@@ -1,0 +1,15 @@
+{
+  "learner_id": "stu_001",
+  "education": "本科",
+  "major": "计算机科学与技术",
+  "theory_scores": {
+    "工业互联网架构": 65,
+    "OPC UA": 40,
+    "MQTT": 70,
+    "边缘计算": 55
+  },
+  "skill_level": "初级",
+  "weak_points": ["OPC UA", "边缘计算网关配置"],
+  "strong_points": ["Python 编程", "MQTT 基础"],
+  "learning_goal": "掌握工业互联网数据采集与边缘计算网关配置"
+}

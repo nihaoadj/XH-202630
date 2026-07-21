@@ -1,0 +1,15 @@
+{
+  "learner_id": "stu_002",
+  "education": "硕士",
+  "major": "控制科学与工程",
+  "theory_scores": {
+    "工业互联网架构": 80,
+    "OPC UA": 75,
+    "MQTT": 85,
+    "边缘计算": 78
+  },
+  "skill_level": "中级",
+  "weak_points": ["数字孪生", "工业大数据分析"],
+  "strong_points": ["PLC 编程", "Modbus 协议"],
+  "learning_goal": "深入理解工业互联网平台层架构与数字孪生应用"
+}

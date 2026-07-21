@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+venv/
+.venv/
+
+# Database
+*.db
+*.sqlite3
+backend/data/*.db
+backend/data/generated_resources/*
+!backend/data/generated_resources/
+!backend/data/generated_resources/.gitkeep
+!backend/data/generated_resources/*/
+!backend/data/generated_resources/*/.gitkeep
+
+# Vector store
+backend/chroma_db/*
+!backend/chroma_db/
+!backend/chroma_db/.gitkeep
+
+# Logs
+backend/logs/*.log
+!backend/logs/.gitkeep
+
+# Testing
+.pytest_cache/
+
+# Codex / local agent workspace
+.agents/
+
+# Frontend
+node_modules/
+dist/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary extraction
+__extracted_pdf.txt
