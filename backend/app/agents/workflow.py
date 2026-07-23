@@ -3,6 +3,7 @@ from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.diagnosis import diagnose_node
 from app.agents.retriever import retrieve_node
+from app.agents.planner import plan_node
 from app.agents.generator import generate_node
 from app.agents.reviewer import review_node
 
@@ -32,7 +33,9 @@ def decide_node(state: AgentState) -> dict:
     trace_item = {
         "agent_name": "supervisor",
         "action": "协同决策",
+        "input_summary": f"审核通过：{review.get('passed', False)}；迭代次数：{state.get('iteration', 0)}",
         "output_summary": f"最终决策：{decision}",
+        "decision_reason": "综合审核结论、幻觉风险和最大重生成次数后确定最终输出策略。",
     }
     return {
         "final_decision": decision,
@@ -46,13 +49,15 @@ def build_workflow():
 
     workflow.add_node("diagnose", diagnose_node)
     workflow.add_node("retrieve", retrieve_node)
+    workflow.add_node("plan", plan_node)
     workflow.add_node("generate", generate_node)
     workflow.add_node("review", review_node)
     workflow.add_node("decide", decide_node)
 
     workflow.set_entry_point("diagnose")
     workflow.add_edge("diagnose", "retrieve")
-    workflow.add_edge("retrieve", "generate")
+    workflow.add_edge("retrieve", "plan")
+    workflow.add_edge("plan", "generate")
     workflow.add_edge("generate", "review")
     workflow.add_conditional_edges(
         "review",

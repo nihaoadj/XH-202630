@@ -16,6 +16,7 @@ def test_workflow_runs():
     """测试多智能体工作流能完成端到端调用"""
     learner = LearnerProfile(
         learner_id="test_001",
+        learner_type="初学者",
         education="本科",
         major="计算机科学与技术",
         theory_scores={"工业互联网架构": 65, "MQTT": 70},
@@ -32,6 +33,7 @@ def test_workflow_runs():
         "resource_types": ["讲义"],
         "diagnosis": {},
         "retrieved_chunks": [],
+        "learning_plan": {},
         "generated_resources": [],
         "review_result": {},
         "final_decision": "",
@@ -55,6 +57,7 @@ def test_generate_node_increments_iteration(monkeypatch):
 
     learner = LearnerProfile(
         learner_id="test_002",
+        learner_type="初学者",
         education="本科",
         major="计算机科学与技术",
         theory_scores={},
@@ -70,6 +73,7 @@ def test_generate_node_increments_iteration(monkeypatch):
         "resource_types": ["讲义"],
         "diagnosis": {},
         "retrieved_chunks": [],
+        "learning_plan": {},
         "generated_resources": [],
         "review_result": {},
         "final_decision": "",

@@ -1,44 +1,69 @@
 # 部署说明
 
+> **当前项目只是框架阶段，不支持完整业务运行或生产部署。**  
+
+
 ## 环境要求
 
-- Python 3.11 或 3.12
+- Python 3.11
 - Node.js 18+
 - 国产大模型 API Key（通义千问 / 文心一言 / DeepSeek / 智谱等）
 
 ## 后端部署
 
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+虚拟环境只在项目根目录 `.venv/` 本地创建，用于安装和隔离依赖；`.venv/` 不属于项目源码，已在 `.gitignore` 中排除，禁止提交到仓库。
 
-# 复制环境变量模板并填写
-# macOS/Linux
-cp .env.example .env
-# Windows PowerShell
-Copy-Item .env.example .env
-# 两种命令都在 backend/ 目录执行，生成 backend/.env
-# 编辑 .env 填入 LLM_API_KEY 与 LLM_BASE_URL
+创建或重建：
 
-# 数据库配置（可选）
-# DB_TYPE=memory        # 默认，服务重启数据丢失，适合开发演示
-# DB_TYPE=sqlite        # 使用 SQLite，数据持久化到 backend/data/domain_knowledge.db
-# DB_TYPE=postgresql    # 使用 PostgreSQL，需配置 DATABASE_URL
-
-cd ..
-# 在项目根目录执行，脚本会自动定位 backend/、examples/ 与 knowledge_base/
-python scripts/ingest_knowledge.py
-python scripts/init_db.py
-
-cd backend
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+```powershell
+cd D:\CODE\XH-202630\version1
+conda create -p .\.venv python=3.11 pip -y
+.\.venv\python.exe -m pip install -r backend\requirements.txt
 ```
+
+复制环境变量模板：
+
+```powershell
+cd backend
+Copy-Item .env.example .env
+```
+
+编辑 `backend/.env`，至少填写：
+
+```env
+LLM_API_KEY=your_api_key_here
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_MODEL=qwen-max
+DB_TYPE=memory
+```
+
+启动后端：
+
+```powershell
+cd D:\CODE\XH-202630\version1\backend
+..\.venv\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+访问：
+
+```text
+http://localhost:8000/
+http://localhost:8000/docs
+```
+
+## 知识库与示例数据
+
+```powershell
+cd D:\CODE\XH-202630\version1
+.\.venv\python.exe scripts\ingest_knowledge.py
+.\.venv\python.exe scripts\init_db.py
+```
+
+注意：知识库入库会涉及 Embedding 和向量库，首次运行可能需要下载模型。
 
 ## 前端部署
 
-```bash
+```powershell
 cd frontend
 npm install
 npm run dev
@@ -46,23 +71,24 @@ npm run dev
 
 生产构建：
 
-```bash
+```powershell
 npm run build
 ```
 
-## Docker 部署（可选）
+## Docker 部署（后续）
 
-```bash
-# 构建镜像（构建上下文为项目根目录，包含 knowledge_base 与 examples）
+当前不建议作为正式部署方式。后续完整业务闭环完成后再验证：
+
+```powershell
 docker build -t domain-knowledge-agent .
-
-# 运行容器，传入环境变量
 docker run -p 8000:8000 --env-file ./backend/.env domain-knowledge-agent
 ```
 
 ## 测试
 
-```bash
-cd backend
-pytest tests/ -v
+```powershell
+cd D:\CODE\XH-202630\version1
+.\.venv\python.exe -m compileall backend\app backend\tests
+.\.venv\python.exe -m pytest backend\tests -q
+.\.venv\python.exe -m pip check
 ```

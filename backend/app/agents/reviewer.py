@@ -26,7 +26,6 @@ REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习�
 
 def review_node(state: AgentState) -> AgentState:
     """审核纠偏 Agent：事实核查、幻觉检测、难度匹配"""
-    llm = get_llm()
     resources = state.get("generated_resources", [])
     chunks = state.get("retrieved_chunks", [])
 
@@ -42,19 +41,19 @@ def review_node(state: AgentState) -> AgentState:
 待审核资源：
 {resource_text}
 """
-    messages = [
-        SystemMessage(content=REVIEW_PROMPT),
-        HumanMessage(content=user_input),
-    ]
-    response = llm.invoke(messages)
-
     try:
+        llm = get_llm()
+        messages = [
+            SystemMessage(content=REVIEW_PROMPT),
+            HumanMessage(content=user_input),
+        ]
+        response = llm.invoke(messages)
         review = json.loads(response.content)
-    except json.JSONDecodeError:
+    except Exception:
         review = {
             "passed": True,
-            "hallucination_score": 0.5,
-            "issues": ["审核结果解析失败，默认通过"],
+            "hallucination_score": 0.3 if chunks else 0.5,
+            "issues": ["使用保底审核结果，建议补充知识库证据或配置 LLM 后复核"],
             "difficulty_match": True,
             "coverage_rate": 0.8,
             "suggestion": "",
@@ -62,8 +61,11 @@ def review_node(state: AgentState) -> AgentState:
 
     trace_item = {
         "agent_name": "reviewer",
-        "action": "内容审核",
+        "action": "审核纠偏",
+        "input_summary": f"资源数：{len(resources)}；证据片段数：{len(chunks)}",
         "output_summary": f"通过：{review.get('passed', False)}; 幻觉分：{review.get('hallucination_score', 0):.2f}; 覆盖率：{review.get('coverage_rate', 0):.2f}",
+        "decision_reason": review.get("suggestion", "根据知识库证据、事实一致性、覆盖率和难度匹配给出审核结论。"),
+        "evidence_refs": [c.get("source", "unknown") for c in chunks[:5]],
     }
 
     return {

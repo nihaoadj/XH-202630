@@ -14,8 +14,13 @@ export const generateApi = {
   generate: (data) => api.post('/generate/', data),
 }
 
+export const resourceApi = {
+  listByLearner: (learnerId) => api.get(`/resources/${learnerId}`),
+}
+
 export const feedbackApi = {
   submit: (data) => api.post('/feedback/', data),
+  history: (learnerId) => api.get(`/feedback/history/${learnerId}`),
 }
 
 export const reportApi = {

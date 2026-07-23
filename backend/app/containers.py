@@ -12,8 +12,10 @@ from app.agents.workflow import build_workflow
 from app.db.database import get_session_factory
 from app.db.learner.repository import create_learner_repository
 from app.db.resource.repository import create_resource_repository
+from app.db.feedback.repository import create_feedback_repository
 from app.services.learner_service import LearnerService
 from app.services.generation_service import GenerationService
+from app.services.resource_service import ResourceService
 from app.services.feedback_service import FeedbackService
 from app.services.report_service import ReportService
 
@@ -56,6 +58,13 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
+
+    # 学习反馈仓库
+    feedback_repository = providers.Singleton(
+        create_feedback_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+    )
     
     # ==================== Service层（单例）====================
     
@@ -71,12 +80,25 @@ class Container(containers.DeclarativeContainer):
         resource_repo=resource_repository,
         workflow=workflow
     )
+
+    # 资源查询服务
+    resource_service = providers.Singleton(
+        ResourceService,
+        repo=resource_repository
+    )
     
-    # 学习反馈服务（无外部依赖）
-    feedback_service = providers.Singleton(FeedbackService)
+    # 学习反馈服务
+    feedback_service = providers.Singleton(
+        FeedbackService,
+        feedback_repo=feedback_repository
+    )
     
-    # 学情报告服务（无外部依赖）
-    report_service = providers.Singleton(ReportService)
+    # 学情报告服务
+    report_service = providers.Singleton(
+        ReportService,
+        resource_repo=resource_repository,
+        feedback_repo=feedback_repository,
+    )
 
 
 def init_container() -> Container:

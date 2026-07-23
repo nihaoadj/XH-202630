@@ -25,6 +25,15 @@
         </el-card>
       </el-col>
     </el-row>
+    <el-card style="margin-top: 20px;">
+      <template #header>最小功能链路</template>
+      <el-steps :active="0" finish-status="success" align-center>
+        <el-step title="画像" description="创建或更新学习者画像" />
+        <el-step title="生成" description="多 Agent 生成资源" />
+        <el-step title="反馈" description="提交资源学习结果" />
+        <el-step title="报告" description="查看画像、资源和反馈摘要" />
+      </el-steps>
+    </el-card>
   </div>
 </template>
 

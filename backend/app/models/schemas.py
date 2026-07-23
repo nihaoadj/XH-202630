@@ -1,4 +1,6 @@
+from datetime import datetime
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -20,23 +22,114 @@ class ProfileStatusResponse(StatusResponse):
     learner_id: str = Field(..., description="学习者唯一标识")
 
 
+class KnowledgeState(BaseModel):
+    """通用知识点掌握状态"""
+    score: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="掌握度，建议 0-1")
+    status: Optional[str] = Field(default=None, description="掌握状态")
+    evidence: List[str] = Field(default_factory=list, description="状态依据")
+    last_updated: Optional[str] = Field(default=None, description="最近更新时间")
+
+
+class LearningPreferences(BaseModel):
+    """学习偏好"""
+    preferred_resource_types: List[str] = Field(default_factory=list, description="偏好的资源类型")
+    difficulty_preference: Optional[str] = Field(default=None, description="难度偏好")
+    time_budget_minutes: Optional[int] = Field(default=None, ge=0, description="单次学习时间预算")
+    language: Optional[str] = Field(default=None, description="输出语言")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="扩展偏好")
+
+
 class LearnerProfile(BaseModel):
     """学习者画像模型"""
     learner_id: str = Field(..., description="学习者唯一标识")
+    learner_type: str = Field(..., description="学习者类型")
     education: str = Field(..., description="学历背景")
     major: str = Field(..., description="专业方向")
+    target_domain: Optional[str] = Field(default=None, description="目标领域，由用户或知识库决定")
+    knowledge_base_id: Optional[str] = Field(default=None, description="当前知识库 ID")
     theory_scores: Dict[str, float] = Field(default_factory=dict, description="理论测试得分")
+    knowledge_states: Dict[str, KnowledgeState] = Field(default_factory=dict, description="知识点掌握状态")
     skill_level: str = Field(default="初级", description="技能水平")
     weak_points: List[str] = Field(default_factory=list, description="知识盲区")
     strong_points: List[str] = Field(default_factory=list, description="优势领域")
     learning_goal: str = Field(..., description="学习目标")
+    learning_preferences: Optional[LearningPreferences] = Field(default=None, description="学习偏好")
+    last_feedback_summary: Dict[str, Any] = Field(default_factory=dict, description="最近反馈摘要")
+
+
+class SkillNode(BaseModel):
+    """能力图谱节点"""
+    node_id: str
+    knowledge_base_id: str
+    name: str
+    description: Optional[str] = None
+    level: Optional[str] = None
+    prerequisites: List[str] = Field(default_factory=list)
+    children: List[str] = Field(default_factory=list)
+    knowledge_points: List[str] = Field(default_factory=list)
+    assessment_methods: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DiagnosticQuestion(BaseModel):
+    """诊断题"""
+    question_id: str
+    knowledge_base_id: str
+    skill_node_id: Optional[str] = None
+    knowledge_point: Optional[str] = None
+    question_type: str
+    difficulty: Optional[str] = None
+    question: str
+    options: List[str] = Field(default_factory=list)
+    answer: Optional[Any] = None
+    explanation: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LearningPathItem(BaseModel):
+    """学习路径数据项"""
+    order: int
+    topic: str
+    reason: str
+
+
+class DiagnosticResult(BaseModel):
+    """诊断结果"""
+    diagnostic_result_id: str
+    learner_id: str
+    knowledge_base_id: Optional[str] = None
+    ability_level: str
+    weak_points: List[str] = Field(default_factory=list)
+    strong_points: List[str] = Field(default_factory=list)
+    knowledge_states: Dict[str, KnowledgeState] = Field(default_factory=dict)
+    recommended_path: List[LearningPathItem] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
 
 
 class GenerateRequest(BaseModel):
     """生成资源请求模型"""
     learner_id: str
     topic: str = Field(..., description="学习主题")
+    knowledge_base_id: Optional[str] = Field(default=None, description="当前知识库 ID")
+    diagnostic_result_id: Optional[str] = Field(default=None, description="诊断结果 ID")
+    target_skill_nodes: List[str] = Field(default_factory=list, description="目标能力节点")
     resource_types: List[str] = Field(default_factory=lambda: ["讲义", "实操指南", "分阶测试题"])
+    difficulty_preference: Optional[str] = Field(default=None, description="难度偏好")
+    generation_mode: Optional[str] = Field(default=None, description="生成模式")
+    include_review: bool = Field(default=True, description="是否进入审核")
+    include_claim_check: bool = Field(default=False, description="是否进行 Claim 级审核")
+    max_iterations: int = Field(default=2, ge=0, description="最大重试次数")
+    constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
+
+
+class LearningPlan(BaseModel):
+    """学习路径规划"""
+    learning_path: List[LearningPathItem] = Field(default_factory=list)
+    skip_points: List[str] = Field(default_factory=list)
+    remedial_points: List[str] = Field(default_factory=list)
+    challenge_points: List[str] = Field(default_factory=list)
+    resource_requirements: Dict[str, str] = Field(default_factory=dict)
+    decision_reason: Optional[str] = None
 
 
 class SourceRef(BaseModel):
@@ -45,16 +138,31 @@ class SourceRef(BaseModel):
     title: str
     snippet: str
     score: float
+    chunk_id: Optional[str] = None
+    knowledge_point: Optional[str] = None
+    section: Optional[str] = None
+    page: Optional[int] = None
+    source_path: Optional[str] = None
+    retrieval_query: Optional[str] = None
+    rank: Optional[int] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ExerciseItem(BaseModel):
+    """资源内练习项"""
+    question_id: str
+    knowledge_point: Optional[str] = None
+    difficulty: Optional[str] = None
+    question: str
+    answer: Optional[Any] = None
+    explanation: Optional[str] = None
 
 
 class LearningResource(BaseModel):
-    """学习资源模型
-
-    支持文本资源与多媒体文件资源两种形态：
-    - 文本资源：storage_type='text'，content_text 保存完整内容
-    - 文件资源：storage_type='file'，file_path 指向文件位置，content_text 可保存摘要
-    """
+    """学习资源模型"""
     resource_id: str
+    learner_id: Optional[str] = None
+    topic: Optional[str] = None
     resource_type: str
     difficulty: str
     storage_type: str = Field(default="text", description="存储方式：text | file")
@@ -64,6 +172,45 @@ class LearningResource(BaseModel):
     mime_type: Optional[str] = Field(default=None, description="文件 MIME 类型")
     knowledge_points: List[str]
     source_refs: List[SourceRef]
+    learning_path_node: Optional[str] = None
+    review_status: Optional[str] = None
+    review_id: Optional[str] = None
+    claim_count: Optional[int] = None
+    hallucination_rate: Optional[float] = None
+    difficulty_match: Optional[bool] = None
+    version: int = 1
+    parent_resource_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    exercise_items: List[ExerciseItem] = Field(default_factory=list)
+
+
+class ResourceClaim(BaseModel):
+    """Claim 级审核项"""
+    claim_id: str
+    text: str
+    knowledge_point: Optional[str] = None
+    supported: bool
+    confidence: Optional[float] = None
+    evidence_refs: List[SourceRef] = Field(default_factory=list)
+    issue_type: Optional[str] = None
+    correction: Optional[str] = None
+    review_comment: Optional[str] = None
+
+
+class ReviewSummary(BaseModel):
+    """资源审核摘要"""
+    review_id: str
+    resource_id: str
+    status: str
+    claim_total: int = 0
+    claim_supported: int = 0
+    claim_unsupported: int = 0
+    suspected_hallucinations: int = 0
+    hallucination_rate: float = 0.0
+    review_pass_rate: float = 0.0
+    revision_count: int = 0
+    issues: List[Dict[str, Any]] = Field(default_factory=list)
+    claims: List[ResourceClaim] = Field(default_factory=list)
 
 
 class AgentTrace(BaseModel):
@@ -71,7 +218,38 @@ class AgentTrace(BaseModel):
     agent_name: str
     action: str
     output_summary: str
+    run_id: Optional[str] = None
+    step_id: Optional[str] = None
+    status: Optional[str] = "success"
+    input_summary: Optional[str] = None
+    input_payload: Dict[str, Any] = Field(default_factory=dict)
+    output_payload: Dict[str, Any] = Field(default_factory=dict)
+    decision_reason: Optional[str] = None
+    evidence_refs: List[str] = Field(default_factory=list)
+    review_summary: Dict[str, Any] = Field(default_factory=dict)
+    retry_count: int = 0
+    error_message: Optional[str] = None
     timestamp: Optional[str] = None
+    started_at: Optional[str] = None
+    ended_at: Optional[str] = None
+    duration_ms: Optional[int] = None
+
+
+class GenerateReport(BaseModel):
+    """单次生成摘要"""
+    learner_id: str
+    ability_level: Optional[str] = None
+    ability_tags: List[str] = Field(default_factory=list)
+    weak_points: List[str] = Field(default_factory=list)
+    recommended_difficulty: Optional[str] = None
+    learning_plan: Dict[str, Any] = Field(default_factory=dict)
+    review_summary: Dict[str, Any] = Field(default_factory=dict)
+    hallucination_rate: float = 0.0
+    coverage_rate: float = 0.0
+    difficulty_match: bool = False
+    retrieval_hit_rate: float = 0.0
+    revision_count: int = 0
+    next_suggestions: List[str] = Field(default_factory=list)
 
 
 class GenerateResponse(BaseModel):
@@ -80,7 +258,7 @@ class GenerateResponse(BaseModel):
     topic: str
     resources: List[LearningResource]
     trace: List[AgentTrace]
-    report: Dict
+    report: GenerateReport
 
 
 class ReportRadar(BaseModel):
@@ -96,11 +274,74 @@ class DifficultyCurveItem(BaseModel):
     recommended_difficulty: str
 
 
-class LearningPathItem(BaseModel):
-    """学习路径数据项"""
-    order: int
-    topic: str
-    reason: str
+class FeedbackAnswer(BaseModel):
+    """单题答题详情"""
+    question_id: str
+    correct: bool
+    answer: Optional[Any] = Field(default=None, description="学习者作答内容")
+    knowledge_point: Optional[str] = None
+    difficulty: Optional[str] = None
+    expected_answer: Optional[Any] = None
+    error_type: Optional[str] = None
+
+
+class FeedbackRequest(BaseModel):
+    """学习反馈请求模型"""
+    learner_id: str
+    resource_id: str
+    correct_rate: float = Field(..., ge=0.0, le=1.0)
+    feedback_type: Optional[str] = Field(default=None, description="反馈类型")
+    time_spent_seconds: Optional[int] = Field(default=None, ge=0, description="耗时")
+    completed: Optional[bool] = Field(default=None, description="是否完成")
+    self_rating: Optional[int] = Field(default=None, ge=1, le=5, description="自评")
+    practice_result: Dict[str, Any] = Field(default_factory=dict, description="实操结果")
+    answers: List[FeedbackAnswer] = Field(default_factory=list, description="答题详情")
+
+
+class FeedbackResponse(BaseModel):
+    """学习反馈响应模型"""
+    learner_id: str
+    decision: str
+    message: str
+    updated_profile: Optional[LearnerProfile] = None
+    decision_reason: Optional[str] = None
+    next_action: Optional[str] = None
+    recommended_topics: List[str] = Field(default_factory=list)
+    updated_knowledge_states: Dict[str, KnowledgeState] = Field(default_factory=dict)
+    regenerate_suggestion: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FeedbackDecisionResult(BaseModel):
+    """反馈决策 Agent 输出"""
+    decision: str
+    decision_reason: str
+    next_action: str
+    recommended_topics: List[str] = Field(default_factory=list)
+    updated_knowledge_states: Dict[str, KnowledgeState] = Field(default_factory=dict)
+    regenerate_suggestion: Dict[str, Any] = Field(default_factory=dict)
+    profile_updates: Dict[str, Any] = Field(default_factory=dict)
+    trace: AgentTrace
+
+
+class FeedbackRecord(BaseModel):
+    """学习反馈历史记录"""
+    feedback_id: str
+    learner_id: str
+    resource_id: str
+    correct_rate: float
+    decision: str
+    answers: List[FeedbackAnswer] = Field(default_factory=list)
+    feedback_type: Optional[str] = None
+    time_spent_seconds: Optional[int] = None
+    completed: Optional[bool] = None
+    self_rating: Optional[int] = None
+    practice_result: Dict[str, Any] = Field(default_factory=dict)
+    decision_reason: Optional[str] = None
+    next_action: Optional[str] = None
+    recommended_topics: List[str] = Field(default_factory=list)
+    updated_knowledge_states: Dict[str, KnowledgeState] = Field(default_factory=dict)
+    regenerate_suggestion: Dict[str, Any] = Field(default_factory=dict)
+    created_at: Optional[datetime] = None
 
 
 class ReportResponse(BaseModel):
@@ -113,26 +354,34 @@ class ReportResponse(BaseModel):
     learning_goal: str
     difficulty_curve: List[DifficultyCurveItem]
     learning_path: List[LearningPathItem] = Field(default_factory=list)
+    blind_spot_heatmap: List[Dict[str, Any]] = Field(default_factory=list)
+    agent_flow: List[AgentTrace] = Field(default_factory=list)
+    resource_difficulty_match: List[Dict[str, Any]] = Field(default_factory=list)
+    review_summary: Dict[str, Any] = Field(default_factory=dict)
+    feedback_trend: List[Dict[str, Any]] = Field(default_factory=list)
+    metric_summary: Dict[str, Any] = Field(default_factory=dict)
+    next_suggestions: List[str] = Field(default_factory=list)
+    recent_resources: List[LearningResource] = Field(default_factory=list)
+    recent_feedback: List[FeedbackRecord] = Field(default_factory=list)
 
 
-class FeedbackAnswer(BaseModel):
-    """单题答题详情"""
-    question_id: str
-    correct: bool
-    answer: Optional[Any] = Field(default=None, description="学习者作答内容")
-
-
-class FeedbackRequest(BaseModel):
-    """学习反馈请求模型"""
+class FeedbackHistoryResponse(BaseModel):
+    """学习反馈历史响应"""
     learner_id: str
-    resource_id: str
-    correct_rate: float = Field(..., ge=0.0, le=1.0)
-    answers: List[FeedbackAnswer] = Field(default_factory=list, description="答题详情")
+    total: int
+    items: List[FeedbackRecord]
 
 
-class FeedbackResponse(BaseModel):
-    """学习反馈响应模型"""
+class ResourceListResponse(BaseModel):
+    """生成资源列表响应"""
     learner_id: str
-    decision: str
-    message: str
-    updated_profile: Optional[LearnerProfile]
+    total: int
+    resources: List[LearningResource]
+
+
+class EvaluationSummary(BaseModel):
+    """量化评测摘要"""
+    sample_count: int
+    metrics: Dict[str, float]
+    ablation: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: Optional[datetime] = None

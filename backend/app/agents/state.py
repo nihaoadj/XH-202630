@@ -13,6 +13,8 @@ class AgentState(TypedDict):
     diagnosis: Dict
     # 检索到的知识片段
     retrieved_chunks: List[Dict]
+    # 学习路径规划输出
+    learning_plan: Dict
     # 生成结果
     generated_resources: List[LearningResource]
     # 审核意见

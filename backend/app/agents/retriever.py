@@ -14,7 +14,10 @@ def retrieve_node(state: AgentState) -> AgentState:
     seen = set()
 
     for q in queries:
-        results = similarity_search(q, top_k=3)
+        try:
+            results = similarity_search(q, top_k=3)
+        except Exception:
+            results = []
         for doc, score in results:
             key = doc.page_content[:100]
             if key in seen:
@@ -28,8 +31,11 @@ def retrieve_node(state: AgentState) -> AgentState:
 
     trace_item = {
         "agent_name": "retriever",
-        "action": "知识检索",
+        "action": "知识库检索",
+        "input_summary": f"检索查询：{queries}",
         "output_summary": f"召回 {len(retrieved)} 条知识片段，最高相似度 {retrieved[0]['score'] if retrieved else 0:.3f}",
+        "decision_reason": "围绕学习主题和前两个薄弱知识点扩展检索，优先为后续生成提供可溯源证据。",
+        "evidence_refs": [item["source"] for item in retrieved[:5]],
     }
 
     return {

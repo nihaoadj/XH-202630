@@ -9,7 +9,12 @@
         :timestamp="item.action"
       >
         <strong>{{ item.agent_name }}</strong>
+        <p v-if="item.input_summary" class="muted">输入：{{ item.input_summary }}</p>
         <p>{{ item.output_summary }}</p>
+        <p v-if="item.decision_reason" class="muted">理由：{{ item.decision_reason }}</p>
+        <p v-if="item.evidence_refs && item.evidence_refs.length" class="muted">
+          证据：{{ item.evidence_refs.slice(0, 3).join('；') }}
+        </p>
       </el-timeline-item>
     </el-timeline>
   </el-card>
@@ -23,3 +28,11 @@ defineProps({
   },
 })
 </script>
+
+<style scoped>
+.muted {
+  color: #667085;
+  font-size: 13px;
+  margin: 4px 0;
+}
+</style>

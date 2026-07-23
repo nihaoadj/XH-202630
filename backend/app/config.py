@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
     db_type: str = "memory"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"
-    knowledge_base_dir: str = "../knowledge_base/demo_industrial_internet"
+    knowledge_base_dir: str = "../knowledge_base/rag_engineering_training"
     vector_store_dir: str = "./chroma_db"
     resources_dir: str = "./data/generated_resources"
     app_host: str = "0.0.0.0"

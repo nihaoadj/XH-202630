@@ -5,13 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.db.models import GeneratedResourceORM
 from app.db.resource.base import BaseResourceRepository
-from app.models.schemas import LearningResource, SourceRef
+from app.models.schemas import ExerciseItem, LearningResource, SourceRef
 
 
 def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
     """将 ORM 对象转换为 Pydantic 模型"""
     return LearningResource(
         resource_id=orm.resource_id,
+        learner_id=orm.learner_id,
+        topic=orm.topic,
         resource_type=orm.resource_type,
         difficulty=orm.difficulty,
         storage_type=orm.storage_type,
@@ -21,6 +23,16 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         mime_type=orm.mime_type,
         knowledge_points=orm.knowledge_points or [],
         source_refs=[SourceRef(**ref) for ref in (orm.source_refs or [])],
+        learning_path_node=orm.learning_path_node,
+        review_status=orm.review_status,
+        review_id=orm.review_id,
+        claim_count=orm.claim_count,
+        hallucination_rate=orm.hallucination_rate,
+        difficulty_match=orm.difficulty_match,
+        version=orm.version or 1,
+        parent_resource_id=orm.parent_resource_id,
+        created_at=orm.created_at,
+        exercise_items=[ExerciseItem(**item) for item in (orm.exercise_items or [])],
     )
 
 
@@ -39,6 +51,15 @@ def _pydantic_to_orm(resource: LearningResource, learner_id: str, topic: str) ->
         mime_type=resource.mime_type,
         knowledge_points=resource.knowledge_points,
         source_refs=[ref.model_dump() for ref in resource.source_refs],
+        learning_path_node=resource.learning_path_node,
+        review_status=resource.review_status,
+        review_id=resource.review_id,
+        claim_count=resource.claim_count,
+        hallucination_rate=resource.hallucination_rate,
+        difficulty_match=resource.difficulty_match,
+        version=resource.version,
+        parent_resource_id=resource.parent_resource_id,
+        exercise_items=[item.model_dump() for item in resource.exercise_items],
     )
 
 
@@ -57,6 +78,8 @@ class SQLResourceRepository(BaseResourceRepository):
         with self.session_factory() as db:
             orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource.resource_id).first()
             if orm:
+                orm.learner_id = learner_id
+                orm.topic = topic
                 orm.resource_type = resource.resource_type
                 orm.difficulty = resource.difficulty
                 orm.storage_type = resource.storage_type
@@ -66,6 +89,15 @@ class SQLResourceRepository(BaseResourceRepository):
                 orm.mime_type = resource.mime_type
                 orm.knowledge_points = resource.knowledge_points
                 orm.source_refs = [ref.model_dump() for ref in resource.source_refs]
+                orm.learning_path_node = resource.learning_path_node
+                orm.review_status = resource.review_status
+                orm.review_id = resource.review_id
+                orm.claim_count = resource.claim_count
+                orm.hallucination_rate = resource.hallucination_rate
+                orm.difficulty_match = resource.difficulty_match
+                orm.version = resource.version
+                orm.parent_resource_id = resource.parent_resource_id
+                orm.exercise_items = [item.model_dump() for item in resource.exercise_items]
             else:
                 orm = _pydantic_to_orm(resource, learner_id, topic)
                 db.add(orm)

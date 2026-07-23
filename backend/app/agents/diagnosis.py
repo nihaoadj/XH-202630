@@ -17,7 +17,6 @@ DIAGNOSIS_PROMPT = """你是一名专业的学情诊断 Agent。请根据学习�
 
 def diagnose_node(state: AgentState) -> AgentState:
     """学情诊断 Agent：解析学习者画像"""
-    llm = get_llm()
     learner = state["learner"]
 
     user_input = f"""
@@ -31,26 +30,28 @@ def diagnose_node(state: AgentState) -> AgentState:
 - learning_goal（学习目标）：{learner.learning_goal}
 - 当前主题：{state['topic']}
 """
-    messages = [
-        SystemMessage(content=DIAGNOSIS_PROMPT),
-        HumanMessage(content=user_input),
-    ]
-    response = llm.invoke(messages)
-
     try:
+        llm = get_llm()
+        messages = [
+            SystemMessage(content=DIAGNOSIS_PROMPT),
+            HumanMessage(content=user_input),
+        ]
+        response = llm.invoke(messages)
         diagnosis = json.loads(response.content)
-    except json.JSONDecodeError:
+    except Exception as exc:
         diagnosis = {
-            "ability_tags": [],
+            "ability_tags": learner.strong_points,
             "weak_points": learner.weak_points,
-            "recommended_difficulty": "中级",
-            "suggestion": response.content,
+            "recommended_difficulty": learner.skill_level or "中级",
+            "suggestion": f"使用画像信息生成保底诊断：{exc}",
         }
 
     trace_item = {
         "agent_name": "diagnosis",
         "action": "学情诊断",
+        "input_summary": f"画像：{learner.skill_level}；主题：{state['topic']}",
         "output_summary": f"推荐难度：{diagnosis.get('recommended_difficulty', '未知')}; 盲区：{diagnosis.get('weak_points', [])}",
+        "decision_reason": diagnosis.get("suggestion", "根据画像得分、知识盲区和学习目标判断能力起点。"),
     }
 
     return {

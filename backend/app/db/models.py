@@ -1,5 +1,5 @@
 """SQLAlchemy ORM 模型定义"""
-from sqlalchemy import Column, String, Integer, Float, JSON, DateTime, func
+from sqlalchemy import Boolean, Column, String, Integer, Float, JSON, DateTime, func
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -10,13 +10,19 @@ class LearnerProfileORM(Base):
     __tablename__ = "learner_profiles"
 
     learner_id = Column(String(64), primary_key=True, index=True, comment="学习者唯一标识")
+    learner_type = Column(String(64), nullable=False, comment="学习者类型")
     education = Column(String(32), nullable=False, comment="学历")
     major = Column(String(64), nullable=False, comment="专业方向")
+    target_domain = Column(String(128), nullable=True, comment="目标领域")
+    knowledge_base_id = Column(String(128), nullable=True, comment="知识库 ID")
     theory_scores = Column(JSON, default=dict, comment="理论测试得分")
+    knowledge_states = Column(JSON, default=dict, comment="知识状态")
     skill_level = Column(String(16), default="初级", comment="技能水平")
     weak_points = Column(JSON, default=list, comment="知识盲区")
     strong_points = Column(JSON, default=list, comment="优势领域")
     learning_goal = Column(String(512), nullable=False, comment="学习目标")
+    learning_preferences = Column(JSON, default=dict, comment="学习偏好")
+    last_feedback_summary = Column(JSON, default=dict, comment="最近反馈摘要")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
@@ -43,6 +49,15 @@ class GeneratedResourceORM(Base):
     mime_type = Column(String(64), nullable=True, comment="文件 MIME 类型")
     knowledge_points = Column(JSON, default=list, comment="覆盖知识点")
     source_refs = Column(JSON, default=list, comment="知识溯源引用")
+    learning_path_node = Column(String(128), nullable=True, comment="学习路径节点")
+    review_status = Column(String(32), nullable=True, comment="审核状态")
+    review_id = Column(String(64), nullable=True, comment="审核记录 ID")
+    claim_count = Column(Integer, nullable=True, comment="Claim 总数")
+    hallucination_rate = Column(Float, nullable=True, comment="幻觉率")
+    difficulty_match = Column(Boolean, nullable=True, comment="难度是否匹配")
+    version = Column(Integer, default=1, comment="资源版本")
+    parent_resource_id = Column(String(64), nullable=True, comment="父资源 ID")
+    exercise_items = Column(JSON, default=list, comment="练习项")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
 
 
@@ -56,4 +71,14 @@ class FeedbackRecordORM(Base):
     correct_rate = Column(Float, nullable=False, comment="答题正确率")
     decision = Column(String(32), nullable=False, comment="系统决策")
     answers = Column(JSON, default=list, comment="答题详情")
+    feedback_type = Column(String(32), nullable=True, comment="反馈类型")
+    time_spent_seconds = Column(Integer, nullable=True, comment="耗时")
+    completed = Column(Boolean, nullable=True, comment="是否完成")
+    self_rating = Column(Integer, nullable=True, comment="自评")
+    practice_result = Column(JSON, default=dict, comment="实操结果")
+    decision_reason = Column(String(512), nullable=True, comment="决策理由")
+    next_action = Column(String(32), nullable=True, comment="下一步动作")
+    recommended_topics = Column(JSON, default=list, comment="推荐主题")
+    updated_knowledge_states = Column(JSON, default=dict, comment="更新后的知识状态")
+    regenerate_suggestion = Column(JSON, default=dict, comment="再生成建议")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")

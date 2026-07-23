@@ -1,0 +1,21 @@
+{
+  "knowledge_base_name": "rag_engineering_training",
+  "domain": "RAG 工程链路",
+  "description": "面向 RAG 链路匠学的 RAG 工程训练知识库，覆盖能力图谱、检索生成链路、审核纠偏与评测调优。",
+  "skill_nodes": [
+    "RAG 基础概念",
+    "文档解析",
+    "Chunk 切分",
+    "Embedding",
+    "向量数据库",
+    "相似度检索",
+    "混合检索",
+    "Rerank",
+    "Prompt 组装",
+    "引用溯源",
+    "幻觉控制",
+    "RAG 评测",
+    "RAG 调优"
+  ],
+  "learner_levels": ["零基础", "Python 基础", "进阶 RAG"]
+}

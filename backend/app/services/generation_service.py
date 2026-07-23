@@ -6,16 +6,30 @@ from app.db.resource.base import BaseResourceRepository
 from app.models.schemas import GenerateRequest, GenerateResponse, LearnerProfile, LearningResource
 
 
-def _build_report(learner: LearnerProfile, diagnosis: dict, review: dict) -> dict:
+def _build_report(learner: LearnerProfile, diagnosis: dict, review: dict, learning_plan: dict) -> dict:
     """构建生成报告摘要"""
+    hallucination_rate = review.get("hallucination_rate", review.get("hallucination_score", 0.0))
+    weak_points = diagnosis.get("weak_points", learner.weak_points)
     return {
         "learner_id": learner.learner_id,
+        "ability_level": diagnosis.get("recommended_difficulty", learner.skill_level),
         "ability_tags": diagnosis.get("ability_tags", []),
-        "weak_points": diagnosis.get("weak_points", learner.weak_points),
+        "weak_points": weak_points,
         "recommended_difficulty": diagnosis.get("recommended_difficulty", learner.skill_level),
-        "hallucination_score": review.get("hallucination_score", 1.0),
+        "learning_plan": learning_plan,
+        "review_summary": {
+            "status": review.get("status", "pending"),
+            "issues": review.get("issues", []),
+            "claim_total": review.get("claim_total", 0),
+            "claim_supported": review.get("claim_supported", 0),
+            "claim_unsupported": review.get("claim_unsupported", 0),
+        },
+        "hallucination_rate": hallucination_rate,
         "coverage_rate": review.get("coverage_rate", 0.0),
         "difficulty_match": review.get("difficulty_match", False),
+        "retrieval_hit_rate": review.get("retrieval_hit_rate", 0.0),
+        "revision_count": review.get("revision_count", 0),
+        "next_suggestions": weak_points[:3],
     }
 
 
@@ -28,6 +42,9 @@ def _persist_resources(
     """将生成的资源持久化到文件系统与数据库"""
     persisted = []
     for resource in resources:
+        resource.learner_id = learner_id
+        resource.topic = topic
+
         if resource.storage_type == "text" and resource.content_text:
             file_path, file_size, mime_type = save_text_resource(
                 learner_id=learner_id,
@@ -70,8 +87,18 @@ class GenerationService:
             "learner": learner,
             "topic": req.topic,
             "resource_types": req.resource_types,
+            "knowledge_base_id": req.knowledge_base_id or learner.knowledge_base_id,
+            "diagnostic_result_id": req.diagnostic_result_id,
+            "target_skill_nodes": req.target_skill_nodes,
+            "difficulty_preference": req.difficulty_preference,
+            "generation_mode": req.generation_mode,
+            "include_review": req.include_review,
+            "include_claim_check": req.include_claim_check,
+            "max_iterations": req.max_iterations,
+            "constraints": req.constraints,
             "diagnosis": {},
             "retrieved_chunks": [],
+            "learning_plan": {},
             "generated_resources": [],
             "review_result": {},
             "final_decision": "",
@@ -97,5 +124,6 @@ class GenerationService:
                 learner,
                 result.get("diagnosis", {}),
                 result.get("review_result", {}),
+                result.get("learning_plan", {}),
             ),
         )
