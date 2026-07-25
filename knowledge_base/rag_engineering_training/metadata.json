@@ -1,21 +1,201 @@
 {
+  "knowledge_base_id": "rag_engineering_training",
   "knowledge_base_name": "rag_engineering_training",
+  "version": "1.0.0",
   "domain": "RAG 工程链路",
   "description": "面向 RAG 链路匠学的 RAG 工程训练知识库，覆盖能力图谱、检索生成链路、审核纠偏与评测调优。",
+  "documents": [
+    {
+      "id": "rag_pipeline_basics",
+      "title": "权威参考：RAG 架构与知识生命周期",
+      "file": "references/01_rag_architecture_and_knowledge_lifecycle.md",
+      "knowledge_points": ["RAG 基础概念", "文档解析", "Chunk 切分"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://arxiv.org/abs/2005.11401", "https://docs.langchain.com/oss/python/langchain/retrieval"]
+    },
+    {
+      "id": "rag_chunk_embedding_store",
+      "title": "权威参考：文档解析、清洗与切片",
+      "file": "references/02_document_parsing_and_chunking.md",
+      "knowledge_points": ["文档解析", "Chunk 切分"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://docs.langchain.com/oss/python/integrations/splitters/index", "https://docs.langchain.com/oss/python/langchain/retrieval"]
+    },
+    {
+      "id": "rag_retrieval_rerank_prompt",
+      "title": "权威参考：Embedding 与向量集合",
+      "file": "references/03_embedding_and_vector_collections.md",
+      "knowledge_points": ["Embedding", "向量数据库"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://sbert.net/examples/sentence_transformer/applications/semantic-search/", "https://docs.trychroma.com/docs/collections/manage-collections", "https://docs.trychroma.com/docs/querying-collections/query-and-get"]
+    },
+    {
+      "id": "rag_citation_hallucination_evaluation",
+      "title": "权威参考：语义召回与元数据过滤",
+      "file": "references/04_semantic_retrieval_and_metadata_filters.md",
+      "knowledge_points": ["相似度检索", "向量数据库"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://docs.trychroma.com/docs/querying-collections/query-and-get", "https://docs.trychroma.com/docs/querying-collections/metadata-filtering"]
+    },
+    {
+      "id": "rag_hybrid_rerank_reference",
+      "title": "权威参考：混合检索与重排序",
+      "file": "references/05_hybrid_retrieval_and_reranking.md",
+      "knowledge_points": ["混合检索", "Rerank"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html", "https://docs.trychroma.com/cloud/search-api/hybrid-search"]
+    },
+    {
+      "id": "rag_context_citation_reference",
+      "title": "权威参考：上下文组装与引用",
+      "file": "references/06_context_assembly_and_citations.md",
+      "knowledge_points": ["Prompt 组装", "引用溯源"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://docs.langchain.com/oss/python/langchain/retrieval", "https://docs.langchain.com/langsmith/evaluate-rag-tutorial"]
+    },
+    {
+      "id": "rag_claim_hallucination_reference",
+      "title": "权威参考：Claim 审核与幻觉控制",
+      "file": "references/07_claim_review_and_hallucination_control.md",
+      "knowledge_points": ["幻觉控制", "引用溯源"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://arxiv.org/abs/2309.15217", "https://docs.langchain.com/langsmith/evaluation-approaches"]
+    },
+    {
+      "id": "rag_evaluation_reference",
+      "title": "权威参考：RAG 评测设计与指标解释",
+      "file": "references/08_rag_evaluation_design.md",
+      "knowledge_points": ["RAG 评测", "幻觉控制"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://arxiv.org/abs/2309.15217", "https://docs.langchain.com/langsmith/evaluate-rag-tutorial"]
+    },
+    {
+      "id": "rag_tuning_audit_reference",
+      "title": "权威参考：调优、消融与数据库审计",
+      "file": "references/09_tuning_ablation_and_database_audit.md",
+      "knowledge_points": ["RAG 调优", "RAG 评测", "引用溯源"],
+      "document_type": "authoritative_reference",
+      "source_urls": ["https://docs.langchain.com/langsmith/evaluation", "https://docs.trychroma.com/guides/build/look-at-your-data"]
+    },
+    {
+      "id": "card_rag_basics",
+      "title": "教学卡：RAG 基础概念",
+      "file": "cards/01_rag_basics.md",
+      "knowledge_points": ["RAG 基础概念"],
+      "learner_levels": ["零基础"],
+      "source_urls": ["https://docs.langchain.com/oss/python/langchain/retrieval", "https://arxiv.org/abs/2005.11401"]
+    },
+    {
+      "id": "card_document_parsing",
+      "title": "教学卡：文档解析与清洗",
+      "file": "cards/02_document_parsing.md",
+      "knowledge_points": ["文档解析"],
+      "learner_levels": ["零基础"],
+      "source_urls": ["https://docs.langchain.com/oss/python/langchain/retrieval"]
+    },
+    {
+      "id": "card_chunking",
+      "title": "教学卡：Chunk 切分策略",
+      "file": "cards/03_chunking.md",
+      "knowledge_points": ["Chunk 切分"],
+      "learner_levels": ["Python 基础"],
+      "source_urls": ["https://docs.langchain.com/oss/python/integrations/splitters/index", "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter"]
+    },
+    {
+      "id": "card_embedding",
+      "title": "教学卡：Embedding 与语义表示",
+      "file": "cards/04_embedding.md",
+      "knowledge_points": ["Embedding"],
+      "learner_levels": ["零基础"],
+      "source_urls": ["https://sbert.net/examples/sentence_transformer/applications/semantic-search/"]
+    },
+    {
+      "id": "card_vector_store",
+      "title": "教学卡：向量数据库与元数据",
+      "file": "cards/05_vector_store.md",
+      "knowledge_points": ["向量数据库"],
+      "learner_levels": ["Python 基础"],
+      "source_urls": ["https://docs.trychroma.com/docs/collections/manage-collections", "https://docs.trychroma.com/reference/python/collection"]
+    },
+    {
+      "id": "card_similarity_retrieval",
+      "title": "教学卡：相似度检索与 Top-K",
+      "file": "cards/06_similarity_retrieval.md",
+      "knowledge_points": ["相似度检索"],
+      "learner_levels": ["Python 基础"],
+      "source_urls": ["https://docs.trychroma.com/docs/querying-collections/query-and-get", "https://docs.trychroma.com/docs/querying-collections/metadata-filtering"]
+    },
+    {
+      "id": "card_hybrid_retrieval",
+      "title": "教学卡：混合检索",
+      "file": "cards/07_hybrid_retrieval.md",
+      "knowledge_points": ["混合检索"],
+      "learner_levels": ["进阶 RAG"],
+      "source_urls": ["https://docs.trychroma.com/cloud/search-api/hybrid-search", "https://docs.trychroma.com/cloud/schema/sparse-vector-search"]
+    },
+    {
+      "id": "card_rerank",
+      "title": "教学卡：Rerank 重排序",
+      "file": "cards/08_rerank.md",
+      "knowledge_points": ["Rerank"],
+      "learner_levels": ["进阶 RAG"],
+      "source_urls": ["https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html", "https://sbert.net/docs/package_reference/cross_encoder/evaluation.html"]
+    },
+    {
+      "id": "card_prompt_assembly",
+      "title": "教学卡：Prompt 组装与上下文约束",
+      "file": "cards/09_prompt_assembly.md",
+      "knowledge_points": ["Prompt 组装"],
+      "learner_levels": ["Python 基础"],
+      "source_urls": ["https://docs.langchain.com/oss/python/langchain/retrieval"]
+    },
+    {
+      "id": "card_citation",
+      "title": "教学卡：引用溯源",
+      "file": "cards/10_citation.md",
+      "knowledge_points": ["引用溯源"],
+      "learner_levels": ["Python 基础"],
+      "source_urls": ["https://docs.langchain.com/langsmith/evaluate-rag-tutorial"]
+    },
+    {
+      "id": "card_hallucination_control",
+      "title": "教学卡：Claim 审核与幻觉控制",
+      "file": "cards/11_hallucination_control.md",
+      "knowledge_points": ["幻觉控制"],
+      "learner_levels": ["进阶 RAG"],
+      "source_urls": ["https://docs.langchain.com/langsmith/evaluation-approaches", "https://arxiv.org/abs/2309.15217"]
+    },
+    {
+      "id": "card_rag_evaluation",
+      "title": "教学卡：RAG 评测设计",
+      "file": "cards/12_rag_evaluation.md",
+      "knowledge_points": ["RAG 评测"],
+      "learner_levels": ["进阶 RAG"],
+      "source_urls": ["https://docs.langchain.com/langsmith/evaluate-rag-tutorial", "https://docs.langchain.com/langsmith/evaluation-concepts?mode=ui"]
+    },
+    {
+      "id": "card_rag_tuning",
+      "title": "教学卡：RAG 调优与消融实验",
+      "file": "cards/13_rag_tuning.md",
+      "knowledge_points": ["RAG 调优"],
+      "learner_levels": ["进阶 RAG"],
+      "source_urls": ["https://docs.langchain.com/langsmith/evaluation", "https://sbert.net/docs/package_reference/cross_encoder/evaluation.html"]
+    }
+  ],
   "skill_nodes": [
-    "RAG 基础概念",
-    "文档解析",
-    "Chunk 切分",
-    "Embedding",
-    "向量数据库",
-    "相似度检索",
-    "混合检索",
-    "Rerank",
-    "Prompt 组装",
-    "引用溯源",
-    "幻觉控制",
-    "RAG 评测",
-    "RAG 调优"
+    {"node_id": "rag_basics", "name": "RAG 基础概念", "level": "零基础", "knowledge_points": ["检索增强生成", "上下文"], "assessment_methods": ["单选题", "概念解释"]},
+    {"node_id": "document_parsing", "name": "文档解析", "level": "零基础", "prerequisites": ["RAG 基础概念"], "knowledge_points": ["格式解析", "文本清洗"], "assessment_methods": ["实操题"]},
+    {"node_id": "chunking", "name": "Chunk 切分", "level": "Python 基础", "prerequisites": ["文档解析"], "knowledge_points": ["chunk_size", "chunk_overlap"], "assessment_methods": ["参数对比题"]},
+    {"node_id": "embedding", "name": "Embedding", "level": "零基础", "prerequisites": ["RAG 基础概念"], "knowledge_points": ["向量表示", "语义相似度"], "assessment_methods": ["概念题"]},
+    {"node_id": "vector_store", "name": "向量数据库", "level": "Python 基础", "prerequisites": ["Embedding"], "knowledge_points": ["索引", "持久化"], "assessment_methods": ["实操题"]},
+    {"node_id": "similarity_retrieval", "name": "相似度检索", "level": "Python 基础", "prerequisites": ["向量数据库", "Chunk 切分"], "knowledge_points": ["Top-K", "召回率"], "assessment_methods": ["参数题"]},
+    {"node_id": "hybrid_retrieval", "name": "混合检索", "level": "进阶 RAG", "prerequisites": ["相似度检索"], "knowledge_points": ["关键词检索", "向量检索"], "assessment_methods": ["方案设计题"]},
+    {"node_id": "rerank", "name": "Rerank", "level": "进阶 RAG", "prerequisites": ["相似度检索"], "knowledge_points": ["重排序", "精排"], "assessment_methods": ["对比题"]},
+    {"node_id": "prompt_assembly", "name": "Prompt 组装", "level": "Python 基础", "prerequisites": ["相似度检索"], "knowledge_points": ["上下文窗口", "指令约束"], "assessment_methods": ["实操题"]},
+    {"node_id": "citation", "name": "引用溯源", "level": "Python 基础", "prerequisites": ["Prompt 组装"], "knowledge_points": ["source_ref", "证据片段"], "assessment_methods": ["溯源题"]},
+    {"node_id": "hallucination_control", "name": "幻觉控制", "level": "进阶 RAG", "prerequisites": ["引用溯源"], "knowledge_points": ["Claim", "证据支持"], "assessment_methods": ["审核题"]},
+    {"node_id": "rag_evaluation", "name": "RAG 评测", "level": "进阶 RAG", "prerequisites": ["幻觉控制"], "knowledge_points": ["命中率", "覆盖率", "幻觉率"], "assessment_methods": ["指标计算题"]},
+    {"node_id": "rag_tuning", "name": "RAG 调优", "level": "进阶 RAG", "prerequisites": ["RAG 评测", "混合检索", "Rerank"], "knowledge_points": ["参数调优", "消融实验"], "assessment_methods": ["综合实操题"]}
   ],
   "learner_levels": ["零基础", "Python 基础", "进阶 RAG"]
 }

@@ -24,3 +24,19 @@ class MemoryLearnerRepository(BaseLearnerRepository):
 
     def list_all(self) -> Dict[str, LearnerProfile]:
         return self._store.copy()
+
+    def update_partial(self, learner_id: str, updates: dict) -> Optional[LearnerProfile]:
+        profile = self.get(learner_id)
+        if profile is None:
+            return None
+        updated = profile.model_copy(update=updates)
+        self.save(updated)
+        return updated
+
+    def list_with_pagination(self, page: int, page_size: int, skill_level: Optional[str] = None) -> dict:
+        items = sorted(self._store.values(), key=lambda profile: profile.learner_id)
+        if skill_level:
+            items = [profile for profile in items if profile.skill_level == skill_level]
+        total = len(items)
+        start = (page - 1) * page_size
+        return {"total": total, "page": page, "page_size": page_size, "items": items[start : start + page_size]}

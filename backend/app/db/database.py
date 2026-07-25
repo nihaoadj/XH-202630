@@ -1,4 +1,6 @@
 """数据库引擎与会话管理"""
+from functools import lru_cache
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -25,6 +27,7 @@ def _resolve_database_url(url: str) -> str:
     return f"sqlite:///{absolute_path.as_posix()}"
 
 
+@lru_cache()
 def get_engine():
     """获取数据库引擎"""
     settings = get_settings()
@@ -36,6 +39,7 @@ def get_engine():
     )
 
 
+@lru_cache()
 def get_session_factory():
     """获取会话工厂"""
     return sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
