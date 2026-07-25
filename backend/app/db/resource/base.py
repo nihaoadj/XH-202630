@@ -27,3 +27,9 @@ class BaseResourceRepository(ABC):
     def delete(self, resource_id: str) -> bool:
         """删除生成资源"""
         pass
+
+    @abstractmethod
+    def list_by_learner_with_filter(
+        self, learner_id: str, resource_type: Optional[str] = None, difficulty: Optional[str] = None
+    ) -> List[LearningResource]:
+        pass

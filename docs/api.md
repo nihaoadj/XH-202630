@@ -54,17 +54,42 @@ POST /api/learner/profile
 | 系统 | GET | `/` | 健康检查 | 当前参考路由 |
 | 学习者 | POST | `/api/learner/profile` | 创建或更新画像 | 当前参考路由 |
 | 学习者 | GET | `/api/learner/profile/{learner_id}` | 查询画像 | 当前参考路由 |
-| 能力图谱 | GET | `/api/skills/nodes` | 查询当前知识库的能力节点 | 设计待建设 |
-| 诊断 | GET | `/api/diagnosis/questions` | 获取诊断题 | 设计待建设 |
-| 诊断 | POST | `/api/diagnosis/submit` | 提交诊断并更新知识状态 | 设计待建设 |
+| 学习者 | PATCH | `/api/learner/profile/{learner_id}` | 部分更新画像 | 当前参考路由 |
+| 学习者 | GET | `/api/learner/list` | 分页查询画像 | 当前参考路由 |
+| 学习者 | DELETE | `/api/learner/profile/{learner_id}` | 删除画像 | 当前参考路由 |
+| 初始画像 | GET | `/api/onboarding/questions` | 获取由服务端维护的问卷题目、选项与条件展示规则 | 当前参考路由 |
+| 初始画像 | POST | `/api/onboarding/initial-profile` | 根据 RAG 入门问卷创建画像，并只返回已了解节点的诊断题 | 当前参考路由 |
+| 能力图谱 | GET | `/api/skills/nodes` | 查询当前知识库的能力节点 | 当前参考路由 |
+| 诊断 | GET | `/api/diagnosis/questions` | 获取诊断题 | 当前参考路由 |
+| 诊断 | POST | `/api/diagnosis/submit` | 提交诊断并更新知识状态 | 当前参考路由 |
 | 生成 | POST | `/api/generate/` | 多 Agent 协同生成资源 | 当前参考路由 |
 | 资源 | GET | `/api/resources/{learner_id}` | 查询资源历史 | 当前参考路由 |
-| 审核 | GET | `/api/reviews/{resource_id}` | 查询资源审核详情 | 设计待建设 |
+| 资源 | GET | `/api/resources/file/{resource_id}` | 通过资源 ID 安全下载文件 | 当前参考路由 |
+| 审核 | GET | `/api/reviews/{resource_id}` | 查询资源审核详情 | 当前参考路由 |
 | 反馈 | POST | `/api/feedback/` | 提交反馈并更新画像 | 当前参考路由 |
 | 反馈 | GET | `/api/feedback/history/{learner_id}` | 查询反馈历史 | 当前参考路由 |
 | 报告 | GET | `/api/report/{learner_id}` | 查询学情报告 | 待增强路由 |
-| 评测 | GET | `/api/evaluation/summary` | 查询量化评测摘要 | 设计待建设 |
-| 知识库 | GET | `/api/knowledge/info` | 查询知识库信息 | 设计待建设 |
+| 评测 | GET | `/api/evaluation/summary` | 查询量化评测摘要 | 当前参考路由 |
+| 知识库 | GET | `/api/knowledge/info` | 查询知识库信息 | 当前参考路由 |
+
+## 初始画像与自适应诊断
+
+先通过 `GET /api/onboarding/questions` 获取问卷定义。问卷已直接覆盖画像中的身份、学历/教育阶段、专业或岗位方向、学习目标、能力自评、知识节点自评、资源类型、学习方式、难度偏好和时间预算字段。随后 `POST /api/onboarding/initial-profile` 提交结构化答案。服务端不调用大模型，而是执行以下确定性处理：
+
+```text
+问卷答案
+→ 创建或更新 learner_profiles
+→ 将“已了解的 RAG 节点”中未选择的能力节点标记为 not_started
+→ 仅对“已了解”节点返回 diagnostic_questions
+→ POST /api/diagnosis/submit 判分并进一步更新画像
+→ POST /api/generate/ 进行第一轮个性化生成
+```
+
+“已了解的 RAG 节点”的映射关系为：文档解析 → `document_parsing`、Chunk 切分 → `chunking`、Embedding → `embedding`、向量数据库 → `vector_store`、Top-K 检索/Query Rewrite → `similarity_retrieval`、Rerank → `rerank`、Prompt 组装 → `prompt_assembly`、引用溯源 → `citation`、幻觉率评测 → `hallucination_control` 与 `rag_evaluation`。选择“都不了解”且 RAG 自评为“完全不了解”时，接口返回空诊断题列表，所有节点保留为 `not_started`，系统可直接进入基础学习资源生成。
+
+问卷中的“了解”只表示值得进一步测试，不会直接判为掌握；只有后续 `POST /api/diagnosis/submit` 的服务端判分结果才能将节点更新为 `weak`、`learning` 或 `mastered`。
+
+旧的“Embedding 在 RAG 中主要用于什么”直白单选题已替换为条件式场景筛查题：仅当用户在“已了解的 RAG 节点”中选择“Embedding”时显示。它用“问法与文档措辞不同但仍需召回”的场景区分 Embedding、切分、Prompt 约束和重排序；答错或未作答时，Embedding 被视为 `not_started`，不会下发该节点的深度诊断题。
 
 ## 5. 通用数据对象
 
@@ -134,6 +159,18 @@ POST /api/learner/profile
 | `evidence` | string[] | 否 | 状态依据，如诊断题、反馈、资源记录 |
 | `last_updated` | string(datetime) | 否 | 最近更新时间 |
 
+`status` 当前使用以下受控状态值；调用方不得自行创造新字符串：
+
+| 状态值 | 阶段 | 含义 | 进入方式 |
+| --- | --- | --- | --- |
+| `not_started` | 初始画像 | 用户明确表示未接触该节点，不发诊断题，优先安排基础学习 | 入门问卷未选择该节点，或条件筛查未通过 |
+| `self_reported` | 初始画像 | 用户自称了解该节点，但尚未被系统测量 | 入门问卷选择该节点且通过必要筛查 |
+| `weak` | 诊断/反馈后 | 已有测量证据，掌握度不足 | 节点诊断得分低于 0.60，或学习反馈表现较低 |
+| `learning` | 诊断/反馈后 | 已有测量证据，处于学习中 | 节点诊断得分介于 0.60 与 0.80 之间，或反馈表现居中 |
+| `mastered` | 诊断/反馈后 | 已有测量证据，掌握较好 | 节点诊断得分不低于 0.80，或学习反馈表现较好 |
+
+`not_started` 与 `unknown` 的区别：前者表示用户已明确说明“不了解”，后者仅表示系统暂时没有任何来源可判断；当前初始画像流程使用 `not_started`，不使用模糊的 `unknown`。
+
 ### 5.3 LearningPreferences
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -188,8 +225,8 @@ POST /api/learner/profile
 | `difficulty` | string | 否 | 难度 |
 | `question` | string | 是 | 题干 |
 | `options` | string[] | 否 | 选项，客观题使用 |
-| `answer` | any | 否 | 标准答案，前端展示时可隐藏 |
-| `explanation` | string | 否 | 解析 |
+| `answer` | any | 仅服务端 | 标准答案；`GET /api/diagnosis/questions` 永不返回此字段 |
+| `explanation` | string | 仅服务端 | 解析；提交后可由后续复盘接口按需返回 |
 | `metadata` | object | 否 | 扩展信息 |
 
 ```json
@@ -683,6 +720,61 @@ DifficultyCurveItem 字段：
 
 响应字段：见 `LearnerProfile`。
 
+### 6.2.1 GET `/api/onboarding/questions`
+
+获取由服务端维护的初始画像问卷。前端应先调用本接口渲染题目，不应硬编码题干、选项或条件展示规则。
+
+无需请求参数。响应字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `questions` | object[] | 问卷题目定义 |
+| `questions[].question_id` | string | 提交时使用的字段名 |
+| `questions[].title` | string | 题干 |
+| `questions[].type` | string | 题型，如 `single_choice`、`multiple_choice`、`text` |
+| `questions[].required` | boolean | 是否必答 |
+| `questions[].options` | string[] | 可选项；文本题可省略 |
+| `questions[].show_when` | object | 条件展示规则；当前 Embedding 场景筛查题依赖此字段 |
+| `questions[].hint` | string | 填写提示，可省略 |
+
+### 6.2.2 POST `/api/onboarding/initial-profile`
+
+根据问卷创建或更新初始画像。服务端保存原始问卷答案，并只向用户声明已了解、且通过必要筛查的能力节点下发诊断题；该过程不调用大模型。
+
+请求字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `learner_id` | string | 是 | 学习者唯一标识；已存在时更新其初始画像 |
+| `identity` | string | 是 | 身份选项 |
+| `education` | string | 是 | 当前学历或教育阶段 |
+| `major` | string | 是 | 专业或岗位方向 |
+| `learning_goals` | string[] | 是 | 一个或多个学习目标 |
+| `python_level` | string | 是 | Python 自评 |
+| `llm_api_level` | string | 是 | 大模型 API 自评 |
+| `prompt_level` | string | 是 | Prompt 自评 |
+| `rag_level` | string | 是 | RAG 自评 |
+| `known_rag_nodes` | string[] | 否 | 自称了解的 RAG 节点；可传 `都不了解` |
+| `vector_store_experience` | string | 否 | 向量库经验 |
+| `rag_failure_causes` | string[] | 否 | 对 RAG 不准确原因的判断 |
+| `desired_resource_types` | string[] | 否 | 希望生成的资源类型 |
+| `learning_modes` | string[] | 否 | 偏好学习方式 |
+| `difficulty_preference` | string | 否 | 第一轮资源难度偏好 |
+| `weekly_time_budget` | string | 否 | 每周时间预算 |
+| `embedding_screening_answer` | string | 条件必填 | 仅 `known_rag_nodes` 含 `Embedding` 时提交；错答则不下发 Embedding 深度诊断题 |
+
+响应字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `learner_id` | string | 学习者 ID |
+| `profile` | LearnerProfile | 创建或更新后的初始画像 |
+| `diagnostic_node_ids` | string[] | 本轮应继续诊断的节点 ID |
+| `not_started_node_ids` | string[] | 用户明确尚未开始的节点 ID，不发诊断题 |
+| `screening_results` | object<string, boolean> | 条件筛查结果，如 Embedding 是否通过 |
+| `diagnostic_questions` | DiagnosticQuestion[] | 可直接进入 `POST /api/diagnosis/submit` 的题目；不含答案与解析 |
+| `next_step` | string | 下一步提示；无诊断题时可直接进入基础资源生成 |
+
 ### 6.3 GET `/api/skills/nodes`
 
 查询当前知识库的能力节点图谱。
@@ -731,10 +823,14 @@ DifficultyCurveItem 字段：
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `questions` | DiagnosticQuestion[] | 是 | 诊断题列表 |
+| `knowledge_base_id` | string | 是 | 实际使用的知识库 ID |
+| `total` | integer | 是 | 本次返回题目数量 |
+| `questions` | DiagnosticQuestion[] | 是 | 诊断题列表，不含 `answer`、`explanation` |
 
 ```json
 {
+  "knowledge_base_id": "rag_engineering_training",
+  "total": 12,
   "questions": []
 }
 ```
@@ -749,7 +845,7 @@ DifficultyCurveItem 字段：
 |------|------|------|------|
 | `learner_id` | string | 是 | 学习者 ID |
 | `knowledge_base_id` | string | 否 | 知识库 ID |
-| `answers` | FeedbackAnswer[] | 是 | 诊断答题明细 |
+| `answers` | DiagnosticAnswerSubmission[] | 是 | 诊断答题明细，仅包含 `question_id`、`answer` |
 | `metadata` | object | 否 | 扩展信息 |
 
 响应字段：见 `DiagnosticResult`。
@@ -813,6 +909,18 @@ DifficultyCurveItem 字段：
   "resources": []
 }
 ```
+
+### 6.7.1 GET `/api/resources/file/{resource_id}`
+
+按资源 ID 下载已生成的文件。该接口不接受文件系统路径；服务端只会读取 `backend/data/generated_resources/` 受控目录内、且已在 `generated_resources` 留档的文件。
+
+路径参数：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `resource_id` | string | 是 | 已生成资源 ID |
+
+成功时返回文件字节流，`Content-Type` 使用资源记录的 `mime_type`，并附带下载文件名。资源不存在、没有文件、文件已丢失或路径不安全时，均返回 HTTP 404；客户端不得把 `file_path` 当作可直接访问的 URL。
 
 ### 6.8 GET `/api/reviews/{resource_id}`
 
@@ -971,23 +1079,26 @@ DifficultyCurveItem 字段：
 | `document_count` | integer | 否 | 文档数量 |
 | `chunk_count` | integer | 否 | 片段数量 |
 | `skill_node_count` | integer | 否 | 能力节点数量 |
+| `diagnostic_question_count` | integer | 否 | 可用诊断题数量 |
+| `version` | string | 否 | 知识库版本 |
 | `updated_at` | string(datetime) | 否 | 更新时间 |
 
 ```json
 {
-  "knowledge_base_id": "kb_rag_demo",
+  "knowledge_base_id": "rag_engineering_training",
   "target_domain": "RAG 工程训练",
-  "description": "用于演示的工程技能知识库",
-  "document_count": 12,
-  "chunk_count": 96,
-  "skill_node_count": 10,
-  "updated_at": "2026-07-23T09:30:00"
+  "description": "RAG 工程训练知识库",
+  "document_count": 22,
+  "chunk_count": 57,
+  "skill_node_count": 13,
+  "diagnostic_question_count": 39,
+  "version": "1.0.0"
 }
 ```
 
 ## 7. 当前实现与目标差异
 
-当前代码已支持最小闭环：
+当前代码已支持扩展闭环：
 
 - 创建/查询画像。
 - 调用多 Agent 生成资源。
@@ -995,14 +1106,16 @@ DifficultyCurveItem 字段：
 - 保存生成资源。
 - 提交反馈并保存反馈历史。
 - 聚合画像、资源和反馈生成报告。
+- 查询知识库统计、能力图谱和诊断题。
+- 服务端完成诊断判分，并将答题记录与知识状态持久化。
+- 持久化 Agent run/step、资源审核与 Claim 证据记录。
+- 保存生成资源正文/文件、资源版本和最近一次审核摘要；文件下载限制在受控目录内。
 
 仍需逐步增强：
 
-- 能力图谱、诊断题、诊断提交接口。
-- Agent run/step 结构化持久化。
-- Claim 级审核、资源审核记录和修正版本。
+- 对外提供 Agent 运行记录、资源修订版本和完整审核历史的查询接口。
 - 报告中的热力图、Agent 流程图、难度匹配、审核汇总和反馈趋势。
-- 评测样本、指标统计和消融实验接口。
+- 补充评测样本，并扩展指标统计与消融实验的录入接口。
 
 ## 8. 错误响应
 

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     llm_model: str = "qwen-max"
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
-    db_type: str = "memory"  # memory | sqlite | postgresql
+    db_type: str = "sqlite"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"
     knowledge_base_dir: str = "../knowledge_base/rag_engineering_training"
     vector_store_dir: str = "./chroma_db"

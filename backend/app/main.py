@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import learner, generate, feedback, report, resources
+from app.api import diagnosis, evaluation, feedback, generate, knowledge, learner, onboarding, report, resources, reviews, skills
 from app.config import get_settings
 from app.containers import init_container
 from app.db.database import init_database
@@ -81,10 +81,16 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(learner.router, prefix="/api/learner", tags=["学习者画像"])
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["初始画像问卷"])
 app.include_router(generate.router, prefix="/api/generate", tags=["资源生成"])
 app.include_router(resources.router, prefix="/api/resources", tags=["资源历史"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["学习反馈"])
 app.include_router(report.router, prefix="/api/report", tags=["学情报告"])
+app.include_router(skills.router, prefix="/api/skills", tags=["能力图谱"])
+app.include_router(diagnosis.router, prefix="/api/diagnosis", tags=["能力诊断"])
+app.include_router(knowledge.router, prefix="/api/knowledge", tags=["知识库"])
+app.include_router(reviews.router, prefix="/api/reviews", tags=["审核证据"])
+app.include_router(evaluation.router, prefix="/api/evaluation", tags=["量化评测"])
 
 
 @app.get("/")

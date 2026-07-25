@@ -22,6 +22,23 @@ class ProfileStatusResponse(StatusResponse):
     learner_id: str = Field(..., description="学习者唯一标识")
 
 
+class LearnerProfileUpdate(BaseModel):
+    """学习者画像的白名单部分更新请求。"""
+    learner_type: Optional[str] = None
+    education: Optional[str] = None
+    major: Optional[str] = None
+    target_domain: Optional[str] = None
+    knowledge_base_id: Optional[str] = None
+    theory_scores: Optional[Dict[str, float]] = None
+    knowledge_states: Optional[Dict[str, "KnowledgeState"]] = None
+    skill_level: Optional[str] = None
+    weak_points: Optional[List[str]] = None
+    strong_points: Optional[List[str]] = None
+    learning_goal: Optional[str] = None
+    learning_preferences: Optional["LearningPreferences"] = None
+    last_feedback_summary: Optional[Dict[str, Any]] = None
+
+
 class KnowledgeState(BaseModel):
     """通用知识点掌握状态"""
     score: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="掌握度，建议 0-1")
@@ -57,6 +74,38 @@ class LearnerProfile(BaseModel):
     last_feedback_summary: Dict[str, Any] = Field(default_factory=dict, description="最近反馈摘要")
 
 
+class InitialProfileQuestionnaire(BaseModel):
+    """RAG 入门问卷的结构化答案，用于创建初始画像并筛选诊断范围。"""
+    learner_id: str
+    identity: str
+    education: str = Field(min_length=1)
+    major: str = Field(min_length=1)
+    learning_goals: List[str] = Field(min_length=1)
+    python_level: str
+    llm_api_level: str
+    prompt_level: str
+    rag_level: str
+    known_rag_nodes: List[str] = Field(default_factory=list)
+    vector_store_experience: Optional[str] = None
+    rag_failure_causes: List[str] = Field(default_factory=list)
+    desired_resource_types: List[str] = Field(default_factory=list)
+    learning_modes: List[str] = Field(default_factory=list)
+    difficulty_preference: Optional[str] = None
+    weekly_time_budget: Optional[str] = None
+    embedding_screening_answer: Optional[str] = None
+
+
+class InitialProfileResponse(BaseModel):
+    """初始画像创建结果及只针对已了解节点的诊断题。"""
+    learner_id: str
+    profile: LearnerProfile
+    diagnostic_node_ids: List[str]
+    not_started_node_ids: List[str]
+    screening_results: Dict[str, bool] = Field(default_factory=dict)
+    diagnostic_questions: List[Dict[str, Any]]
+    next_step: str
+
+
 class SkillNode(BaseModel):
     """能力图谱节点"""
     node_id: str
@@ -83,6 +132,31 @@ class DiagnosticQuestion(BaseModel):
     options: List[str] = Field(default_factory=list)
     answer: Optional[Any] = None
     explanation: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DiagnosticAnswerSubmission(BaseModel):
+    """学习者提交的诊断作答；正确性只能由服务端计算。"""
+    question_id: str
+    answer: Any
+
+
+class DiagnosticAnswerRecord(DiagnosticAnswerSubmission):
+    """服务端判定后的诊断答题记录。"""
+    correct: bool
+    score: float = Field(ge=0.0, le=1.0)
+
+
+class DiagnosticQuestionListResponse(BaseModel):
+    knowledge_base_id: str
+    total: int
+    questions: List[Dict[str, Any]]
+
+
+class DiagnosticSubmitRequest(BaseModel):
+    learner_id: str
+    knowledge_base_id: Optional[str] = None
+    answers: List[DiagnosticAnswerSubmission] = Field(min_length=1)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

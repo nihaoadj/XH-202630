@@ -121,5 +121,10 @@ def save_text_resource(
 def load_resource_file(relative_path: str) -> bytes:
     """根据相对路径读取资源文件内容"""
     full_path = resolve_backend_path(relative_path)
+    resources_dir = _get_resources_dir().resolve()
+    try:
+        full_path.relative_to(resources_dir)
+    except ValueError as exc:
+        raise ValueError("资源文件路径不在受控目录内") from exc
     with open(full_path, "rb") as f:
         return f.read()

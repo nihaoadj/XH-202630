@@ -1,5 +1,17 @@
 """SQLAlchemy ORM 模型定义"""
-from sqlalchemy import Boolean, Column, String, Integer, Float, JSON, DateTime, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -82,3 +94,225 @@ class FeedbackRecordORM(Base):
     updated_knowledge_states = Column(JSON, default=dict, comment="更新后的知识状态")
     regenerate_suggestion = Column(JSON, default=dict, comment="再生成建议")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+
+
+# 以下模型承接知识库、图谱、审核和评测。JSON 仅用于可扩展负载；可查询的核心
+# 关联均保留为独立字段，以便比赛演示时追踪“知识点—证据—资源—审核”链路。
+class KnowledgeBaseORM(Base):
+    __tablename__ = "knowledge_bases"
+
+    knowledge_base_id = Column(String(128), primary_key=True, comment="知识库唯一标识")
+    name = Column(String(256), nullable=False)
+    version = Column(String(64), nullable=False, default="0.1.0")
+    domain = Column(String(256), nullable=True)
+    description = Column(Text, nullable=True)
+    learner_levels = Column(JSON, default=list)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class KnowledgeDocumentORM(Base):
+    __tablename__ = "knowledge_documents"
+    __table_args__ = (UniqueConstraint("knowledge_base_id", "source_path", name="uq_kb_document_path"),)
+
+    document_id = Column(String(128), primary_key=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    title = Column(String(512), nullable=False)
+    source_path = Column(String(1024), nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    knowledge_points = Column(JSON, default=list)
+    learner_levels = Column(JSON, default=list)
+    document_version = Column(String(64), nullable=True)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class KnowledgeChunkORM(Base):
+    __tablename__ = "knowledge_chunks"
+    __table_args__ = (UniqueConstraint("knowledge_base_id", "document_id", "chunk_index", name="uq_document_chunk_index"),)
+
+    chunk_id = Column(String(128), primary_key=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    document_id = Column(String(128), ForeignKey("knowledge_documents.document_id"), nullable=False, index=True)
+    chunk_index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    content_hash = Column(String(64), nullable=False, index=True)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class RagSkillNodeORM(Base):
+    __tablename__ = "rag_skill_nodes"
+    __table_args__ = (UniqueConstraint("knowledge_base_id", "name", name="uq_kb_skill_node_name"),)
+
+    node_id = Column(String(128), primary_key=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    name = Column(String(256), nullable=False)
+    description = Column(Text, nullable=True)
+    level = Column(String(32), nullable=True)
+    knowledge_points = Column(JSON, default=list)
+    assessment_methods = Column(JSON, default=list)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class SkillNodeRelationORM(Base):
+    __tablename__ = "skill_node_relations"
+    __table_args__ = (UniqueConstraint("knowledge_base_id", "parent_node_id", "child_node_id", name="uq_skill_edge"),)
+
+    relation_id = Column(Integer, primary_key=True, autoincrement=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    parent_node_id = Column(String(128), ForeignKey("rag_skill_nodes.node_id"), nullable=False)
+    child_node_id = Column(String(128), ForeignKey("rag_skill_nodes.node_id"), nullable=False)
+    relation_type = Column(String(32), nullable=False, default="prerequisite")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DiagnosticQuestionORM(Base):
+    __tablename__ = "diagnostic_questions"
+
+    question_id = Column(String(128), primary_key=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    skill_node_id = Column(String(128), ForeignKey("rag_skill_nodes.node_id"), nullable=True, index=True)
+    knowledge_point = Column(String(256), nullable=True, index=True)
+    question_type = Column(String(32), nullable=False)
+    difficulty = Column(String(32), nullable=True)
+    question = Column(Text, nullable=False)
+    options = Column(JSON, default=list)
+    answer = Column(JSON, nullable=True)
+    explanation = Column(Text, nullable=True)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DiagnosticAnswerORM(Base):
+    __tablename__ = "diagnostic_answers"
+    __table_args__ = (UniqueConstraint("learner_id", "question_id", "attempt_no", name="uq_diagnostic_attempt"),)
+
+    answer_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    question_id = Column(String(128), ForeignKey("diagnostic_questions.question_id"), nullable=False, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    attempt_no = Column(Integer, nullable=False, default=1)
+    answer = Column(JSON, nullable=True)
+    is_correct = Column(Boolean, nullable=True)
+    score = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class KnowledgeStateORM(Base):
+    __tablename__ = "knowledge_states"
+    __table_args__ = (UniqueConstraint("learner_id", "knowledge_base_id", "skill_node_id", name="uq_learner_skill_state"),)
+
+    state_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    skill_node_id = Column(String(128), ForeignKey("rag_skill_nodes.node_id"), nullable=False, index=True)
+    mastery_score = Column(Float, nullable=True)
+    status = Column(String(32), nullable=True)
+    evidence = Column(JSON, default=list)
+    last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AgentRunORM(Base):
+    __tablename__ = "agent_runs"
+
+    run_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=True, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=True, index=True)
+    topic = Column(String(512), nullable=True)
+    status = Column(String(32), nullable=False, default="running")
+    input_payload = Column(JSON, default=dict)
+    output_payload = Column(JSON, default=dict)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class AgentStepORM(Base):
+    __tablename__ = "agent_steps"
+    __table_args__ = (UniqueConstraint("run_id", "step_no", name="uq_agent_run_step"),)
+
+    step_id = Column(String(128), primary_key=True)
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
+    step_no = Column(Integer, nullable=False)
+    agent_name = Column(String(128), nullable=False)
+    action = Column(String(256), nullable=False)
+    status = Column(String(32), nullable=False, default="success")
+    input_payload = Column(JSON, default=dict)
+    output_payload = Column(JSON, default=dict)
+    decision_reason = Column(Text, nullable=True)
+    evidence_refs = Column(JSON, default=list)
+    retry_count = Column(Integer, nullable=False, default=0)
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+
+
+class ResourceReviewORM(Base):
+    __tablename__ = "resource_reviews"
+
+    review_id = Column(String(128), primary_key=True)
+    resource_id = Column(String(64), ForeignKey("generated_resources.resource_id"), nullable=False, index=True)
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
+    status = Column(String(32), nullable=False)
+    claim_total = Column(Integer, nullable=False, default=0)
+    claim_supported = Column(Integer, nullable=False, default=0)
+    claim_unsupported = Column(Integer, nullable=False, default=0)
+    suspected_hallucinations = Column(Integer, nullable=False, default=0)
+    hallucination_rate = Column(Float, nullable=False, default=0.0)
+    review_pass_rate = Column(Float, nullable=False, default=0.0)
+    revision_count = Column(Integer, nullable=False, default=0)
+    issues = Column(JSON, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ResourceClaimORM(Base):
+    __tablename__ = "resource_claims"
+
+    claim_id = Column(String(128), primary_key=True)
+    review_id = Column(String(128), ForeignKey("resource_reviews.review_id"), nullable=False, index=True)
+    resource_id = Column(String(64), ForeignKey("generated_resources.resource_id"), nullable=False, index=True)
+    knowledge_point = Column(String(256), nullable=True, index=True)
+    claim_text = Column(Text, nullable=False)
+    supported = Column(Boolean, nullable=False)
+    confidence = Column(Float, nullable=True)
+    evidence_refs = Column(JSON, default=list)
+    issue_type = Column(String(64), nullable=True)
+    correction = Column(Text, nullable=True)
+    review_comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ContestEvalCaseORM(Base):
+    __tablename__ = "contest_eval_cases"
+
+    case_id = Column(String(128), primary_key=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    query = Column(Text, nullable=False)
+    target_skill_nodes = Column(JSON, default=list)
+    expected_document_ids = Column(JSON, default=list)
+    expected_chunk_ids = Column(JSON, default=list)
+    expected_answer = Column(JSON, nullable=True)
+    difficulty = Column(String(32), nullable=True)
+    tags = Column(JSON, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ContestEvalResultORM(Base):
+    __tablename__ = "contest_eval_results"
+    __table_args__ = (UniqueConstraint("case_id", "experiment_name", name="uq_eval_case_experiment"),)
+
+    result_id = Column(String(128), primary_key=True)
+    case_id = Column(String(128), ForeignKey("contest_eval_cases.case_id"), nullable=False, index=True)
+    experiment_name = Column(String(128), nullable=False)
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
+    retrieval_hit = Column(Boolean, nullable=True)
+    coverage_rate = Column(Float, nullable=True)
+    hallucination_rate = Column(Float, nullable=True)
+    difficulty_match = Column(Boolean, nullable=True)
+    metrics = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

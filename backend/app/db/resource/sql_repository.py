@@ -116,3 +116,15 @@ class SQLResourceRepository(BaseResourceRepository):
                 db.commit()
                 return True
             return False
+
+    def list_by_learner_with_filter(
+        self, learner_id: str, resource_type: Optional[str] = None, difficulty: Optional[str] = None
+    ) -> List[LearningResource]:
+        with self.session_factory() as db:
+            query = db.query(GeneratedResourceORM).filter_by(learner_id=learner_id)
+            if resource_type:
+                query = query.filter_by(resource_type=resource_type)
+            if difficulty:
+                query = query.filter_by(difficulty=difficulty)
+            orms = query.order_by(GeneratedResourceORM.created_at.desc()).all()
+        return [_orm_to_pydantic(orm) for orm in orms]

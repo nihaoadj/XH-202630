@@ -4,7 +4,7 @@ from typing import Dict, Optional, Callable
 from sqlalchemy.orm import Session
 
 from app.db.learner.base import BaseLearnerRepository
-from app.db.models import LearnerProfileORM
+from app.db.models import AgentRunORM, DiagnosticAnswerORM, KnowledgeStateORM, LearnerProfileORM
 from app.models.schemas import KnowledgeState, LearnerProfile, LearningPreferences
 
 
@@ -102,6 +102,10 @@ class SQLLearnerRepository(BaseLearnerRepository):
         with self.session_factory() as db:
             orm = db.query(LearnerProfileORM).filter_by(learner_id=learner_id).first()
             if orm:
+                # 诊断记录与知识状态直接依赖画像；Agent 运行轨迹则匿名保留，以免丢失审计证据。
+                db.query(DiagnosticAnswerORM).filter_by(learner_id=learner_id).delete(synchronize_session=False)
+                db.query(KnowledgeStateORM).filter_by(learner_id=learner_id).delete(synchronize_session=False)
+                db.query(AgentRunORM).filter_by(learner_id=learner_id).update({"learner_id": None}, synchronize_session=False)
                 db.delete(orm)
                 db.commit()
                 return True
@@ -111,3 +115,20 @@ class SQLLearnerRepository(BaseLearnerRepository):
         with self.session_factory() as db:
             orms = db.query(LearnerProfileORM).all()
         return {orm.learner_id: _orm_to_pydantic(orm) for orm in orms}
+
+    def update_partial(self, learner_id: str, updates: dict) -> Optional[LearnerProfile]:
+        profile = self.get(learner_id)
+        if profile is None:
+            return None
+        updated = profile.model_copy(update=updates)
+        self.save(updated)
+        return updated
+
+    def list_with_pagination(self, page: int, page_size: int, skill_level: Optional[str] = None) -> dict:
+        with self.session_factory() as db:
+            query = db.query(LearnerProfileORM)
+            if skill_level:
+                query = query.filter_by(skill_level=skill_level)
+            total = query.count()
+            rows = query.order_by(LearnerProfileORM.learner_id).offset((page - 1) * page_size).limit(page_size).all()
+        return {"total": total, "page": page, "page_size": page_size, "items": [_orm_to_pydantic(row) for row in rows]}

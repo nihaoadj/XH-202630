@@ -30,3 +30,9 @@ class LearnerService:
     def delete(self, learner_id: str) -> bool:
         """删除学习者画像"""
         return self.repo.delete(learner_id)
+
+    def update_partial(self, learner_id: str, updates: dict) -> Optional[LearnerProfile]:
+        return self.repo.update_partial(learner_id, updates)
+
+    def list_with_pagination(self, page: int, page_size: int, skill_level: Optional[str] = None) -> dict:
+        return self.repo.list_with_pagination(page, page_size, skill_level)

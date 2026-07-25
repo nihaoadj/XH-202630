@@ -35,3 +35,14 @@ class MemoryResourceRepository(BaseResourceRepository):
                     self._learner_index[learner_id].remove(resource_id)
             return True
         return False
+
+    def list_by_learner_with_filter(
+        self, learner_id: str, resource_type: Optional[str] = None, difficulty: Optional[str] = None
+    ) -> List[LearningResource]:
+        resources = self.list_by_learner(learner_id)
+        return [
+            resource
+            for resource in resources
+            if (resource_type is None or resource.resource_type == resource_type)
+            and (difficulty is None or resource.difficulty == difficulty)
+        ]
