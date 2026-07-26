@@ -1,6 +1,13 @@
 <template>
   <div>
     <h2>生成个性化学习资源</h2>
+    <el-alert
+      v-if="learningDirectionId"
+      type="info"
+      :closable="false"
+      style="margin-bottom: 16px;"
+      :title="`当前学习方向：${learningDirectionId}`"
+    />
     <el-form :model="form" label-width="120px">
       <el-form-item label="学习者ID">
         <el-input v-model="form.learner_id" />
@@ -76,25 +83,17 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { learnerApi, generateApi } from '../api'
+import { profileApi, generateApi } from '../api'
+import { useAppStore } from '../stores/app'
 import AgentVisualization from '../components/AgentVisualization.vue'
 import ResourceViewer from '../components/ResourceViewer.vue'
 
-const form = reactive({
-  learner_id: 'stu_001',
-  topic: '根据当前知识库主题生成一套入门到实操的学习资源',
-})
+const store = useAppStore()
+const learningDirectionId = store.currentLearningDirectionId || localStorage.getItem('learning_direction_id') || ''
 
-const profile = reactive({
-  learner_id: 'stu_001',
-  learner_type: '有基础学习者',
-  education: '本科',
-  major: '计算机科学与技术',
-  theory_scores: { '基础概念': 70, '核心流程': 45, '工具使用': 65, '实操应用': 50 },
-  skill_level: '中级',
-  weak_points: ['核心流程', '实操应用'],
-  strong_points: ['基础概念', '工具使用'],
-  learning_goal: '掌握当前知识库主题的核心概念、实操步骤和常见问题处理',
+const form = reactive({
+  learner_id: localStorage.getItem('last_learner_id') || store.currentLearnerId || 'stu_001',
+  topic: '根据当前知识库主题生成一套入门到实操的学习资源',
 })
 
 const loading = ref(false)
@@ -111,10 +110,17 @@ function percent(value) {
 async function onSubmit() {
   loading.value = true
   try {
-    await learnerApi.createProfile({ ...profile, learner_id: form.learner_id })
+    try {
+      await profileApi.get(form.learner_id)
+    } catch (e) {
+      if (e?.response?.status !== 404) throw e
+      ElMessage.warning('请先完成领域选择与入门问卷，再生成个性化资源')
+      return
+    }
     localStorage.setItem('last_learner_id', form.learner_id)
     const res = await generateApi.generate({
       learner_id: form.learner_id,
+      knowledge_base_id: learningDirectionId || undefined,
       topic: form.topic,
       resource_types: ['定制讲义', '实操指南', '分阶测试题'],
     })

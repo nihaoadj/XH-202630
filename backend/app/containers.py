@@ -15,8 +15,9 @@ from app.db.resource.repository import create_resource_repository
 from app.db.feedback.repository import create_feedback_repository
 from app.db.audit.repository import create_audit_repository
 from app.db.diagnosis.repository import create_diagnosis_repository
+from app.db.questionnaire.repository import create_questionnaire_repository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
-from app.services.learner_service import LearnerService
+from app.services.profile_service import ProfileService
 from app.services.generation_service import GenerationService
 from app.services.resource_service import ResourceService
 from app.services.feedback_service import FeedbackService
@@ -87,6 +88,12 @@ class Container(containers.DeclarativeContainer):
         session_factory=db_session_factory,
     )
 
+    questionnaire_repository = providers.Singleton(
+        create_questionnaire_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+    )
+
     knowledge_catalog = providers.Singleton(
         KnowledgeCatalogRepository,
         session_factory=db_session_factory,
@@ -94,9 +101,9 @@ class Container(containers.DeclarativeContainer):
     
     # ==================== Service层（单例）====================
     
-    # 学习者画像服务
-    learner_service = providers.Singleton(
-        LearnerService,
+    # 问卷画像查询与维护服务
+    profile_service = providers.Singleton(
+        ProfileService,
         repo=learner_repository
     )
     
@@ -127,14 +134,16 @@ class Container(containers.DeclarativeContainer):
         feedback_repo=feedback_repository,
     )
 
-    knowledge_service = providers.Singleton(KnowledgeService)
+    knowledge_service = providers.Singleton(
+        KnowledgeService,
+        catalog=knowledge_catalog,
+    )
 
     diagnosis_service = providers.Singleton(
         DiagnosisService,
         knowledge_service=knowledge_service,
         learner_repo=learner_repository,
         diagnosis_repo=diagnosis_repository,
-        catalog=knowledge_catalog,
     )
 
     review_service = providers.Singleton(
@@ -152,6 +161,7 @@ class Container(containers.DeclarativeContainer):
         OnboardingService,
         learner_repo=learner_repository,
         knowledge_service=knowledge_service,
+        questionnaire_repo=questionnaire_repository,
     )
 
 

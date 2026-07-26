@@ -5,9 +5,26 @@ const api = axios.create({
   timeout: 120000,
 })
 
-export const learnerApi = {
-  createProfile: (data) => api.post('/learner/profile', data),
-  getProfile: (id) => api.get(`/learner/profile/${id}`),
+export const profileApi = {
+  list: (params) => api.get('/profiles/', { params }),
+  get: (id) => api.get(`/profiles/${id}`),
+  update: (id, data) => api.patch(`/profiles/${id}`, data),
+  delete: (id) => api.delete(`/profiles/${id}`),
+}
+
+export const knowledgeApi = {
+  listDomains: () => api.get('/knowledge/domains'),
+  listDirections: () => api.get('/knowledge/directions'),
+  getInfo: (learningDirectionId) => api.get('/knowledge/info', { params: { knowledge_base_id: learningDirectionId } }),
+}
+
+export const onboardingApi = {
+  getQuestions: (learningDirectionId) => api.get('/onboarding/questions', { params: { learning_direction_id: learningDirectionId } }),
+  createInitialProfile: (data) => api.post('/onboarding/initial-profile', data),
+}
+
+export const diagnosisApi = {
+  submit: (data) => api.post('/diagnosis/submit', data),
 }
 
 export const generateApi = {

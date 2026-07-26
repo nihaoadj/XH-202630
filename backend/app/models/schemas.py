@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StatusResponse(BaseModel):
@@ -75,24 +75,12 @@ class LearnerProfile(BaseModel):
 
 
 class InitialProfileQuestionnaire(BaseModel):
-    """RAG 入门问卷的结构化答案，用于创建初始画像并筛选诊断范围。"""
+    """初始画像问卷提交；具体题目字段由数据库问卷定义决定。"""
+    model_config = ConfigDict(extra="allow")
+
     learner_id: str
-    identity: str
-    education: str = Field(min_length=1)
-    major: str = Field(min_length=1)
-    learning_goals: List[str] = Field(min_length=1)
-    python_level: str
-    llm_api_level: str
-    prompt_level: str
-    rag_level: str
-    known_rag_nodes: List[str] = Field(default_factory=list)
-    vector_store_experience: Optional[str] = None
-    rag_failure_causes: List[str] = Field(default_factory=list)
-    desired_resource_types: List[str] = Field(default_factory=list)
-    learning_modes: List[str] = Field(default_factory=list)
-    difficulty_preference: Optional[str] = None
-    weekly_time_budget: Optional[str] = None
-    embedding_screening_answer: Optional[str] = None
+    learning_direction_id: Optional[str] = Field(default=None, description="用户选择的学习方向 ID")
+    answers: Dict[str, Any] = Field(default_factory=dict, description="问卷答案；也兼容旧版平铺字段")
 
 
 class InitialProfileResponse(BaseModel):
@@ -155,6 +143,7 @@ class DiagnosticQuestionListResponse(BaseModel):
 
 class DiagnosticSubmitRequest(BaseModel):
     learner_id: str
+    learning_direction_id: Optional[str] = Field(default=None, description="用户选择的学习方向 ID")
     knowledge_base_id: Optional[str] = None
     answers: List[DiagnosticAnswerSubmission] = Field(min_length=1)
     metadata: Dict[str, Any] = Field(default_factory=dict)

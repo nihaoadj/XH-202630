@@ -10,7 +10,7 @@ from app.core.file_storage import load_resource_file
 from app.db.learner.memory import MemoryLearnerRepository
 from app.db.resource.memory import MemoryResourceRepository
 from app.models.schemas import LearnerProfile, LearningResource
-from app.services.learner_service import LearnerService
+from app.services.profile_service import ProfileService
 from app.services.resource_service import ResourceService
 
 
@@ -40,7 +40,7 @@ def test_resource_filter_and_resource_id_download(monkeypatch):
     )
     app = FastAPI()
     app.container = SimpleNamespace(
-        learner_service=lambda: LearnerService(learner_repo),
+        profile_service=lambda: ProfileService(learner_repo),
         resource_service=lambda: ResourceService(resource_repo),
     )
     app.include_router(resources.router, prefix="/api/resources")

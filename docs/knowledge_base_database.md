@@ -1,153 +1,382 @@
 # 知识库与数据库实现说明
 
-## 运行方式
+> 项目编号：XH-202630  
+> 文档版本：2.0  
+> 文档更新时间：2026-07-26  
+> 文档定位：说明当前项目中知识库源文件、SQLite 数据库、问卷、诊断、画像与资源的真实落库方式。
 
-开发与演示环境使用 SQLite。复制 `backend/.env.example` 为 `backend/.env` 后，保持：
+## 1. 当前运行方式
+
+开发环境当前使用 SQLite。
+
+`backend/.env` 的关键配置为：
 
 ```env
 DB_TYPE=sqlite
 DATABASE_URL=sqlite:///./data/domain_knowledge.db
 ```
 
-在项目根目录执行：
+数据库文件位置：
+
+```text
+backend/data/domain_knowledge.db
+```
+
+初始化与导入脚本：
 
 ```powershell
 python scripts/init_db.py
 python scripts/ingest_knowledge.py
 ```
 
-`init_db.py` 创建关系表，并同步当前 `KNOWLEDGE_BASE_DIR` 指向知识库的元数据、文档、切片、能力图谱、诊断题及示例学习者画像。`ingest_knowledge.py` 只构建对应知识库的 Chroma collection；默认使用稳定片段 ID 上插入，可安全重复执行。只有知识库源文件被删除或希望完全刷新索引时才使用：
+含义：
 
-```powershell
-python scripts/ingest_knowledge.py --rebuild
+- `init_db.py`
+  - 创建关系表
+  - 导入学习目录
+  - 导入问卷模板与问卷题目
+  - 导入诊断题
+  - 初始化知识库元数据与示例画像
+- `ingest_knowledge.py`
+  - 构建知识库向量索引
+  - 将知识文档切片写入 Chroma
+
+## 2. 当前知识源目录
+
+### 2.1 学习目录源文件
+
+```text
+knowledge_base/learning_catalog_seed.json
 ```
 
-## 知识库目录约定
+作用：
 
-每个知识库目录包含：
+- 保存“领域 -> 学习方向”的目录结构
+- 初始化后同步到：
+  - `learning_domains`
+  - `learning_tracks`
 
-- `metadata.json`：知识库 ID、版本、文档清单、能力图谱和适用人群。
-- `raw/`：Markdown 或 TXT 原始资料。
-- `diagnostic_questions.json`：可版本管理的诊断题数据（可选）。
+### 2.2 通用问卷源文件
 
-每个向量片段都保留 `knowledge_base_id`、`document_id`、`chunk_id`、`chunk_index`、`title`、`source_path`、`knowledge_points` 与 `content_hash`。前端展示、资源引用和 Claim 审核均应使用这些稳定字段，不应依赖本机绝对路径或向量库返回顺序。
+```text
+knowledge_base/questionnaire_common.json
+```
 
-## 关系数据分层
+作用：
 
-| 范围 | 主要表 | 用途 |
-| --- | --- | --- |
-| 知识源 | `knowledge_bases`、`knowledge_documents`、`knowledge_chunks` | 管理知识库版本、文档和向量片段的可追溯映射 |
-| 能力诊断 | `rag_skill_nodes`、`skill_node_relations`、`diagnostic_questions`、`diagnostic_answers`、`knowledge_states` | 建立知识点、题目、学习者掌握度之间的结构化关系 |
-| Agent 与审核 | `agent_runs`、`agent_steps`、`resource_reviews`、`resource_claims` | 保存协同过程、证据、Claim 支持情况与修订结果 |
-| 比赛评测 | `contest_eval_cases`、`contest_eval_results` | 记录检索命中、覆盖率、幻觉率、难度适配和消融实验 |
+- 保存所有学习方向共用的初始画像问卷
 
-现有 `learner_profiles`、`generated_resources` 与 `feedback_records` 表继续保留，以保证当前服务层兼容。资源生成服务会将每次工作流的 `agent_runs`、`agent_steps` 以及每项资源的 `resource_reviews` 自动落库；当审核 Agent 提供 Claim 时，同时写入 `resource_claims`。新增表不替代现有 API，而是为后续 `/api/skills/*`、`/api/knowledge/*` 与评测接口提供数据源。
+### 2.3 方向专属源文件
 
-## AI 生成资源的持久化与知识库边界
+每个学习方向目录下可包含：
 
-AI 生成的学习资源需要保存，但它与“权威知识库资料”是两类数据，不能混存，也不能因为生成成功就自动进入向量检索库。
+```text
+knowledge_base/<track_id>/
+  metadata.json
+  questionnaire.json
+  diagnostic_questions.json
+  raw/
+```
 
-| 数据对象 | 保存位置 | 保存内容 | 是否参与 RAG 检索 |
-| --- | --- | --- | --- |
-| 权威知识库资料 | `knowledge_bases`、`knowledge_documents`、`knowledge_chunks` 与 Chroma collection | 已整理的参考资料、教学知识卡、稳定片段 ID、来源元数据与内容哈希 | 是 |
-| AI 生成学习资源 | `generated_resources`；有正文时另存 `backend/data/generated_resources/` | 学习者、主题、类型、难度、正文/文件、知识点、来源引用、版本、审核摘要 | 否 |
-| 生成过程审计 | `agent_runs`、`agent_steps` | 请求摘要、Agent 步骤、决策依据、证据引用、重试和异常信息 | 否 |
-| 审核结果 | `resource_reviews`、`resource_claims` | 审核状态、幻觉风险、Claim、支持与否、证据片段、修正建议 | 否 |
+当前已有方向目录：
 
-`POST /api/generate/` 的资源保存链路为：生成 Agent 产出 `LearningResource` → 若有文本正文，写入受控目录并记录相对路径、大小和 MIME 类型 → 写入 `generated_resources` → 写入本次 `agent_runs` 与 `agent_steps` → 审核结果写入 `resource_reviews`；只有审核 Agent 实际返回 Claim 时才写入 `resource_claims`。资源读取只允许按 `resource_id` 访问，服务端会验证文件仍位于 `backend/data/generated_resources/` 内，避免把任意本机路径暴露给客户端。
+- `knowledge_base/rag_engineering_training/`
+- `knowledge_base/demo_industrial_internet/`
 
-生成资源的 `source_refs` 和 Claim 的 `evidence_refs` 应指向稳定的知识库文档/片段标识，用于展示“这份资源依据了什么”。当前实现**不会**将生成内容自动写回 `knowledge_documents`、`knowledge_chunks` 或 Chroma。若后续希望把某份生成内容升级为知识库资料，应先由人工核验内容、来源、版权和版本，再走显式的资料导入与索引重建流程；这一环节目前没有自动接口，属于有意保留的人审边界。
+说明：
 
-## 数据质量规则
+- `metadata.json`：知识库元数据
+- `questionnaire.json`：方向专属问卷源文件
+- `diagnostic_questions.json`：诊断题源文件
+- `raw/`：原始知识文档
 
-1. `knowledge_base_id` 是知识隔离边界；检索、文档、图谱和诊断题必须属于同一知识库。
-2. `document_id`、`chunk_id`、`question_id` 与 `node_id` 一经发布不得随意变更。
-3. 每条诊断题必须绑定至少一个知识点或能力节点；每条评测样本必须给出期望证据。
-4. Claim 审核记录使用 `resource_claims.evidence_refs` 关联稳定片段 ID，不能只保存自然语言来源描述。
+## 3. 当前数据库分层
 
-## 当前实现清单（数据库、知识库、接口与测试）
+### 3.1 学习目录
 
-本节只描述仓库中已经实现和验证过的内容，不把后续设想写成已完成功能。开发环境当前使用 SQLite（`backend/data/domain_knowledge.db`）；语义向量索引由本地 Chroma 独立保存。两者分工如下：SQLite 保存业务事实、关系、审计和历史记录，Chroma 保存可语义检索的知识文档切片及其来源元数据。
+| 表 | 作用 |
+|---|---|
+| `learning_domains` | 保存一级领域 |
+| `learning_tracks` | 保存学习方向，并绑定到知识库 |
 
-### 数据库当前保存的数据
+当前前端的“先选领域，再选方向”就是从这两张表读数据。
 
-| 数据类别 | 表 | 保存内容 | 主要用途 |
-| --- | --- | --- | --- |
-| 学习者画像 | `learner_profiles` | 背景、目标领域、所属知识库、能力等级、理论得分、知识状态、强弱项、学习偏好、最近反馈摘要 | 个性化诊断、路径规划和资源生成 |
-| 已生成资源 | `generated_resources` | 资源类型、难度、正文或文件路径、覆盖知识点、来源引用、审核状态、版本 | 向学习者展示资源并保留资源历史 |
-| 学习反馈 | `feedback_records` | 正确率、答案详情、耗时、自评、决策、推荐主题、知识状态更新 | 驱动下一轮补弱、练习或进阶挑战 |
-| 知识库目录 | `knowledge_bases`、`knowledge_documents`、`knowledge_chunks` | 知识库版本、文档路径与哈希、切片正文、切片哈希、来源元数据 | 追溯“某段回答来自哪篇文档、哪个片段” |
-| 能力图谱 | `rag_skill_nodes`、`skill_node_relations` | 节点名称、层级、前置/后继关系、关联知识点、考核方式 | 组织教学顺序与诊断维度 |
-| 诊断过程 | `diagnostic_questions`、`diagnostic_answers`、`knowledge_states` | 题目、标准答案、作答、判分、节点掌握度及证据题号 | 服务器判分并更新学习者画像 |
-| Agent 过程与审核 | `agent_runs`、`agent_steps`、`resource_reviews`、`resource_claims` | 每次生成的输入输出摘要、Agent 步骤、审核结果、Claim 与证据切片 | 演示多 Agent 过程，审计资源的证据支撑 |
-| 量化评测 | `contest_eval_cases`、`contest_eval_results` | 标准评测题、实验名称、检索命中、覆盖率、幻觉率、难度匹配等结果 | 汇总比赛用的真实评测指标；评测样例仍待后续录入 |
+### 3.2 问卷
 
-画像中的灵活字段（如 `knowledge_states`、`learning_preferences`）以 JSON 保存；需要过滤和关联的关键字段（如 `learner_id`、`knowledge_base_id`、`resource_id`、`node_id`）保留为独立列。删除画像时会删除其诊断答案和知识状态，并将 Agent 审计记录中的学习者标识匿名化。
+| 表 | 作用 |
+|---|---|
+| `questionnaire_templates` | 问卷模板 |
+| `questionnaire_questions` | 问卷题目定义 |
+| `questionnaire_submissions` | 一次问卷提交的主记录 |
+| `questionnaire_answers` | 一次问卷提交的逐题答案明细 |
 
-### 当前知识库保存的数据
+说明：
 
-当前演示知识库位于 `knowledge_base/rag_engineering_training/`，其 `knowledge_base_id` 为 `rag_engineering_training`，版本为 `1.0.0`。本次入库已验证为 **22 篇文档、57 个 Chroma 向量切片、13 个能力节点、39 道诊断题**。
+- 运行时问卷不是从前端硬编码读取
+- 也不是直接从 JSON 文件给前端
+- 当前 API 会先从数据库读取问卷模板和题目，再组装成前端可渲染结构
 
-| 位置/文件 | 当前内容 | 保存方式和用途 |
-| --- | --- | --- |
-| `metadata.json` | 知识库 ID、版本、文档清单、来源 URL、能力图谱、适用层级 | 知识库的总目录；初始化时同步到关系数据库 |
-| `references/` | 9 篇 RAG 工程权威资料整理，覆盖架构、切分、嵌入、检索、重排、引用、审核、评测、调优 | 面向事实依据和工程方法，保留原始来源链接 |
-| `cards/` | 13 张教学知识卡，分别对应能力图谱节点 | 面向教学和个性化生成，提供可直接学习的内容 |
-| `diagnostic_questions.json` | 39 道题：每个能力节点 3 题，覆盖概念、情境、误区 | 服务器读取并判分；对外获取题目时不返回答案和解析 |
-| `raw/` | 预留的原始资料归档目录；当前为空 | 之前的 4 篇非权威原始资料已按要求删除，不参与检索或入库 |
-| Chroma collection | 57 个片段的文本向量与基础来源元数据 | 用于语义检索；片段保留 `knowledge_base_id`、`document_id`、`chunk_id`、标题、来源路径、知识点、内容哈希等可追溯字段 |
+### 3.3 画像
 
-向量切片采用稳定 ID 上插入：重复执行入库不会产生重复片段；显式执行 `python scripts/ingest_knowledge.py --rebuild` 时，才会先删除该知识库原有的 Chroma collection 再重建。
+| 表 | 作用 |
+|---|---|
+| `learner_profiles` | 学习者画像主表 |
 
-### 当前后端接口
+当前画像包含：
 
-以下接口均已注册在 FastAPI 应用中；详细请求体和响应字段见 [api.md](api.md)。
+- 基础背景
+- 学习目标
+- `knowledge_base_id`
+- `theory_scores`
+- `knowledge_states`
+- `weak_points`
+- `strong_points`
+- `learning_preferences`
 
-| 模块 | 已实现接口 |
-| --- | --- |
-| 健康检查 | `GET /` |
-| 学习者画像 | `POST /api/learner/profile`、`GET /api/learner/profile/{learner_id}`、`PATCH /api/learner/profile/{learner_id}`、`GET /api/learner/list`、`DELETE /api/learner/profile/{learner_id}` |
-| 初始画像与自适应诊断 | `GET /api/onboarding/questions`、`POST /api/onboarding/initial-profile` |
-| 知识库与能力图谱 | `GET /api/knowledge/info`、`GET /api/skills/nodes` |
-| 诊断 | `GET /api/diagnosis/questions`、`POST /api/diagnosis/submit` |
-| 个性化生成 | `POST /api/generate/` |
-| 资源 | `GET /api/resources/{learner_id}`、`GET /api/resources/file/{resource_id}` |
-| 审核与证据 | `GET /api/reviews/{resource_id}` |
-| 反馈与报告 | `POST /api/feedback/`、`GET /api/feedback/history/{learner_id}`、`GET /api/report/{learner_id}` |
-| 评测 | `GET /api/evaluation/summary` |
+### 3.4 知识库
 
-`GET /api/diagnosis/questions` 不返回题目答案和解析，正确性只由服务端在 `POST /api/diagnosis/submit` 时计算。`GET /api/evaluation/summary` 只汇总已经落库的真实评测结果，不会生成虚假的比赛指标。
+| 表 | 作用 |
+|---|---|
+| `knowledge_bases` | 知识库主表 |
+| `knowledge_documents` | 文档记录 |
+| `knowledge_chunks` | 切片记录 |
 
-### 测试文件与覆盖范围
+同时向量索引位于：
 
-当前完整回归命令为：
+```text
+backend/chroma_db/
+```
+
+关系数据库与向量库分工：
+
+- SQLite：保存业务事实、文档映射、切片映射、元数据
+- Chroma：保存向量与语义检索索引
+
+### 3.5 技能图谱与诊断
+
+| 表 | 作用 |
+|---|---|
+| `rag_skill_nodes` | 技能节点 |
+| `skill_node_relations` | 技能节点关系 |
+| `diagnostic_questions` | 诊断题库 |
+| `diagnostic_answers` | 诊断作答记录 |
+| `knowledge_states` | 节点掌握状态持久化 |
+
+说明：
+
+- 问卷与诊断是两套不同数据结构
+- 问卷用于初始画像
+- 诊断用于真实测量能力并回写状态
+
+### 3.6 资源、反馈与审核
+
+| 表 | 作用 |
+|---|---|
+| `generated_resources` | 已生成资源 |
+| `feedback_records` | 学习反馈 |
+| `agent_runs` | Agent 运行主记录 |
+| `agent_steps` | Agent 步骤记录 |
+| `resource_reviews` | 资源审核摘要 |
+| `resource_claims` | Claim 与证据记录 |
+
+### 3.7 评测
+
+| 表 | 作用 |
+|---|---|
+| `contest_eval_cases` | 评测样例 |
+| `contest_eval_results` | 评测结果 |
+
+## 4. 当前 API 与数据库的关系
+
+### 4.1 学习目录
+
+- `GET /api/knowledge/domains`
+- `GET /api/knowledge/directions`
+
+读取：
+
+- `learning_domains`
+- `learning_tracks`
+
+### 4.2 问卷
+
+- `GET /api/onboarding/questions`
+- `POST /api/onboarding/initial-profile`
+
+读取：
+
+- `questionnaire_templates`
+- `questionnaire_questions`
+
+写入：
+
+- `questionnaire_submissions`
+- `questionnaire_answers`
+- `learner_profiles`
+
+### 4.3 画像
+
+- `GET /api/profiles/`
+- `GET /api/profiles/{learner_id}`
+- `PATCH /api/profiles/{learner_id}`
+- `DELETE /api/profiles/{learner_id}`
+
+读写：
+
+- `learner_profiles`
+
+删除时还会联动清理相关诊断记录。
+
+### 4.4 诊断
+
+- `GET /api/diagnosis/questions`
+- `POST /api/diagnosis/submit`
+
+读取：
+
+- `diagnostic_questions`
+- `rag_skill_nodes`
+- `skill_node_relations`
+
+写入：
+
+- `diagnostic_answers`
+- `knowledge_states`
+- `learner_profiles`
+
+### 4.5 资源与反馈
+
+- `POST /api/generate/`
+- `GET /api/resources/{learner_id}`
+- `GET /api/resources/file/{resource_id}`
+- `GET /api/reviews/{resource_id}`
+- `POST /api/feedback/`
+- `GET /api/feedback/history/{learner_id}`
+- `GET /api/report/{learner_id}`
+
+涉及：
+
+- `generated_resources`
+- `resource_reviews`
+- `resource_claims`
+- `feedback_records`
+- `agent_runs`
+- `agent_steps`
+- `learner_profiles`
+
+## 5. 问卷与诊断的边界
+
+### 5.1 问卷负责什么
+
+问卷用于收集：
+
+- 身份与背景
+- 学历/专业
+- 学习目标
+- 自述水平
+- 学习偏好
+- 希望优先学习的方向
+
+问卷不会直接判定：
+
+- `mastered`
+- `weak`
+- `learning`
+
+### 5.2 诊断负责什么
+
+诊断用于：
+
+- 测量真实掌握情况
+- 判分
+- 回写 `knowledge_states`
+- 更新 `skill_level`
+- 更新 `weak_points` / `strong_points`
+
+## 6. 当前实现中的真实口径
+
+### 6.1 问卷来源
+
+当前是：
+
+```text
+源文件 -> init_db.py 导入 -> questionnaire_templates / questionnaire_questions -> API 从数据库读取
+```
+
+所以：
+
+- 源文件存在，是为了开发理解、版本管理和初始化
+- 运行时实际读取来源是数据库
+
+### 6.2 诊断题来源
+
+当前是：
+
+```text
+diagnostic_questions.json -> init_db.py 导入 -> diagnostic_questions -> API 从数据库读取
+```
+
+所以：
+
+- 诊断题源文件只是导入来源
+- 运行时实际读取来源也是数据库
+
+## 7. 当前知识库示例状态
+
+当前演示知识库目录：
+
+```text
+knowledge_base/rag_engineering_training/
+```
+
+当前已知事实：
+
+- `knowledge_base_id = rag_engineering_training`
+- 当前已存在文档、切片、技能节点和诊断题的数据库记录
+
+## 8. 当前测试口径
+
+当前后端回归命令：
 
 ```powershell
 python -m pytest backend/tests -q
 ```
 
-截至本说明更新时，完整测试结果为 **26 passed**。各文件覆盖范围如下：
+当前测试文件已覆盖：
 
-| 测试文件 | 覆盖内容 |
-| --- | --- |
-| `backend/tests/test_agents.py` | Agent 工作流能运行；达到最大重试次数时能够停止；生成节点会正确增加迭代计数 |
-| `backend/tests/test_services.py` | 学习者服务增删查改、内存仓储选择、反馈降级决策、反馈决策 Agent、学习报告服务 |
-| `backend/tests/test_knowledge_base.py` | 稳定切片与来源字段、Chroma 元数据序列化/还原、目录幂等同步与过期文档清理、检索的知识库隔离、Agent 审计和 Claim 证据持久化、诊断判分及 SQLite 持久化 |
-| `backend/tests/test_knowledge_api.py` | 知识库信息和诊断接口可用，且诊断题答案不会泄露给客户端 |
-| `backend/tests/test_learner_api.py` | 学习者列表、部分更新和删除接口 |
-| `backend/tests/test_onboarding_api.py` | 问卷创建/更新初始画像、仅向自称了解的节点发放诊断题、未开始节点保留、Embedding 场景筛查失败时跳过深度诊断 |
-| `backend/tests/test_resource_api.py` | 资源类型/难度过滤、按资源 ID 下载、拒绝访问生成资源目录之外的路径 |
-| `backend/tests/test_review_api.py` | 审核详情接口返回 Claim 证据，并正确处理资源不存在的情况 |
-| `backend/tests/test_evaluation_api.py` | 评测汇总按实验名称聚合真实已落库结果 |
+- Agent 工作流
+- 问卷 API
+- 画像 API
+- 知识库 API
+- 资源 API
+- 审核 API
+- 评测 API
+- 问卷数据库读写
 
-> 当前测试重点是数据库、知识库和 API 的回归保障。前端联调、正式比赛评测样例扩充、生产环境权限与隐私策略不属于本轮已完成范围。
+说明：
 
-## 初始画像与自适应诊断
+- 这里不再写死某个过期的 `xx passed`
+- 以当前实际测试结果为准
 
-新增 `GET /api/onboarding/questions` 与 `POST /api/onboarding/initial-profile` 后，问卷数据仍保存于既有 `learner_profiles` 表，不新增一张孤立的问卷表：身份映射为 `learner_type`，问卷直接采集 `education` 和 `major`，学习目标映射为 `learning_goal`；Python、API、Prompt、RAG 自评保存为带“自评”前缀的理论得分；资源类型、难度偏好与学习方式写入 `learning_preferences`，资源语言当前固定为中文默认值；原始问卷答案保留在 `learning_preferences.metadata.onboarding`，以便追溯初始判断依据。
+## 9. 当前约束
 
-第 7 题“已了解的 RAG 节点”只用于选择诊断范围：被选择的节点写为 `self_reported` 并返回对应诊断题；未选择节点写为 `not_started` 并进入画像的待补弱项，但不会出诊断题。用户随后通过 `/api/diagnosis/submit` 对已选择节点作答，服务端真实判分后会覆盖这些节点的状态；未开始节点会继续保留在待补列表中，供第一轮资源生成优先补齐。
+### 9.1 命名约束
 
-知识状态的受控值为 `not_started`、`self_reported`、`weak`、`learning`、`mastered`。其中前两种用于初始画像：`not_started` 表示用户明确不了解，`self_reported` 表示用户自称了解、待诊断验证；后三种只能由诊断题服务端判分或学习反馈产生。`not_started` 不是 `unknown`：前者有明确的问卷证据，后者表示没有任何判断依据。
+- 前台流程入口：`learning_direction_id`
+- 内部知识边界：`knowledge_base_id`
 
-Embedding 节点在返回深度诊断题前还需通过一个条件式场景筛查题。该筛查题不是直接询问定义，而是要求区分语义向量召回、文档切分、Prompt 约束和重排序；回答错误时不会把“自称了解 Embedding”误当成掌握，也不会继续发放该节点的诊断题。
+### 9.2 存储约束
+
+- 业务事实进 SQLite
+- 向量索引进 Chroma
+- 生成资源文件进 `backend/data/generated_resources/`
+
+### 9.3 文档约束
+
+文档不得再使用以下旧口径描述当前实现：
+
+- `/api/learner/profile`
+- `/api/learner/list`
+- 前端硬编码问卷
+- 问卷和诊断混为一套题
+

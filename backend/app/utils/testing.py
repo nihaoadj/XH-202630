@@ -17,9 +17,9 @@ def reset_container() -> Container:
         def setup_function():
             container = reset_container()  # 创建全新容器
 
-        def test_learner_service():
+        def test_profile_service():
             container = reset_container()
-            service = container.learner_service()  # 获取全新Service实例
+            service = container.profile_service()  # 获取全新Service实例
     """
     return init_container()
 
@@ -38,7 +38,7 @@ def override_repository(container: Container, mock_repo):
             mock_repo = Mock()
 
             with override_repository(container, mock_repo):
-                service = container.learner_service()
+                service = container.profile_service()
                 # service会自动使用mock_repo
 
             # 退出with块后自动恢复真实实现

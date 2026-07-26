@@ -1,0 +1,238 @@
+{
+  "domains": [
+    {
+      "domain_id": "ai_application",
+      "name": "AI 应用开发",
+      "description": "面向大模型应用、RAG、Agent 与评测的工程培训。",
+      "sort_order": 10,
+      "enabled": true,
+      "tracks": [
+        {
+          "track_id": "rag_engineering_training",
+          "knowledge_base_id": "rag_engineering_training",
+          "name": "RAG 工程链路培训",
+          "description": "围绕文档解析、切分、Embedding、检索、重排、生成和评测的完整 RAG 工程链路训练。",
+          "sort_order": 10,
+          "enabled": true,
+          "available": true
+        },
+        {
+          "track_id": "prompt_engineering",
+          "knowledge_base_id": "prompt_engineering",
+          "name": "Prompt 工程与评测",
+          "description": "学习提示词结构化设计、上下文控制和效果评测。",
+          "sort_order": 20,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "agent_application",
+          "knowledge_base_id": "agent_application",
+          "name": "Agent 应用开发",
+          "description": "学习工具调用、任务规划、多 Agent 协作和执行观测。",
+          "sort_order": 30,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "llm_api_application",
+          "knowledge_base_id": "llm_api_application",
+          "name": "大模型 API 应用开发",
+          "description": "学习模型调用、流式输出、函数调用和应用集成。",
+          "sort_order": 40,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "model_evaluation_safety",
+          "knowledge_base_id": "model_evaluation_safety",
+          "name": "模型评测与安全",
+          "description": "学习效果评估、鲁棒性、安全边界和风险治理。",
+          "sort_order": 50,
+          "enabled": true,
+          "available": false
+        }
+      ]
+    },
+    {
+      "domain_id": "industrial_internet",
+      "name": "工业互联网",
+      "description": "面向工业互联、边缘计算、设备数据采集与工业协议的培训。",
+      "sort_order": 20,
+      "enabled": true,
+      "tracks": [
+        {
+          "track_id": "demo_industrial_internet",
+          "knowledge_base_id": "demo_industrial_internet",
+          "name": "工业互联网基础",
+          "description": "学习工业互联网基本概念、边缘接入、协议采集和平台应用。",
+          "sort_order": 10,
+          "enabled": true,
+          "available": true
+        },
+        {
+          "track_id": "edge_gateway",
+          "knowledge_base_id": "edge_gateway",
+          "name": "边缘计算网关",
+          "description": "学习边缘网关配置、数据接入、协议适配和边缘处理。",
+          "sort_order": 20,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "industrial_protocol_collection",
+          "knowledge_base_id": "industrial_protocol_collection",
+          "name": "工业协议与数据采集",
+          "description": "学习 Modbus、OPC UA、MQTT 等协议与采集链路。",
+          "sort_order": 30,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "predictive_maintenance",
+          "knowledge_base_id": "predictive_maintenance",
+          "name": "设备预测性维护",
+          "description": "学习设备状态监测、异常识别和维护策略。",
+          "sort_order": 40,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "industrial_data_platform",
+          "knowledge_base_id": "industrial_data_platform",
+          "name": "工业数据平台",
+          "description": "学习工业数据接入、存储、分析和平台化能力。",
+          "sort_order": 50,
+          "enabled": true,
+          "available": false
+        }
+      ]
+    },
+    {
+      "domain_id": "data_engineering",
+      "name": "数据工程",
+      "description": "面向数据采集、治理、建模、实时处理和检索系统的工程培训。",
+      "sort_order": 30,
+      "enabled": true,
+      "tracks": [
+        {
+          "track_id": "data_governance_modeling",
+          "knowledge_base_id": "data_governance_modeling",
+          "name": "数据治理与建模",
+          "description": "学习数据标准、质量规则、指标建模和血缘管理。",
+          "sort_order": 10,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "data_warehouse_bi",
+          "knowledge_base_id": "data_warehouse_bi",
+          "name": "数据仓库与 BI",
+          "description": "学习数仓分层、主题建模、指标体系和可视化分析。",
+          "sort_order": 20,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "realtime_data_processing",
+          "knowledge_base_id": "realtime_data_processing",
+          "name": "实时数据处理",
+          "description": "学习流式采集、实时计算、消息队列和延迟治理。",
+          "sort_order": 30,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "vector_retrieval_engineering",
+          "knowledge_base_id": "vector_retrieval_engineering",
+          "name": "向量检索工程",
+          "description": "学习向量索引、召回评估、过滤策略和检索服务化。",
+          "sort_order": 40,
+          "enabled": true,
+          "available": false
+        }
+      ]
+    },
+    {
+      "domain_id": "software_engineering",
+      "name": "软件工程",
+      "description": "面向工程化开发、后端服务、测试质量和交付流程的培训。",
+      "sort_order": 40,
+      "enabled": true,
+      "tracks": [
+        {
+          "track_id": "python_engineering",
+          "knowledge_base_id": "python_engineering",
+          "name": "Python 工程能力",
+          "description": "学习项目结构、依赖管理、测试、调试和代码质量。",
+          "sort_order": 10,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "backend_api_development",
+          "knowledge_base_id": "backend_api_development",
+          "name": "后端 API 开发",
+          "description": "学习 REST API、鉴权、数据库访问和服务分层。",
+          "sort_order": 20,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "devops_ci_cd",
+          "knowledge_base_id": "devops_ci_cd",
+          "name": "DevOps 与 CI/CD",
+          "description": "学习自动化测试、构建发布、容器化和流水线。",
+          "sort_order": 30,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "software_testing_quality",
+          "knowledge_base_id": "software_testing_quality",
+          "name": "软件测试与质量保障",
+          "description": "学习单元测试、接口测试、回归策略和质量度量。",
+          "sort_order": 40,
+          "enabled": true,
+          "available": false
+        }
+      ]
+    },
+    {
+      "domain_id": "cyber_security",
+      "name": "网络安全",
+      "description": "面向 Web 安全、安全运营、日志分析和 AI 安全的培训。",
+      "sort_order": 50,
+      "enabled": true,
+      "tracks": [
+        {
+          "track_id": "web_security_basics",
+          "knowledge_base_id": "web_security_basics",
+          "name": "Web 安全基础",
+          "description": "学习常见漏洞、攻防原理和基础防护。",
+          "sort_order": 10,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "security_operations_logs",
+          "knowledge_base_id": "security_operations_logs",
+          "name": "安全运营与日志分析",
+          "description": "学习日志采集、告警研判、事件响应和运营指标。",
+          "sort_order": 20,
+          "enabled": true,
+          "available": false
+        },
+        {
+          "track_id": "ai_security_redteam",
+          "knowledge_base_id": "ai_security_redteam",
+          "name": "AI 安全与红队测试",
+          "description": "学习提示注入、越权风险、模型输出安全和红队评测。",
+          "sort_order": 30,
+          "enabled": true,
+          "available": false
+        }
+      ]
+    }
+  ]
+}

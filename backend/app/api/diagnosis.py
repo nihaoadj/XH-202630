@@ -10,6 +10,7 @@ router = APIRouter()
 @router.get("/questions", response_model=DiagnosticQuestionListResponse)
 def get_diagnostic_questions(
     request: Request,
+    learning_direction_id: str | None = None,
     knowledge_base_id: str | None = None,
     learner_id: str | None = None,
     skill_node_ids: str | None = None,
@@ -21,8 +22,9 @@ def get_diagnostic_questions(
     service: KnowledgeService = request.app.container.knowledge_service()
     node_ids = [item.strip() for item in skill_node_ids.split(",")] if skill_node_ids else None
     try:
-        questions = service.select_diagnostic_questions(knowledge_base_id, node_ids, level, limit)
-        resolved_id = service._ensure_knowledge_base(knowledge_base_id)["knowledge_base_id"]
+        direction_id = learning_direction_id or knowledge_base_id
+        questions = service.select_diagnostic_questions(direction_id, node_ids, level, limit)
+        resolved_id = service._ensure_knowledge_base(direction_id)["knowledge_base_id"]
         return {
             "knowledge_base_id": resolved_id,
             "total": len(questions),
