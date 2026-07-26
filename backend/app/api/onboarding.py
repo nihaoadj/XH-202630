@@ -8,10 +8,17 @@ router = APIRouter()
 
 
 @router.get("/questions")
-def get_onboarding_questions(request: Request):
+def get_onboarding_questions(request: Request, learning_direction_id: str | None = None):
     """获取由服务端维护的初始画像问卷定义。"""
     service: OnboardingService = request.app.container.onboarding_service()
-    return {"questions": service.questionnaire()}
+    try:
+        manifest = service.knowledge_service._ensure_knowledge_base(learning_direction_id)
+        return {
+            "learning_direction_id": manifest["knowledge_base_id"],
+            "questions": service.questionnaire(manifest["knowledge_base_id"]),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/initial-profile", response_model=InitialProfileResponse)

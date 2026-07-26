@@ -7,7 +7,6 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from app.db.diagnosis.base import BaseDiagnosisRepository
-from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.learner.base import BaseLearnerRepository
 from app.models.schemas import (
     DiagnosticAnswerRecord,
@@ -32,19 +31,19 @@ class DiagnosisService:
         knowledge_service: KnowledgeService,
         learner_repo: BaseLearnerRepository,
         diagnosis_repo: BaseDiagnosisRepository,
-        catalog: KnowledgeCatalogRepository | None = None,
     ):
         self.knowledge_service = knowledge_service
         self.learner_repo = learner_repo
         self.diagnosis_repo = diagnosis_repo
-        self.catalog = catalog
 
     def submit(self, request: DiagnosticSubmitRequest) -> DiagnosticResult:
         learner = self.learner_repo.get(request.learner_id)
         if learner is None:
             raise LookupError("学习者画像不存在")
 
-        manifest = self.knowledge_service._ensure_knowledge_base(request.knowledge_base_id)
+        manifest = self.knowledge_service._ensure_knowledge_base(
+            request.learning_direction_id or request.knowledge_base_id
+        )
         knowledge_base_id = manifest["knowledge_base_id"]
         questions = {
             question.question_id: question
@@ -106,11 +105,6 @@ class DiagnosisService:
         learner.skill_level = "初级" if average < 0.6 else "中级" if average < 0.8 else "进阶"
         self.learner_repo.save(learner)
 
-        # 先投影题库和图谱，确保 PostgreSQL 等启用外键约束的部署也能安全写入答题记录。
-        if self.catalog is not None:
-            self.catalog.upsert_knowledge_base(manifest)
-            self.catalog.upsert_skill_nodes(manifest.get("skill_nodes", []), knowledge_base_id)
-            self.catalog.upsert_diagnostic_questions(questions.values())
         self.diagnosis_repo.save_submission(knowledge_base_id=knowledge_base_id, learner_id=learner.learner_id, answers=records, knowledge_states=states)
 
         weak_nodes = [node_id for node_id, state in states.items() if state.status == "weak"]

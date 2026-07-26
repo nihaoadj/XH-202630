@@ -4,10 +4,10 @@ from app.db.learner.base import BaseLearnerRepository
 from app.models.schemas import LearnerProfile
 
 
-class LearnerService:
-    """学习者画像业务服务
-    
-    通过构造函数注入Repository依赖。
+class ProfileService:
+    """学习者画像查询与维护服务。
+
+    首次创建画像由 OnboardingService 根据问卷完成；本服务只负责已存在画像的查询、维护和删除。
     """
 
     def __init__(self, repo: BaseLearnerRepository):
@@ -18,8 +18,10 @@ class LearnerService:
         """
         self.repo = repo
 
-    def create_or_update(self, profile: LearnerProfile) -> LearnerProfile:
-        """创建或更新学习者画像"""
+    def save_existing_profile(self, profile: LearnerProfile) -> Optional[LearnerProfile]:
+        """保存已存在画像的系统更新，不承担首次创建职责。"""
+        if self.repo.get(profile.learner_id) is None:
+            return None
         self.repo.save(profile)
         return profile
 

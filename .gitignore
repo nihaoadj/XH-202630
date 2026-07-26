@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .env
+**/.env
 venv/
 .venv/
 
@@ -27,9 +28,11 @@ backend/logs/*.log
 
 # Testing
 .pytest_cache/
+**/.pytest_cache/
 
 # Codex / local agent workspace
 .agents/
+.codex/
 
 # Frontend
 node_modules/

@@ -5,7 +5,7 @@ from fastapi.responses import Response
 
 from app.core.file_storage import load_resource_file
 from app.models.schemas import ResourceListResponse
-from app.services.learner_service import LearnerService
+from app.services.profile_service import ProfileService
 from app.services.resource_service import ResourceService
 
 router = APIRouter()
@@ -42,8 +42,8 @@ def list_resources(
     """查询学习者生成资源历史"""
     container = request.app.container
 
-    learner_service: LearnerService = container.learner_service()
-    profile = learner_service.get(learner_id)
+    profile_service: ProfileService = container.profile_service()
+    profile = profile_service.get(learner_id)
     if not profile:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 

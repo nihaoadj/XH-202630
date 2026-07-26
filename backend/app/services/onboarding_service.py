@@ -1,9 +1,10 @@
-"""根据 RAG 入门问卷创建初始画像，并选择自适应诊断题。"""
+"""根据入门问卷创建初始画像，并选择自适应诊断题。"""
 from __future__ import annotations
 
 from typing import Any
 
 from app.db.learner.base import BaseLearnerRepository
+from app.db.questionnaire.base import BaseQuestionnaireRepository
 from app.models.schemas import (
     InitialProfileQuestionnaire,
     InitialProfileResponse,
@@ -14,97 +15,22 @@ from app.models.schemas import (
 from app.services.knowledge_service import KnowledgeService
 
 
-IDENTITY_PROFILE = {
-    "在校学生": "在校学生",
-    "已工作，技术岗位": "职场学习者",
-    "已工作，非技术岗位，准备转向 AI 方向": "转行学习者",
-    "其他": "其他",
-}
-
-LEVEL_SCORES = {
-    "完全不会": 0,
-    "会基础语法，但很少写项目": 25,
-    "能写脚本和调用 API": 50,
-    "能完成中小型项目": 75,
-    "比较熟练，能独立调试工程代码": 100,
-    "没用过": 0,
-    "只在网页端用过 ChatGPT/通义/豆包等": 25,
-    "调用过 OpenAI 或兼容 API": 50,
-    "做过基于大模型 API 的小项目": 75,
-    "做过较完整的大模型应用": 100,
-    "不清楚 Prompt 是什么": 0,
-    "会写简单提问": 25,
-    "知道角色设定、格式约束、上下文注入": 50,
-    "能设计结构化 Prompt": 75,
-    "能针对不同任务优化 Prompt": 100,
-    "完全不了解": 0,
-    "听说过，但说不清流程": 25,
-    "知道大致流程：文档、向量化、检索、生成": 50,
-    "搭建过简单 RAG Demo": 75,
-    "做过 RAG 调优或评测": 100,
-}
-
-# 问卷第 7 题的自我陈述只决定“是否值得进一步测”，不能直接当作掌握证据。
-KNOWN_NODE_MAP = {
-    "文档解析": ["document_parsing"],
-    "Chunk 切分": ["chunking"],
-    "Embedding": ["embedding"],
-    "向量数据库": ["vector_store"],
-    "Top-K 检索": ["similarity_retrieval"],
-    "Query Rewrite": ["similarity_retrieval"],
-    "Rerank": ["rerank"],
-    "Prompt 组装": ["prompt_assembly"],
-    "引用溯源": ["citation"],
-    "幻觉率评测": ["hallucination_control", "rag_evaluation"],
-}
-
-
-# 由后端维护问卷定义，避免前端硬编码题目后与画像字段发生偏差。
-QUESTIONNAIRE = [
-    {"question_id": "identity", "title": "你目前的身份是？", "type": "single_choice", "required": True,
-     "options": list(IDENTITY_PROFILE)},
-    {"question_id": "education", "title": "你的当前学历或教育阶段是？", "type": "single_choice_or_other", "required": True,
-     "options": ["高中/中职", "专科", "本科", "硕士及以上", "已毕业/在职", "其他"]},
-    {"question_id": "major", "title": "你的专业或当前岗位方向是？", "type": "text", "required": True,
-     "hint": "例如：软件工程、机械工程、后端开发、产品运营"},
-    {"question_id": "learning_goals", "title": "你的主要学习目标是？", "type": "multiple_choice", "required": True,
-     "options": ["了解 RAG 基础概念", "能独立搭建一个 RAG Demo", "能优化 RAG 检索效果", "为比赛/项目开发做准备", "为面试/转岗 AI 应用开发或大模型相关岗位做准备"]},
-    {"question_id": "python_level", "title": "你的 Python 基础如何？", "type": "single_choice", "required": True,
-     "options": ["完全不会", "会基础语法，但很少写项目", "能写脚本和调用 API", "能完成中小型项目", "比较熟练，能独立调试工程代码"]},
-    {"question_id": "llm_api_level", "title": "你是否使用过大模型 API？", "type": "single_choice", "required": True,
-     "options": ["没用过", "只在网页端用过 ChatGPT/通义/豆包等", "调用过 OpenAI 或兼容 API", "做过基于大模型 API 的小项目", "做过较完整的大模型应用"]},
-    {"question_id": "prompt_level", "title": "你对 Prompt 的理解程度是？", "type": "single_choice", "required": True,
-     "options": ["不清楚 Prompt 是什么", "会写简单提问", "知道角色设定、格式约束、上下文注入", "能设计结构化 Prompt", "能针对不同任务优化 Prompt"]},
-    {"question_id": "rag_level", "title": "你对 RAG 的了解程度是？", "type": "single_choice", "required": True,
-     "options": ["完全不了解", "听说过，但说不清流程", "知道大致流程：文档、向量化、检索、生成", "搭建过简单 RAG Demo", "做过 RAG 调优或评测"]},
-    {"question_id": "known_rag_nodes", "title": "以下 RAG 环节中，你了解哪些？", "type": "multiple_choice", "required": False,
-     "options": [*KNOWN_NODE_MAP, "都不了解"], "hint": "只对选中的节点安排后续诊断；“都不了解”不可与其他选项同时选择。"},
-    {"question_id": "embedding_screening_answer", "title": "场景筛查：用户问法与文档措辞不同，仍希望召回相关片段。Embedding 在此最主要的作用是？", "type": "single_choice", "required": False,
-     "show_when": {"known_rag_nodes_contains": "Embedding"},
-     "options": ["把问题和文档编码为语义向量，再按相似度召回片段", "把文档按固定字数切分", "要求模型只回答“我不知道”", "用交叉编码器对候选结果重新排序"]},
-    {"question_id": "vector_store_experience", "title": "你是否使用过向量数据库或向量检索工具？", "type": "single_choice", "required": False,
-     "options": ["听说过 FAISS、Chroma、Milvus 等", "用过 FAISS 或 Chroma", "用过 Milvus、Qdrant、Elasticsearch 等", "做过向量库调优或线上应用", "没用过/没听说过"]},
-    {"question_id": "rag_failure_causes", "title": "如果一个 RAG 系统回答不准确，你认为可能原因有哪些？", "type": "multiple_choice", "required": False,
-     "options": ["文档切分不准确", "Embedding 效果不好", "检索没有命中相关内容", "Top-K 或相似度阈值设置不合适", "Prompt 没要求基于证据回答", "模型自身幻觉", "不太清楚"]},
-    {"question_id": "desired_resource_types", "title": "希望系统优先生成哪些学习资源？", "type": "multiple_choice", "required": False,
-     "options": ["图解讲义", "一步步实操教程", "代码模板", "分阶测试题", "项目案例", "调参建议", "面试/转岗建议"]},
-    {"question_id": "learning_modes", "title": "你偏好的学习方式是？", "type": "multiple_choice", "required": False,
-     "options": ["先讲概念，再做练习", "直接做项目，边做边学", "看代码案例理解", "看图解和类比理解", "先做测试，系统根据薄弱点推荐内容"]},
-    {"question_id": "difficulty_preference", "title": "你希望第一轮学习资源的难度如何？", "type": "single_choice", "required": False,
-     "options": ["自适应推荐", "从基础开始", "保持当前水平", "优先挑战进阶内容"]},
-    {"question_id": "weekly_time_budget", "title": "你每周大概能投入多少时间学习 RAG？", "type": "single_choice", "required": False,
-     "options": ["0.5-1 小时", "1-2 小时", "2-4 小时", "4-6 小时", "6 小时以上"]},
-]
-
-
 class OnboardingService:
-    def __init__(self, learner_repo: BaseLearnerRepository, knowledge_service: KnowledgeService):
+    COMMON_QUESTIONNAIRE_ID = "common_initial_profile_v1"
+
+    def __init__(
+        self,
+        learner_repo: BaseLearnerRepository,
+        knowledge_service: KnowledgeService,
+        questionnaire_repo: BaseQuestionnaireRepository,
+    ):
         self.learner_repo = learner_repo
         self.knowledge_service = knowledge_service
+        self.questionnaire_repo = questionnaire_repo
 
     def create_initial_profile(self, request: InitialProfileQuestionnaire) -> InitialProfileResponse:
-        self._validate_answers(request)
-        manifest = self.knowledge_service._ensure_knowledge_base(None)
+        manifest = self.knowledge_service._ensure_knowledge_base(request.learning_direction_id)
+        self._validate_answers(request, manifest)
         nodes = self.knowledge_service.list_skill_nodes(manifest["knowledge_base_id"])
         node_by_id = {node.node_id: node for node in nodes}
 
@@ -120,6 +46,7 @@ class OnboardingService:
             not_started_node_ids,
         )
         self.learner_repo.save(profile)
+        self._save_questionnaire_submissions(request, manifest, profile)
 
         questions = (
             self.knowledge_service.select_diagnostic_questions(
@@ -141,47 +68,37 @@ class OnboardingService:
             ),
         )
 
-    @staticmethod
-    def questionnaire() -> list[dict[str, Any]]:
-        """返回前端渲染所需的问卷定义，不包含诊断题标准答案。"""
-        return QUESTIONNAIRE
+    def questionnaire(self, learning_direction_id: str | None = None) -> list[dict[str, Any]]:
+        """从数据库返回前端渲染所需的问卷定义。"""
+        manifest = self.knowledge_service._ensure_knowledge_base(learning_direction_id)
+        common, track = self._questionnaire_templates(manifest["knowledge_base_id"])
+        return [*common.get("questions", []), *track.get("questions", [])]
 
-    def _validate_answers(self, request: InitialProfileQuestionnaire) -> None:
-        if request.identity not in IDENTITY_PROFILE:
-            raise ValueError("identity 必须使用 RAG 学习画像问卷中的选项")
-        level_fields = (request.python_level, request.llm_api_level, request.prompt_level, request.rag_level)
-        invalid_levels = [value for value in level_fields if value not in LEVEL_SCORES]
-        if invalid_levels:
-            raise ValueError(f"存在不支持的能力自评选项：{', '.join(invalid_levels)}")
-        choices = set(request.known_rag_nodes)
-        invalid_nodes = choices - (set(KNOWN_NODE_MAP) | {"都不了解"})
-        if invalid_nodes:
-            raise ValueError(f"第 7 题包含未知节点：{', '.join(sorted(invalid_nodes))}")
-        if "都不了解" in choices and len(choices) > 1:
-            raise ValueError("第 7 题选择“都不了解”时不能同时选择其他节点")
+    def _validate_answers(self, request: InitialProfileQuestionnaire, manifest: dict[str, Any]) -> None:
+        questions = self._question_by_id(manifest["knowledge_base_id"])
+        answers = self._answer_payload(request)
+        for question_id, question in questions.items():
+            answer = answers.get(question_id)
+            if question.get("required") and self._is_empty_answer(answer):
+                raise ValueError(f"缺少必答字段：{question_id}")
+            if self._is_empty_answer(answer) or question.get("type") == "text":
+                continue
+            self._validate_option_answer(question, answer)
 
     def _diagnostic_node_ids(
         self, request: InitialProfileQuestionnaire, node_by_id: dict[str, Any]
     ) -> tuple[list[str], dict[str, bool]]:
         selected = set()
-        for option in request.known_rag_nodes:
-            selected.update(KNOWN_NODE_MAP.get(option, []))
+        if not node_by_id:
+            return [], {}
+        questions = self._question_by_id(request.learning_direction_id)
+        answers = self._answer_payload(request)
+        for question_id, answer in answers.items():
+            values = answer if isinstance(answer, list) else [answer]
+            for value in values:
+                selected.update(self._option_metadata(questions, question_id, value).get("diagnostic_scope_add", []))
 
-        # 第 6 题不是掌握证明，但只要用户表示接触过 RAG，就补测 RAG 基础概念。
-        if LEVEL_SCORES[request.rag_level] > 0:
-            selected.add("rag_basics")
-        if request.rag_level == "做过 RAG 调优或评测":
-            selected.update({"rag_evaluation", "rag_tuning"})
-
-        screening_results: dict[str, bool] = {}
-        if "embedding" in selected:
-            screening_results["embedding"] = (
-                request.embedding_screening_answer == "把问题和文档编码为语义向量，再按相似度召回片段"
-            )
-            if not screening_results["embedding"]:
-                selected.discard("embedding")
-
-        return [node_id for node_id in node_by_id if node_id in selected], screening_results
+        return [node_id for node_id in node_by_id if node_id in selected], {}
 
     def _build_profile(
         self,
@@ -192,13 +109,12 @@ class OnboardingService:
         diagnostic_node_ids: list[str],
         not_started_node_ids: list[str],
     ) -> LearnerProfile:
-        learner_type = IDENTITY_PROFILE[request.identity]
-        score_values = [
-            LEVEL_SCORES[request.python_level],
-            LEVEL_SCORES[request.llm_api_level],
-            LEVEL_SCORES[request.prompt_level],
-            LEVEL_SCORES[request.rag_level],
-        ]
+        questions = self._question_by_id(knowledge_base_id)
+        answers = self._answer_payload(request)
+        mapped = self._profile_mapping_values(questions, answers)
+        score_values = list(mapped["self_report_scores"])
+        if not score_values:
+            score_values = [25]
         average = sum(score_values) / len(score_values)
         skill_level = "初级" if average < 40 else "中级" if average < 75 else "进阶"
 
@@ -219,20 +135,22 @@ class OnboardingService:
                 )
 
         prior_scores = dict(existing.theory_scores) if existing else {}
-        prior_scores.update(
-            {
-                "自评：Python 基础": LEVEL_SCORES[request.python_level],
-                "自评：大模型 API": LEVEL_SCORES[request.llm_api_level],
-                "自评：Prompt": LEVEL_SCORES[request.prompt_level],
-                "自评：RAG 基础": LEVEL_SCORES[request.rag_level],
-            }
-        )
+        prior_scores.update(mapped["theory_scores"])
         old_preferences = existing.learning_preferences if existing and existing.learning_preferences else LearningPreferences()
         metadata = dict(old_preferences.metadata)
-        metadata["onboarding"] = request.model_dump(mode="json", exclude={"learner_id"})
+        metadata["onboarding"] = {**answers, "learning_direction_id": request.learning_direction_id}
+        metadata.update(mapped["learning_preferences_metadata"])
+        preferred_resource_types = mapped["learning_preferences"].get(
+            "preferred_resource_types",
+            old_preferences.preferred_resource_types,
+        )
+        difficulty_preference = mapped["learning_preferences"].get(
+            "difficulty_preference",
+            old_preferences.difficulty_preference or "自适应推荐",
+        )
         preferences = LearningPreferences(
-            preferred_resource_types=request.desired_resource_types or old_preferences.preferred_resource_types,
-            difficulty_preference=request.difficulty_preference or old_preferences.difficulty_preference or "自适应推荐",
+            preferred_resource_types=preferred_resource_types,
+            difficulty_preference=difficulty_preference,
             time_budget_minutes=old_preferences.time_budget_minutes,
             language=old_preferences.language or "zh-CN",
             metadata=metadata,
@@ -241,17 +159,17 @@ class OnboardingService:
         preserved_weak_points = list(existing.weak_points) if existing else []
         return LearnerProfile(
             learner_id=request.learner_id,
-            learner_type=learner_type,
-            education=request.education,
-            major=request.major,
-            target_domain="RAG 工程训练",
+            learner_type=mapped["root"].get("learner_type") or (existing.learner_type if existing else "问卷学习者"),
+            education=mapped["root"].get("education") or (existing.education if existing else "未填写"),
+            major=mapped["root"].get("major") or (existing.major if existing else "未填写"),
+            target_domain=self.knowledge_service._ensure_knowledge_base(knowledge_base_id).get("domain"),
             knowledge_base_id=knowledge_base_id,
             theory_scores=prior_scores,
             knowledge_states=prior_states,
             skill_level=skill_level,
             weak_points=list(dict.fromkeys(preserved_weak_points + not_started_names)),
             strong_points=list(existing.strong_points) if existing else [],
-            learning_goal="；".join(request.learning_goals),
+            learning_goal=mapped["root"].get("learning_goal") or (existing.learning_goal if existing else "未填写"),
             learning_preferences=preferences,
             last_feedback_summary=existing.last_feedback_summary if existing else {},
         )
@@ -259,3 +177,145 @@ class OnboardingService:
     @staticmethod
     def _is_onboarding_state(state: KnowledgeState) -> bool:
         return bool(state.evidence) and all(item.startswith("onboarding:") for item in state.evidence)
+
+    def _questionnaire_templates(self, knowledge_base_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        common = self.questionnaire_repo.get_questionnaire_template(self.COMMON_QUESTIONNAIRE_ID)
+        track = self.questionnaire_repo.get_questionnaire_for_track(knowledge_base_id, knowledge_base_id)
+        if common is None:
+            raise ValueError("数据库中缺少通用初始画像问卷")
+        if track is None:
+            raise ValueError(f"数据库中缺少学习方向问卷：{knowledge_base_id}")
+        return common, track
+
+    def _question_by_id(self, learning_direction_id: str | None) -> dict[str, dict[str, Any]]:
+        manifest = self.knowledge_service._ensure_knowledge_base(learning_direction_id)
+        common, track = self._questionnaire_templates(manifest["knowledge_base_id"])
+        return {question["question_id"]: question for question in [*common["questions"], *track["questions"]]}
+
+    @staticmethod
+    def _answer_payload(request: InitialProfileQuestionnaire) -> dict[str, Any]:
+        payload = dict(request.answers or {})
+        payload.update(request.model_extra or {})
+        return payload
+
+    @staticmethod
+    def _is_empty_answer(value: Any) -> bool:
+        return value is None or value == "" or value == []
+
+    def _validate_option_answer(self, question: dict[str, Any], answer: Any) -> None:
+        valid_values = {option.get("value", option.get("label")) for option in question.get("options", []) if isinstance(option, dict)}
+        if not valid_values:
+            return
+        values = answer if isinstance(answer, list) else [answer]
+        invalid = [value for value in values if value not in valid_values]
+        if invalid:
+            raise ValueError(f"{question['question_id']} 包含不支持的选项：{', '.join(invalid)}")
+        exclusive = set((question.get("validation") or {}).get("exclusive_option_values", []))
+        if exclusive & set(values) and len(values) > 1:
+            raise ValueError(f"{question['question_id']} 的互斥选项不能与其他选项同时选择")
+
+    def _option_metadata(self, questions: dict[str, dict[str, Any]], question_id: str, value: str | None) -> dict[str, Any]:
+        if value is None:
+            return {}
+        for option in questions.get(question_id, {}).get("options", []):
+            if isinstance(option, dict) and option.get("value", option.get("label")) == value:
+                return option
+        return {}
+
+    def _self_report_score(self, questions: dict[str, dict[str, Any]], question_id: str, value: str | None) -> float | None:
+        score = self._option_metadata(questions, question_id, value).get("self_report_score")
+        return float(score) if score is not None else None
+
+    def _profile_mapping_values(
+        self,
+        questions: dict[str, dict[str, Any]],
+        answers: dict[str, Any],
+    ) -> dict[str, Any]:
+        mapped = {
+            "root": {},
+            "theory_scores": {},
+            "learning_preferences": {},
+            "learning_preferences_metadata": {},
+            "self_report_scores": [],
+        }
+        for question_id, question in questions.items():
+            answer = answers.get(question_id)
+            if self._is_empty_answer(answer):
+                continue
+            mapping = question.get("profile_mapping") or {}
+            target_path = mapping.get("target_path")
+            transform = mapping.get("transform", "answer")
+            value = self._transform_answer(questions, question_id, answer, transform)
+            if value is None or not target_path:
+                continue
+            self._assign_profile_value(mapped, target_path, value)
+
+            values = answer if isinstance(answer, list) else [answer]
+            for option_value in values:
+                score = self._self_report_score(questions, question_id, option_value)
+                if score is not None:
+                    mapped["self_report_scores"].append(score)
+        return mapped
+
+    def _transform_answer(
+        self,
+        questions: dict[str, dict[str, Any]],
+        question_id: str,
+        answer: Any,
+        transform: str,
+    ) -> Any:
+        if transform == "answer":
+            return [] if answer == ["无"] else answer
+        if transform == "join_semicolon":
+            return "；".join(str(item) for item in answer) if isinstance(answer, list) else str(answer)
+        if transform == "option.profile_value":
+            return self._option_metadata(questions, question_id, answer).get("profile_value", answer)
+        if transform == "option.self_report_score":
+            values = answer if isinstance(answer, list) else [answer]
+            scores = [self._self_report_score(questions, question_id, value) for value in values]
+            scores = [score for score in scores if score is not None]
+            if not scores:
+                return None
+            return sum(scores) / len(scores)
+        return answer
+
+    @staticmethod
+    def _assign_profile_value(mapped: dict[str, Any], target_path: str, value: Any) -> None:
+        if target_path.startswith("theory_scores."):
+            mapped["theory_scores"][target_path.removeprefix("theory_scores.")] = value
+            return
+        if target_path.startswith("learning_preferences.metadata."):
+            key = target_path.removeprefix("learning_preferences.metadata.")
+            mapped["learning_preferences_metadata"][key] = value
+            return
+        if target_path.startswith("learning_preferences."):
+            key = target_path.removeprefix("learning_preferences.")
+            if key == "focus_nodes":
+                mapped["learning_preferences_metadata"]["focus_nodes"] = value
+            else:
+                mapped["learning_preferences"][key] = value
+            return
+        mapped["root"][target_path] = value
+
+    def _save_questionnaire_submissions(
+        self,
+        request: InitialProfileQuestionnaire,
+        manifest: dict[str, Any],
+        profile: LearnerProfile,
+    ) -> None:
+        common, track = self._questionnaire_templates(manifest["knowledge_base_id"])
+        answers = self._answer_payload(request)
+        for template in (common, track):
+            question_ids = {question["question_id"] for question in template.get("questions", [])}
+            template_answers = {key: value for key, value in answers.items() if key in question_ids and not self._is_empty_answer(value)}
+            if not template_answers:
+                continue
+            self.questionnaire_repo.save_submission(
+                questionnaire_id=template["questionnaire_id"],
+                learner_id=request.learner_id,
+                answers=template_answers,
+                track_id=manifest["knowledge_base_id"],
+                knowledge_base_id=manifest["knowledge_base_id"],
+                profile_updates=profile.model_dump(mode="json"),
+                metadata={"purpose": "initial_profile"},
+            )

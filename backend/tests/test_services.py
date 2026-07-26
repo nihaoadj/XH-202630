@@ -7,14 +7,14 @@ from app.db.resource.memory import MemoryResourceRepository
 from app.db.resource.repository import create_resource_repository
 from app.agents.feedback import decide_feedback
 from app.models.schemas import LearnerProfile
-from app.services.learner_service import LearnerService
+from app.services.profile_service import ProfileService
 from app.services.feedback_service import FeedbackService
 from app.services.report_service import ReportService
 
 
-def test_learner_service_crud():
+def test_profile_service_only_saves_existing_profiles():
     repo = MemoryLearnerRepository()
-    service = LearnerService(repo)
+    service = ProfileService(repo)
 
     profile = LearnerProfile(
         learner_id="svc_001",
@@ -25,8 +25,12 @@ def test_learner_service_crud():
         learning_goal="测试",
     )
 
-    service.create_or_update(profile)
-    assert service.get("svc_001").major == "计算机"
+    assert service.save_existing_profile(profile) is None
+
+    repo.save(profile)
+    profile.major = "软件工程"
+    service.save_existing_profile(profile)
+    assert service.get("svc_001").major == "软件工程"
 
 
 def test_repository_factories_choose_memory_implementation():

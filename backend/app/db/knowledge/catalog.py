@@ -11,6 +11,8 @@ from app.db.models import (
     KnowledgeBaseORM,
     KnowledgeChunkORM,
     KnowledgeDocumentORM,
+    LearningDomainORM,
+    LearningTrackORM,
     RagSkillNodeORM,
     SkillNodeRelationORM,
 )
@@ -50,6 +52,134 @@ class KnowledgeCatalogRepository:
                 for key, value in values.items():
                     setattr(row, key, value)
             db.commit()
+
+    def upsert_learning_catalog(self, domain: Dict[str, Any], track: Dict[str, Any]) -> None:
+        """同步面向用户展示的领域/方向层级。"""
+        with self.session_factory() as db:
+            domain_id = domain["domain_id"]
+            domain_values = {
+                "name": domain["name"],
+                "description": domain.get("description"),
+                "sort_order": domain.get("sort_order", 100),
+                "enabled": domain.get("enabled", True),
+                "extra_metadata": domain.get("metadata", {}),
+            }
+            domain_row = db.get(LearningDomainORM, domain_id)
+            if domain_row is None:
+                db.add(LearningDomainORM(domain_id=domain_id, **domain_values))
+            else:
+                for key, value in domain_values.items():
+                    setattr(domain_row, key, value)
+
+            track_id = track["track_id"]
+            track_values = {
+                "domain_id": domain_id,
+                "knowledge_base_id": track["knowledge_base_id"],
+                "name": track["name"],
+                "description": track.get("description"),
+                "target_audience": track.get("target_audience", []),
+                "difficulty_levels": track.get("difficulty_levels", []),
+                "sort_order": track.get("sort_order", 100),
+                "enabled": track.get("enabled", True),
+                "extra_metadata": track.get("metadata", {}),
+            }
+            track_row = db.get(LearningTrackORM, track_id)
+            if track_row is None:
+                db.add(LearningTrackORM(track_id=track_id, **track_values))
+            else:
+                for key, value in track_values.items():
+                    setattr(track_row, key, value)
+            db.commit()
+
+    def list_learning_domains(self) -> List[Dict[str, Any]]:
+        """读取启用中的领域/方向展示树。"""
+        with self.session_factory() as db:
+            domains = (
+                db.query(LearningDomainORM)
+                .filter_by(enabled=True)
+                .order_by(LearningDomainORM.sort_order, LearningDomainORM.name)
+                .all()
+            )
+            domain_ids = [domain.domain_id for domain in domains]
+            tracks = []
+            if domain_ids:
+                tracks = (
+                    db.query(LearningTrackORM)
+                    .filter(LearningTrackORM.enabled.is_(True), LearningTrackORM.domain_id.in_(domain_ids))
+                    .order_by(LearningTrackORM.sort_order, LearningTrackORM.name)
+                    .all()
+                )
+
+        grouped: Dict[str, List[Dict[str, Any]]] = {domain.domain_id: [] for domain in domains}
+        for track in tracks:
+            grouped.setdefault(track.domain_id, []).append(self._track_payload(track))
+        return [
+            {
+                "domain_id": domain.domain_id,
+                "name": domain.name,
+                "description": domain.description,
+                "sort_order": domain.sort_order,
+                "enabled": domain.enabled,
+                "metadata": domain.extra_metadata or {},
+                "tracks": grouped.get(domain.domain_id, []),
+            }
+            for domain in domains
+        ]
+
+    def get_learning_track(self, track_id: str) -> Dict[str, Any] | None:
+        """按方向 ID 查询方向配置。"""
+        with self.session_factory() as db:
+            row = db.get(LearningTrackORM, track_id)
+            if row is None or not row.enabled:
+                return None
+            return self._track_payload(row)
+
+    def get_knowledge_base(self, knowledge_base_id: str) -> Dict[str, Any] | None:
+        """按知识库 ID 查询知识库元数据。"""
+        with self.session_factory() as db:
+            row = db.get(KnowledgeBaseORM, knowledge_base_id)
+            if row is None:
+                return None
+            return {
+                "knowledge_base_id": row.knowledge_base_id,
+                "name": row.name,
+                "version": row.version,
+                "domain": row.domain,
+                "description": row.description,
+                "learner_levels": row.learner_levels or [],
+                "raw_metadata": row.extra_metadata or {},
+            }
+
+    def default_knowledge_base_id(self) -> str | None:
+        """返回第一个已开放学习方向绑定的知识库 ID。"""
+        with self.session_factory() as db:
+            rows = (
+                db.query(LearningTrackORM)
+                .filter(LearningTrackORM.enabled.is_(True))
+                .order_by(LearningTrackORM.sort_order, LearningTrackORM.name)
+                .all()
+            )
+        for row in rows:
+            metadata = row.extra_metadata or {}
+            if metadata.get("available") is not False:
+                return row.knowledge_base_id
+        return rows[0].knowledge_base_id if rows else None
+
+    @staticmethod
+    def _track_payload(row: LearningTrackORM) -> Dict[str, Any]:
+        return {
+            "track_id": row.track_id,
+            "learning_direction_id": row.track_id,
+            "domain_id": row.domain_id,
+            "knowledge_base_id": row.knowledge_base_id,
+            "name": row.name,
+            "description": row.description,
+            "target_audience": row.target_audience or [],
+            "difficulty_levels": row.difficulty_levels or [],
+            "sort_order": row.sort_order,
+            "enabled": row.enabled,
+            "metadata": row.extra_metadata or {},
+        }
 
     def sync_documents(self, documents: Iterable, chunks: Iterable) -> None:
         """把已加载文档和已切片内容同步到关系库，保留稳定的 Chroma 对照 ID。"""
@@ -234,3 +364,49 @@ class KnowledgeCatalogRepository:
             )
             for row in rows
         ]
+
+    def list_skill_edges(self, knowledge_base_id: str) -> List[Dict[str, str]]:
+        with self.session_factory() as db:
+            edges = db.query(SkillNodeRelationORM).filter_by(knowledge_base_id=knowledge_base_id).all()
+        return [
+            {
+                "source": edge.parent_node_id,
+                "target": edge.child_node_id,
+                "relation": edge.relation_type,
+            }
+            for edge in edges
+        ]
+
+    def list_diagnostic_questions(self, knowledge_base_id: str) -> List[DiagnosticQuestion]:
+        with self.session_factory() as db:
+            rows = (
+                db.query(DiagnosticQuestionORM)
+                .filter_by(knowledge_base_id=knowledge_base_id)
+                .order_by(DiagnosticQuestionORM.skill_node_id, DiagnosticQuestionORM.question_id)
+                .all()
+            )
+        return [
+            DiagnosticQuestion(
+                question_id=row.question_id,
+                knowledge_base_id=row.knowledge_base_id,
+                skill_node_id=row.skill_node_id,
+                knowledge_point=row.knowledge_point,
+                question_type=row.question_type,
+                difficulty=row.difficulty,
+                question=row.question,
+                options=row.options or [],
+                answer=row.answer,
+                explanation=row.explanation,
+                metadata=row.extra_metadata or {},
+            )
+            for row in rows
+        ]
+
+    def knowledge_base_counts(self, knowledge_base_id: str) -> Dict[str, int]:
+        with self.session_factory() as db:
+            return {
+                "document_count": db.query(KnowledgeDocumentORM).filter_by(knowledge_base_id=knowledge_base_id).count(),
+                "chunk_count": db.query(KnowledgeChunkORM).filter_by(knowledge_base_id=knowledge_base_id).count(),
+                "skill_node_count": db.query(RagSkillNodeORM).filter_by(knowledge_base_id=knowledge_base_id).count(),
+                "diagnostic_question_count": db.query(DiagnosticQuestionORM).filter_by(knowledge_base_id=knowledge_base_id).count(),
+            }

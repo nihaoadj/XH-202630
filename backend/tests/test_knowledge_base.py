@@ -291,7 +291,6 @@ def test_diagnosis_submission_persists_answers_and_states_in_sqlite(tmp_path):
         knowledge_service=knowledge_service,
         learner_repo=learner_repo,
         diagnosis_repo=SQLDiagnosisRepository(factory),
-        catalog=KnowledgeCatalogRepository(factory),
     )
     service.submit(
         DiagnosticSubmitRequest(

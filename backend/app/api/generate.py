@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from app.models.schemas import GenerateRequest, GenerateResponse
-from app.services.learner_service import LearnerService
+from app.services.profile_service import ProfileService
 from app.services.generation_service import GenerationService
 
 router = APIRouter()
@@ -12,8 +12,8 @@ def generate_resources(req: GenerateRequest, request: Request):
     """根据学习者画像生成个性化资源"""
     container = request.app.container
     
-    learner_service: LearnerService = container.learner_service()
-    learner = learner_service.get(req.learner_id)
+    profile_service: ProfileService = container.profile_service()
+    learner = profile_service.get(req.learner_id)
     if not learner:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 

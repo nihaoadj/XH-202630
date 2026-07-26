@@ -3,15 +3,15 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Iterable
 
 from app.core.knowledge_base import (
     chunk_documents,
     load_documents,
     load_knowledge_base_manifest,
-    resolve_knowledge_base_dir,
+    resolve_knowledge_base_dir_by_id,
 )
+from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.models.schemas import DiagnosticQuestion, SkillNode
 
 
@@ -21,16 +21,84 @@ class KnowledgeService:
     题库答案只在服务端保留；对外题目列表不会返回 answer 或 explanation。
     """
 
-    def _manifest(self) -> dict[str, Any]:
-        return load_knowledge_base_manifest()
+    def __init__(self, catalog: KnowledgeCatalogRepository | None = None):
+        self.catalog = catalog
+
+    def _resolve_knowledge_base_id(self, learning_direction_id: str | None = None) -> str | None:
+        if not learning_direction_id or self.catalog is None:
+            return learning_direction_id
+        track = self.catalog.get_learning_track(learning_direction_id)
+        if track is None:
+            return learning_direction_id
+        if track.get("metadata", {}).get("available") is False:
+            raise ValueError(f"学习方向尚未开放：{learning_direction_id}")
+        return track["knowledge_base_id"]
+
+    def _manifest(self, knowledge_base_id: str | None = None) -> dict[str, Any]:
+        if self.catalog is not None:
+            resolved_id = self._resolve_knowledge_base_id(knowledge_base_id)
+            if resolved_id is None:
+                resolved_id = self.catalog.default_knowledge_base_id()
+            if resolved_id is None:
+                raise FileNotFoundError("数据库中缺少可用学习方向")
+            row = self.catalog.get_knowledge_base(resolved_id)
+            if row is None:
+                raise FileNotFoundError(f"数据库中缺少知识库：{resolved_id}")
+            return row
+        kb_dir = resolve_knowledge_base_dir_by_id(self._resolve_knowledge_base_id(knowledge_base_id))
+        return load_knowledge_base_manifest(str(kb_dir))
 
     def _ensure_knowledge_base(self, knowledge_base_id: str | None) -> dict[str, Any]:
-        manifest = self._manifest()
-        if knowledge_base_id and knowledge_base_id != manifest["knowledge_base_id"]:
-            raise ValueError(f"知识库不存在：{knowledge_base_id}")
-        return manifest
+        try:
+            return self._manifest(knowledge_base_id)
+        except FileNotFoundError as exc:
+            raise ValueError(f"学习方向不存在或尚未配置教学数据：{knowledge_base_id}") from exc
+
+    def list_learning_directions(self) -> list[dict[str, Any]]:
+        """返回面向用户展示的学习方向列表，隐藏“知识库”实现概念。"""
+        directions = []
+        default_id = self._manifest()["knowledge_base_id"]
+        for domain in self.list_learning_domains():
+            for track in domain["tracks"]:
+                metadata = track.get("metadata", {})
+                directions.append(
+                    {
+                        "learning_direction_id": track["track_id"],
+                        "track_id": track["track_id"],
+                        "domain_id": domain["domain_id"],
+                        "title": track["name"],
+                        "description": track.get("description"),
+                        "version": metadata.get("version"),
+                        "document_count": metadata.get("document_count", 0),
+                        "skill_node_count": metadata.get("skill_node_count", 0),
+                        "is_default": track.get("knowledge_base_id") == default_id,
+                        "metadata": metadata,
+                    }
+                )
+        return directions
+
+    def list_learning_domains(self) -> list[dict[str, Any]]:
+        """返回领域 -> 方向的两级展示树。"""
+        if self.catalog is None:
+            return []
+        default_id = self._manifest()["knowledge_base_id"]
+        domains = self.catalog.list_learning_domains()
+        for domain in domains:
+            for track in domain["tracks"]:
+                track["is_default"] = track.get("knowledge_base_id") == default_id
+        return domains
 
     def list_skill_nodes(self, knowledge_base_id: str | None = None, level: str | None = None) -> list[SkillNode]:
+        if self.catalog is not None:
+            manifest = self._ensure_knowledge_base(knowledge_base_id)
+            nodes = self.catalog.list_skill_nodes(manifest["knowledge_base_id"])
+            if level:
+                nodes = [node for node in nodes if node.level == level]
+            children: dict[str, list[str]] = defaultdict(list)
+            for edge in self.catalog.list_skill_edges(manifest["knowledge_base_id"]):
+                children[edge["source"]].append(edge["target"])
+            return [node.model_copy(update={"children": children.get(node.node_id, [])}) for node in nodes]
+
         manifest = self._ensure_knowledge_base(knowledge_base_id)
         raw_nodes = manifest.get("skill_nodes", [])
         node_ids_by_name = {node["name"]: node["node_id"] for node in raw_nodes}
@@ -50,6 +118,10 @@ class KnowledgeService:
         return nodes
 
     def list_edges(self, knowledge_base_id: str | None = None) -> list[dict[str, str]]:
+        if self.catalog is not None:
+            manifest = self._ensure_knowledge_base(knowledge_base_id)
+            return self.catalog.list_skill_edges(manifest["knowledge_base_id"])
+
         manifest = self._ensure_knowledge_base(knowledge_base_id)
         node_ids_by_name = {node["name"]: node["node_id"] for node in manifest.get("skill_nodes", [])}
         return [
@@ -63,8 +135,12 @@ class KnowledgeService:
         ]
 
     def load_diagnostic_questions(self, knowledge_base_id: str | None = None) -> list[DiagnosticQuestion]:
-        self._ensure_knowledge_base(knowledge_base_id)
-        path = resolve_knowledge_base_dir() / "diagnostic_questions.json"
+        if self.catalog is not None:
+            manifest = self._ensure_knowledge_base(knowledge_base_id)
+            return self.catalog.list_diagnostic_questions(manifest["knowledge_base_id"])
+
+        manifest = self._ensure_knowledge_base(knowledge_base_id)
+        path = resolve_knowledge_base_dir_by_id(manifest["knowledge_base_id"]) / "diagnostic_questions.json"
         if not path.exists():
             return []
         import json
@@ -116,9 +192,20 @@ class KnowledgeService:
 
     def get_info(self, knowledge_base_id: str | None = None) -> dict[str, Any]:
         manifest = self._ensure_knowledge_base(knowledge_base_id)
-        documents = load_documents()
+        if self.catalog is not None:
+            counts = self.catalog.knowledge_base_counts(manifest["knowledge_base_id"])
+            return {
+                "knowledge_base_id": manifest["knowledge_base_id"],
+                "target_domain": manifest.get("domain"),
+                "description": manifest.get("description"),
+                "version": manifest.get("version"),
+                **counts,
+                "updated_at": None,
+            }
+
+        kb_dir = resolve_knowledge_base_dir_by_id(manifest["knowledge_base_id"])
+        documents = load_documents(str(kb_dir))
         chunks = chunk_documents(documents)
-        kb_dir = resolve_knowledge_base_dir()
         updated_at = datetime.fromtimestamp(
             max((path.stat().st_mtime for path in kb_dir.rglob("*") if path.is_file()), default=0),
             tz=timezone.utc,

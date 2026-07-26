@@ -112,6 +112,111 @@ class KnowledgeBaseORM(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+class LearningDomainORM(Base):
+    __tablename__ = "learning_domains"
+
+    domain_id = Column(String(128), primary_key=True)
+    name = Column(String(256), nullable=False)
+    description = Column(Text, nullable=True)
+    sort_order = Column(Integer, nullable=False, default=100)
+    enabled = Column(Boolean, nullable=False, default=True)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class LearningTrackORM(Base):
+    __tablename__ = "learning_tracks"
+    __table_args__ = (UniqueConstraint("domain_id", "track_id", name="uq_domain_track"),)
+
+    track_id = Column(String(128), primary_key=True)
+    domain_id = Column(String(128), ForeignKey("learning_domains.domain_id"), nullable=False, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    name = Column(String(256), nullable=False)
+    description = Column(Text, nullable=True)
+    target_audience = Column(JSON, default=list)
+    difficulty_levels = Column(JSON, default=list)
+    sort_order = Column(Integer, nullable=False, default=100)
+    enabled = Column(Boolean, nullable=False, default=True)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class QuestionnaireTemplateORM(Base):
+    """问卷模板表：保存通用问卷和方向问卷的版本化配置。"""
+    __tablename__ = "questionnaire_templates"
+
+    questionnaire_id = Column(String(128), primary_key=True)
+    scope = Column(String(32), nullable=False, index=True, comment="common/domain/track")
+    domain_id = Column(String(128), ForeignKey("learning_domains.domain_id"), nullable=True, index=True)
+    track_id = Column(String(128), ForeignKey("learning_tracks.track_id"), nullable=True, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=True, index=True)
+    name = Column(String(256), nullable=False)
+    description = Column(Text, nullable=True)
+    version = Column(String(64), nullable=False, default="1.0.0")
+    enabled = Column(Boolean, nullable=False, default=True)
+    source_path = Column(String(1024), nullable=True)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class QuestionnaireQuestionORM(Base):
+    """问卷题目表：保存题干、选项、展示条件和画像映射规则。"""
+    __tablename__ = "questionnaire_questions"
+    __table_args__ = (UniqueConstraint("questionnaire_id", "question_id", name="uq_questionnaire_question"),)
+
+    question_uid = Column(String(256), primary_key=True)
+    questionnaire_id = Column(String(128), ForeignKey("questionnaire_templates.questionnaire_id"), nullable=False, index=True)
+    question_id = Column(String(128), nullable=False, index=True)
+    field_key = Column(String(128), nullable=False)
+    title = Column(Text, nullable=False)
+    question_type = Column(String(32), nullable=False)
+    required = Column(Boolean, nullable=False, default=False)
+    sort_order = Column(Integer, nullable=False, default=100)
+    hint = Column(Text, nullable=True)
+    options = Column(JSON, default=list)
+    validation = Column(JSON, default=dict)
+    show_when = Column(JSON, default=dict)
+    profile_mapping = Column(JSON, default=dict)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class QuestionnaireSubmissionORM(Base):
+    """问卷提交表：记录用户一次完整问卷提交及其画像更新快照。"""
+    __tablename__ = "questionnaire_submissions"
+
+    submission_id = Column(String(128), primary_key=True)
+    questionnaire_id = Column(String(128), ForeignKey("questionnaire_templates.questionnaire_id"), nullable=False, index=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    track_id = Column(String(128), ForeignKey("learning_tracks.track_id"), nullable=True, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=True, index=True)
+    purpose = Column(String(64), nullable=False, default="initial_profile")
+    answers_snapshot = Column(JSON, default=dict)
+    profile_updates = Column(JSON, default=dict)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QuestionnaireAnswerORM(Base):
+    """问卷答案明细表：保留每道题的原始答案与当时的画像映射规则。"""
+    __tablename__ = "questionnaire_answers"
+    __table_args__ = (UniqueConstraint("submission_id", "question_id", name="uq_questionnaire_submission_answer"),)
+
+    answer_id = Column(String(128), primary_key=True)
+    submission_id = Column(String(128), ForeignKey("questionnaire_submissions.submission_id"), nullable=False, index=True)
+    questionnaire_id = Column(String(128), ForeignKey("questionnaire_templates.questionnaire_id"), nullable=False, index=True)
+    question_id = Column(String(128), nullable=False, index=True)
+    field_key = Column(String(128), nullable=True)
+    answer = Column(JSON, nullable=True)
+    profile_mapping = Column(JSON, default=dict)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class KnowledgeDocumentORM(Base):
     __tablename__ = "knowledge_documents"
     __table_args__ = (UniqueConstraint("knowledge_base_id", "source_path", name="uq_kb_document_path"),)

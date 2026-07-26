@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-from app.config import get_settings, resolve_backend_path
+from app.config import PROJECT_ROOT, get_settings, resolve_backend_path
 
 
 TEXT_EXTENSIONS = {".md", ".txt"}
@@ -42,6 +42,26 @@ def resolve_knowledge_base_dir(kb_dir: Optional[str] = None) -> Path:
     if not target.exists() or not target.is_dir():
         raise FileNotFoundError(f"知识库目录不存在：{target}")
     return target
+
+
+def list_knowledge_base_dirs() -> List[Path]:
+    """列出项目内所有可作为学习方向的数据目录。"""
+    root = PROJECT_ROOT / "knowledge_base"
+    if not root.exists():
+        return []
+    return sorted(path for path in root.iterdir() if path.is_dir())
+
+
+def resolve_knowledge_base_dir_by_id(knowledge_base_id: Optional[str] = None) -> Path:
+    """按知识库 ID 解析目录；ID 是学习方向在后端的稳定绑定。"""
+    if not knowledge_base_id:
+        return resolve_knowledge_base_dir()
+    for path in list_knowledge_base_dirs():
+        raw = _read_json(path / "metadata.json")
+        kb_id = str(raw.get("knowledge_base_id") or raw.get("knowledge_base_name") or path.name)
+        if kb_id == knowledge_base_id:
+            return path
+    raise FileNotFoundError(f"知识库目录不存在：{knowledge_base_id}")
 
 
 def load_metadata(kb_dir: Optional[str] = None) -> Dict[str, Any]:
