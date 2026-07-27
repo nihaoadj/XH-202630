@@ -1,1062 +1,644 @@
-# API 接口文档
+# API 文档
 
 > 项目编号：XH-202630  
-> 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 基础路径：`http://localhost:8000`  
-> 文档版本：v1.0  
-> 文档定位：以分工任务书要求为目标，定义通用领域知识生成系统的 API 契约、字段类型、必填规则、链路逻辑和当前建设状态。
+> 文档版本：2.0
+> 文档更新时间：2026-07-27
+> 说明：本文档以当前后端代码和运行中的 OpenAPI 为准，覆盖 `backend/app/api` 中已实际暴露的接口。
 
-## 1. 设计原则
+## 1. 基本信息
 
-- **字段通用**：接口字段不硬编码任何特定领域。领域由 `knowledge_base_id`、`target_domain`、`topic`、能力节点、画像和知识库内容决定。
-- **示例可具体**：JSON 示例可使用 RAG 工程训练作为演示数据，但字段本身必须能迁移到其他领域。
-- **闭环完整**：接口需要支撑“画像 -> 能力诊断 -> 知识检索 -> 路径规划 -> 资源生成 -> 审核纠偏 -> 反馈更新 -> 报告评测”的完整链路。
-- **分阶段落地**：当前代码优先跑通最小闭环；能力图谱、诊断题、Claim 审核、评测等接口先以契约明确，再逐步实现。
+- 本地服务根地址：`http://127.0.0.1:8000`
+- API 前缀：`/api`
+- 文档依据：
+  - `backend/app/api/*.py`
+  - `backend/app/models/schemas.py`
+  - 运行中的 `GET /openapi.json`
 
-## 2. 状态说明
+## 2. 当前业务主流程
 
-| 状态 | 含义 |
-|------|------|
-| 当前参考路由 | 当前代码已有路由，可用于最小功能联调 |
-| 待增强路由 | 当前有基础能力，但字段、持久化或展示仍需增强 |
-| 设计待建设 | 为完整分工目标预留的接口，当前代码可能尚未实现 |
-
-## 3. 完整业务闭环
+当前代码中的学习流程是：
 
 ```text
-POST /api/learner/profile
-→ GET /api/skills/nodes
-→ GET /api/diagnosis/questions
-→ POST /api/diagnosis/submit
-→ POST /api/generate/
-→ GET /api/resources/{learner_id}
-→ GET /api/reviews/{resource_id}
-→ POST /api/feedback/
-→ GET /api/feedback/history/{learner_id}
-→ GET /api/report/{learner_id}
-→ GET /api/evaluation/summary
-→ POST /api/generate/ 进入下一轮
+选择领域
+-> 选择学习方向
+-> GET /api/onboarding/questions
+-> POST /api/onboarding/initial-profile
+-> POST /api/diagnosis/submit
+-> POST /api/generate/
+-> GET /api/resources/{learner_id}
+-> POST /api/feedback/
+-> GET /api/report/{learner_id}
 ```
 
-最小演示链路：
+说明：
 
-```text
-POST /api/learner/profile
-→ POST /api/generate/
-→ POST /api/feedback/
-→ GET /api/report/{learner_id}
-```
+- “学习方向”是前台概念。
+- 后端内部仍保留 `knowledge_base_id` 作为稳定的数据边界。
+- 问卷与诊断是两套不同的数据结构：
+  - 问卷：用于生成初始画像
+  - 诊断：用于测量真实掌握情况并回写画像
 
-## 4. 接口总览
+## 3. 接口总览
 
-| 模块 | 方法 | 路径 | 说明 | 状态 |
-|------|------|------|------|------|
-| 系统 | GET | `/` | 健康检查 | 当前参考路由 |
-| 学习者 | POST | `/api/learner/profile` | 创建或更新画像 | 当前参考路由 |
-| 学习者 | GET | `/api/learner/profile/{learner_id}` | 查询画像 | 当前参考路由 |
-| 能力图谱 | GET | `/api/skills/nodes` | 查询当前知识库的能力节点 | 设计待建设 |
-| 诊断 | GET | `/api/diagnosis/questions` | 获取诊断题 | 设计待建设 |
-| 诊断 | POST | `/api/diagnosis/submit` | 提交诊断并更新知识状态 | 设计待建设 |
-| 生成 | POST | `/api/generate/` | 多 Agent 协同生成资源 | 当前参考路由 |
-| 资源 | GET | `/api/resources/{learner_id}` | 查询资源历史 | 当前参考路由 |
-| 审核 | GET | `/api/reviews/{resource_id}` | 查询资源审核详情 | 设计待建设 |
-| 反馈 | POST | `/api/feedback/` | 提交反馈并更新画像 | 当前参考路由 |
-| 反馈 | GET | `/api/feedback/history/{learner_id}` | 查询反馈历史 | 当前参考路由 |
-| 报告 | GET | `/api/report/{learner_id}` | 查询学情报告 | 待增强路由 |
-| 评测 | GET | `/api/evaluation/summary` | 查询量化评测摘要 | 设计待建设 |
-| 知识库 | GET | `/api/knowledge/info` | 查询知识库信息 | 设计待建设 |
-
-## 5. 通用数据对象
-
-### 5.1 LearnerProfile
-
-学习者画像用于诊断、生成、反馈和报告。字段必须描述“学习者状态”，不能描述固定领域实现细节。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者唯一标识 |
-| `learner_type` | string | 是 | 学习者类型，如初学者、有基础、进阶；允许业务自定义 |
-| `education` | string | 是 | 学历或学习背景 |
-| `major` | string | 是 | 专业、岗位或学习方向 |
-| `target_domain` | string | 否 | 当前目标领域名称，由用户或知识库决定 |
-| `knowledge_base_id` | string | 否 | 当前使用的知识库标识 |
-| `theory_scores` | object<string, number> | 否 | 主题或能力维度得分，通常为 0-100 |
-| `knowledge_states` | object<string, KnowledgeState> | 否 | 知识点掌握状态 |
-| `skill_level` | string | 否 | 综合能力等级 |
-| `weak_points` | string[] | 否 | 当前薄弱知识点或能力节点 |
-| `strong_points` | string[] | 否 | 当前优势知识点或能力节点 |
-| `learning_goal` | string | 是 | 学习目标 |
-| `learning_preferences` | LearningPreferences | 否 | 学习偏好 |
-| `last_feedback_summary` | object | 否 | 最近反馈摘要，用于下一轮调整 |
-
-```json
-{
-  "learner_id": "learner_001",
-  "learner_type": "有基础学习者",
-  "education": "本科",
-  "major": "计算机科学与技术",
-  "target_domain": "RAG 工程训练",
-  "knowledge_base_id": "kb_rag_demo",
-  "theory_scores": {
-    "文档解析": 70,
-    "检索策略": 45
-  },
-  "knowledge_states": {
-    "检索策略": {
-      "score": 0.45,
-      "status": "weak",
-      "last_updated": "2026-07-23T09:30:00"
-    }
-  },
-  "skill_level": "中级",
-  "weak_points": ["检索策略"],
-  "strong_points": ["文档解析"],
-  "learning_goal": "掌握从知识库检索到生成审核的完整工程流程",
-  "learning_preferences": {
-    "preferred_resource_types": ["定制讲义", "实操指南"],
-    "difficulty_preference": "自适应",
-    "time_budget_minutes": 30
-  },
-  "last_feedback_summary": {
-    "resource_id": "res_001",
-    "correct_rate": 0.55,
-    "decision": "降维解释"
-  }
-}
-```
-
-### 5.2 KnowledgeState
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `score` | number | 否 | 掌握度，建议 0-1 |
-| `status` | string | 否 | 状态，如 unknown、learning、weak、mastered |
-| `evidence` | string[] | 否 | 状态依据，如诊断题、反馈、资源记录 |
-| `last_updated` | string(datetime) | 否 | 最近更新时间 |
-
-### 5.3 LearningPreferences
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `preferred_resource_types` | string[] | 否 | 偏好的资源类型 |
-| `difficulty_preference` | string | 否 | 难度偏好，如自适应、基础、进阶 |
-| `time_budget_minutes` | integer | 否 | 单次学习时间预算 |
-| `language` | string | 否 | 输出语言 |
-| `metadata` | object | 否 | 扩展偏好 |
-
-### 5.4 SkillNode
-
-能力节点用于构建当前知识库的训练图谱。字段名保持通用，节点内容由知识库决定。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `node_id` | string | 是 | 节点唯一标识 |
-| `knowledge_base_id` | string | 是 | 所属知识库 |
-| `name` | string | 是 | 节点名称 |
-| `description` | string | 否 | 节点说明 |
-| `level` | string | 否 | 节点层级或难度 |
-| `prerequisites` | string[] | 否 | 前置节点 ID 或名称 |
-| `children` | string[] | 否 | 后继节点 ID 或名称 |
-| `knowledge_points` | string[] | 否 | 关联知识点 |
-| `assessment_methods` | string[] | 否 | 适合的诊断或评测方式 |
-| `metadata` | object | 否 | 扩展信息 |
-
-```json
-{
-  "node_id": "skill_retrieval",
-  "knowledge_base_id": "kb_rag_demo",
-  "name": "检索策略",
-  "description": "理解相似度检索、混合检索和召回质量评估",
-  "level": "中级",
-  "prerequisites": ["skill_embedding"],
-  "children": ["skill_rerank"],
-  "knowledge_points": ["Top-K", "相似度", "混合检索"],
-  "assessment_methods": ["选择题", "实操任务"],
-  "metadata": {}
-}
-```
-
-### 5.5 DiagnosticQuestion
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `question_id` | string | 是 | 诊断题唯一标识 |
-| `knowledge_base_id` | string | 是 | 所属知识库 |
-| `skill_node_id` | string | 否 | 绑定能力节点 |
-| `knowledge_point` | string | 否 | 绑定知识点 |
-| `question_type` | string | 是 | 题型，如 single_choice、multiple_choice、short_answer、practice |
-| `difficulty` | string | 否 | 难度 |
-| `question` | string | 是 | 题干 |
-| `options` | string[] | 否 | 选项，客观题使用 |
-| `answer` | any | 否 | 标准答案，前端展示时可隐藏 |
-| `explanation` | string | 否 | 解析 |
-| `metadata` | object | 否 | 扩展信息 |
-
-```json
-{
-  "question_id": "q_001",
-  "knowledge_base_id": "kb_rag_demo",
-  "skill_node_id": "skill_retrieval",
-  "knowledge_point": "Top-K",
-  "question_type": "single_choice",
-  "difficulty": "基础",
-  "question": "当 Top-K 设置过小，最可能带来什么问题？",
-  "options": ["召回不足", "索引无法构建", "文档无法切分", "模型无法输出"],
-  "answer": "召回不足",
-  "explanation": "Top-K 太小可能遗漏相关片段，影响后续生成质量。",
-  "metadata": {}
-}
-```
-
-### 5.6 DiagnosticResult
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `diagnostic_result_id` | string | 是 | 诊断结果唯一标识 |
-| `learner_id` | string | 是 | 学习者 ID |
-| `knowledge_base_id` | string | 否 | 当前知识库 |
-| `ability_level` | string | 是 | 综合能力等级 |
-| `weak_points` | string[] | 否 | 薄弱点 |
-| `strong_points` | string[] | 否 | 优势点 |
-| `knowledge_states` | object<string, KnowledgeState> | 否 | 诊断后的知识状态 |
-| `recommended_path` | LearningPathItem[] | 否 | 推荐学习路径 |
-| `created_at` | string(datetime) | 否 | 创建时间 |
-
-```json
-{
-  "diagnostic_result_id": "diag_001",
-  "learner_id": "learner_001",
-  "knowledge_base_id": "kb_rag_demo",
-  "ability_level": "中级",
-  "weak_points": ["检索策略"],
-  "strong_points": ["文档解析"],
-  "knowledge_states": {},
-  "recommended_path": [
-    {"order": 1, "topic": "检索策略", "reason": "当前得分低，建议优先补齐"}
-  ],
-  "created_at": "2026-07-23T09:30:00"
-}
-```
-
-### 5.7 GenerateRequest
-
-生成请求需要把画像、诊断、目标主题、资源类型和协同控制参数传入服务层。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `topic` | string | 是 | 当前学习或生成主题 |
-| `knowledge_base_id` | string | 否 | 指定知识库；缺省使用画像或系统默认知识库 |
-| `diagnostic_result_id` | string | 否 | 指定诊断结果 |
-| `target_skill_nodes` | string[] | 否 | 本次重点训练的能力节点 |
-| `resource_types` | string[] | 否 | 需要生成的资源类型 |
-| `difficulty_preference` | string | 否 | 难度偏好 |
-| `generation_mode` | string | 否 | 生成模式，如讲解、实操、测评、综合训练 |
-| `include_review` | boolean | 否 | 是否进入审核纠偏 |
-| `include_claim_check` | boolean | 否 | 是否进行 Claim 级审核 |
-| `max_iterations` | integer | 否 | 审核不通过时最大重试次数 |
-| `constraints` | object | 否 | 生成约束，如字数、语言、是否必须引用 |
-
-```json
-{
-  "learner_id": "learner_001",
-  "topic": "检索策略入门到实操",
-  "knowledge_base_id": "kb_rag_demo",
-  "diagnostic_result_id": "diag_001",
-  "target_skill_nodes": ["skill_retrieval"],
-  "resource_types": ["定制讲义", "实操指南", "分阶测试题"],
-  "difficulty_preference": "自适应",
-  "generation_mode": "综合训练",
-  "include_review": true,
-  "include_claim_check": true,
-  "max_iterations": 2,
-  "constraints": {
-    "must_include_citations": true,
-    "max_words": 2000,
-    "language": "zh-CN"
-  }
-}
-```
-
-### 5.8 LearningPlan
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learning_path` | LearningPathItem[] | 否 | 推荐学习顺序 |
-| `skip_points` | string[] | 否 | 可跳过内容 |
-| `remedial_points` | string[] | 否 | 需要补救内容 |
-| `challenge_points` | string[] | 否 | 进阶挑战内容 |
-| `resource_requirements` | object<string, string> | 否 | 不同资源类型的生成要求 |
-| `decision_reason` | string | 否 | 规划理由 |
-
-```json
-{
-  "learning_path": [
-    {"order": 1, "topic": "相似度检索", "reason": "先补齐基础概念"},
-    {"order": 2, "topic": "混合检索", "reason": "再理解召回策略差异"}
-  ],
-  "skip_points": ["文档解析"],
-  "remedial_points": ["Top-K 参数"],
-  "challenge_points": ["混合检索对比实验"],
-  "resource_requirements": {
-    "定制讲义": "解释核心概念和常见错误",
-    "实操指南": "提供可执行步骤",
-    "分阶测试题": "覆盖基础、应用和反思题"
-  },
-  "decision_reason": "根据画像得分、薄弱点和检索证据安排路径"
-}
-```
-
-### 5.9 SourceRef
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `doc_id` | string | 是 | 来源文档 ID |
-| `chunk_id` | string | 否 | 来源片段 ID |
-| `title` | string | 是 | 来源标题 |
-| `snippet` | string | 是 | 引用片段摘要 |
-| `score` | number | 是 | 检索相关度或证据分数 |
-| `knowledge_point` | string | 否 | 关联知识点 |
-| `section` | string | 否 | 文档章节 |
-| `page` | integer | 否 | 页码 |
-| `source_path` | string | 否 | 来源路径或 URL |
-| `retrieval_query` | string | 否 | 召回该片段的查询词 |
-| `rank` | integer | 否 | 检索排序 |
-| `metadata` | object | 否 | 扩展信息 |
-
-### 5.10 LearningResource
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `resource_id` | string | 是 | 资源唯一标识 |
-| `learner_id` | string | 否 | 所属学习者 |
-| `topic` | string | 否 | 资源主题 |
-| `resource_type` | string | 是 | 资源类型 |
-| `difficulty` | string | 是 | 资源难度 |
-| `storage_type` | string | 否 | `text` 或 `file` |
-| `content_text` | string | 否 | 文本正文或文件摘要 |
-| `file_path` | string | 否 | 文件相对路径 |
-| `file_size` | integer | 否 | 文件大小 |
-| `mime_type` | string | 否 | MIME 类型 |
-| `knowledge_points` | string[] | 是 | 覆盖知识点 |
-| `source_refs` | SourceRef[] | 是 | 知识溯源 |
-| `learning_path_node` | string | 否 | 对应学习路径节点 |
-| `review_status` | string | 否 | 审核状态，如 pending、passed、revision_required |
-| `review_id` | string | 否 | 审核记录 ID |
-| `claim_count` | integer | 否 | Claim 总数 |
-| `hallucination_rate` | number | 否 | 幻觉率 |
-| `difficulty_match` | boolean | 否 | 难度是否匹配画像 |
-| `version` | integer | 否 | 资源版本 |
-| `parent_resource_id` | string | 否 | 重写前资源 ID |
-| `created_at` | string(datetime) | 否 | 创建时间 |
-| `exercise_items` | ExerciseItem[] | 否 | 测试题或练习项 |
-
-```json
-{
-  "resource_id": "res_001",
-  "learner_id": "learner_001",
-  "topic": "检索策略入门到实操",
-  "resource_type": "实操指南",
-  "difficulty": "中级",
-  "storage_type": "text",
-  "content_text": "资源正文",
-  "file_path": "data/generated_resources/text/learner_001/res_001.md",
-  "file_size": 2048,
-  "mime_type": "text/markdown",
-  "knowledge_points": ["Top-K", "混合检索"],
-  "source_refs": [
-    {
-      "doc_id": "doc_001",
-      "chunk_id": "chunk_001",
-      "title": "retrieval.md",
-      "snippet": "Top-K 控制检索阶段返回的候选片段数量。",
-      "score": 0.89,
-      "knowledge_point": "Top-K",
-      "section": "检索策略",
-      "rank": 1
-    }
-  ],
-  "learning_path_node": "检索策略",
-  "review_status": "passed",
-  "review_id": "review_001",
-  "claim_count": 12,
-  "hallucination_rate": 0.03,
-  "difficulty_match": true,
-  "version": 1,
-  "parent_resource_id": null,
-  "created_at": "2026-07-23T09:30:00",
-  "exercise_items": [
-    {
-      "question_id": "q1",
-      "knowledge_point": "Top-K",
-      "difficulty": "基础",
-      "question": "Top-K 过小可能造成什么问题？",
-      "answer": "召回不足",
-      "explanation": "候选片段太少会遗漏相关证据。"
-    }
-  ]
-}
-```
-
-### 5.11 ExerciseItem
-
-`exercise_items` 是资源内的练习或测试题条目，用于后续反馈接口。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `question_id` | string | 是 | 题目唯一标识 |
-| `knowledge_point` | string | 否 | 关联知识点 |
-| `difficulty` | string | 否 | 题目难度 |
-| `question` | string | 是 | 题干 |
-| `answer` | any | 否 | 参考答案 |
-| `explanation` | string | 否 | 解析 |
-
-### 5.12 AgentTrace / AgentRun
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `run_id` | string | 否 | 本次 Agent 运行 ID |
-| `step_id` | string | 否 | 当前步骤 ID |
-| `agent_name` | string | 是 | Agent 名称 |
-| `action` | string | 是 | 当前动作 |
-| `status` | string | 否 | success、degraded、failed、skipped、retrying；fallback 不得标记 success |
-| `input_summary` | string | 否 | 输入摘要 |
-| `output_summary` | string | 是 | 输出摘要 |
-| `input_payload` | object | 否 | 结构化输入 |
-| `output_payload` | object | 否 | 结构化输出 |
-| `decision_reason` | string | 否 | 决策理由 |
-| `evidence_refs` | string[] | 否 | 证据引用 ID 或路径 |
-| `review_summary` | object | 否 | 审核摘要 |
-| `retry_count` | integer | 否 | 重试次数 |
-| `error_code` | string | 否 | 稳定、脱敏的内部错误码；不得放原始上游异常 |
-| `error_message` | string | 否 | 错误信息 |
-| `timestamp` | string(datetime) | 否 | 兼容字段，记录时间 |
-| `started_at` | string(datetime) | 否 | 开始时间 |
-| `ended_at` | string(datetime) | 否 | 结束时间 |
-| `duration_ms` | integer | 否 | 耗时毫秒 |
-
-```json
-{
-  "run_id": "run_001",
-  "step_id": "step_003",
-  "agent_name": "planner",
-  "action": "学习路径规划",
-  "status": "success",
-  "input_summary": "画像等级中级，薄弱点为检索策略",
-  "output_summary": "规划 2 个学习节点和 3 类资源要求",
-  "input_payload": {},
-  "output_payload": {},
-  "decision_reason": "优先补齐召回策略，再进入实验任务",
-  "evidence_refs": ["doc_001#chunk_001"],
-  "review_summary": {},
-  "retry_count": 0,
-  "timestamp": "2026-07-23T09:30:00"
-}
-```
-
-### 5.13 GenerateReport
-
-`POST /api/generate/` 的 `report` 字段使用该对象，描述本次生成和审核摘要。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `ability_level` | string | 否 | 本次判断的能力等级 |
-| `ability_tags` | string[] | 否 | 能力标签 |
-| `weak_points` | string[] | 否 | 本次生成关注的薄弱点 |
-| `recommended_difficulty` | string | 否 | 推荐难度 |
-| `learning_plan` | object | 否 | 学习路径规划摘要 |
-| `review_summary` | object | 否 | 审核摘要 |
-| `hallucination_rate` | number | 否 | 幻觉率 |
-| `coverage_rate` | number | 否 | 知识点覆盖率 |
-| `difficulty_match` | boolean | 否 | 难度是否匹配 |
-| `retrieval_hit_rate` | number | 否 | 检索命中率 |
-| `revision_count` | integer | 否 | 审核修正次数 |
-| `next_suggestions` | string[] | 否 | 下一步建议 |
-
-### 5.14 ReviewSummary / ResourceClaim
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `review_id` | string | 是 | 审核记录 ID |
-| `resource_id` | string | 是 | 被审核资源 ID |
-| `status` | string | 是 | passed、revision_required、failed |
-| `claim_total` | integer | 否 | Claim 总数 |
-| `claim_supported` | integer | 否 | 证据支持数量 |
-| `claim_unsupported` | integer | 否 | 证据不足数量 |
-| `suspected_hallucinations` | integer | 否 | 疑似幻觉数量 |
-| `hallucination_rate` | number | 否 | 幻觉率 |
-| `review_pass_rate` | number | 否 | 审核通过率 |
-| `revision_count` | integer | 否 | 修正次数 |
-| `issues` | object[] | 否 | 审核问题列表 |
-| `claims` | ResourceClaim[] | 否 | Claim 级审核明细 |
-
-ResourceClaim 字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `claim_id` | string | 是 | Claim ID |
-| `text` | string | 是 | Claim 文本 |
-| `knowledge_point` | string | 否 | 关联知识点 |
-| `supported` | boolean | 是 | 是否被证据支持 |
-| `confidence` | number | 否 | 可信度 |
-| `evidence_refs` | SourceRef[] | 否 | 支撑证据 |
-| `issue_type` | string | 否 | 问题类型 |
-| `correction` | string | 否 | 修正建议 |
-| `review_comment` | string | 否 | 审核说明 |
-
-```json
-{
-  "review_id": "review_001",
-  "resource_id": "res_001",
-  "status": "passed",
-  "claim_total": 12,
-  "claim_supported": 11,
-  "claim_unsupported": 1,
-  "suspected_hallucinations": 1,
-  "hallucination_rate": 0.083,
-  "review_pass_rate": 0.917,
-  "revision_count": 1,
-  "issues": [],
-  "claims": [
-    {
-      "claim_id": "claim_001",
-      "text": "Top-K 会影响候选片段召回数量。",
-      "knowledge_point": "Top-K",
-      "supported": true,
-      "confidence": 0.91,
-      "evidence_refs": [],
-      "issue_type": null,
-      "correction": null,
-      "review_comment": "证据支持"
-    }
-  ]
-}
-```
-
-### 5.15 FeedbackRequest / FeedbackResponse
-
-FeedbackRequest 字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `resource_id` | string | 是 | 反馈对应资源 |
-| `feedback_type` | string | 否 | feedback、quiz、practice、manual_review 等 |
-| `correct_rate` | number | 是 | 正确率，0-1 |
-| `time_spent_seconds` | integer | 否 | 学习或实操耗时 |
-| `completed` | boolean | 否 | 是否完成 |
-| `self_rating` | integer | 否 | 自评，建议 1-5 |
-| `practice_result` | object | 否 | 实操反馈结果 |
-| `answers` | FeedbackAnswer[] | 否 | 答题明细 |
-
-FeedbackAnswer 字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `question_id` | string | 是 | 题目 ID |
-| `knowledge_point` | string | 否 | 关联知识点 |
-| `difficulty` | string | 否 | 题目难度 |
-| `correct` | boolean | 是 | 是否正确 |
-| `answer` | any | 否 | 学习者答案 |
-| `expected_answer` | any | 否 | 参考答案 |
-| `error_type` | string | 否 | 错误类型 |
-
-```json
-{
-  "learner_id": "learner_001",
-  "resource_id": "res_001",
-  "feedback_type": "quiz",
-  "correct_rate": 0.55,
-  "time_spent_seconds": 600,
-  "completed": true,
-  "self_rating": 3,
-  "practice_result": {
-    "success": false,
-    "error_summary": "混合检索参数选择错误"
-  },
-  "answers": [
-    {
-      "question_id": "q1",
-      "knowledge_point": "Top-K",
-      "difficulty": "基础",
-      "correct": false,
-      "answer": "越小越好",
-      "expected_answer": "需要结合召回和噪声平衡",
-      "error_type": "concept"
-    }
-  ]
-}
-```
-
-FeedbackResponse 字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `decision` | string | 是 | 反馈决策 |
-| `decision_reason` | string | 否 | 决策理由 |
-| `message` | string | 是 | 面向前端展示的提示 |
-| `next_action` | string | 否 | 下一步动作，如 regenerate、practice、challenge、continue |
-| `recommended_topics` | string[] | 否 | 推荐下一轮主题 |
-| `updated_knowledge_states` | object<string, KnowledgeState> | 否 | 更新后的知识状态 |
-| `regenerate_suggestion` | object | 否 | 再生成建议 |
-| `updated_profile` | LearnerProfile | 否 | 更新后的画像 |
-
-反馈响应字段由反馈决策 Agent 产生，API service 只负责保存反馈记录、应用画像更新并返回结果。Agent 的内部输出还包含 `profile_updates` 和 `trace`，后续如需展示反馈 Agent 过程，可扩展到反馈历史或 Agent 运行记录接口。
-
-### 5.16 FeedbackRecord
-
-反馈历史接口返回该对象。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `feedback_id` | string | 是 | 反馈记录 ID |
-| `learner_id` | string | 是 | 学习者 ID |
-| `resource_id` | string | 是 | 资源 ID |
-| `correct_rate` | number | 是 | 正确率，0-1 |
-| `decision` | string | 是 | 反馈决策 |
-| `answers` | FeedbackAnswer[] | 否 | 答题明细 |
-| `feedback_type` | string | 否 | 反馈类型 |
-| `time_spent_seconds` | integer | 否 | 耗时 |
-| `completed` | boolean | 否 | 是否完成 |
-| `self_rating` | integer | 否 | 自评，建议 1-5 |
-| `practice_result` | object | 否 | 实操反馈结果 |
-| `decision_reason` | string | 否 | 决策理由 |
-| `next_action` | string | 否 | 下一步动作 |
-| `recommended_topics` | string[] | 否 | 推荐主题 |
-| `updated_knowledge_states` | object<string, KnowledgeState> | 否 | 更新后的知识状态 |
-| `regenerate_suggestion` | object | 否 | 再生成建议 |
-| `created_at` | string(datetime) | 否 | 创建时间 |
-
-### 5.17 ReportRadar / DifficultyCurveItem
-
-ReportRadar 字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `dimensions` | string[] | 是 | 雷达图维度 |
-| `values` | number[] | 是 | 各维度得分 |
-
-DifficultyCurveItem 字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `topic` | string | 是 | 主题或知识点 |
-| `score` | number | 是 | 当前得分 |
-| `recommended_difficulty` | string | 是 | 推荐难度 |
-
-## 6. 关键接口契约
-
-### 6.0 GET `/health`
-
-返回当前运行模式与脱敏 readiness。该接口不调用计费 LLM，不下载 Embedding 模型，不返回 API Key、完整 endpoint、绝对运行路径或 traceback。
-
-| 字段 | 类型 | 必填 | 说明 |
+| 模块 | 方法 | 路径 | 说明 |
 |---|---|---|---|
-| `status` | string | 是 | `ready`、`degraded` 或 `not_ready` |
-| `app_mode` | string | 是 | `development`、`demo` 或 `production` |
-| `degraded_generation_allowed` | boolean | 是 | 当前是否显式允许 degraded；production 永远为 false |
-| `python` | object | 是 | Python readiness |
-| `storage` | object | 是 | storage status、mode 和 ephemeral 标记 |
-| `llm` | object | 是 | LLM 配置 readiness，仅返回安全 code |
-| `embedding` | object | 是 | 本地 Embedding 可用性 |
-| `vector_store` | object | 是 | Chroma collection 状态和可选 count |
-| `resources` | object | 是 | 输出目录 readiness |
-| `error_codes` | string[] | 是 | 去重后的稳定错误码 |
+| 系统 | `GET` | `/` | 服务信息 |
+| 系统 | `GET` | `/health` | 脱敏运行时 readiness |
+| 知识目录 | `GET` | `/api/knowledge/domains` | 查询领域及其下属学习方向 |
+| 知识目录 | `GET` | `/api/knowledge/directions` | 查询学习方向列表 |
+| 知识目录 | `GET` | `/api/knowledge/info` | 查询知识库统计信息 |
+| Onboarding | `GET` | `/api/onboarding/questions` | 获取当前学习方向的问卷定义 |
+| Onboarding | `POST` | `/api/onboarding/initial-profile` | 提交问卷并创建初始画像，同时返回诊断题 |
+| 画像 | `GET` | `/api/profiles/` | 分页查询画像 |
+| 画像 | `GET` | `/api/profiles/{learner_id}` | 查询单个画像 |
+| 画像 | `PATCH` | `/api/profiles/{learner_id}` | 白名单字段局部更新画像 |
+| 画像 | `DELETE` | `/api/profiles/{learner_id}` | 删除画像及关联诊断记录 |
+| 技能图谱 | `GET` | `/api/skills/nodes` | 查询技能节点和边 |
+| 诊断 | `GET` | `/api/diagnosis/questions` | 按方向/知识库获取诊断题 |
+| 诊断 | `POST` | `/api/diagnosis/submit` | 提交诊断答案并更新画像 |
+| 资源生成 | `POST` | `/api/generate/` | 生成学习资源 |
+| 资源 | `GET` | `/api/resources/{learner_id}` | 查询某学习者的资源列表 |
+| 资源 | `GET` | `/api/resources/file/{resource_id}` | 下载资源文件 |
+| 审核 | `GET` | `/api/reviews/{resource_id}` | 查询资源最近一次审核摘要 |
+| 反馈 | `POST` | `/api/feedback/` | 提交学习反馈并触发画像更新 |
+| 反馈 | `GET` | `/api/feedback/history/{learner_id}` | 查询反馈历史 |
+| 报告 | `GET` | `/api/report/{learner_id}` | 查询学习报告 |
+| 评测 | `GET` | `/api/evaluation/summary` | 查询评测摘要 |
 
-`ready` 和显式允许的 `degraded` 返回 HTTP 200；`not_ready` 返回 HTTP 503。production 的启动预检为 not_ready 时应用 fail-fast。
+## 4. 关键数据对象
+
+## 4.1 LearnerProfile
+
+学习者画像是系统中的核心聚合对象。
+
+关键字段：
+
+- `learner_id`
+- `learner_type`
+- `education`
+- `major`
+- `target_domain`
+- `knowledge_base_id`
+- `theory_scores`
+- `knowledge_states`
+- `skill_level`
+- `weak_points`
+- `strong_points`
+- `learning_goal`
+- `learning_preferences`
+- `last_feedback_summary`
+
+说明：
+
+- `knowledge_base_id` 在存储层仍然保留。
+- `knowledge_states` 会在问卷、诊断、反馈后逐步更新。
+
+## 4.2 InitialProfileQuestionnaire
+
+问卷提交模型：
+
+- `learner_id`：必填
+- `learning_direction_id`：可选
+- `answers`：对象，键来自 `/api/onboarding/questions` 返回的 `question_id`
+
+补充：
+
+- 模型允许额外字段，兼容旧版平铺提交。
+- 当前推荐提交方式始终是结构化 `answers`。
+
+## 4.3 InitialProfileResponse
+
+问卷提交后的返回结构：
+
+- `learner_id`
+- `profile`
+- `diagnostic_node_ids`
+- `not_started_node_ids`
+- `screening_results`
+- `diagnostic_questions`
+- `next_step`
+
+说明：
+
+- `diagnostic_questions` 是当前方向下可直接用于诊断的题目列表。
+- 返回的诊断题不包含标准答案和解析。
+
+## 4.4 DiagnosticSubmitRequest
+
+- `learner_id`：必填
+- `learning_direction_id`：可选，优先于 `knowledge_base_id`
+- `knowledge_base_id`：可选
+- `answers`：必填，至少 1 条
+- `metadata`：可选
+
+其中 `answers` 的单项结构为：
+
+- `question_id`
+- `answer`
+
+## 4.5 DiagnosticResult
+
+- `diagnostic_result_id`
+- `learner_id`
+- `knowledge_base_id`
+- `ability_level`
+- `weak_points`
+- `strong_points`
+- `knowledge_states`
+- `recommended_path`
+- `created_at`
+
+## 4.6 GenerateRequest
+
+- `learner_id`：必填
+- `topic`：必填
+- `knowledge_base_id`
+- `diagnostic_result_id`
+- `target_skill_nodes`
+- `resource_types`
+- `difficulty_preference`
+- `generation_mode`
+- `include_review`
+- `include_claim_check`
+- `max_iterations`
+- `constraints`
+
+## 4.7 GenerateResponse / AgentTrace
+
+`GenerateResponse` 主字段：
+
+- `learner_id`
+- `topic`
+- `resources`
+- `trace`
+- `report`
+- `execution_status`：`success` 或 `degraded`；任何 fallback 都不得显示为普通 success
+- `error_codes`：本次生成涉及的稳定、脱敏错误码
+
+`AgentTrace` 的 P0-00 失败语义：
+
+- `status`：`success`、`degraded`、`failed`、`skipped` 或 `retrying`
+- `error_code`：可选稳定错误码，不得写入原始上游异常、API Key 或完整学习者画像
+- 发生显式允许的 fallback 时，受影响节点必须使用 `degraded`
+
+## 4.8 FeedbackRequest
+
+- `learner_id`：必填
+- `resource_id`：必填
+- `correct_rate`：必填
+- `feedback_type`
+- `time_spent_seconds`
+- `completed`
+- `self_rating`
+- `practice_result`
+- `answers`
+
+## 5. 接口详情
+
+### 5.0 `GET /health`
+
+返回当前运行模式及脱敏 readiness。该接口不调用计费 LLM、不下载 Embedding 模型，也不返回 API Key、完整 endpoint、绝对运行路径或 traceback。
+
+主字段：
+
+- `status`：`ready`、`degraded` 或 `not_ready`
+- `app_mode`：`development`、`demo` 或 `production`
+- `degraded_generation_allowed`
+- `python`
+- `storage`：包含 storage mode 和 `ephemeral` 标记
+- `llm`
+- `embedding`
+- `vector_store`：包含 collection 状态和可选 count
+- `resources`
+- `error_codes`
+
+状态码：
+
+- `ready`：HTTP 200
+- `degraded`：HTTP 200，仅 development/demo 且显式允许 degraded
+- `not_ready`：HTTP 503
+- production 启动预检为 not_ready 时应用 fail-fast
 
 ```json
 {
   "status": "degraded",
   "app_mode": "demo",
   "degraded_generation_allowed": true,
+  "python": {"status": "ready"},
   "storage": {"status": "ready", "mode": "sqlite", "ephemeral": false},
   "llm": {"status": "not_ready", "code": "CFG_LLM_API_KEY_MISSING"},
   "embedding": {"status": "ready"},
   "vector_store": {"status": "ready", "collection_state": "populated", "count": 8},
   "resources": {"status": "ready"},
-  "python": {"status": "ready"},
   "error_codes": ["CFG_LLM_API_KEY_MISSING"]
 }
 ```
 
-### 6.1 POST `/api/learner/profile`
+### 5.1 `GET /`
 
-创建或更新学习者画像。
+返回服务基本信息。
 
-请求体字段：见 `LearnerProfile`。
+### 5.2 `GET /api/knowledge/domains`
 
-响应字段：
+返回领域及其下属学习方向，供前端做“先选领域，再选方向”。
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `status` | string | 是 | 响应状态 |
-| `message` | string | 否 | 响应消息 |
-| `learner_id` | string | 是 | 学习者 ID |
+响应主字段：
 
-响应示例：
+- `domains`
+- `domains[].domain_id`
+- `domains[].name`
+- `domains[].description`
+- `domains[].tracks`
+- `domains[].tracks[].track_id`
+- `domains[].tracks[].learning_direction_id`
+- `domains[].tracks[].knowledge_base_id`
+- `domains[].tracks[].name`
+- `domains[].tracks[].description`
 
-```json
-{
-  "status": "success",
-  "message": null,
-  "learner_id": "learner_001"
-}
-```
+### 5.3 `GET /api/knowledge/directions`
 
-### 6.2 GET `/api/learner/profile/{learner_id}`
+返回平铺后的学习方向列表。
 
-查询学习者画像。
+响应主字段：
 
-路径参数：
+- `directions`
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
+### 5.4 `GET /api/knowledge/info`
 
-响应字段：见 `LearnerProfile`。
-
-### 6.3 GET `/api/skills/nodes`
-
-查询当前知识库的能力节点图谱。
+查询某个知识库的统计信息。
 
 查询参数：
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `knowledge_base_id` | string | 否 | 知识库 ID |
-| `target_domain` | string | 否 | 目标领域 |
-| `level` | string | 否 | 节点难度或层级 |
+- `knowledge_base_id`：可选
 
-响应字段：
+典型返回包含：
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `knowledge_base_id` | string | 是 | 知识库 ID |
-| `nodes` | SkillNode[] | 是 | 能力节点 |
-| `edges` | object[] | 否 | 节点关系 |
+- `knowledge_base_id`
+- `target_domain`
+- `description`
+- `document_count`
+- `chunk_count`
+- `skill_node_count`
+- `diagnostic_question_count`
+- `version`
+- `updated_at`
 
-```json
-{
-  "knowledge_base_id": "kb_rag_demo",
-  "nodes": [],
-  "edges": [
-    {"source": "skill_embedding", "target": "skill_retrieval", "relation": "prerequisite"}
-  ]
-}
-```
+### 5.5 `GET /api/onboarding/questions`
 
-### 6.4 GET `/api/diagnosis/questions`
-
-获取诊断题。
+按学习方向返回问卷定义。
 
 查询参数：
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `knowledge_base_id` | string | 否 | 知识库 ID |
-| `learner_id` | string | 否 | 学习者 ID，用于个性化出题 |
-| `skill_node_ids` | string | 否 | 逗号分隔的目标节点 ID |
-| `level` | string | 否 | 难度 |
-| `limit` | integer | 否 | 返回数量 |
+- `learning_direction_id`：可选
 
-响应字段：
+响应主字段：
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `questions` | DiagnosticQuestion[] | 是 | 诊断题列表 |
+- `learning_direction_id`
+- `questions`
 
-```json
-{
-  "questions": []
-}
-```
+每个 `questions[]` 典型字段：
 
-### 6.5 POST `/api/diagnosis/submit`
+- `question_id`
+- `title`
+- `type`
+- `required`
+- `options`
+- `show_when`
+- `hint`
 
-提交诊断结果并更新知识状态。
+说明：
 
-请求字段：
+- 前端不应硬编码题目和选项。
+- 题目来自数据库问卷模板，而不是前端本地 JSON。
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `knowledge_base_id` | string | 否 | 知识库 ID |
-| `answers` | FeedbackAnswer[] | 是 | 诊断答题明细 |
-| `metadata` | object | 否 | 扩展信息 |
+### 5.6 `POST /api/onboarding/initial-profile`
 
-响应字段：见 `DiagnosticResult`。
+提交问卷，创建或更新初始画像，并返回当前方向下需要继续诊断的题目。
 
-### 6.6 POST `/api/generate/`
-
-多 Agent 协同生成资源。
-
-请求字段：见 `GenerateRequest`。
-
-响应字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `topic` | string | 是 | 生成主题 |
-| `resources` | LearningResource[] | 是 | 生成资源 |
-| `trace` | AgentTrace[] | 是 | Agent 协同轨迹 |
-| `report` | GenerateReport | 是 | 本次生成摘要 |
-| `execution_status` | string | 是 | `success` 或 `degraded`；任何 fallback 必须为 degraded |
-| `error_codes` | string[] | 是 | 本次生成涉及的脱敏错误码 |
+请求体：
 
 ```json
 {
-  "learner_id": "learner_001",
-  "topic": "检索策略入门到实操",
-  "resources": [],
-  "trace": [],
-  "execution_status": "success",
-  "error_codes": [],
-  "report": {
-    "learner_id": "learner_001",
-    "ability_level": "中级",
-    "weak_points": ["检索策略"],
-    "recommended_difficulty": "中级",
-    "hallucination_rate": 0.03,
-    "coverage_rate": 0.9,
-    "difficulty_match": true
+  "learner_id": "stu_001",
+  "learning_direction_id": "rag_engineering_training",
+  "answers": {
+    "identity": "在校学生",
+    "education": "本科"
   }
 }
 ```
 
-### 6.7 GET `/api/resources/{learner_id}`
+响应重点：
 
-查询学习者历史生成资源。
+- `profile`
+- `diagnostic_questions`
+- `next_step`
 
-路径参数：
+当前实现特点：
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
+- 服务端会保存问卷提交记录和问卷答案明细
+- 服务端会更新 `learner_profiles`
+- 服务端会区分：
+  - 可继续诊断的节点
+  - 明确尚未开始的节点
 
-响应字段：
+### 5.7 `GET /api/profiles/`
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `total` | integer | 是 | 资源数量 |
-| `resources` | LearningResource[] | 是 | 资源列表 |
-
-```json
-{
-  "learner_id": "learner_001",
-  "total": 1,
-  "resources": []
-}
-```
-
-### 6.8 GET `/api/reviews/{resource_id}`
-
-查询资源审核详情。
-
-路径参数：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `resource_id` | string | 是 | 资源 ID |
-
-响应字段：见 `ReviewSummary`。
-
-### 6.9 POST `/api/feedback/`
-
-提交学习反馈，触发反馈决策 Agent，并动态更新画像与下一轮学习建议。
-
-请求字段：见 `FeedbackRequest`。
-
-响应字段：见 `FeedbackResponse`。
-
-### 6.10 GET `/api/feedback/history/{learner_id}`
-
-查询学习反馈历史。
-
-路径参数：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-
-响应字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `total` | integer | 是 | 反馈数量 |
-| `items` | FeedbackRecord[] | 是 | 反馈记录 |
-
-```json
-{
-  "learner_id": "learner_001",
-  "total": 1,
-  "items": []
-}
-```
-
-### 6.11 GET `/api/report/{learner_id}`
-
-查询学情报告。
-
-路径参数：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-
-响应字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `learner_id` | string | 是 | 学习者 ID |
-| `radar` | ReportRadar | 是 | 能力雷达图数据 |
-| `weak_points` | string[] | 是 | 薄弱点 |
-| `strong_points` | string[] | 是 | 优势点 |
-| `skill_level` | string | 是 | 能力等级 |
-| `learning_goal` | string | 是 | 学习目标 |
-| `difficulty_curve` | DifficultyCurveItem[] | 是 | 难度适配曲线 |
-| `learning_path` | LearningPathItem[] | 否 | 推荐路径 |
-| `blind_spot_heatmap` | object[] | 否 | 知识盲区热力图数据 |
-| `agent_flow` | AgentTrace[] | 否 | Agent 流程展示数据 |
-| `resource_difficulty_match` | object[] | 否 | 资源难度匹配结果 |
-| `review_summary` | object | 否 | 审核摘要 |
-| `feedback_trend` | object[] | 否 | 反馈趋势 |
-| `metric_summary` | object | 否 | 指标摘要 |
-| `next_suggestions` | string[] | 否 | 下一步建议 |
-| `recent_resources` | LearningResource[] | 否 | 最近资源 |
-| `recent_feedback` | FeedbackRecord[] | 否 | 最近反馈 |
-
-```json
-{
-  "learner_id": "learner_001",
-  "radar": {"dimensions": ["文档解析", "检索策略"], "values": [70, 45]},
-  "weak_points": ["检索策略"],
-  "strong_points": ["文档解析"],
-  "skill_level": "中级",
-  "learning_goal": "掌握完整工程流程",
-  "difficulty_curve": [
-    {"topic": "检索策略", "score": 45, "recommended_difficulty": "初级"}
-  ],
-  "learning_path": [],
-  "blind_spot_heatmap": [],
-  "agent_flow": [],
-  "resource_difficulty_match": [],
-  "review_summary": {},
-  "feedback_trend": [],
-  "metric_summary": {},
-  "next_suggestions": [],
-  "recent_resources": [],
-  "recent_feedback": []
-}
-```
-
-### 6.12 GET `/api/evaluation/summary`
-
-查询量化评测摘要。
-
-响应字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `sample_count` | integer | 是 | 评测样本数量 |
-| `metrics` | object<string, number> | 是 | 指标集合 |
-| `ablation` | object[] | 否 | 消融实验结果 |
-| `created_at` | string(datetime) | 否 | 统计时间 |
-
-```json
-{
-  "sample_count": 50,
-  "metrics": {
-    "hallucination_rate": 0.04,
-    "knowledge_coverage_rate": 0.91,
-    "difficulty_match_accuracy": 0.86,
-    "retrieval_hit_rate": 0.92,
-    "post_feedback_improvement": 0.18
-  },
-  "ablation": [
-    {
-      "method": "baseline",
-      "description": "无检索或无审核的基线方法",
-      "hallucination_rate": 0.18,
-      "coverage_rate": 0.68
-    }
-  ],
-  "created_at": "2026-07-23T09:30:00"
-}
-```
-
-### 6.13 GET `/api/knowledge/info`
-
-查询当前知识库信息。
+分页查询画像。
 
 查询参数：
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `knowledge_base_id` | string | 否 | 知识库 ID |
+- `page`：默认 `1`
+- `page_size`：默认 `10`
+- `skill_level`：可选
 
-响应字段：
+### 5.8 `GET /api/profiles/{learner_id}`
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `knowledge_base_id` | string | 是 | 知识库 ID |
-| `target_domain` | string | 否 | 领域名称 |
-| `description` | string | 否 | 知识库说明 |
-| `document_count` | integer | 否 | 文档数量 |
-| `chunk_count` | integer | 否 | 片段数量 |
-| `skill_node_count` | integer | 否 | 能力节点数量 |
-| `updated_at` | string(datetime) | 否 | 更新时间 |
+查询单个画像。
+
+返回模型：`LearnerProfile`
+
+### 5.9 `PATCH /api/profiles/{learner_id}`
+
+对白名单字段做局部更新。
+
+请求体模型：`LearnerProfileUpdate`
+
+说明：
+
+- 不允许修改 `learner_id`
+- 空更新会返回 `400`
+
+成功响应格式：
 
 ```json
 {
-  "knowledge_base_id": "kb_rag_demo",
-  "target_domain": "RAG 工程训练",
-  "description": "用于演示的工程技能知识库",
-  "document_count": 12,
-  "chunk_count": 96,
-  "skill_node_count": 10,
-  "updated_at": "2026-07-23T09:30:00"
+  "status": "success",
+  "learner_id": "stu_001",
+  "updated_fields": ["learning_goal"]
 }
 ```
 
-## 7. 当前实现与目标差异
+### 5.10 `DELETE /api/profiles/{learner_id}`
 
-当前代码已支持最小闭环：
+删除画像及其依赖记录。
 
-- 创建/查询画像。
-- 调用多 Agent 生成资源。
-- 返回 Agent trace。
-- 保存生成资源。
-- 提交反馈并保存反馈历史。
-- 聚合画像、资源和反馈生成报告。
+返回模型：`StatusResponse`
 
-仍需逐步增强：
+### 5.11 `GET /api/skills/nodes`
 
-- 能力图谱、诊断题、诊断提交接口。
-- Agent run/step 结构化持久化。
-- Claim 级审核、资源审核记录和修正版本。
-- 报告中的热力图、Agent 流程图、难度匹配、审核汇总和反馈趋势。
-- 评测样本、指标统计和消融实验接口。
+查询技能节点和依赖边。
 
-## 8. 错误响应
+查询参数：
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `status` | string | 是 | 固定为 `error` |
-| `code` | string | 是 | 稳定内部错误码 |
-| `message` | string | 是 | 错误描述 |
-| `detail` | any | 否 | 详细错误信息 |
+- `knowledge_base_id`：可选
+- `level`：可选
+- `target_domain`：保留参数，当前未真正参与筛选
+
+响应主字段：
+
+- `knowledge_base_id`
+- `nodes`
+- `edges`
+
+### 5.12 `GET /api/diagnosis/questions`
+
+按方向或知识库查询诊断题。
+
+查询参数：
+
+- `learning_direction_id`：可选
+- `knowledge_base_id`：可选
+- `learner_id`：可选，当前预留
+- `skill_node_ids`：可选，逗号分隔
+- `level`：可选
+- `limit`：可选，`1-39`
+
+响应主字段：
+
+- `knowledge_base_id`
+- `total`
+- `questions`
+
+说明：
+
+- 当前响应不返回 `answer`
+- 当前响应不返回 `explanation`
+
+### 5.13 `POST /api/diagnosis/submit`
+
+提交诊断答案并回写画像。
+
+请求体示例：
+
+```json
+{
+  "learner_id": "stu_001",
+  "learning_direction_id": "rag_engineering_training",
+  "answers": [
+    {
+      "question_id": "dq_rag_001",
+      "answer": "检索相关外部证据"
+    }
+  ]
+}
+```
+
+响应模型：`DiagnosticResult`
+
+当前实现会：
+
+- 判分
+- 持久化诊断答题记录
+- 更新 `learner_profiles.skill_level`
+- 更新 `learner_profiles.knowledge_states`
+- 更新 `weak_points` 和 `strong_points`
+
+### 5.14 `POST /api/generate/`
+
+根据画像生成资源。
+
+前置条件：
+
+- `learner_id` 对应画像必须存在
+
+返回模型：`GenerateResponse`
+
+主字段：
+
+- `learner_id`
+- `topic`
+- `resources`
+- `trace`
+- `report`
+- `execution_status`：`success` 或 `degraded`
+- `error_codes`：稳定、脱敏错误码列表
+
+禁用 degraded 或 production 中依赖失败时，接口返回 HTTP 503，且不会在失败前持久化 fallback 资源。显式允许 fallback 时，HTTP 响应仍必须通过 `execution_status=degraded` 和对应 trace 状态表明降级。
+
+### 5.15 `GET /api/resources/{learner_id}`
+
+查询某个学习者的资源列表。
+
+路径参数：
+
+- `learner_id`
+
+查询参数：
+
+- `resource_type`：可选
+- `difficulty`：可选
+
+返回模型：`ResourceListResponse`
+
+### 5.16 `GET /api/resources/file/{resource_id}`
+
+下载某个资源文件。
+
+说明：
+
+- 只允许下载已登记的受控文件
+- 不允许任意文件路径访问
+
+### 5.17 `GET /api/reviews/{resource_id}`
+
+查询资源最近一次审核摘要。
+
+返回模型：`ReviewSummary`
+
+### 5.18 `POST /api/feedback/`
+
+提交学习反馈并触发画像更新。
+
+前置条件：
+
+- `learner_id` 对应画像必须存在
+
+返回模型：`FeedbackResponse`
+
+关键返回字段：
+
+- `decision`
+- `message`
+- `updated_profile`
+- `decision_reason`
+- `next_action`
+- `recommended_topics`
+- `updated_knowledge_states`
+- `regenerate_suggestion`
+
+### 5.19 `GET /api/feedback/history/{learner_id}`
+
+查询学习反馈历史。
+
+返回模型：`FeedbackHistoryResponse`
+
+### 5.20 `GET /api/report/{learner_id}`
+
+查询学习报告。
+
+返回模型：`ReportResponse`
+
+关键字段：
+
+- `radar`
+- `weak_points`
+- `strong_points`
+- `skill_level`
+- `learning_goal`
+- `difficulty_curve`
+- `learning_path`
+- `next_suggestions`
+- `recent_resources`
+- `recent_feedback`
+
+### 5.21 `GET /api/evaluation/summary`
+
+查询评测摘要。
+
+返回模型：`EvaluationSummary`
+
+主字段：
+
+- `sample_count`
+- `metrics`
+- `ablation`
+- `created_at`
+
+## 6. 当前数据库落库事实
+
+基于当前代码，以下数据会被持久化：
+
+- 问卷模板和问题：
+  - `questionnaire_templates`
+  - `questionnaire_questions`
+- 问卷提交结果：
+  - `questionnaire_submissions`
+  - `questionnaire_answers`
+- 画像：
+  - `learner_profiles`
+- 诊断题库：
+  - `diagnostic_questions`
+- 诊断答题结果：
+  - `diagnostic_answers`
+
+这意味着：
+
+- 问卷不是只保存在前端状态中
+- 诊断结果也不是只回写到内存中
+- 当前系统已经具备问卷、诊断、画像三段持久化链路
+
+## 7. 命名说明
+
+当前代码里同时存在两套术语：
+
+- 面向用户和前端：`learning_direction_id`
+- 面向内部存储和知识库：`knowledge_base_id`
+
+当前实现关系是：
+
+- 前端先选学习方向
+- 服务端把学习方向映射到对应知识库
+- 画像、技能图谱、诊断、资源生成等后续能力仍大量使用 `knowledge_base_id`
+
+因此文档中保留这两个字段，但应理解为：
+
+- `learning_direction_id` 是流程入口参数
+- `knowledge_base_id` 是后端稳定标识
+
+## 8. 已下线或不再推荐的旧实现
+
+以下旧概念不应再作为当前流程文档的主线：
+
+- 旧版 `/api/learner/profile` 系列接口
+- 前端硬编码问卷
+- 问卷和诊断混用为同一套题
+- 提交问卷后直接在同一块表单下“接着显示旧诊断内容”的旧交互假设
+
+## 9. 错误响应
+
+当前接口由全局异常处理器返回统一、脱敏的错误结构：
 
 ```json
 {
   "status": "error",
   "code": "HTTP_ERROR",
-  "message": "学习者画像不存在",
+  "message": "资源不存在",
   "detail": null
 }
 ```
+
+字段说明：
+
+- `status`：固定为 `error`
+- `code`：稳定内部错误码
+- `message`：安全的公开错误信息
+- `detail`：可选脱敏详情；不得包含 API Key、完整画像、原始上游响应或 traceback
+
+常见场景：
+
+- `400`：请求参数不合法、问卷提交不合法、诊断答案不合法
+- `404`：画像不存在、知识库不存在、资源不存在、审核记录不存在
+- `422`：Pydantic/FastAPI 请求校验失败，`code=REQUEST_VALIDATION_ERROR`
+- `500`：未分类内部错误，`code=INTERNAL_ERROR`
+- `503`：生成依赖不可用或运行状态 not_ready

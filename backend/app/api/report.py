@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from app.models.schemas import ReportResponse
-from app.services.learner_service import LearnerService
+from app.services.profile_service import ProfileService
 from app.services.report_service import ReportService
 
 router = APIRouter()
@@ -12,8 +12,8 @@ def get_report(learner_id: str, request: Request):
     """获取学情报告"""
     container = request.app.container
     
-    learner_service: LearnerService = container.learner_service()
-    profile = learner_service.get(learner_id)
+    profile_service: ProfileService = container.profile_service()
+    profile = profile_service.get(learner_id)
     if not profile:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 

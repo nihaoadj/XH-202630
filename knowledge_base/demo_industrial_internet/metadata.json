@@ -1,4 +1,5 @@
 {
+  "knowledge_base_id": "demo_industrial_internet",
   "domain": "工业互联网",
   "version": "0.1.0",
   "description": "工业互联网边缘计算与数据采集领域知识库示例",

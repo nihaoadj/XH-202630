@@ -24,10 +24,16 @@ def _build_source_refs(chunks):
     refs = []
     for i, c in enumerate(chunks[:3]):
         refs.append(SourceRef(
-            doc_id=f"doc_{i}",
-            title=c["source"],
+            doc_id=c.get("document_id") or f"legacy_doc_{i}",
+            title=c.get("title") or c.get("source", "unknown"),
             snippet=c["content"][:200],
             score=c["score"],
+            chunk_id=c.get("chunk_id"),
+            knowledge_point=(c.get("knowledge_points") or [None])[0],
+            source_path=c.get("source"),
+            retrieval_query=c.get("retrieval_query"),
+            rank=c.get("rank"),
+            metadata={"knowledge_base_id": c.get("knowledge_base_id")},
         ))
     return refs
 

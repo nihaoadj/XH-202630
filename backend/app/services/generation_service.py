@@ -4,6 +4,7 @@ from app.agents.workflow import build_workflow
 from app.core.file_storage import save_text_resource
 from app.core.health import ensure_generation_ready
 from app.db.resource.base import BaseResourceRepository
+from app.db.audit.base import BaseAuditRepository
 from app.models.schemas import GenerateRequest, GenerateResponse, LearnerProfile, LearningResource
 
 
@@ -71,7 +72,8 @@ class GenerationService:
     def __init__(
         self,
         resource_repo: BaseResourceRepository,
-        workflow
+        workflow,
+        audit_repo: BaseAuditRepository | None = None,
     ):
         """初始化服务
         
@@ -81,6 +83,7 @@ class GenerationService:
         """
         self.resource_repo = resource_repo
         self.workflow = workflow
+        self.audit_repo = audit_repo
 
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         """生成个性化学习资源"""
@@ -117,6 +120,29 @@ class GenerationService:
             req.topic,
             self.resource_repo,
         )
+        review = result.get("review_result", {})
+        if self.audit_repo:
+            run_id = self.audit_repo.save_run(
+                learner_id=req.learner_id,
+                knowledge_base_id=req.knowledge_base_id or learner.knowledge_base_id,
+                topic=req.topic,
+                trace=result.get("trace", []),
+                input_payload=req.model_dump(mode="json"),
+                output_payload={"final_decision": result.get("final_decision", "")},
+                status="completed",
+            )
+            for resource in persisted_resources:
+                review_id = self.audit_repo.save_review(resource.resource_id, review, run_id)
+                resource.review_id = review_id
+                resource.review_status = review.get("status") or (
+                    "passed" if review.get("passed") else "needs_review"
+                )
+                resource.claim_count = review.get("claim_total", len(review.get("claims", [])))
+                resource.hallucination_rate = review.get(
+                    "hallucination_rate", review.get("hallucination_score")
+                )
+                resource.difficulty_match = review.get("difficulty_match")
+                self.resource_repo.save(resource, req.learner_id, req.topic)
 
         trace_error_codes = [
             item.get("error_code")

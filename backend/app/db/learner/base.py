@@ -26,3 +26,11 @@ class BaseLearnerRepository(ABC):
     def list_all(self) -> Dict[str, LearnerProfile]:
         """列出所有学习者画像"""
         pass
+
+    @abstractmethod
+    def update_partial(self, learner_id: str, updates: dict) -> Optional[LearnerProfile]:
+        pass
+
+    @abstractmethod
+    def list_with_pagination(self, page: int, page_size: int, skill_level: Optional[str] = None) -> dict:
+        pass

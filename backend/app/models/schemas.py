@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StatusResponse(BaseModel):
@@ -20,6 +20,23 @@ class ErrorResponse(BaseModel):
 class ProfileStatusResponse(StatusResponse):
     """学习者画像写入响应模型"""
     learner_id: str = Field(..., description="学习者唯一标识")
+
+
+class LearnerProfileUpdate(BaseModel):
+    """学习者画像的白名单部分更新请求。"""
+    learner_type: Optional[str] = None
+    education: Optional[str] = None
+    major: Optional[str] = None
+    target_domain: Optional[str] = None
+    knowledge_base_id: Optional[str] = None
+    theory_scores: Optional[Dict[str, float]] = None
+    knowledge_states: Optional[Dict[str, "KnowledgeState"]] = None
+    skill_level: Optional[str] = None
+    weak_points: Optional[List[str]] = None
+    strong_points: Optional[List[str]] = None
+    learning_goal: Optional[str] = None
+    learning_preferences: Optional["LearningPreferences"] = None
+    last_feedback_summary: Optional[Dict[str, Any]] = None
 
 
 class KnowledgeState(BaseModel):
@@ -57,6 +74,26 @@ class LearnerProfile(BaseModel):
     last_feedback_summary: Dict[str, Any] = Field(default_factory=dict, description="最近反馈摘要")
 
 
+class InitialProfileQuestionnaire(BaseModel):
+    """初始画像问卷提交；具体题目字段由数据库问卷定义决定。"""
+    model_config = ConfigDict(extra="allow")
+
+    learner_id: str
+    learning_direction_id: Optional[str] = Field(default=None, description="用户选择的学习方向 ID")
+    answers: Dict[str, Any] = Field(default_factory=dict, description="问卷答案；也兼容旧版平铺字段")
+
+
+class InitialProfileResponse(BaseModel):
+    """初始画像创建结果及只针对已了解节点的诊断题。"""
+    learner_id: str
+    profile: LearnerProfile
+    diagnostic_node_ids: List[str]
+    not_started_node_ids: List[str]
+    screening_results: Dict[str, bool] = Field(default_factory=dict)
+    diagnostic_questions: List[Dict[str, Any]]
+    next_step: str
+
+
 class SkillNode(BaseModel):
     """能力图谱节点"""
     node_id: str
@@ -83,6 +120,32 @@ class DiagnosticQuestion(BaseModel):
     options: List[str] = Field(default_factory=list)
     answer: Optional[Any] = None
     explanation: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DiagnosticAnswerSubmission(BaseModel):
+    """学习者提交的诊断作答；正确性只能由服务端计算。"""
+    question_id: str
+    answer: Any
+
+
+class DiagnosticAnswerRecord(DiagnosticAnswerSubmission):
+    """服务端判定后的诊断答题记录。"""
+    correct: bool
+    score: float = Field(ge=0.0, le=1.0)
+
+
+class DiagnosticQuestionListResponse(BaseModel):
+    knowledge_base_id: str
+    total: int
+    questions: List[Dict[str, Any]]
+
+
+class DiagnosticSubmitRequest(BaseModel):
+    learner_id: str
+    learning_direction_id: Optional[str] = Field(default=None, description="用户选择的学习方向 ID")
+    knowledge_base_id: Optional[str] = None
+    answers: List[DiagnosticAnswerSubmission] = Field(min_length=1)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

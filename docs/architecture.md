@@ -2,43 +2,127 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：v1.0  
-> 文档定位：统一系统分层、模块边界、调用链和运行路径。
+> 文档版本：2.0  
+> 文档更新时间：2026-07-26  
+> 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 1. 架构目标
 
-系统架构支撑通用领域知识生成闭环：
+系统当前面向“多领域培训”场景，围绕以下闭环组织：
 
 ```text
-学习者画像输入
-→ 能力诊断
-→ 知识库检索
-→ 学习路径规划
-→ 个性化资源生成
-→ 审核纠偏与知识溯源
-→ 学情报告
-→ 学习反馈
-→ 反馈决策
-→ 动态更新画像与下一轮学习路径
+领域选择
+-> 学习方向选择
+-> 初始画像问卷
+-> 诊断测评
+-> 个性化资源生成
+-> 审核与证据
+-> 学习反馈
+-> 学情报告
 ```
 
-领域方向由用户输入、学习者画像和当前接入的知识库决定，后端不硬编码任何特定领域。
+其中：
 
-## 2. 总体分层
+- “学习方向”是前台和流程入口概念。
+- `knowledge_base_id` 是后端内部的稳定知识边界。
+- 问卷负责构建初始画像。
+- 诊断负责测量真实掌握情况并回写画像。
 
-| 层级 | 目录 | 核心职责 |
-|------|------|----------|
-| 前端可视化层 | `frontend/src/` | 页面交互、画像录入、资源展示、报告图表、Agent 过程可视化 |
-| API 路由层 | `backend/app/api/` | HTTP 参数接收、Pydantic 校验、状态码、响应模型、联调入口 |
-| 业务服务层 | `backend/app/services/` | 串联画像、生成、反馈、报告等业务用例 |
-| 多智能体层 | `backend/app/agents/` | Agent 节点、共享状态、协同决策、审核纠偏 |
-| 基础设施层 | `backend/app/core/` | LLM、Embedding、知识库读取、向量库、文件存储、运行时健康检查与稳定错误码 |
-| 数据访问层 | `backend/app/db/` | ORM、仓库接口、画像/资源/反馈数据持久化 |
-| 数据模型层 | `backend/app/models/` | Pydantic 请求/响应/领域数据结构 |
-| 脚本层 | `scripts/` | 数据库初始化、知识库入库、演示数据准备 |
-| 知识库层 | `knowledge_base/` | 可替换的领域知识库原始资料 |
+## 2. 当前代码分层
 
-## 3. 后端调用链
+| 层级 | 目录 | 当前职责 |
+|---|---|---|
+| 前端界面层 | `frontend/src/` | 领域/方向选择、问卷、诊断、历史记录、资源查看、报告展示 |
+| API 路由层 | `backend/app/api/` | FastAPI 路由、参数接收、响应模型与错误映射 |
+| 业务服务层 | `backend/app/services/` | 问卷组装、画像创建、诊断判分、资源生成、反馈处理、报告构建 |
+| 多智能体层 | `backend/app/agents/` | LangGraph 工作流及诊断、检索、规划、生成、审核、反馈等 Agent 节点 |
+| 基础设施层 | `backend/app/core/` | LLM、Embedding、向量存储、知识库读取、文件存储 |
+| 数据访问层 | `backend/app/db/` | SQLite/PostgreSQL 仓储工厂、ORM 模型、表初始化与分领域仓储 |
+| 数据模型层 | `backend/app/models/` | Pydantic schema 与核心数据结构 |
+| 工具层 | `backend/app/utils/` | 项目内部复用工具函数 |
+| 脚本层 | `scripts/` | 初始化数据库、导入知识库与问卷/诊断源数据 |
+| 知识源层 | `knowledge_base/` | 学习目录源文件、方向知识库元数据、问卷源文件、诊断题源文件 |
+
+## 3. 当前后端模块
+
+### 3.1 API 路由
+
+`backend/app/api/` 当前真实文件为：
+
+- `onboarding.py`
+- `profiles.py`
+- `knowledge.py`
+- `skills.py`
+- `diagnosis.py`
+- `generate.py`
+- `resources.py`
+- `reviews.py`
+- `feedback.py`
+- `report.py`
+- `evaluation.py`
+
+说明：
+
+- 旧的 `learner.py` 已不再是当前接口主入口。
+- 当前画像接口统一收敛为 `/api/profiles/*`。
+
+### 3.2 服务层
+
+`backend/app/services/` 当前真实文件为：
+
+- `knowledge_service.py`
+- `onboarding_service.py`
+- `profile_service.py`
+- `diagnosis_service.py`
+- `generation_service.py`
+- `resource_service.py`
+- `review_service.py`
+- `feedback_service.py`
+- `report_service.py`
+- `evaluation_service.py`
+
+职责划分：
+
+- `knowledge_service`：学习目录、知识库信息、技能图谱、诊断题选择
+- `onboarding_service`：问卷组装、问卷提交、初始画像创建
+- `profile_service`：画像查询、分页、局部更新、删除
+- `diagnosis_service`：诊断判分与画像回写
+- `generation_service`：生成工作流和资源落库
+- `feedback_service`：学习反馈处理与画像更新
+- `report_service`：报告组装
+
+### 3.3 Agent 层
+
+`backend/app/agents/` 当前真实文件为：
+
+- `workflow.py`
+- `state.py`
+- `diagnosis.py`
+- `retriever.py`
+- `planner.py`
+- `generator.py`
+- `reviewer.py`
+- `feedback.py`
+
+当前代码含义：
+
+- Agent 负责协同推理和多步生成
+- 服务层负责把 Agent 与数据库、画像、资源记录串起来
+
+## 4. 当前主流程调用链
+
+### 4.1 画像与诊断
+
+```text
+frontend
+-> GET /api/knowledge/domains
+-> GET /api/onboarding/questions?learning_direction_id=...
+-> POST /api/onboarding/initial-profile
+-> POST /api/diagnosis/submit
+-> learner_profiles / questionnaire_* / diagnostic_* 落库
+```
+
+### 4.2 生成与反馈
 
 ```text
 frontend
@@ -65,80 +149,106 @@ backend/app/core + backend/app/db
   └─ Repository / ORM / SQLite or Memory
 ```
 
-## 4. API 闭环
+## 5. 当前接口闭环
+
+当前实际对外闭环接口为：
 
 ```text
-POST /api/learner/profile
-→ POST /api/generate/
-→ GET /api/resources/{learner_id}
-→ POST /api/feedback/
-→ 反馈决策 Agent 更新画像与下一轮建议
-→ GET /api/feedback/history/{learner_id}
-→ GET /api/report/{learner_id}
-→ POST /api/generate/ 进入下一轮
+GET /api/knowledge/domains
+-> GET /api/onboarding/questions
+-> POST /api/onboarding/initial-profile
+-> POST /api/diagnosis/submit
+-> POST /api/generate/
+-> GET /api/resources/{learner_id}
+-> POST /api/feedback/
+-> GET /api/report/{learner_id}
 ```
 
-## 5. Agent 运行数据
+补充接口：
 
-每次生成需要返回可视化 trace：
-
-- `agent_name`
-- `action`
-- `input_summary`
-- `output_summary`
-- `decision_reason`
-- `evidence_refs`
+- `GET /api/knowledge/directions`
+- `GET /api/knowledge/info`
+- `GET /api/skills/nodes`
 - `status`（success/degraded/failed；fallback 不得标记 success）
 - `error_code`（稳定脱敏码，不保存原始上游异常）
-- `timestamp`
+- `GET /api/diagnosis/questions`
+- `GET /api/resources/file/{resource_id}`
+- `GET /api/reviews/{resource_id}`
+- `GET /api/feedback/history/{learner_id}`
+- `GET /api/evaluation/summary`
 
-后续如需回放历史过程，可继续增加 `agent_runs` 与 `agent_steps` 持久化。
+## 6. 当前数据与运行目录
 
-反馈提交时由 `feedback` Agent 输出反馈决策数据：
+| 路径 | 当前用途 |
+|---|---|
+| `backend/data/domain_knowledge.db` | SQLite 业务数据库 |
+| `backend/data/generated_resources/` | 生成资源文件目录 |
+| `backend/chroma_db/` | Chroma 向量索引目录 |
+| `backend/logs/` | 运行日志目录 |
+| `knowledge_base/learning_catalog_seed.json` | 领域与学习方向目录源文件 |
+| `knowledge_base/questionnaire_common.json` | 通用问卷源文件 |
+| `knowledge_base/<track>/questionnaire.json` | 方向特定问卷源文件 |
+| `knowledge_base/<track>/diagnostic_questions.json` | 方向诊断题源文件 |
 
-- `decision`
-- `decision_reason`
-- `next_action`
-- `recommended_topics`
-- `updated_knowledge_states`
-- `regenerate_suggestion`
-- `profile_updates`
+## 7. 当前目录树摘要
 
-`feedback_service` 只负责调用该 Agent、应用画像更新、保存反馈记录和返回 API 响应。
+```text
+backend/
+  app/
+    api/
+    agents/
+    core/
+    db/
+    models/
+    services/
+    utils/
+    config.py
+    main.py
+  data/
+  chroma_db/
+  logs/
 
-## 6. 运行时路径标准
+frontend/
+  src/
+    api/
+    components/
+    router/
+    stores/
+    styles/
+    utils/
+    views/
 
-| 类型 | 标准路径 | 说明 |
-|------|----------|------|
-| 本地虚拟环境 | `.venv/` | 项目根目录下的 Python 虚拟环境，仅本地使用，不进入版本控制 |
-| 后端运行根目录 | `backend/` | 配置、数据库、日志、生成资源基准目录 |
-| 环境变量文件 | `backend/.env` | `app/config.py` 固定读取 |
-| SQLite 数据库 | `backend/data/domain_knowledge.db` | `DB_TYPE=sqlite` 时使用 |
-| 生成资源 | `backend/data/generated_resources/` | 文本、文件类资源统一落点 |
-| 向量库索引 | `backend/chroma_db/` | ChromaDB 持久化目录 |
-| 日志 | `backend/logs/` | 后端日志目录 |
-| 原始知识库 | `knowledge_base/` | 可替换领域知识库源数据 |
-| 示例数据 | `examples/` | 初始化和演示使用 |
+knowledge_base/
+  learning_catalog_seed.json
+  questionnaire_common.json
+  rag_engineering_training/
+  demo_industrial_internet/
 
-禁止新增 `backend/app/data/` 或项目根目录 `data/` 作为正式运行目录。
+scripts/
+  init_db.py
+  ingest_knowledge.py
+```
 
-## 7. 运行模式与健康边界
+## 8. 当前约束
 
-- `development`：默认 SQLite、禁止 degraded；not_ready 时应用保留 `/health`，生成入口在持久化前返回 503。
-- `demo`：只有显式 `ALLOW_DEGRADED_GENERATION=true` 才允许 fallback；响应和 trace 必须显示 degraded。
-- `production`：禁止 degraded 和 memory storage；配置或必需组件 not_ready 时启动 fail-fast。
-- `backend/app/core/health.py` 只做本地、脱敏检查，不调用计费 LLM，不下载 Embedding 模型，不使用 `get_vector_store()` 隐式创建 collection。
-- `backend/app/core/errors.py` 统一稳定错误码和 fallback allow/deny；P0-02 之前不承担 retry、结构化输出或模型路由职责。
-- `/health` 返回 storage、LLM、Embedding、Vector Store、资源目录和 Python readiness，不返回 Key、完整 endpoint、绝对运行路径或 traceback。
-- memory repository 是 ephemeral；即使可运行，也必须在启动日志和 health 中明确显示，不能作为 production ready。
+### 8.1 命名约束
 
-## 8. 协作规则
+- 前台流程入口使用 `learning_direction_id`
+- 后端内部知识边界保留 `knowledge_base_id`
 
-| 规则 | 标准 |
-|------|------|
-| 接口优先 | 修改 API 请求/响应字段前，同步 `docs/api.md` 与 `backend/app/models/schemas.py` |
-| 模型统一 | 前后端共享字段名以 Pydantic schema 为准 |
-| 业务下沉 | 路由只做协议转换，业务规则放在 `services/` 或 `agents/` |
-| 数据隔离 | 仓库实现放在 `db/`，服务层通过接口或工厂调用 |
-| 路径统一 | 运行时文件只写入 `backend/data/`、`backend/chroma_db/`、`backend/logs/` |
-| 可视化闭环 | Agent trace、审核证据、反馈变化和报告数据必须能被前端展示 |
+### 8.2 文档约束
+
+当以下内容变更时，应同步文档：
+
+- 路由文件名或接口路径
+- 服务命名
+- 主流程步骤
+- 数据库存储位置
+- 问卷与诊断的数据边界
+
+### 8.3 运行约束
+
+- 项目本地接口基地址统一为 `http://127.0.0.1:8000`
+- Vite 前端代理应指向 `8000`
+- 文档与联调口径均以 `8000` 为准
+

@@ -8,6 +8,7 @@ class AgentState(TypedDict):
     """多智能体共享状态"""
     learner: LearnerProfile
     topic: str
+    knowledge_base_id: Optional[str]
     resource_types: List[str]
     # 学情诊断输出
     diagnosis: Dict
