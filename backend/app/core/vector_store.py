@@ -13,6 +13,7 @@ def get_vector_store():
     return Chroma(
         persist_directory=str(vector_store_dir),
         embedding_function=embeddings,
+        collection_name=settings.chroma_collection_name,
     )
 
 

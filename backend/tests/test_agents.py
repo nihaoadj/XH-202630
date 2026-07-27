@@ -4,7 +4,7 @@ from app.models.schemas import LearnerProfile
 
 
 class _FakeResponse:
-    content = "[]"
+    content = """[{"resource_type":"讲义","difficulty":"初级","content_text":"测试内容","knowledge_points":["测试"]}]"""
 
 
 class _FakeLLM:

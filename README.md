@@ -84,7 +84,9 @@ backend/
 │   │   ├── embeddings.py         # 中文 Embedding 模型加载
 │   │   ├── vector_store.py       # ChromaDB 向量存储
 │   │   ├── knowledge_base.py     # 知识库文档加载与切片
-│   │   └── file_storage.py       # 生成资源文件存储（支持文本与多媒体）
+│   │   ├── file_storage.py       # 生成资源文件存储（支持文本与多媒体）
+│   │   ├── health.py             # 脱敏运行时健康检查与 readiness 聚合
+│   │   └── errors.py             # 稳定错误码与显式 degraded 策略
 │   ├── db/                       # 数据访问层：按实体划分子包
 │   │   ├── models.py             # SQLAlchemy ORM 模型（共享）
 │   │   ├── database.py           # 数据库引擎与会话管理（共享）
@@ -153,7 +155,8 @@ version1/
 │   └── deployment.md             # 部署说明文档
 ├── scripts/                      # 初始化与辅助脚本
 │   ├── ingest_knowledge.py       # 知识库文档切片并写入向量库
-│   └── init_db.py                # 初始化数据库表并导入示例数据
+│   ├── init_db.py                # 初始化数据库表并导入示例数据
+│   └── check_environment.py      # 只读、脱敏的运行环境检查
 ├── Dockerfile                    # Docker 镜像构建文件
 ├── git-workflow.md               # Git 分支、提交和协作规范
 ├── README.md

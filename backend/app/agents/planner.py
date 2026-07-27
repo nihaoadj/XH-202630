@@ -3,6 +3,7 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
+from app.core.errors import ErrorCode, require_degraded_generation
 from app.core.llm import get_llm
 
 
@@ -95,6 +96,7 @@ def plan_node(state: AgentState) -> AgentState:
 {json.dumps(evidence_summary, ensure_ascii=False)}
 """
 
+    fallback_code = None
     try:
         llm = get_llm()
         messages = [
@@ -104,6 +106,7 @@ def plan_node(state: AgentState) -> AgentState:
         response = llm.invoke(messages)
         plan = json.loads(response.content)
     except Exception:
+        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
         plan = _fallback_plan(state)
 
     path = plan.get("learning_path", [])
@@ -115,6 +118,8 @@ def plan_node(state: AgentState) -> AgentState:
         "output_summary": f"学习路径：{path_summary}",
         "decision_reason": plan.get("decision_reason", "根据诊断盲区、知识库证据和学习目标规划资源生成顺序。"),
         "evidence_refs": [item.get("source", "unknown") for item in chunks[:5]],
+        "status": "degraded" if fallback_code else "success",
+        "error_code": fallback_code,
     }
 
     return {

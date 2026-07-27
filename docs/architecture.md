@@ -32,7 +32,7 @@
 | API 路由层 | `backend/app/api/` | HTTP 参数接收、Pydantic 校验、状态码、响应模型、联调入口 |
 | 业务服务层 | `backend/app/services/` | 串联画像、生成、反馈、报告等业务用例 |
 | 多智能体层 | `backend/app/agents/` | Agent 节点、共享状态、协同决策、审核纠偏 |
-| 基础设施层 | `backend/app/core/` | LLM、Embedding、知识库读取、向量库、文件存储 |
+| 基础设施层 | `backend/app/core/` | LLM、Embedding、知识库读取、向量库、文件存储、运行时健康检查与稳定错误码 |
 | 数据访问层 | `backend/app/db/` | ORM、仓库接口、画像/资源/反馈数据持久化 |
 | 数据模型层 | `backend/app/models/` | Pydantic 请求/响应/领域数据结构 |
 | 脚本层 | `scripts/` | 数据库初始化、知识库入库、演示数据准备 |
@@ -47,7 +47,7 @@ backend/app/api
   ↓ 调用服务
 backend/app/services
   ├─ learner_service: 画像创建、查询、更新
-  ├─ generation_service: 调用多 Agent 生成闭环并保存资源
+  ├─ generation_service: 先执行 readiness gate，再调用多 Agent 生成闭环并保存资源
   ├─ feedback_service: 调用反馈决策 Agent，保存反馈记录并更新画像
   └─ report_service: 聚合画像、资源、反馈生成报告
   ↓
@@ -61,7 +61,7 @@ backend/app/agents
   └─ workflow: 协同编排与重试决策
   ↓
 backend/app/core + backend/app/db
-  ├─ LLM / Embedding / ChromaDB / 知识库 / 文件存储
+  ├─ RuntimeHealth / failure policy / LLM / Embedding / ChromaDB / 知识库 / 文件存储
   └─ Repository / ORM / SQLite or Memory
 ```
 
@@ -88,6 +88,8 @@ POST /api/learner/profile
 - `output_summary`
 - `decision_reason`
 - `evidence_refs`
+- `status`（success/degraded/failed；fallback 不得标记 success）
+- `error_code`（稳定脱敏码，不保存原始上游异常）
 - `timestamp`
 
 后续如需回放历史过程，可继续增加 `agent_runs` 与 `agent_steps` 持久化。
@@ -120,7 +122,17 @@ POST /api/learner/profile
 
 禁止新增 `backend/app/data/` 或项目根目录 `data/` 作为正式运行目录。
 
-## 7. 协作规则
+## 7. 运行模式与健康边界
+
+- `development`：默认 SQLite、禁止 degraded；not_ready 时应用保留 `/health`，生成入口在持久化前返回 503。
+- `demo`：只有显式 `ALLOW_DEGRADED_GENERATION=true` 才允许 fallback；响应和 trace 必须显示 degraded。
+- `production`：禁止 degraded 和 memory storage；配置或必需组件 not_ready 时启动 fail-fast。
+- `backend/app/core/health.py` 只做本地、脱敏检查，不调用计费 LLM，不下载 Embedding 模型，不使用 `get_vector_store()` 隐式创建 collection。
+- `backend/app/core/errors.py` 统一稳定错误码和 fallback allow/deny；P0-02 之前不承担 retry、结构化输出或模型路由职责。
+- `/health` 返回 storage、LLM、Embedding、Vector Store、资源目录和 Python readiness，不返回 Key、完整 endpoint、绝对运行路径或 traceback。
+- memory repository 是 ephemeral；即使可运行，也必须在启动日志和 health 中明确显示，不能作为 production ready。
+
+## 8. 协作规则
 
 | 规则 | 标准 |
 |------|------|

@@ -228,6 +228,7 @@ class AgentTrace(BaseModel):
     evidence_refs: List[str] = Field(default_factory=list)
     review_summary: Dict[str, Any] = Field(default_factory=dict)
     retry_count: int = 0
+    error_code: Optional[str] = None
     error_message: Optional[str] = None
     timestamp: Optional[str] = None
     started_at: Optional[str] = None
@@ -259,6 +260,8 @@ class GenerateResponse(BaseModel):
     resources: List[LearningResource]
     trace: List[AgentTrace]
     report: GenerateReport
+    execution_status: str = "success"
+    error_codes: List[str] = Field(default_factory=list)
 
 
 class ReportRadar(BaseModel):

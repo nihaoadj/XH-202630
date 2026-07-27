@@ -2,6 +2,7 @@ from typing import List
 
 from app.agents.workflow import build_workflow
 from app.core.file_storage import save_text_resource
+from app.core.health import ensure_generation_ready
 from app.db.resource.base import BaseResourceRepository
 from app.models.schemas import GenerateRequest, GenerateResponse, LearnerProfile, LearningResource
 
@@ -83,6 +84,7 @@ class GenerationService:
 
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         """生成个性化学习资源"""
+        readiness = ensure_generation_ready()
         initial_state = {
             "learner": learner,
             "topic": req.topic,
@@ -107,6 +109,7 @@ class GenerationService:
         }
 
         result = self.workflow.invoke(initial_state)
+        trace = result.get("trace", [])
         raw_resources = result.get("generated_resources", [])
         persisted_resources = _persist_resources(
             raw_resources,
@@ -115,15 +118,30 @@ class GenerationService:
             self.resource_repo,
         )
 
+        trace_error_codes = [
+            item.get("error_code")
+            for item in trace
+            if isinstance(item, dict) and item.get("error_code")
+        ]
+        error_codes = list(dict.fromkeys(readiness.error_codes + trace_error_codes))
+        execution_status = (
+            "degraded"
+            if readiness.status == "degraded"
+            or any(isinstance(item, dict) and item.get("status") == "degraded" for item in trace)
+            else "success"
+        )
+
         return GenerateResponse(
             learner_id=req.learner_id,
             topic=req.topic,
             resources=persisted_resources,
-            trace=result.get("trace", []),
+            trace=trace,
             report=_build_report(
                 learner,
                 result.get("diagnosis", {}),
                 result.get("review_result", {}),
                 result.get("learning_plan", {}),
             ),
+            execution_status=execution_status,
+            error_codes=error_codes,
         )

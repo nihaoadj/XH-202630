@@ -2,6 +2,7 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
+from app.core.errors import ErrorCode, require_degraded_generation
 from app.core.llm import get_llm
 
 
@@ -30,6 +31,7 @@ def diagnose_node(state: AgentState) -> AgentState:
 - learning_goal（学习目标）：{learner.learning_goal}
 - 当前主题：{state['topic']}
 """
+    fallback_code = None
     try:
         llm = get_llm()
         messages = [
@@ -38,12 +40,13 @@ def diagnose_node(state: AgentState) -> AgentState:
         ]
         response = llm.invoke(messages)
         diagnosis = json.loads(response.content)
-    except Exception as exc:
+    except Exception:
+        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
         diagnosis = {
             "ability_tags": learner.strong_points,
             "weak_points": learner.weak_points,
             "recommended_difficulty": learner.skill_level or "中级",
-            "suggestion": f"使用画像信息生成保底诊断：{exc}",
+            "suggestion": "LLM 不可用，已按显式降级策略使用画像信息生成保底诊断。",
         }
 
     trace_item = {
@@ -52,6 +55,8 @@ def diagnose_node(state: AgentState) -> AgentState:
         "input_summary": f"画像：{learner.skill_level}；主题：{state['topic']}",
         "output_summary": f"推荐难度：{diagnosis.get('recommended_difficulty', '未知')}; 盲区：{diagnosis.get('weak_points', [])}",
         "decision_reason": diagnosis.get("suggestion", "根据画像得分、知识盲区和学习目标判断能力起点。"),
+        "status": "degraded" if fallback_code else "success",
+        "error_code": fallback_code,
     }
 
     return {

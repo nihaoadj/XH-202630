@@ -3,6 +3,7 @@ import uuid
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
+from app.core.errors import ErrorCode, require_degraded_generation
 from app.core.llm import get_llm
 from app.models.schemas import LearningResource, SourceRef
 
@@ -99,6 +100,7 @@ strong_points（优势领域）：{learner.strong_points}
 
 请生成对应资源，每个资源字段：resource_type, difficulty, content_text, knowledge_points, source_refs。
 """
+    fallback_code = None
     try:
         llm = get_llm()
         messages = [
@@ -108,10 +110,13 @@ strong_points（优势领域）：{learner.strong_points}
         response = llm.invoke(messages)
         raw_resources = json.loads(response.content)
     except Exception:
+        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
         raw_resources = []
 
     resources = []
-    for r in raw_resources:
+    for r in raw_resources if isinstance(raw_resources, list) else []:
+        if not isinstance(r, dict):
+            continue
         resources.append(LearningResource(
             resource_id=str(uuid.uuid4()),
             resource_type=r.get("resource_type", "讲义"),
@@ -121,6 +126,8 @@ strong_points（优势领域）：{learner.strong_points}
             source_refs=_build_source_refs(chunks),
         ))
     if not resources:
+        if fallback_code is None:
+            fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
         resources = _fallback_resources(state)
 
     trace_item = {
@@ -130,6 +137,8 @@ strong_points（优势领域）：{learner.strong_points}
         "output_summary": f"生成 {len(resources)} 种资源：{[r.resource_type for r in resources]}",
         "decision_reason": "依据学习路径规划和检索证据生成不同难度、不同形态的学习资源。",
         "evidence_refs": [c.get("source", "unknown") for c in chunks[:5]],
+        "status": "degraded" if fallback_code else "success",
+        "error_code": fallback_code,
     }
 
     return {

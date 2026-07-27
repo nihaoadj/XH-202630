@@ -2,6 +2,7 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
+from app.core.errors import ErrorCode, require_degraded_generation
 from app.core.llm import get_llm
 
 
@@ -41,6 +42,7 @@ def review_node(state: AgentState) -> AgentState:
 待审核资源：
 {resource_text}
 """
+    fallback_code = None
     try:
         llm = get_llm()
         messages = [
@@ -50,11 +52,12 @@ def review_node(state: AgentState) -> AgentState:
         response = llm.invoke(messages)
         review = json.loads(response.content)
     except Exception:
+        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
         review = {
-            "passed": True,
+            "passed": False,
             "hallucination_score": 0.3 if chunks else 0.5,
             "issues": ["使用保底审核结果，建议补充知识库证据或配置 LLM 后复核"],
-            "difficulty_match": True,
+            "difficulty_match": False,
             "coverage_rate": 0.8,
             "suggestion": "",
         }
@@ -66,6 +69,8 @@ def review_node(state: AgentState) -> AgentState:
         "output_summary": f"通过：{review.get('passed', False)}; 幻觉分：{review.get('hallucination_score', 0):.2f}; 覆盖率：{review.get('coverage_rate', 0):.2f}",
         "decision_reason": review.get("suggestion", "根据知识库证据、事实一致性、覆盖率和难度匹配给出审核结论。"),
         "evidence_refs": [c.get("source", "unknown") for c in chunks[:5]],
+        "status": "degraded" if fallback_code else "success",
+        "error_code": fallback_code,
     }
 
     return {

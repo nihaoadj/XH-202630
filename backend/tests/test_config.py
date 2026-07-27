@@ -1,0 +1,132 @@
+import pytest
+from pydantic import ValidationError
+
+from app.config import Settings
+from app.db import database as database_module
+
+
+def make_settings(**overrides):
+    values = {"_env_file": None}
+    values.update(overrides)
+    return Settings(**values)
+
+
+def test_settings_safe_defaults():
+    settings = make_settings()
+
+    assert settings.app_mode == "development"
+    assert settings.allow_degraded_generation is False
+    assert settings.db_type == "sqlite"
+    assert settings.debug is False
+    assert settings.sql_echo is False
+
+
+@pytest.mark.parametrize("mode", ["development", "demo", "production"])
+def test_settings_accept_legal_app_modes(mode):
+    overrides = {"app_mode": mode}
+    if mode == "production":
+        overrides["llm_api_key"] = "test-production-key"
+    assert make_settings(**overrides).app_mode == mode
+
+
+@pytest.mark.parametrize("db_type", ["memory", "sqlite", "postgresql"])
+def test_settings_accept_legal_db_types(db_type):
+    database_url = (
+        "postgresql://localhost/test"
+        if db_type == "postgresql"
+        else "sqlite:///./data/domain_knowledge.db"
+    )
+    assert make_settings(db_type=db_type, database_url=database_url).db_type == db_type
+
+
+def test_settings_reject_invalid_app_mode_without_echoing_input():
+    invalid_value = "invalid-mode-sensitive-value"
+    with pytest.raises(ValidationError) as caught:
+        make_settings(app_mode=invalid_value)
+
+    message = str(caught.value)
+    assert "CFG_INVALID_APP_MODE" in message
+    assert invalid_value not in message
+
+
+def test_settings_reject_invalid_db_type():
+    with pytest.raises(ValidationError, match="CFG_INVALID_DB_TYPE"):
+        make_settings(db_type="redis")
+
+
+def test_settings_reject_database_url_mismatch():
+    with pytest.raises(ValidationError, match="CFG_DATABASE_URL_MISMATCH"):
+        make_settings(db_type="sqlite", database_url="postgresql://db/test")
+
+
+@pytest.mark.parametrize("api_key", ["", "your_api_key_here", "changeme", "replace_me"])
+def test_production_rejects_missing_or_placeholder_key(api_key):
+    expected = "CFG_LLM_API_KEY_MISSING" if not api_key else "CFG_LLM_API_KEY_PLACEHOLDER"
+    with pytest.raises(ValidationError, match=expected):
+        make_settings(app_mode="production", llm_api_key=api_key)
+
+
+def test_production_rejects_degraded_and_memory():
+    with pytest.raises(ValidationError, match="CFG_PRODUCTION_DEGRADED_FORBIDDEN"):
+        make_settings(
+            app_mode="production",
+            allow_degraded_generation=True,
+            llm_api_key="test-key",
+        )
+    with pytest.raises(ValidationError, match="CFG_PRODUCTION_EPHEMERAL_STORAGE"):
+        make_settings(
+            app_mode="production",
+            db_type="memory",
+            llm_api_key="test-key",
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("llm_base_url", "not-a-url", "CFG_LLM_ENDPOINT_INVALID"),
+        ("llm_model", "", "CFG_LLM_MODEL_MISSING"),
+        ("embedding_model", "", "CFG_EMBEDDING_MODEL_MISSING"),
+    ],
+)
+def test_production_rejects_incomplete_model_configuration(field, value, code):
+    overrides = {"app_mode": "production", "llm_api_key": "test-key", field: value}
+    with pytest.raises(ValidationError, match=code):
+        make_settings(**overrides)
+
+
+def test_demo_allows_explicit_degraded_mode_without_key():
+    settings = make_settings(
+        app_mode="demo",
+        allow_degraded_generation=True,
+        llm_api_key="",
+    )
+    assert settings.allow_degraded_generation is True
+
+
+def test_api_key_is_secret_in_repr_and_dump():
+    secret = "test-key-must-not-leak"
+    settings = make_settings(llm_api_key=secret)
+
+    assert secret not in repr(settings)
+    assert secret not in str(settings.model_dump())
+
+
+def test_debug_does_not_enable_sql_echo(monkeypatch, tmp_path):
+    captured = {}
+    settings = make_settings(
+        debug=True,
+        sql_echo=False,
+        database_url=f"sqlite:///{(tmp_path / 'test.db').as_posix()}",
+    )
+
+    def fake_create_engine(url, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(database_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(database_module, "create_engine", fake_create_engine)
+    database_module.get_engine()
+
+    assert captured["echo"] is False
+    assert captured["hide_parameters"] is True

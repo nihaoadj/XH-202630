@@ -419,7 +419,7 @@ POST /api/learner/profile
 | `step_id` | string | 否 | 当前步骤 ID |
 | `agent_name` | string | 是 | Agent 名称 |
 | `action` | string | 是 | 当前动作 |
-| `status` | string | 否 | success、failed、skipped、retrying |
+| `status` | string | 否 | success、degraded、failed、skipped、retrying；fallback 不得标记 success |
 | `input_summary` | string | 否 | 输入摘要 |
 | `output_summary` | string | 是 | 输出摘要 |
 | `input_payload` | object | 否 | 结构化输入 |
@@ -428,6 +428,7 @@ POST /api/learner/profile
 | `evidence_refs` | string[] | 否 | 证据引用 ID 或路径 |
 | `review_summary` | object | 否 | 审核摘要 |
 | `retry_count` | integer | 否 | 重试次数 |
+| `error_code` | string | 否 | 稳定、脱敏的内部错误码；不得放原始上游异常 |
 | `error_message` | string | 否 | 错误信息 |
 | `timestamp` | string(datetime) | 否 | 兼容字段，记录时间 |
 | `started_at` | string(datetime) | 否 | 开始时间 |
@@ -647,6 +648,40 @@ DifficultyCurveItem 字段：
 
 ## 6. 关键接口契约
 
+### 6.0 GET `/health`
+
+返回当前运行模式与脱敏 readiness。该接口不调用计费 LLM，不下载 Embedding 模型，不返回 API Key、完整 endpoint、绝对运行路径或 traceback。
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `status` | string | 是 | `ready`、`degraded` 或 `not_ready` |
+| `app_mode` | string | 是 | `development`、`demo` 或 `production` |
+| `degraded_generation_allowed` | boolean | 是 | 当前是否显式允许 degraded；production 永远为 false |
+| `python` | object | 是 | Python readiness |
+| `storage` | object | 是 | storage status、mode 和 ephemeral 标记 |
+| `llm` | object | 是 | LLM 配置 readiness，仅返回安全 code |
+| `embedding` | object | 是 | 本地 Embedding 可用性 |
+| `vector_store` | object | 是 | Chroma collection 状态和可选 count |
+| `resources` | object | 是 | 输出目录 readiness |
+| `error_codes` | string[] | 是 | 去重后的稳定错误码 |
+
+`ready` 和显式允许的 `degraded` 返回 HTTP 200；`not_ready` 返回 HTTP 503。production 的启动预检为 not_ready 时应用 fail-fast。
+
+```json
+{
+  "status": "degraded",
+  "app_mode": "demo",
+  "degraded_generation_allowed": true,
+  "storage": {"status": "ready", "mode": "sqlite", "ephemeral": false},
+  "llm": {"status": "not_ready", "code": "CFG_LLM_API_KEY_MISSING"},
+  "embedding": {"status": "ready"},
+  "vector_store": {"status": "ready", "collection_state": "populated", "count": 8},
+  "resources": {"status": "ready"},
+  "python": {"status": "ready"},
+  "error_codes": ["CFG_LLM_API_KEY_MISSING"]
+}
+```
+
 ### 6.1 POST `/api/learner/profile`
 
 创建或更新学习者画像。
@@ -769,6 +804,8 @@ DifficultyCurveItem 字段：
 | `resources` | LearningResource[] | 是 | 生成资源 |
 | `trace` | AgentTrace[] | 是 | Agent 协同轨迹 |
 | `report` | GenerateReport | 是 | 本次生成摘要 |
+| `execution_status` | string | 是 | `success` 或 `degraded`；任何 fallback 必须为 degraded |
+| `error_codes` | string[] | 是 | 本次生成涉及的脱敏错误码 |
 
 ```json
 {
@@ -776,6 +813,8 @@ DifficultyCurveItem 字段：
   "topic": "检索策略入门到实操",
   "resources": [],
   "trace": [],
+  "execution_status": "success",
+  "error_codes": [],
   "report": {
     "learner_id": "learner_001",
     "ability_level": "中级",
@@ -1009,12 +1048,14 @@ DifficultyCurveItem 字段：
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `status` | string | 是 | 固定为 `error` |
+| `code` | string | 是 | 稳定内部错误码 |
 | `message` | string | 是 | 错误描述 |
 | `detail` | any | 否 | 详细错误信息 |
 
 ```json
 {
   "status": "error",
+  "code": "HTTP_ERROR",
   "message": "学习者画像不存在",
   "detail": null
 }

@@ -11,7 +11,7 @@ def get_llm() -> ChatOpenAI:
     """
     settings = get_settings()
     return ChatOpenAI(
-        api_key=settings.llm_api_key,
+        api_key=settings.llm_api_key.get_secret_value(),
         base_url=settings.llm_base_url,
         model=settings.llm_model,
         temperature=0.3,
