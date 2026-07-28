@@ -20,6 +20,8 @@ from app.config import (
     resolve_backend_path,
 )
 from app.core.errors import ApplicationError, ErrorCode
+from app.core.knowledge_base import list_knowledge_base_dirs, load_knowledge_base_manifest
+from app.core.vector_store import _collection_name
 
 
 class ComponentHealth(BaseModel):
@@ -41,6 +43,24 @@ class HealthReport(BaseModel):
     embedding: ComponentHealth
     vector_store: ComponentHealth
     resources: ComponentHealth
+    error_codes: list[str] = Field(default_factory=list)
+
+
+class KnowledgeBaseHealth(BaseModel):
+    knowledge_base_id: str
+    is_default: bool = False
+    status: str
+    code: Optional[str] = None
+    collection_name: str
+    collection_state: Optional[str] = None
+    count: Optional[int] = None
+
+
+class KnowledgeBaseHealthReport(BaseModel):
+    status: str
+    default_knowledge_base_id: Optional[str] = None
+    knowledge_bases: list[KnowledgeBaseHealth] = Field(default_factory=list)
+    orphan_collections: list[str] = Field(default_factory=list)
     error_codes: list[str] = Field(default_factory=list)
 
 
@@ -147,6 +167,80 @@ def _check_embedding(settings: Settings) -> ComponentHealth:
     return _failure(ErrorCode.EMBEDDING_MODEL_UNAVAILABLE)
 
 
+def _get_chroma_client(vector_dir: Path):
+    import chromadb
+
+    return chromadb.PersistentClient(path=str(vector_dir))
+
+
+def _default_knowledge_base_id(settings: Settings) -> str:
+    return str(
+        load_knowledge_base_manifest(settings.knowledge_base_dir)["knowledge_base_id"]
+    )
+
+
+def _inspect_knowledge_base_collection(
+    client,
+    knowledge_base_id: str,
+    settings: Settings,
+    *,
+    is_default: bool = False,
+) -> KnowledgeBaseHealth:
+    collection_name = _collection_name(knowledge_base_id, settings)
+    try:
+        collection = client.get_collection(collection_name)
+    except Exception:
+        return KnowledgeBaseHealth(
+            knowledge_base_id=knowledge_base_id,
+            is_default=is_default,
+            status="not_ready",
+            code=ErrorCode.VECTOR_COLLECTION_MISSING.value,
+            collection_name=collection_name,
+            collection_state="missing",
+        )
+
+    if (collection.metadata or {}).get("knowledge_base_id") != knowledge_base_id:
+        return KnowledgeBaseHealth(
+            knowledge_base_id=knowledge_base_id,
+            is_default=is_default,
+            status="not_ready",
+            code=ErrorCode.VECTOR_COLLECTION_METADATA_MISMATCH.value,
+            collection_name=collection_name,
+            collection_state="metadata_mismatch",
+        )
+
+    try:
+        count = collection.count()
+    except Exception:
+        return KnowledgeBaseHealth(
+            knowledge_base_id=knowledge_base_id,
+            is_default=is_default,
+            status="not_ready",
+            code=ErrorCode.VECTOR_STORE_UNAVAILABLE.value,
+            collection_name=collection_name,
+            collection_state="unavailable",
+        )
+
+    if count == 0:
+        return KnowledgeBaseHealth(
+            knowledge_base_id=knowledge_base_id,
+            is_default=is_default,
+            status="not_ready",
+            code=ErrorCode.VECTOR_COLLECTION_EMPTY.value,
+            collection_name=collection_name,
+            collection_state="empty",
+            count=0,
+        )
+    return KnowledgeBaseHealth(
+        knowledge_base_id=knowledge_base_id,
+        is_default=is_default,
+        status="ready",
+        collection_name=collection_name,
+        collection_state="populated",
+        count=count,
+    )
+
+
 def _check_vector_store(settings: Settings, prepare: bool) -> ComponentHealth:
     vector_dir = resolve_backend_path(settings.vector_store_dir)
     if not _directory_is_writable(vector_dir, prepare):
@@ -161,25 +255,19 @@ def _check_vector_store(settings: Settings, prepare: bool) -> ComponentHealth:
         )
 
     try:
-        import chromadb
-
-        client = chromadb.PersistentClient(path=str(vector_dir))
-        collection_names = {collection.name for collection in client.list_collections()}
-        if settings.chroma_collection_name not in collection_names:
-            return ComponentHealth(
-                status="not_ready",
-                code=ErrorCode.VECTOR_COLLECTION_MISSING.value,
-                collection_state="missing",
-            )
-        count = client.get_collection(settings.chroma_collection_name).count()
-        if count == 0:
-            return ComponentHealth(
-                status="not_ready",
-                code=ErrorCode.VECTOR_COLLECTION_EMPTY.value,
-                collection_state="empty",
-                count=0,
-            )
-        return ComponentHealth(status="ready", collection_state="populated", count=count)
+        client = _get_chroma_client(vector_dir)
+        detail = _inspect_knowledge_base_collection(
+            client,
+            _default_knowledge_base_id(settings),
+            settings,
+            is_default=True,
+        )
+        return ComponentHealth(
+            status=detail.status,
+            code=detail.code,
+            collection_state=detail.collection_state,
+            count=detail.count,
+        )
     except Exception:
         return _failure(ErrorCode.VECTOR_STORE_UNAVAILABLE)
 
@@ -252,3 +340,104 @@ def ensure_generation_ready(settings: Settings | None = None) -> HealthReport:
     if report.status == "not_ready":
         raise ApplicationError(ErrorCode.GENERATION_DEPENDENCY_UNAVAILABLE)
     return report
+
+
+def build_knowledge_base_health_report(
+    settings: Settings | None = None,
+) -> KnowledgeBaseHealthReport:
+    """Inspect every configured KB for administrators without loading embeddings.
+
+    The public readiness report intentionally does not call this function. A
+    non-default KB failure therefore cannot turn the whole service into HTTP
+    503; it is represented as a degraded administrator report instead.
+    """
+    settings = settings or get_settings()
+    try:
+        default_id = _default_knowledge_base_id(settings)
+    except Exception:
+        return KnowledgeBaseHealthReport(
+            status="not_ready",
+            error_codes=[ErrorCode.KNOWLEDGE_BASE_MANIFEST_INVALID.value],
+        )
+
+    configured: list[tuple[str, Optional[str]]] = []
+    for directory in list_knowledge_base_dirs():
+        try:
+            knowledge_base_id = str(
+                load_knowledge_base_manifest(str(directory))["knowledge_base_id"]
+            )
+            configured.append((knowledge_base_id, None))
+        except Exception:
+            configured.append((directory.name, ErrorCode.KNOWLEDGE_BASE_MANIFEST_INVALID.value))
+    if default_id not in {knowledge_base_id for knowledge_base_id, _ in configured}:
+        configured.insert(0, (default_id, None))
+
+    vector_dir = resolve_backend_path(settings.vector_store_dir)
+    database_file = vector_dir / "chroma.sqlite3"
+    if not vector_dir.is_dir() or not database_file.exists():
+        details = [
+            KnowledgeBaseHealth(
+                knowledge_base_id=knowledge_base_id,
+                is_default=knowledge_base_id == default_id,
+                status="not_ready",
+                code=manifest_error or ErrorCode.VECTOR_COLLECTION_MISSING.value,
+                collection_name=_collection_name(knowledge_base_id, settings),
+                collection_state="manifest_invalid" if manifest_error else "missing",
+            )
+            for knowledge_base_id, manifest_error in configured
+        ]
+        return KnowledgeBaseHealthReport(
+            status="not_ready",
+            default_knowledge_base_id=default_id,
+            knowledge_bases=details,
+            error_codes=list(dict.fromkeys(item.code for item in details if item.code)),
+        )
+
+    try:
+        client = _get_chroma_client(vector_dir)
+        collections = {collection.name for collection in client.list_collections()}
+    except Exception:
+        return KnowledgeBaseHealthReport(
+            status="not_ready",
+            default_knowledge_base_id=default_id,
+            error_codes=[ErrorCode.VECTOR_STORE_UNAVAILABLE.value],
+        )
+
+    details = []
+    for knowledge_base_id, manifest_error in configured:
+        if manifest_error:
+            details.append(
+                KnowledgeBaseHealth(
+                    knowledge_base_id=knowledge_base_id,
+                    is_default=knowledge_base_id == default_id,
+                    status="not_ready",
+                    code=manifest_error,
+                    collection_name=_collection_name(knowledge_base_id, settings),
+                    collection_state="manifest_invalid",
+                )
+            )
+            continue
+        details.append(
+            _inspect_knowledge_base_collection(
+                client,
+                knowledge_base_id,
+                settings,
+                is_default=knowledge_base_id == default_id,
+            )
+        )
+
+    expected_names = {item.collection_name for item in details}
+    default_health = next((item for item in details if item.is_default), None)
+    if default_health is None or default_health.status != "ready":
+        status = "not_ready"
+    elif any(item.status != "ready" for item in details):
+        status = "degraded"
+    else:
+        status = "ready"
+    return KnowledgeBaseHealthReport(
+        status=status,
+        default_knowledge_base_id=default_id,
+        knowledge_bases=details,
+        orphan_collections=sorted(collections - expected_names),
+        error_codes=list(dict.fromkeys(item.code for item in details if item.code)),
+    )

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import diagnosis, evaluation, feedback, generate, knowledge, onboarding, profiles, report, resources, reviews, skills
+from app.api import admin, diagnosis, evaluation, feedback, generate, knowledge, onboarding, profiles, report, resources, reviews, skills
 from app.config import get_settings
 from app.containers import init_container
 from app.core.errors import ApplicationError, ErrorCode
@@ -166,6 +166,7 @@ app.include_router(diagnosis.router, prefix="/api/diagnosis", tags=["能力诊�
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["知识库"])
 app.include_router(reviews.router, prefix="/api/reviews", tags=["审核证据"])
 app.include_router(evaluation.router, prefix="/api/evaluation", tags=["量化评测"])
+app.include_router(admin.router, prefix="/api/admin", tags=["管理员运行诊断"])
 
 
 @app.get("/")
@@ -174,6 +175,7 @@ def read_root():
 
 
 @app.get("/health")
+@app.get("/health/ready")
 def health(request: Request):
     """Return sanitized readiness without calling external model endpoints."""
     settings = get_settings()

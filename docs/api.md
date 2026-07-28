@@ -44,6 +44,8 @@
 |---|---|---|---|
 | 系统 | `GET` | `/` | 服务信息 |
 | 系统 | `GET` | `/health` | 脱敏运行时 readiness |
+| 系统 | `GET` | `/health/ready` | 与 `/health` 相同的明确 readiness 别名 |
+| 管理员 | `GET` | `/api/admin/knowledge-bases/health` | Token 保护的全 KB 脱敏状态 |
 | 知识目录 | `GET` | `/api/knowledge/domains` | 查询领域及其下属学习方向 |
 | 知识目录 | `GET` | `/api/knowledge/directions` | 查询学习方向列表 |
 | 知识目录 | `GET` | `/api/knowledge/info` | 查询知识库统计信息 |
@@ -195,9 +197,9 @@
 
 ## 5. 接口详情
 
-### 5.0 `GET /health`
+### 5.0 `GET /health`、`GET /health/ready`
 
-返回当前运行模式及脱敏 readiness。该接口不调用计费 LLM、不下载 Embedding 模型，也不返回 API Key、完整 endpoint、绝对运行路径或 traceback。
+返回当前运行模式及脱敏 readiness。该接口不调用计费 LLM、不下载 Embedding 模型，也不返回 API Key、完整 endpoint、绝对运行路径或 traceback。多 KB 模式下只检查默认 KB 和核心依赖；非默认 KB 异常不会改变公共 readiness。
 
 主字段：
 
@@ -233,6 +235,47 @@
   "error_codes": ["CFG_LLM_API_KEY_MISSING"]
 }
 ```
+
+### 5.0a `GET /api/admin/knowledge-bases/health`
+
+返回全部已配置 KB 的脱敏 collection 状态。接口默认关闭，只有设置 `ADMIN_HEALTH_TOKEN` 后才能通过 `X-Admin-Token` 请求头访问。
+
+状态码：
+
+- 未配置管理员 token：HTTP 404 + `ADMIN_HEALTH_DISABLED`
+- token 缺失或错误：HTTP 401 + `ADMIN_UNAUTHORIZED`
+- 默认 KB/Chroma 核心不可用：HTTP 503 + `status=not_ready`
+- 默认 KB 正常、部分非默认 KB 异常：HTTP 200 + `status=degraded`
+- 全部 KB 正常：HTTP 200 + `status=ready`
+
+```json
+{
+  "status": "degraded",
+  "default_knowledge_base_id": "rag_engineering_training",
+  "knowledge_bases": [
+    {
+      "knowledge_base_id": "rag_engineering_training",
+      "is_default": true,
+      "status": "ready",
+      "collection_name": "kb_0123456789abcdef",
+      "collection_state": "populated",
+      "count": 42
+    },
+    {
+      "knowledge_base_id": "optional_training",
+      "is_default": false,
+      "status": "not_ready",
+      "code": "VECTOR_COLLECTION_MISSING",
+      "collection_name": "kb_fedcba9876543210",
+      "collection_state": "missing"
+    }
+  ],
+  "orphan_collections": [],
+  "error_codes": ["VECTOR_COLLECTION_MISSING"]
+}
+```
+
+接口不返回管理员 token、绝对磁盘路径、原始异常或文档正文。collection name 统一由 `_collection_name(kb_id)` 生成；旧 `CHROMA_COLLECTION_NAME` 在兼容期只作为前缀解释。
 
 ### 5.1 `GET /`
 

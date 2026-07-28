@@ -12,39 +12,14 @@ class _FakeLLM:
         return _FakeResponse()
 
 
-def test_workflow_runs():
-    """测试多智能体工作流能完成端到端调用"""
-    learner = LearnerProfile(
-        learner_id="test_001",
-        learner_type="初学者",
-        education="本科",
-        major="计算机科学与技术",
-        theory_scores={"工业互联网架构": 65, "MQTT": 70},
-        skill_level="初级",
-        weak_points=["OPC UA", "边缘计算网关配置"],
-        strong_points=["Python 编程"],
-        learning_goal="掌握工业互联网数据采集",
-    )
-
+def test_workflow_compiles_with_expected_baseline_channels():
+    """只验证当前图可编译及基线 channel；完整离线 invoke 属于 P0-01。"""
     workflow = build_workflow()
-    initial_state = {
-        "learner": learner,
-        "topic": "工业互联网边缘计算网关配置",
-        "resource_types": ["讲义"],
-        "diagnosis": {},
-        "retrieved_chunks": [],
-        "learning_plan": {},
-        "generated_resources": [],
-        "review_result": {},
-        "final_decision": "",
-        "trace": [],
-        "iteration": 0,
-    }
+    schema = workflow.get_input_jsonschema()
 
-    # 注意：此测试需要配置 LLM_API_KEY 才能运行
-    # result = workflow.invoke(initial_state)
-    # assert "final_decision" in result
-    assert workflow is not None
+    assert {"learner", "topic", "knowledge_base_id", "trace", "iteration"} <= set(
+        schema["properties"]
+    )
 
 
 def test_workflow_retry_guard_decides_after_max_iteration():

@@ -104,9 +104,33 @@ def test_demo_allows_explicit_degraded_mode_without_key():
     assert settings.allow_degraded_generation is True
 
 
+def test_legacy_chroma_collection_name_is_a_prefix_during_compatibility_window():
+    legacy = make_settings(chroma_collection_name="legacy_collection")
+    preferred = make_settings(
+        chroma_collection_name="legacy_collection",
+        chroma_collection_prefix="preferred",
+    )
+    explicit_default = make_settings(
+        chroma_collection_name="legacy_collection",
+        chroma_collection_prefix="kb",
+    )
+
+    assert legacy.chroma_collection_prefix == "legacy_collection"
+    assert preferred.chroma_collection_prefix == "preferred"
+    assert explicit_default.chroma_collection_prefix == "kb"
+
+
 def test_api_key_is_secret_in_repr_and_dump():
     secret = "test-key-must-not-leak"
     settings = make_settings(llm_api_key=secret)
+
+    assert secret not in repr(settings)
+    assert secret not in str(settings.model_dump())
+
+
+def test_admin_health_token_is_secret_in_repr_and_dump():
+    secret = "admin-health-token-must-not-leak"
+    settings = make_settings(admin_health_token=secret)
 
     assert secret not in repr(settings)
     assert secret not in str(settings.model_dump())

@@ -143,6 +143,87 @@ def test_unwritable_resource_directory_is_always_not_ready(monkeypatch):
     assert report.status == "not_ready"
 
 
+class _FakeCollection:
+    def __init__(self, name, knowledge_base_id, count=1):
+        self.name = name
+        self.metadata = {"knowledge_base_id": knowledge_base_id}
+        self._count = count
+
+    def count(self):
+        return self._count
+
+
+class _FakeChromaClient:
+    def __init__(self, collections):
+        self.collections = {collection.name: collection for collection in collections}
+        self.requested_names = []
+
+    def get_collection(self, name):
+        self.requested_names.append(name)
+        if name not in self.collections:
+            raise KeyError(name)
+        return self.collections[name]
+
+    def list_collections(self):
+        return list(self.collections.values())
+
+
+def test_public_health_checks_only_default_knowledge_base(monkeypatch, tmp_path):
+    settings = make_settings(
+        llm_api_key="test-key",
+        vector_store_dir=str(tmp_path),
+    )
+    (tmp_path / "chroma.sqlite3").touch()
+    default_name = health_module._collection_name("default_kb", settings)
+    client = _FakeChromaClient([_FakeCollection(default_name, "default_kb", count=3)])
+    monkeypatch.setattr(health_module, "_get_chroma_client", lambda path: client)
+    monkeypatch.setattr(
+        health_module, "_default_knowledge_base_id", lambda settings: "default_kb"
+    )
+
+    result = health_module._check_vector_store(settings, prepare=False)
+
+    assert result.status == "ready"
+    assert result.count == 3
+    assert client.requested_names == [default_name]
+
+
+def test_non_default_kb_failure_degrades_admin_report_not_public_health(monkeypatch, tmp_path):
+    settings = make_settings(
+        llm_api_key="test-key",
+        vector_store_dir=str(tmp_path),
+    )
+    (tmp_path / "chroma.sqlite3").touch()
+    default_name = health_module._collection_name("default_kb", settings)
+    client = _FakeChromaClient([_FakeCollection(default_name, "default_kb", count=3)])
+    monkeypatch.setattr(health_module, "_get_chroma_client", lambda path: client)
+    monkeypatch.setattr(
+        health_module, "_default_knowledge_base_id", lambda settings: "default_kb"
+    )
+    monkeypatch.setattr(
+        health_module,
+        "list_knowledge_base_dirs",
+        lambda: [tmp_path / "default", tmp_path / "optional"],
+    )
+    monkeypatch.setattr(
+        health_module,
+        "load_knowledge_base_manifest",
+        lambda path=None: {
+            "knowledge_base_id": "optional_kb"
+            if path and str(path).endswith("optional")
+            else "default_kb"
+        },
+    )
+
+    public = health_module._check_vector_store(settings, prepare=False)
+    admin = health_module.build_knowledge_base_health_report(settings)
+
+    assert public.status == "ready"
+    assert admin.status == "degraded"
+    assert admin.knowledge_bases[0].status == "ready"
+    assert admin.knowledge_bases[1].code == ErrorCode.VECTOR_COLLECTION_MISSING.value
+
+
 def _http_report(status):
     component = ComponentHealth(status="ready")
     return HealthReport(
@@ -179,6 +260,21 @@ def test_health_http_status_and_secret_redaction(monkeypatch, status, expected_h
     assert response.json()["status"] == status
     assert secret not in response.text
     assert "traceback" not in response.text.lower()
+
+
+def test_ready_alias_uses_the_same_default_kb_readiness(monkeypatch):
+    settings = make_settings(llm_api_key="test-key")
+    report = _http_report("ready")
+    monkeypatch.setattr(main_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(main_module, "init_container", lambda: object())
+    monkeypatch.setattr(main_module, "init_database", lambda: None)
+    monkeypatch.setattr(main_module, "build_health_report", lambda *args, **kwargs: report)
+
+    with TestClient(main_module.app, raise_server_exceptions=False) as client:
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == report.model_dump(mode="json", exclude_none=True)
 
 
 def test_memory_startup_logs_ephemeral_warning(monkeypatch, caplog):

@@ -4,20 +4,29 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from typing import Iterable, Optional
 
 from langchain_community.vectorstores import Chroma
 from langchain.schema import Document
 
-from app.config import get_settings, resolve_backend_path
+from app.config import Settings, get_settings, resolve_backend_path
 from app.core.embeddings import get_embeddings
 from app.core.knowledge_base import load_knowledge_base_manifest
 
 
-def _collection_name(knowledge_base_id: str) -> str:
-    """避免中文、空格等 ID 直接作为 Chroma collection 名称带来的兼容问题。"""
+def _collection_name(knowledge_base_id: str, settings: Settings | None = None) -> str:
+    """Return the one canonical Chroma collection name for a knowledge base.
+
+    ``CHROMA_COLLECTION_NAME`` is retained for one compatibility window, but is
+    interpreted by ``Settings`` as a prefix. It is never used as one global
+    collection name shared by multiple knowledge bases.
+    """
+    settings = settings or get_settings()
+    prefix = re.sub(r"[^a-zA-Z0-9_-]+", "_", settings.chroma_collection_prefix.strip())
+    prefix = prefix.strip("_-")[:32] or "kb"
     digest = hashlib.sha256(knowledge_base_id.encode("utf-8")).hexdigest()[:16]
-    return f"kb_{digest}"
+    return f"{prefix}_{digest}"
 
 
 def _resolve_knowledge_base_id(knowledge_base_id: Optional[str]) -> str:
@@ -66,7 +75,7 @@ def get_vector_store(knowledge_base_id: Optional[str] = None) -> Chroma:
     os.makedirs(vector_store_dir, exist_ok=True)
     kb_id = _resolve_knowledge_base_id(knowledge_base_id)
     return Chroma(
-        collection_name=_collection_name(kb_id),
+        collection_name=_collection_name(kb_id, settings),
         persist_directory=str(vector_store_dir),
         embedding_function=get_embeddings(),
         collection_metadata={"knowledge_base_id": kb_id},

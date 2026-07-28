@@ -149,6 +149,14 @@ backend/app/core + backend/app/db
   └─ Repository / ORM / SQLite or Memory
 ```
 
+### 多 KB collection 与健康检查边界
+
+- 每个 `knowledge_base_id` 通过 `backend/app/core/vector_store.py:_collection_name()` 映射到独立 Chroma collection。
+- collection 的创建、写入、查询、删除和 health 均复用该 resolver；`CHROMA_COLLECTION_NAME` 兼容期只作为前缀，不再表示唯一固定集合。
+- 公共 `/health` 与 `/health/ready` 只判断默认 KB 和 Python、storage、LLM、Embedding、Chroma 目录、资源目录等核心依赖。
+- 管理员 `/api/admin/knowledge-bases/health` 在显式 token 保护下返回所有 KB 的脱敏详情。
+- 默认 KB 正常但部分可选 KB 异常时，管理员汇总为 degraded；公共服务不因此返回 503。默认 KB 或 Chroma 核心不可用时才按运行模式进入 degraded/not-ready。
+
 ## 5. 当前接口闭环
 
 当前实际对外闭环接口为：

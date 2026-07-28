@@ -30,8 +30,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/domain_knowledge.db"
     knowledge_base_dir: str = "../knowledge_base/rag_engineering_training"
     vector_store_dir: str = "./chroma_db"
-    chroma_collection_name: str = "langchain"
+    chroma_collection_prefix: str = "kb"
+    # Deprecated compatibility input. During the compatibility window this is
+    # interpreted as a prefix, never as one fixed collection shared by all KBs.
+    chroma_collection_name: str | None = None
     resources_dir: str = "./data/generated_resources"
+    admin_health_token: SecretStr = SecretStr("")
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     debug: bool = False
@@ -62,6 +66,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_runtime_settings(self):
+        legacy_prefix = (self.chroma_collection_name or "").strip()
+        if legacy_prefix and "chroma_collection_prefix" not in self.model_fields_set:
+            self.chroma_collection_prefix = legacy_prefix
+        if not self.chroma_collection_prefix.strip():
+            self.chroma_collection_prefix = "kb"
+
         if self.db_type == "sqlite" and not self.database_url.startswith("sqlite:///"):
             raise ValueError("CFG_DATABASE_URL_MISMATCH")
         if self.db_type == "postgresql" and not self.database_url.startswith(
