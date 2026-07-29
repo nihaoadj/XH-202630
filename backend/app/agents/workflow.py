@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import partial
+from inspect import signature
 from typing import Any
 
 from langgraph.graph import END, StateGraph
@@ -13,6 +15,7 @@ from app.agents.retriever import retrieve_node
 from app.agents.reviewer import review_node
 from app.agents.state import AgentState
 from app.core.errors import ErrorCode
+from app.core.llm_gateway import LLMGateway, default_llm_gateway
 from app.models.agent_contracts import build_trace_item, make_error_info, start_step
 from app.models.schemas import LearningResource
 from app.models.workflow import (
@@ -268,15 +271,24 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     }
 
 
-def build_workflow():
+def _bind_llm_gateway(node, gateway: LLMGateway):
+    """Bind production Agent nodes while keeping pure workflow test doubles simple."""
+
+    if "llm_gateway" not in signature(node).parameters:
+        return node
+    return partial(node, llm_gateway=gateway)
+
+
+def build_workflow(llm_gateway: LLMGateway | None = None):
     """Build the synchronous P0-01 Agent workflow."""
+    gateway = llm_gateway or default_llm_gateway()
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("diagnose", diagnose_node)
+    workflow.add_node("diagnose", _bind_llm_gateway(diagnose_node, gateway))
     workflow.add_node("retrieve", retrieve_node)
-    workflow.add_node("plan", plan_node)
-    workflow.add_node("generate", generate_node)
-    workflow.add_node("review", review_node)
+    workflow.add_node("plan", _bind_llm_gateway(plan_node, gateway))
+    workflow.add_node("generate", _bind_llm_gateway(generate_node, gateway))
+    workflow.add_node("review", _bind_llm_gateway(review_node, gateway))
     workflow.add_node("prepare_revision", prepare_revision_node)
     workflow.add_node("finalize_draft", finalize_draft_node)
     workflow.add_node("claim_check", claim_check_node)

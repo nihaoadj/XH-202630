@@ -104,6 +104,8 @@ class WorkflowState(TypedDict, total=False):
     current_node: str
     generation_attempt: int
     revision_count: int
+    workflow_started_at: datetime
+    workflow_deadline_at: datetime
     claim_check_status: str
     retrieval_status: str
 
@@ -144,6 +146,8 @@ class WorkflowStateSnapshot(BaseModel):
     current_node: str = "pending"
     generation_attempt: int = Field(default=1, ge=1)
     revision_count: int = Field(default=0, ge=0)
+    workflow_started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    workflow_deadline_at: datetime
     claim_check_status: ClaimCheckStatus = ClaimCheckStatus.NOT_REQUESTED
     retrieval_status: Literal["pending", "available", "no_hit", "error"] = "pending"
 

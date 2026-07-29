@@ -3,16 +3,19 @@ import uuid
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
-from app.core.errors import ErrorCode, require_degraded_generation
-from app.core.llm import get_llm
+from app.core.errors import ErrorCode
+from app.core.llm_gateway import LLMGateway, LLMGatewayError
 from app.models.agent_contracts import (
+    GeneratedResourceBatch,
     GeneratorInput,
     GeneratorOutput,
     NodeResult,
     build_trace_item,
     make_error_info,
+    require_agent_fallback,
     start_step,
 )
+from app.models.llm import LLMCallContext
 from app.models.schemas import LearningResource, SourceRef
 from app.models.workflow import ResourceStatus, StepStatus
 
@@ -24,8 +27,8 @@ GENERATION_PROMPT = """你是一名个性化资源生成 Agent。请严格依据
 3. 输出内容必须围绕用户输入的学习主题和当前知识库证据。
 4. 不得预设、暗示或偏向任何固定领域；领域范围只能从用户输入、学习者画像和知识库片段中推断。
 5. 按当前主题所属领域的知识结构组织内容，明确核心概念、实操步骤、常见错误、练习或测试要求。
-6. 输出包含：resource_type（资源类型）、difficulty（难度等级）、content_text（内容）、knowledge_points（覆盖知识点）、source_refs（引用来源）。
-7. 用 JSON 数组格式输出，每个元素对应一种资源类型，字段名必须使用英文。
+6. 每项资源仅输出：resource_type（资源类型）、difficulty（难度等级）、content_text（内容）、knowledge_points（覆盖知识点）。引用来源由系统根据检索证据绑定，不由模型生成。
+7. 输出一个带 resources 字段的 JSON 对象，每个资源类型必须且只能出现一次。
 """
 
 
@@ -100,7 +103,11 @@ def _fallback_resources(state: AgentState):
     return resources
 
 
-def generate_node(state: AgentState) -> dict:
+def generate_node(
+    state: AgentState,
+    *,
+    llm_gateway: LLMGateway,
+) -> dict:
     """个性化资源生成 Agent：生成讲义、实操指南、分阶测试题"""
     node_input = GeneratorInput.model_validate(state)
     learner = node_input.learner
@@ -133,19 +140,48 @@ strong_points（优势领域）：{learner.strong_points}
 专业知识片段：
 {context}
 
-请生成对应资源，每个资源字段：resource_type, difficulty, content_text, knowledge_points, source_refs。
+请生成对应资源。根对象字段为 resources；每个资源字段为 resource_type, difficulty, content_text, knowledge_points。
 """
-    fallback_code = None
+    llm_result = None
+    error = None
     try:
-        llm = get_llm()
         messages = [
             SystemMessage(content=GENERATION_PROMPT),
             HumanMessage(content=user_input),
         ]
-        response = llm.invoke(messages)
-        raw_resources = json.loads(response.content)
-    except Exception:
-        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
+        llm_result = llm_gateway.invoke_structured(
+            messages=messages,
+            output_schema=GeneratedResourceBatch,
+            context=LLMCallContext(
+                run_id=node_input.run_id,
+                step_id=step_context["step_id"],
+                node_name="generator",
+                schema_name=GeneratedResourceBatch.__name__,
+                generation_attempt=generation_attempt,
+                workflow_deadline_at=state.get("workflow_deadline_at"),
+            ),
+            options=llm_gateway.options_for("generator", temperature=0.2),
+        )
+        drafts = llm_result.output.resources
+        expected_types = set(resource_types)
+        actual_types = {draft.resource_type for draft in drafts}
+        if actual_types != expected_types or len(drafts) != len(resource_types):
+            error = require_agent_fallback(
+                state,
+                make_error_info(
+                    ErrorCode.LLM_OUTPUT_SCHEMA_INVALID,
+                    source="generator",
+                    attempt=generation_attempt,
+                    category="schema",
+                    safe_detail="resources:coverage",
+                ),
+            )
+            raw_resources = []
+        else:
+            raw_resources = [draft.model_dump(mode="python") for draft in drafts]
+    except LLMGatewayError as exc:
+        error = require_agent_fallback(state, exc.error)
+        llm_result = exc
         raw_resources = []
 
     previous_by_type = {
@@ -153,9 +189,7 @@ strong_points（优势领域）：{learner.strong_points}
         for resource in node_input.generated_resources
     }
     resources = []
-    for r in raw_resources if isinstance(raw_resources, list) else []:
-        if not isinstance(r, dict):
-            continue
+    for r in raw_resources:
         resource_type = r.get("resource_type", "讲义")
         previous = previous_by_type.get(resource_type)
         resources.append(LearningResource(
@@ -174,20 +208,20 @@ strong_points（优势领域）：{learner.strong_points}
             parent_resource_id=previous.resource_id if previous else None,
         ))
     if not resources:
-        if fallback_code is None:
-            fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
+        if error is None:
+            error = require_agent_fallback(
+                state,
+                make_error_info(
+                    ErrorCode.LLM_OUTPUT_SCHEMA_INVALID,
+                    source="generator",
+                    attempt=generation_attempt,
+                    category="schema",
+                    safe_detail="resources:empty",
+                ),
+            )
         resources = _fallback_resources(state)
 
-    status = StepStatus.DEGRADED if fallback_code else StepStatus.SUCCESS
-    error = (
-        make_error_info(
-            fallback_code,
-            source="generator",
-            attempt=generation_attempt,
-        )
-        if fallback_code
-        else None
-    )
+    status = StepStatus.DEGRADED if error else StepStatus.SUCCESS
     NodeResult[GeneratorOutput](
         status=status,
         output=GeneratorOutput(
@@ -210,6 +244,7 @@ strong_points（优势领域）：{learner.strong_points}
         error=error,
         attempt=generation_attempt,
         step_context=step_context,
+        llm_metadata=llm_result.trace_metadata() if llm_result else None,
     )
 
     return {

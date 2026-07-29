@@ -6,7 +6,8 @@
 from dependency_injector import containers, providers
 
 from app.config import get_settings
-from app.core.llm import get_llm
+from app.core.llm import LangChainChatTransport
+from app.core.llm_gateway import LLMGateway
 from app.core.vector_store import get_vector_store
 from app.agents.workflow import build_workflow
 from app.db.database import get_session_factory
@@ -27,6 +28,7 @@ from app.services.diagnosis_service import DiagnosisService
 from app.services.review_service import ReviewService
 from app.services.evaluation_service import EvaluationService
 from app.services.onboarding_service import OnboardingService
+from app.models.llm import LLMCallOptions
 
 
 class Container(containers.DeclarativeContainer):
@@ -40,8 +42,27 @@ class Container(containers.DeclarativeContainer):
     
     # ==================== 基础设施层（单例）====================
     
-    # LLM客户端
-    llm_client = providers.Singleton(get_llm)
+    # LLM transport 与 Gateway 均可在测试或部署组装时替换。
+    runtime_settings = providers.Singleton(get_settings)
+    llm_transport = providers.Singleton(
+        LangChainChatTransport,
+        settings=runtime_settings,
+    )
+    llm_call_options = providers.Factory(
+        LLMCallOptions,
+        request_timeout_seconds=config.llm_request_timeout_seconds,
+        max_attempts=config.llm_max_attempts,
+        max_output_tokens=config.llm_max_output_tokens,
+        structured_output_mode=config.llm_structured_output_mode,
+    )
+    llm_gateway = providers.Singleton(
+        LLMGateway,
+        transport=llm_transport,
+        retry_base_delay_seconds=config.llm_retry_base_delay_seconds,
+        retry_max_delay_seconds=config.llm_retry_max_delay_seconds,
+        default_options=llm_call_options,
+        generator_max_output_tokens=config.llm_generator_max_output_tokens,
+    )
     
     # 向量数据库
     vector_store = providers.Singleton(get_vector_store)
@@ -50,7 +71,7 @@ class Container(containers.DeclarativeContainer):
     db_session_factory = providers.Singleton(get_session_factory)
     
     # Agent工作流
-    workflow = providers.Singleton(build_workflow)
+    workflow = providers.Singleton(build_workflow, llm_gateway=llm_gateway)
     
     # ==================== Repository层（根据配置选择实现）====================
     

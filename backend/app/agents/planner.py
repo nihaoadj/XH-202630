@@ -3,16 +3,17 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
-from app.core.errors import ErrorCode, require_degraded_generation
-from app.core.llm import get_llm
+from app.core.llm_gateway import LLMGateway, LLMGatewayError
 from app.models.agent_contracts import (
     NodeResult,
+    PlannerLLMOutput,
     PlannerInput,
     PlannerOutput,
     build_trace_item,
-    make_error_info,
+    require_agent_fallback,
     start_step,
 )
+from app.models.llm import LLMCallContext
 from app.models.workflow import StepStatus
 
 
@@ -74,7 +75,11 @@ def _fallback_plan(state: AgentState) -> dict:
     }
 
 
-def plan_node(state: AgentState) -> dict:
+def plan_node(
+    state: AgentState,
+    *,
+    llm_gateway: LLMGateway,
+) -> dict:
     """学习路径规划 Agent：输出路径和资源生成要求"""
     step_context = start_step(state)
     node_input = PlannerInput.model_validate(state)
@@ -112,19 +117,30 @@ def plan_node(state: AgentState) -> dict:
 {json.dumps(evidence_summary, ensure_ascii=False)}
 """
 
-    fallback_code = None
+    llm_result = None
+    error = None
     try:
-        llm = get_llm()
         messages = [
             SystemMessage(content=PLANNER_PROMPT),
             HumanMessage(content=user_input),
         ]
-        response = llm.invoke(messages)
-        plan = json.loads(response.content)
-        if not isinstance(plan, dict):
-            raise ValueError("planner output must be an object")
-    except Exception:
-        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
+        llm_result = llm_gateway.invoke_structured(
+            messages=messages,
+            output_schema=PlannerLLMOutput,
+            context=LLMCallContext(
+                run_id=node_input.run_id,
+                step_id=step_context["step_id"],
+                node_name="planner",
+                schema_name=PlannerLLMOutput.__name__,
+                generation_attempt=step_context["attempt"],
+                workflow_deadline_at=state.get("workflow_deadline_at"),
+            ),
+            options=llm_gateway.options_for("planner", temperature=0.1),
+        )
+        plan = llm_result.output.model_dump(mode="python")
+    except LLMGatewayError as exc:
+        error = require_agent_fallback(state, exc.error)
+        llm_result = exc
         plan = _fallback_plan(state)
 
     path = plan.get("learning_path", [])
@@ -133,8 +149,7 @@ def plan_node(state: AgentState) -> dict:
     plan["generation_mode"] = node_input.generation_mode
     plan["constraints"] = node_input.constraints
     path_summary = " -> ".join([item.get("topic", "") for item in path[:4]]) or node_input.topic
-    status = StepStatus.DEGRADED if fallback_code else StepStatus.SUCCESS
-    error = make_error_info(fallback_code, source="planner") if fallback_code else None
+    status = StepStatus.DEGRADED if error else StepStatus.SUCCESS
     NodeResult[PlannerOutput](
         status=status,
         output=PlannerOutput(learning_plan=plan),
@@ -151,6 +166,7 @@ def plan_node(state: AgentState) -> dict:
         evidence_refs=[item.get("chunk_id") or item.get("source", "unknown") for item in chunks[:5]],
         error=error,
         step_context=step_context,
+        llm_metadata=llm_result.trace_metadata() if llm_result else None,
     )
 
     return {

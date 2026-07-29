@@ -31,7 +31,17 @@ DATABASE_URL=sqlite:///./data/domain_knowledge.db
 DEBUG=false
 SQL_ECHO=false
 CHROMA_COLLECTION_PREFIX=kb
+LLM_REQUEST_TIMEOUT_SECONDS=30
+LLM_WORKFLOW_TIMEOUT_SECONDS=105
+LLM_MAX_ATTEMPTS=2
+LLM_RETRY_BASE_DELAY_SECONDS=0.5
+LLM_RETRY_MAX_DELAY_SECONDS=3.0
+LLM_MAX_OUTPUT_TOKENS=4096
+LLM_GENERATOR_MAX_OUTPUT_TOKENS=8192
+LLM_STRUCTURED_OUTPUT_MODE=auto
 ```
+
+LLM 预算约束：workflow timeout 必须大于单次 request timeout，并建议小于前端当前 120 秒 Axios timeout；attempts 允许 `1..3`，delay 不得为负且 max delay 不得小于 base delay。`auto` 优先使用结构化调用，Provider 不支持时受控切到 text + 严格 parser。SDK retry 固定关闭，所有重试都计入 Gateway 总预算。
 
 填入真实 `LLM_API_KEY` 后执行只读环境检查：
 
@@ -117,10 +127,10 @@ npm run build
 ```powershell
 Set-Location <仓库根目录>
 .\.venv\Scripts\python.exe -m pip check
-.\.venv\Scripts\python.exe -m pytest backend\tests -q
+.\.venv\Scripts\python.exe -m pytest backend\tests -m "not live_llm" -q
 Invoke-WebRequest http://127.0.0.1:8000/health -UseBasicParsing
 git diff --check
 git status --short --branch
 ```
 
-验收不能只检查 HTTP 200：还要确认 `status/error_codes`、默认 KB collection/count、degraded 标记、管理员接口鉴权，以及日志中没有 Key、完整画像、SQL 参数和原始上游异常。
+验收不能只检查 HTTP 200：还要确认 `status/error_codes`、默认 KB collection/count、degraded 标记、管理员接口鉴权，以及日志中没有 Key、完整画像、prompt、模型原文、SQL 参数和原始上游异常。可选 live smoke 必须显式设置 `RUN_LIVE_LLM_TESTS=1`，默认测试不得访问 Provider。

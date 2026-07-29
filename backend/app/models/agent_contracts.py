@@ -6,9 +6,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.core.errors import ErrorCode, PUBLIC_MESSAGES
+from app.core.errors import (
+    ApplicationError,
+    ErrorCode,
+    PUBLIC_MESSAGES,
+    require_degraded_generation,
+)
 from app.models.schemas import LearnerProfile, LearningResource
 from app.models.workflow import (
     ErrorInfo,
@@ -51,6 +56,7 @@ class DiagnosisInput(AgentInput):
     diagnostic_result_id: Optional[str] = None
     target_skill_nodes: List[str] = Field(default_factory=list)
     difficulty_preference: Optional[str] = None
+    generation_mode: str = "standard"
 
 
 class DiagnosisOutput(BaseModel):
@@ -117,10 +123,77 @@ class ReviewerInput(AgentInput):
     constraints: Dict[str, Any] = Field(default_factory=dict)
     generation_attempt: int = Field(default=1, ge=1)
     revision_count: int = Field(default=0, ge=0)
+    generation_mode: str = "standard"
 
 
 class ReviewerOutput(BaseModel):
     review_result: Dict[str, Any]
+
+
+class StrictLLMOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+
+class DiagnosisLLMOutput(StrictLLMOutput):
+    ability_tags: List[str] = Field(default_factory=list, max_length=20)
+    weak_points: List[str] = Field(default_factory=list, max_length=20)
+    recommended_difficulty: Literal["初级", "中级", "高级"]
+    suggestion: str = Field(min_length=1, max_length=2000)
+
+
+class PlannedPathItem(StrictLLMOutput):
+    order: int = Field(ge=1)
+    topic: str = Field(min_length=1, max_length=256)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class PlannerLLMOutput(StrictLLMOutput):
+    learning_path: List[PlannedPathItem] = Field(min_length=1, max_length=50)
+    skip_points: List[str] = Field(default_factory=list, max_length=50)
+    remedial_points: List[str] = Field(default_factory=list, max_length=50)
+    challenge_points: List[str] = Field(default_factory=list, max_length=50)
+    resource_requirements: Dict[str, str] = Field(default_factory=dict)
+    decision_reason: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("learning_path")
+    @classmethod
+    def validate_unique_order(cls, items: List[PlannedPathItem]) -> List[PlannedPathItem]:
+        orders = [item.order for item in items]
+        if len(orders) != len(set(orders)):
+            raise ValueError("learning_path order must be unique")
+        return items
+
+
+class GeneratedResourceDraft(StrictLLMOutput):
+    resource_type: str = Field(min_length=1, max_length=64)
+    difficulty: str = Field(min_length=1, max_length=32)
+    content_text: str = Field(min_length=1, max_length=40000)
+    knowledge_points: List[str] = Field(min_length=1, max_length=50)
+
+
+class GeneratedResourceBatch(StrictLLMOutput):
+    resources: List[GeneratedResourceDraft] = Field(min_length=1, max_length=10)
+
+    @field_validator("resources")
+    @classmethod
+    def validate_unique_resource_types(
+        cls,
+        resources: List[GeneratedResourceDraft],
+    ) -> List[GeneratedResourceDraft]:
+        resource_types = [resource.resource_type for resource in resources]
+        if len(resource_types) != len(set(resource_types)):
+            raise ValueError("resource_type must be unique")
+        return resources
+
+
+class ReviewLLMOutput(StrictLLMOutput):
+    decision: Literal["approve", "revise", "reject"]
+    hallucination_score: float = Field(ge=0.0, le=1.0)
+    issues: List[str] = Field(default_factory=list, max_length=100)
+    difficulty_match: bool
+    coverage_rate: float = Field(ge=0.0, le=1.0)
+    suggestion: str = Field(min_length=1, max_length=4000)
+    revision_instructions: List[str] = Field(default_factory=list, max_length=100)
 
 
 def make_error_info(
@@ -146,6 +219,22 @@ def make_error_info(
         attempt=attempt,
         safe_detail=safe_detail,
     )
+
+
+def require_agent_fallback(
+    state: Dict[str, Any],
+    error: ErrorInfo,
+) -> ErrorInfo:
+    """Apply the global degraded policy while making strict mode fail closed."""
+
+    try:
+        code = ErrorCode(error.code)
+    except ValueError:
+        code = ErrorCode.LLM_UPSTREAM_UNAVAILABLE
+    if state.get("generation_mode", "standard") == "strict":
+        raise ApplicationError(code)
+    require_degraded_generation(code)
+    return error
 
 
 def start_step(
@@ -178,6 +267,7 @@ def build_trace_item(
     error: Optional[ErrorInfo] = None,
     attempt: Optional[int] = None,
     step_context: Optional[Dict[str, Any]] = None,
+    llm_metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Create a complete trace item before the node result leaves the node."""
 
@@ -202,7 +292,7 @@ def build_trace_item(
         "evidence_refs": evidence_refs or [],
         "resource_ids": resource_ids or [],
         "review_ids": review_ids or [],
-        "retry_count": 0,
+        "retry_count": (llm_metadata or {}).get("retry_count", 0),
         "error_code": error.code if error else None,
         "error_message": error.message if error else None,
         "error": error.model_dump(mode="json") if error else None,
@@ -211,4 +301,6 @@ def build_trace_item(
         "ended_at": now.isoformat(),
         "duration_ms": duration_ms,
     }
+    if llm_metadata:
+        item.update(llm_metadata)
     return item

@@ -110,6 +110,8 @@
 - 服务层负责把 Agent 与数据库、画像、资源记录串起来
 - `backend/app/models/workflow.py` 定义版本化 `WorkflowState`、状态枚举和脱敏 `ErrorInfo`
 - `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 构造
+- `backend/app/core/llm_gateway.py` 是四个 LLM Agent 的唯一模型调用入口；Transport 在组合根注入，节点不构造 Provider client
+- `backend/app/core/structured_output.py` 统一完成 JSON 提取和严格 DTO 校验，各 Agent 不再自行 `json.loads`
 - `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
 
 ## 4. 当前主流程调用链
@@ -148,7 +150,9 @@ backend/app/agents
   └─ workflow: 审核开关、Claim 预留、返工额度与终态决策
   ↓
 backend/app/core + backend/app/db
-  ├─ RuntimeHealth / failure policy / LLM / Embedding / ChromaDB / 知识库 / 文件存储
+  ├─ LLMGateway -> LLMTransport -> OpenAI-compatible Provider
+  ├─ StructuredOutputParser -> strict Agent output DTO
+  ├─ RuntimeHealth / failure policy / Embedding / ChromaDB / 知识库 / 文件存储
   └─ Repository / ORM / SQLite or Memory
 ```
 
@@ -167,6 +171,15 @@ P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim �
 ```
 
 `max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
+
+### LLM 调用边界
+
+- Diagnosis、Planner、Generator、Reviewer 仅依赖注入的 `LLMGateway`；Gateway 的 transport 可在离线测试中替换。
+- Gateway 统一控制单次 timeout、总 attempts、指数退避、`Retry-After` 上限和工作流 deadline；Provider SDK 的 `max_retries=0`，避免双重重试。
+- Provider structured output 优先按配置执行；`auto` 遇到能力不支持时最多切换一次 text 模式，仍经同一个平衡 JSON parser 与严格 schema 校验。
+- parse/schema repair 与 transport retry 共用同一 attempts 预算，不增加业务 `revision_count`。
+- Generator 的 `source_refs` 只由 Retriever 结果在代码侧绑定；Reviewer 的最终 approve 阈值由代码侧执行。
+- trace 只保存调用 ID、模型名、token、耗时、重试数、结束原因和稳定错误码。P0-02 不新增数据库列；完整持久化留给 P0-04。
 
 ### 多 KB collection 与健康检查边界
 

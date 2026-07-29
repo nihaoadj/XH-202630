@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("")
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     llm_model: str = "qwen-max"
+    llm_request_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    llm_workflow_timeout_seconds: float = Field(default=105.0, gt=0, le=600)
+    llm_max_attempts: int = Field(default=2, ge=1, le=3)
+    llm_retry_base_delay_seconds: float = Field(default=0.5, ge=0, le=30)
+    llm_retry_max_delay_seconds: float = Field(default=3.0, ge=0, le=60)
+    llm_max_output_tokens: int = Field(default=4096, ge=256, le=65536)
+    llm_generator_max_output_tokens: int = Field(default=8192, ge=256, le=65536)
+    llm_structured_output_mode: str = "auto"
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
     db_type: str = "sqlite"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"
@@ -64,6 +72,66 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_DB_TYPE")
         return normalized
 
+    @field_validator("llm_structured_output_mode")
+    @classmethod
+    def validate_llm_structured_output_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"auto", "json_schema", "function_calling", "json_mode", "text"}:
+            raise ValueError("CFG_INVALID_LLM_STRUCTURED_OUTPUT_MODE")
+        return normalized
+
+    @field_validator(
+        "llm_request_timeout_seconds",
+        "llm_workflow_timeout_seconds",
+        mode="before",
+    )
+    @classmethod
+    def validate_llm_timeout_value(cls, value, info):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_LLM_TIMEOUT") from None
+        maximum = 120 if info.field_name == "llm_request_timeout_seconds" else 600
+        if normalized <= 0 or normalized > maximum:
+            raise ValueError("CFG_INVALID_LLM_TIMEOUT")
+        return value
+
+    @field_validator(
+        "llm_max_attempts",
+        "llm_retry_base_delay_seconds",
+        "llm_retry_max_delay_seconds",
+        mode="before",
+    )
+    @classmethod
+    def validate_llm_retry_value(cls, value, info):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_LLM_RETRY_POLICY") from None
+        if info.field_name == "llm_max_attempts":
+            if not normalized.is_integer() or not 1 <= normalized <= 3:
+                raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
+        else:
+            maximum = 30 if info.field_name == "llm_retry_base_delay_seconds" else 60
+            if normalized < 0 or normalized > maximum:
+                raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
+        return value
+
+    @field_validator(
+        "llm_max_output_tokens",
+        "llm_generator_max_output_tokens",
+        mode="before",
+    )
+    @classmethod
+    def validate_llm_token_limit(cls, value):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_LLM_TOKEN_LIMIT") from None
+        if not normalized.is_integer() or not 256 <= normalized <= 65536:
+            raise ValueError("CFG_INVALID_LLM_TOKEN_LIMIT")
+        return value
+
     @model_validator(mode="after")
     def validate_runtime_settings(self):
         legacy_prefix = (self.chroma_collection_name or "").strip()
@@ -71,6 +139,11 @@ class Settings(BaseSettings):
             self.chroma_collection_prefix = legacy_prefix
         if not self.chroma_collection_prefix.strip():
             self.chroma_collection_prefix = "kb"
+
+        if self.llm_workflow_timeout_seconds <= self.llm_request_timeout_seconds:
+            raise ValueError("CFG_INVALID_LLM_TIMEOUT")
+        if self.llm_retry_max_delay_seconds < self.llm_retry_base_delay_seconds:
+            raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
 
         if self.db_type == "sqlite" and not self.database_url.startswith("sqlite:///"):
             raise ValueError("CFG_DATABASE_URL_MISMATCH")

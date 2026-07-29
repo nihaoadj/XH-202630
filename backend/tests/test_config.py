@@ -104,6 +104,37 @@ def test_demo_allows_explicit_degraded_mode_without_key():
     assert settings.allow_degraded_generation is True
 
 
+@pytest.mark.parametrize(
+    ("overrides", "code"),
+    [
+        ({"llm_request_timeout_seconds": 0}, "CFG_INVALID_LLM_TIMEOUT"),
+        (
+            {
+                "llm_request_timeout_seconds": 30,
+                "llm_workflow_timeout_seconds": 30,
+            },
+            "CFG_INVALID_LLM_TIMEOUT",
+        ),
+        ({"llm_max_attempts": 4}, "CFG_INVALID_LLM_RETRY_POLICY"),
+        (
+            {
+                "llm_retry_base_delay_seconds": 4,
+                "llm_retry_max_delay_seconds": 3,
+            },
+            "CFG_INVALID_LLM_RETRY_POLICY",
+        ),
+        ({"llm_max_output_tokens": 100}, "CFG_INVALID_LLM_TOKEN_LIMIT"),
+        (
+            {"llm_structured_output_mode": "unknown"},
+            "CFG_INVALID_LLM_STRUCTURED_OUTPUT_MODE",
+        ),
+    ],
+)
+def test_settings_reject_invalid_llm_runtime_budget(overrides, code):
+    with pytest.raises(ValidationError, match=code):
+        make_settings(**overrides)
+
+
 def test_legacy_chroma_collection_name_is_a_prefix_during_compatibility_window():
     legacy = make_settings(chroma_collection_name="legacy_collection")
     preferred = make_settings(

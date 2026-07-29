@@ -63,6 +63,8 @@ npm run dev
 
 `scripts/check_environment.py` 不调用计费 LLM、不下载 Embedding，退出码为 0=ready、2=degraded、1=not-ready。公共 `/health` 与 `/health/ready` 只检查默认 KB 和核心依赖；其他 KB 的异常不会轻易把整个服务变成 503。全 KB 详情位于 token 保护的管理员接口，见 `docs/api.md`。
 
+四个生成 Agent 统一通过可注入的 `LLMGateway` 调用模型。默认单次请求预算为 30 秒、同步工作流预算为 105 秒、总尝试次数为 2；SDK 自带重试关闭，技术重试和资源返工分别计数。结构化输出会经过严格 Pydantic 校验，Reviewer 的异常或非法输出不会被自动批准。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
+
 ## 后端目录说明
 
 ```text
@@ -102,6 +104,8 @@ backend/
 │   │   └── feedback.py           # 反馈决策 Agent
 │   ├── core/                     # 基础设施层：封装底层技术能力
 │   │   ├── llm.py                # 大模型客户端封装
+│   │   ├── llm_gateway.py        # 超时、重试、deadline、错误映射与调用遥测
+│   │   ├── structured_output.py  # 统一 JSON 提取与严格结构校验
 │   │   ├── embeddings.py         # 中文 Embedding 模型加载
 │   │   ├── vector_store.py       # ChromaDB 向量存储
 │   │   ├── knowledge_base.py     # 知识库文档加载与切片

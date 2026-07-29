@@ -11,9 +11,12 @@ from app.agents import (
     workflow as workflow_module,
 )
 from app.models.agent_contracts import build_trace_item
+from app.core.llm_gateway import LLMGateway
+from app.models.llm import RawLLMResponse
 from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
 from app.models.workflow import StepStatus
 from app.services.generation_service import build_workflow_state
+from tests.fakes.llm import ScriptedLLMTransport
 
 
 def _learner() -> LearnerProfile:
@@ -216,60 +219,43 @@ def test_strict_mode_never_approves_degraded_output():
 def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypatch):
     captured = {}
 
-    class Response:
-        def __init__(self, payload):
-            self.content = json.dumps(payload, ensure_ascii=False)
+    def outcome(name, payload):
+        def respond(call):
+            captured[name] = call["messages"][-1].content
+            return RawLLMResponse(content=payload)
+        return respond
 
-    class LLM:
-        def __init__(self, name, payload):
-            self.name = name
-            self.payload = payload
-
-        def invoke(self, messages):
-            captured[self.name] = messages[-1].content
-            return Response(self.payload)
-
-    monkeypatch.setattr(
-        diagnosis_module,
-        "get_llm",
-        lambda: LLM("diagnosis", {
+    gateway = LLMGateway(ScriptedLLMTransport([
+        outcome("diagnosis", {
             "ability_tags": [],
             "weak_points": [],
             "recommended_difficulty": "初级",
             "suggestion": "ok",
         }),
-    )
-    monkeypatch.setattr(
-        planner_module,
-        "get_llm",
-        lambda: LLM("planner", {
-            "learning_path": [],
+        outcome("planner", {
+            "learning_path": [{"order": 1, "topic": "node-a", "reason": "ok"}],
+            "skip_points": [],
+            "remedial_points": [],
+            "challenge_points": [],
             "resource_requirements": {},
             "decision_reason": "ok",
         }),
-    )
-    monkeypatch.setattr(
-        generator_module,
-        "get_llm",
-        lambda: LLM("generator", [{
-            "resource_type": "讲义",
-            "difficulty": "初级",
-            "content_text": "测试资源",
-            "knowledge_points": ["node-a"],
-        }]),
-    )
-    monkeypatch.setattr(
-        reviewer_module,
-        "get_llm",
-        lambda: LLM("reviewer", {
-            "passed": True,
+        outcome("generator", {"resources": [{
+                "resource_type": "讲义",
+                "difficulty": "初级",
+                "content_text": "测试资源",
+                "knowledge_points": ["node-a"],
+            }]}),
+        outcome("reviewer", {
+            "decision": "approve",
             "hallucination_score": 0.0,
             "issues": [],
             "difficulty_match": True,
             "coverage_rate": 1.0,
             "suggestion": "ok",
+            "revision_instructions": [],
         }),
-    )
+    ]))
     retrieval_calls = []
     monkeypatch.setattr(
         retriever_module,
@@ -290,7 +276,7 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
         generation_mode="standard",
         constraints={"retrieval_top_k": 4, "language": "zh-CN"},
     )
-    result = workflow_module.build_workflow().invoke(
+    result = workflow_module.build_workflow(gateway).invoke(
         build_workflow_state(_learner(), request, run_id="run-contract")
     )
 

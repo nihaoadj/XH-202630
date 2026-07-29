@@ -1,9 +1,11 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from app.core.file_storage import save_text_resource
 from app.core.errors import ApplicationError, ErrorCode
 from app.core.health import ensure_generation_ready
+from app.config import get_settings
 from app.db.resource.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
 from app.models.schemas import GenerateRequest, GenerateResponse, LearnerProfile, LearningResource
@@ -28,6 +30,8 @@ def build_workflow_state(
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
 
     try:
+        settings = get_settings()
+        workflow_started_at = datetime.now(timezone.utc)
         constraints = WorkflowConstraints.model_validate(req.constraints).model_dump(
             mode="python",
             exclude_none=True,
@@ -51,6 +55,10 @@ def build_workflow_state(
             current_node="pending",
             generation_attempt=1,
             revision_count=0,
+            workflow_started_at=workflow_started_at,
+            workflow_deadline_at=workflow_started_at + timedelta(
+                seconds=settings.llm_workflow_timeout_seconds
+            ),
             claim_check_status=(
                 ClaimCheckStatus.PENDING
                 if req.include_claim_check

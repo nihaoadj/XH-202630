@@ -307,6 +307,8 @@ class ReviewSummary(BaseModel):
 
 class AgentTrace(BaseModel):
     """Agent 执行轨迹"""
+    model_config = ConfigDict(protected_namespaces=())
+
     schema_version: Literal["1.0"] = "1.0"
     agent_name: str
     node_name: Optional[str] = None
@@ -337,6 +339,15 @@ class AgentTrace(BaseModel):
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     error: Optional[Dict[str, Any]] = None
+    llm_call_id: Optional[str] = None
+    model_name: Optional[str] = None
+    provider_request_id: Optional[str] = None
+    structured_output_mode: Optional[str] = None
+    finish_reason: Optional[str] = None
+    input_tokens: Optional[int] = Field(default=None, ge=0)
+    output_tokens: Optional[int] = Field(default=None, ge=0)
+    total_tokens: Optional[int] = Field(default=None, ge=0)
+    llm_duration_ms: Optional[int] = Field(default=None, ge=0)
     timestamp: Optional[str] = None
     started_at: Optional[str] = None
     ended_at: Optional[str] = None

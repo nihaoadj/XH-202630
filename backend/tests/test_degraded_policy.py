@@ -5,10 +5,12 @@ from app.config import Settings
 from app.core import errors as errors_module
 from app.core.errors import ApplicationError, ErrorCode, require_degraded_generation
 from app.core.health import ComponentHealth, HealthReport
+from app.core.llm_gateway import LLMGateway
 from app.db.resource.memory import MemoryResourceRepository
 from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
 from app.services import generation_service as generation_module
 from app.services.generation_service import GenerationService
+from tests.fakes.llm import ScriptedLLMTransport
 
 
 def make_settings(**overrides):
@@ -43,12 +45,12 @@ def test_fallback_requires_explicit_non_production_opt_in(monkeypatch):
 def test_reviewer_failure_is_degraded_and_not_approved(monkeypatch):
     settings = make_settings(app_mode="demo", allow_degraded_generation=True)
     monkeypatch.setattr(errors_module, "get_settings", lambda: settings)
-    monkeypatch.setattr(reviewer_module, "get_llm", lambda: (_ for _ in ()).throw(RuntimeError("secret")))
+    gateway = LLMGateway(ScriptedLLMTransport([RuntimeError("secret")]))
 
     result = reviewer_module.review_node({
         "generated_resources": [],
         "retrieved_chunks": [],
-    })
+    }, llm_gateway=gateway)
 
     assert result["review_result"]["passed"] is False
     assert result["trace"][0]["status"] == "degraded"

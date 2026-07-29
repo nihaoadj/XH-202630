@@ -182,7 +182,7 @@
 - `execution_status`：兼容字段；取值为 `success | degraded | failed | human_review | running`
 - `error_codes`：本次生成涉及的稳定、脱敏错误码
 
-`AgentTrace` 的 P0-01 契约：
+`AgentTrace` 契约：
 
 - `schema_version/run_id/step_id/sequence/attempt`：工作流版本及稳定运行、步骤和轮次标识
 - `status`：必填，无默认成功；取值为 `running | success | degraded | retryable_error | failed | human_review | skipped`
@@ -190,6 +190,11 @@
 - `error_code`：可选稳定错误码，不得写入原始上游异常、API Key 或完整学习者画像
 - `error`：可选脱敏 `ErrorInfo`，包含 `code/category/message/retryable/source/attempt/occurred_at/safe_detail`
 - 发生显式允许的 fallback 时，受影响节点必须使用 `degraded`
+- `llm_call_id/model_name/provider_request_id/structured_output_mode/finish_reason`：脱敏模型调用标识和结束原因
+- `input_tokens/output_tokens/total_tokens/llm_duration_ms`：Provider 可用时记录的 token 与单次 Gateway 总耗时
+- `retry_count`：同一 Gateway 调用中的技术重试次数，不等于资源 `revision_count`
+
+LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_CONNECTION_FAILED`、`LLM_UPSTREAM_5XX`、`LLM_AUTH_FAILED`、`LLM_BAD_REQUEST`、`LLM_CONTENT_REFUSED`、`LLM_OUTPUT_EMPTY`、`LLM_OUTPUT_TRUNCATED`、`LLM_OUTPUT_PARSE_FAILED`、`LLM_OUTPUT_SCHEMA_INVALID`。响应和 trace 不返回 Provider 原始错误 body、prompt、模型原文或凭据。
 
 资源审核状态为：`draft | unreviewed_draft | pending_review | approved | rejected | human_review`。未执行 Reviewer 或 Claim 能力不可用时，资源不得标记为 `approved`。
 
@@ -532,11 +537,14 @@
 
 禁用 degraded 或 production 中依赖失败时，接口返回 HTTP 503，且不会在失败前持久化 fallback 资源。显式允许 fallback 时，HTTP 响应仍必须通过 `execution_status=degraded` 和对应 trace 状态表明降级。
 
+同步预算：后端默认 workflow deadline 为 105 秒，必须小于前端当前 120 秒请求超时；每次模型调用都会读取剩余预算，deadline 不足时不再 sleep 或发起下一次请求。
+
 工作流控制语义：
 
 - `include_review=false`：`generate -> finalize_draft`，审核决策为 `not_requested`。
 - Reviewer 返回 `revise` 且 `revision_count < max_iterations`：先增加返工计数，再重新进入 Generator；下一版资源使用新 `resource_id`，并通过 `parent_resource_id/version` 关联上一版。
 - 返工额度用尽、Reviewer 无法自动决策或严格模式中存在降级结果：`workflow_status=human_review`。
+- Reviewer 只有在 typed decision 为 `approve`、幻觉分低于安全阈值、难度匹配且覆盖率达标时才能批准；模型超时、限流、5xx、空输出、截断、解析或 schema 错误均不得 approve。
 - `include_claim_check=true`：P0-06 前返回 `claim_check_status=unavailable`、错误码 `CLAIM_CHECK_NOT_IMPLEMENTED`，不得把空 `claims` 当作通过。
 
 ### 5.15 `GET /api/resources/{learner_id}`

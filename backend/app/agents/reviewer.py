@@ -3,16 +3,17 @@ import uuid
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
-from app.core.errors import ErrorCode, require_degraded_generation
-from app.core.llm import get_llm
+from app.core.llm_gateway import LLMGateway, LLMGatewayError
 from app.models.agent_contracts import (
     NodeResult,
+    ReviewLLMOutput,
     ReviewerInput,
     ReviewerOutput,
     build_trace_item,
-    make_error_info,
+    require_agent_fallback,
     start_step,
 )
+from app.models.llm import LLMCallContext
 from app.models.workflow import ReviewDecision, StepStatus
 
 
@@ -24,18 +25,23 @@ REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习�
 
 请用 JSON 格式输出：
 {
-  "passed": bool,
+  "decision": "approve" | "revise" | "reject",
   "hallucination_score": float (0-1, 越高表示幻觉越严重),
   "issues": ["问题描述"],
   "difficulty_match": bool,
   "coverage_rate": float (0-1),
-  "suggestion": "改进建议"
+  "suggestion": "审核判断或改进建议",
+  "revision_instructions": ["可执行的修改要求"]
 }
 不要包含额外解释。
 """
 
 
-def review_node(state: AgentState) -> dict:
+def review_node(
+    state: AgentState,
+    *,
+    llm_gateway: LLMGateway,
+) -> dict:
     """审核纠偏 Agent：事实核查、幻觉检测、难度匹配"""
     node_input = ReviewerInput.model_validate(state)
     resources = node_input.generated_resources
@@ -61,55 +67,65 @@ def review_node(state: AgentState) -> dict:
 目标难度：{node_input.difficulty_preference or '按画像与诊断结果'}
 生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}
 """
-    fallback_code = None
+    llm_result = None
+    error = None
     try:
-        llm = get_llm()
         messages = [
             SystemMessage(content=REVIEW_PROMPT),
             HumanMessage(content=user_input),
         ]
-        response = llm.invoke(messages)
-        review = json.loads(response.content)
-        if not isinstance(review, dict):
-            raise ValueError("reviewer output must be an object")
-    except Exception:
-        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
+        llm_result = llm_gateway.invoke_structured(
+            messages=messages,
+            output_schema=ReviewLLMOutput,
+            context=LLMCallContext(
+                run_id=node_input.run_id,
+                step_id=step_context["step_id"],
+                node_name="reviewer",
+                schema_name=ReviewLLMOutput.__name__,
+                generation_attempt=node_input.generation_attempt,
+                workflow_deadline_at=state.get("workflow_deadline_at"),
+            ),
+            options=llm_gateway.options_for("reviewer", temperature=0.0),
+        )
+        review = llm_result.output.model_dump(mode="python")
+    except LLMGatewayError as exc:
+        error = require_agent_fallback(state, exc.error)
+        llm_result = exc
         review = {
+            "decision": ReviewDecision.HUMAN_REVIEW.value,
             "passed": False,
             "hallucination_score": 0.3 if chunks else 0.5,
             "issues": ["使用保底审核结果，建议补充知识库证据或配置 LLM 后复核"],
             "difficulty_match": False,
             "coverage_rate": 0.8,
             "suggestion": "",
+            "revision_instructions": ["转人工复核，不得自动批准"],
         }
 
-    if fallback_code:
+    if error:
         decision = ReviewDecision.HUMAN_REVIEW
     else:
-        requested_decision = review.get("decision")
-        if requested_decision in {item.value for item in ReviewDecision}:
-            decision = ReviewDecision(requested_decision)
-        elif review.get("passed", False) and review.get("hallucination_score", 1.0) < 0.2:
+        requested_decision = ReviewDecision(review["decision"])
+        if requested_decision == ReviewDecision.REJECT:
+            decision = ReviewDecision.REJECT
+        elif (
+            requested_decision == ReviewDecision.APPROVE
+            and review["hallucination_score"] < 0.2
+            and review["difficulty_match"]
+            and review["coverage_rate"] >= 0.8
+        ):
             decision = ReviewDecision.APPROVE
         else:
             decision = ReviewDecision.REVISE
 
     review.update({
+        "passed": decision == ReviewDecision.APPROVE,
         "decision": decision.value,
         "status": decision.value,
         "review_ids": review_ids,
         "revision_count": node_input.revision_count,
     })
-    status = StepStatus.DEGRADED if fallback_code else StepStatus.SUCCESS
-    error = (
-        make_error_info(
-            fallback_code,
-            source="reviewer",
-            attempt=node_input.generation_attempt,
-        )
-        if fallback_code
-        else None
-    )
+    status = StepStatus.DEGRADED if error else StepStatus.SUCCESS
     NodeResult[ReviewerOutput](
         status=status,
         output=ReviewerOutput(review_result=review),
@@ -129,6 +145,7 @@ def review_node(state: AgentState) -> dict:
         error=error,
         attempt=node_input.generation_attempt,
         step_context=step_context,
+        llm_metadata=llm_result.trace_metadata() if llm_result else None,
     )
 
     return {
