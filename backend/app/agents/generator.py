@@ -3,7 +3,8 @@ import uuid
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
-from app.core.errors import ErrorCode
+from app.core.errors import ApplicationError, ErrorCode
+from app.core.evidence import source_refs_from_evidence
 from app.core.llm_gateway import LLMGateway, LLMGatewayError
 from app.models.agent_contracts import (
     GeneratedResourceBatch,
@@ -16,7 +17,7 @@ from app.models.agent_contracts import (
     start_step,
 )
 from app.models.llm import LLMCallContext
-from app.models.schemas import LearningResource, SourceRef
+from app.models.schemas import LearningResource
 from app.models.workflow import ResourceStatus, StepStatus
 
 
@@ -32,31 +33,13 @@ GENERATION_PROMPT = """你是一名个性化资源生成 Agent。请严格依据
 """
 
 
-def _build_source_refs(chunks):
-    refs = []
-    for i, c in enumerate(chunks[:3]):
-        refs.append(SourceRef(
-            doc_id=c.get("document_id") or f"legacy_doc_{i}",
-            title=c.get("title") or c.get("source", "unknown"),
-            snippet=c["content"][:200],
-            score=c["score"],
-            chunk_id=c.get("chunk_id"),
-            knowledge_point=(c.get("knowledge_points") or [None])[0],
-            source_path=c.get("source"),
-            retrieval_query=c.get("retrieval_query"),
-            rank=c.get("rank"),
-            metadata={"knowledge_base_id": c.get("knowledge_base_id")},
-        ))
-    return refs
-
-
 def _fallback_resources(state: AgentState):
     learner = state["learner"]
     topic = state["topic"]
     resource_types = state.get("resource_types", ["定制讲义", "实操指南", "分阶测试题"])
     learning_plan = state.get("learning_plan", {})
-    chunks = state.get("retrieved_chunks", [])
-    source_refs = _build_source_refs(chunks)
+    evidence = state.get("retrieved_evidence", [])
+    source_refs = source_refs_from_evidence(evidence)
     knowledge_points = list(dict.fromkeys(
         (learner.weak_points or []) + [item.get("topic", "") for item in learning_plan.get("learning_path", [])]
     ))
@@ -112,7 +95,9 @@ def generate_node(
     node_input = GeneratorInput.model_validate(state)
     learner = node_input.learner
     diagnosis = node_input.diagnosis
-    chunks = node_input.retrieved_chunks
+    evidence = node_input.retrieved_evidence
+    if not evidence:
+        raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
     resource_types = node_input.resource_types
     topic = node_input.topic
     learning_plan = node_input.learning_plan
@@ -120,7 +105,11 @@ def generate_node(
     step_context = start_step(state, attempt=generation_attempt)
 
     context = "\n\n".join(
-        [f"[片段 {i+1}] 来源：{c['source']}\n{c['content']}" for i, c in enumerate(chunks[:5])]
+        [
+            f"[证据 {item.evidence_id}] 来源：{item.locator.source_path}"
+            f"#{item.locator.section or item.locator.line_start or ''}\n{item.excerpt}"
+            for item in evidence[:5]
+        ]
     )
 
     user_input = f"""
@@ -198,7 +187,7 @@ strong_points（优势领域）：{learner.strong_points}
             difficulty=node_input.difficulty_preference or r.get("difficulty", "中级"),
             content_text=r.get("content_text") or r.get("content", ""),
             knowledge_points=r.get("knowledge_points", []),
-            source_refs=_build_source_refs(chunks),
+            source_refs=source_refs_from_evidence(evidence),
             review_status=(
                 ResourceStatus.PENDING_REVIEW.value
                 if node_input.include_review
@@ -239,7 +228,7 @@ strong_points（优势领域）：{learner.strong_points}
         input_summary=f"资源类型：{resource_types}；路径节点数：{len(learning_plan.get('learning_path', []))}；返工次数：{node_input.revision_count}",
         output_summary=f"生成 {len(resources)} 种资源：{[r.resource_type for r in resources]}",
         decision_reason="依据学习路径、请求难度、生成约束、检索证据及上一轮审核意见生成资源。",
-        evidence_refs=[c.get("chunk_id") or c.get("source", "unknown") for c in chunks[:5]],
+        evidence_refs=[item.evidence_id for item in evidence[:5]],
         resource_ids=[resource.resource_id for resource in resources],
         error=error,
         attempt=generation_attempt,

@@ -38,8 +38,11 @@ python scripts/ingest_knowledge.py
   - 导入诊断题
   - 初始化知识库元数据与示例画像
 - `ingest_knowledge.py`
-  - 构建知识库向量索引
-  - 将知识文档切片写入 Chroma
+  - 生成不可变 DocumentVersion 与稳定 Chunk ID
+  - 对账 SQL 当前快照和 KB 专属 Chroma collection
+  - 删除失效向量、校验三方 Chunk 数量并执行 manifest smoke query
+  - 全部通过后才把 SQL Chunk 激活并把 index status 标记为 `ready`
+  - 输出结构化 JSON 报告；失败时返回非零退出码且不暴露 Provider 原始异常
 
 ## 2. 当前知识源目录
 
@@ -140,6 +143,9 @@ knowledge_base/<track_id>/
 | `knowledge_bases` | 知识库主表 |
 | `knowledge_documents` | 文档记录 |
 | `knowledge_chunks` | 切片记录 |
+| `knowledge_document_versions` | 不可变文档版本历史与当前版本标识 |
+| `knowledge_chunk_versions` | 不可变 Chunk、locator、文本哈希与 active 状态 |
+| `knowledge_index_status` | SQL/Chroma 数量、快照哈希、smoke 与最后错误码 |
 
 同时向量索引位于：
 
@@ -151,6 +157,11 @@ backend/chroma_db/
 
 - SQLite：保存业务事实、文档映射、切片映射、元数据
 - Chroma：保存向量与语义检索索引
+
+从 P0-03 起，事实生成只接受 `EvidenceItem`：向量候选必须能按
+`knowledge_base_id + document_version + chunk_id` 从 SQL 反查，内容哈希一致且
+Chunk 为 active，才能进入 Planner/Generator。`SourceRef.score` 在兼容期映射为
+`normalized_score`；新增 `evidence_id`、文档版本和精确 locator 字段。
 
 ### 3.5 技能图谱与诊断
 

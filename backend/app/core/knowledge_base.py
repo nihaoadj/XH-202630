@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -15,15 +14,19 @@ from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from app.config import PROJECT_ROOT, get_settings, resolve_backend_path
+from app.core.knowledge_ids import (
+    chunk_id,
+    chunking_config_hash,
+    document_id as build_document_id,
+    document_version_id,
+    normalize_source_path,
+    normalize_text,
+    sha256_hex,
+)
 
 
 TEXT_EXTENSIONS = {".md", ".txt"}
-
-
-def _stable_id(prefix: str, *parts: object) -> str:
-    """根据业务内容生成跨机器、跨重复入库稳定的 ID。"""
-    value = "|".join(str(part) for part in parts)
-    return f"{prefix}_{hashlib.sha256(value.encode('utf-8')).hexdigest()[:20]}"
+DEFAULT_CHUNKING_STRATEGY = "recursive-v1"
 
 
 def _read_json(path: Path) -> Dict[str, Any]:
@@ -97,20 +100,34 @@ def load_knowledge_base_manifest(kb_dir: Optional[str] = None) -> Dict[str, Any]
         "skill_nodes": raw.get("skill_nodes", []),
         "learner_levels": raw.get("learner_levels", []),
         "document_specs": document_specs,
+        "index_schema_version": str(raw.get("index_schema_version") or "1.0"),
+        "chunking": raw.get("chunking", {}),
+        "smoke_queries": raw.get("smoke_queries", []),
         "raw_metadata": raw,
     }
 
 
-def _document_metadata(path: Path, kb_path: Path, manifest: Dict[str, Any]) -> Dict[str, Any]:
-    relative_path = path.relative_to(kb_path).as_posix()
+def _document_metadata(
+    path: Path,
+    kb_path: Path,
+    manifest: Dict[str, Any],
+    content: str,
+) -> Dict[str, Any]:
+    relative_path = normalize_source_path(path.relative_to(kb_path).as_posix())
     # 支持 metadata.json 中写 "01_x.md" 和 "raw/01_x.md" 两种格式。
     spec = manifest["document_specs"].get(relative_path)
     if spec is None:
         spec = manifest["document_specs"].get(path.name, {})
-    document_id = str(spec.get("id") or _stable_id("doc", manifest["knowledge_base_id"], relative_path))
-
-    with path.open("r", encoding="utf-8") as file:
-        content = file.read()
+    document_id = str(
+        spec.get("id")
+        or build_document_id(manifest["knowledge_base_id"], relative_path)
+    )
+    content_hash = sha256_hex(content)
+    document_version = document_version_id(
+        manifest["knowledge_base_id"],
+        document_id,
+        content_hash,
+    )
     first_heading = next(
         (line.lstrip("#").strip() for line in content.splitlines() if line.startswith("#")),
         path.stem,
@@ -122,7 +139,14 @@ def _document_metadata(path: Path, kb_path: Path, manifest: Dict[str, Any]) -> D
         "source_path": relative_path,
         "knowledge_points": spec.get("knowledge_points", []),
         "learner_levels": spec.get("learner_levels", manifest["learner_levels"]),
-        "document_version": str(spec.get("version") or manifest["version"]),
+        "document_version": document_version,
+        "source_version": str(spec.get("version") or manifest["version"]),
+        "document_content_hash": content_hash,
+        "source_type": str(
+            spec.get("source_type")
+            or ("markdown" if path.suffix.lower() == ".md" else "text")
+        ),
+        "enabled": bool(spec.get("enabled", True)),
         "source_urls": spec.get("source_urls", []),
     }
 
@@ -136,10 +160,32 @@ def load_documents(kb_dir: Optional[str] = None) -> List[Document]:
         if not path.is_file() or path.suffix.lower() not in TEXT_EXTENSIONS:
             continue
         with path.open("r", encoding="utf-8") as file:
-            text = file.read().strip()
+            text = normalize_text(file.read())
         if text:
-            documents.append(Document(page_content=text, metadata=_document_metadata(path, kb_path, manifest)))
+            metadata = _document_metadata(path, kb_path, manifest, text)
+            if metadata["enabled"]:
+                documents.append(Document(page_content=text, metadata=metadata))
     return documents
+
+
+def _section_at(text: str, start_index: int) -> Optional[str]:
+    """Return the nearest Markdown heading path before one character offset."""
+
+    headings: Dict[int, str] = {}
+    consumed = 0
+    for line in text.splitlines(keepends=True):
+        if consumed > start_index:
+            break
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            level = len(stripped) - len(stripped.lstrip("#"))
+            if 1 <= level <= 6 and stripped[level:].strip():
+                headings = {key: value for key, value in headings.items() if key < level}
+                headings[level] = stripped[level:].strip()
+        consumed += len(line)
+    if not headings:
+        return None
+    return " / ".join(headings[level] for level in sorted(headings))
 
 
 def chunk_documents(
@@ -148,26 +194,57 @@ def chunk_documents(
     """切片并为每个片段生成稳定 ID、序号和内容校验值。"""
     if chunk_size <= 0 or chunk_overlap < 0 or chunk_overlap >= chunk_size:
         raise ValueError("chunk_size 必须大于 0，且 chunk_overlap 必须满足 0 <= overlap < size")
+    config = {
+        "strategy": DEFAULT_CHUNKING_STRATEGY,
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+        "separators_version": "zh-text-v1",
+        "normalization_version": "nfc-lines-v1",
+    }
+    config_hash = chunking_config_hash(config)
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         separators=["\n\n", "\n", "。", "；", " ", ""],
+        add_start_index=True,
     )
     chunks: List[Document] = []
     for document in documents:
         source_chunks = splitter.split_documents([document])
         kb_id = document.metadata.get("knowledge_base_id")
         document_id = document.metadata.get("document_id")
-        if not kb_id or not document_id:
-            raise ValueError("文档缺少 knowledge_base_id 或 document_id，无法进行可追溯切片")
+        document_version = document.metadata.get("document_version")
+        if not kb_id or not document_id or not document_version:
+            raise ValueError(
+                "文档缺少 knowledge_base_id、document_id 或 document_version，无法进行可追溯切片"
+            )
         for index, chunk in enumerate(source_chunks):
-            content_hash = hashlib.sha256(chunk.page_content.encode("utf-8")).hexdigest()
+            normalized_chunk = normalize_text(chunk.page_content)
+            text_hash = sha256_hex(normalized_chunk)
+            start_index = int(chunk.metadata.pop("start_index", 0))
+            line_start = document.page_content.count("\n", 0, start_index) + 1
+            line_end = line_start + normalized_chunk.count("\n")
+            stable_chunk_id = chunk_id(
+                knowledge_base_id=str(kb_id),
+                logical_document_id=str(document_id),
+                document_version=str(document_version),
+                chunking_hash=config_hash,
+                ordinal=index,
+                text_hash=text_hash,
+            )
+            chunk.page_content = normalized_chunk
             chunk.metadata.update(document.metadata)
             chunk.metadata.update(
                 {
-                    "chunk_id": _stable_id("chunk", kb_id, document_id, index, content_hash),
+                    "chunk_id": stable_chunk_id,
                     "chunk_index": index,
-                    "content_hash": content_hash,
+                    "chunk_ordinal": index,
+                    "content_hash": text_hash,
+                    "text_hash": text_hash,
+                    "chunking_config_hash": config_hash,
+                    "section": _section_at(document.page_content, start_index),
+                    "line_start": line_start,
+                    "line_end": line_end,
                 }
             )
             chunks.append(chunk)

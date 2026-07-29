@@ -4,12 +4,15 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
 from app.core.llm_gateway import LLMGateway, LLMGatewayError
+from app.core.evidence import source_refs_are_scoped
+from app.core.errors import ErrorCode
 from app.models.agent_contracts import (
     NodeResult,
     ReviewLLMOutput,
     ReviewerInput,
     ReviewerOutput,
     build_trace_item,
+    make_error_info,
     require_agent_fallback,
     start_step,
 )
@@ -45,14 +48,17 @@ def review_node(
     """审核纠偏 Agent：事实核查、幻觉检测、难度匹配"""
     node_input = ReviewerInput.model_validate(state)
     resources = node_input.generated_resources
-    chunks = node_input.retrieved_chunks
+    evidence = node_input.retrieved_evidence
     step_context = start_step(state, attempt=node_input.generation_attempt)
     review_ids = {
         resource.resource_id: str(uuid.uuid4())
         for resource in resources
     }
 
-    context = "\n\n".join([f"[片段 {i+1}] {c['content']}" for i, c in enumerate(chunks[:5])])
+    context = "\n\n".join(
+        f"[证据 {item.evidence_id}] {item.excerpt}"
+        for item in evidence[:5]
+    )
     resource_text = "\n\n".join(
         [f"[{r.resource_type}] 难度：{r.difficulty}\n{r.content_text or ''}" for r in resources]
     )
@@ -69,38 +75,64 @@ def review_node(
 """
     llm_result = None
     error = None
-    try:
-        messages = [
-            SystemMessage(content=REVIEW_PROMPT),
-            HumanMessage(content=user_input),
-        ]
-        llm_result = llm_gateway.invoke_structured(
-            messages=messages,
-            output_schema=ReviewLLMOutput,
-            context=LLMCallContext(
-                run_id=node_input.run_id,
-                step_id=step_context["step_id"],
-                node_name="reviewer",
-                schema_name=ReviewLLMOutput.__name__,
-                generation_attempt=node_input.generation_attempt,
-                workflow_deadline_at=state.get("workflow_deadline_at"),
+    invalid_source_refs = any(
+        not source_refs_are_scoped(resource.source_refs, evidence)
+        for resource in resources
+    )
+    if invalid_source_refs:
+        error = require_agent_fallback(
+            state,
+            make_error_info(
+                ErrorCode.EVIDENCE_PROVENANCE_INVALID,
+                source="reviewer",
+                attempt=node_input.generation_attempt,
+                category="evidence",
+                safe_detail="resource_source_refs:out_of_scope",
             ),
-            options=llm_gateway.options_for("reviewer", temperature=0.0),
         )
-        review = llm_result.output.model_dump(mode="python")
-    except LLMGatewayError as exc:
-        error = require_agent_fallback(state, exc.error)
-        llm_result = exc
         review = {
             "decision": ReviewDecision.HUMAN_REVIEW.value,
             "passed": False,
-            "hallucination_score": 0.3 if chunks else 0.5,
-            "issues": ["使用保底审核结果，建议补充知识库证据或配置 LLM 后复核"],
+            "hallucination_score": 1.0,
+            "issues": ["资源引用未能映射到本次检索证据"],
             "difficulty_match": False,
-            "coverage_rate": 0.8,
-            "suggestion": "",
-            "revision_instructions": ["转人工复核，不得自动批准"],
+            "coverage_rate": 0.0,
+            "suggestion": "引用证据不完整，禁止自动批准。",
+            "revision_instructions": ["仅使用本次工作流返回的 EvidenceItem 重建引用"],
         }
+    else:
+        try:
+            messages = [
+                SystemMessage(content=REVIEW_PROMPT),
+                HumanMessage(content=user_input),
+            ]
+            llm_result = llm_gateway.invoke_structured(
+                messages=messages,
+                output_schema=ReviewLLMOutput,
+                context=LLMCallContext(
+                    run_id=node_input.run_id,
+                    step_id=step_context["step_id"],
+                    node_name="reviewer",
+                    schema_name=ReviewLLMOutput.__name__,
+                    generation_attempt=node_input.generation_attempt,
+                    workflow_deadline_at=state.get("workflow_deadline_at"),
+                ),
+                options=llm_gateway.options_for("reviewer", temperature=0.0),
+            )
+            review = llm_result.output.model_dump(mode="python")
+        except LLMGatewayError as exc:
+            error = require_agent_fallback(state, exc.error)
+            llm_result = exc
+            review = {
+                "decision": ReviewDecision.HUMAN_REVIEW.value,
+                "passed": False,
+                "hallucination_score": 0.3 if evidence else 0.5,
+                "issues": ["使用保底审核结果，建议补充知识库证据或配置 LLM 后复核"],
+                "difficulty_match": False,
+                "coverage_rate": 0.8,
+                "suggestion": "",
+                "revision_instructions": ["转人工复核，不得自动批准"],
+            }
 
     if error:
         decision = ReviewDecision.HUMAN_REVIEW
@@ -136,10 +168,10 @@ def review_node(
         agent_name="reviewer",
         action="审核纠偏",
         status=status,
-        input_summary=f"资源数：{len(resources)}；证据片段数：{len(chunks)}；生成轮次：{node_input.generation_attempt}",
+        input_summary=f"资源数：{len(resources)}；证据数：{len(evidence)}；生成轮次：{node_input.generation_attempt}",
         output_summary=f"决策：{decision.value}; 幻觉分：{review.get('hallucination_score', 0):.2f}; 覆盖率：{review.get('coverage_rate', 0):.2f}",
         decision_reason=review.get("suggestion", "根据知识库证据、事实一致性、覆盖率和难度匹配给出审核结论。"),
-        evidence_refs=[c.get("chunk_id") or c.get("source", "unknown") for c in chunks[:5]],
+        evidence_refs=[item.evidence_id for item in evidence[:5]],
         resource_ids=[resource.resource_id for resource in resources],
         review_ids=list(review_ids.values()),
         error=error,

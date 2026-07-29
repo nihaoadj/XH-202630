@@ -8,6 +8,7 @@ from app.core.health import ensure_generation_ready
 from app.config import get_settings
 from app.db.resource.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
+from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.models.schemas import GenerateRequest, GenerateResponse, LearnerProfile, LearningResource
 from app.models.workflow import (
     ClaimCheckStatus,
@@ -65,7 +66,13 @@ def build_workflow_state(
                 else ClaimCheckStatus.NOT_REQUESTED
             ),
             retrieval_status="pending",
+            retrieval_config_hash=None,
+            retrieval_query_hashes=[],
+            retrieval_candidate_count=0,
+            retrieval_dropped_candidate_count=0,
+            retrieval_partial_failure_count=0,
             diagnosis={},
+            retrieved_evidence=[],
             retrieved_chunks=[],
             learning_plan={},
             generated_resources=[],
@@ -146,6 +153,7 @@ class GenerationService:
         resource_repo: BaseResourceRepository,
         workflow,
         audit_repo: BaseAuditRepository | None = None,
+        knowledge_catalog: KnowledgeCatalogRepository | None = None,
     ):
         """初始化服务
         
@@ -156,10 +164,17 @@ class GenerationService:
         self.resource_repo = resource_repo
         self.workflow = workflow
         self.audit_repo = audit_repo
+        self.knowledge_catalog = knowledge_catalog
 
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         """生成个性化学习资源"""
-        readiness = ensure_generation_ready()
+        readiness = (
+            ensure_generation_ready(
+                index_status_provider=self.knowledge_catalog.get_index_status
+            )
+            if self.knowledge_catalog is not None
+            else ensure_generation_ready()
+        )
         initial_state = build_workflow_state(learner, req)
         run_id = initial_state["run_id"]
 

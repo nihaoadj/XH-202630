@@ -188,6 +188,46 @@ def test_public_health_checks_only_default_knowledge_base(monkeypatch, tmp_path)
     assert client.requested_names == [default_name]
 
 
+def test_default_kb_index_status_and_live_counts_are_part_of_readiness(monkeypatch, tmp_path):
+    settings = make_settings(llm_api_key="test-key", vector_store_dir=str(tmp_path))
+    (tmp_path / "chroma.sqlite3").touch()
+    default_name = health_module._collection_name("default_kb", settings)
+    client = _FakeChromaClient([_FakeCollection(default_name, "default_kb", count=3)])
+    monkeypatch.setattr(health_module, "_get_chroma_client", lambda path: client)
+    monkeypatch.setattr(
+        health_module, "_default_knowledge_base_id", lambda settings: "default_kb"
+    )
+
+    ready = health_module._check_vector_store(
+        settings,
+        prepare=False,
+        index_status_provider=lambda kb_id: {
+            "status": "ready",
+            "smoke_status": "passed",
+            "expected_chunk_count": 3,
+            "sql_chunk_count": 3,
+            "live_sql_active_chunk_count": 3,
+            "vector_chunk_count": 3,
+        },
+    )
+    mismatch = health_module._check_vector_store(
+        settings,
+        prepare=False,
+        index_status_provider=lambda kb_id: {
+            "status": "ready",
+            "smoke_status": "passed",
+            "expected_chunk_count": 3,
+            "sql_chunk_count": 3,
+            "live_sql_active_chunk_count": 2,
+            "vector_chunk_count": 3,
+        },
+    )
+
+    assert ready.status == "ready"
+    assert mismatch.status == "not_ready"
+    assert mismatch.code == ErrorCode.VECTOR_INDEX_OUT_OF_SYNC.value
+
+
 def test_non_default_kb_failure_degrades_admin_report_not_public_health(monkeypatch, tmp_path):
     settings = make_settings(
         llm_api_key="test-key",
@@ -216,11 +256,31 @@ def test_non_default_kb_failure_degrades_admin_report_not_public_health(monkeypa
     )
 
     public = health_module._check_vector_store(settings, prepare=False)
-    admin = health_module.build_knowledge_base_health_report(settings)
+    admin = health_module.build_knowledge_base_health_report(
+        settings,
+        index_status_provider=lambda kb_id: (
+            {
+                "status": "ready",
+                "index_schema_version": "1.0",
+                "active_snapshot_hash": "a" * 64,
+                "expected_chunk_count": 3,
+                "sql_chunk_count": 3,
+                "live_sql_active_chunk_count": 3,
+                "vector_chunk_count": 3,
+                "smoke_status": "passed",
+                "last_error_code": None,
+                "last_indexed_at": None,
+            }
+            if kb_id == "default_kb"
+            else None
+        ),
+    )
 
     assert public.status == "ready"
     assert admin.status == "degraded"
     assert admin.knowledge_bases[0].status == "ready"
+    assert admin.knowledge_bases[0].index_status == "ready"
+    assert admin.knowledge_bases[0].smoke_status == "passed"
     assert admin.knowledge_bases[1].code == ErrorCode.VECTOR_COLLECTION_MISSING.value
 
 

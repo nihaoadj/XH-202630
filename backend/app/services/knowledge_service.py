@@ -194,12 +194,14 @@ class KnowledgeService:
         manifest = self._ensure_knowledge_base(knowledge_base_id)
         if self.catalog is not None:
             counts = self.catalog.knowledge_base_counts(manifest["knowledge_base_id"])
+            index_status = self.catalog.get_index_status(manifest["knowledge_base_id"])
             return {
                 "knowledge_base_id": manifest["knowledge_base_id"],
                 "target_domain": manifest.get("domain"),
                 "description": manifest.get("description"),
                 "version": manifest.get("version"),
                 **counts,
+                "index_status": index_status,
                 "updated_at": None,
             }
 

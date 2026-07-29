@@ -230,12 +230,27 @@ class SourceRef(BaseModel):
     title: str
     snippet: str
     score: float
+    provenance_status: Literal["legacy", "verified"] = "legacy"
+    evidence_id: Optional[str] = None
+    knowledge_base_id: Optional[str] = None
+    document_version: Optional[str] = None
     chunk_id: Optional[str] = None
     knowledge_point: Optional[str] = None
     section: Optional[str] = None
     page: Optional[int] = None
     source_path: Optional[str] = None
+    source_type: Optional[str] = None
+    line_start: Optional[int] = None
+    line_end: Optional[int] = None
+    timestamp_start_ms: Optional[int] = None
+    timestamp_end_ms: Optional[int] = None
     retrieval_query: Optional[str] = None
+    query_hash: Optional[str] = None
+    raw_score: Optional[float] = None
+    score_kind: Optional[str] = None
+    normalized_score: Optional[float] = None
+    excerpt_hash: Optional[str] = None
+    retrieval_config_hash: Optional[str] = None
     rank: Optional[int] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -348,6 +363,15 @@ class AgentTrace(BaseModel):
     output_tokens: Optional[int] = Field(default=None, ge=0)
     total_tokens: Optional[int] = Field(default=None, ge=0)
     llm_duration_ms: Optional[int] = Field(default=None, ge=0)
+    retrieval_status: Optional[str] = None
+    retrieval_config_hash: Optional[str] = None
+    retrieval_query_hashes: List[str] = Field(default_factory=list)
+    retrieval_candidate_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_dropped_candidate_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_partial_failure_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_query_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_evidence_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_dropped_count: Optional[int] = Field(default=None, ge=0)
     timestamp: Optional[str] = None
     started_at: Optional[str] = None
     ended_at: Optional[str] = None

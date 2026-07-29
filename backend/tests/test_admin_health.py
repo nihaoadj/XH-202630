@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from types import SimpleNamespace
 
 from app import main as main_module
 from app.api import admin as admin_module
@@ -59,14 +60,16 @@ def _client(monkeypatch, token):
         llm_api_key="test-key",
     )
     monkeypatch.setattr(main_module, "get_settings", lambda: settings)
-    monkeypatch.setattr(main_module, "init_container", lambda: object())
+    catalog = SimpleNamespace(get_index_status=lambda knowledge_base_id: None)
+    container = SimpleNamespace(knowledge_catalog=lambda: catalog)
+    monkeypatch.setattr(main_module, "init_container", lambda: container)
     monkeypatch.setattr(main_module, "init_database", lambda: None)
     monkeypatch.setattr(main_module, "build_health_report", lambda *args, **kwargs: _runtime_report())
     monkeypatch.setattr(admin_module, "get_settings", lambda: settings)
     monkeypatch.setattr(
         admin_module,
         "build_knowledge_base_health_report",
-        lambda settings: _admin_report(),
+        lambda settings, **kwargs: _admin_report(),
     )
     return TestClient(main_module.app, raise_server_exceptions=False)
 

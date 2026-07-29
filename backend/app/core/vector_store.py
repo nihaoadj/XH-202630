@@ -13,6 +13,7 @@ from langchain.schema import Document
 from app.config import Settings, get_settings, resolve_backend_path
 from app.core.embeddings import get_embeddings
 from app.core.knowledge_base import load_knowledge_base_manifest
+from app.models.knowledge import ScoreKind, VectorCandidate
 
 
 def _collection_name(knowledge_base_id: str, settings: Settings | None = None) -> str:
@@ -78,7 +79,11 @@ def get_vector_store(knowledge_base_id: Optional[str] = None) -> Chroma:
         collection_name=_collection_name(kb_id, settings),
         persist_directory=str(vector_store_dir),
         embedding_function=get_embeddings(),
-        collection_metadata={"knowledge_base_id": kb_id},
+        collection_metadata={
+            "knowledge_base_id": kb_id,
+            "index_schema_version": "1.0",
+            "hnsw:space": settings.vector_distance_metric,
+        },
     )
 
 
@@ -100,6 +105,44 @@ def add_documents(documents: Iterable, ids: Optional[list[str]] = None, knowledg
     return get_vector_store(kb_id).add_documents(chroma_documents, ids=stable_ids)
 
 
+def synchronize_documents(
+    documents: Iterable,
+    *,
+    knowledge_base_id: Optional[str] = None,
+) -> list[str]:
+    """Replace one KB's active vector records with the supplied snapshot."""
+
+    documents = list(documents)
+    inferred_ids = {
+        document.metadata.get("knowledge_base_id") for document in documents
+    }
+    if documents and (None in inferred_ids or len(inferred_ids) != 1):
+        raise ValueError("一次同步只能包含同一 knowledge_base_id 的完整溯源片段")
+    inferred_id = next(iter(inferred_ids)) if inferred_ids else None
+    kb_id = _resolve_knowledge_base_id(knowledge_base_id or inferred_id)
+    if inferred_id is not None and inferred_id != kb_id:
+        raise ValueError("传入的 knowledge_base_id 与片段元数据不一致")
+
+    stable_ids = [str(document.metadata.get("chunk_id") or "") for document in documents]
+    if any(not item for item in stable_ids) or len(stable_ids) != len(set(stable_ids)):
+        raise ValueError("每个片段必须具备唯一的 chunk_id")
+
+    store = get_vector_store(kb_id)
+    existing = store.get(include=[]).get("ids", [])
+    if existing:
+        store.delete(ids=list(existing))
+    if documents:
+        store.add_documents(
+            [_to_chroma_document(document) for document in documents],
+            ids=stable_ids,
+        )
+    return stable_ids
+
+
+def vector_store_count(knowledge_base_id: Optional[str] = None) -> int:
+    return int(get_vector_store(knowledge_base_id)._collection.count())
+
+
 def reset_vector_store(knowledge_base_id: Optional[str] = None) -> None:
     """删除指定知识库的向量集合，用于显式全量重建。"""
     get_vector_store(knowledge_base_id).delete_collection()
@@ -113,3 +156,37 @@ def similarity_search(query: str, top_k: int = 5, knowledge_base_id: Optional[st
         raise ValueError("top_k 必须大于 0")
     results = get_vector_store(knowledge_base_id).similarity_search_with_score(query, k=top_k)
     return [(_restore_retrieved_metadata(document), score) for document, score in results]
+
+
+class ChromaVectorSearchBackend:
+    """Raw KB-scoped candidate adapter used by EvidenceRetriever."""
+
+    def __init__(self, settings: Settings | None = None):
+        self.settings = settings or get_settings()
+
+    def search(
+        self,
+        *,
+        query: str,
+        top_k: int,
+        knowledge_base_id: str,
+    ) -> list[VectorCandidate]:
+        if not query.strip():
+            raise ValueError("retrieval query cannot be empty")
+        results = get_vector_store(knowledge_base_id).similarity_search_with_score(
+            query,
+            k=top_k,
+        )
+        return [
+            VectorCandidate(
+                chunk_id=str(document.metadata.get("chunk_id") or ""),
+                text=document.page_content,
+                metadata=dict(document.metadata),
+                raw_score=float(score),
+                score_kind=ScoreKind.DISTANCE,
+                metric=self.settings.vector_distance_metric,
+                query=query,
+                query_rank=rank,
+            )
+            for rank, (document, score) in enumerate(results, start=1)
+        ]

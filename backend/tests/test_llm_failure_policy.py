@@ -14,6 +14,7 @@ from app.core.llm_gateway import LLMGateway
 from app.models.llm import RawLLMResponse
 from app.models.schemas import LearnerProfile
 from tests.fakes.llm import ScriptedLLMGateway, ScriptedLLMTransport
+from tests.fakes.evidence import make_evidence
 
 
 def _settings(**overrides) -> Settings:
@@ -184,7 +185,7 @@ def test_diagnosis_trace_carries_sanitized_llm_telemetry_and_shared_ids():
     assert "messages" not in trace
 
 
-def test_generator_builds_source_refs_only_from_retrieved_chunks():
+def test_generator_builds_source_refs_only_from_validated_evidence():
     assert "source_refs" not in GENERATION_PROMPT
     gateway = ScriptedLLMGateway([{
         "resources": [{
@@ -201,18 +202,17 @@ def test_generator_builds_source_refs_only_from_retrieved_chunks():
         "topic": "检索",
         "resource_types": ["讲义"],
         "generation_mode": "standard",
-        "retrieved_chunks": [{
-            "document_id": "doc-system",
-            "source": "system-source.md",
-            "content": "可信知识片段",
-            "score": 0.9,
-        }],
+        "retrieved_evidence": [make_evidence(
+            document_id="doc-system",
+            source_path="system-source.md",
+        )],
         "trace": [],
     }, llm_gateway=gateway)
 
     source_ref = result["generated_resources"][0].source_refs[0]
     assert source_ref.doc_id == "doc-system"
-    assert source_ref.title == "system-source.md"
+    assert source_ref.source_path == "system-source.md"
+    assert source_ref.evidence_id == "evidence-fixture"
 
 
 def test_technical_retry_does_not_increment_business_revision_count():
@@ -241,7 +241,7 @@ def test_technical_retry_does_not_increment_business_revision_count():
         "topic": "检索",
         "resource_types": ["讲义"],
         "generation_mode": "standard",
-        "retrieved_chunks": [],
+        "retrieved_evidence": [make_evidence()],
         "generation_attempt": 2,
         "revision_count": 1,
         "trace": [],

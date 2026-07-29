@@ -49,10 +49,16 @@ async def lifespan(app: FastAPI):
             )
             health_overrides["storage"] = ErrorCode.STORAGE_DATABASE_UNAVAILABLE
 
+    index_status_provider = (
+        container.knowledge_catalog().get_index_status
+        if hasattr(container, "knowledge_catalog")
+        else None
+    )
     report = build_health_report(
         settings,
         prepare_directories=True,
         overrides=health_overrides,
+        index_status_provider=index_status_provider,
     )
     app.state.health_report = report
     logger.info(
@@ -179,7 +185,16 @@ def read_root():
 def health(request: Request):
     """Return sanitized readiness without calling external model endpoints."""
     settings = get_settings()
-    report = build_health_report(settings)
+    container = getattr(request.app, "container", None)
+    index_status_provider = (
+        container.knowledge_catalog().get_index_status
+        if container is not None and hasattr(container, "knowledge_catalog")
+        else None
+    )
+    report = build_health_report(
+        settings,
+        index_status_provider=index_status_provider,
+    )
     request.app.state.health_report = report
     return JSONResponse(
         status_code=503 if report.status == "not_ready" else 200,

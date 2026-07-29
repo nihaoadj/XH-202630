@@ -17,6 +17,11 @@ from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
 from app.models.workflow import StepStatus
 from app.services.generation_service import build_workflow_state
 from tests.fakes.llm import ScriptedLLMTransport
+from tests.fakes.evidence import (
+    ScriptedEvidenceRetriever,
+    make_available_batch,
+    make_evidence,
+)
 
 
 def _learner() -> LearnerProfile:
@@ -48,9 +53,14 @@ def _install_fake_nodes(monkeypatch, review_decision="approve"):
         return {"diagnosis": {}, "trace": [_trace(state, "diagnosis")], "errors": []}
 
     def retrieve(state):
+        kb_id = state.get("knowledge_base_id") or "kb-default"
+        evidence = make_evidence(knowledge_base_id=kb_id)
         return {
+            "knowledge_base_id": kb_id,
+            "retrieved_evidence": [evidence],
             "retrieved_chunks": [],
-            "retrieval_status": "no_hit",
+            "retrieval_status": "available",
+            "retrieval_config_hash": evidence.config_hash,
             "trace": [_trace(state, "retriever")],
             "errors": [],
         }
@@ -256,14 +266,13 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
             "revision_instructions": [],
         }),
     ]))
-    retrieval_calls = []
-    monkeypatch.setattr(
-        retriever_module,
-        "similarity_search",
-        lambda query, top_k, knowledge_base_id: retrieval_calls.append(
-            (query, top_k, knowledge_base_id)
-        ) or [],
+    evidence = make_evidence(
+        knowledge_base_id="kb-contract",
+        query="控制流 node-a",
     )
+    evidence_retriever = ScriptedEvidenceRetriever([
+        make_available_batch([evidence]),
+    ])
 
     request = GenerateRequest(
         learner_id="flow-001",
@@ -276,7 +285,7 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
         generation_mode="standard",
         constraints={"retrieval_top_k": 4, "language": "zh-CN"},
     )
-    result = workflow_module.build_workflow(gateway).invoke(
+    result = workflow_module.build_workflow(gateway, evidence_retriever).invoke(
         build_workflow_state(_learner(), request, run_id="run-contract")
     )
 
@@ -285,7 +294,10 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
     assert "zh-CN" in captured["planner"]
     assert "node-a" in captured["generator"]
     assert "高级" in captured["reviewer"]
-    assert ("控制流 node-a", 4, "kb-contract") in retrieval_calls
+    retrieval_request = evidence_retriever.calls[0]
+    assert "控制流 node-a" in retrieval_request.queries
+    assert retrieval_request.policy.top_k_per_query == 4
+    assert retrieval_request.knowledge_base_id == "kb-contract"
     assert result["generated_resources"][0].difficulty == "高级"
     assert [item["sequence"] for item in result["trace"]] == list(
         range(1, len(result["trace"]) + 1)

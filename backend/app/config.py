@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     llm_generator_max_output_tokens: int = Field(default=8192, ge=256, le=65536)
     llm_structured_output_mode: str = "auto"
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
+    retrieval_top_k_default: int = Field(default=3, ge=1, le=10)
+    retrieval_max_queries: int = Field(default=6, ge=1, le=10)
+    retrieval_max_evidence: int = Field(default=8, ge=1, le=20)
+    retrieval_min_evidence: int = Field(default=1, ge=1, le=20)
+    retrieval_min_normalized_score: float = Field(default=0.35, ge=0, le=1)
+    evidence_max_excerpt_chars: int = Field(default=1200, ge=100, le=10000)
+    vector_distance_metric: str = "cosine"
     db_type: str = "sqlite"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"
     knowledge_base_dir: str = "../knowledge_base/rag_engineering_training"
@@ -79,6 +86,51 @@ class Settings(BaseSettings):
         if normalized not in {"auto", "json_schema", "function_calling", "json_mode", "text"}:
             raise ValueError("CFG_INVALID_LLM_STRUCTURED_OUTPUT_MODE")
         return normalized
+
+    @field_validator("vector_distance_metric")
+    @classmethod
+    def validate_vector_distance_metric(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized != "cosine":
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        return normalized
+
+    @field_validator(
+        "retrieval_top_k_default",
+        "retrieval_max_queries",
+        "retrieval_max_evidence",
+        "retrieval_min_evidence",
+        "evidence_max_excerpt_chars",
+        mode="before",
+    )
+    @classmethod
+    def validate_retrieval_integer_policy(cls, value, info):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY") from None
+        bounds = {
+            "retrieval_top_k_default": (1, 10),
+            "retrieval_max_queries": (1, 10),
+            "retrieval_max_evidence": (1, 20),
+            "retrieval_min_evidence": (1, 20),
+            "evidence_max_excerpt_chars": (100, 10000),
+        }
+        minimum, maximum = bounds[info.field_name]
+        if not normalized.is_integer() or not minimum <= normalized <= maximum:
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        return value
+
+    @field_validator("retrieval_min_normalized_score", mode="before")
+    @classmethod
+    def validate_retrieval_score_policy(cls, value):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY") from None
+        if not 0 <= normalized <= 1:
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        return value
 
     @field_validator(
         "llm_request_timeout_seconds",
@@ -144,6 +196,8 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         if self.llm_retry_max_delay_seconds < self.llm_retry_base_delay_seconds:
             raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
+        if self.retrieval_min_evidence > self.retrieval_max_evidence:
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
 
         if self.db_type == "sqlite" and not self.database_url.startswith("sqlite:///"):
             raise ValueError("CFG_DATABASE_URL_MISMATCH")

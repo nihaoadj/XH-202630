@@ -9,6 +9,8 @@ from app.config import get_settings
 from app.core.llm import LangChainChatTransport
 from app.core.llm_gateway import LLMGateway
 from app.core.vector_store import get_vector_store
+from app.core.vector_store import ChromaVectorSearchBackend
+from app.core.evidence_retriever import EvidenceRetriever
 from app.agents.workflow import build_workflow
 from app.db.database import get_session_factory
 from app.db.learner.repository import create_learner_repository
@@ -28,6 +30,7 @@ from app.services.diagnosis_service import DiagnosisService
 from app.services.review_service import ReviewService
 from app.services.evaluation_service import EvaluationService
 from app.services.onboarding_service import OnboardingService
+from app.services.ingestion_service import ChromaKnowledgeVectorIndex, IngestionService
 from app.models.llm import LLMCallOptions
 
 
@@ -69,9 +72,6 @@ class Container(containers.DeclarativeContainer):
     
     # 数据库会话工厂
     db_session_factory = providers.Singleton(get_session_factory)
-    
-    # Agent工作流
-    workflow = providers.Singleton(build_workflow, llm_gateway=llm_gateway)
     
     # ==================== Repository层（根据配置选择实现）====================
     
@@ -119,6 +119,33 @@ class Container(containers.DeclarativeContainer):
         KnowledgeCatalogRepository,
         session_factory=db_session_factory,
     )
+
+    vector_search_backend = providers.Singleton(
+        ChromaVectorSearchBackend,
+        settings=runtime_settings,
+    )
+    evidence_retriever = providers.Singleton(
+        EvidenceRetriever,
+        backend=vector_search_backend,
+        chunk_repository=knowledge_catalog,
+        settings=runtime_settings,
+    )
+    knowledge_vector_index = providers.Singleton(
+        ChromaKnowledgeVectorIndex,
+        search_backend=vector_search_backend,
+    )
+    ingestion_service = providers.Singleton(
+        IngestionService,
+        catalog=knowledge_catalog,
+        vector_index=knowledge_vector_index,
+    )
+
+    # Agent 工作流必须显式注入证据检索边界。
+    workflow = providers.Singleton(
+        build_workflow,
+        llm_gateway=llm_gateway,
+        evidence_retriever=evidence_retriever,
+    )
     
     # ==================== Service层（单例）====================
     
@@ -134,6 +161,7 @@ class Container(containers.DeclarativeContainer):
         resource_repo=resource_repository,
         workflow=workflow,
         audit_repo=audit_repository,
+        knowledge_catalog=knowledge_catalog,
     )
 
     # 资源查询服务

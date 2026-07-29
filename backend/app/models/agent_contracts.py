@@ -14,6 +14,7 @@ from app.core.errors import (
     PUBLIC_MESSAGES,
     require_degraded_generation,
 )
+from app.models.knowledge import EvidenceItem, RetrievalStatus
 from app.models.schemas import LearnerProfile, LearningResource
 from app.models.workflow import (
     ErrorInfo,
@@ -72,8 +73,13 @@ class RetrieverInput(AgentInput):
 
 
 class RetrieverOutput(BaseModel):
-    retrieved_chunks: List[Dict[str, Any]]
-    retrieval_status: str
+    retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
+    retrieval_status: RetrievalStatus
+    retrieval_config_hash: Optional[str] = None
+    retrieval_query_hashes: List[str] = Field(default_factory=list)
+    retrieval_candidate_count: int = Field(default=0, ge=0)
+    retrieval_dropped_candidate_count: int = Field(default=0, ge=0)
+    retrieval_partial_failure_count: int = Field(default=0, ge=0)
 
 
 class PlannerInput(AgentInput):
@@ -85,7 +91,7 @@ class PlannerInput(AgentInput):
     generation_mode: str = "standard"
     constraints: Dict[str, Any] = Field(default_factory=dict)
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
-    retrieved_chunks: List[Dict[str, Any]] = Field(default_factory=list)
+    retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
 
 
 class PlannerOutput(BaseModel):
@@ -101,7 +107,7 @@ class GeneratorInput(AgentInput):
     generation_mode: str = "standard"
     constraints: Dict[str, Any] = Field(default_factory=dict)
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
-    retrieved_chunks: List[Dict[str, Any]] = Field(default_factory=list)
+    retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
     review_result: Dict[str, Any] = Field(default_factory=dict)
     generated_resources: List[LearningResource] = Field(default_factory=list)
@@ -118,7 +124,7 @@ class GeneratorOutput(BaseModel):
 
 class ReviewerInput(AgentInput):
     generated_resources: List[LearningResource] = Field(default_factory=list)
-    retrieved_chunks: List[Dict[str, Any]] = Field(default_factory=list)
+    retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
     difficulty_preference: Optional[str] = None
     constraints: Dict[str, Any] = Field(default_factory=dict)
     generation_attempt: int = Field(default=1, ge=1)
@@ -268,6 +274,7 @@ def build_trace_item(
     attempt: Optional[int] = None,
     step_context: Optional[Dict[str, Any]] = None,
     llm_metadata: Optional[Dict[str, Any]] = None,
+    retrieval_metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Create a complete trace item before the node result leaves the node."""
 
@@ -303,4 +310,6 @@ def build_trace_item(
     }
     if llm_metadata:
         item.update(llm_metadata)
+    if retrieval_metadata:
+        item.update(retrieval_metadata)
     return item

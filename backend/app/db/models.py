@@ -234,6 +234,33 @@ class KnowledgeDocumentORM(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+class KnowledgeDocumentVersionORM(Base):
+    """Immutable content-addressed version of one logical knowledge document."""
+
+    __tablename__ = "knowledge_document_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "knowledge_base_id",
+            "document_id",
+            "content_hash",
+            name="uq_kb_document_content_version",
+        ),
+    )
+
+    document_version = Column(String(128), primary_key=True)
+    document_id = Column(String(128), nullable=False, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    title = Column(String(512), nullable=False)
+    source_path = Column(String(1024), nullable=False)
+    source_type = Column(String(32), nullable=False)
+    source_version = Column(String(64), nullable=True)
+    content_hash = Column(String(64), nullable=False, index=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    is_current = Column(Boolean, nullable=False, default=True, index=True)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class KnowledgeChunkORM(Base):
     __tablename__ = "knowledge_chunks"
     __table_args__ = (UniqueConstraint("knowledge_base_id", "document_id", "chunk_index", name="uq_document_chunk_index"),)
@@ -246,6 +273,59 @@ class KnowledgeChunkORM(Base):
     content_hash = Column(String(64), nullable=False, index=True)
     extra_metadata = Column("metadata", JSON, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class KnowledgeChunkVersionORM(Base):
+    """Immutable Chunk history used to resolve SourceRef after re-indexing."""
+
+    __tablename__ = "knowledge_chunk_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_version",
+            "chunk_ordinal",
+            "chunking_config_hash",
+            name="uq_document_version_chunk_ordinal",
+        ),
+    )
+
+    chunk_id = Column(String(128), primary_key=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    document_id = Column(String(128), nullable=False, index=True)
+    document_version = Column(String(128), ForeignKey("knowledge_document_versions.document_version"), nullable=False, index=True)
+    chunk_ordinal = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    text_hash = Column(String(64), nullable=False, index=True)
+    chunking_config_hash = Column(String(64), nullable=False)
+    source_type = Column(String(32), nullable=False)
+    source_path = Column(String(1024), nullable=False)
+    title = Column(String(512), nullable=False)
+    section = Column(String(512), nullable=True)
+    page = Column(Integer, nullable=True)
+    line_start = Column(Integer, nullable=True)
+    line_end = Column(Integer, nullable=True)
+    active = Column(Boolean, nullable=False, default=True, index=True)
+    knowledge_points = Column(JSON, default=list)
+    learner_levels = Column(JSON, default=list)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class KnowledgeIndexStatusORM(Base):
+    """Latest reconciled SQL/Chroma index status for one knowledge base."""
+
+    __tablename__ = "knowledge_index_status"
+
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), primary_key=True)
+    status = Column(String(32), nullable=False, default="pending")
+    index_schema_version = Column(String(32), nullable=False, default="1.0")
+    active_snapshot_hash = Column(String(64), nullable=True)
+    expected_chunk_count = Column(Integer, nullable=False, default=0)
+    sql_chunk_count = Column(Integer, nullable=False, default=0)
+    vector_chunk_count = Column(Integer, nullable=False, default=0)
+    smoke_status = Column(String(32), nullable=True)
+    last_error_code = Column(String(128), nullable=True)
+    last_indexed_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class RagSkillNodeORM(Base):

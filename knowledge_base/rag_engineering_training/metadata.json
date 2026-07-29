@@ -2,6 +2,22 @@
   "knowledge_base_id": "rag_engineering_training",
   "knowledge_base_name": "rag_engineering_training",
   "version": "1.0.0",
+  "index_schema_version": "1.0",
+  "chunking": {
+    "strategy": "recursive_v1",
+    "chunk_size": 500,
+    "chunk_overlap": 50
+  },
+  "smoke_queries": [
+    {
+      "query": "Embedding 向量集合与余弦距离",
+      "expected_document_ids": ["rag_retrieval_rerank_prompt"]
+    },
+    {
+      "query": "Claim 审核与幻觉控制的引用证据",
+      "expected_document_ids": ["rag_claim_hallucination_reference"]
+    }
+  ],
   "domain": "RAG 工程链路",
   "description": "面向 RAG 链路匠学的 RAG 工程训练知识库，覆盖能力图谱、检索生成链路、审核纠偏与评测调优。",
   "documents": [

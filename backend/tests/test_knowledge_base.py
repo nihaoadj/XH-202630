@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.agents import retriever
 from app.config import Settings
 from app.core import vector_store
+from app.core.evidence_retriever import EvidenceRetriever
 from app.core.knowledge_base import (
     chunk_documents,
     load_documents,
@@ -16,6 +17,7 @@ from app.core.knowledge_base import (
 )
 from app.core.vector_store import _restore_retrieved_metadata, _to_chroma_document
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
+from app.db.knowledge.memory import MemoryKnowledgeChunkRepository
 from app.db.audit.sql_repository import SQLAuditRepository
 from app.db.diagnosis.memory import MemoryDiagnosisRepository
 from app.db.diagnosis.sql_repository import SQLDiagnosisRepository
@@ -40,6 +42,11 @@ from app.models.schemas import (
     DiagnosticQuestion,
     DiagnosticSubmitRequest,
     LearnerProfile,
+)
+from tests.fakes.evidence import (
+    ScriptedVectorSearchBackend,
+    make_knowledge_chunk,
+    make_vector_candidate,
 )
 from app.services.diagnosis_service import DiagnosisService
 from app.services.knowledge_service import KnowledgeService
@@ -180,16 +187,28 @@ def test_catalog_sync_prunes_removed_documents_and_old_chunks(tmp_path):
         assert db.query(KnowledgeChunkORM).count() == len(retained_chunks)
 
 
-def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs(monkeypatch):
+def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs():
     documents = load_documents()
-    chunk = chunk_documents(documents)[0]
-    calls = []
-
-    def fake_similarity_search(query, top_k, knowledge_base_id):
-        calls.append((query, top_k, knowledge_base_id))
-        return [(chunk, 0.12)]
-
-    monkeypatch.setattr(retriever, "similarity_search", fake_similarity_search)
+    document_chunk = chunk_documents(documents)[0]
+    metadata = document_chunk.metadata
+    chunk = make_knowledge_chunk(
+        knowledge_base_id=metadata["knowledge_base_id"],
+        document_id=metadata["document_id"],
+        document_version=metadata["document_version"],
+        chunk_id=metadata["chunk_id"],
+        text=document_chunk.page_content,
+        source_path=metadata["source_path"],
+    )
+    queries = ["RAG 基础概念", "RAG 基础概念 Embedding"]
+    backend = ScriptedVectorSearchBackend({
+        query: [make_vector_candidate(chunk, query=query, raw_score=0.12)]
+        for query in queries
+    })
+    evidence_retriever = EvidenceRetriever(
+        backend=backend,
+        chunk_repository=MemoryKnowledgeChunkRepository([chunk]),
+        settings=Settings(_env_file=None),
+    )
     learner = LearnerProfile(
         learner_id="test_retriever",
         learner_type="初学者",
@@ -203,7 +222,7 @@ def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs(monkeypa
             "topic": "RAG 基础概念",
             "knowledge_base_id": "rag_engineering_training",
             "diagnosis": {"weak_points": ["Embedding"]},
-            "retrieved_chunks": [],
+            "retrieved_evidence": [],
             "learning_plan": {},
             "generated_resources": [],
             "review_result": {},
@@ -211,13 +230,17 @@ def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs(monkeypa
             "resource_types": ["讲义"],
             "trace": [],
             "iteration": 0,
-        }
+        },
+        evidence_retriever=evidence_retriever,
     )
 
-    assert calls and all(call[2] == "rag_engineering_training" for call in calls)
-    retrieved = result["retrieved_chunks"][0]
-    assert retrieved["document_id"] == chunk.metadata["document_id"]
-    assert retrieved["chunk_id"] == chunk.metadata["chunk_id"]
+    assert backend.calls and all(
+        call["knowledge_base_id"] == "rag_engineering_training"
+        for call in backend.calls
+    )
+    retrieved = result["retrieved_evidence"][0]
+    assert retrieved.document_id == chunk.document_id
+    assert retrieved.chunk_id == chunk.chunk_id
 
 
 def test_audit_repository_persists_agent_steps_and_claim_evidence(tmp_path):

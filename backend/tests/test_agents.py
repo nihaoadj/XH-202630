@@ -4,6 +4,7 @@ from app.core.llm_gateway import LLMGateway
 from app.models.llm import RawLLMResponse
 from app.models.schemas import LearnerProfile
 from tests.fakes.llm import ScriptedLLMTransport
+from tests.fakes.evidence import make_evidence
 
 
 def test_workflow_compiles_with_expected_baseline_channels():
@@ -71,7 +72,7 @@ def test_generate_node_increments_iteration():
         "topic": "工业互联网",
         "resource_types": ["讲义"],
         "diagnosis": {},
-        "retrieved_chunks": [],
+        "retrieved_evidence": [make_evidence()],
         "learning_plan": {},
         "generated_resources": [],
         "review_result": {},

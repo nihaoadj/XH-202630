@@ -105,6 +105,28 @@ def test_demo_allows_explicit_degraded_mode_without_key():
 
 
 @pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("retrieval_top_k_default", 0),
+        ("retrieval_max_queries", 11),
+        ("retrieval_max_evidence", 21),
+        ("retrieval_min_evidence", 0),
+        ("retrieval_min_normalized_score", 1.1),
+        ("evidence_max_excerpt_chars", 99),
+        ("vector_distance_metric", "l2"),
+    ],
+)
+def test_retrieval_policy_rejects_unsafe_values_with_stable_code(field, value):
+    with pytest.raises(ValidationError, match="CFG_INVALID_RETRIEVAL_POLICY"):
+        make_settings(**{field: value})
+
+
+def test_retrieval_min_evidence_cannot_exceed_maximum():
+    with pytest.raises(ValidationError, match="CFG_INVALID_RETRIEVAL_POLICY"):
+        make_settings(retrieval_min_evidence=4, retrieval_max_evidence=3)
+
+
+@pytest.mark.parametrize(
     ("overrides", "code"),
     [
         ({"llm_request_timeout_seconds": 0}, "CFG_INVALID_LLM_TIMEOUT"),
