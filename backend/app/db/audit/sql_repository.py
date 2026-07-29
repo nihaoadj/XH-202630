@@ -21,8 +21,8 @@ class SQLAuditRepository(BaseAuditRepository):
     def __init__(self, session_factory: Callable[[], Session]):
         self.session_factory = session_factory
 
-    def save_run(self, learner_id, knowledge_base_id, topic, trace: Iterable[dict[str, Any]], input_payload, output_payload, status):
-        run_id = str(uuid.uuid4())
+    def save_run(self, learner_id, knowledge_base_id, topic, trace: Iterable[dict[str, Any]], input_payload, output_payload, status, run_id=None):
+        run_id = run_id or str(uuid.uuid4())
         steps = [_as_dict(item) for item in trace]
         with self.session_factory() as db:
             db.add(
@@ -44,7 +44,7 @@ class SQLAuditRepository(BaseAuditRepository):
                         step_no=step_no,
                         agent_name=step.get("agent_name", "unknown"),
                         action=step.get("action", "unknown"),
-                        status=step.get("status", "success"),
+                        status=step.get("status") or "failed",
                         input_payload=step.get("input_payload", {}),
                         output_payload=step.get("output_payload", {}),
                         decision_reason=step.get("decision_reason"),
@@ -58,8 +58,11 @@ class SQLAuditRepository(BaseAuditRepository):
         return run_id
 
     def save_review(self, resource_id: str, review: dict[str, Any], run_id: Optional[str]) -> str:
-        requested_id = review.get("review_id")
-        review_id = f"{requested_id}:{resource_id}" if requested_id else str(uuid.uuid4())
+        requested_id = review.get("review_ids", {}).get(resource_id)
+        legacy_batch_id = review.get("review_id")
+        review_id = requested_id or (
+            f"{legacy_batch_id}:{resource_id}" if legacy_batch_id else str(uuid.uuid4())
+        )
         status = review.get("status") or ("passed" if review.get("passed") else "needs_review")
         claims = [_as_dict(claim) for claim in review.get("claims", [])]
         claim_total = review.get("claim_total", len(claims))
@@ -78,7 +81,10 @@ class SQLAuditRepository(BaseAuditRepository):
                     claim_unsupported=claim_unsupported,
                     suspected_hallucinations=review.get("suspected_hallucinations", claim_unsupported),
                     hallucination_rate=hallucination_rate,
-                    review_pass_rate=review.get("review_pass_rate", 1.0 if status == "passed" else 0.0),
+                    review_pass_rate=review.get(
+                        "review_pass_rate",
+                        1.0 if status in {"approve", "approved", "passed"} else 0.0,
+                    ),
                     revision_count=review.get("revision_count", 0),
                     issues=review.get("issues", []),
                 )

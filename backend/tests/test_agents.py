@@ -4,7 +4,7 @@ from app.models.schemas import LearnerProfile
 
 
 class _FakeResponse:
-    content = "[]"
+    content = """[{"resource_type":"讲义","difficulty":"初级","content_text":"测试内容","knowledge_points":["测试"]}]"""
 
 
 class _FakeLLM:
@@ -12,44 +12,43 @@ class _FakeLLM:
         return _FakeResponse()
 
 
-def test_workflow_runs():
-    """测试多智能体工作流能完成端到端调用"""
-    learner = LearnerProfile(
-        learner_id="test_001",
-        learner_type="初学者",
-        education="本科",
-        major="计算机科学与技术",
-        theory_scores={"工业互联网架构": 65, "MQTT": 70},
-        skill_level="初级",
-        weak_points=["OPC UA", "边缘计算网关配置"],
-        strong_points=["Python 编程"],
-        learning_goal="掌握工业互联网数据采集",
-    )
-
+def test_workflow_compiles_with_expected_baseline_channels():
+    """工作流输入 schema 必须保留全部生成请求控制字段。"""
     workflow = build_workflow()
-    initial_state = {
-        "learner": learner,
-        "topic": "工业互联网边缘计算网关配置",
-        "resource_types": ["讲义"],
-        "diagnosis": {},
-        "retrieved_chunks": [],
-        "learning_plan": {},
-        "generated_resources": [],
-        "review_result": {},
-        "final_decision": "",
-        "trace": [],
-        "iteration": 0,
-    }
+    schema = workflow.get_input_jsonschema()
 
-    # 注意：此测试需要配置 LLM_API_KEY 才能运行
-    # result = workflow.invoke(initial_state)
-    # assert "final_decision" in result
-    assert workflow is not None
+    assert {
+        "schema_version",
+        "run_id",
+        "learner_id",
+        "learner",
+        "topic",
+        "knowledge_base_id",
+        "diagnostic_result_id",
+        "target_skill_nodes",
+        "resource_types",
+        "difficulty_preference",
+        "generation_mode",
+        "include_review",
+        "include_claim_check",
+        "max_iterations",
+        "constraints",
+        "trace",
+        "errors",
+    } <= set(schema["properties"])
 
 
 def test_workflow_retry_guard_decides_after_max_iteration():
-    assert decide_next({"review_result": {"passed": False}, "iteration": 0}) == "generate"
-    assert decide_next({"review_result": {"passed": False}, "iteration": 2}) == "decide"
+    assert decide_next({
+        "review_result": {"decision": "revise"},
+        "revision_count": 0,
+        "max_iterations": 1,
+    }) == "generate"
+    assert decide_next({
+        "review_result": {"decision": "revise"},
+        "revision_count": 1,
+        "max_iterations": 1,
+    }) == "decide"
 
 
 def test_generate_node_increments_iteration(monkeypatch):
@@ -82,3 +81,4 @@ def test_generate_node_increments_iteration(monkeypatch):
     })
 
     assert result["iteration"] == 1
+    assert result["generation_attempt"] == 1

@@ -93,6 +93,9 @@ def _placeholder_manifest(domain: dict, track: dict) -> dict:
 def main():
     settings = get_settings()
 
+    if settings.db_type == "memory":
+        print("*** EPHEMERAL WARNING: DB_TYPE=memory，当前进程退出后导入数据将全部丢失。***")
+
     # 如果使用 SQL 数据库，先创建表结构
     if settings.db_type in ("sqlite", "postgresql"):
         print(f"正在初始化 {settings.db_type} 数据库表结构...")

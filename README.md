@@ -53,6 +53,15 @@ cd frontend
 npm install
 npm run dev
 ```
+运行模式和退出语义：
+
+| 模式 | degraded fallback | 存储建议 | 启动/生成语义 |
+|---|---|---|---|
+| `development` | 默认禁止，可显式开启 | SQLite | not-ready 时保留 `/health`，生成返回 503 |
+| `demo` | 仅显式 `ALLOW_DEGRADED_GENERATION=true` | SQLite | fallback 必须标记 degraded |
+| `production` | 永远禁止 | SQLite/PostgreSQL | 核心依赖或默认 KB not-ready 时 fail-fast |
+
+`scripts/check_environment.py` 不调用计费 LLM、不下载 Embedding，退出码为 0=ready、2=degraded、1=not-ready。公共 `/health` 与 `/health/ready` 只检查默认 KB 和核心依赖；其他 KB 的异常不会轻易把整个服务变成 503。全 KB 详情位于 token 保护的管理员接口，见 `docs/api.md`。
 
 ## 后端目录说明
 
@@ -61,6 +70,7 @@ backend/
 ├── app/                          # 后端应用核心代码
 │   ├── api/                      # HTTP 路由层：仅负责请求校验、协议转换与响应组装
 │   │   ├── onboarding.py         # 初始画像问卷接口
+│   │   ├── admin.py              # Token 保护的全 KB 运行状态接口
 │   │   ├── profiles.py           # 学习者画像接口
 │   │   ├── knowledge.py          # 领域、方向与知识库目录接口
 │   │   ├── skills.py             # 技能图谱接口
@@ -95,7 +105,9 @@ backend/
 │   │   ├── embeddings.py         # 中文 Embedding 模型加载
 │   │   ├── vector_store.py       # ChromaDB 向量存储
 │   │   ├── knowledge_base.py     # 知识库文档加载与切片
-│   │   └── file_storage.py       # 生成资源文件存储
+│   │   ├── file_storage.py       # 生成资源文件存储（支持文本与多媒体）
+│   │   ├── health.py             # 脱敏运行时健康检查与 readiness 聚合
+│   │   └── errors.py             # 稳定错误码与显式 degraded 策略
 │   ├── db/                       # 数据访问层：按实体划分子包
 │   │   ├── learner/              # 画像仓储
 │   │   ├── questionnaire/        # 问卷仓储
@@ -156,7 +168,8 @@ version1/
 │   └── ...
 ├── scripts/                     # 初始化与辅助脚本
 │   ├── ingest_knowledge.py
-│   └── init_db.py
+│   ├── init_db.py
+│   └── check_environment.py      # 只读、脱敏的运行环境检查
 ├── Dockerfile
 ├── git-workflow.md
 ├── README.md

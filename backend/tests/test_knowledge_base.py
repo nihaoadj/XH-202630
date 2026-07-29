@@ -2,10 +2,13 @@
 import json
 from pathlib import Path
 
+from langchain.schema import Document
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.agents import retriever
+from app.config import Settings
+from app.core import vector_store
 from app.core.knowledge_base import (
     chunk_documents,
     load_documents,
@@ -68,6 +71,58 @@ def test_chroma_metadata_serialization_preserves_list_provenance():
     assert restored.metadata["knowledge_points"] == chunk.metadata["knowledge_points"]
     assert restored.metadata["learner_levels"] == chunk.metadata["learner_levels"]
     assert restored.metadata["source_urls"] == chunk.metadata["source_urls"]
+
+
+def test_collection_name_is_kb_scoped_and_uses_compatible_prefix():
+    settings = Settings(
+        _env_file=None,
+        chroma_collection_prefix="training prefix",
+    )
+
+    first = vector_store._collection_name("kb_one", settings)
+    second = vector_store._collection_name("kb_two", settings)
+
+    assert first.startswith("training_prefix_")
+    assert second.startswith("training_prefix_")
+    assert first != second
+
+
+def test_create_write_query_and_delete_use_one_collection_resolver(monkeypatch, tmp_path):
+    settings = Settings(
+        _env_file=None,
+        vector_store_dir=str(tmp_path / "chroma"),
+        chroma_collection_prefix="kbtest",
+    )
+    created_names = []
+
+    class FakeStore:
+        def __init__(self, collection_name, **kwargs):
+            self.collection_name = collection_name
+            created_names.append(collection_name)
+
+        def add_documents(self, documents, ids):
+            return ids
+
+        def similarity_search_with_score(self, query, k):
+            return []
+
+        def delete_collection(self):
+            return None
+
+    monkeypatch.setattr(vector_store, "get_settings", lambda: settings)
+    monkeypatch.setattr(vector_store, "get_embeddings", lambda: object())
+    monkeypatch.setattr(vector_store, "Chroma", FakeStore)
+    chunk = Document(
+        page_content="测试片段",
+        metadata={"knowledge_base_id": "kb_one", "chunk_id": "chunk_one"},
+    )
+
+    vector_store.get_vector_store("kb_one")
+    vector_store.add_documents([chunk], knowledge_base_id="kb_one")
+    vector_store.similarity_search("测试", knowledge_base_id="kb_one")
+    vector_store.reset_vector_store("kb_one")
+
+    assert created_names == [vector_store._collection_name("kb_one", settings)] * 4
 
 
 def test_catalog_sync_is_idempotent_and_preserves_graph(tmp_path):

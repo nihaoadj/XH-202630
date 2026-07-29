@@ -1,70 +1,107 @@
 # 部署说明
 
-> **当前项目只是框架阶段，不支持完整业务运行或生产部署。**  
+> 当前项目仍处于 P0 开发阶段；production 模式采用 fail-fast，不应把 degraded 演示产物当作正式生成结果。
 
+## 1. 环境要求
 
-## 环境要求
-
-- Python 3.11
+- Python 3.11（使用项目根目录唯一 `.venv/`）
 - Node.js 18+
-- 国产大模型 API Key（通义千问 / 文心一言 / DeepSeek / 智谱等）
+- OpenAI-compatible LLM API Key
+- 预先准备的 Embedding 模型缓存和 Chroma collection
 
-## 后端部署
+`.venv/`、`backend/.env`、SQLite、Chroma 索引、日志和生成资源不得提交。
 
-虚拟环境只在项目根目录 `.venv/` 本地创建，用于安装和隔离依赖；`.venv/` 不属于项目源码，已在 `.gitignore` 中排除，禁止提交到仓库。
+## 2. Windows PowerShell
 
-创建或重建：
-
-```powershell
-cd D:\CODE\XH-202630\version1
-conda create -p .\.venv python=3.11 pip -y
-.\.venv\python.exe -m pip install -r backend\requirements.txt
-```
-
-复制环境变量模板：
+从仓库根目录执行，不依赖机器上的绝对项目路径：
 
 ```powershell
-cd backend
-Copy-Item .env.example .env
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+Copy-Item backend\.env.example backend\.env
 ```
 
-编辑 `backend/.env`，至少填写：
+编辑 `backend/.env`。推荐开发配置：
 
 ```env
-LLM_API_KEY=your_api_key_here
-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_MODEL=qwen-max
-DB_TYPE=memory
+APP_MODE=development
+ALLOW_DEGRADED_GENERATION=false
+DB_TYPE=sqlite
+DATABASE_URL=sqlite:///./data/domain_knowledge.db
+DEBUG=false
+SQL_ECHO=false
+CHROMA_COLLECTION_PREFIX=kb
+```
+
+填入真实 `LLM_API_KEY` 后执行只读环境检查：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\check_environment.py
+$LASTEXITCODE
+```
+
+退出码：0=ready、2=degraded、1=not-ready/配置非法。脚本不调用计费 LLM、不下载模型、不创建 collection。
+
+初始化默认知识库和示例数据：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\ingest_knowledge.py
+.\.venv\Scripts\python.exe scripts\init_db.py
 ```
 
 启动后端：
 
 ```powershell
-cd D:\CODE\XH-202630\version1\backend
-..\.venv\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+Set-Location backend
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-访问：
+## 3. Linux/macOS
 
-```text
-http://localhost:8000/
-http://localhost:8000/docs
+```bash
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements.txt
+cp backend/.env.example backend/.env
+.venv/bin/python scripts/check_environment.py
+.venv/bin/python scripts/ingest_knowledge.py
+.venv/bin/python scripts/init_db.py
+cd backend
+../.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-## 知识库与示例数据
+## 4. 多 KB collection 与兼容期
+
+- 每个 KB 的 Chroma collection 由统一 `_collection_name(kb_id)` 生成：`<prefix>_<kb_id_hash>`。
+- 创建、写入、查询、删除和 health 使用同一个 resolver，不再共享唯一固定集合名。
+- 首选 `CHROMA_COLLECTION_PREFIX=kb`。
+- 兼容期保留旧 `CHROMA_COLLECTION_NAME`；若未显式设置新变量，它按“前缀”解释，不再表示固定 collection。
+- 更换前缀会改变目标 collection 名，应重新对每个 KB 执行入库；不要直接复制/重命名 Chroma 内部文件。
+
+公共 `GET /health` 和 `GET /health/ready` 只检查默认 KB 和核心依赖：默认 KB 异常可按模式产生 degraded/503，非默认 KB 异常不会影响公共 readiness。
+
+全 KB 详情接口默认关闭。需要时设置随机高强度 `ADMIN_HEALTH_TOKEN`，再使用：
 
 ```powershell
-cd D:\CODE\XH-202630\version1
-.\.venv\python.exe scripts\ingest_knowledge.py
-.\.venv\python.exe scripts\init_db.py
+$headers = @{ "X-Admin-Token" = "<ADMIN_HEALTH_TOKEN>" }
+Invoke-RestMethod http://127.0.0.1:8000/api/admin/knowledge-bases/health -Headers $headers
 ```
 
-注意：知识库入库会涉及 Embedding 和向量库，首次运行可能需要下载模型。
+未配置 token 返回 404，错误 token 返回 401；部分非默认 KB 异常返回 HTTP 200 + `status=degraded`。响应不包含 token、绝对路径、Embedding 内容或完整异常。
 
-## 前端部署
+## 5. 运行模式
+
+| 模式 | degraded | memory | not-ready 行为 |
+|---|---|---|---|
+| development | 默认 false，可显式 true | 允许但标 ephemeral | 应用可启动，生成 503 |
+| demo | 仅显式 true | 允许但标 ephemeral | 有保底产物时 HTTP 200 + degraded |
+| production | 禁止 | 禁止 | 核心依赖/默认 KB 不可用时启动失败 |
+
+`DEBUG=false` 和 `SQL_ECHO=false` 是安全默认；即使临时开启 SQL echo，SQLAlchemy 仍使用 `hide_parameters=True`。
+
+## 6. 前端
 
 ```powershell
-cd frontend
+Set-Location frontend
 npm install
 npm run dev
 ```
@@ -75,20 +112,15 @@ npm run dev
 npm run build
 ```
 
-## Docker 部署（后续）
-
-当前不建议作为正式部署方式。后续完整业务闭环完成后再验证：
+## 7. 验收
 
 ```powershell
-docker build -t domain-knowledge-agent .
-docker run -p 8000:8000 --env-file ./backend/.env domain-knowledge-agent
+Set-Location <仓库根目录>
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m pytest backend\tests -q
+Invoke-WebRequest http://127.0.0.1:8000/health -UseBasicParsing
+git diff --check
+git status --short --branch
 ```
 
-## 测试
-
-```powershell
-cd D:\CODE\XH-202630\version1
-.\.venv\python.exe -m compileall backend\app backend\tests
-.\.venv\python.exe -m pytest backend\tests -q
-.\.venv\python.exe -m pip check
-```
+验收不能只检查 HTTP 200：还要确认 `status/error_codes`、默认 KB collection/count、degraded 标记、管理员接口鉴权，以及日志中没有 Key、完整画像、SQL 参数和原始上游异常。

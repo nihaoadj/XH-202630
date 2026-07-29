@@ -3,7 +3,17 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
+from app.core.errors import ErrorCode, require_degraded_generation
 from app.core.llm import get_llm
+from app.models.agent_contracts import (
+    NodeResult,
+    PlannerInput,
+    PlannerOutput,
+    build_trace_item,
+    make_error_info,
+    start_step,
+)
+from app.models.workflow import StepStatus
 
 
 PLANNER_PROMPT = """你是一名学习路径规划 Agent。请根据学习者画像、学情诊断结果、学习主题和已检索到的知识库证据，规划个性化学习路径。
@@ -64,11 +74,13 @@ def _fallback_plan(state: AgentState) -> dict:
     }
 
 
-def plan_node(state: AgentState) -> AgentState:
+def plan_node(state: AgentState) -> dict:
     """学习路径规划 Agent：输出路径和资源生成要求"""
-    learner = state["learner"]
-    diagnosis = state.get("diagnosis", {})
-    chunks = state.get("retrieved_chunks", [])
+    step_context = start_step(state)
+    node_input = PlannerInput.model_validate(state)
+    learner = node_input.learner
+    diagnosis = node_input.diagnosis
+    chunks = node_input.retrieved_chunks
 
     evidence_summary = [
         {
@@ -80,7 +92,12 @@ def plan_node(state: AgentState) -> AgentState:
     ]
 
     user_input = f"""
-学习主题：{state['topic']}
+学习主题：{node_input.topic}
+诊断结果 ID：{node_input.diagnostic_result_id or '无'}
+目标能力节点：{node_input.target_skill_nodes or ['未指定']}
+请求难度：{node_input.difficulty_preference or '未指定'}
+生成模式：{node_input.generation_mode}
+生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}
 学习者画像：
 - skill_level: {learner.skill_level}
 - theory_scores: {learner.theory_scores}
@@ -95,6 +112,7 @@ def plan_node(state: AgentState) -> AgentState:
 {json.dumps(evidence_summary, ensure_ascii=False)}
 """
 
+    fallback_code = None
     try:
         llm = get_llm()
         messages = [
@@ -103,21 +121,41 @@ def plan_node(state: AgentState) -> AgentState:
         ]
         response = llm.invoke(messages)
         plan = json.loads(response.content)
+        if not isinstance(plan, dict):
+            raise ValueError("planner output must be an object")
     except Exception:
+        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
         plan = _fallback_plan(state)
 
     path = plan.get("learning_path", [])
-    path_summary = " -> ".join([item.get("topic", "") for item in path[:4]]) or state["topic"]
-    trace_item = {
-        "agent_name": "planner",
-        "action": "学习路径规划",
-        "input_summary": f"诊断盲区：{diagnosis.get('weak_points', learner.weak_points)}；证据数：{len(chunks)}",
-        "output_summary": f"学习路径：{path_summary}",
-        "decision_reason": plan.get("decision_reason", "根据诊断盲区、知识库证据和学习目标规划资源生成顺序。"),
-        "evidence_refs": [item.get("source", "unknown") for item in chunks[:5]],
-    }
+    plan["target_skill_nodes"] = node_input.target_skill_nodes
+    plan["difficulty_preference"] = node_input.difficulty_preference
+    plan["generation_mode"] = node_input.generation_mode
+    plan["constraints"] = node_input.constraints
+    path_summary = " -> ".join([item.get("topic", "") for item in path[:4]]) or node_input.topic
+    status = StepStatus.DEGRADED if fallback_code else StepStatus.SUCCESS
+    error = make_error_info(fallback_code, source="planner") if fallback_code else None
+    NodeResult[PlannerOutput](
+        status=status,
+        output=PlannerOutput(learning_plan=plan),
+        error=error,
+    )
+    trace_item = build_trace_item(
+        state,
+        agent_name="planner",
+        action="学习路径规划",
+        status=status,
+        input_summary=f"目标节点：{node_input.target_skill_nodes}；诊断盲区：{diagnosis.get('weak_points', learner.weak_points)}；证据数：{len(chunks)}",
+        output_summary=f"学习路径：{path_summary}",
+        decision_reason=plan.get("decision_reason", "根据诊断盲区、知识库证据和学习目标规划资源生成顺序。"),
+        evidence_refs=[item.get("chunk_id") or item.get("source", "unknown") for item in chunks[:5]],
+        error=error,
+        step_context=step_context,
+    )
 
     return {
         "learning_plan": plan,
+        "current_node": "planner",
         "trace": [trace_item],
+        "errors": [error.model_dump(mode="json")] if error else [],
     }

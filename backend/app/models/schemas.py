@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StatusResponse(BaseModel):
@@ -176,13 +176,42 @@ class GenerateRequest(BaseModel):
     knowledge_base_id: Optional[str] = Field(default=None, description="当前知识库 ID")
     diagnostic_result_id: Optional[str] = Field(default=None, description="诊断结果 ID")
     target_skill_nodes: List[str] = Field(default_factory=list, description="目标能力节点")
-    resource_types: List[str] = Field(default_factory=lambda: ["讲义", "实操指南", "分阶测试题"])
+    resource_types: List[str] = Field(
+        default_factory=lambda: ["讲义", "实操指南", "分阶测试题"],
+        min_length=1,
+    )
     difficulty_preference: Optional[str] = Field(default=None, description="难度偏好")
-    generation_mode: Optional[str] = Field(default=None, description="生成模式")
+    generation_mode: Optional[Literal["draft", "standard", "strict"]] = Field(
+        default="standard",
+        description="生成模式：draft | standard | strict",
+    )
     include_review: bool = Field(default=True, description="是否进入审核")
     include_claim_check: bool = Field(default=False, description="是否进行 Claim 级审核")
-    max_iterations: int = Field(default=2, ge=0, description="最大重试次数")
+    max_iterations: int = Field(default=2, ge=0, le=3, description="最大业务返工次数")
     constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
+
+    @field_validator("topic")
+    @classmethod
+    def normalize_topic(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("topic cannot be blank")
+        return normalized
+
+    @field_validator("target_skill_nodes")
+    @classmethod
+    def deduplicate_target_nodes(cls, values: List[str]) -> List[str]:
+        normalized = [value.strip() for value in values if value and value.strip()]
+        return list(dict.fromkeys(normalized))
+
+    @field_validator("resource_types")
+    @classmethod
+    def normalize_resource_types(cls, values: List[str]) -> List[str]:
+        normalized = [value.strip() for value in values if value and value.strip()]
+        normalized = list(dict.fromkeys(normalized))
+        if not normalized:
+            raise ValueError("resource_types cannot be empty")
+        return normalized
 
 
 class LearningPlan(BaseModel):
@@ -278,20 +307,36 @@ class ReviewSummary(BaseModel):
 
 class AgentTrace(BaseModel):
     """Agent 执行轨迹"""
+    schema_version: Literal["1.0"] = "1.0"
     agent_name: str
+    node_name: Optional[str] = None
     action: str
     output_summary: str
     run_id: Optional[str] = None
     step_id: Optional[str] = None
-    status: Optional[str] = "success"
+    sequence: Optional[int] = Field(default=None, ge=1)
+    attempt: int = Field(default=1, ge=1)
+    status: Literal[
+        "running",
+        "success",
+        "degraded",
+        "retryable_error",
+        "failed",
+        "human_review",
+        "skipped",
+    ]
     input_summary: Optional[str] = None
     input_payload: Dict[str, Any] = Field(default_factory=dict)
     output_payload: Dict[str, Any] = Field(default_factory=dict)
     decision_reason: Optional[str] = None
     evidence_refs: List[str] = Field(default_factory=list)
+    resource_ids: List[str] = Field(default_factory=list)
+    review_ids: List[str] = Field(default_factory=list)
     review_summary: Dict[str, Any] = Field(default_factory=dict)
     retry_count: int = 0
+    error_code: Optional[str] = None
     error_message: Optional[str] = None
+    error: Optional[Dict[str, Any]] = None
     timestamp: Optional[str] = None
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
@@ -317,11 +362,16 @@ class GenerateReport(BaseModel):
 
 class GenerateResponse(BaseModel):
     """生成资源响应模型"""
+    schema_version: Literal["1.0"] = "1.0"
+    run_id: str
+    workflow_status: Literal["running", "completed", "degraded", "failed", "human_review"]
     learner_id: str
     topic: str
     resources: List[LearningResource]
     trace: List[AgentTrace]
     report: GenerateReport
+    execution_status: str = "success"
+    error_codes: List[str] = Field(default_factory=list)
 
 
 class ReportRadar(BaseModel):

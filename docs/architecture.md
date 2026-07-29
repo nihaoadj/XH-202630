@@ -3,7 +3,7 @@
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
 > 文档版本：2.0  
-> 文档更新时间：2026-07-26  
+> 文档更新时间：2026-07-28
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 1. 架构目标
@@ -108,6 +108,9 @@
 
 - Agent 负责协同推理和多步生成
 - 服务层负责把 Agent 与数据库、画像、资源记录串起来
+- `backend/app/models/workflow.py` 定义版本化 `WorkflowState`、状态枚举和脱敏 `ErrorInfo`
+- `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 构造
+- `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
 
 ## 4. 当前主流程调用链
 
@@ -126,16 +129,52 @@ frontend
 
 ```text
 frontend
--> POST /api/generate/
--> generation_service
--> agents/workflow.py
--> generated_resources / agent_runs / agent_steps / resource_reviews 落库
-
-frontend
--> POST /api/feedback/
--> feedback_service
--> learner_profiles / feedback_records 更新
+  ↓ HTTP
+backend/app/api
+  ↓ 调用服务
+backend/app/services
+  ├─ learner_service: 画像创建、查询、更新
+  ├─ generation_service: 先执行 readiness gate，再调用多 Agent 生成闭环并保存资源
+  ├─ feedback_service: 调用反馈决策 Agent，保存反馈记录并更新画像
+  └─ report_service: 聚合画像、资源、反馈生成报告
+  ↓
+backend/app/agents
+  ├─ diagnosis: 学情诊断 Agent
+  ├─ retriever: 知识库检索 Agent
+  ├─ planner: 学习路径规划 Agent
+  ├─ generator: 个性化资源生成 Agent
+  ├─ reviewer: 审核纠偏 Agent
+  ├─ feedback: 反馈决策 Agent
+  └─ workflow: 审核开关、Claim 预留、返工额度与终态决策
+  ↓
+backend/app/core + backend/app/db
+  ├─ RuntimeHealth / failure policy / LLM / Embedding / ChromaDB / 知识库 / 文件存储
+  └─ Repository / ORM / SQLite or Memory
 ```
+
+生成请求进入工作流前，由 `generation_service.build_workflow_state()` 完成唯一映射并生成 `run_id`。运行中遵守以下控制流：
+
+```text
+diagnose -> retrieve -> plan -> generate
+                                  ├─ include_review=false -> finalize_draft
+                                  └─ include_review=true  -> review
+                                                               ├─ approve -> finalize
+                                                               ├─ revise 且有额度 -> prepare_revision -> generate
+                                                               └─ reject/额度耗尽 -> finalize
+
+任一终结分支在 include_claim_check=true 时先进入 claim_check 预留节点。
+P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim 审核。
+```
+
+`max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
+
+### 多 KB collection 与健康检查边界
+
+- 每个 `knowledge_base_id` 通过 `backend/app/core/vector_store.py:_collection_name()` 映射到独立 Chroma collection。
+- collection 的创建、写入、查询、删除和 health 均复用该 resolver；`CHROMA_COLLECTION_NAME` 兼容期只作为前缀，不再表示唯一固定集合。
+- 公共 `/health` 与 `/health/ready` 只判断默认 KB 和 Python、storage、LLM、Embedding、Chroma 目录、资源目录等核心依赖。
+- 管理员 `/api/admin/knowledge-bases/health` 在显式 token 保护下返回所有 KB 的脱敏详情。
+- 默认 KB 正常但部分可选 KB 异常时，管理员汇总为 degraded；公共服务不因此返回 503。默认 KB 或 Chroma 核心不可用时才按运行模式进入 degraded/not-ready。
 
 ## 5. 当前接口闭环
 
@@ -157,6 +196,8 @@ GET /api/knowledge/domains
 - `GET /api/knowledge/directions`
 - `GET /api/knowledge/info`
 - `GET /api/skills/nodes`
+- `status`（success/degraded/failed；fallback 不得标记 success）
+- `error_code`（稳定脱敏码，不保存原始上游异常）
 - `GET /api/diagnosis/questions`
 - `GET /api/resources/file/{resource_id}`
 - `GET /api/reviews/{resource_id}`

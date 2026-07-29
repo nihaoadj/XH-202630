@@ -12,8 +12,8 @@ class MemoryAuditRepository(BaseAuditRepository):
         self.runs: dict[str, dict[str, Any]] = {}
         self.reviews: dict[str, dict[str, Any]] = {}
 
-    def save_run(self, learner_id, knowledge_base_id, topic, trace: Iterable[dict[str, Any]], input_payload, output_payload, status):
-        run_id = str(uuid.uuid4())
+    def save_run(self, learner_id, knowledge_base_id, topic, trace: Iterable[dict[str, Any]], input_payload, output_payload, status, run_id=None):
+        run_id = run_id or str(uuid.uuid4())
         self.runs[run_id] = {
             "learner_id": learner_id,
             "knowledge_base_id": knowledge_base_id,
@@ -26,7 +26,7 @@ class MemoryAuditRepository(BaseAuditRepository):
         return run_id
 
     def save_review(self, resource_id: str, review: dict[str, Any], run_id: Optional[str]) -> str:
-        review_id = str(uuid.uuid4())
+        review_id = review.get("review_ids", {}).get(resource_id) or review.get("review_id") or str(uuid.uuid4())
         self.reviews[review_id] = {"resource_id": resource_id, "run_id": run_id, **review}
         return review_id
 
@@ -59,16 +59,20 @@ class MemoryAuditRepository(BaseAuditRepository):
                 )
                 for claim in review.get("claims", [])
             ]
+            status = review.get("status") or ("passed" if review.get("passed") else "needs_review")
             return ReviewSummary(
                 review_id=review_id,
                 resource_id=resource_id,
-                status=review.get("status") or ("passed" if review.get("passed") else "needs_review"),
+                status=status,
                 claim_total=review.get("claim_total", len(claims)),
                 claim_supported=review.get("claim_supported", sum(claim.supported for claim in claims)),
                 claim_unsupported=review.get("claim_unsupported", sum(not claim.supported for claim in claims)),
                 suspected_hallucinations=review.get("suspected_hallucinations", sum(not claim.supported for claim in claims)),
                 hallucination_rate=review.get("hallucination_rate", review.get("hallucination_score", 0.0)),
-                review_pass_rate=review.get("review_pass_rate", 1.0 if review.get("passed") else 0.0),
+                review_pass_rate=review.get(
+                    "review_pass_rate",
+                    1.0 if review.get("passed") or status in {"approve", "approved", "passed"} else 0.0,
+                ),
                 revision_count=review.get("revision_count", 0),
                 issues=review.get("issues", []),
                 claims=claims,

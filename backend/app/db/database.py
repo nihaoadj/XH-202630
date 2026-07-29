@@ -36,7 +36,8 @@ def get_engine():
     return create_engine(
         database_url,
         connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {},
-        echo=settings.debug,
+        echo=settings.sql_echo,
+        hide_parameters=True,
     )
 
 

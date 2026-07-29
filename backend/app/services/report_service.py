@@ -80,7 +80,11 @@ class ReportService:
             ],
             "review_summary": {
                 "resource_count": len(resources),
-                "passed_count": len([r for r in resources if r.review_status == "passed"]),
+                "passed_count": len([
+                    resource
+                    for resource in resources
+                    if resource.review_status in {"passed", "approved"}
+                ]),
                 "average_hallucination_rate": self._average_hallucination_rate(resources),
             },
             "feedback_trend": [
