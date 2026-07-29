@@ -17,6 +17,7 @@ class BaseAuditRepository(ABC):
         input_payload: dict[str, Any],
         output_payload: dict[str, Any],
         status: str,
+        run_id: Optional[str] = None,
     ) -> str:
         pass
 

@@ -3,7 +3,7 @@
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
 > 文档版本：2.0  
-> 文档更新时间：2026-07-26  
+> 文档更新时间：2026-07-28
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 1. 架构目标
@@ -108,6 +108,9 @@
 
 - Agent 负责协同推理和多步生成
 - 服务层负责把 Agent 与数据库、画像、资源记录串起来
+- `backend/app/models/workflow.py` 定义版本化 `WorkflowState`、状态枚举和脱敏 `ErrorInfo`
+- `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 构造
+- `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
 
 ## 4. 当前主流程调用链
 
@@ -142,12 +145,28 @@ backend/app/agents
   ├─ generator: 个性化资源生成 Agent
   ├─ reviewer: 审核纠偏 Agent
   ├─ feedback: 反馈决策 Agent
-  └─ workflow: 协同编排与重试决策
+  └─ workflow: 审核开关、Claim 预留、返工额度与终态决策
   ↓
 backend/app/core + backend/app/db
   ├─ RuntimeHealth / failure policy / LLM / Embedding / ChromaDB / 知识库 / 文件存储
   └─ Repository / ORM / SQLite or Memory
 ```
+
+生成请求进入工作流前，由 `generation_service.build_workflow_state()` 完成唯一映射并生成 `run_id`。运行中遵守以下控制流：
+
+```text
+diagnose -> retrieve -> plan -> generate
+                                  ├─ include_review=false -> finalize_draft
+                                  └─ include_review=true  -> review
+                                                               ├─ approve -> finalize
+                                                               ├─ revise 且有额度 -> prepare_revision -> generate
+                                                               └─ reject/额度耗尽 -> finalize
+
+任一终结分支在 include_claim_check=true 时先进入 claim_check 预留节点。
+P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim 审核。
+```
+
+`max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
 
 ### 多 KB collection 与健康检查边界
 

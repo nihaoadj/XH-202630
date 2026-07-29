@@ -157,31 +157,41 @@
 - `knowledge_base_id`
 - `diagnostic_result_id`
 - `target_skill_nodes`
-- `resource_types`
+- `resource_types`：至少 1 项，去重并保留请求顺序
 - `difficulty_preference`
-- `generation_mode`
-- `include_review`
-- `include_claim_check`
-- `max_iterations`
+- `generation_mode`：`draft | standard | strict`，默认 `standard`
+- `include_review`：默认 `true`；为 `false` 时跳过 Reviewer，资源状态只能是 `unreviewed_draft`
+- `include_claim_check`：默认 `false`；P0-06 接入前，请求该能力会明确返回 `unavailable` 并转人工复核
+- `max_iterations`：`0..3`，表示最大业务返工次数；初次生成不计入返工
 - `constraints`
+
+请求字段由 `GenerationService` 一次性映射到 `WorkflowState 1.0`。`knowledge_base_id` 以请求值优先，否则使用画像中的默认值；目标节点、难度、生成模式和约束会进入对应 Agent 输入契约，不得在 LangGraph channel 中静默丢失。
 
 ## 4.7 GenerateResponse / AgentTrace
 
 `GenerateResponse` 主字段：
 
+- `schema_version`：当前固定为字符串 `1.0`
+- `run_id`：请求进入工作流前生成，在 state、trace 和审计记录中保持一致
+- `workflow_status`：`running | completed | degraded | failed | human_review`
 - `learner_id`
 - `topic`
 - `resources`
 - `trace`
 - `report`
-- `execution_status`：`success` 或 `degraded`；任何 fallback 都不得显示为普通 success
+- `execution_status`：兼容字段；取值为 `success | degraded | failed | human_review | running`
 - `error_codes`：本次生成涉及的稳定、脱敏错误码
 
-`AgentTrace` 的 P0-00 失败语义：
+`AgentTrace` 的 P0-01 契约：
 
-- `status`：`success`、`degraded`、`failed`、`skipped` 或 `retrying`
+- `schema_version/run_id/step_id/sequence/attempt`：工作流版本及稳定运行、步骤和轮次标识
+- `status`：必填，无默认成功；取值为 `running | success | degraded | retryable_error | failed | human_review | skipped`
+- `resource_ids/review_ids/evidence_refs`：本步骤关联对象
 - `error_code`：可选稳定错误码，不得写入原始上游异常、API Key 或完整学习者画像
+- `error`：可选脱敏 `ErrorInfo`，包含 `code/category/message/retryable/source/attempt/occurred_at/safe_detail`
 - 发生显式允许的 fallback 时，受影响节点必须使用 `degraded`
+
+资源审核状态为：`draft | unreviewed_draft | pending_review | approved | rejected | human_review`。未执行 Reviewer 或 Claim 能力不可用时，资源不得标记为 `approved`。
 
 ## 4.8 FeedbackRequest
 
@@ -509,15 +519,25 @@
 
 主字段：
 
+- `schema_version`：`1.0`
+- `run_id`
+- `workflow_status`：`completed | degraded | failed | human_review`（同步接口完成时不会返回 `running`）
 - `learner_id`
 - `topic`
 - `resources`
 - `trace`
 - `report`
-- `execution_status`：`success` 或 `degraded`
+- `execution_status`：`success | degraded | failed | human_review`
 - `error_codes`：稳定、脱敏错误码列表
 
 禁用 degraded 或 production 中依赖失败时，接口返回 HTTP 503，且不会在失败前持久化 fallback 资源。显式允许 fallback 时，HTTP 响应仍必须通过 `execution_status=degraded` 和对应 trace 状态表明降级。
+
+工作流控制语义：
+
+- `include_review=false`：`generate -> finalize_draft`，审核决策为 `not_requested`。
+- Reviewer 返回 `revise` 且 `revision_count < max_iterations`：先增加返工计数，再重新进入 Generator；下一版资源使用新 `resource_id`，并通过 `parent_resource_id/version` 关联上一版。
+- 返工额度用尽、Reviewer 无法自动决策或严格模式中存在降级结果：`workflow_status=human_review`。
+- `include_claim_check=true`：P0-06 前返回 `claim_check_status=unavailable`、错误码 `CLAIM_CHECK_NOT_IMPLEMENTED`，不得把空 `claims` 当作通过。
 
 ### 5.15 `GET /api/resources/{learner_id}`
 

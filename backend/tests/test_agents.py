@@ -13,18 +13,42 @@ class _FakeLLM:
 
 
 def test_workflow_compiles_with_expected_baseline_channels():
-    """只验证当前图可编译及基线 channel；完整离线 invoke 属于 P0-01。"""
+    """工作流输入 schema 必须保留全部生成请求控制字段。"""
     workflow = build_workflow()
     schema = workflow.get_input_jsonschema()
 
-    assert {"learner", "topic", "knowledge_base_id", "trace", "iteration"} <= set(
-        schema["properties"]
-    )
+    assert {
+        "schema_version",
+        "run_id",
+        "learner_id",
+        "learner",
+        "topic",
+        "knowledge_base_id",
+        "diagnostic_result_id",
+        "target_skill_nodes",
+        "resource_types",
+        "difficulty_preference",
+        "generation_mode",
+        "include_review",
+        "include_claim_check",
+        "max_iterations",
+        "constraints",
+        "trace",
+        "errors",
+    } <= set(schema["properties"])
 
 
 def test_workflow_retry_guard_decides_after_max_iteration():
-    assert decide_next({"review_result": {"passed": False}, "iteration": 0}) == "generate"
-    assert decide_next({"review_result": {"passed": False}, "iteration": 2}) == "decide"
+    assert decide_next({
+        "review_result": {"decision": "revise"},
+        "revision_count": 0,
+        "max_iterations": 1,
+    }) == "generate"
+    assert decide_next({
+        "review_result": {"decision": "revise"},
+        "revision_count": 1,
+        "max_iterations": 1,
+    }) == "decide"
 
 
 def test_generate_node_increments_iteration(monkeypatch):
@@ -57,3 +81,4 @@ def test_generate_node_increments_iteration(monkeypatch):
     })
 
     assert result["iteration"] == 1
+    assert result["generation_attempt"] == 1
