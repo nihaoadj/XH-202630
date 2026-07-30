@@ -636,6 +636,40 @@ LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_C
 - `ablation`
 - `created_at`
 
+### 5.22 `GET /api/runs/{run_id}`
+
+查询一次生成 Run 的脱敏生命周期摘要。`run_id` 来自同步
+`POST /api/generate/` 响应；不存在时返回 `404 + WORKFLOW_RUN_NOT_FOUND`。
+
+公开字段包括：
+
+- `run_id/schema_version/status/workflow_status/execution_status`
+- `learner_id/knowledge_base_id/topic`
+- `current_node/current_step_sequence`
+- `generation_attempt/revision_count/retrieval_status`
+- `final_decision/last_error_code`
+- `started_at/updated_at/ended_at/replay_completeness`
+
+不会返回 request payload、owner/lease、row version、数据库内部主键或绝对路径。
+
+### 5.23 `GET /api/runs/{run_id}/timeline`
+
+按 `event_sequence` 升序返回 Run、Step、Event、Checkpoint 摘要和 Evidence
+snapshot。查询参数：
+
+- `after_sequence`：默认 `0`，只返回更大的事件序号。
+- `limit`：`1..500`；非法值返回 422。
+- `next_event_sequence`：非空时可作为下一页的 `after_sequence`。
+
+该接口只读关系数据库，不调用 LLM、Embedding、Chroma，也不会重新执行节点。
+历史 P0-04 前记录返回 `replay_completeness=legacy_partial`，不得解释为完整时间线。
+
+### 5.24 `GET /api/runs/{run_id}/evidence`
+
+返回检索时不可变 Evidence snapshot。响应保留 `query_hash`、excerpt、locator、
+score 和 config hash，但不返回原始 query。知识库当前内容或 Chunk active 状态变化
+不会改写历史 snapshot。
+
 ## 6. 当前数据库落库事实
 
 基于当前代码，以下数据会被持久化：
@@ -652,6 +686,16 @@ LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_C
   - `diagnostic_questions`
 - 诊断答题结果：
   - `diagnostic_answers`
+- Agent 工作流生命周期：
+  - `agent_runs`
+  - `agent_steps`
+  - `workflow_events`
+  - `workflow_checkpoints`
+  - `retrieval_evidence_snapshots`
+
+生成链路在首个 Agent/LLM 调用前创建 Run；节点副作用前创建 running Step；
+状态合并后保存 checkpoint；资源和审核完成后才把 Run 从 `finalizing` 写成终态。
+持久化失败始终 fail closed，不受 demo/degraded 生成策略放宽。
 
 这意味着：
 
@@ -713,3 +757,5 @@ LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_C
 - `422`：Pydantic/FastAPI 请求校验失败，`code=REQUEST_VALIDATION_ERROR`
 - `500`：未分类内部错误，`code=INTERNAL_ERROR`
 - `503`：生成依赖不可用或运行状态 not_ready
+- `503`：工作流记录不可用，`code=WORKFLOW_PERSISTENCE_UNAVAILABLE`
+- `409`：持久化 ID/序号/hash 冲突或回放校验失败

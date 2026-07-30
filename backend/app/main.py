@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -7,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import admin, diagnosis, evaluation, feedback, generate, knowledge, onboarding, profiles, report, resources, reviews, skills
+from app.api import admin, diagnosis, evaluation, feedback, generate, knowledge, onboarding, profiles, report, resources, reviews, runs, skills
 from app.config import get_settings
 from app.containers import init_container
 from app.core.errors import ApplicationError, ErrorCode
@@ -41,6 +42,16 @@ async def lifespan(app: FastAPI):
         logger.info("检测到 DB_TYPE=%s，自动初始化数据库表...", settings.db_type)
         try:
             init_database()
+            now = datetime.now(timezone.utc)
+            interrupted = container.audit_repository().mark_stale_interrupted(
+                before=now,
+                occurred_at=now,
+            )
+            if interrupted:
+                logger.warning(
+                    "Marked %s expired workflow runs as interrupted",
+                    interrupted,
+                )
             logger.info("数据库表初始化完成")
         except Exception:
             logger.error(
@@ -171,6 +182,7 @@ app.include_router(skills.router, prefix="/api/skills", tags=["能力图谱"])
 app.include_router(diagnosis.router, prefix="/api/diagnosis", tags=["能力诊断"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["知识库"])
 app.include_router(reviews.router, prefix="/api/reviews", tags=["审核证据"])
+app.include_router(runs.router, prefix="/api/runs", tags=["工作流运行记录"])
 app.include_router(evaluation.router, prefix="/api/evaluation", tags=["量化评测"])
 app.include_router(admin.router, prefix="/api/admin", tags=["管理员运行诊断"])
 

@@ -363,6 +363,7 @@ class AgentTrace(BaseModel):
     output_tokens: Optional[int] = Field(default=None, ge=0)
     total_tokens: Optional[int] = Field(default=None, ge=0)
     llm_duration_ms: Optional[int] = Field(default=None, ge=0)
+    llm_attempts: List[Dict[str, Any]] = Field(default_factory=list)
     retrieval_status: Optional[str] = None
     retrieval_config_hash: Optional[str] = None
     retrieval_query_hashes: List[str] = Field(default_factory=list)

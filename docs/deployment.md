@@ -134,3 +134,28 @@ git status --short --branch
 ```
 
 验收不能只检查 HTTP 200：还要确认 `status/error_codes`、默认 KB collection/count、degraded 标记、管理员接口鉴权，以及日志中没有 Key、完整画像、prompt、模型原文、SQL 参数和原始上游异常。可选 live smoke 必须显式设置 `RUN_LIVE_LLM_TESTS=1`，默认测试不得访问 Provider。
+
+## 8. P0-04 Run 持久化与迁移
+
+可配置项：
+
+```dotenv
+WORKFLOW_RUN_LEASE_SECONDS=180
+WORKFLOW_CHECKPOINT_MAX_BYTES=65536
+WORKFLOW_TIMELINE_DEFAULT_LIMIT=100
+WORKFLOW_TIMELINE_MAX_LIMIT=500
+```
+
+应用启动时先执行版本化 additive migration，再仅将 lease 已过期的
+`running/finalizing` Run 标记为 `interrupted`。该扫描不会自动 resume，也不会调用
+LLM。SQLite migration 已包含幂等回归；PostgreSQL 上线前仍需数据库负责人对 DDL、
+索引和锁行为执行受控验证。
+
+迁移或生命周期 Repository 不可用属于核心持久化故障；即使 demo 模式允许生成降级，
+也不得绕过 Run/Step/Event 写入继续调用模型。查询验证：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>
+Invoke-RestMethod "http://127.0.0.1:8000/api/runs/<run_id>/timeline?after_sequence=0&limit=100"
+Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/evidence
+```

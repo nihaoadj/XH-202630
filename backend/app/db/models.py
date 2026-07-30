@@ -50,6 +50,8 @@ class GeneratedResourceORM(Base):
     __tablename__ = "generated_resources"
 
     resource_id = Column(String(64), primary_key=True, index=True, comment="资源唯一标识")
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
+    generation_step_id = Column(String(128), ForeignKey("agent_steps.step_id"), nullable=True, index=True)
     learner_id = Column(String(64), nullable=False, index=True, comment="学习者ID")
     topic = Column(String(256), nullable=False, comment="学习主题")
     resource_type = Column(String(32), nullable=False, comment="资源类型：讲义/实操指南/分阶测试题/ppt/video/pdf/audio/image")
@@ -406,13 +408,32 @@ class AgentRunORM(Base):
     __tablename__ = "agent_runs"
 
     run_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
     learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=True, index=True)
     knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=True, index=True)
     topic = Column(String(512), nullable=True)
     status = Column(String(32), nullable=False, default="running")
+    request_hash = Column(String(64), nullable=True, index=True)
+    workflow_status = Column(String(32), nullable=True)
+    execution_status = Column(String(32), nullable=True)
+    current_node = Column(String(128), nullable=True)
+    current_step_id = Column(String(128), nullable=True)
+    current_step_sequence = Column(Integer, nullable=False, default=0)
+    last_event_sequence = Column(Integer, nullable=False, default=0)
+    generation_attempt = Column(Integer, nullable=False, default=1)
+    revision_count = Column(Integer, nullable=False, default=0)
+    retrieval_status = Column(String(32), nullable=True)
+    final_decision = Column(String(256), nullable=True)
+    last_error_code = Column(String(128), nullable=True)
+    replay_completeness = Column(String(32), nullable=False, default="complete")
+    owner_instance_id = Column(String(128), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    heartbeat_at = Column(DateTime(timezone=True), nullable=True)
+    row_version = Column(Integer, nullable=False, default=1)
     input_payload = Column(JSON, default=dict)
     output_payload = Column(JSON, default=dict)
     started_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     ended_at = Column(DateTime(timezone=True), nullable=True)
 
 
@@ -421,20 +442,118 @@ class AgentStepORM(Base):
     __table_args__ = (UniqueConstraint("run_id", "step_no", name="uq_agent_run_step"),)
 
     step_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
     run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
     step_no = Column(Integer, nullable=False)
     agent_name = Column(String(128), nullable=False)
+    node_name = Column(String(128), nullable=True)
     action = Column(String(256), nullable=False)
     status = Column(String(32), nullable=False, default="success")
     input_payload = Column(JSON, default=dict)
     output_payload = Column(JSON, default=dict)
+    input_summary = Column(Text, nullable=True)
+    output_summary = Column(Text, nullable=True)
     decision_reason = Column(Text, nullable=True)
     evidence_refs = Column(JSON, default=list)
+    resource_ids = Column(JSON, default=list)
+    review_ids = Column(JSON, default=list)
+    generation_attempt = Column(Integer, nullable=False, default=1)
     retry_count = Column(Integer, nullable=False, default=0)
+    error_code = Column(String(128), nullable=True)
     error_message = Column(Text, nullable=True)
+    llm_call_id = Column(String(128), nullable=True)
+    model_name = Column(String(128), nullable=True)
+    provider_request_id = Column(String(256), nullable=True)
+    structured_output_mode = Column(String(32), nullable=True)
+    finish_reason = Column(String(64), nullable=True)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    llm_duration_ms = Column(Integer, nullable=True)
+    llm_attempts = Column(JSON, default=list)
+    retrieval_status = Column(String(32), nullable=True)
+    retrieval_config_hash = Column(String(64), nullable=True)
+    retrieval_query_hashes = Column(JSON, default=list)
+    retrieval_candidate_count = Column(Integer, nullable=True)
+    retrieval_dropped_candidate_count = Column(Integer, nullable=True)
+    retrieval_partial_failure_count = Column(Integer, nullable=True)
+    payload_hash = Column(String(64), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     ended_at = Column(DateTime(timezone=True), nullable=True)
     duration_ms = Column(Integer, nullable=True)
+
+
+class WorkflowEventORM(Base):
+    __tablename__ = "workflow_events"
+    __table_args__ = (
+        UniqueConstraint("run_id", "event_sequence", name="uq_workflow_event_sequence"),
+    )
+
+    event_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
+    event_sequence = Column(Integer, nullable=False)
+    event_type = Column(String(64), nullable=False, index=True)
+    step_id = Column(String(128), ForeignKey("agent_steps.step_id"), nullable=True, index=True)
+    step_sequence = Column(Integer, nullable=True)
+    node_name = Column(String(128), nullable=True)
+    status = Column(String(32), nullable=True)
+    payload = Column(JSON, default=dict)
+    payload_hash = Column(String(64), nullable=False)
+    error_code = Column(String(128), nullable=True)
+    occurred_at = Column(DateTime(timezone=True), nullable=False)
+    persisted_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class WorkflowCheckpointORM(Base):
+    __tablename__ = "workflow_checkpoints"
+    __table_args__ = (
+        UniqueConstraint("run_id", "step_id", name="uq_workflow_checkpoint_step"),
+    )
+
+    checkpoint_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
+    event_sequence = Column(Integer, nullable=False)
+    step_id = Column(String(128), ForeignKey("agent_steps.step_id"), nullable=False, index=True)
+    step_sequence = Column(Integer, nullable=False)
+    node_name = Column(String(128), nullable=False)
+    state_projection = Column(JSON, nullable=False)
+    state_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class RetrievalEvidenceSnapshotORM(Base):
+    __tablename__ = "retrieval_evidence_snapshots"
+
+    evidence_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
+    retrieval_step_id = Column(String(128), ForeignKey("agent_steps.step_id"), nullable=False, index=True)
+    knowledge_base_id = Column(String(128), nullable=False, index=True)
+    document_id = Column(String(128), nullable=False, index=True)
+    document_version = Column(String(128), nullable=False)
+    chunk_id = Column(String(128), nullable=False, index=True)
+    query_hash = Column(String(64), nullable=False)
+    query_rank = Column(Integer, nullable=False)
+    rank = Column(Integer, nullable=False)
+    raw_score = Column(Float, nullable=False)
+    score_kind = Column(String(32), nullable=False)
+    normalized_score = Column(Float, nullable=False)
+    excerpt = Column(Text, nullable=False)
+    excerpt_hash = Column(String(64), nullable=False)
+    locator = Column(JSON, nullable=False)
+    config_hash = Column(String(64), nullable=False)
+    snapshot_hash = Column(String(64), nullable=False)
+    retrieved_at = Column(DateTime(timezone=True), nullable=False)
+    persisted_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SchemaMigrationORM(Base):
+    __tablename__ = "schema_migrations"
+
+    migration_id = Column(String(128), primary_key=True)
+    applied_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class ResourceReviewORM(Base):

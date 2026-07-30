@@ -22,6 +22,7 @@ from app.core.evidence_retriever import (
 )
 from app.config import get_settings
 from app.core.llm_gateway import LLMGateway, default_llm_gateway
+from app.db.audit.base import BaseAuditRepository
 from app.models.agent_contracts import build_trace_item, make_error_info, start_step
 from app.models.schemas import LearningResource
 from app.models.workflow import (
@@ -32,6 +33,7 @@ from app.models.workflow import (
     WorkflowStatus,
 )
 from app.models.knowledge import RetrievalStatus
+from app.services.recorded_node import recorded_node
 
 
 def _review_decision(state: AgentState) -> ReviewDecision:
@@ -432,26 +434,27 @@ def _bind_evidence_retriever(node, retriever: EvidenceRetriever):
 def build_workflow(
     llm_gateway: LLMGateway | None = None,
     evidence_retriever: EvidenceRetriever | None = None,
+    lifecycle_repository: BaseAuditRepository | None = None,
 ):
     """Build the synchronous workflow with the P0-03 evidence boundary."""
     gateway = llm_gateway or default_llm_gateway()
     retriever = evidence_retriever or default_evidence_retriever()
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("diagnose", _bind_llm_gateway(diagnose_node, gateway))
-    workflow.add_node("retrieve", _bind_evidence_retriever(retrieve_node, retriever))
-    workflow.add_node("evidence_gate", evidence_gate_node)
-    workflow.add_node("plan", _bind_llm_gateway(plan_node, gateway))
-    workflow.add_node("generate", _bind_llm_gateway(generate_node, gateway))
-    workflow.add_node("review", _bind_llm_gateway(review_node, gateway))
-    workflow.add_node("prepare_revision", prepare_revision_node)
-    workflow.add_node("finalize_draft", finalize_draft_node)
-    workflow.add_node("claim_check", claim_check_node)
-    workflow.add_node("finalize", decide_node)
-    workflow.add_node(
-        "finalize_evidence_insufficient",
-        finalize_evidence_insufficient_node,
-    )
+    def add_recorded(name: str, node) -> None:
+        workflow.add_node(name, recorded_node(name, node, lifecycle_repository))
+
+    add_recorded("diagnose", _bind_llm_gateway(diagnose_node, gateway))
+    add_recorded("retrieve", _bind_evidence_retriever(retrieve_node, retriever))
+    add_recorded("evidence_gate", evidence_gate_node)
+    add_recorded("plan", _bind_llm_gateway(plan_node, gateway))
+    add_recorded("generate", _bind_llm_gateway(generate_node, gateway))
+    add_recorded("review", _bind_llm_gateway(review_node, gateway))
+    add_recorded("prepare_revision", prepare_revision_node)
+    add_recorded("finalize_draft", finalize_draft_node)
+    add_recorded("claim_check", claim_check_node)
+    add_recorded("finalize", decide_node)
+    add_recorded("finalize_evidence_insufficient", finalize_evidence_insufficient_node)
 
     workflow.set_entry_point("diagnose")
     workflow.add_edge("diagnose", "retrieve")

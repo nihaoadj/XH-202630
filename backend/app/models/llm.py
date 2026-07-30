@@ -96,4 +96,17 @@ class LLMCallResult(BaseModel, Generic[T]):
             "total_tokens": self.usage.total_tokens,
             "llm_duration_ms": self.latency_ms,
             "retry_count": self.retry_count,
+            "llm_attempts": [
+                {
+                    "attempt": item.attempt,
+                    "status": item.status,
+                    "error_code": item.error_code,
+                    "latency_ms": item.latency_ms,
+                    "structured_output_mode": item.structured_output_mode.value,
+                    "input_tokens": item.usage.input_tokens,
+                    "output_tokens": item.usage.output_tokens,
+                    "total_tokens": item.usage.total_tokens,
+                }
+                for item in self.attempts
+            ],
         }

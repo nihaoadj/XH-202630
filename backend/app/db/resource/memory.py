@@ -11,12 +11,26 @@ class MemoryResourceRepository(BaseResourceRepository):
     def __init__(self):
         self._store: Dict[str, LearningResource] = {}
         self._learner_index: Dict[str, List[str]] = {}
+        self.associations: Dict[str, Dict[str, str | None]] = {}
 
     def get(self, resource_id: str) -> Optional[LearningResource]:
         return self._store.get(resource_id)
 
-    def save(self, resource: LearningResource, learner_id: str, topic: str) -> None:
+    def save(
+        self,
+        resource: LearningResource,
+        learner_id: str,
+        topic: str,
+        *,
+        run_id: str | None = None,
+        generation_step_id: str | None = None,
+    ) -> None:
         self._store[resource.resource_id] = resource
+        if run_id is not None or generation_step_id is not None:
+            self.associations[resource.resource_id] = {
+                "run_id": run_id,
+                "generation_step_id": generation_step_id,
+            }
         if learner_id not in self._learner_index:
             self._learner_index[learner_id] = []
         if resource.resource_id not in self._learner_index[learner_id]:
@@ -29,6 +43,7 @@ class MemoryResourceRepository(BaseResourceRepository):
     def delete(self, resource_id: str) -> bool:
         if resource_id in self._store:
             resource = self._store.pop(resource_id)
+            self.associations.pop(resource_id, None)
             learner_ids = list(self._learner_index.keys())
             for learner_id in learner_ids:
                 if resource_id in self._learner_index[learner_id]:

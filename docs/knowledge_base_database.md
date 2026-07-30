@@ -187,6 +187,9 @@ Chunk 为 active，才能进入 Planner/Generator。`SourceRef.score` 在兼容�
 | `feedback_records` | 学习反馈 |
 | `agent_runs` | Agent 运行主记录 |
 | `agent_steps` | Agent 步骤记录 |
+| `workflow_events` | Run 内严格递增的 append-only 生命周期事件 |
+| `workflow_checkpoints` | 节点合并后的脱敏状态投影和 hash |
+| `retrieval_evidence_snapshots` | 检索时不可变 Evidence 快照，不含原始 query |
 | `resource_reviews` | 资源审核摘要 |
 | `resource_claims` | Claim 与证据记录 |
 
@@ -273,6 +276,18 @@ Chunk 为 active，才能进入 Planner/Generator。`SourceRef.score` 在兼容�
 - `feedback_records`
 - `agent_runs`
 - `agent_steps`
+- `workflow_events`
+- `workflow_checkpoints`
+- `retrieval_evidence_snapshots`
+
+P0-04 起，`agent_runs` 在工作流开始前创建，`agent_steps` 在节点副作用前创建。
+`generated_resources` 通过可空 `run_id/generation_step_id` 关联生成来源；旧资源保持
+`null` 兼容。历史 Run 不补造 Event、Checkpoint 或 Evidence，查询时标记
+`legacy_partial`。
+
+数据库启动会执行 `schema_migrations` 中登记的 additive migration。P0-04 migration
+可重复运行，不删除或重建旧 Run/Step；`Base.metadata.create_all()` 只负责建新表，不能
+替代旧表加列迁移。
 - `learner_profiles`
 
 ## 5. 问卷与诊断的边界

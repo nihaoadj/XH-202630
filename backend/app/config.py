@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     retrieval_min_evidence: int = Field(default=1, ge=1, le=20)
     retrieval_min_normalized_score: float = Field(default=0.35, ge=0, le=1)
     evidence_max_excerpt_chars: int = Field(default=1200, ge=100, le=10000)
+    workflow_run_lease_seconds: int = Field(default=180, ge=30, le=3600)
+    workflow_checkpoint_max_bytes: int = Field(default=65536, ge=4096, le=1048576)
+    workflow_timeline_default_limit: int = Field(default=100, ge=1, le=500)
+    workflow_timeline_max_limit: int = Field(default=500, ge=1, le=1000)
     vector_distance_metric: str = "cosine"
     db_type: str = "sqlite"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"

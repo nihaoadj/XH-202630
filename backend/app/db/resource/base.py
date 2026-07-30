@@ -14,7 +14,15 @@ class BaseResourceRepository(ABC):
         pass
 
     @abstractmethod
-    def save(self, resource: LearningResource, learner_id: str, topic: str) -> None:
+    def save(
+        self,
+        resource: LearningResource,
+        learner_id: str,
+        topic: str,
+        *,
+        run_id: str | None = None,
+        generation_step_id: str | None = None,
+    ) -> None:
         """保存或更新生成资源"""
         pass
 

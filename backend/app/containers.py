@@ -31,6 +31,7 @@ from app.services.review_service import ReviewService
 from app.services.evaluation_service import EvaluationService
 from app.services.onboarding_service import OnboardingService
 from app.services.ingestion_service import ChromaKnowledgeVectorIndex, IngestionService
+from app.services.run_query_service import RunQueryService
 from app.models.llm import LLMCallOptions
 
 
@@ -145,6 +146,7 @@ class Container(containers.DeclarativeContainer):
         build_workflow,
         llm_gateway=llm_gateway,
         evidence_retriever=evidence_retriever,
+        lifecycle_repository=audit_repository,
     )
     
     # ==================== Service层（单例）====================
@@ -198,6 +200,11 @@ class Container(containers.DeclarativeContainer):
     review_service = providers.Singleton(
         ReviewService,
         audit_repo=audit_repository,
+    )
+
+    run_query_service = providers.Singleton(
+        RunQueryService,
+        repository=audit_repository,
     )
 
     evaluation_service = providers.Singleton(

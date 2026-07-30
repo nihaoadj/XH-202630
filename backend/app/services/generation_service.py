@@ -1,4 +1,6 @@
 import uuid
+import os
+import socket
 from datetime import datetime, timedelta, timezone
 from typing import List
 
@@ -8,8 +10,15 @@ from app.core.health import ensure_generation_ready
 from app.config import get_settings
 from app.db.resource.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
+from app.db.audit.memory import MemoryAuditRepository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.models.schemas import GenerateRequest, GenerateResponse, LearnerProfile, LearningResource
+from app.models.persistence import (
+    CreateRunCommand,
+    RunStatus,
+    WorkflowEventType,
+    canonical_hash,
+)
 from app.models.workflow import (
     ClaimCheckStatus,
     ReviewDecision,
@@ -18,6 +27,7 @@ from app.models.workflow import (
     WorkflowStateSnapshot,
     WorkflowStatus,
 )
+from app.services.durable_workflow_runner import DurableWorkflowRunner
 
 
 def build_workflow_state(
@@ -119,6 +129,10 @@ def _persist_resources(
     learner_id: str,
     topic: str,
     resource_repo: BaseResourceRepository,
+    *,
+    run_id: str,
+    generation_steps: dict[str, str],
+    audit_repo: BaseAuditRepository,
 ) -> List[LearningResource]:
     """将生成的资源持久化到文件系统与数据库"""
     persisted = []
@@ -137,9 +151,88 @@ def _persist_resources(
             resource.file_size = file_size
             resource.mime_type = mime_type
 
-        resource_repo.save(resource, learner_id, topic)
+        generation_step_id = generation_steps.get(resource.resource_id)
+        resource_repo.save(
+            resource,
+            learner_id,
+            topic,
+            run_id=run_id,
+            generation_step_id=generation_step_id,
+        )
+        audit_repo.append_event(
+            run_id,
+            WorkflowEventType.RESOURCE_PERSISTED,
+            payload={"resource_ids": [resource.resource_id]},
+            occurred_at=datetime.now(timezone.utc),
+            step_id=generation_step_id,
+            status=resource.review_status,
+            event_id=_event_id(
+                run_id,
+                WorkflowEventType.RESOURCE_PERSISTED.value,
+                resource.resource_id,
+            ),
+        )
         persisted.append(resource)
     return persisted
+
+
+def _request_snapshot(req: GenerateRequest, state: WorkflowState) -> dict:
+    constraints = state.get("constraints", {})
+    allowed_constraint_keys = {
+        "must_include_citations",
+        "language",
+        "max_length",
+        "retrieval_top_k",
+    }
+    return {
+        "learner_id": req.learner_id,
+        "topic": req.topic,
+        "knowledge_base_id": state.get("knowledge_base_id"),
+        "diagnostic_result_id": req.diagnostic_result_id,
+        "target_skill_nodes": list(req.target_skill_nodes),
+        "resource_types": list(req.resource_types),
+        "difficulty_preference": req.difficulty_preference,
+        "generation_mode": req.generation_mode or "standard",
+        "include_review": req.include_review,
+        "include_claim_check": req.include_claim_check,
+        "max_iterations": req.max_iterations,
+        "constraints": {
+            key: constraints[key]
+            for key in allowed_constraint_keys
+            if key in constraints
+        },
+    }
+
+
+def _generation_step_map(trace: list[dict]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for item in trace:
+        if not isinstance(item, dict) or item.get("agent_name") != "generator":
+            continue
+        step_id = item.get("step_id")
+        if not step_id:
+            continue
+        for resource_id in item.get("resource_ids", []):
+            result[str(resource_id)] = str(step_id)
+    return result
+
+
+def _event_id(run_id: str, event_type: str, subject_id: str) -> str:
+    material = {
+        "run_id": run_id,
+        "event_type": event_type,
+        "subject_id": subject_id,
+    }
+    return f"evt_{canonical_hash(material)[:32]}"
+
+
+def _run_status(workflow_status: str) -> RunStatus:
+    return {
+        WorkflowStatus.COMPLETED.value: RunStatus.COMPLETED,
+        WorkflowStatus.DEGRADED.value: RunStatus.DEGRADED,
+        WorkflowStatus.HUMAN_REVIEW.value: RunStatus.HUMAN_REVIEW,
+        WorkflowStatus.FAILED.value: RunStatus.FAILED,
+    }[workflow_status]
 
 
 class GenerationService:
@@ -163,7 +256,7 @@ class GenerationService:
         """
         self.resource_repo = resource_repo
         self.workflow = workflow
-        self.audit_repo = audit_repo
+        self.audit_repo = audit_repo or MemoryAuditRepository()
         self.knowledge_catalog = knowledge_catalog
 
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
@@ -177,43 +270,55 @@ class GenerationService:
         )
         initial_state = build_workflow_state(learner, req)
         run_id = initial_state["run_id"]
-
-        result = self.workflow.invoke(initial_state)
-        trace = result.get("trace", [])
-        raw_resources = result.get("generated_resources", [])
-        persisted_resources = _persist_resources(
-            raw_resources,
-            req.learner_id,
-            req.topic,
-            self.resource_repo,
+        started_at = datetime.now(timezone.utc)
+        lease_expires_at = started_at + timedelta(
+            seconds=get_settings().workflow_run_lease_seconds
         )
-        review = result.get("review_result", {})
-        if self.audit_repo:
-            self.audit_repo.save_run(
-                learner_id=req.learner_id,
-                knowledge_base_id=req.knowledge_base_id or learner.knowledge_base_id,
-                topic=req.topic,
-                trace=result.get("trace", []),
-                input_payload=req.model_dump(mode="json"),
-                output_payload={
-                    "schema_version": initial_state["schema_version"],
-                    "run_id": run_id,
-                    "workflow_status": result.get("workflow_status", WorkflowStatus.COMPLETED.value),
-                    "final_decision": result.get("final_decision", ""),
-                },
-                status=result.get("workflow_status", WorkflowStatus.COMPLETED.value),
-                run_id=run_id,
+        request_snapshot = _request_snapshot(req, initial_state)
+        try:
+            self.audit_repo.create_run(
+                CreateRunCommand(
+                    run_id=run_id,
+                    learner_id=req.learner_id,
+                    knowledge_base_id=initial_state.get("knowledge_base_id"),
+                    topic=req.topic,
+                    request_snapshot=request_snapshot,
+                    request_hash=canonical_hash(request_snapshot),
+                    owner_instance_id=f"{socket.gethostname()}:{os.getpid()}",
+                    lease_expires_at=lease_expires_at,
+                    occurred_at=started_at,
+                )
             )
-            if review.get("decision") != ReviewDecision.NOT_REQUESTED.value:
-                for resource in persisted_resources:
-                    review_id = self.audit_repo.save_review(resource.resource_id, review, run_id)
-                    resource.review_id = review_id
-                    resource.claim_count = review.get("claim_total", len(review.get("claims", [])))
-                    resource.hallucination_rate = review.get(
-                        "hallucination_rate", review.get("hallucination_score")
-                    )
-                    resource.difficulty_match = review.get("difficulty_match")
-                    self.resource_repo.save(resource, req.learner_id, req.topic)
+            self.audit_repo.start_run(
+                run_id,
+                occurred_at=started_at,
+                lease_expires_at=lease_expires_at,
+            )
+        except ApplicationError:
+            raise
+        except Exception as exc:
+            raise ApplicationError(ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE) from exc
+
+        try:
+            result = DurableWorkflowRunner(self.workflow, self.audit_repo).invoke(initial_state)
+        except Exception as exc:
+            error_code = (
+                exc.code.value if isinstance(exc, ApplicationError) else ErrorCode.INTERNAL_ERROR.value
+            )
+            try:
+                self.audit_repo.fail_run(
+                    run_id,
+                    error_code=error_code,
+                    occurred_at=datetime.now(timezone.utc),
+                )
+            except Exception as persistence_exc:
+                raise ApplicationError(ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE) from persistence_exc
+            if isinstance(exc, ApplicationError):
+                raise
+            raise ApplicationError(ErrorCode.INTERNAL_ERROR, status_code=500) from exc
+
+        trace = result.get("trace", [])
+        review = result.get("review_result", {})
 
         trace_error_codes = [
             item.get("error_code")
@@ -236,6 +341,77 @@ class GenerationService:
             WorkflowStatus.FAILED.value: "failed",
             WorkflowStatus.RUNNING.value: "running",
         }[workflow_status]
+
+        try:
+            self.audit_repo.mark_finalizing(
+                run_id,
+                workflow_status=workflow_status,
+                current_node=result.get("current_node"),
+                generation_attempt=int(result.get("generation_attempt", 1)),
+                revision_count=int(result.get("revision_count", 0)),
+                retrieval_status=result.get("retrieval_status"),
+                final_decision=result.get("final_decision"),
+                occurred_at=datetime.now(timezone.utc),
+            )
+            raw_resources = result.get("generated_resources", [])
+            persisted_resources = _persist_resources(
+                raw_resources,
+                req.learner_id,
+                req.topic,
+                self.resource_repo,
+                run_id=run_id,
+                generation_steps=_generation_step_map(trace),
+                audit_repo=self.audit_repo,
+            )
+            if review and review.get("decision") != ReviewDecision.NOT_REQUESTED.value:
+                for resource in persisted_resources:
+                    review_id = self.audit_repo.save_review(resource.resource_id, review, run_id)
+                    self.audit_repo.append_event(
+                        run_id,
+                        WorkflowEventType.REVIEW_PERSISTED,
+                        payload={
+                            "resource_ids": [resource.resource_id],
+                            "review_ids": [review_id],
+                        },
+                        occurred_at=datetime.now(timezone.utc),
+                        status=str(review.get("status") or review.get("decision") or "unknown"),
+                        event_id=_event_id(
+                            run_id,
+                            WorkflowEventType.REVIEW_PERSISTED.value,
+                            review_id,
+                        ),
+                    )
+                    resource.review_id = review_id
+                    resource.claim_count = review.get("claim_total", len(review.get("claims", [])))
+                    resource.hallucination_rate = review.get(
+                        "hallucination_rate", review.get("hallucination_score")
+                    )
+                    resource.difficulty_match = review.get("difficulty_match")
+                    self.resource_repo.save(
+                        resource,
+                        req.learner_id,
+                        req.topic,
+                        run_id=run_id,
+                        generation_step_id=_generation_step_map(trace).get(resource.resource_id),
+                    )
+            self.audit_repo.complete_run(
+                run_id,
+                status=_run_status(workflow_status),
+                workflow_status=workflow_status,
+                execution_status=execution_status,
+                final_decision=result.get("final_decision"),
+                occurred_at=datetime.now(timezone.utc),
+            )
+        except Exception as exc:
+            try:
+                self.audit_repo.fail_run(
+                    run_id,
+                    error_code=ErrorCode.WORKFLOW_FINALIZATION_FAILED.value,
+                    occurred_at=datetime.now(timezone.utc),
+                )
+            except Exception as persistence_exc:
+                raise ApplicationError(ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE) from persistence_exc
+            raise ApplicationError(ErrorCode.WORKFLOW_FINALIZATION_FAILED) from exc
 
         return GenerateResponse(
             schema_version=initial_state["schema_version"],

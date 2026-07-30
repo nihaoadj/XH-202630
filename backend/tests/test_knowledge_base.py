@@ -270,6 +270,7 @@ def test_audit_repository_persists_agent_steps_and_claim_evidence(tmp_path):
         db.commit()
 
     repository = SQLAuditRepository(factory)
+    preallocated_run_id = "audit_run"
     run_id = repository.save_run(
         learner_id="audit_learner",
         knowledge_base_id=None,
@@ -278,7 +279,9 @@ def test_audit_repository_persists_agent_steps_and_claim_evidence(tmp_path):
         input_payload={"topic": "RAG"},
         output_payload={"final_decision": "通过"},
         status="completed",
+        run_id=preallocated_run_id,
     )
+    assert run_id == preallocated_run_id
     review_id = repository.save_review(
         "audit_resource",
         {

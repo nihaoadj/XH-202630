@@ -36,10 +36,19 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
     )
 
 
-def _pydantic_to_orm(resource: LearningResource, learner_id: str, topic: str) -> GeneratedResourceORM:
+def _pydantic_to_orm(
+    resource: LearningResource,
+    learner_id: str,
+    topic: str,
+    *,
+    run_id: str | None = None,
+    generation_step_id: str | None = None,
+) -> GeneratedResourceORM:
     """将 Pydantic 模型转换为 ORM 对象"""
     return GeneratedResourceORM(
         resource_id=resource.resource_id,
+        run_id=run_id,
+        generation_step_id=generation_step_id,
         learner_id=learner_id,
         topic=topic,
         resource_type=resource.resource_type,
@@ -74,10 +83,22 @@ class SQLResourceRepository(BaseResourceRepository):
             orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource_id).first()
         return _orm_to_pydantic(orm) if orm else None
 
-    def save(self, resource: LearningResource, learner_id: str, topic: str) -> None:
+    def save(
+        self,
+        resource: LearningResource,
+        learner_id: str,
+        topic: str,
+        *,
+        run_id: str | None = None,
+        generation_step_id: str | None = None,
+    ) -> None:
         with self.session_factory() as db:
             orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource.resource_id).first()
             if orm:
+                if run_id is not None:
+                    orm.run_id = run_id
+                if generation_step_id is not None:
+                    orm.generation_step_id = generation_step_id
                 orm.learner_id = learner_id
                 orm.topic = topic
                 orm.resource_type = resource.resource_type
@@ -99,7 +120,13 @@ class SQLResourceRepository(BaseResourceRepository):
                 orm.parent_resource_id = resource.parent_resource_id
                 orm.exercise_items = [item.model_dump() for item in resource.exercise_items]
             else:
-                orm = _pydantic_to_orm(resource, learner_id, topic)
+                orm = _pydantic_to_orm(
+                    resource,
+                    learner_id,
+                    topic,
+                    run_id=run_id,
+                    generation_step_id=generation_step_id,
+                )
                 db.add(orm)
             db.commit()
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from contextvars import ContextVar, Token
 from datetime import datetime, timezone
 from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar
 
@@ -24,6 +25,22 @@ from app.models.workflow import (
 
 
 T = TypeVar("T")
+
+
+_RECORDED_STEP_CONTEXT: ContextVar[Optional[Dict[str, Any]]] = ContextVar(
+    "recorded_step_context",
+    default=None,
+)
+
+
+def bind_recorded_step_context(context: Dict[str, Any]) -> Token:
+    """Bind the identity preallocated by the durable node wrapper."""
+
+    return _RECORDED_STEP_CONTEXT.set(dict(context))
+
+
+def reset_recorded_step_context(token: Token) -> None:
+    _RECORDED_STEP_CONTEXT.reset(token)
 
 
 class NodeResult(BaseModel, Generic[T]):
@@ -250,6 +267,13 @@ def start_step(
 ) -> Dict[str, Any]:
     """Allocate step identity and start time before a node performs work."""
 
+    recorded = _RECORDED_STEP_CONTEXT.get()
+    if recorded is not None:
+        context = dict(recorded)
+        if attempt is not None:
+            context["attempt"] = attempt
+        return context
+
     return {
         "step_id": str(uuid.uuid4()),
         "sequence": len(state.get("trace", [])) + 1,
@@ -289,7 +313,7 @@ def build_trace_item(
         "step_id": context["step_id"],
         "sequence": context["sequence"],
         "agent_name": agent_name,
-        "node_name": agent_name,
+        "node_name": context.get("node_name", agent_name),
         "action": action,
         "attempt": context["attempt"],
         "status": normalized_status,

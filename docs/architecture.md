@@ -136,7 +136,7 @@ backend/app/api
   ↓ 调用服务
 backend/app/services
   ├─ learner_service: 画像创建、查询、更新
-  ├─ generation_service: 先执行 readiness gate，再调用多 Agent 生成闭环并保存资源
+  ├─ generation_service: readiness 后先创建 Run，再调用持久化多 Agent 闭环并 finalizing 资源
   ├─ feedback_service: 调用反馈决策 Agent，保存反馈记录并更新画像
   └─ report_service: 聚合画像、资源、反馈生成报告
   ↓
@@ -172,14 +172,40 @@ P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim �
 
 `max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
 
-### LLM 调用边界
+### 4.3 LLM 调用边界
 
 - Diagnosis、Planner、Generator、Reviewer 仅依赖注入的 `LLMGateway`；Gateway 的 transport 可在离线测试中替换。
 - Gateway 统一控制单次 timeout、总 attempts、指数退避、`Retry-After` 上限和工作流 deadline；Provider SDK 的 `max_retries=0`，避免双重重试。
 - Provider structured output 优先按配置执行；`auto` 遇到能力不支持时最多切换一次 text 模式，仍经同一个平衡 JSON parser 与严格 schema 校验。
 - parse/schema repair 与 transport retry 共用同一 attempts 预算，不增加业务 `revision_count`。
 - Generator 的 `source_refs` 只由 Retriever 结果在代码侧绑定；Reviewer 的最终 approve 阈值由代码侧执行。
-- trace 只保存调用 ID、模型名、token、耗时、重试数、结束原因和稳定错误码。P0-02 不新增数据库列；完整持久化留给 P0-04。
+- trace 只保存调用 ID、模型名、token、耗时、重试数、结束原因、脱敏 attempt summaries 和稳定错误码；P0-04 将这组白名单 telemetry 持久化到 Step。
+
+### 4.4 P0-04 持久化执行边界
+
+```text
+readiness
+-> create_run(created)
+-> start_run(running)
+-> RecordedNode.begin_step(running)
+-> Agent/Supervisor node side effect
+-> complete_step + Evidence snapshot + terminal Event
+-> LangGraph state merge
+-> WorkflowCheckpoint(state projection + SHA-256)
+-> mark_run_finalizing
+-> persist Resource/Review with run_id
+-> complete_run(completed/degraded/human_review/failed)
+```
+
+- `RecordedNode` 在组合根统一包装所有 LangGraph 节点，预分配的 Step context 也是
+  State trace、LLM call context 和数据库记录的唯一身份来源。
+- `DurableWorkflowRunner` 消费 `stream_mode=values`，只在 LangGraph 完成状态合并后保存
+  白名单 checkpoint；不 pickle Python 对象。
+- `workflow_events` 是 append-only 顺序账本，业务正文仍由 Resource/Review/Evidence
+  事实表负责。
+- 回放只读数据库，不是 resume；P0-04 不自动重新调用模型、不提供 SSE/取消接口。
+- `running/finalizing` Run 只有 lease 已过期时才会在安全启动扫描中标记
+  `interrupted`，活跃 lease 不处理。
 
 ### 多 KB collection 与健康检查边界
 
