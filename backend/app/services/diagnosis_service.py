@@ -1,4 +1,4 @@
-"""诊断判分、学习状态更新和持久化服务。"""
+"""诊断判分、学习状态更新与结果持久化。"""
 from __future__ import annotations
 
 import json
@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from app.db.diagnosis.base import BaseDiagnosisRepository
 from app.db.learner.base import BaseLearnerRepository
+from app.models.history_schemas import DiagnosticRunRecord
 from app.models.schemas import (
     DiagnosticAnswerRecord,
     DiagnosticResult,
@@ -19,7 +20,6 @@ from app.services.knowledge_service import KnowledgeService
 
 
 def _answers_match(expected: object, actual: object) -> bool:
-    """统一比较 JSON 值，避免列表、数字等答案类型的表示差异。"""
     return json.dumps(expected, ensure_ascii=False, sort_keys=True) == json.dumps(
         actual, ensure_ascii=False, sort_keys=True
     )
@@ -53,7 +53,7 @@ class DiagnosisService:
             raise ValueError("同一次诊断不能重复提交同一道题")
         missing = sorted({answer.question_id for answer in request.answers} - set(questions))
         if missing:
-            raise ValueError(f"包含不存在的诊断题：{', '.join(missing)}")
+            raise ValueError(f"包含不存在的诊断题: {', '.join(missing)}")
 
         records: list[DiagnosticAnswerRecord] = []
         by_node: dict[str, list[DiagnosticAnswerRecord]] = defaultdict(list)
@@ -88,8 +88,6 @@ class DiagnosisService:
         learner.theory_scores.update(
             {nodes[node_id].name: round(state.score * 100, 1) for node_id, state in states.items() if node_id in nodes}
         )
-        # 自适应诊断只覆盖用户已了解、值得进一步测量的节点。未出题的
-        # not_started 节点不能因为本次提交而从待补列表中消失。
         assessed_names = {nodes[node_id].name for node_id in states if node_id in nodes}
         preserved_weak_points = [point for point in learner.weak_points if point not in assessed_names]
         preserved_strong_points = [point for point in learner.strong_points if point not in assessed_names]
@@ -105,7 +103,12 @@ class DiagnosisService:
         learner.skill_level = "初级" if average < 0.6 else "中级" if average < 0.8 else "进阶"
         self.learner_repo.save(learner)
 
-        self.diagnosis_repo.save_submission(knowledge_base_id=knowledge_base_id, learner_id=learner.learner_id, answers=records, knowledge_states=states)
+        self.diagnosis_repo.save_submission(
+            knowledge_base_id=knowledge_base_id,
+            learner_id=learner.learner_id,
+            answers=records,
+            knowledge_states=states,
+        )
 
         weak_nodes = [node_id for node_id, state in states.items() if state.status == "weak"]
         recommended_path = [
@@ -113,7 +116,7 @@ class DiagnosisService:
             for index, node_id in enumerate(weak_nodes, start=1)
             if node_id in nodes
         ]
-        return DiagnosticResult(
+        result = DiagnosticResult(
             diagnostic_result_id=f"diag_{uuid.uuid4().hex[:16]}",
             learner_id=learner.learner_id,
             knowledge_base_id=knowledge_base_id,
@@ -124,3 +127,20 @@ class DiagnosisService:
             recommended_path=recommended_path,
             created_at=datetime.now(timezone.utc),
         )
+        self.diagnosis_repo.save_run(
+            DiagnosticRunRecord(
+                diagnostic_result_id=result.diagnostic_result_id,
+                learner_id=result.learner_id,
+                knowledge_base_id=result.knowledge_base_id,
+                ability_level=result.ability_level,
+                weak_points=result.weak_points,
+                strong_points=result.strong_points,
+                knowledge_states_snapshot={
+                    key: value.model_dump(mode="json") for key, value in result.knowledge_states.items()
+                },
+                recommended_path=[item.model_dump(mode="json") for item in result.recommended_path],
+                raw_result=result.model_dump(mode="json"),
+                created_at=result.created_at,
+            )
+        )
+        return result

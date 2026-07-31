@@ -3,8 +3,8 @@ import HomeView from '../views/HomeView.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomeView },
+  { path: '/user/profile', name: 'user-profile', component: () => import('../views/UserProfileView.vue') },
   { path: '/learning/new', name: 'onboarding', component: () => import('../views/OnboardingView.vue') },
-  { path: '/learning/diagnosis', name: 'diagnosis', component: () => import('../views/DiagnosisView.vue') },
   { path: '/learning/history', name: 'history', component: () => import('../views/HistoryView.vue') },
   { path: '/resources', name: 'resources', component: () => import('../views/ResourcesView.vue') },
   { path: '/generate', name: 'generate', component: () => import('../views/GenerateView.vue') },

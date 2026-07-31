@@ -5,7 +5,7 @@
         <div class="brand-mark">TP</div>
         <div>
           <div class="brand-title">Training Pilot</div>
-          <div class="brand-subtitle">多领域教学培训工作台</div>
+          <div class="brand-subtitle">学习方向与资源生成工作台</div>
         </div>
       </div>
 
@@ -23,14 +23,18 @@
       </nav>
 
       <div class="context-card">
-        <div class="context-title">当前学习上下文</div>
+        <div class="context-title">当前上下文</div>
+        <div class="context-item">
+          <span>用户</span>
+          <strong>{{ store.currentUserProfile?.display_name || store.currentUserId || '未设置' }}</strong>
+        </div>
         <div class="context-item">
           <span>学习方向</span>
           <strong>{{ store.currentLearningDirectionName || store.currentLearningDirectionId || '未选择' }}</strong>
         </div>
         <div class="context-item">
-          <span>学习者</span>
-          <strong>{{ store.currentLearnerId || '未设置' }}</strong>
+          <span>学习画像</span>
+          <strong>{{ store.currentLearnerId || '未生成' }}</strong>
         </div>
       </div>
     </aside>
@@ -59,28 +63,28 @@ const route = useRoute()
 const store = useAppStore()
 
 const navigation = [
-  { to: '/', label: '总览工作台', hint: '入口与当前进度' },
-  { to: '/learning/new', label: '新建学习方向', hint: '方向选择与问卷' },
-  { to: '/learning/diagnosis', label: '能力诊断', hint: '进入测评并查看诊断结果' },
-  { to: '/learning/history', label: '历史学习', hint: '回看画像与方向记录' },
-  { to: '/resources', label: '资源查看', hint: '浏览已生成教学资源' },
-  { to: '/generate', label: '资源生成', hint: '生成新的训练材料' },
+  { to: '/', label: '总览', hint: '查看当前进度与主入口' },
+  { to: '/user/profile', label: '用户资料', hint: '维护固定基础信息' },
+  { to: '/learning/new', label: '新建学习方向', hint: '5 步完成画像、诊断与生成' },
+  { to: '/learning/history', label: '学习历史', hint: '按时间线查看学习过程' },
+  { to: '/resources', label: '资源查看', hint: '浏览已生成资源' },
+  { to: '/generate', label: '资源生成', hint: '查看生成任务状态' },
   { to: '/report', label: '学习报告', hint: '查看诊断与进展' },
-  { to: '/feedback', label: '学习反馈', hint: '记录练习与迭代' },
+  { to: '/feedback', label: '学习反馈', hint: '记录练习结果' },
 ]
 
 const pageMeta = {
-  home: ['培训工作台', '围绕学习方向、历史进度、资源与报告组织完整培训流程。'],
-  onboarding: ['新建学习方向', '先选择领域与方向，再完成初始画像问卷。'],
-  diagnosis: ['能力诊断', '基于问卷结果进入真实掌握情况评估。'],
-  history: ['历史学习方向', '查看已有画像、既往方向与继续学习入口。'],
-  resources: ['资源查看', '按学习者与方向浏览已生成教学资源。'],
-  generate: ['资源生成', '围绕当前方向生成讲义、实操指南与训练材料。'],
-  report: ['学习报告', '查看知识盲区、能力曲线与近期资源效果。'],
-  feedback: ['学习反馈', '提交练习结果，推动画像与资源迭代。'],
+  home: ['工作台总览', '围绕用户资料、学习方向、诊断、资源与历史记录组织完整流程。'],
+  'user-profile': ['用户资料', '将学历、专业等稳定信息集中维护，供后续学习方向复用。'],
+  onboarding: ['新建学习方向', '完成领域、方向、问卷、诊断和资源选择 5 步流程。'],
+  history: ['学习历史', '按时间线查看问卷、诊断和资源生成过程。'],
+  resources: ['资源查看', '按学习画像与任务结果查看已生成资源。'],
+  generate: ['资源生成状态', '任务提交后在这里查看状态，并在完成后跳转资源页。'],
+  report: ['学习报告', '查看学习画像与能力变化。'],
+  feedback: ['学习反馈', '提交练习结果，推进后续资源迭代。'],
 }
 
-const pageTitle = computed(() => pageMeta[route.name]?.[0] || '培训工作台')
+const pageTitle = computed(() => pageMeta[route.name]?.[0] || 'Training Pilot')
 const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
 </script>
 

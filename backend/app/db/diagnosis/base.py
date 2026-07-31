@@ -1,7 +1,8 @@
-"""诊断记录仓库抽象。"""
+"""诊断仓储接口定义。"""
 from abc import ABC, abstractmethod
 from typing import Iterable
 
+from app.models.history_schemas import DiagnosticRunRecord
 from app.models.schemas import DiagnosticAnswerRecord, KnowledgeState
 
 
@@ -14,4 +15,12 @@ class BaseDiagnosisRepository(ABC):
         answers: Iterable[DiagnosticAnswerRecord],
         knowledge_states: dict[str, KnowledgeState],
     ) -> None:
-        """保存一次诊断答题，并更新每个能力节点的最新状态。"""
+        """保存一次诊断答题提交。"""
+
+    @abstractmethod
+    def save_run(self, run: DiagnosticRunRecord) -> None:
+        """保存一次诊断结果快照。"""
+
+    @abstractmethod
+    def list_runs_by_learner(self, learner_id: str) -> list[DiagnosticRunRecord]:
+        """返回指定学习者的诊断历史。"""

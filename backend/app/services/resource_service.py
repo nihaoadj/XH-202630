@@ -18,6 +18,10 @@ class ResourceService:
         return self.repo.get(resource_id)
 
     def list_by_learner_with_filter(
-        self, learner_id: str, resource_type: str | None = None, difficulty: str | None = None
+        self,
+        learner_id: str,
+        resource_type: str | None = None,
+        difficulty: str | None = None,
+        run_id: str | None = None,
     ) -> List[LearningResource]:
-        return self.repo.list_by_learner_with_filter(learner_id, resource_type, difficulty)
+        return self.repo.list_by_learner_with_filter(learner_id, resource_type, difficulty, run_id)

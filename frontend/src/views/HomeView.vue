@@ -2,10 +2,10 @@
   <div class="dashboard">
     <section class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">教学培训总览</span>
-        <h2>围绕学习方向、画像、诊断、资源与反馈组织完整训练流程</h2>
+        <span class="eyebrow">学习流程总览</span>
+        <h2>先维护用户资料，再用 5 步完成学习方向创建、诊断和资源生成</h2>
         <p>
-          这里是培训系统的主工作台。你可以从当前方向继续生成资源，也可以新建学习方向，或回到历史学习记录继续推进。
+          当前主流程已经调整为：用户资料 -> 选择领域 -> 选择方向 -> 填写问卷 -> 完成诊断 -> 查看诊断结果并选择资源 -> 进入生成状态页。
         </p>
       </div>
       <div class="hero-stats">
@@ -19,7 +19,7 @@
         </div>
         <div class="stat-card">
           <strong>{{ profiles.length }}</strong>
-          <span>历史画像</span>
+          <span>学习画像</span>
         </div>
       </div>
     </section>
@@ -28,32 +28,26 @@
       <article class="module-card current-card">
         <div class="module-header">
           <div>
-            <span class="module-kicker">当前学习方向</span>
-            <h3>{{ currentDirection?.name || store.currentLearningDirectionName || '尚未选择学习方向' }}</h3>
+            <span class="module-kicker">当前用户</span>
+            <h3>{{ store.currentUserProfile?.display_name || store.currentUserId || '尚未设置用户资料' }}</h3>
           </div>
-          <el-tag type="success">{{ store.currentLearnerId || '未设置学习者' }}</el-tag>
+          <el-tag type="success">{{ store.currentLearnerId || '暂无学习画像' }}</el-tag>
         </div>
         <p class="module-description">
-          {{ currentDirection?.description || '当前尚未建立可继续推进的学习方向。建议先新建学习方向并完成画像与诊断。' }}
+          {{ currentDirection?.description || '先创建用户资料，再进入新的学习方向流程。完成诊断后，系统会将你带到资源生成状态页。' }}
         </p>
         <div class="module-actions">
-          <el-button type="primary" @click="$router.push('/generate')" :disabled="!store.currentLearningDirectionId">
-            继续生成资源
-          </el-button>
-          <el-button @click="$router.push('/resources')" :disabled="!store.currentLearnerId">
-            查看资源
-          </el-button>
-          <el-button @click="$router.push('/report')" :disabled="!store.currentLearnerId">
-            查看报告
-          </el-button>
+          <el-button type="primary" @click="$router.push('/user/profile')">维护用户资料</el-button>
+          <el-button @click="$router.push('/learning/new')">新建学习方向</el-button>
+          <el-button @click="$router.push('/generate')" :disabled="!store.currentLearnerId">查看生成状态</el-button>
         </div>
       </article>
 
       <article class="module-card">
-        <span class="module-kicker">新建学习方向</span>
-        <h3>从领域选择开始建立新的学习训练链路</h3>
+        <span class="module-kicker">主流程入口</span>
+        <h3>新建学习方向并在第 5 步选择资源类型</h3>
         <p class="module-description">
-          先选择领域和学习方向，再通过问卷构建初始画像，随后跳转到诊断题页面完成真实能力测评。
+          问卷只保留方向相关动态信息，学历、专业等固定信息已经拆到用户资料中，不需要每次重复填写。
         </p>
         <div class="module-actions">
           <el-button type="primary" @click="$router.push('/learning/new')">开始新建</el-button>
@@ -61,10 +55,10 @@
       </article>
 
       <article class="module-card">
-        <span class="module-kicker">历史学习方向</span>
-        <h3>回看过去的画像与学习记录</h3>
+        <span class="module-kicker">学习历史</span>
+        <h3>按时间线回看问卷、诊断与资源生成过程</h3>
         <p class="module-description">
-          历史方向页面集中展示既有画像、当前能力层级、学习目标与方向上下文，适合续学与回顾。
+          历史页会聚合每个学习画像的关键事件，帮助你排查流程问题，也方便继续进入资源或生成状态页。
         </p>
         <div class="module-actions">
           <el-button type="primary" plain @click="$router.push('/learning/history')">查看历史</el-button>
@@ -73,95 +67,33 @@
 
       <article class="module-card">
         <span class="module-kicker">资源查看</span>
-        <h3>查看已经生成的教学资源与证据引用</h3>
+        <h3>查看已生成资源并按任务过滤结果</h3>
         <p class="module-description">
-          将讲义、实操指南、测试题和知识点覆盖放在同一处浏览，方便培训内容复盘与复用。
+          资源生成是异步过程，提交后无需原地等待。生成完成后，你可以从状态页跳转到资源页下载和查看结果。
         </p>
         <div class="module-actions">
-          <el-button type="primary" plain @click="$router.push('/resources')">进入资源库</el-button>
+          <el-button type="primary" plain @click="$router.push('/resources')">进入资源页</el-button>
         </div>
       </article>
     </section>
-
-    <section class="section-head">
-      <div>
-        <h3>近期学习记录</h3>
-        <p>从最近画像快速继续进入某一条学习方向。</p>
-      </div>
-      <el-button text @click="$router.push('/learning/history')">查看全部</el-button>
-    </section>
-
-    <div class="history-grid">
-      <el-empty v-if="!profiles.length" description="暂时还没有历史学习记录" />
-      <article
-        v-for="profile in recentProfiles"
-        :key="profile.learner_id"
-        class="history-card"
-      >
-        <div class="history-top">
-          <div>
-            <h4>{{ profile.learner_id }}</h4>
-            <p>{{ resolveTrackName(profile.knowledge_base_id) }}</p>
-          </div>
-          <el-tag>{{ profile.skill_level }}</el-tag>
-        </div>
-        <p class="history-goal">{{ profile.learning_goal || '暂无学习目标' }}</p>
-        <div class="history-meta">
-          <span>{{ profile.education }}</span>
-          <span>{{ profile.major }}</span>
-        </div>
-        <div class="history-actions">
-          <el-button size="small" type="primary" @click="resumeLearning(profile)">继续学习</el-button>
-          <el-button size="small" @click="openReport(profile)">报告</el-button>
-          <el-button size="small" @click="openResources(profile)">资源</el-button>
-        </div>
-      </article>
-    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
 import { knowledgeApi, profileApi } from '../api'
 import { useAppStore } from '../stores/app'
 
-const router = useRouter()
 const store = useAppStore()
 const domains = ref([])
 const profiles = ref([])
 
 const totalTracks = computed(() => domains.value.reduce((sum, domain) => sum + (domain.tracks?.length || 0), 0))
 const allTracks = computed(() => domains.value.flatMap((domain) => domain.tracks || []))
-const recentProfiles = computed(() => profiles.value.slice(0, 6))
 const currentDirection = computed(() =>
-  allTracks.value.find(
-    (item) => item.track_id === store.currentLearningDirectionId || item.knowledge_base_id === store.currentLearningDirectionId
-  )
+  allTracks.value.find((item) => item.track_id === store.currentLearningDirectionId || item.knowledge_base_id === store.currentLearningDirectionId)
 )
-
-function resolveTrackName(trackId) {
-  return allTracks.value.find((item) => item.track_id === trackId || item.knowledge_base_id === trackId)?.name || trackId || '未命名方向'
-}
-
-function resumeLearning(profile) {
-  const trackName = resolveTrackName(profile.knowledge_base_id)
-  store.resumeProfile(profile, profile.knowledge_base_id, trackName)
-  router.push('/generate')
-}
-
-function openReport(profile) {
-  const trackName = resolveTrackName(profile.knowledge_base_id)
-  store.resumeProfile(profile, profile.knowledge_base_id, trackName)
-  router.push('/report')
-}
-
-function openResources(profile) {
-  const trackName = resolveTrackName(profile.knowledge_base_id)
-  store.resumeProfile(profile, profile.knowledge_base_id, trackName)
-  router.push('/resources')
-}
 
 async function loadDashboard() {
   try {
@@ -252,8 +184,7 @@ onMounted(loadDashboard)
   gap: 18px;
 }
 
-.module-card,
-.history-card {
+.module-card {
   padding: 22px;
   border-radius: 16px;
   background: #fff;
@@ -261,57 +192,31 @@ onMounted(loadDashboard)
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.05);
 }
 
-.module-card h3,
-.history-card h4,
-.section-head h3 {
-  margin: 0;
-}
-
 .current-card {
   background: linear-gradient(180deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.98));
 }
 
-.module-header,
-.history-top,
-.section-head {
+.module-header {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
 }
 
-.module-description,
-.history-goal,
-.section-head p,
-.history-top p {
+.module-card h3 {
+  margin: 0;
+}
+
+.module-description {
   color: #5a6878;
   line-height: 1.65;
 }
 
-.module-actions,
-.history-actions {
+.module-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   margin-top: 18px;
-}
-
-.history-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-}
-
-.history-goal {
-  min-height: 52px;
-}
-
-.history-meta {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  color: #667085;
-  font-size: 13px;
 }
 
 @media (max-width: 960px) {

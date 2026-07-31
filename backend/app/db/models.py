@@ -17,6 +17,21 @@ from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 
+class UserProfileORM(Base):
+    __tablename__ = "users"
+
+    user_id = Column(String(64), primary_key=True, index=True, comment="鐢ㄦ埛鍞竴鏍囪瘑")
+    display_name = Column(String(128), nullable=False, comment="鐢ㄦ埛鏄剧ず鍚嶇О")
+    identity = Column(String(64), nullable=False, comment="鐢ㄦ埛韬唤")
+    education = Column(String(64), nullable=False, comment="瀛﹀巻")
+    major = Column(String(128), nullable=False, comment="涓撲笟")
+    job_role = Column(String(128), nullable=True, comment="宀椾綅")
+    experience_years = Column(Integer, nullable=True, comment="骞撮檺")
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class LearnerProfileORM(Base):
     """学习者画像数据库表"""
     __tablename__ = "learner_profiles"
@@ -67,6 +82,7 @@ class GeneratedResourceORM(Base):
     claim_count = Column(Integer, nullable=True, comment="Claim 总数")
     hallucination_rate = Column(Float, nullable=True, comment="幻觉率")
     difficulty_match = Column(Boolean, nullable=True, comment="难度是否匹配")
+    run_id = Column(String(128), ForeignKey("generation_jobs.run_id"), nullable=True, index=True, comment="生成任务 ID")
     version = Column(Integer, default=1, comment="资源版本")
     parent_resource_id = Column(String(64), nullable=True, comment="父资源 ID")
     exercise_items = Column(JSON, default=list, comment="练习项")
@@ -94,6 +110,23 @@ class FeedbackRecordORM(Base):
     updated_knowledge_states = Column(JSON, default=dict, comment="更新后的知识状态")
     regenerate_suggestion = Column(JSON, default=dict, comment="再生成建议")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+
+
+class GenerationJobORM(Base):
+    """异步资源生成任务表"""
+    __tablename__ = "generation_jobs"
+
+    run_id = Column(String(128), primary_key=True, comment="生成任务唯一标识")
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True, comment="学习者ID")
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=True, index=True, comment="知识库ID")
+    topic = Column(String(256), nullable=False, comment="生成主题")
+    status = Column(String(32), nullable=False, default="queued", comment="任务状态")
+    request_payload = Column(JSON, default=dict, comment="原始生成请求")
+    resource_ids = Column(JSON, default=list, comment="产出的资源ID列表")
+    error_message = Column(String(512), nullable=True, comment="错误信息")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    started_at = Column(DateTime(timezone=True), nullable=True, comment="开始执行时间")
+    finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
 
 
 # 以下模型承接知识库、图谱、审核和评测。JSON 仅用于可扩展负载；可查询的核心

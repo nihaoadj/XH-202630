@@ -214,6 +214,29 @@ class GenerateRequest(BaseModel):
         return normalized
 
 
+class GenerationJobCreateResponse(StatusResponse):
+    """异步资源生成任务创建响应"""
+    run_id: str
+    learner_id: str
+    topic: str
+    knowledge_base_id: Optional[str] = None
+    job_status: Literal["queued", "running", "completed", "failed"] = "queued"
+
+
+class GenerationJobStatusResponse(BaseModel):
+    """异步资源生成任务状态响应"""
+    run_id: str
+    learner_id: str
+    topic: str
+    knowledge_base_id: Optional[str] = None
+    job_status: Literal["queued", "running", "completed", "failed"]
+    resource_ids: List[str] = Field(default_factory=list)
+    error_message: Optional[str] = None
+    created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+
+
 class LearningPlan(BaseModel):
     """学习路径规划"""
     learning_path: List[LearningPathItem] = Field(default_factory=list)
@@ -267,6 +290,7 @@ class LearningResource(BaseModel):
     learning_path_node: Optional[str] = None
     review_status: Optional[str] = None
     review_id: Optional[str] = None
+    run_id: Optional[str] = None
     claim_count: Optional[int] = None
     hallucination_rate: Optional[float] = None
     difficulty_match: Optional[bool] = None

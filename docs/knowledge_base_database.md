@@ -2,7 +2,7 @@
 
 > 项目编号：XH-202630  
 > 文档版本：2.0  
-> 文档更新时间：2026-07-26  
+> 文档更新时间：2026-07-31  
 > 文档定位：说明当前项目中知识库源文件、SQLite 数据库、问卷、诊断、画像与资源的真实落库方式。
 
 ## 1. 当前运行方式
@@ -65,6 +65,7 @@ knowledge_base/questionnaire_common.json
 作用：
 
 - 保存所有学习方向共用的初始画像问卷
+- 当前只保留动态学习信息题目，不再保存用户长期稳定资料字段
 
 ### 2.3 方向专属源文件
 
@@ -115,8 +116,36 @@ knowledge_base/<track_id>/
 - 运行时问卷不是从前端硬编码读取
 - 也不是直接从 JSON 文件给前端
 - 当前 API 会先从数据库读取问卷模板和题目，再组装成前端可渲染结构
+- 当前通用问卷只保留：
+  - `learning_goals`
+  - `learning_modes`
+  - `difficulty_preference`
+  - `weekly_time_budget`
+- `identity`、`education`、`major`、`desired_resource_types` 已不再属于通用问卷题目
 
-### 3.3 画像
+### 3.3 用户资料
+
+| 表 | 作用 |
+|---|---|
+| `users` | 保存用户长期稳定资料 |
+
+当前用户资料包含：
+
+- `user_id`
+- `display_name`
+- `identity`
+- `education`
+- `major`
+- `job_role`
+- `experience_years`
+- `metadata`
+
+说明：
+
+- `user_id` 由后端自动生成
+- 用户资料与学习者画像已经拆分为两层数据对象
+
+### 3.4 画像
 
 | 表 | 作用 |
 |---|---|
@@ -133,7 +162,7 @@ knowledge_base/<track_id>/
 - `strong_points`
 - `learning_preferences`
 
-### 3.4 知识库
+### 3.5 知识库
 
 | 表 | 作用 |
 |---|---|
@@ -152,7 +181,7 @@ backend/chroma_db/
 - SQLite：保存业务事实、文档映射、切片映射、元数据
 - Chroma：保存向量与语义检索索引
 
-### 3.5 技能图谱与诊断
+### 3.6 技能图谱与诊断
 
 | 表 | 作用 |
 |---|---|
@@ -168,10 +197,11 @@ backend/chroma_db/
 - 问卷用于初始画像
 - 诊断用于真实测量能力并回写状态
 
-### 3.6 资源、反馈与审核
+### 3.7 资源、反馈与审核
 
 | 表 | 作用 |
 |---|---|
+| `generation_jobs` | 异步资源生成任务 |
 | `generated_resources` | 已生成资源 |
 | `feedback_records` | 学习反馈 |
 | `agent_runs` | Agent 运行主记录 |
@@ -179,7 +209,7 @@ backend/chroma_db/
 | `resource_reviews` | 资源审核摘要 |
 | `resource_claims` | Claim 与证据记录 |
 
-### 3.7 评测
+### 3.8 评测
 
 | 表 | 作用 |
 |---|---|
@@ -214,7 +244,18 @@ backend/chroma_db/
 - `questionnaire_answers`
 - `learner_profiles`
 
-### 4.3 画像
+### 4.3 用户资料
+
+- `GET /api/users/`
+- `GET /api/users/{user_id}`
+- `POST /api/users/`
+- `PATCH /api/users/{user_id}`
+
+读写：
+
+- `users`
+
+### 4.4 画像
 
 - `GET /api/profiles/`
 - `GET /api/profiles/{learner_id}`
@@ -227,7 +268,7 @@ backend/chroma_db/
 
 删除时还会联动清理相关诊断记录。
 
-### 4.4 诊断
+### 4.5 诊断
 
 - `GET /api/diagnosis/questions`
 - `POST /api/diagnosis/submit`
@@ -244,14 +285,16 @@ backend/chroma_db/
 - `knowledge_states`
 - `learner_profiles`
 
-### 4.5 资源与反馈
+### 4.6 资源与反馈
 
-- `POST /api/generate/`
+- `POST /api/generate/jobs`
+- `GET /api/generate/jobs/{run_id}`
 - `GET /api/resources/{learner_id}`
 - `GET /api/resources/file/{resource_id}`
 - `GET /api/reviews/{resource_id}`
 - `POST /api/feedback/`
 - `GET /api/feedback/history/{learner_id}`
+- `GET /api/learning-history/{learner_id}/timeline`
 - `GET /api/report/{learner_id}`
 
 涉及：
@@ -270,12 +313,9 @@ backend/chroma_db/
 
 问卷用于收集：
 
-- 身份与背景
-- 学历/专业
 - 学习目标
-- 自述水平
 - 学习偏好
-- 希望优先学习的方向
+- 当前学习方向下的动态时间与难度偏好
 
 问卷不会直接判定：
 
@@ -307,6 +347,7 @@ backend/chroma_db/
 
 - 源文件存在，是为了开发理解、版本管理和初始化
 - 运行时实际读取来源是数据库
+- 如果源文件已经更新但数据库未同步，前端看到的仍会是数据库中的旧模板
 
 ### 6.2 诊断题来源
 
@@ -320,6 +361,19 @@ diagnostic_questions.json -> init_db.py 导入 -> diagnostic_questions -> API �
 
 - 诊断题源文件只是导入来源
 - 运行时实际读取来源也是数据库
+
+### 6.3 用户资料来源
+
+当前是：
+
+```text
+POST /api/users/ -> users -> onboarding / 画像流程按需读取
+```
+
+所以：
+
+- 用户长期稳定资料不应再放入通用问卷
+- 用户资料与画像之间是“先建用户资料，再生成学习画像”的关系
 
 ## 7. 当前知识库示例状态
 
@@ -364,6 +418,8 @@ python -m pytest backend/tests -q
 
 - 前台流程入口：`learning_direction_id`
 - 内部知识边界：`knowledge_base_id`
+- 用户资料主键：`user_id`
+- 学习者画像主键：`learner_id`
 
 ### 9.2 存储约束
 
@@ -379,4 +435,5 @@ python -m pytest backend/tests -q
 - `/api/learner/list`
 - 前端硬编码问卷
 - 问卷和诊断混为一套题
+- 把 `identity`、`education`、`major` 继续写在通用问卷中
 

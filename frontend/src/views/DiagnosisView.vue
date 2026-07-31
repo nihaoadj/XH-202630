@@ -18,7 +18,7 @@
         <el-descriptions :column="2" border>
           <el-descriptions-item label="学习者">{{ profile.learner_id }}</el-descriptions-item>
           <el-descriptions-item label="当前层级">{{ profile.skill_level }}</el-descriptions-item>
-          <el-descriptions-item label="背景">{{ profile.education }} / {{ profile.major }}</el-descriptions-item>
+          <el-descriptions-item label="当前方向">{{ store.currentLearningDirectionName || store.currentLearningDirectionId }}</el-descriptions-item>
           <el-descriptions-item label="学习目标">{{ profile.learning_goal }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
