@@ -123,7 +123,7 @@
           <div class="selection-pill-row">
             <span class="selection-pill">用户：{{ currentUser?.display_name }}</span>
             <span class="selection-pill">方向：{{ selectedDirection?.name }}</span>
-            <span class="selection-pill">画像 ID：{{ learnerId }}</span>
+            <span class="selection-pill">学习档案：{{ learnerLabel }}</span>
           </div>
 
           <el-form label-position="top" class="questionnaire-form">
@@ -247,7 +247,7 @@
 
             <el-descriptions :column="2" border>
               <el-descriptions-item label="用户">{{ currentUser?.display_name }}</el-descriptions-item>
-              <el-descriptions-item label="画像 ID">{{ learnerId }}</el-descriptions-item>
+              <el-descriptions-item label="学习方向">{{ selectedDirection?.name || '-' }}</el-descriptions-item>
               <el-descriptions-item label="薄弱点" :span="2">{{ (diagnosisResult.weak_points || []).join('、') || '-' }}</el-descriptions-item>
               <el-descriptions-item label="优势点" :span="2">{{ (diagnosisResult.strong_points || []).join('、') || '-' }}</el-descriptions-item>
             </el-descriptions>
@@ -297,7 +297,7 @@ const stepStage = ref('domain')
 const submittingProfile = ref(false)
 const submittingDiagnosis = ref(false)
 const submittingGeneration = ref(false)
-const selectedResourceTypes = ref(['讲义', '实操指南', '分阶测试题'])
+const selectedResourceTypes = ref(['讲义', '实操指南', '分阶段测试题'])
 const generationTopic = ref('基于当前诊断结果生成一组从入门到实操的学习资源')
 
 const form = reactive({})
@@ -315,8 +315,13 @@ const learnerId = computed(() => {
   if (!selectedUserId.value || !selectedDirectionId.value) return ''
   return `${selectedUserId.value}__${selectedDirectionId.value}`
 })
+const learnerLabel = computed(() => {
+  const userName = currentUser.value?.display_name || '当前用户'
+  const directionName = selectedDirection.value?.name || '未选择方向'
+  return `${userName} / ${directionName}`
+})
 
-const resourceTypeOptions = ['讲义', '实操指南', '分阶测试题', '复习清单', '学习路径建议']
+const resourceTypeOptions = ['讲义', '实操指南', '分阶段测试题', '复习清单', '学习路径建议']
 
 const steps = [
   {

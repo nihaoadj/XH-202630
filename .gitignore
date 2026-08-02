@@ -49,3 +49,6 @@ Thumbs.db
 
 # Temporary extraction
 __extracted_pdf.txt
+
+# Local startup helpers
+scripts/local-*.ps1

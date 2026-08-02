@@ -509,6 +509,17 @@ class FeedbackHistoryResponse(BaseModel):
     items: List[FeedbackRecord]
 
 
+class ResourceEvaluationSubmitResponse(BaseModel):
+    """学习后测评与反馈结果"""
+    learner_id: str
+    resource_id: str
+    correct_rate: float
+    correct_count: int
+    total_questions: int
+    wrong_knowledge_points: List[str] = Field(default_factory=list)
+    feedback: FeedbackResponse
+
+
 class ResourceListResponse(BaseModel):
     """生成资源列表响应"""
     learner_id: str
@@ -522,3 +533,41 @@ class EvaluationSummary(BaseModel):
     metrics: Dict[str, float]
     ablation: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: Optional[datetime] = None
+
+
+class ResourceEvaluationQuestion(BaseModel):
+    """学习后测评题目"""
+    question_id: str
+    question_type: str
+    question: str
+    options: List[str] = Field(default_factory=list)
+    knowledge_point: Optional[str] = None
+    difficulty: Optional[str] = None
+    source: Literal["resource", "knowledge_base"] = "resource"
+
+
+class ResourceEvaluationSessionResponse(BaseModel):
+    """资源学习后测评题目列表"""
+    learner_id: str
+    resource_id: str
+    topic: Optional[str] = None
+    total: int
+    questions: List[ResourceEvaluationQuestion] = Field(default_factory=list)
+
+
+class ResourceEvaluationAnswerSubmission(BaseModel):
+    """学习后测评单题作答"""
+    question_id: str
+    answer: Any
+
+
+class ResourceEvaluationSubmitRequest(BaseModel):
+    """学习后测评与反馈提交"""
+    learner_id: str
+    resource_id: str
+    answers: List[ResourceEvaluationAnswerSubmission] = Field(default_factory=list, min_length=1)
+    feedback_type: Optional[str] = Field(default=None, description="反馈类型")
+    time_spent_seconds: Optional[int] = Field(default=None, ge=0, description="学习耗时")
+    completed: Optional[bool] = Field(default=None, description="是否完成学习")
+    self_rating: Optional[int] = Field(default=None, ge=1, le=5, description="自评")
+    practice_result: Dict[str, Any] = Field(default_factory=dict, description="主观反馈与练习信息")

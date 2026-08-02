@@ -1,7 +1,7 @@
 <template>
   <div class="history-page">
     <section class="toolbar">
-      <el-input v-model="keyword" placeholder="按画像 ID / 方向 / 目标搜索" clearable class="search" />
+      <el-input v-model="keyword" placeholder="按用户名、学习方向或目标搜索" clearable class="search" />
       <el-select v-model="skillFilter" clearable placeholder="能力层级">
         <el-option label="初级" value="初级" />
         <el-option label="中级" value="中级" />
@@ -27,9 +27,9 @@
           :class="{ active: activeLearnerId === profile.learner_id }"
           @click="selectProfile(profile)"
         >
-          <strong>{{ profile.learner_id }}</strong>
+          <strong>{{ profileDisplayName(profile) }}</strong>
           <span>{{ resolveTrackName(profile.knowledge_base_id) }}</span>
-          <span>{{ profile.skill_level }}</span>
+          <span>{{ profile.skill_level }} · {{ profile.learning_goal || '暂无学习目标' }}</span>
         </button>
       </el-card>
 
@@ -41,26 +41,43 @@
               <p v-if="timeline">{{ timeline.profile.learning_goal || '暂无学习目标' }}</p>
             </div>
             <div class="header-actions">
-              <el-button v-if="timeline" @click="toResources">资源</el-button>
+              <el-button v-if="timeline" @click="toGenerate">资源</el-button>
               <el-button v-if="timeline" type="primary" @click="toGenerate">生成状态</el-button>
             </div>
           </div>
         </template>
 
         <el-empty v-if="!timeline" description="请选择左侧学习画像查看时间线" />
-        <div v-else class="timeline-list">
-          <article v-for="event in timeline.events" :key="event.event_id" class="timeline-item">
-            <div class="timeline-dot" />
-            <div class="timeline-content">
-              <div class="timeline-head">
-                <strong>{{ event.title }}</strong>
-                <el-tag v-if="event.status" size="small">{{ event.status }}</el-tag>
-              </div>
-              <p>{{ event.description }}</p>
-              <span class="timeline-time">{{ formatTime(event.occurred_at) }}</span>
+        <template v-else>
+          <div class="timeline-summary">
+            <div>
+              <span>用户</span>
+              <strong>{{ profileDisplayName(timeline.profile) }}</strong>
             </div>
-          </article>
-        </div>
+            <div>
+              <span>学习方向</span>
+              <strong>{{ resolveTrackName(timeline.profile.knowledge_base_id) }}</strong>
+            </div>
+            <div>
+              <span>当前层级</span>
+              <strong>{{ timeline.profile.skill_level || '-' }}</strong>
+            </div>
+          </div>
+
+          <div class="timeline-list">
+            <article v-for="event in timeline.events" :key="event.event_id" class="timeline-item">
+              <div class="timeline-dot" />
+              <div class="timeline-content">
+                <div class="timeline-head">
+                  <strong>{{ event.title }}</strong>
+                  <el-tag v-if="event.status" size="small">{{ event.status }}</el-tag>
+                </div>
+                <p>{{ event.description }}</p>
+                <span class="timeline-time">{{ formatTime(event.occurred_at) }}</span>
+              </div>
+            </article>
+          </div>
+        </template>
       </el-card>
     </section>
   </div>
@@ -84,7 +101,14 @@ const activeLearnerId = ref('')
 
 const filteredProfiles = computed(() =>
   profiles.value.filter((profile) => {
-    const searchable = [profile.learner_id, profile.knowledge_base_id, profile.learning_goal].join(' ').toLowerCase()
+    const searchable = [
+      profileDisplayName(profile),
+      resolveTrackName(profile.knowledge_base_id),
+      profile.learning_goal,
+      profile.skill_level,
+    ]
+      .join(' ')
+      .toLowerCase()
     const matchesKeyword = !keyword.value || searchable.includes(keyword.value.toLowerCase())
     const matchesSkill = !skillFilter.value || profile.skill_level === skillFilter.value
     return matchesKeyword && matchesSkill
@@ -93,6 +117,11 @@ const filteredProfiles = computed(() =>
 
 function resolveTrackName(trackId) {
   return tracks.value.find((item) => item.track_id === trackId)?.name || trackId || '未命名方向'
+}
+
+function profileDisplayName(profile) {
+  const snapshot = profile?.learning_preferences?.metadata?.user_profile_snapshot
+  return snapshot?.display_name || snapshot?.name || profile?.learner_type || '未命名画像'
 }
 
 function formatTime(value) {
@@ -129,17 +158,12 @@ async function selectProfile(profile) {
   }
 }
 
-function toResources() {
-  if (!timeline.value) return
-  router.push({
-    path: '/resources',
-    query: { learnerId: timeline.value.learner_id },
-  })
-}
-
 function toGenerate() {
   if (!timeline.value) return
-  router.push('/generate')
+  router.push({
+    path: '/generate',
+    query: { learnerId: timeline.value.learner_id },
+  })
 }
 
 onMounted(async () => {
@@ -221,6 +245,29 @@ onMounted(async () => {
   font-size: 13px;
 }
 
+.timeline-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8fbff;
+  border: 1px solid #e3edf8;
+}
+
+.timeline-summary span {
+  display: block;
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.timeline-summary strong {
+  color: #172033;
+  font-size: 14px;
+}
+
 .timeline-list {
   display: flex;
   flex-direction: column;
@@ -265,6 +312,10 @@ onMounted(async () => {
 
 @media (max-width: 960px) {
   .history-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-summary {
     grid-template-columns: 1fr;
   }
 }

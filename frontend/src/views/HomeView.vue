@@ -5,7 +5,8 @@
         <span class="eyebrow">学习流程总览</span>
         <h2>先维护用户资料，再用 5 步完成学习方向创建、诊断和资源生成</h2>
         <p>
-          当前主流程已经调整为：用户资料 -> 选择领域 -> 选择方向 -> 填写问卷 -> 完成诊断 -> 查看诊断结果并选择资源 -> 进入生成状态页。
+          当前主流程已经调整为：用户资料 -> 选择领域 -> 选择方向 -> 填写问卷 -> 完成诊断 ->
+          查看诊断结果并选择资源 -> 进入生成状态页。
         </p>
       </div>
       <div class="hero-stats">
@@ -19,7 +20,7 @@
         </div>
         <div class="stat-card">
           <strong>{{ profiles.length }}</strong>
-          <span>学习画像</span>
+          <span>学习档案</span>
         </div>
       </div>
     </section>
@@ -29,12 +30,15 @@
         <div class="module-header">
           <div>
             <span class="module-kicker">当前用户</span>
-            <h3>{{ store.currentUserProfile?.display_name || store.currentUserId || '尚未设置用户资料' }}</h3>
+            <h3>{{ store.currentUserProfile?.display_name || '尚未设置用户资料' }}</h3>
           </div>
-          <el-tag type="success">{{ store.currentLearnerId || '暂无学习画像' }}</el-tag>
+          <el-tag type="success">{{ currentDirection?.name || '未选择学习方向' }}</el-tag>
         </div>
         <p class="module-description">
-          {{ currentDirection?.description || '先创建用户资料，再进入新的学习方向流程。完成诊断后，系统会将你带到资源生成状态页。' }}
+          {{
+            currentDirection?.description ||
+            '先创建用户资料，再进入新的学习方向流程。完成诊断后，系统会将你带到资源生成状态页。'
+          }}
         </p>
         <div class="module-actions">
           <el-button type="primary" @click="$router.push('/user/profile')">维护用户资料</el-button>
@@ -58,7 +62,7 @@
         <span class="module-kicker">学习历史</span>
         <h3>按时间线回看问卷、诊断与资源生成过程</h3>
         <p class="module-description">
-          历史页会聚合每个学习画像的关键事件，帮助你排查流程问题，也方便继续进入资源或生成状态页。
+          历史页会聚合每个学习档案的关键事件，帮助你排查流程问题，也方便继续进入资源或生成状态页。
         </p>
         <div class="module-actions">
           <el-button type="primary" plain @click="$router.push('/learning/history')">查看历史</el-button>
@@ -72,7 +76,7 @@
           资源生成是异步过程，提交后无需原地等待。生成完成后，你可以从状态页跳转到资源页下载和查看结果。
         </p>
         <div class="module-actions">
-          <el-button type="primary" plain @click="$router.push('/resources')">进入资源页</el-button>
+          <el-button type="primary" plain @click="$router.push('/generate')">查看已生成资源</el-button>
         </div>
       </article>
     </section>
@@ -92,7 +96,11 @@ const profiles = ref([])
 const totalTracks = computed(() => domains.value.reduce((sum, domain) => sum + (domain.tracks?.length || 0), 0))
 const allTracks = computed(() => domains.value.flatMap((domain) => domain.tracks || []))
 const currentDirection = computed(() =>
-  allTracks.value.find((item) => item.track_id === store.currentLearningDirectionId || item.knowledge_base_id === store.currentLearningDirectionId)
+  allTracks.value.find(
+    (item) =>
+      item.track_id === store.currentLearningDirectionId ||
+      item.knowledge_base_id === store.currentLearningDirectionId
+  )
 )
 
 async function loadDashboard() {
