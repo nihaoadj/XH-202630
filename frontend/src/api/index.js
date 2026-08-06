@@ -12,6 +12,13 @@ export const profileApi = {
   delete: (id) => api.delete(`/profiles/${id}`),
 }
 
+export const userApi = {
+  list: () => api.get('/users/'),
+  get: (id) => api.get(`/users/${id}`),
+  create: (data) => api.post('/users/', data),
+  update: (id, data) => api.patch(`/users/${id}`, data),
+}
+
 export const knowledgeApi = {
   listDomains: () => api.get('/knowledge/domains'),
   listDirections: () => api.get('/knowledge/directions'),
@@ -28,16 +35,27 @@ export const diagnosisApi = {
 }
 
 export const generateApi = {
-  generate: (data) => api.post('/generate/', data),
+  createJob: (data) => api.post('/generate/jobs', data),
+  listJobs: (learnerId) => api.get('/generate/jobs', { params: { learner_id: learnerId } }),
+  getJobStatus: (runId) => api.get(`/generate/jobs/${runId}`),
+}
+
+export const learningHistoryApi = {
+  timeline: (learnerId) => api.get(`/learning-history/${learnerId}/timeline`),
 }
 
 export const resourceApi = {
-  listByLearner: (learnerId) => api.get(`/resources/${learnerId}`),
+  listByLearner: (learnerId, params = {}) => api.get(`/resources/${learnerId}`, { params }),
+  downloadUrl: (resourceId) => `/api/resources/file/${resourceId}`,
 }
 
 export const feedbackApi = {
   submit: (data) => api.post('/feedback/', data),
   history: (learnerId) => api.get(`/feedback/history/${learnerId}`),
+  getEvaluationSession: (learnerId, resourceId) => api.get(`/feedback/evaluation/${learnerId}/${resourceId}`),
+  getRunEvaluationSession: (learnerId, runId) => api.get(`/feedback/evaluation/run/${learnerId}/${runId}`),
+  submitEvaluation: (data) => api.post('/feedback/evaluation/submit', data),
+  submitRunEvaluation: (data) => api.post('/feedback/evaluation/run/submit', data),
 }
 
 export const reportApi = {

@@ -1,59 +1,46 @@
 <template>
   <div class="onboarding-page">
-    <section class="wizard-layout">
+    <section class="user-bar">
+      <div>
+        <h2>新建学习方向</h2>
+        <p>先确认当前用户，再按 5 步完成问卷、诊断和资源选择。</p>
+      </div>
+
+      <div class="user-actions">
+        <el-select v-model="selectedUserId" placeholder="请选择当前用户" class="user-select" @change="applySelectedUser">
+          <el-option
+            v-for="user in users"
+            :key="user.user_id"
+            :label="`${user.display_name} / ${user.identity}`"
+            :value="user.user_id"
+          />
+        </el-select>
+        <el-button @click="$router.push('/user/profile')">维护用户资料</el-button>
+      </div>
+    </section>
+
+    <el-empty
+      v-if="!users.length"
+      description="请先创建用户资料，再开始新建学习方向。"
+    >
+      <el-button type="primary" @click="$router.push('/user/profile')">去创建用户资料</el-button>
+    </el-empty>
+
+    <section v-else class="wizard-layout">
       <aside class="progress-panel">
         <button
+          v-for="step in steps"
+          :key="step.stage"
           type="button"
           class="progress-card"
-          :class="{ active: activeStep === 1, done: completedStepCount >= 1 }"
-          @click="goStep('domain')"
+          :class="{ active: stepStage === step.stage, done: completedStepCount >= step.index, disabled: !canEnter(step.stage) }"
+          :disabled="!canEnter(step.stage)"
+          @click="goStep(step.stage)"
         >
-          <span class="progress-index">{{ completedStepCount >= 1 ? '✓' : '1' }}</span>
+          <span class="progress-index">{{ completedStepCount >= step.index ? '✓' : step.index }}</span>
           <div>
-            <div class="progress-title">领域</div>
-            <div class="progress-desc">{{ selectedDomain?.name || '选择一级培训领域' }}</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="progress-card"
-          :class="{ active: activeStep === 2, done: completedStepCount >= 2, disabled: !selectedDomainId }"
-          :disabled="!selectedDomainId"
-          @click="goStep('track')"
-        >
-          <span class="progress-index">{{ completedStepCount >= 2 ? '✓' : '2' }}</span>
-          <div>
-            <div class="progress-title">方向</div>
-            <div class="progress-desc">{{ selectedDirection?.name || '在已选领域下细化方向' }}</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="progress-card"
-          :class="{ active: activeStep === 3, done: completedStepCount >= 3, disabled: !selectedDirectionId }"
-          :disabled="!selectedDirectionId"
-          @click="goStep('questionnaire')"
-        >
-          <span class="progress-index">{{ completedStepCount >= 3 ? '✓' : '3' }}</span>
-          <div>
-            <div class="progress-title">问卷</div>
-            <div class="progress-desc">{{ questionnaireCompleted ? '初始画像问卷已完成' : '构建初始学习画像' }}</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="progress-card"
-          :class="{ active: activeStep === 4, done: Boolean(diagnosisResult), disabled: !questionnaireCompleted }"
-          :disabled="!questionnaireCompleted"
-          @click="goStep('diagnosis')"
-        >
-          <span class="progress-index">{{ diagnosisResult ? '✓' : '4' }}</span>
-          <div>
-            <div class="progress-title">诊断</div>
-            <div class="progress-desc">{{ diagnosisResult ? '能力诊断已完成' : '根据问卷进入能力诊断' }}</div>
+            <div class="progress-title">{{ step.title }}</div>
+            <div class="progress-desc">{{ step.description() }}</div>
           </div>
         </button>
       </aside>
@@ -63,8 +50,8 @@
           <template #header>
             <div class="card-head">
               <div>
-                <div class="card-title">第一步：选择培训领域</div>
-                <div class="card-subtitle">先确定培训领域，再继续细化学习方向。</div>
+                <div class="card-title">第 1 步：选择培训领域</div>
+                <div class="card-subtitle">先选择大领域，再细化到具体学习方向。</div>
               </div>
             </div>
           </template>
@@ -73,9 +60,9 @@
             <button
               v-for="item in domains"
               :key="item.domain_id"
+              type="button"
               class="choice-card"
               :class="{ selected: selectedDomainId === item.domain_id }"
-              type="button"
               @click="selectDomain(item)"
             >
               <span class="choice-title">{{ item.name }}</span>
@@ -93,34 +80,26 @@
           <template #header>
             <div class="card-head">
               <div>
-                <div class="card-title">第二步：选择学习方向</div>
+                <div class="card-title">第 2 步：选择学习方向</div>
                 <div class="card-subtitle">当前领域：{{ selectedDomain?.name }}</div>
               </div>
-              <el-button text @click="goStep('domain')">返回修改领域</el-button>
             </div>
           </template>
-
-          <div class="selection-pill-row">
-            <span class="selection-pill">领域：{{ selectedDomain?.name }}</span>
-          </div>
 
           <div class="card-grid">
             <button
               v-for="item in tracks"
               :key="item.track_id"
+              type="button"
               class="choice-card"
               :class="{ selected: selectedDirectionId === item.track_id, unavailable: !isTrackAvailable(item) }"
-              type="button"
               :disabled="!isTrackAvailable(item)"
               @click="selectDirection(item)"
             >
-              <span class="choice-title">
-                {{ item.name }}
-                <el-tag v-if="!isTrackAvailable(item)" size="small" type="info">待建设</el-tag>
-              </span>
+              <span class="choice-title">{{ item.name }}</span>
               <span class="choice-description">{{ item.description || '暂无描述' }}</span>
               <span class="choice-meta">
-                {{ item.metadata?.document_count || 0 }} 份资料 · {{ item.metadata?.skill_node_count || 0 }} 个能力节点
+                {{ item.metadata?.document_count || 0 }} 份资料 / {{ item.metadata?.skill_node_count || 0 }} 个能力节点
               </span>
             </button>
           </div>
@@ -135,23 +114,19 @@
           <template #header>
             <div class="card-head">
               <div>
-                <div class="card-title">第三步：填写初始画像问卷</div>
-                <div class="card-subtitle">已选方向：{{ selectedDirection?.name }}。提交后将在当前页面进入诊断。</div>
+                <div class="card-title">第 3 步：填写方向问卷</div>
+                <div class="card-subtitle">这里只填写当前学习方向相关的动态信息。</div>
               </div>
-              <el-button text @click="goStep('track')">返回修改方向</el-button>
             </div>
           </template>
 
           <div class="selection-pill-row">
-            <span class="selection-pill">领域：{{ selectedDomain?.name }}</span>
+            <span class="selection-pill">用户：{{ currentUser?.display_name }}</span>
             <span class="selection-pill">方向：{{ selectedDirection?.name }}</span>
+            <span class="selection-pill">学习档案：{{ learnerLabel }}</span>
           </div>
 
-          <el-form :model="form" label-position="top" class="questionnaire-form">
-            <el-form-item label="学习者 ID" required>
-              <el-input v-model="form.learner_id" placeholder="例如：stu_001" />
-            </el-form-item>
-
+          <el-form label-position="top" class="questionnaire-form">
             <el-form-item
               v-for="question in questions"
               :key="question.question_id"
@@ -194,29 +169,20 @@
 
             <div class="action-row">
               <el-button @click="goStep('track')">上一步</el-button>
-              <el-button type="primary" @click="submitQuestionnaire" :loading="submittingProfile">
-                提交问卷并进入诊断
-              </el-button>
+              <el-button type="primary" :loading="submittingProfile" @click="submitQuestionnaire">提交问卷</el-button>
             </div>
           </el-form>
         </el-card>
 
-        <el-card v-else class="work-card">
+        <el-card v-else-if="stepStage === 'diagnosis'" class="work-card">
           <template #header>
             <div class="card-head">
               <div>
-                <div class="card-title">第四步：完成能力诊断</div>
-                <div class="card-subtitle">诊断用于校准真实掌握情况、薄弱点与后续资源建议。</div>
+                <div class="card-title">第 4 步：完成能力诊断</div>
+                <div class="card-subtitle">根据问卷结果补齐真实掌握情况。</div>
               </div>
-              <el-button text @click="goStep('questionnaire')">返回查看问卷</el-button>
             </div>
           </template>
-
-          <div v-if="currentProfile" class="summary-strip">
-            <span class="selection-pill">学习者：{{ currentProfile.learner_id }}</span>
-            <span class="selection-pill">方向：{{ store.currentLearningDirectionName || selectedDirection?.name }}</span>
-            <span class="selection-pill">当前层级：{{ currentProfile.skill_level || '待诊断' }}</span>
-          </div>
 
           <template v-if="diagnosticQuestions.length">
             <div v-for="question in diagnosticQuestions" :key="question.question_id" class="diagnostic-item">
@@ -251,36 +217,60 @@
 
             <div class="action-row">
               <el-button @click="goStep('questionnaire')">上一步</el-button>
-              <el-button type="primary" @click="submitDiagnosis" :loading="submittingDiagnosis">
-                提交诊断
-              </el-button>
+              <el-button type="primary" :loading="submittingDiagnosis" @click="submitDiagnosis">提交诊断</el-button>
             </div>
           </template>
 
-          <el-empty v-else-if="!diagnosisResult" description="请先完成问卷，系统会生成对应诊断题。" />
+          <el-empty v-else description="当前没有需要作答的诊断题，提交问卷后系统会自动判断是否需要诊断。" />
+        </el-card>
+
+        <el-card v-else class="work-card">
+          <template #header>
+            <div class="card-head">
+              <div>
+                <div class="card-title">第 5 步：确认诊断结果并选择资源</div>
+                <div class="card-subtitle">资源类型不再从问卷选择，而是在诊断结果出来后单独确认。</div>
+              </div>
+            </div>
+          </template>
 
           <el-card v-if="diagnosisResult" class="result-card">
             <template #header>
               <div class="card-head compact">
                 <div>
                   <div class="card-title small">诊断结果</div>
-                  <div class="card-subtitle">当前学习方向下的能力评估结果</div>
+                  <div class="card-subtitle">{{ selectedDirection?.name }}</div>
                 </div>
                 <el-tag type="success">{{ diagnosisResult.ability_level }}</el-tag>
               </div>
             </template>
 
             <el-descriptions :column="2" border>
-              <el-descriptions-item label="能力层级">{{ diagnosisResult.ability_level }}</el-descriptions-item>
-              <el-descriptions-item label="学习方向">{{ store.currentLearningDirectionName || selectedDirection?.name }}</el-descriptions-item>
-              <el-descriptions-item label="薄弱点" :span="2">
-                {{ (diagnosisResult.weak_points || []).join('、') || '-' }}
-              </el-descriptions-item>
-              <el-descriptions-item label="优势项" :span="2">
-                {{ (diagnosisResult.strong_points || []).join('、') || '-' }}
-              </el-descriptions-item>
+              <el-descriptions-item label="用户">{{ currentUser?.display_name }}</el-descriptions-item>
+              <el-descriptions-item label="学习方向">{{ selectedDirection?.name || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="薄弱点" :span="2">{{ (diagnosisResult.weak_points || []).join('、') || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="优势点" :span="2">{{ (diagnosisResult.strong_points || []).join('、') || '-' }}</el-descriptions-item>
             </el-descriptions>
           </el-card>
+
+          <el-form label-position="top" class="questionnaire-form">
+            <el-form-item label="本次要生成的资源类型" required>
+              <el-checkbox-group v-model="selectedResourceTypes">
+                <el-checkbox v-for="item in resourceTypeOptions" :key="item" :label="item" :value="item" />
+              </el-checkbox-group>
+            </el-form-item>
+
+            <el-form-item label="生成主题">
+              <el-input v-model="generationTopic" type="textarea" :rows="3" />
+            </el-form-item>
+
+            <div class="action-row">
+              <el-button @click="goStep('diagnosis')">上一步</el-button>
+              <el-button type="primary" :loading="submittingGeneration" @click="submitGeneration">
+                生成并进入状态页
+              </el-button>
+            </div>
+          </el-form>
         </el-card>
       </div>
     </section>
@@ -290,24 +280,30 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { diagnosisApi, knowledgeApi, onboardingApi } from '../api'
+import { useRouter } from 'vue-router'
+import { diagnosisApi, generateApi, knowledgeApi, onboardingApi, userApi } from '../api'
 import { useAppStore } from '../stores/app'
 
+const router = useRouter()
 const store = useAppStore()
 
+const users = ref([])
 const domains = ref([])
 const questions = ref([])
+const selectedUserId = ref(store.currentUserId || '')
 const selectedDomainId = ref('')
 const selectedDirectionId = ref('')
 const stepStage = ref('domain')
 const submittingProfile = ref(false)
 const submittingDiagnosis = ref(false)
+const submittingGeneration = ref(false)
+const selectedResourceTypes = ref(['讲义', '实操指南', '分阶段测试题'])
+const generationTopic = ref('基于当前诊断结果生成一组从入门到实操的学习资源')
 
-const form = reactive({
-  learner_id: localStorage.getItem('last_learner_id') || store.currentLearnerId || 'stu_001',
-})
+const form = reactive({})
 const diagnosticAnswers = reactive({})
 
+const currentUser = computed(() => users.value.find((item) => item.user_id === selectedUserId.value) || store.currentUserProfile || null)
 const selectedDomain = computed(() => domains.value.find((item) => item.domain_id === selectedDomainId.value))
 const tracks = computed(() => selectedDomain.value?.tracks || [])
 const selectedDirection = computed(() => tracks.value.find((item) => item.track_id === selectedDirectionId.value))
@@ -315,6 +311,50 @@ const currentProfile = computed(() => store.currentProfile)
 const diagnosticQuestions = computed(() => store.pendingDiagnosticQuestions || [])
 const diagnosisResult = computed(() => store.diagnosisResult)
 const questionnaireCompleted = computed(() => Boolean(currentProfile.value && selectedDirectionId.value))
+const learnerId = computed(() => {
+  if (!selectedUserId.value || !selectedDirectionId.value) return ''
+  return `${selectedUserId.value}__${selectedDirectionId.value}`
+})
+const learnerLabel = computed(() => {
+  const userName = currentUser.value?.display_name || '当前用户'
+  const directionName = selectedDirection.value?.name || '未选择方向'
+  return `${userName} / ${directionName}`
+})
+
+const resourceTypeOptions = ['讲义', '实操指南', '分阶段测试题', '复习清单', '学习路径建议']
+
+const steps = [
+  {
+    index: 1,
+    stage: 'domain',
+    title: '领域',
+    description: () => selectedDomain.value?.name || '选择一级培训领域',
+  },
+  {
+    index: 2,
+    stage: 'track',
+    title: '方向',
+    description: () => selectedDirection.value?.name || '选择具体学习方向',
+  },
+  {
+    index: 3,
+    stage: 'questionnaire',
+    title: '问卷',
+    description: () => (questionnaireCompleted.value ? '已完成方向问卷' : '填写方向相关动态信息'),
+  },
+  {
+    index: 4,
+    stage: 'diagnosis',
+    title: '诊断',
+    description: () => (diagnosisResult.value ? '已完成能力诊断' : '补齐真实掌握情况'),
+  },
+  {
+    index: 5,
+    stage: 'review',
+    title: '资源选择',
+    description: () => (diagnosisResult.value ? '确认资源类型并生成' : '查看诊断结果后选择资源'),
+  },
+]
 
 const completedStepCount = computed(() => {
   let count = 0
@@ -322,15 +362,31 @@ const completedStepCount = computed(() => {
   if (selectedDirectionId.value) count = 2
   if (questionnaireCompleted.value) count = 3
   if (diagnosisResult.value) count = 4
+  if (diagnosisResult.value && selectedResourceTypes.value.length) count = 5
   return count
 })
 
-const activeStep = computed(() => {
-  if (stepStage.value === 'diagnosis') return 4
-  if (stepStage.value === 'questionnaire') return 3
-  if (stepStage.value === 'track') return 2
-  return 1
-})
+function canEnter(stage) {
+  if (!currentUser.value) return stage === 'domain'
+  if (stage === 'domain') return true
+  if (stage === 'track') return Boolean(selectedDomainId.value)
+  if (stage === 'questionnaire') return Boolean(selectedDirectionId.value)
+  if (stage === 'diagnosis') return questionnaireCompleted.value
+  if (stage === 'review') return Boolean(diagnosisResult.value)
+  return false
+}
+
+function goStep(target) {
+  if (canEnter(target)) {
+    stepStage.value = target
+  }
+}
+
+function applySelectedUser() {
+  const user = users.value.find((item) => item.user_id === selectedUserId.value)
+  if (!user) return
+  store.setCurrentUserProfile(user)
+}
 
 function initDiagnosticAnswers() {
   Object.keys(diagnosticAnswers).forEach((key) => {
@@ -342,6 +398,9 @@ function initDiagnosticAnswers() {
 }
 
 function resetFormValues() {
+  Object.keys(form).forEach((key) => {
+    delete form[key]
+  })
   for (const question of questions.value) {
     form[question.question_id] = question.type === 'multiple_choice' ? [] : ''
   }
@@ -387,21 +446,6 @@ function isTrackAvailable(track) {
   return track.metadata?.available !== false
 }
 
-async function loadDomains() {
-  const res = await knowledgeApi.listDomains()
-  domains.value = res.data.domains || []
-}
-
-async function loadQuestions() {
-  if (!selectedDirectionId.value) {
-    questions.value = []
-    return
-  }
-  const res = await onboardingApi.getQuestions(selectedDirectionId.value)
-  questions.value = res.data.questions || []
-  resetFormValues()
-}
-
 function selectDomain(item) {
   selectedDomainId.value = item.domain_id
   selectedDirectionId.value = ''
@@ -423,35 +467,42 @@ function selectDirection(item) {
   store.setDiagnosisResult(null)
 }
 
+async function loadUsers() {
+  const res = await userApi.list()
+  users.value = res.data.items || []
+  if (!selectedUserId.value && users.value.length) {
+    selectedUserId.value = store.currentUserId || users.value[0].user_id
+    applySelectedUser()
+  }
+}
+
+async function loadDomains() {
+  const res = await knowledgeApi.listDomains()
+  domains.value = res.data.domains || []
+}
+
+async function loadQuestions() {
+  if (!selectedDirectionId.value) {
+    questions.value = []
+    return
+  }
+  const res = await onboardingApi.getQuestions(selectedDirectionId.value)
+  questions.value = res.data.questions || []
+  resetFormValues()
+}
+
 async function prepareQuestionnaire() {
   if (!selectedDirectionId.value) return
   await loadQuestions()
   stepStage.value = 'questionnaire'
 }
 
-function goStep(target) {
-  if (target === 'domain') {
-    stepStage.value = 'domain'
-    return
-  }
-  if (target === 'track' && selectedDomainId.value) {
-    stepStage.value = 'track'
-    return
-  }
-  if (target === 'questionnaire' && selectedDirectionId.value) {
-    if (!questions.value.length) {
-      prepareQuestionnaire()
-      return
-    }
-    stepStage.value = 'questionnaire'
-    return
-  }
-  if (target === 'diagnosis' && questionnaireCompleted.value) {
-    stepStage.value = 'diagnosis'
-  }
-}
-
 async function submitQuestionnaire() {
+  if (!currentUser.value || !learnerId.value) {
+    ElMessage.warning('请先选择用户和学习方向')
+    return
+  }
+
   submittingProfile.value = true
   try {
     const answers = questions.value.reduce((acc, question) => {
@@ -460,18 +511,28 @@ async function submitQuestionnaire() {
     }, {})
 
     const res = await onboardingApi.createInitialProfile({
-      learner_id: form.learner_id,
+      learner_id: learnerId.value,
+      user_id: currentUser.value.user_id,
       learning_direction_id: selectedDirectionId.value,
       answers,
     })
 
-    store.setLearnerId(form.learner_id)
+    store.setLearnerId(learnerId.value)
     store.setCurrentProfile(res.data.profile)
     store.setPendingDiagnosis(res.data.diagnostic_questions || [])
     store.setDiagnosisResult(null)
     initDiagnosticAnswers()
-    stepStage.value = 'diagnosis'
-    ElMessage.success('问卷已完成，请继续完成诊断')
+    stepStage.value = diagnosticQuestions.value.length ? 'diagnosis' : 'review'
+    if (!diagnosticQuestions.value.length) {
+      store.setDiagnosisResult({
+        ability_level: res.data.profile.skill_level,
+        weak_points: res.data.profile.weak_points || [],
+        strong_points: res.data.profile.strong_points || [],
+        knowledge_states: res.data.profile.knowledge_states || {},
+        diagnostic_result_id: '',
+      })
+    }
+    ElMessage.success('问卷已提交')
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.response?.data?.message || '问卷提交失败')
@@ -507,6 +568,7 @@ async function submitDiagnosis() {
       },
     })
     store.setPendingDiagnosis([])
+    stepStage.value = 'review'
     ElMessage.success('诊断已完成')
   } catch (error) {
     console.error(error)
@@ -516,22 +578,48 @@ async function submitDiagnosis() {
   }
 }
 
-watch(diagnosticQuestions, () => {
-  initDiagnosticAnswers()
-})
+async function submitGeneration() {
+  if (!selectedResourceTypes.value.length) {
+    ElMessage.warning('请至少选择一种资源类型')
+    return
+  }
+  submittingGeneration.value = true
+  try {
+    const payload = {
+      learner_id: learnerId.value,
+      knowledge_base_id: selectedDirectionId.value,
+      topic: generationTopic.value,
+      diagnostic_result_id: diagnosisResult.value?.diagnostic_result_id,
+      resource_types: selectedResourceTypes.value,
+    }
+    localStorage.setItem('last_generation_request', JSON.stringify(payload))
+    const res = await generateApi.createJob(payload)
+    router.push({
+      path: '/generate',
+      query: {
+        runId: res.data.run_id,
+        learnerId: learnerId.value,
+      },
+    })
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error?.response?.data?.message || '生成任务提交失败')
+  } finally {
+    submittingGeneration.value = false
+  }
+}
+
+watch(diagnosticQuestions, initDiagnosticAnswers)
 
 onMounted(async () => {
   try {
-    selectedDomainId.value = ''
-    selectedDirectionId.value = ''
-    stepStage.value = 'domain'
     store.setCurrentProfile(null)
     store.setPendingDiagnosis([])
     store.setDiagnosisResult(null)
-    await loadDomains()
+    await Promise.all([loadUsers(), loadDomains()])
   } catch (error) {
     console.error(error)
-    ElMessage.error('学习方向加载失败')
+    ElMessage.error('初始化学习方向页面失败')
   }
 })
 </script>
@@ -540,29 +628,57 @@ onMounted(async () => {
 .onboarding-page {
   display: flex;
   flex-direction: column;
+  gap: 18px;
+}
+
+.user-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 22px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+}
+
+.user-bar h2 {
+  margin: 0;
+}
+
+.user-bar p {
+  margin: 8px 0 0;
+  color: #667085;
+}
+
+.user-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.user-select {
+  width: 280px;
 }
 
 .wizard-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   gap: 20px;
-  align-items: stretch;
 }
 
 .progress-panel {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-height: 100%;
 }
 
 .progress-card {
-  flex: 1;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
-  min-height: 116px;
+  min-height: 104px;
   padding: 18px 16px;
   border: 1px solid #dde4ee;
   border-radius: 8px;
@@ -570,7 +686,6 @@ onMounted(async () => {
   color: #172033;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .progress-card.active {
@@ -602,17 +717,12 @@ onMounted(async () => {
 
 .progress-title {
   font-weight: 700;
-  color: #172033;
 }
 
 .progress-desc {
   margin-top: 4px;
   color: #5f6b7a;
   line-height: 1.5;
-}
-
-.step-panel {
-  min-width: 0;
 }
 
 .work-card,
@@ -646,8 +756,7 @@ onMounted(async () => {
   color: #5f6b7a;
 }
 
-.selection-pill-row,
-.summary-strip {
+.selection-pill-row {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -684,13 +793,6 @@ onMounted(async () => {
   color: #1f2937;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.choice-card:hover {
-  border-color: #9bb8ff;
-  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
-  transform: translateY(-1px);
 }
 
 .choice-card.selected {
@@ -704,17 +806,7 @@ onMounted(async () => {
   color: #667085;
 }
 
-.choice-card.unavailable:hover {
-  transform: none;
-  box-shadow: none;
-  border-color: #d8dee8;
-}
-
 .choice-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   font-size: 18px;
   font-weight: 650;
 }
@@ -765,9 +857,15 @@ onMounted(async () => {
   .wizard-layout {
     grid-template-columns: 1fr;
   }
+}
 
-  .progress-card {
-    min-height: 92px;
+@media (max-width: 720px) {
+  .user-bar {
+    flex-direction: column;
+  }
+
+  .user-select {
+    width: 100%;
   }
 }
 </style>

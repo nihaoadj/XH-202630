@@ -1,4 +1,4 @@
-"""SQLAlchemy 问卷仓储。"""
+"""问卷仓储的 SQLAlchemy 实现。"""
 from __future__ import annotations
 
 import hashlib
@@ -180,6 +180,30 @@ class SQLQuestionnaireRepository(BaseQuestionnaireRepository):
                 )
             db.commit()
             return submission_id
+
+    def list_submissions_by_learner(self, learner_id: str) -> list[dict[str, Any]]:
+        with self.session_factory() as db:
+            rows = (
+                db.query(QuestionnaireSubmissionORM)
+                .filter_by(learner_id=learner_id)
+                .order_by(QuestionnaireSubmissionORM.created_at.desc())
+                .all()
+            )
+        return [
+            {
+                "submission_id": row.submission_id,
+                "questionnaire_id": row.questionnaire_id,
+                "learner_id": row.learner_id,
+                "track_id": row.track_id,
+                "knowledge_base_id": row.knowledge_base_id,
+                "purpose": row.purpose,
+                "answers": row.answers_snapshot or {},
+                "profile_updates": row.profile_updates or {},
+                "metadata": row.extra_metadata or {},
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
 
     @staticmethod
     def _template_payload(row: QuestionnaireTemplateORM, include_questions: bool = True) -> dict[str, Any]:

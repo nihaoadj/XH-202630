@@ -71,11 +71,13 @@ backend/
 │   ├── api/                      # HTTP 路由层：仅负责请求校验、协议转换与响应组装
 │   │   ├── onboarding.py         # 初始画像问卷接口
 │   │   ├── admin.py              # Token 保护的全 KB 运行状态接口
+│   │   ├── users.py              # 用户基础资料接口
 │   │   ├── profiles.py           # 学习者画像接口
 │   │   ├── knowledge.py          # 领域、方向与知识库目录接口
 │   │   ├── skills.py             # 技能图谱接口
 │   │   ├── diagnosis.py          # 诊断接口
 │   │   ├── generate.py           # 资源生成接口
+│   │   ├── learning_history.py   # 学习历史时间线接口
 │   │   ├── resources.py          # 资源历史与文件下载接口
 │   │   ├── reviews.py            # 审核摘要接口
 │   │   ├── feedback.py           # 学习反馈接口
@@ -85,8 +87,11 @@ backend/
 │   │   ├── knowledge_service.py
 │   │   ├── onboarding_service.py
 │   │   ├── profile_service.py
+│   │   ├── user_service.py
 │   │   ├── diagnosis_service.py
 │   │   ├── generation_service.py
+│   │   ├── generation_job_service.py
+│   │   ├── learning_history_service.py
 │   │   ├── resource_service.py
 │   │   ├── review_service.py
 │   │   ├── feedback_service.py

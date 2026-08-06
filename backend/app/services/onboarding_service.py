@@ -1,10 +1,11 @@
-"""根据入门问卷创建初始画像，并选择自适应诊断题。"""
+"""根据 onboarding 问卷创建初始学习画像。"""
 from __future__ import annotations
 
 from typing import Any
 
 from app.db.learner.base import BaseLearnerRepository
 from app.db.questionnaire.base import BaseQuestionnaireRepository
+from app.db.user.base import BaseUserRepository
 from app.models.schemas import (
     InitialProfileQuestionnaire,
     InitialProfileResponse,
@@ -12,6 +13,7 @@ from app.models.schemas import (
     LearnerProfile,
     LearningPreferences,
 )
+from app.models.user_schemas import UserProfile
 from app.services.knowledge_service import KnowledgeService
 
 
@@ -23,14 +25,17 @@ class OnboardingService:
         learner_repo: BaseLearnerRepository,
         knowledge_service: KnowledgeService,
         questionnaire_repo: BaseQuestionnaireRepository,
+        user_repo: BaseUserRepository,
     ):
         self.learner_repo = learner_repo
         self.knowledge_service = knowledge_service
         self.questionnaire_repo = questionnaire_repo
+        self.user_repo = user_repo
 
     def create_initial_profile(self, request: InitialProfileQuestionnaire) -> InitialProfileResponse:
         manifest = self.knowledge_service._ensure_knowledge_base(request.learning_direction_id)
         self._validate_answers(request, manifest)
+        user = self._resolve_user(request)
         nodes = self.knowledge_service.list_skill_nodes(manifest["knowledge_base_id"])
         node_by_id = {node.node_id: node for node in nodes}
 
@@ -40,6 +45,7 @@ class OnboardingService:
         profile = self._build_profile(
             request,
             existing,
+            user,
             manifest["knowledge_base_id"],
             node_by_id,
             diagnostic_node_ids,
@@ -62,17 +68,23 @@ class OnboardingService:
             not_started_node_ids=not_started_node_ids,
             screening_results=screening_results,
             diagnostic_questions=[self.knowledge_service.public_question(question) for question in questions],
-            next_step=(
-                "提交 diagnostic_questions 的作答到 POST /api/diagnosis/submit；"
-                "未了解节点已标记为 not_started，不会出现在本轮诊断中。"
-            ),
+            next_step="提交诊断答案到 POST /api/diagnosis/submit，然后进入第 5 步选择资源类型。",
         )
 
     def questionnaire(self, learning_direction_id: str | None = None) -> list[dict[str, Any]]:
-        """从数据库返回前端渲染所需的问卷定义。"""
         manifest = self.knowledge_service._ensure_knowledge_base(learning_direction_id)
         common, track = self._questionnaire_templates(manifest["knowledge_base_id"])
         return [*common.get("questions", []), *track.get("questions", [])]
+
+    def _resolve_user(self, request: InitialProfileQuestionnaire) -> UserProfile:
+        payload = self._answer_payload(request)
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise ValueError("用户基础信息不存在，请先创建用户资料")
+        user = self.user_repo.get(user_id)
+        if user is None:
+            raise ValueError("用户基础信息不存在，请先创建用户资料")
+        return user
 
     def _validate_answers(self, request: InitialProfileQuestionnaire, manifest: dict[str, Any]) -> None:
         questions = self._question_by_id(manifest["knowledge_base_id"])
@@ -80,7 +92,7 @@ class OnboardingService:
         for question_id, question in questions.items():
             answer = answers.get(question_id)
             if question.get("required") and self._is_empty_answer(answer):
-                raise ValueError(f"缺少必答字段：{question_id}")
+                raise ValueError(f"缺少必答字段: {question_id}")
             if self._is_empty_answer(answer) or question.get("type") == "text":
                 continue
             self._validate_option_answer(question, answer)
@@ -97,13 +109,13 @@ class OnboardingService:
             values = answer if isinstance(answer, list) else [answer]
             for value in values:
                 selected.update(self._option_metadata(questions, question_id, value).get("diagnostic_scope_add", []))
-
         return [node_id for node_id in node_by_id if node_id in selected], {}
 
     def _build_profile(
         self,
         request: InitialProfileQuestionnaire,
         existing: LearnerProfile | None,
+        user: UserProfile,
         knowledge_base_id: str,
         node_by_id: dict[str, Any],
         diagnostic_node_ids: list[str],
@@ -112,9 +124,7 @@ class OnboardingService:
         questions = self._question_by_id(knowledge_base_id)
         answers = self._answer_payload(request)
         mapped = self._profile_mapping_values(questions, answers)
-        score_values = list(mapped["self_report_scores"])
-        if not score_values:
-            score_values = [25]
+        score_values = list(mapped["self_report_scores"]) or [25]
         average = sum(score_values) / len(score_values)
         skill_level = "初级" if average < 40 else "中级" if average < 75 else "进阶"
 
@@ -139,17 +149,15 @@ class OnboardingService:
         old_preferences = existing.learning_preferences if existing and existing.learning_preferences else LearningPreferences()
         metadata = dict(old_preferences.metadata)
         metadata["onboarding"] = {**answers, "learning_direction_id": request.learning_direction_id}
+        metadata["user_id"] = user.user_id
+        metadata["user_profile_snapshot"] = user.model_dump(mode="json")
         metadata.update(mapped["learning_preferences_metadata"])
-        preferred_resource_types = mapped["learning_preferences"].get(
-            "preferred_resource_types",
-            old_preferences.preferred_resource_types,
-        )
         difficulty_preference = mapped["learning_preferences"].get(
             "difficulty_preference",
             old_preferences.difficulty_preference or "自适应推荐",
         )
         preferences = LearningPreferences(
-            preferred_resource_types=preferred_resource_types,
+            preferred_resource_types=old_preferences.preferred_resource_types,
             difficulty_preference=difficulty_preference,
             time_budget_minutes=old_preferences.time_budget_minutes,
             language=old_preferences.language or "zh-CN",
@@ -159,9 +167,9 @@ class OnboardingService:
         preserved_weak_points = list(existing.weak_points) if existing else []
         return LearnerProfile(
             learner_id=request.learner_id,
-            learner_type=mapped["root"].get("learner_type") or (existing.learner_type if existing else "问卷学习者"),
-            education=mapped["root"].get("education") or (existing.education if existing else "未填写"),
-            major=mapped["root"].get("major") or (existing.major if existing else "未填写"),
+            learner_type=mapped["root"].get("learner_type") or user.identity or (existing.learner_type if existing else "问卷学习者"),
+            education=user.education,
+            major=user.major,
             target_domain=self.knowledge_service._ensure_knowledge_base(knowledge_base_id).get("domain"),
             knowledge_base_id=knowledge_base_id,
             theory_scores=prior_scores,
@@ -184,7 +192,7 @@ class OnboardingService:
         if common is None:
             raise ValueError("数据库中缺少通用初始画像问卷")
         if track is None:
-            raise ValueError(f"数据库中缺少学习方向问卷：{knowledge_base_id}")
+            raise ValueError(f"数据库中缺少学习方向问卷: {knowledge_base_id}")
         return common, track
 
     def _question_by_id(self, learning_direction_id: str | None) -> dict[str, dict[str, Any]]:
@@ -203,13 +211,17 @@ class OnboardingService:
         return value is None or value == "" or value == []
 
     def _validate_option_answer(self, question: dict[str, Any], answer: Any) -> None:
-        valid_values = {option.get("value", option.get("label")) for option in question.get("options", []) if isinstance(option, dict)}
+        valid_values = {
+            option.get("value", option.get("label"))
+            for option in question.get("options", [])
+            if isinstance(option, dict)
+        }
         if not valid_values:
             return
         values = answer if isinstance(answer, list) else [answer]
         invalid = [value for value in values if value not in valid_values]
         if invalid:
-            raise ValueError(f"{question['question_id']} 包含不支持的选项：{', '.join(invalid)}")
+            raise ValueError(f"{question['question_id']} 包含不支持的选项: {', '.join(invalid)}")
         exclusive = set((question.get("validation") or {}).get("exclusive_option_values", []))
         if exclusive & set(values) and len(values) > 1:
             raise ValueError(f"{question['question_id']} 的互斥选项不能与其他选项同时选择")
@@ -307,7 +319,11 @@ class OnboardingService:
         answers = self._answer_payload(request)
         for template in (common, track):
             question_ids = {question["question_id"] for question in template.get("questions", [])}
-            template_answers = {key: value for key, value in answers.items() if key in question_ids and not self._is_empty_answer(value)}
+            template_answers = {
+                key: value
+                for key, value in answers.items()
+                if key in question_ids and not self._is_empty_answer(value)
+            }
             if not template_answers:
                 continue
             self.questionnaire_repo.save_submission(

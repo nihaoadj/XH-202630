@@ -1,11 +1,11 @@
 import uuid
 from typing import List
 
-from app.core.file_storage import save_text_resource
 from app.core.errors import ApplicationError, ErrorCode
+from app.core.file_storage import save_text_resource
 from app.core.health import ensure_generation_ready
-from app.db.resource.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
+from app.db.resource.base import BaseResourceRepository
 from app.models.schemas import GenerateRequest, GenerateResponse, LearnerProfile, LearningResource
 from app.models.workflow import (
     ClaimCheckStatus,
@@ -73,7 +73,6 @@ def build_workflow_state(
 
 
 def _build_report(learner: LearnerProfile, diagnosis: dict, review: dict, learning_plan: dict) -> dict:
-    """构建生成报告摘要"""
     hallucination_rate = review.get("hallucination_rate", review.get("hallucination_score", 0.0))
     weak_points = diagnosis.get("weak_points", learner.weak_points)
     return {
@@ -104,12 +103,14 @@ def _persist_resources(
     learner_id: str,
     topic: str,
     resource_repo: BaseResourceRepository,
+    run_id: str,
 ) -> List[LearningResource]:
-    """将生成的资源持久化到文件系统与数据库"""
+    """Persist generated resources to the filesystem and repository."""
     persisted = []
     for resource in resources:
         resource.learner_id = learner_id
         resource.topic = topic
+        resource.run_id = run_id
 
         if resource.storage_type == "text" and resource.content_text:
             file_path, file_size, mime_type = save_text_resource(
@@ -128,10 +129,7 @@ def _persist_resources(
 
 
 class GenerationService:
-    """个性化资源生成业务服务
-    
-    通过构造函数注入依赖。
-    """
+    """Generate learning resources by orchestrating the workflow and persistence."""
 
     def __init__(
         self,
@@ -139,20 +137,21 @@ class GenerationService:
         workflow,
         audit_repo: BaseAuditRepository | None = None,
     ):
-        """初始化服务
-        
-        Args:
-            resource_repo: 资源仓库（通过DI容器注入）
-            workflow: Agent工作流（通过DI容器注入）
-        """
         self.resource_repo = resource_repo
         self.workflow = workflow
         self.audit_repo = audit_repo
 
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
-        """生成个性化学习资源"""
+        return self.generate_with_run_id(learner, req)
+
+    def generate_with_run_id(
+        self,
+        learner: LearnerProfile,
+        req: GenerateRequest,
+        run_id: str | None = None,
+    ) -> GenerateResponse:
         readiness = ensure_generation_ready()
-        initial_state = build_workflow_state(learner, req)
+        initial_state = build_workflow_state(learner, req, run_id=run_id)
         run_id = initial_state["run_id"]
 
         result = self.workflow.invoke(initial_state)
@@ -163,8 +162,10 @@ class GenerationService:
             req.learner_id,
             req.topic,
             self.resource_repo,
+            run_id,
         )
         review = result.get("review_result", {})
+
         if self.audit_repo:
             self.audit_repo.save_run(
                 learner_id=req.learner_id,
@@ -187,7 +188,8 @@ class GenerationService:
                     resource.review_id = review_id
                     resource.claim_count = review.get("claim_total", len(review.get("claims", [])))
                     resource.hallucination_rate = review.get(
-                        "hallucination_rate", review.get("hallucination_score")
+                        "hallucination_rate",
+                        review.get("hallucination_score"),
                     )
                     resource.difficulty_match = review.get("difficulty_match")
                     self.resource_repo.save(resource, req.learner_id, req.topic)

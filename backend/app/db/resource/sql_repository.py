@@ -26,6 +26,7 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         learning_path_node=orm.learning_path_node,
         review_status=orm.review_status,
         review_id=orm.review_id,
+        run_id=orm.run_id,
         claim_count=orm.claim_count,
         hallucination_rate=orm.hallucination_rate,
         difficulty_match=orm.difficulty_match,
@@ -54,6 +55,7 @@ def _pydantic_to_orm(resource: LearningResource, learner_id: str, topic: str) ->
         learning_path_node=resource.learning_path_node,
         review_status=resource.review_status,
         review_id=resource.review_id,
+        run_id=resource.run_id,
         claim_count=resource.claim_count,
         hallucination_rate=resource.hallucination_rate,
         difficulty_match=resource.difficulty_match,
@@ -92,6 +94,7 @@ class SQLResourceRepository(BaseResourceRepository):
                 orm.learning_path_node = resource.learning_path_node
                 orm.review_status = resource.review_status
                 orm.review_id = resource.review_id
+                orm.run_id = resource.run_id
                 orm.claim_count = resource.claim_count
                 orm.hallucination_rate = resource.hallucination_rate
                 orm.difficulty_match = resource.difficulty_match
@@ -118,7 +121,11 @@ class SQLResourceRepository(BaseResourceRepository):
             return False
 
     def list_by_learner_with_filter(
-        self, learner_id: str, resource_type: Optional[str] = None, difficulty: Optional[str] = None
+        self,
+        learner_id: str,
+        resource_type: Optional[str] = None,
+        difficulty: Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> List[LearningResource]:
         with self.session_factory() as db:
             query = db.query(GeneratedResourceORM).filter_by(learner_id=learner_id)
@@ -126,5 +133,7 @@ class SQLResourceRepository(BaseResourceRepository):
                 query = query.filter_by(resource_type=resource_type)
             if difficulty:
                 query = query.filter_by(difficulty=difficulty)
+            if run_id:
+                query = query.filter_by(run_id=run_id)
             orms = query.order_by(GeneratedResourceORM.created_at.desc()).all()
         return [_orm_to_pydantic(orm) for orm in orms]

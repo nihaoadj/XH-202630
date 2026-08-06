@@ -1,4 +1,4 @@
-"""SQLAlchemy 诊断记录仓库。"""
+"""诊断仓储的 SQLAlchemy 实现。"""
 from __future__ import annotations
 
 import hashlib
@@ -8,7 +8,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.diagnosis.base import BaseDiagnosisRepository
+from app.db.extended_models import DiagnosticRunORM
 from app.db.models import DiagnosticAnswerORM, KnowledgeStateORM
+from app.models.history_schemas import DiagnosticRunRecord
 from app.models.schemas import DiagnosticAnswerRecord, KnowledgeState
 
 
@@ -79,3 +81,44 @@ class SQLDiagnosisRepository(BaseDiagnosisRepository):
                     for key, value in values.items():
                         setattr(row, key, value)
             db.commit()
+
+    def save_run(self, run: DiagnosticRunRecord) -> None:
+        with self.session_factory() as db:
+            db.add(
+                DiagnosticRunORM(
+                    diagnostic_result_id=run.diagnostic_result_id,
+                    learner_id=run.learner_id,
+                    knowledge_base_id=run.knowledge_base_id,
+                    ability_level=run.ability_level,
+                    weak_points=run.weak_points,
+                    strong_points=run.strong_points,
+                    knowledge_states_snapshot=run.knowledge_states_snapshot,
+                    recommended_path=run.recommended_path,
+                    raw_result=run.raw_result,
+                )
+            )
+            db.commit()
+
+    def list_runs_by_learner(self, learner_id: str) -> list[DiagnosticRunRecord]:
+        with self.session_factory() as db:
+            rows = (
+                db.query(DiagnosticRunORM)
+                .filter_by(learner_id=learner_id)
+                .order_by(DiagnosticRunORM.created_at.desc())
+                .all()
+            )
+        return [
+            DiagnosticRunRecord(
+                diagnostic_result_id=row.diagnostic_result_id,
+                learner_id=row.learner_id,
+                knowledge_base_id=row.knowledge_base_id,
+                ability_level=row.ability_level,
+                weak_points=row.weak_points or [],
+                strong_points=row.strong_points or [],
+                knowledge_states_snapshot=row.knowledge_states_snapshot or {},
+                recommended_path=row.recommended_path or [],
+                raw_result=row.raw_result or {},
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
