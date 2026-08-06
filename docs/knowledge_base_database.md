@@ -288,10 +288,13 @@ backend/chroma_db/
 ### 4.6 资源与反馈
 
 - `POST /api/generate/jobs`
+- `GET /api/generate/jobs?learner_id={learner_id}`
 - `GET /api/generate/jobs/{run_id}`
 - `GET /api/resources/{learner_id}`
 - `GET /api/resources/file/{resource_id}`
 - `GET /api/reviews/{resource_id}`
+- `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
+- `POST /api/feedback/evaluation/run/submit`
 - `POST /api/feedback/`
 - `GET /api/feedback/history/{learner_id}`
 - `GET /api/learning-history/{learner_id}/timeline`

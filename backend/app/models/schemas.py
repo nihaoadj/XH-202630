@@ -237,6 +237,13 @@ class GenerationJobStatusResponse(BaseModel):
     finished_at: Optional[datetime] = None
 
 
+class GenerationJobListResponse(BaseModel):
+    """学习者生成任务列表响应"""
+    learner_id: str
+    total: int
+    items: List[GenerationJobStatusResponse] = Field(default_factory=list)
+
+
 class LearningPlan(BaseModel):
     """学习路径规划"""
     learning_path: List[LearningPathItem] = Field(default_factory=list)
@@ -520,6 +527,18 @@ class ResourceEvaluationSubmitResponse(BaseModel):
     feedback: FeedbackResponse
 
 
+class RunEvaluationSubmitResponse(BaseModel):
+    """按生成任务聚合的学习后测评与反馈结果"""
+    learner_id: str
+    run_id: str
+    resource_count: int
+    correct_rate: float
+    correct_count: int
+    total_questions: int
+    wrong_knowledge_points: List[str] = Field(default_factory=list)
+    feedback: FeedbackResponse
+
+
 class ResourceListResponse(BaseModel):
     """生成资源列表响应"""
     learner_id: str
@@ -555,6 +574,16 @@ class ResourceEvaluationSessionResponse(BaseModel):
     questions: List[ResourceEvaluationQuestion] = Field(default_factory=list)
 
 
+class RunEvaluationSessionResponse(BaseModel):
+    """按生成任务聚合的学习后测评题目列表"""
+    learner_id: str
+    run_id: str
+    topic: Optional[str] = None
+    resource_ids: List[str] = Field(default_factory=list)
+    total: int
+    questions: List[ResourceEvaluationQuestion] = Field(default_factory=list)
+
+
 class ResourceEvaluationAnswerSubmission(BaseModel):
     """学习后测评单题作答"""
     question_id: str
@@ -565,6 +594,18 @@ class ResourceEvaluationSubmitRequest(BaseModel):
     """学习后测评与反馈提交"""
     learner_id: str
     resource_id: str
+    answers: List[ResourceEvaluationAnswerSubmission] = Field(default_factory=list, min_length=1)
+    feedback_type: Optional[str] = Field(default=None, description="反馈类型")
+    time_spent_seconds: Optional[int] = Field(default=None, ge=0, description="学习耗时")
+    completed: Optional[bool] = Field(default=None, description="是否完成学习")
+    self_rating: Optional[int] = Field(default=None, ge=1, le=5, description="自评")
+    practice_result: Dict[str, Any] = Field(default_factory=dict, description="主观反馈与练习信息")
+
+
+class RunEvaluationSubmitRequest(BaseModel):
+    """按生成任务聚合的学习后测评与反馈提交"""
+    learner_id: str
+    run_id: str
     answers: List[ResourceEvaluationAnswerSubmission] = Field(default_factory=list, min_length=1)
     feedback_type: Optional[str] = Field(default=None, description="反馈类型")
     time_spent_seconds: Optional[int] = Field(default=None, ge=0, description="学习耗时")

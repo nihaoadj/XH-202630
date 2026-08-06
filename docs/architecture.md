@@ -175,6 +175,7 @@ backend/app/core + backend/app/db
 
 ```text
 POST /api/generate/jobs
+-> GET /api/generate/jobs?learner_id={learner_id}
 -> BackgroundTasks 触发 generation_job_service.run_job(...)
 -> 任务状态通过 GET /api/generate/jobs/{run_id} 查询
 -> 结果通过 GET /api/resources/{learner_id}?run_id={run_id} 获取
@@ -215,10 +216,14 @@ POST /api/users/
 -> POST /api/onboarding/initial-profile
 -> POST /api/diagnosis/submit
 -> POST /api/generate/jobs
+-> GET /api/generate/jobs?learner_id={learner_id}
 -> GET /api/generate/jobs/{run_id}
 -> GET /api/resources/{learner_id}
 -> GET /api/resources/file/{resource_id}
+-> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
+-> POST /api/feedback/evaluation/run/submit
 -> POST /api/feedback/
+-> GET /api/feedback/history/{learner_id}
 -> GET /api/learning-history/{learner_id}/timeline
 -> GET /api/report/{learner_id}
 ```
@@ -233,6 +238,9 @@ POST /api/users/
 - `GET /api/skills/nodes`
 - `GET /api/diagnosis/questions`
 - `GET /api/reviews/{resource_id}`
+- `GET /api/generate/jobs?learner_id={learner_id}`
+- `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
+- `POST /api/feedback/evaluation/run/submit`
 - `GET /api/feedback/history/{learner_id}`
 - `GET /api/evaluation/summary`
 
@@ -322,5 +330,7 @@ scripts/
 
 - 当前对外资源生成模式为异步任务模式
 - 同步生成接口 `POST /api/generate/` 已移除
+- 资源生成页当前按任务维度展示，默认定位当前任务，可切换查看历史成功任务
+- 学习反馈页当前按任务维度加载测评题，并支持基于选中反馈主动重新生成
 - 学习历史页面应优先依赖 `/api/learning-history/{learner_id}/timeline`
 - 通用问卷不再承担用户资料采集职责

@@ -7,6 +7,7 @@ from app.db.generation_job.base import BaseGenerationJobRepository
 from app.models.schemas import (
     GenerateRequest,
     GenerationJobCreateResponse,
+    GenerationJobListResponse,
     GenerationJobStatusResponse,
     LearnerProfile,
 )
@@ -51,6 +52,14 @@ class GenerationJobService:
 
     def get_job(self, run_id: str) -> GenerationJobStatusResponse | None:
         return self.job_repo.get(run_id)
+
+    def list_jobs(self, learner_id: str) -> GenerationJobListResponse:
+        items = self.job_repo.list_by_learner(learner_id)
+        return GenerationJobListResponse(
+            learner_id=learner_id,
+            total=len(items),
+            items=items,
+        )
 
     def run_job(self, learner: LearnerProfile, req: GenerateRequest, run_id: str) -> None:
         self.job_repo.mark_running(run_id)

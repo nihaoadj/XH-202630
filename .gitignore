@@ -16,6 +16,8 @@ backend/data/generated_resources/*
 !backend/data/generated_resources/.gitkeep
 !backend/data/generated_resources/*/
 !backend/data/generated_resources/*/.gitkeep
+backend/data/generated_resources/**/*
+!backend/data/generated_resources/**/.gitkeep
 
 # Vector store
 backend/chroma_db/*

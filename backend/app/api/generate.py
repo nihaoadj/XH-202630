@@ -5,6 +5,7 @@ from app.core.health import build_health_report
 from app.models.schemas import (
     GenerateRequest,
     GenerationJobCreateResponse,
+    GenerationJobListResponse,
     GenerationJobStatusResponse,
 )
 from app.services.generation_job_service import GenerationJobService
@@ -46,3 +47,15 @@ def get_generation_job(run_id: str, request: Request):
     if job is None:
         raise HTTPException(status_code=404, detail="生成任务不存在")
     return job
+
+
+@router.get("/jobs", response_model=GenerationJobListResponse)
+def list_generation_jobs(learner_id: str, request: Request):
+    container = request.app.container
+    profile_service: ProfileService = container.profile_service()
+    learner = profile_service.get(learner_id)
+    if not learner:
+        raise HTTPException(status_code=404, detail="学习者画像不存在")
+
+    generation_job_service: GenerationJobService = container.generation_job_service()
+    return generation_job_service.list_jobs(learner_id)

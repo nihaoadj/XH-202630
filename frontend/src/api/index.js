@@ -36,6 +36,7 @@ export const diagnosisApi = {
 
 export const generateApi = {
   createJob: (data) => api.post('/generate/jobs', data),
+  listJobs: (learnerId) => api.get('/generate/jobs', { params: { learner_id: learnerId } }),
   getJobStatus: (runId) => api.get(`/generate/jobs/${runId}`),
 }
 
@@ -52,7 +53,9 @@ export const feedbackApi = {
   submit: (data) => api.post('/feedback/', data),
   history: (learnerId) => api.get(`/feedback/history/${learnerId}`),
   getEvaluationSession: (learnerId, resourceId) => api.get(`/feedback/evaluation/${learnerId}/${resourceId}`),
+  getRunEvaluationSession: (learnerId, runId) => api.get(`/feedback/evaluation/run/${learnerId}/${runId}`),
   submitEvaluation: (data) => api.post('/feedback/evaluation/submit', data),
+  submitRunEvaluation: (data) => api.post('/feedback/evaluation/run/submit', data),
 }
 
 export const reportApi = {

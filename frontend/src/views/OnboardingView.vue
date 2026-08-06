@@ -585,13 +585,15 @@ async function submitGeneration() {
   }
   submittingGeneration.value = true
   try {
-    const res = await generateApi.createJob({
+    const payload = {
       learner_id: learnerId.value,
       knowledge_base_id: selectedDirectionId.value,
       topic: generationTopic.value,
       diagnostic_result_id: diagnosisResult.value?.diagnostic_result_id,
       resource_types: selectedResourceTypes.value,
-    })
+    }
+    localStorage.setItem('last_generation_request', JSON.stringify(payload))
+    const res = await generateApi.createJob(payload)
     router.push({
       path: '/generate',
       query: {

@@ -3,7 +3,7 @@
     <section class="hero-card">
       <div class="hero-copy">
         <h2>资源生成状态</h2>
-        <p>资源生成完成后会直接展示在当前页面，你可以点开对应资源查看内容、知识点和下载入口，不再单独跳到资源查看页。</p>
+        <p>默认展示当前正在进行的生成任务；如果你想回看之前的任务，也可以在下方切换历史任务并查看该任务下的资源。</p>
       </div>
       <el-tag v-if="learningDirectionName" type="info" effect="plain">
         当前学习方向：{{ learningDirectionName }}
@@ -13,36 +13,67 @@
     <el-card class="status-card">
       <template #header>
         <div class="status-head">
-          <span>生成任务</span>
-          <el-tag :type="statusTagType(job.status)">{{ statusLabel(job.status) }}</el-tag>
+          <div>
+            <span>生成任务</span>
+            <p class="section-tip">默认优先定位到当前生产中的任务，也支持下拉查看历史任务。</p>
+          </div>
+          <el-button text @click="refreshJobs" :loading="loadingJobs">刷新任务</el-button>
         </div>
       </template>
 
       <el-empty
-        v-if="!job.runId"
+        v-if="!jobs.length"
         description="当前还没有生成任务。请先在学习方向流程中完成诊断并发起资源生成。"
       />
 
       <template v-else>
-        <div class="job-summary">
+        <div class="task-selector">
+          <el-select
+            v-model="selectedRunId"
+            filterable
+            placeholder="选择要查看的生成任务"
+            class="task-select"
+            @change="handleTaskChange"
+          >
+            <el-option
+              v-for="task in jobs"
+              :key="task.run_id"
+              :label="taskLabel(task)"
+              :value="task.run_id"
+            />
+          </el-select>
+        </div>
+
+        <div v-if="selectedJob" class="job-summary">
           <p><strong>用户：</strong>{{ currentDisplayName }}</p>
-          <p><strong>主题：</strong>{{ job.topic || '-' }}</p>
+          <p><strong>学习方向：</strong>{{ learningDirectionName || '-' }}</p>
           <p><strong>任务编号：</strong>{{ shortRunId }}</p>
-          <p v-if="job.errorMessage"><strong>错误信息：</strong>{{ job.errorMessage }}</p>
+          <p><strong>任务状态：</strong><el-tag :type="statusTagType(selectedJob.job_status)">{{ statusLabel(selectedJob.job_status) }}</el-tag></p>
+          <p><strong>创建时间：</strong>{{ formatDateTime(selectedJob.created_at) }}</p>
+          <p v-if="selectedJob.finished_at"><strong>完成时间：</strong>{{ formatDateTime(selectedJob.finished_at) }}</p>
+          <p v-if="selectedJob.error_message"><strong>错误信息：</strong>{{ selectedJob.error_message }}</p>
         </div>
 
         <div class="status-actions">
           <el-button
-            v-if="job.status === 'running' || job.status === 'queued'"
+            v-if="selectedJob && (selectedJob.job_status === 'running' || selectedJob.job_status === 'queued')"
             @click="refreshStatus"
           >
             刷新状态
           </el-button>
           <el-button
-            v-if="job.status === 'completed'"
+            v-if="selectedJob && selectedJob.job_status === 'failed'"
+            type="primary"
+            @click="retryGeneration"
+            :loading="retrying"
+          >
+            重新生成
+          </el-button>
+          <el-button
+            v-if="selectedJob && selectedJob.job_status === 'completed'"
             type="primary"
             plain
-            @click="loadResources"
+            @click="loadResourcesForSelectedJob"
             :loading="loadingResources"
           >
             刷新资源
@@ -52,30 +83,53 @@
       </template>
     </el-card>
 
-    <el-card v-if="job.runId && job.status === 'completed'" class="resources-card">
+    <el-card v-if="selectedJob" class="resources-card">
       <template #header>
         <div class="status-head">
           <div>
-            <span>本次生成资源</span>
-            <p class="section-tip">点击下方资源卡片即可查看生成结果与引用来源。</p>
+            <span>{{ selectedJob.job_status === 'completed' ? '任务资源' : '任务资源预览' }}</span>
+            <p class="section-tip">资源按任务维度展示；先选任务，再从该任务下选择任意一份资源阅读。</p>
           </div>
-          <el-tag type="success" effect="plain">{{ resources.length }} 份资源</el-tag>
+          <el-tag :type="selectedJob.job_status === 'completed' ? 'success' : 'info'" effect="plain">
+            {{ resources.length }} 份资源
+          </el-tag>
         </div>
       </template>
 
       <div v-loading="loadingResources">
         <el-empty
-          v-if="resourcesLoaded && !resources.length"
-          description="任务已完成，但暂时还没有查到资源内容。可以稍后再刷新一次。"
+          v-if="selectedJob.job_status !== 'completed'"
+          :description="selectedJob.job_status === 'failed' ? '该任务生成失败，当前没有可展示的资源。' : '该任务仍在生成中，完成后这里会展示本任务的资源。'"
         />
-        <ResourceViewer v-else-if="resources.length" :resources="resources" />
+        <el-empty
+          v-else-if="resourcesLoaded && !resources.length"
+          description="该任务已完成，但暂时还没有查到资源内容。可以稍后再刷新一次。"
+        />
+        <template v-else-if="resources.length">
+          <div class="resource-selector">
+            <el-select
+              v-model="selectedResourceId"
+              filterable
+              placeholder="选择要阅读的资源"
+              class="resource-select"
+            >
+              <el-option
+                v-for="item in resources"
+                :key="item.resource_id"
+                :label="resourceLabel(item)"
+                :value="item.resource_id"
+              />
+            </el-select>
+          </div>
+          <ResourceViewer v-if="selectedResource" :resources="[selectedResource]" />
+        </template>
       </div>
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { generateApi, resourceApi } from '../api'
 import ResourceViewer from '../components/ResourceViewer.vue'
@@ -94,24 +148,33 @@ const currentDisplayName = computed(
     '当前用户'
 )
 
+const learnerId =
+  new URLSearchParams(window.location.search).get('learnerId') ||
+  localStorage.getItem('last_learner_id') ||
+  store.currentLearnerId ||
+  ''
+const initialRunId =
+  new URLSearchParams(window.location.search).get('runId') ||
+  localStorage.getItem('current_generation_run_id') ||
+  ''
+
 const pollTimer = ref(null)
+const jobs = ref([])
+const loadingJobs = ref(false)
 const loadingResources = ref(false)
 const resourcesLoaded = ref(false)
 const resources = ref([])
+const retrying = ref(false)
+const selectedRunId = ref(initialRunId)
+const selectedResourceId = ref('')
 
-const job = reactive({
-  runId: new URLSearchParams(window.location.search).get('runId') || localStorage.getItem('current_generation_run_id') || '',
-  status: localStorage.getItem('current_generation_status') || '',
-  learnerId:
-    new URLSearchParams(window.location.search).get('learnerId') ||
-    localStorage.getItem('last_learner_id') ||
-    store.currentLearnerId ||
-    '',
-  topic: '',
-  errorMessage: '',
-})
-
-const shortRunId = computed(() => (job.runId ? job.runId.slice(0, 8).toUpperCase() : '-'))
+const selectedJob = computed(
+  () => jobs.value.find((item) => item.run_id === selectedRunId.value) || null
+)
+const shortRunId = computed(() => (selectedJob.value?.run_id ? selectedJob.value.run_id.slice(0, 8).toUpperCase() : '-'))
+const selectedResource = computed(
+  () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
+)
 
 function statusLabel(status) {
   return (
@@ -135,9 +198,40 @@ function statusTagType(status) {
   )
 }
 
-function persistJobState() {
-  localStorage.setItem('current_generation_run_id', job.runId || '')
-  localStorage.setItem('current_generation_status', job.status || '')
+function taskLabel(task) {
+  const prefix = task.job_status === 'running' || task.job_status === 'queued' ? '当前' : '历史'
+  return `${prefix} / ${task.run_id.slice(0, 8).toUpperCase()} / ${task.topic || '未命名主题'} / ${formatDateTime(task.finished_at || task.created_at)}`
+}
+
+function persistSelectedJob() {
+  localStorage.setItem('current_generation_run_id', selectedJob.value?.run_id || '')
+  localStorage.setItem('current_generation_status', selectedJob.value?.job_status || '')
+}
+
+function resourceLabel(resource) {
+  return `${resource.resource_type} / ${resource.difficulty} / ${resource.topic || '未命名主题'}`
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function readLastGenerationRequest() {
+  try {
+    const raw = localStorage.getItem('last_generation_request')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
 }
 
 function stopPolling() {
@@ -149,17 +243,71 @@ function stopPolling() {
 
 function startPolling() {
   stopPolling()
+  if (!selectedJob.value || !['queued', 'running'].includes(selectedJob.value.job_status)) {
+    return
+  }
   pollTimer.value = setInterval(refreshStatus, 5000)
 }
 
-async function loadResources() {
-  if (!job.learnerId) return
+function pickDefaultRunId(items) {
+  if (!items.length) return ''
+  const currentJob = items.find((item) => item.job_status === 'running' || item.job_status === 'queued')
+  if (currentJob) return currentJob.run_id
+  if (initialRunId && items.some((item) => item.run_id === initialRunId)) return initialRunId
+  return items[0].run_id
+}
+
+async function loadJobs(preferDefault = false) {
+  if (!learnerId) return
+  loadingJobs.value = true
+  try {
+    const res = await generateApi.listJobs(learnerId)
+    jobs.value = (res.data.items || []).filter((item) => item.job_status !== 'failed')
+    if (!jobs.value.length) {
+      selectedRunId.value = ''
+      resources.value = []
+      resourcesLoaded.value = false
+      selectedResourceId.value = ''
+      stopPolling()
+      return
+    }
+
+    if (
+      preferDefault ||
+      !selectedRunId.value ||
+      !jobs.value.some((item) => item.run_id === selectedRunId.value)
+    ) {
+      selectedRunId.value = pickDefaultRunId(jobs.value)
+    }
+
+    persistSelectedJob()
+    startPolling()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error?.response?.data?.message || '任务列表加载失败')
+  } finally {
+    loadingJobs.value = false
+  }
+}
+
+async function loadResourcesForSelectedJob() {
+  if (!learnerId || !selectedJob.value?.run_id || selectedJob.value.job_status !== 'completed') {
+    resources.value = []
+    resourcesLoaded.value = true
+    selectedResourceId.value = ''
+    return
+  }
+
   loadingResources.value = true
   try {
-    const params = job.runId ? { run_id: job.runId } : {}
-    const res = await resourceApi.listByLearner(job.learnerId, params)
+    const res = await resourceApi.listByLearner(learnerId, { run_id: selectedJob.value.run_id })
     resources.value = res.data.resources || []
     resourcesLoaded.value = true
+    if (!resources.value.length) {
+      selectedResourceId.value = ''
+    } else if (!resources.value.some((item) => item.resource_id === selectedResourceId.value)) {
+      selectedResourceId.value = resources.value[0].resource_id
+    }
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.response?.data?.message || '资源列表加载失败')
@@ -169,20 +317,21 @@ async function loadResources() {
 }
 
 async function refreshStatus() {
-  if (!job.runId) return
+  if (!selectedJob.value?.run_id) return
   try {
-    const res = await generateApi.getJobStatus(job.runId)
-    job.status = res.data.job_status
-    job.learnerId = res.data.learner_id
-    job.topic = res.data.topic
-    job.errorMessage = res.data.error_message || ''
-    persistJobState()
+    const res = await generateApi.getJobStatus(selectedJob.value.run_id)
+    const nextJob = res.data
+    jobs.value = jobs.value.map((item) => (item.run_id === nextJob.run_id ? nextJob : item))
+    persistSelectedJob()
 
-    if (job.status === 'completed') {
+    if (nextJob.job_status === 'completed') {
       stopPolling()
-      await loadResources()
-    } else if (job.status === 'failed') {
+      await loadResourcesForSelectedJob()
+    } else if (nextJob.job_status === 'failed') {
       stopPolling()
+      resources.value = []
+      resourcesLoaded.value = true
+      selectedResourceId.value = ''
     }
   } catch (error) {
     console.error(error)
@@ -191,12 +340,64 @@ async function refreshStatus() {
   }
 }
 
-if (job.runId) {
-  refreshStatus()
-  if (job.status === 'queued' || job.status === 'running' || !job.status) {
-    startPolling()
+async function refreshJobs() {
+  await loadJobs(false)
+  if (selectedJob.value?.job_status === 'completed') {
+    await loadResourcesForSelectedJob()
   }
 }
+
+async function handleTaskChange() {
+  persistSelectedJob()
+  stopPolling()
+  resources.value = []
+  resourcesLoaded.value = false
+  selectedResourceId.value = ''
+
+  if (!selectedJob.value) return
+  if (selectedJob.value.job_status === 'completed') {
+    await loadResourcesForSelectedJob()
+  } else {
+    resourcesLoaded.value = true
+  }
+  startPolling()
+}
+
+async function retryGeneration() {
+  const payload = readLastGenerationRequest()
+  if (!payload?.learner_id || !payload?.topic || !Array.isArray(payload?.resource_types)) {
+    ElMessage.warning('缺少上一轮生成参数，请返回学习方向页面重新发起生成')
+    return
+  }
+
+  retrying.value = true
+  resources.value = []
+  resourcesLoaded.value = false
+  selectedResourceId.value = ''
+  stopPolling()
+
+  try {
+    const res = await generateApi.createJob(payload)
+    selectedRunId.value = res.data.run_id
+    await loadJobs(true)
+    startPolling()
+    ElMessage.success('已重新发起生成任务')
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error?.response?.data?.message || '重新生成失败')
+  } finally {
+    retrying.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadJobs(true)
+  if (selectedJob.value?.job_status === 'completed') {
+    await loadResourcesForSelectedJob()
+  } else {
+    resourcesLoaded.value = true
+  }
+})
 
 onBeforeUnmount(stopPolling)
 </script>
@@ -251,6 +452,15 @@ onBeforeUnmount(stopPolling)
   font-size: 13px;
 }
 
+.task-selector {
+  margin-bottom: 18px;
+}
+
+.task-select,
+.resource-select {
+  width: min(560px, 100%);
+}
+
 .job-summary p {
   margin: 0 0 10px;
   color: #1f2937;
@@ -260,6 +470,10 @@ onBeforeUnmount(stopPolling)
   justify-content: flex-end;
   margin-top: 18px;
   flex-wrap: wrap;
+}
+
+.resource-selector {
+  margin-bottom: 18px;
 }
 
 @media (max-width: 920px) {

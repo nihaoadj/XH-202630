@@ -20,10 +20,14 @@
 -> POST /api/onboarding/initial-profile
 -> POST /api/diagnosis/submit
 -> POST /api/generate/jobs
+-> GET /api/generate/jobs?learner_id={learner_id}
 -> GET /api/generate/jobs/{run_id}
 -> GET /api/resources/{learner_id}?run_id={run_id}
 -> GET /api/resources/file/{resource_id}
+-> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
+-> POST /api/feedback/evaluation/run/submit
 -> POST /api/feedback/
+-> GET /api/feedback/history/{learner_id}
 -> GET /api/learning-history/{learner_id}/timeline
 -> GET /api/report/{learner_id}
 ```
@@ -35,7 +39,9 @@
 - 通用问卷 `common_initial_profile_v1` 当前只保留 4 个动态问题：
   `learning_goals`、`learning_modes`、`difficulty_preference`、`weekly_time_budget`
 - 异步资源生成已经成为唯一对外生成入口。
+- 生成任务列表接口已经提供，前端可默认展示当前任务并切换查看历史任务。
 - 资源列表支持按 `run_id` 过滤查看某一次生成任务的结果。
+- 学习反馈已支持按生成任务聚合测评，并可基于选中的历史反馈主动发起重新生成。
 - 学习历史时间线接口已提供统一查看问卷、诊断、生成任务的入口。
 
 ## 4. 接口总览
@@ -61,10 +67,13 @@
 | 诊断 | `GET` | `/api/diagnosis/questions` | 获取诊断题 |
 | 诊断 | `POST` | `/api/diagnosis/submit` | 提交诊断结果 |
 | 资源生成 | `POST` | `/api/generate/jobs` | 创建异步资源生成任务 |
+| 资源生成 | `GET` | `/api/generate/jobs` | 按学习者查询生成任务列表 |
 | 资源生成 | `GET` | `/api/generate/jobs/{run_id}` | 查询生成任务状态 |
 | 资源 | `GET` | `/api/resources/{learner_id}` | 查询资源列表 |
 | 资源 | `GET` | `/api/resources/file/{resource_id}` | 下载资源文件 |
 | 审核 | `GET` | `/api/reviews/{resource_id}` | 查询资源审核摘要 |
+| 反馈 | `GET` | `/api/feedback/evaluation/run/{learner_id}/{run_id}` | 获取任务级测评题 |
+| 反馈 | `POST` | `/api/feedback/evaluation/run/submit` | 提交任务级测评与反馈 |
 | 反馈 | `POST` | `/api/feedback/` | 提交学习反馈 |
 | 反馈 | `GET` | `/api/feedback/history/{learner_id}` | 查询反馈历史 |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/timeline` | 查询学习过程时间线 |
@@ -279,6 +288,39 @@
 - 当 `job_status=completed` 时，前端应展示“查看资源”按钮，或跳转到资源页。
 - 当 `job_status=failed` 时，前端应展示失败原因并允许用户重试。
 
+### 8.3 `GET /api/generate/jobs`
+
+用途：
+
+- 按 `learner_id` 查询某个学习者的生成任务列表。
+
+查询参数：
+
+- `learner_id`：必填
+
+返回字段：
+
+- `learner_id`
+- `total`
+- `items`
+
+每个任务的重要字段：
+
+- `run_id`
+- `topic`
+- `knowledge_base_id`
+- `job_status`
+- `resource_ids`
+- `error_message`
+- `created_at`
+- `started_at`
+- `finished_at`
+
+说明：
+
+- 前端可据此默认展示当前 `running/queued` 任务，并允许切换查看历史任务。
+- 当前资源生成页已按任务维度展示，不再只依赖单个 `run_id` 查询参数驱动整页。
+
 ## 9. 资源接口
 
 ### 9.1 `GET /api/resources/{learner_id}`
@@ -346,7 +388,60 @@
 - 展示资源生成记录
 - 串联整个学习过程
 
-## 11. 前端调用约定
+## 11. 反馈与测评接口
+
+### 11.1 `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
+
+用途：
+
+- 按生成任务聚合获取学习后测评题。
+
+返回重点字段：
+
+- `learner_id`
+- `run_id`
+- `topic`
+- `resource_ids`
+- `total`
+- `questions`
+
+说明：
+
+- 当前学习反馈页优先按任务而不是单个资源加载测评题。
+- 题目优先取该任务资源内的练习题；不足时再回退到知识库诊断题。
+
+### 11.2 `POST /api/feedback/evaluation/run/submit`
+
+用途：
+
+- 提交某次生成任务的测评结果与主观反馈。
+
+请求体重点字段：
+
+- `learner_id`
+- `run_id`
+- `answers`
+- `completed`
+- `time_spent_seconds`
+- `self_rating`
+- `practice_result`
+
+返回重点字段：
+
+- `run_id`
+- `resource_count`
+- `correct_rate`
+- `correct_count`
+- `total_questions`
+- `wrong_knowledge_points`
+- `feedback`
+
+说明：
+
+- 提交成功后，后端会保存反馈记录并回写学习者画像。
+- 反馈页“基于反馈重新生成”当前采用“选中某条反馈记录 + 当前最新画像”的方式发起新任务。
+
+## 12. 前端调用约定
 
 - 用户资料页：
   `POST /api/users/` 创建用户，`PATCH /api/users/{user_id}` 更新资料
@@ -358,23 +453,33 @@
   `POST /api/diagnosis/submit`
 - 资源生成：
   `POST /api/generate/jobs`
+- 任务列表：
+  `GET /api/generate/jobs?learner_id={learner_id}`
 - 任务轮询：
   `GET /api/generate/jobs/{run_id}`
 - 任务完成后查看资源：
   `GET /api/resources/{learner_id}?run_id={run_id}`
+- 任务级测评加载：
+  `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
+- 任务级测评提交：
+  `POST /api/feedback/evaluation/run/submit`
+- 反馈历史：
+  `GET /api/feedback/history/{learner_id}`
 - 下载资源文件：
   `GET /api/resources/file/{resource_id}`
 - 历史学习记录：
   `GET /api/learning-history/{learner_id}/timeline`
 
-## 12. 当前状态
+## 13. 当前状态
 
 - 已执行：用户资料从问卷中拆出
 - 已执行：`user_id` 改为后端自动生成
 - 已执行：通用问卷同步为 4 道动态题
 - 已执行：同步生成接口 `POST /api/generate/` 已移除
 - 已执行：前端统一切到异步生成任务模式
+- 已执行：生成任务列表接口可用，资源生成页支持当前任务与历史任务切换
 - 已执行：资源列表支持按 `run_id` 查看本次结果
+- 已执行：学习反馈页支持按任务加载测评题与提交反馈
 - 已执行：资源文件下载接口可用
 - 已执行：学习历史时间线接口可用
 - 未执行：实时推送
