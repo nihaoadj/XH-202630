@@ -361,6 +361,9 @@
 - `resources` 表示“该学习者已经生成并入库的资源记录”。
 - 它不是知识库原始文档列表，而是面向用户交付的学习资源列表。
 - 同一次生成任务产出的多个资源，会通过同一个 `run_id` 关联起来。
+- `source_refs[].score` 是 0 到 1 的最终相关度；精排可用时为 CrossEncoder logits 经 sigmoid 映射后的分数，降级时为归一化 RRF 分数，数值越大排名越靠前。
+- `source_refs[].metadata.retrieval_method` 正常为 `hybrid_rrf_cross_encoder`，精排关闭或不可用时回退为 `hybrid_rrf`；`retrieval_channels` 标识片段来自 `vector`、`bm25` 或两路共同召回。
+- `source_refs[].metadata` 保留 `vector_rank`、`vector_score`、`lexical_rank`、`lexical_score`、`hybrid_rank`、`hybrid_score`、`rerank_rank`、`rerank_raw_score`、`rerank_score`、`reranker_model`、`rerank_latency_ms` 和 `rerank_candidate_count`，用于检索审计和消融评测。
 
 ### 9.2 `GET /api/resources/file/{resource_id}`
 

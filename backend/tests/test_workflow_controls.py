@@ -273,7 +273,7 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
     retrieval_calls = []
     monkeypatch.setattr(
         retriever_module,
-        "similarity_search",
+        "hybrid_search",
         lambda query, top_k, knowledge_base_id: retrieval_calls.append(
             (query, top_k, knowledge_base_id)
         ) or [],
@@ -299,7 +299,10 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
     assert "zh-CN" in captured["planner"]
     assert "node-a" in captured["generator"]
     assert "高级" in captured["reviewer"]
-    assert ("控制流 node-a", 4, "kb-contract") in retrieval_calls
+    assert any(
+        query == "控制流 node-a" and top_k >= 4 and knowledge_base_id == "kb-contract"
+        for query, top_k, knowledge_base_id in retrieval_calls
+    )
     assert result["generated_resources"][0].difficulty == "高级"
     assert [item["sequence"] for item in result["trace"]] == list(
         range(1, len(result["trace"]) + 1)

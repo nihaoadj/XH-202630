@@ -42,7 +42,27 @@ def _build_source_refs(chunks):
             source_path=c.get("source"),
             retrieval_query=c.get("retrieval_query"),
             rank=c.get("rank"),
-            metadata={"knowledge_base_id": c.get("knowledge_base_id")},
+            metadata={
+                "knowledge_base_id": c.get("knowledge_base_id"),
+                "retrieval_method": c.get("retrieval_method"),
+                "retrieval_channels": c.get("retrieval_channels", []),
+                "vector_rank": c.get("vector_rank"),
+                "vector_score": c.get("vector_score"),
+                "lexical_rank": c.get("lexical_rank"),
+                "lexical_score": c.get("lexical_score"),
+                "hybrid_rank": c.get("hybrid_rank"),
+                "hybrid_score": c.get("hybrid_score"),
+                "rerank_status": c.get("rerank_status"),
+                "rerank_rank": c.get("rerank_rank"),
+                "rerank_raw_score": c.get("rerank_raw_score"),
+                "rerank_score": c.get("rerank_score"),
+                "reranker_model": c.get("reranker_model"),
+                "rerank_query_hash": c.get("rerank_query_hash"),
+                "rerank_latency_ms": c.get("rerank_latency_ms"),
+                "rerank_candidate_count": c.get("rerank_candidate_count"),
+                "final_score": c.get("final_score"),
+                "matched_queries": c.get("matched_queries", []),
+            },
         ))
     return refs
 

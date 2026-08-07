@@ -389,7 +389,30 @@ knowledge_base/rag_engineering_training/
 当前已知事实：
 
 - `knowledge_base_id = rag_engineering_training`
-- 当前已存在文档、切片、技能节点和诊断题的数据库记录
+- 知识库版本：`2.2.0`
+- 综合学习模块：6 个，不再拆分教学卡、概要参考和深度参考
+- 向量切片：84 个，已经写入该知识库独立的 Chroma 集合
+- 在线检索：多查询扩展后分别执行 BM25 关键词召回与 Chroma 向量召回，按 `chunk_id` 去重并使用 RRF 融合，再由 `BAAI/bge-reranker-base` CrossEncoder 对候选精排
+- 能力节点：13 个
+- 诊断题：39 道
+- 方向问卷题：6 道
+
+6 个模块统一采用“学习目标与路径 → 原理与工程正文 → 诊断与练习 → 验收标准 → 权威来源”的结构：
+
+- RAG 原理、系统边界与工程契约
+- 资料治理、文档解析与 Chunk 实验
+- Embedding、向量数据库与相似度检索
+- 查询改写、混合召回与 Rerank
+- 上下文组装、引用与忠实生成
+- RAG 评测、消融实验与生产运营
+
+模块内容依据 RAG、DPR、HyDE、Self-RAG、RAGAS、RAGChecker 原始论文，以及 LangChain、LangSmith、Sentence Transformers 和 Chroma 官方文档整理。每个模块的 `source_urls` 均登记在：
+
+```text
+knowledge_base/rag_engineering_training/metadata.json
+```
+
+6 个模块共同覆盖 13 个能力节点；一个模块可以承载多个紧密相关的节点，但每个节点只指定一个主模块，避免检索时反复召回内容相似的卡片和参考文档。诊断题仍按 13 个细粒度能力节点组织，不因资料合并而降低诊断粒度。
 
 ## 8. 当前测试口径
 
@@ -429,6 +452,7 @@ python -m pytest backend/tests -q
 - 业务事实进 SQLite
 - 向量索引进 Chroma
 - 生成资源文件进 `backend/data/generated_resources/`
+- CrossEncoder 模型缓存在 `backend/data/models/`，该目录已由 Git 忽略
 
 ### 9.3 文档约束
 
