@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from app.api.dependencies import ensure_profile_access, request_user
 from app.models.schemas import LearnerProfile, LearnerProfileUpdate, StatusResponse
 from app.services.profile_service import ProfileService
 
@@ -15,14 +16,20 @@ def list_profiles(
 ):
     """分页查询由问卷或诊断流程产生的学习者画像。"""
     service: ProfileService = request.app.container.profile_service()
-    return service.list_with_pagination(page, page_size, skill_level)
+    current_user = request_user(request)
+    return service.list_with_pagination(
+        page,
+        page_size,
+        skill_level,
+        user_id=current_user.user_id if current_user else None,
+    )
 
 
 @router.get("/{learner_id}", response_model=LearnerProfile)
 def get_profile(learner_id: str, request: Request):
     """查询学习者画像。"""
     service: ProfileService = request.app.container.profile_service()
-    profile = service.get(learner_id)
+    profile = ensure_profile_access(request, service.get(learner_id))
     if not profile:
         raise HTTPException(status_code=404, detail="学习者画像不存在，请先完成入门问卷")
     return profile
@@ -35,6 +42,8 @@ def update_profile(learner_id: str, payload: LearnerProfileUpdate, request: Requ
     if not updates:
         raise HTTPException(status_code=400, detail="至少提供一个待更新字段")
     service: ProfileService = request.app.container.profile_service()
+    if ensure_profile_access(request, service.get(learner_id)) is None:
+        raise HTTPException(status_code=404, detail="学习者画像不存在，请先完成入门问卷")
     profile = service.update_partial(learner_id, updates)
     if profile is None:
         raise HTTPException(status_code=404, detail="学习者画像不存在，请先完成入门问卷")
@@ -45,6 +54,8 @@ def update_profile(learner_id: str, payload: LearnerProfileUpdate, request: Requ
 def delete_profile(learner_id: str, request: Request):
     """删除学习者画像及其诊断依赖记录，保留匿名化 Agent 审计轨迹。"""
     service: ProfileService = request.app.container.profile_service()
+    if ensure_profile_access(request, service.get(learner_id)) is None:
+        raise HTTPException(status_code=404, detail="学习者画像不存在")
     if not service.delete(learner_id):
         raise HTTPException(status_code=404, detail="学习者画像不存在")
     return {"status": "success", "message": "学习者画像已删除"}

@@ -1,7 +1,10 @@
 <template>
   <div class="history-page">
     <section class="toolbar">
-      <el-input v-model="keyword" placeholder="按用户名、学习方向或目标搜索" clearable class="search" />
+      <div class="page-title-block">
+        <h2>学习历史</h2>
+        <p>按时间线查看问卷、诊断、资源生成、学习反馈和重新生成过程。</p>
+      </div>
       <el-select v-model="skillFilter" clearable placeholder="能力层级">
         <el-option label="初级" value="初级" />
         <el-option label="中级" value="中级" />
@@ -94,24 +97,14 @@ const router = useRouter()
 const store = useAppStore()
 const profiles = ref([])
 const tracks = ref([])
-const keyword = ref('')
 const skillFilter = ref('')
 const timeline = ref(null)
 const activeLearnerId = ref('')
 
 const filteredProfiles = computed(() =>
   profiles.value.filter((profile) => {
-    const searchable = [
-      profileDisplayName(profile),
-      resolveTrackName(profile.knowledge_base_id),
-      profile.learning_goal,
-      profile.skill_level,
-    ]
-      .join(' ')
-      .toLowerCase()
-    const matchesKeyword = !keyword.value || searchable.includes(keyword.value.toLowerCase())
     const matchesSkill = !skillFilter.value || profile.skill_level === skillFilter.value
-    return matchesKeyword && matchesSkill
+    return matchesSkill
   })
 )
 
@@ -182,25 +175,48 @@ onMounted(async () => {
 
 <style scoped>
 .history-page {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow: hidden;
 }
 
 .toolbar {
+  flex-shrink: 0;
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  padding: 20px 22px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
 }
 
-.search {
-  width: min(420px, 100%);
+.page-title-block h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.page-title-block p {
+  margin: 8px 0 0;
+  color: #667085;
 }
 
 .history-layout {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 18px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
 }
 
 .card-head {
@@ -243,6 +259,27 @@ onMounted(async () => {
 .profile-item span {
   color: #667085;
   font-size: 13px;
+}
+
+.profile-list {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.profile-list :deep(.el-card__body) {
+  max-height: calc(100dvh - 244px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.timeline-card :deep(.el-card__header) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
 }
 
 .timeline-summary {
@@ -315,8 +352,43 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
+  .profile-list,
+  .timeline-card :deep(.el-card__header) {
+    position: static;
+  }
+
+  .profile-list {
+    max-height: none;
+  }
+
+  .profile-list :deep(.el-card__body) {
+    max-height: 38dvh;
+  }
+
   .timeline-summary {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .toolbar {
+    padding: 18px;
+  }
+
+  .toolbar .el-select {
+    width: 100%;
+  }
+
+  .page-title-block {
+    width: 100%;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .el-button {
+    flex: 1;
   }
 }
 </style>

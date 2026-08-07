@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 
+from app.api.dependencies import ensure_profile_access
 from app.models.schemas import (
     FeedbackHistoryResponse,
     FeedbackRequest,
@@ -27,7 +28,7 @@ def get_resource_evaluation(learner_id: str, resource_id: str, request: Request)
     feedback_service: FeedbackService = container.feedback_service()
     knowledge_service: KnowledgeService = container.knowledge_service()
 
-    profile = profile_service.get(learner_id)
+    profile = ensure_profile_access(request, profile_service.get(learner_id))
     if not profile:
         raise HTTPException(status_code=404, detail="学习画像不存在")
 
@@ -46,7 +47,7 @@ def get_run_evaluation(learner_id: str, run_id: str, request: Request):
     feedback_service: FeedbackService = container.feedback_service()
     knowledge_service: KnowledgeService = container.knowledge_service()
 
-    profile = profile_service.get(learner_id)
+    profile = ensure_profile_access(request, profile_service.get(learner_id))
     if not profile:
         raise HTTPException(status_code=404, detail="学习画像不存在")
 
@@ -65,7 +66,7 @@ def submit_resource_evaluation(payload: ResourceEvaluationSubmitRequest, request
     feedback_service: FeedbackService = container.feedback_service()
     knowledge_service: KnowledgeService = container.knowledge_service()
 
-    profile = profile_service.get(payload.learner_id)
+    profile = ensure_profile_access(request, profile_service.get(payload.learner_id))
     if not profile:
         raise HTTPException(status_code=404, detail="学习画像不存在")
 
@@ -97,7 +98,7 @@ def submit_run_evaluation(payload: RunEvaluationSubmitRequest, request: Request)
     feedback_service: FeedbackService = container.feedback_service()
     knowledge_service: KnowledgeService = container.knowledge_service()
 
-    profile = profile_service.get(payload.learner_id)
+    profile = ensure_profile_access(request, profile_service.get(payload.learner_id))
     if not profile:
         raise HTTPException(status_code=404, detail="学习画像不存在")
 
@@ -127,7 +128,7 @@ def submit_feedback(req: FeedbackRequest, request: Request):
     container = request.app.container
 
     profile_service: ProfileService = container.profile_service()
-    profile = profile_service.get(req.learner_id)
+    profile = ensure_profile_access(request, profile_service.get(req.learner_id))
     if not profile:
         raise HTTPException(status_code=404, detail="学习画像不存在")
 
@@ -145,7 +146,7 @@ def get_feedback_history(learner_id: str, request: Request):
     container = request.app.container
 
     profile_service: ProfileService = container.profile_service()
-    profile = profile_service.get(learner_id)
+    profile = ensure_profile_access(request, profile_service.get(learner_id))
     if not profile:
         raise HTTPException(status_code=404, detail="学习画像不存在")
 

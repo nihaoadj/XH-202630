@@ -20,6 +20,10 @@ Base = declarative_base()
 class UserProfileORM(Base):
     __tablename__ = "users"
 
+    username = Column(String(64), unique=True, nullable=True, index=True, comment="登录用户名")
+    password_hash = Column(String(512), nullable=True, comment="密码哈希")
+    is_active = Column(Boolean, nullable=False, default=True, comment="是否允许登录")
+    last_login_at = Column(DateTime(timezone=True), nullable=True, comment="最近登录时间")
     user_id = Column(String(64), primary_key=True, index=True, comment="鐢ㄦ埛鍞竴鏍囪瘑")
     display_name = Column(String(128), nullable=False, comment="鐢ㄦ埛鏄剧ず鍚嶇О")
     identity = Column(String(64), nullable=False, comment="鐢ㄦ埛韬唤")
@@ -36,6 +40,7 @@ class LearnerProfileORM(Base):
     """学习者画像数据库表"""
     __tablename__ = "learner_profiles"
 
+    user_id = Column(String(64), ForeignKey("users.user_id"), nullable=True, index=True, comment="所属用户 ID")
     learner_id = Column(String(64), primary_key=True, index=True, comment="学习者唯一标识")
     learner_type = Column(String(64), nullable=False, comment="学习者类型")
     education = Column(String(32), nullable=False, comment="学历")

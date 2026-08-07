@@ -33,8 +33,16 @@ class MemoryLearnerRepository(BaseLearnerRepository):
         self.save(updated)
         return updated
 
-    def list_with_pagination(self, page: int, page_size: int, skill_level: Optional[str] = None) -> dict:
+    def list_with_pagination(
+        self,
+        page: int,
+        page_size: int,
+        skill_level: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> dict:
         items = sorted(self._store.values(), key=lambda profile: profile.learner_id)
+        if user_id:
+            items = [profile for profile in items if profile.user_id == user_id]
         if skill_level:
             items = [profile for profile in items if profile.skill_level == skill_level]
         total = len(items)

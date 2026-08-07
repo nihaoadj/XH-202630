@@ -1,5 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
+from app.api.dependencies import ensure_profile_access
 from app.config import get_settings
 from app.core.health import build_health_report
 from app.models.schemas import (
@@ -30,7 +31,7 @@ def create_generation_job(
     container = request.app.container
 
     profile_service: ProfileService = container.profile_service()
-    learner = profile_service.get(req.learner_id)
+    learner = ensure_profile_access(request, profile_service.get(req.learner_id))
     if not learner:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 
@@ -46,6 +47,9 @@ def get_generation_job(run_id: str, request: Request):
     job = generation_job_service.get_job(run_id)
     if job is None:
         raise HTTPException(status_code=404, detail="生成任务不存在")
+    profile = request.app.container.profile_service().get(job.learner_id)
+    if ensure_profile_access(request, profile) is None:
+        raise HTTPException(status_code=404, detail="生成任务不存在")
     return job
 
 
@@ -53,7 +57,7 @@ def get_generation_job(run_id: str, request: Request):
 def list_generation_jobs(learner_id: str, request: Request):
     container = request.app.container
     profile_service: ProfileService = container.profile_service()
-    learner = profile_service.get(learner_id)
+    learner = ensure_profile_access(request, profile_service.get(learner_id))
     if not learner:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 

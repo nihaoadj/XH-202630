@@ -1,4 +1,5 @@
 """数据库引擎、会话工厂与 SQLite 轻量迁移。"""
+import json
 from functools import lru_cache
 
 from sqlalchemy import create_engine, text
@@ -82,6 +83,7 @@ def _sqlite_columns(conn, table_name: str) -> set[str]:
 def _migrate_sqlite_learner_profiles(engine) -> None:
     """补齐旧版 learner_profiles 缺失的画像字段。"""
     expected_columns = {
+        "user_id": "VARCHAR(64)",
         "learner_type": "VARCHAR(64) NOT NULL DEFAULT '问卷学习者'",
         "target_domain": "VARCHAR(128)",
         "knowledge_base_id": "VARCHAR(128)",
@@ -96,12 +98,40 @@ def _migrate_sqlite_learner_profiles(engine) -> None:
         for column, ddl in expected_columns.items():
             if column not in existing:
                 conn.execute(text(f"ALTER TABLE learner_profiles ADD COLUMN {column} {ddl}"))
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_learner_profiles_user_id ON learner_profiles(user_id)"
+        )
+        existing_user_ids = {
+            row[0] for row in conn.exec_driver_sql("SELECT user_id FROM users").fetchall()
+        }
+        rows = conn.exec_driver_sql(
+            "SELECT learner_id, learning_preferences FROM learner_profiles WHERE user_id IS NULL"
+        ).fetchall()
+        for learner_id, raw_preferences in rows:
+            try:
+                preferences = (
+                    json.loads(raw_preferences)
+                    if isinstance(raw_preferences, str)
+                    else (raw_preferences or {})
+                )
+                user_id = (preferences.get("metadata") or {}).get("user_id")
+            except (AttributeError, TypeError, ValueError):
+                user_id = None
+            if user_id in existing_user_ids:
+                conn.execute(
+                    text("UPDATE learner_profiles SET user_id = :user_id WHERE learner_id = :learner_id"),
+                    {"user_id": user_id, "learner_id": learner_id},
+                )
 
 
 def _migrate_sqlite_users(engine) -> None:
     """补齐 users 表缺失的用户身份字段。"""
     expected_columns = {
         "identity": "VARCHAR(64) NOT NULL DEFAULT '其他'",
+        "username": "VARCHAR(64)",
+        "password_hash": "VARCHAR(512)",
+        "is_active": "BOOLEAN NOT NULL DEFAULT 1",
+        "last_login_at": "DATETIME",
     }
     with engine.begin() as conn:
         if "users" not in _sqlite_tables(conn):
@@ -110,6 +140,9 @@ def _migrate_sqlite_users(engine) -> None:
         for column, ddl in expected_columns.items():
             if column not in existing:
                 conn.execute(text(f"ALTER TABLE users ADD COLUMN {column} {ddl}"))
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users(username) WHERE username IS NOT NULL"
+        )
 
 
 def _migrate_sqlite_questionnaire_submissions(engine) -> None:

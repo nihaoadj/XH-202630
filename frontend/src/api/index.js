@@ -3,7 +3,27 @@ import axios from 'axios'
 const api = axios.create({
   baseURL: '/api',
   timeout: 120000,
+  withCredentials: true,
 })
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const isAuthPage = ['/login', '/register'].includes(window.location.pathname)
+    const isAuthRequest = String(error?.config?.url || '').startsWith('/auth/')
+    if (error?.response?.status === 401 && !isAuthPage && !isAuthRequest) {
+      window.location.assign(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+    }
+    return Promise.reject(error)
+  },
+)
+
+export const authApi = {
+  register: (data) => api.post('/auth/register', data),
+  login: (data) => api.post('/auth/login', data),
+  me: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
+}
 
 export const profileApi = {
   list: (params) => api.get('/profiles/', { params }),

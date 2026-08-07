@@ -245,7 +245,7 @@ class FeedbackService:
         profile: LearnerProfile,
         resource: LearningResource,
         knowledge_service: KnowledgeService,
-        limit: int = 5,
+        limit: int = 10,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
         questions: list[ResourceEvaluationQuestion] = []
         answer_key: dict[str, object] = {}
@@ -263,15 +263,18 @@ class FeedbackService:
             )
             answer_key[item.question_id] = item.answer
 
-        if questions:
+        if len(questions) >= limit:
             return questions[:limit], answer_key
 
         if not profile.knowledge_base_id:
-            return [], {}
+            return questions[:limit], answer_key
 
         tokens = [resource.topic or "", *(resource.knowledge_points or [])]
+        seen_question_ids = {question.question_id for question in questions}
         related = []
         for item in knowledge_service.load_diagnostic_questions(profile.knowledge_base_id):
+            if item.question_id in seen_question_ids:
+                continue
             searchable = " ".join(
                 [
                     item.question or "",
@@ -283,12 +286,16 @@ class FeedbackService:
                 related.append(item)
 
         if not related:
-            related = knowledge_service.select_diagnostic_questions(
-                profile.knowledge_base_id,
-                limit=limit,
-            )
+            related = [
+                item
+                for item in knowledge_service.select_diagnostic_questions(
+                    profile.knowledge_base_id,
+                    limit=limit,
+                )
+                if item.question_id not in seen_question_ids
+            ]
 
-        for item in related[:limit]:
+        for item in related[: max(0, limit - len(questions))]:
             questions.append(
                 ResourceEvaluationQuestion(
                     question_id=item.question_id,
@@ -309,14 +316,14 @@ class FeedbackService:
         profile: LearnerProfile,
         resources: list[LearningResource],
         knowledge_service: KnowledgeService,
-        limit: int = 8,
+        limit: int = 10,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
         merged_questions: list[ResourceEvaluationQuestion] = []
         merged_answer_key: dict[str, object] = {}
         seen_question_ids: set[str] = set()
 
         for resource in resources:
-            questions, answer_key = self._build_question_specs(profile, resource, knowledge_service, limit=5)
+            questions, answer_key = self._build_question_specs(profile, resource, knowledge_service, limit=10)
             for question in questions:
                 if question.question_id in seen_question_ids:
                     continue

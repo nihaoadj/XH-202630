@@ -54,3 +54,4 @@ __extracted_pdf.txt
 
 # Local startup helpers
 scripts/local-*.ps1
+**/.codex-run-*.ps1

@@ -1,6 +1,7 @@
 """RAG 入门问卷与初始画像接口。"""
 from fastapi import APIRouter, HTTPException, Request
 
+from app.api.dependencies import request_user
 from app.models.schemas import InitialProfileQuestionnaire, InitialProfileResponse
 from app.services.onboarding_service import OnboardingService
 
@@ -26,6 +27,6 @@ def create_initial_profile(payload: InitialProfileQuestionnaire, request: Reques
     """由入门问卷创建画像，仅返回用户声明已了解节点的诊断题。"""
     service: OnboardingService = request.app.container.onboarding_service()
     try:
-        return service.create_initial_profile(payload)
+        return service.create_initial_profile(payload, authenticated_user=request_user(request))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -59,6 +59,7 @@ class LearningPreferences(BaseModel):
 class LearnerProfile(BaseModel):
     """学习者画像模型"""
     learner_id: str = Field(..., description="学习者唯一标识")
+    user_id: Optional[str] = Field(default=None, description="所属用户 ID")
     learner_type: str = Field(..., description="学习者类型")
     education: str = Field(..., description="学历背景")
     major: str = Field(..., description="专业方向")
@@ -232,6 +233,7 @@ class GenerationJobStatusResponse(BaseModel):
     job_status: Literal["queued", "running", "completed", "failed"]
     resource_ids: List[str] = Field(default_factory=list)
     error_message: Optional[str] = None
+    request_payload: Dict[str, Any] = Field(default_factory=dict)
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
