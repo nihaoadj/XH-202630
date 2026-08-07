@@ -159,7 +159,7 @@ backend/app/services
   -> 
 backend/app/agents
   |- diagnosis: 学情诊断 Agent
-  |- retriever: 知识库检索 Agent
+  |- retriever: 知识库检索 Agent（BM25 + Chroma 向量召回 + RRF 融合 + CrossEncoder 精排）
   |- planner: 学习路径规划 Agent
   |- generator: 个性化资源生成 Agent
   |- reviewer: 审核纠偏 Agent

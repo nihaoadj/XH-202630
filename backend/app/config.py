@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # Deprecated compatibility input. During the compatibility window this is
     # interpreted as a prefix, never as one fixed collection shared by all KBs.
     chroma_collection_name: str | None = None
+    rerank_enabled: bool = True
+    rerank_model: str = "BAAI/bge-reranker-base"
+    rerank_model_cache_dir: str = "./data/models"
+    rerank_device: str = "cpu"
+    rerank_candidate_k: int = 20
+    rerank_per_query_k: int = 10
+    rerank_batch_size: int = 4
+    rerank_max_length: int = 512
+    rerank_max_chunks_per_document: int = 2
     resources_dir: str = "./data/generated_resources"
     admin_health_token: SecretStr = SecretStr("")
     app_host: str = "0.0.0.0"
@@ -71,6 +80,16 @@ class Settings(BaseSettings):
             self.chroma_collection_prefix = legacy_prefix
         if not self.chroma_collection_prefix.strip():
             self.chroma_collection_prefix = "kb"
+
+        if self.rerank_enabled:
+            if not self.rerank_model.strip():
+                raise ValueError("CFG_RERANK_MODEL_MISSING")
+            if self.rerank_candidate_k <= 0 or self.rerank_per_query_k <= 0:
+                raise ValueError("CFG_RERANK_CANDIDATE_INVALID")
+            if self.rerank_batch_size <= 0 or self.rerank_max_length <= 0:
+                raise ValueError("CFG_RERANK_RUNTIME_INVALID")
+            if self.rerank_max_chunks_per_document <= 0:
+                raise ValueError("CFG_RERANK_DIVERSITY_INVALID")
 
         if self.db_type == "sqlite" and not self.database_url.startswith("sqlite:///"):
             raise ValueError("CFG_DATABASE_URL_MISMATCH")
