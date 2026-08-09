@@ -1,4 +1,4 @@
-"""内存问卷仓储，供测试或非 SQL 演示使用。"""
+"""问卷仓储的内存实现。"""
 from __future__ import annotations
 
 import hashlib
@@ -20,11 +20,7 @@ class MemoryQuestionnaireRepository(BaseQuestionnaireRepository):
         self._templates[payload["questionnaire_id"]] = payload
 
     def list_questionnaire_templates(self) -> list[dict[str, Any]]:
-        return [
-            deepcopy(template)
-            for template in self._templates.values()
-            if template.get("enabled", True)
-        ]
+        return [deepcopy(template) for template in self._templates.values() if template.get("enabled", True)]
 
     def get_questionnaire_template(self, questionnaire_id: str) -> dict[str, Any] | None:
         template = self._templates.get(questionnaire_id)
@@ -67,6 +63,9 @@ class MemoryQuestionnaireRepository(BaseQuestionnaireRepository):
             }
         )
         return submission_id
+
+    def list_submissions_by_learner(self, learner_id: str) -> list[dict[str, Any]]:
+        return [deepcopy(item) for item in self.submissions if item["learner_id"] == learner_id]
 
 
 def _stable_id(prefix: str, *parts: object) -> str:

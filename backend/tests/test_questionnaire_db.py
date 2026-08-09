@@ -1,4 +1,5 @@
-"""问卷数据库表与源文件同步测试。"""
+"""问卷 SQL 同步测试。"""
+
 import json
 from pathlib import Path
 
@@ -7,7 +8,14 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.knowledge_base import load_knowledge_base_manifest
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
-from app.db.models import Base, LearnerProfileORM, QuestionnaireAnswerORM, QuestionnaireQuestionORM, QuestionnaireSubmissionORM, QuestionnaireTemplateORM
+from app.db.models import (
+    Base,
+    LearnerProfileORM,
+    QuestionnaireAnswerORM,
+    QuestionnaireQuestionORM,
+    QuestionnaireSubmissionORM,
+    QuestionnaireTemplateORM,
+)
 from app.db.questionnaire.sql_repository import SQLQuestionnaireRepository
 
 
@@ -58,6 +66,13 @@ def test_questionnaire_source_sync_is_idempotent(tmp_path):
     assert loaded["track_id"] == "rag_engineering_training"
     assert [question["question_id"] for question in loaded["questions"]][-1] == "learning_focus_rag_nodes"
     assert loaded["questions"][-1]["profile_mapping"]["target_path"] == "learning_preferences.focus_nodes"
+
+    common_loaded = repository.get_questionnaire_template("common_initial_profile_v1")
+    common_question_ids = [question["question_id"] for question in common_loaded["questions"]]
+    assert "identity" not in common_question_ids
+    assert "education" not in common_question_ids
+    assert "major" not in common_question_ids
+    assert "desired_resource_types" not in common_question_ids
 
     with factory() as db:
         db.add(

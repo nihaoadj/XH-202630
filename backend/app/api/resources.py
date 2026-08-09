@@ -40,6 +40,7 @@ def list_resources(
     request: Request,
     resource_type: str | None = None,
     difficulty: str | None = None,
+    run_id: str | None = None,
 ):
     """查询学习者生成资源历史"""
     container = request.app.container
@@ -50,7 +51,7 @@ def list_resources(
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 
     resource_service: ResourceService = container.resource_service()
-    resources = resource_service.list_by_learner_with_filter(learner_id, resource_type, difficulty)
+    resources = resource_service.list_by_learner_with_filter(learner_id, resource_type, difficulty, run_id)
     return {
         "learner_id": learner_id,
         "total": len(resources),

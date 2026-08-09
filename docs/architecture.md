@@ -3,7 +3,7 @@
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
 > 文档版本：2.0  
-> 文档更新时间：2026-07-28
+> 文档更新时间：2026-07-31
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 1. 架构目标
@@ -11,7 +11,8 @@
 系统当前面向“多领域培训”场景，围绕以下闭环组织：
 
 ```text
-领域选择
+用户资料维护
+-> 领域选择
 -> 学习方向选择
 -> 初始画像问卷
 -> 诊断测评
@@ -25,16 +26,17 @@
 
 - “学习方向”是前台和流程入口概念。
 - `knowledge_base_id` 是后端内部的稳定知识边界。
-- 问卷负责构建初始画像。
+- 用户长期稳定信息由用户资料维护，不再放入通用问卷。
+- 问卷负责构建初始画像中的动态学习信息。
 - 诊断负责测量真实掌握情况并回写画像。
 
 ## 2. 当前代码分层
 
 | 层级 | 目录 | 当前职责 |
 |---|---|---|
-| 前端界面层 | `frontend/src/` | 领域/方向选择、问卷、诊断、历史记录、资源查看、报告展示 |
+| 前端界面层 | `frontend/src/` | 用户资料、领域/方向选择、问卷、诊断、历史记录、资源查看、报告展示 |
 | API 路由层 | `backend/app/api/` | FastAPI 路由、参数接收、响应模型与错误映射 |
-| 业务服务层 | `backend/app/services/` | 问卷组装、画像创建、诊断判分、资源生成、反馈处理、报告构建 |
+| 业务服务层 | `backend/app/services/` | 用户资料、问卷组装、画像创建、诊断判分、资源生成、反馈处理、报告构建 |
 | 多智能体层 | `backend/app/agents/` | LangGraph 工作流及诊断、检索、规划、生成、审核、反馈等 Agent 节点 |
 | 基础设施层 | `backend/app/core/` | LLM、Embedding、向量存储、知识库读取、文件存储 |
 | 数据访问层 | `backend/app/db/` | SQLite/PostgreSQL 仓储工厂、ORM 模型、表初始化与分领域仓储 |
@@ -49,22 +51,26 @@
 
 `backend/app/api/` 当前真实文件为：
 
+- `admin.py`
+- `diagnosis.py`
+- `evaluation.py`
+- `feedback.py`
+- `generate.py`
+- `knowledge.py`
+- `learning_history.py`
 - `onboarding.py`
 - `profiles.py`
-- `knowledge.py`
-- `skills.py`
-- `diagnosis.py`
-- `generate.py`
+- `report.py`
 - `resources.py`
 - `reviews.py`
-- `feedback.py`
-- `report.py`
-- `evaluation.py`
+- `skills.py`
+- `users.py`
 
 说明：
 
-- 旧的 `learner.py` 已不再是当前接口主入口。
-- 当前画像接口统一收敛为 `/api/profiles/*`。
+- 画像接口统一收敛在 `/api/profiles/*`。
+- 用户基础资料接口统一收敛在 `/api/users/*`。
+- 学习历史时间线接口统一收敛在 `/api/learning-history/*`。
 
 ### 3.2 服务层
 
@@ -73,22 +79,28 @@
 - `knowledge_service.py`
 - `onboarding_service.py`
 - `profile_service.py`
+- `user_service.py`
 - `diagnosis_service.py`
 - `generation_service.py`
+- `generation_job_service.py`
 - `resource_service.py`
 - `review_service.py`
 - `feedback_service.py`
 - `report_service.py`
 - `evaluation_service.py`
+- `learning_history_service.py`
 
 职责划分：
 
 - `knowledge_service`：学习目录、知识库信息、技能图谱、诊断题选择
 - `onboarding_service`：问卷组装、问卷提交、初始画像创建
+- `user_service`：用户资料创建、查询、局部更新
 - `profile_service`：画像查询、分页、局部更新、删除
 - `diagnosis_service`：诊断判分与画像回写
 - `generation_service`：生成工作流和资源落库
+- `generation_job_service`：异步生成任务创建、状态查询、后台执行
 - `feedback_service`：学习反馈处理与画像更新
+- `learning_history_service`：学习过程时间线组装
 - `report_service`：报告组装
 
 ### 3.3 Agent 层
@@ -106,66 +118,78 @@
 
 当前代码含义：
 
-- Agent 负责协同推理和多步生成
-- 服务层负责把 Agent 与数据库、画像、资源记录串起来
+- Agent 负责协同推理和多步生成。
+- 服务层负责把 Agent 与数据库、画像、资源记录串起来。
 - `backend/app/models/workflow.py` 定义版本化 `WorkflowState`、状态枚举和脱敏 `ErrorInfo`
-- `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 构造
-- `backend/app/core/llm_gateway.py` 是四个 LLM Agent 的唯一模型调用入口；Transport 在组合根注入，节点不构造 Provider client
-- `backend/app/core/structured_output.py` 统一完成 JSON 提取和严格 DTO 校验，各 Agent 不再自行 `json.loads`
+- `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 结构
 - `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
 
 ## 4. 当前主流程调用链
 
-### 4.1 画像与诊断
+### 4.1 用户资料、画像与诊断
 
 ```text
 frontend
+-> POST /api/users/
 -> GET /api/knowledge/domains
 -> GET /api/onboarding/questions?learning_direction_id=...
 -> POST /api/onboarding/initial-profile
 -> POST /api/diagnosis/submit
--> learner_profiles / questionnaire_* / diagnostic_* 落库
+-> users / learner_profiles / questionnaire_* / diagnostic_* 落库
 ```
+
+说明：
+
+- 用户的 `identity`、`education`、`major` 等稳定信息先进入 `users`。
+- 通用问卷只负责当前学习方向的动态信息，不再重复采集稳定资料。
+- `onboarding_service` 会优先使用用户资料中的 `identity` 回写画像的 `learner_type`。
 
 ### 4.2 生成与反馈
 
 ```text
 frontend
-  ↓ HTTP
+  -> HTTP
 backend/app/api
-  ↓ 调用服务
+  -> 调用服务
 backend/app/services
-  ├─ learner_service: 画像创建、查询、更新
-  ├─ generation_service: readiness 后先创建 Run，再调用持久化多 Agent 闭环并 finalizing 资源
-  ├─ feedback_service: 调用反馈决策 Agent，保存反馈记录并更新画像
-  └─ report_service: 聚合画像、资源、反馈生成报告
-  ↓
+  |- generation_job_service: 创建异步任务、查询状态、后台执行
+  |- generation_service: 先执行 readiness gate，再调用多 Agent 生成闭环并保存资源
+  |- feedback_service: 调用反馈决策 Agent，保存反馈记录并更新画像
+  |- report_service: 聚合画像、资源、反馈生成报告
+  ->
 backend/app/agents
-  ├─ diagnosis: 学情诊断 Agent
-  ├─ retriever: 知识库检索 Agent
-  ├─ planner: 学习路径规划 Agent
-  ├─ generator: 个性化资源生成 Agent
-  ├─ reviewer: 审核纠偏 Agent
-  ├─ feedback: 反馈决策 Agent
-  ├─ policies/validators: 审核阈值、返工指令、版本链与发布门禁
-  └─ workflow: 审核开关、Claim 预留、定向返工额度与终态决策
-  ↓
+  |- diagnosis: 学情诊断 Agent
+  |- retriever: 知识库检索 Agent（BM25 + Chroma 向量召回 + RRF 融合 + CrossEncoder 精排）
+  |- planner: 学习路径规划 Agent
+  |- generator: 个性化资源生成 Agent
+  |- reviewer: 审核纠偏 Agent
+  |- feedback: 反馈决策 Agent
+  |- workflow: 审核开关、Claim 预留、返工额度与终态决策
+  ->
 backend/app/core + backend/app/db
-  ├─ LLMGateway -> LLMTransport -> OpenAI-compatible Provider
-  ├─ StructuredOutputParser -> strict Agent output DTO
-  ├─ RuntimeHealth / failure policy / Embedding / ChromaDB / 知识库 / 文件存储
-  └─ Repository / ORM / SQLite or Memory
+  |- RuntimeHealth / failure policy / LLM / Embedding / ChromaDB / 知识库 / 文件存储
+  |- Repository / ORM / SQLite or Memory
 ```
 
-生成请求进入工作流前，由 `generation_service.build_workflow_state()` 完成唯一映射并生成 `run_id`。运行中遵守以下控制流：
+生成请求进入工作流前，由 `generation_service.build_workflow_state()` 完成唯一映射并生成 `run_id`。当前对外生成入口已经统一为异步任务模式：
+
+```text
+POST /api/generate/jobs
+-> GET /api/generate/jobs?learner_id={learner_id}
+-> BackgroundTasks 触发 generation_job_service.run_job(...)
+-> 任务状态通过 GET /api/generate/jobs/{run_id} 查询
+-> 结果通过 GET /api/resources/{learner_id}?run_id={run_id} 获取
+```
+
+运行中遵守以下控制流：
 
 ```text
 diagnose -> retrieve -> plan -> generate
-                                  ├─ include_review=false -> finalize_draft
-                                  └─ include_review=true  -> review
-                                                               ├─ approve -> finalize
-                                                               ├─ revise 且有额度 -> prepare_revision -> generate
-                                                               └─ reject/额度耗尽 -> finalize
+                                  |- include_review=false -> finalize_draft
+                                  |- include_review=true  -> review
+                                                               |- approve -> finalize
+                                                               |- revise 且有额度 -> prepare_revision -> generate
+                                                               |- reject/额度耗尽 -> finalize
 
 任一终结分支在 include_claim_check=true 时先进入 claim_check 预留节点。
 P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim 审核。
@@ -173,48 +197,10 @@ P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim �
 
 `max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
 
-P0-05 中 Reviewer 只提供候选结论，`policies.py` 以证据范围、幻觉分、覆盖率、难度和阻断问题执行确定性二次裁决。revise 必须携带结构化可执行指令；Generator 只修改命中的资源类型，新版本使用新 ID 并指向直接父版本。`review_status` 与 `publication_status` 分离：只有 supervisor 最终 approve 的叶子版本 published，其余版本仅用于审计。
-
-### 4.3 LLM 调用边界
-
-- Diagnosis、Planner、Generator、Reviewer 仅依赖注入的 `LLMGateway`；Gateway 的 transport 可在离线测试中替换。
-- Gateway 统一控制单次 timeout、总 attempts、指数退避、`Retry-After` 上限和工作流 deadline；Provider SDK 的 `max_retries=0`，避免双重重试。
-- Provider structured output 优先按配置执行；`auto` 遇到能力不支持时最多切换一次 text 模式，仍经同一个平衡 JSON parser 与严格 schema 校验。
-- parse/schema repair 与 transport retry 共用同一 attempts 预算，不增加业务 `revision_count`。
-- Generator 的 `source_refs` 只由 Retriever 结果在代码侧绑定；Reviewer 的最终 approve 阈值由代码侧执行。
-- trace 只保存调用 ID、模型名、token、耗时、重试数、结束原因、脱敏 attempt summaries 和稳定错误码；P0-04 将这组白名单 telemetry 持久化到 Step。
-
-### 4.4 P0-04 持久化执行边界
-
-```text
-readiness
--> create_run(created)
--> start_run(running)
--> RecordedNode.begin_step(running)
--> Agent/Supervisor node side effect
--> complete_step + Evidence snapshot + terminal Event
--> LangGraph state merge
--> WorkflowArtifactRecorder(Resource version / Review round / publication)
--> WorkflowCheckpoint(state projection + SHA-256)
--> mark_run_finalizing
--> persist Resource/Review with run_id
--> complete_run(completed/degraded/human_review/failed)
-```
-
-- `RecordedNode` 在组合根统一包装所有 LangGraph 节点，预分配的 Step context 也是
-  State trace、LLM call context 和数据库记录的唯一身份来源。
-- `DurableWorkflowRunner` 消费 `stream_mode=values`，只在 LangGraph 完成状态合并后保存
-  本轮业务制品和白名单 checkpoint；不 pickle Python 对象。制品写入发生在 checkpoint 前，避免回放引用尚未落库的版本。
-- `workflow_events` 是 append-only 顺序账本，业务正文仍由 Resource/Review/Evidence
-  事实表负责。
-- 回放只读数据库，不是 resume；P0-04 不自动重新调用模型、不提供 SSE/取消接口。
-- `running/finalizing` Run 只有 lease 已过期时才会在安全启动扫描中标记
-  `interrupted`，活跃 lease 不处理。
-
 ### 多 KB collection 与健康检查边界
 
 - 每个 `knowledge_base_id` 通过 `backend/app/core/vector_store.py:_collection_name()` 映射到独立 Chroma collection。
-- collection 的创建、写入、查询、删除和 health 均复用该 resolver；`CHROMA_COLLECTION_NAME` 兼容期只作为前缀，不再表示唯一固定集合。
+- collection 的创建、写入、查询、删除和 health 均复用该 resolver，`CHROMA_COLLECTION_NAME` 兼容期只作为前缀，不再表示唯一固定集合。
 - 公共 `/health` 与 `/health/ready` 只判断默认 KB 和 Python、storage、LLM、Embedding、Chroma 目录、资源目录等核心依赖。
 - 管理员 `/api/admin/knowledge-bases/health` 在显式 token 保护下返回所有 KB 的脱敏详情。
 - 默认 KB 正常但部分可选 KB 异常时，管理员汇总为 degraded；公共服务不因此返回 503。默认 KB 或 Chroma 核心不可用时才按运行模式进入 degraded/not-ready。
@@ -224,26 +210,37 @@ readiness
 当前实际对外闭环接口为：
 
 ```text
-GET /api/knowledge/domains
+POST /api/users/
+-> GET /api/knowledge/domains
 -> GET /api/onboarding/questions
 -> POST /api/onboarding/initial-profile
 -> POST /api/diagnosis/submit
--> POST /api/generate/
+-> POST /api/generate/jobs
+-> GET /api/generate/jobs?learner_id={learner_id}
+-> GET /api/generate/jobs/{run_id}
 -> GET /api/resources/{learner_id}
+-> GET /api/resources/file/{resource_id}
+-> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
+-> POST /api/feedback/evaluation/run/submit
 -> POST /api/feedback/
+-> GET /api/feedback/history/{learner_id}
+-> GET /api/learning-history/{learner_id}/timeline
 -> GET /api/report/{learner_id}
 ```
 
 补充接口：
 
+- `GET /api/users/`
+- `GET /api/users/{user_id}`
+- `PATCH /api/users/{user_id}`
 - `GET /api/knowledge/directions`
 - `GET /api/knowledge/info`
 - `GET /api/skills/nodes`
-- `status`（success/degraded/failed；fallback 不得标记 success）
-- `error_code`（稳定脱敏码，不保存原始上游异常）
 - `GET /api/diagnosis/questions`
-- `GET /api/resources/file/{resource_id}`
 - `GET /api/reviews/{resource_id}`
+- `GET /api/generate/jobs?learner_id={learner_id}`
+- `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
+- `POST /api/feedback/evaluation/run/submit`
 - `GET /api/feedback/history/{learner_id}`
 - `GET /api/evaluation/summary`
 
@@ -259,6 +256,11 @@ GET /api/knowledge/domains
 | `knowledge_base/questionnaire_common.json` | 通用问卷源文件 |
 | `knowledge_base/<track>/questionnaire.json` | 方向特定问卷源文件 |
 | `knowledge_base/<track>/diagnostic_questions.json` | 方向诊断题源文件 |
+
+说明：
+
+- 当前本地数据库已经按最新模型重建。
+- `knowledge_base/questionnaire_common.json` 现已收缩为只保存动态学习信息，不再包含用户长期资料字段。
 
 ## 7. 当前目录树摘要
 
@@ -305,6 +307,8 @@ scripts/
 
 - 前台流程入口使用 `learning_direction_id`
 - 后端内部知识边界保留 `knowledge_base_id`
+- 用户资料主键使用 `user_id`
+- 学习者画像主键使用 `learner_id`
 
 ### 8.2 文档约束
 
@@ -314,7 +318,7 @@ scripts/
 - 服务命名
 - 主流程步骤
 - 数据库存储位置
-- 问卷与诊断的数据边界
+- 用户资料、问卷与诊断的数据边界
 
 ### 8.3 运行约束
 
@@ -322,3 +326,40 @@ scripts/
 - Vite 前端代理应指向 `8000`
 - 文档与联调口径均以 `8000` 为准
 
+### 8.4 当前实现边界
+
+- 当前对外资源生成模式为异步任务模式
+- 同步生成接口 `POST /api/generate/` 已移除
+- 资源生成页当前按任务维度展示，默认定位当前任务，可切换查看历史成功任务
+- 学习反馈页当前按任务维度加载测评题，并支持基于选中反馈主动重新生成
+- 学习历史页面应优先依赖 `/api/learning-history/{learner_id}/timeline`
+- 通用问卷不再承担用户资料采集职责
+## 9. Agent 可靠执行与异步任务整合
+
+dev 的异步 `GenerationJob` 负责排队和面向前端的任务状态；`AgentRun` 负责一次
+多 Agent 执行的可信生命周期。两者共享预分配的 run_id，但职责不合并：
+
+```text
+GenerationJobService
+  -> GenerationService.generate_with_run_id
+       -> AgentRun / AgentStep / WorkflowEvent
+       -> EvidenceRetriever
+            -> hybrid vector + BM25
+            -> optional CrossEncoder rerank
+            -> KB / Chunk version / content hash validation
+       -> Generator
+       -> Reviewer
+       -> WorkflowArtifactRecorder
+       -> WorkflowCheckpoint
+       -> publication gate
+```
+
+架构约束：
+
+- 混合召回和精排只产生候选；候选必须经过 SQL Chunk 历史版本、KB 范围和内容哈希校验后才能成为 Evidence。
+- `RecordedNode` 在节点副作用前创建 running Step；`DurableWorkflowRunner` 在状态合并后、checkpoint 前保存业务制品。
+- Generator 定向返工使用上一版本和结构化指令，新版本不可原地覆盖旧正文。
+- Reviewer 的模型建议必须经过确定性 policy 二次裁决。
+- Resource 的 `run_id` 单一关联 AgentRun；GenerationJob 以同值关联，避免 ORM 中出现两个竞争的 run_id 字段。
+- `review_status` 描述审核状态，`publication_status` 描述分发状态；只有最终批准叶子版本发布。
+- Run 回放只读数据库，不重新执行模型；自动 resume、SSE、取消仍为后续能力。

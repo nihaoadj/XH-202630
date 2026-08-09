@@ -28,28 +28,33 @@ class MemoryResourceRepository(BaseResourceRepository):
         run_id: str | None = None,
         generation_step_id: str | None = None,
     ) -> None:
+        effective_run_id = run_id or resource.run_id
         normalized = resource.model_copy(
-            update={"learner_id": learner_id, "topic": topic},
+            update={
+                "learner_id": learner_id,
+                "topic": topic,
+                "run_id": effective_run_id,
+            },
             deep=True,
         )
         existing = self._store.get(resource.resource_id)
         if existing and immutable_resource_payload(existing) != immutable_resource_payload(normalized):
             raise PersistenceConflict("resource immutable payload conflict")
-        if run_id is not None:
+        if effective_run_id is not None:
             for stored_id, association in self.associations.items():
                 stored = self._store.get(stored_id)
                 if (
                     stored is not None
                     and stored_id != resource.resource_id
-                    and association.get("run_id") == run_id
+                    and association.get("run_id") == effective_run_id
                     and stored.resource_type == normalized.resource_type
                     and stored.version == normalized.version
                 ):
                     raise PersistenceConflict("duplicate resource version in run")
         self._store[resource.resource_id] = normalized
-        if run_id is not None or generation_step_id is not None:
+        if effective_run_id is not None or generation_step_id is not None:
             self.associations[resource.resource_id] = {
-                "run_id": run_id,
+                "run_id": effective_run_id,
                 "generation_step_id": generation_step_id,
             }
         if learner_id not in self._learner_index:
@@ -85,7 +90,11 @@ class MemoryResourceRepository(BaseResourceRepository):
         return False
 
     def list_by_learner_with_filter(
-        self, learner_id: str, resource_type: Optional[str] = None, difficulty: Optional[str] = None
+        self,
+        learner_id: str,
+        resource_type: Optional[str] = None,
+        difficulty: Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> List[LearningResource]:
         resources = self.list_by_learner(learner_id)
         return [
@@ -93,4 +102,5 @@ class MemoryResourceRepository(BaseResourceRepository):
             for resource in resources
             if (resource_type is None or resource.resource_type == resource_type)
             and (difficulty is None or resource.difficulty == difficulty)
+            and (run_id is None or getattr(resource, "run_id", None) == run_id)
         ]

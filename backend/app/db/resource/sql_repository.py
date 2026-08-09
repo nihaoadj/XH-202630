@@ -30,6 +30,7 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         review_id=orm.review_id,
         publication_status=orm.publication_status or "unpublished",
         published_at=orm.published_at,
+        run_id=orm.run_id,
         claim_count=orm.claim_count,
         hallucination_rate=orm.hallucination_rate,
         difficulty_match=orm.difficulty_match,
@@ -51,7 +52,7 @@ def _pydantic_to_orm(
     """将 Pydantic 模型转换为 ORM 对象"""
     return GeneratedResourceORM(
         resource_id=resource.resource_id,
-        run_id=run_id,
+        run_id=run_id or resource.run_id,
         generation_step_id=generation_step_id,
         learner_id=learner_id,
         topic=topic,
@@ -98,14 +99,17 @@ class SQLResourceRepository(BaseResourceRepository):
         run_id: str | None = None,
         generation_step_id: str | None = None,
     ) -> None:
-        normalized = resource.model_copy(update={"learner_id": learner_id, "topic": topic})
+        effective_run_id = run_id or resource.run_id
+        normalized = resource.model_copy(
+            update={"learner_id": learner_id, "topic": topic, "run_id": effective_run_id}
+        )
         with self.session_factory() as db:
             orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource.resource_id).first()
-            if run_id is not None:
+            if effective_run_id is not None:
                 duplicate = (
                     db.query(GeneratedResourceORM)
                     .filter(
-                        GeneratedResourceORM.run_id == run_id,
+                        GeneratedResourceORM.run_id == effective_run_id,
                         GeneratedResourceORM.resource_type == normalized.resource_type,
                         GeneratedResourceORM.version == normalized.version,
                         GeneratedResourceORM.resource_id != normalized.resource_id,
@@ -118,10 +122,10 @@ class SQLResourceRepository(BaseResourceRepository):
                 existing = _orm_to_pydantic(orm)
                 if immutable_resource_payload(existing) != immutable_resource_payload(normalized):
                     raise PersistenceConflict("resource immutable payload conflict")
-                if run_id is not None:
-                    if orm.run_id is not None and orm.run_id != run_id:
+                if effective_run_id is not None:
+                    if orm.run_id is not None and orm.run_id != effective_run_id:
                         raise PersistenceConflict("resource run_id conflict")
-                    orm.run_id = run_id
+                    orm.run_id = effective_run_id
                 if generation_step_id is not None:
                     if orm.generation_step_id is not None and orm.generation_step_id != generation_step_id:
                         raise PersistenceConflict("resource generation_step_id conflict")
@@ -141,7 +145,7 @@ class SQLResourceRepository(BaseResourceRepository):
                     normalized,
                     learner_id,
                     topic,
-                    run_id=run_id,
+                    run_id=effective_run_id,
                     generation_step_id=generation_step_id,
                 )
                 db.add(orm)
@@ -179,7 +183,11 @@ class SQLResourceRepository(BaseResourceRepository):
             return False
 
     def list_by_learner_with_filter(
-        self, learner_id: str, resource_type: Optional[str] = None, difficulty: Optional[str] = None
+        self,
+        learner_id: str,
+        resource_type: Optional[str] = None,
+        difficulty: Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> List[LearningResource]:
         with self.session_factory() as db:
             query = db.query(GeneratedResourceORM).filter_by(
@@ -190,5 +198,7 @@ class SQLResourceRepository(BaseResourceRepository):
                 query = query.filter_by(resource_type=resource_type)
             if difficulty:
                 query = query.filter_by(difficulty=difficulty)
+            if run_id:
+                query = query.filter_by(run_id=run_id)
             orms = query.order_by(GeneratedResourceORM.created_at.desc()).all()
         return [_orm_to_pydantic(orm) for orm in orms]

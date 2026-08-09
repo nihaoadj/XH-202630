@@ -5,7 +5,7 @@
         <div class="brand-mark">TP</div>
         <div>
           <div class="brand-title">Training Pilot</div>
-          <div class="brand-subtitle">多领域教学培训工作台</div>
+          <div class="brand-subtitle">学习方向与资源生成工作台</div>
         </div>
       </div>
 
@@ -23,14 +23,17 @@
       </nav>
 
       <div class="context-card">
-        <div class="context-title">当前学习上下文</div>
+        <div class="context-title">当前上下文</div>
         <div class="context-item">
-          <span>学习方向</span>
-          <strong>{{ store.currentLearningDirectionName || store.currentLearningDirectionId || '未选择' }}</strong>
+          <div class="context-head">
+            <span>用户</span>
+            <router-link to="/user/profile" class="context-action">编辑</router-link>
+          </div>
+          <strong>{{ store.currentUserProfile?.display_name || '未设置' }}</strong>
         </div>
         <div class="context-item">
-          <span>学习者</span>
-          <strong>{{ store.currentLearnerId || '未设置' }}</strong>
+          <span>学习方向</span>
+          <strong>{{ store.currentLearningDirectionName || '未选择' }}</strong>
         </div>
       </div>
     </aside>
@@ -59,36 +62,34 @@ const route = useRoute()
 const store = useAppStore()
 
 const navigation = [
-  { to: '/', label: '总览工作台', hint: '入口与当前进度' },
-  { to: '/learning/new', label: '新建学习方向', hint: '方向选择与问卷' },
-  { to: '/learning/diagnosis', label: '能力诊断', hint: '进入测评并查看诊断结果' },
-  { to: '/learning/history', label: '历史学习', hint: '回看画像与方向记录' },
-  { to: '/resources', label: '资源查看', hint: '浏览已生成教学资源' },
-  { to: '/generate', label: '资源生成', hint: '生成新的训练材料' },
+  { to: '/', label: '总览', hint: '查看当前进度与主入口' },
+  { to: '/learning/new', label: '新建学习方向', hint: '5 步完成问卷、诊断与生成' },
+  { to: '/learning/history', label: '学习历史', hint: '按时间线查看学习过程' },
+  { to: '/generate', label: '资源生成', hint: '查看生成任务状态' },
   { to: '/report', label: '学习报告', hint: '查看诊断与进展' },
-  { to: '/feedback', label: '学习反馈', hint: '记录练习与迭代' },
+  { to: '/feedback', label: '学习反馈', hint: '记录练习结果' },
 ]
 
 const pageMeta = {
-  home: ['培训工作台', '围绕学习方向、历史进度、资源与报告组织完整培训流程。'],
-  onboarding: ['新建学习方向', '先选择领域与方向，再完成初始画像问卷。'],
-  diagnosis: ['能力诊断', '基于问卷结果进入真实掌握情况评估。'],
-  history: ['历史学习方向', '查看已有画像、既往方向与继续学习入口。'],
-  resources: ['资源查看', '按学习者与方向浏览已生成教学资源。'],
-  generate: ['资源生成', '围绕当前方向生成讲义、实操指南与训练材料。'],
-  report: ['学习报告', '查看知识盲区、能力曲线与近期资源效果。'],
-  feedback: ['学习反馈', '提交练习结果，推动画像与资源迭代。'],
+  home: ['工作台总览', '围绕用户资料、学习方向、诊断、资源与历史记录组织完整流程。'],
+  'user-profile': ['用户资料', '将学历、专业等稳定信息集中维护，供后续学习方向复用。'],
+  onboarding: ['新建学习方向', '完成领域、方向、问卷、诊断和资源选择 5 步流程。'],
+  history: ['学习历史', '按时间线查看问卷、诊断和资源生成过程。'],
+  generate: ['资源生成状态', '任务提交后在这里查看状态，并在完成后跳转资源页。'],
+  report: ['学习报告', '查看学习进展与能力变化。'],
+  feedback: ['学习反馈', '提交练习结果，推进后续资源迭代。'],
 }
 
-const pageTitle = computed(() => pageMeta[route.name]?.[0] || '培训工作台')
+const pageTitle = computed(() => pageMeta[route.name]?.[0] || 'Training Pilot')
 const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
 </script>
 
 <style scoped>
 .shell {
-  min-height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+  overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 26%),
     linear-gradient(180deg, #f4f7fb 0%, #eef3f8 100%);
@@ -100,6 +101,7 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
   flex-direction: column;
   gap: 24px;
   padding: 28px 22px;
+  overflow-y: auto;
   background: rgba(10, 23, 44, 0.96);
   color: #f8fbff;
 }
@@ -169,7 +171,7 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
 }
 
 .context-card {
-  margin-top: auto;
+  margin-top: 6px;
   padding: 16px;
   border-radius: 14px;
   background: rgba(148, 163, 184, 0.14);
@@ -192,6 +194,13 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
   margin-top: 12px;
 }
 
+.context-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .context-item span {
   color: rgba(203, 213, 225, 0.72);
   font-size: 12px;
@@ -201,13 +210,42 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
   font-size: 14px;
 }
 
+.context-action {
+  padding: 6px 12px;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(56, 189, 248, 0.1));
+  color: #e0f2fe;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.context-action:hover {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.32), rgba(59, 130, 246, 0.18));
+  border-color: rgba(186, 230, 253, 0.5);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
 .main {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
+  flex-shrink: 0;
   padding: 30px 36px 10px;
 }
 
@@ -223,16 +261,23 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
 }
 
 .content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 18px 36px 36px;
 }
 
 @media (max-width: 1080px) {
   .shell {
+    height: auto;
+    min-height: 100dvh;
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .sidebar {
     gap: 18px;
+    overflow: visible;
   }
 
   .context-card {

@@ -16,9 +16,9 @@
           </div>
         </template>
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="学习者">{{ profile.learner_id }}</el-descriptions-item>
+          <el-descriptions-item label="用户">{{ currentDisplayName }}</el-descriptions-item>
           <el-descriptions-item label="当前层级">{{ profile.skill_level }}</el-descriptions-item>
-          <el-descriptions-item label="背景">{{ profile.education }} / {{ profile.major }}</el-descriptions-item>
+          <el-descriptions-item label="当前方向">{{ store.currentLearningDirectionName || store.currentLearningDirectionId }}</el-descriptions-item>
           <el-descriptions-item label="学习目标">{{ profile.learning_goal }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -76,14 +76,14 @@
 
         <el-descriptions :column="2" border>
           <el-descriptions-item label="能力层级">{{ result.ability_level }}</el-descriptions-item>
-          <el-descriptions-item label="知识库">{{ result.knowledge_base_id }}</el-descriptions-item>
+          <el-descriptions-item label="学习方向">{{ store.currentLearningDirectionName || result.knowledge_base_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="薄弱点" :span="2">{{ (result.weak_points || []).join('、') || '-' }}</el-descriptions-item>
           <el-descriptions-item label="强项" :span="2">{{ (result.strong_points || []).join('、') || '-' }}</el-descriptions-item>
         </el-descriptions>
 
         <div class="action-row">
           <el-button type="primary" @click="$router.push('/generate')">进入资源生成</el-button>
-          <el-button @click="$router.push('/resources')">查看资源页</el-button>
+          <el-button @click="$router.push('/generate')">查看生成资源</el-button>
           <el-button @click="$router.push('/report')">查看报告</el-button>
         </div>
       </el-card>
@@ -101,6 +101,12 @@ const store = useAppStore()
 const profile = computed(() => store.currentProfile)
 const diagnosticQuestions = computed(() => store.pendingDiagnosticQuestions || [])
 const result = computed(() => store.diagnosisResult)
+const currentDisplayName = computed(
+  () =>
+    profile.value?.learning_preferences?.metadata?.user_profile_snapshot?.display_name ||
+    store.currentUserProfile?.display_name ||
+    '当前用户'
+)
 const submittingDiagnosis = ref(false)
 const diagnosticAnswers = reactive({})
 

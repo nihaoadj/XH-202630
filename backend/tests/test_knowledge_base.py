@@ -1,4 +1,5 @@
 """知识库与关系目录的核心回归测试。"""
+import inspect
 import json
 from pathlib import Path
 
@@ -52,6 +53,13 @@ from app.services.diagnosis_service import DiagnosisService
 from app.services.knowledge_service import KnowledgeService
 
 
+def test_default_chunking_configuration_uses_100_character_overlap():
+    parameters = inspect.signature(chunk_documents).parameters
+
+    assert parameters["chunk_size"].default == 500
+    assert parameters["chunk_overlap"].default == 100
+
+
 def test_chunks_have_stable_complete_provenance():
     documents = load_documents()
     first = chunk_documents(documents)
@@ -78,6 +86,58 @@ def test_chroma_metadata_serialization_preserves_list_provenance():
     assert restored.metadata["knowledge_points"] == chunk.metadata["knowledge_points"]
     assert restored.metadata["learner_levels"] == chunk.metadata["learner_levels"]
     assert restored.metadata["source_urls"] == chunk.metadata["source_urls"]
+
+
+def test_bm25_search_prioritizes_exact_technical_identifier():
+    exact = Document(
+        page_content="系统出现错误码 ERR-42 时，需要检查 collection 的向量维度。",
+        metadata={"chunk_id": "exact"},
+    )
+    semantic_only = Document(
+        page_content="向量数据库发生异常时可以检查索引配置。",
+        metadata={"chunk_id": "semantic"},
+    )
+
+    results = vector_store._bm25_search("ERR-42 如何处理", [semantic_only, exact], top_k=2)
+
+    assert results
+    assert results[0][0].metadata["chunk_id"] == "exact"
+    assert results[0][1] > 0
+
+
+def test_hybrid_search_fuses_vector_and_bm25_with_rrf(monkeypatch):
+    semantic = Document(
+        page_content="向量数据库异常排查方法。",
+        metadata={"chunk_id": "semantic", "knowledge_base_id": "kb-hybrid"},
+    )
+    exact = Document(
+        page_content="错误码 ERR-42 表示 collection 向量维度不一致。",
+        metadata={"chunk_id": "exact", "knowledge_base_id": "kb-hybrid"},
+    )
+
+    class FakeStore:
+        def similarity_search_with_score(self, query, k):
+            return [(semantic, 0.1), (exact, 0.2)]
+
+        def get(self, include):
+            return {
+                "ids": ["semantic", "exact"],
+                "documents": [semantic.page_content, exact.page_content],
+                "metadatas": [semantic.metadata, exact.metadata],
+            }
+
+    vector_store._LEXICAL_DOCUMENT_CACHE.clear()
+    monkeypatch.setattr(vector_store, "get_vector_store", lambda knowledge_base_id: FakeStore())
+
+    results = vector_store.hybrid_search("ERR-42", top_k=2, knowledge_base_id="kb-hybrid")
+
+    assert [document.metadata["chunk_id"] for document, _ in results] == ["exact", "semantic"]
+    exact_result, exact_score = results[0]
+    assert exact_result.metadata["retrieval_method"] == "hybrid_rrf"
+    assert exact_result.metadata["retrieval_channels"] == ["vector", "bm25"]
+    assert exact_result.metadata["vector_rank"] == 2
+    assert exact_result.metadata["lexical_rank"] == 1
+    assert 0 < results[1][1] < exact_score <= 1
 
 
 def test_collection_name_is_kb_scoped_and_uses_compatible_prefix():

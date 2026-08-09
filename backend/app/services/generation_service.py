@@ -4,8 +4,8 @@ import socket
 from datetime import datetime, timedelta, timezone
 from typing import List
 
-from app.core.file_storage import save_text_resource
 from app.core.errors import ApplicationError, ErrorCode
+from app.core.file_storage import save_text_resource
 from app.core.health import ensure_generation_ready
 from app.config import get_settings
 from app.db.resource.base import BaseResourceRepository
@@ -99,7 +99,6 @@ def build_workflow_state(
 
 
 def _build_report(learner: LearnerProfile, diagnosis: dict, review: dict, learning_plan: dict) -> dict:
-    """构建生成报告摘要"""
     hallucination_rate = review.get("hallucination_rate", review.get("hallucination_score", 0.0))
     weak_points = diagnosis.get("weak_points", learner.weak_points)
     return {
@@ -135,11 +134,12 @@ def _persist_resources(
     generation_steps: dict[str, str],
     audit_repo: BaseAuditRepository,
 ) -> List[LearningResource]:
-    """将生成的资源持久化到文件系统与数据库"""
+    """Persist generated resources to the filesystem and repository."""
     persisted = []
     for resource in resources:
         resource.learner_id = learner_id
         resource.topic = topic
+        resource.run_id = run_id
 
         if (
             resource.publication_status == "published"
@@ -241,10 +241,7 @@ def _run_status(workflow_status: str) -> RunStatus:
 
 
 class GenerationService:
-    """个性化资源生成业务服务
-    
-    通过构造函数注入依赖。
-    """
+    """Generate learning resources by orchestrating the workflow and persistence."""
 
     def __init__(
         self,
@@ -253,19 +250,21 @@ class GenerationService:
         audit_repo: BaseAuditRepository | None = None,
         knowledge_catalog: KnowledgeCatalogRepository | None = None,
     ):
-        """初始化服务
-        
-        Args:
-            resource_repo: 资源仓库（通过DI容器注入）
-            workflow: Agent工作流（通过DI容器注入）
-        """
         self.resource_repo = resource_repo
         self.workflow = workflow
         self.audit_repo = audit_repo or MemoryAuditRepository()
         self.knowledge_catalog = knowledge_catalog
 
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
-        """生成个性化学习资源"""
+        return self.generate_with_run_id(learner, req)
+
+    def generate_with_run_id(
+        self,
+        learner: LearnerProfile,
+        req: GenerateRequest,
+        run_id: str | None = None,
+    ) -> GenerateResponse:
+        """Generate with a caller-owned Run ID while preserving durable lifecycle semantics."""
         readiness = (
             ensure_generation_ready(
                 index_status_provider=self.knowledge_catalog.get_index_status
@@ -273,7 +272,7 @@ class GenerationService:
             if self.knowledge_catalog is not None
             else ensure_generation_ready()
         )
-        initial_state = build_workflow_state(learner, req)
+        initial_state = build_workflow_state(learner, req, run_id=run_id)
         run_id = initial_state["run_id"]
         started_at = datetime.now(timezone.utc)
         lease_expires_at = started_at + timedelta(

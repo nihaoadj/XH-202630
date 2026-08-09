@@ -43,6 +43,10 @@ class BaseResourceRepository(ABC):
 
     @abstractmethod
     def list_by_learner_with_filter(
-        self, learner_id: str, resource_type: Optional[str] = None, difficulty: Optional[str] = None
+        self,
+        learner_id: str,
+        resource_type: Optional[str] = None,
+        difficulty: Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> List[LearningResource]:
         pass

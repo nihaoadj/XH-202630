@@ -87,6 +87,7 @@ def test_service_reuses_run_id_in_state_response_trace_and_audit(monkeypatch):
     assert response.run_id == workflow.state["run_id"]
     assert response.trace[0].run_id == response.run_id
     assert response.run_id in audit.runs
+    assert response.resources[0].run_id == response.run_id
     assert response.schema_version == "1.0"
     assert response.workflow_status == "completed"
 

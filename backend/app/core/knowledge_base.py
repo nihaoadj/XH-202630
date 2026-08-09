@@ -189,9 +189,9 @@ def _section_at(text: str, start_index: int) -> Optional[str]:
 
 
 def chunk_documents(
-    documents: List[Document], chunk_size: int = 500, chunk_overlap: int = 50
+    documents: List[Document], chunk_size: int = 500, chunk_overlap: int = 100
 ) -> List[Document]:
-    """切片并为每个片段生成稳定 ID、序号和内容校验值。"""
+    """按默认 500/100 切片并生成稳定 ID、序号和内容校验值。"""
     if chunk_size <= 0 or chunk_overlap < 0 or chunk_overlap >= chunk_size:
         raise ValueError("chunk_size 必须大于 0，且 chunk_overlap 必须满足 0 <= overlap < size")
     config = {

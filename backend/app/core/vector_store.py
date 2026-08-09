@@ -1,8 +1,10 @@
 """按知识库隔离的 Chroma 向量存储访问层。"""
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import json
+import math
 import os
 import re
 from typing import Iterable, Optional
@@ -41,6 +43,12 @@ def _resolve_knowledge_base_id(knowledge_base_id: Optional[str]) -> str:
 # so encode those values at the storage boundary instead of throwing away
 # provenance needed by retrieval and audit features.
 _JSON_METADATA_FIELDS = {"knowledge_points", "learner_levels", "source_urls"}
+_LEXICAL_DOCUMENT_CACHE: dict[str, list[Document]] = {}
+_LATIN_OR_NUMBER_TOKEN = re.compile(r"[a-z0-9]+(?:[._:/+\-][a-z0-9]+)*", re.IGNORECASE)
+_CHINESE_SEQUENCE = re.compile(r"[\u4e00-\u9fff]+")
+_BM25_K1 = 1.5
+_BM25_B = 0.75
+_RRF_K = 60
 
 
 def _to_chroma_document(document: Document) -> Document:
@@ -67,6 +75,100 @@ def _restore_retrieved_metadata(document: Document) -> Document:
             if isinstance(decoded, list):
                 document.metadata[key] = decoded
     return document
+
+
+def _tokenize_for_lexical_search(text: str) -> list[str]:
+    """Tokenize mixed Chinese/technical text without an external tokenizer.
+
+    Latin identifiers, versions and error codes are retained as complete tokens.
+    Chinese sequences contribute unigrams and bigrams so exact terminology can
+    be matched even when the source and query use different sentence boundaries.
+    """
+    normalized = text.lower()
+    tokens = _LATIN_OR_NUMBER_TOKEN.findall(normalized)
+    for sequence in _CHINESE_SEQUENCE.findall(normalized):
+        tokens.extend(sequence)
+        tokens.extend(sequence[index:index + 2] for index in range(len(sequence) - 1))
+    return tokens
+
+
+def _bm25_search(
+    query: str,
+    documents: list[Document],
+    top_k: int,
+) -> list[tuple[Document, float]]:
+    """Rank an in-memory knowledge-base corpus with Okapi BM25."""
+    if not documents or top_k <= 0:
+        return []
+    query_tokens = list(dict.fromkeys(_tokenize_for_lexical_search(query)))
+    if not query_tokens:
+        return []
+
+    tokenized_documents = [_tokenize_for_lexical_search(document.page_content) for document in documents]
+    average_length = sum(len(tokens) for tokens in tokenized_documents) / len(tokenized_documents)
+    if average_length <= 0:
+        return []
+
+    document_frequency: Counter[str] = Counter()
+    for tokens in tokenized_documents:
+        document_frequency.update(set(tokens))
+
+    corpus_size = len(documents)
+    scored: list[tuple[Document, float]] = []
+    for document, tokens in zip(documents, tokenized_documents):
+        if not tokens:
+            continue
+        term_frequency = Counter(tokens)
+        length_normalization = _BM25_K1 * (
+            1 - _BM25_B + _BM25_B * len(tokens) / average_length
+        )
+        score = 0.0
+        for token in query_tokens:
+            frequency = term_frequency.get(token, 0)
+            if not frequency:
+                continue
+            frequency_in_corpus = document_frequency[token]
+            inverse_document_frequency = math.log(
+                1 + (corpus_size - frequency_in_corpus + 0.5) / (frequency_in_corpus + 0.5)
+            )
+            score += inverse_document_frequency * (
+                frequency * (_BM25_K1 + 1) / (frequency + length_normalization)
+            )
+        if score > 0:
+            scored.append((document, score))
+
+    scored.sort(key=lambda item: item[1], reverse=True)
+    return scored[:top_k]
+
+
+def _load_lexical_documents(store: Chroma, knowledge_base_id: str) -> list[Document]:
+    cached = _LEXICAL_DOCUMENT_CACHE.get(knowledge_base_id)
+    if cached is not None:
+        return cached
+
+    payload = store.get(include=["documents", "metadatas"])
+    ids = payload.get("ids") or []
+    texts = payload.get("documents") or []
+    metadatas = payload.get("metadatas") or []
+    documents: list[Document] = []
+    for index, text in enumerate(texts):
+        if not text:
+            continue
+        metadata = dict(metadatas[index] or {}) if index < len(metadatas) else {}
+        if index < len(ids):
+            metadata.setdefault("chunk_id", ids[index])
+        documents.append(
+            _restore_retrieved_metadata(Document(page_content=text, metadata=metadata))
+        )
+    _LEXICAL_DOCUMENT_CACHE[knowledge_base_id] = documents
+    return documents
+
+
+def _result_key(document: Document) -> str:
+    return str(
+        document.metadata.get("chunk_id")
+        or hashlib.sha256(document.page_content.encode("utf-8")).hexdigest()
+    )
 
 
 def get_vector_store(knowledge_base_id: Optional[str] = None) -> Chroma:
@@ -102,7 +204,9 @@ def add_documents(documents: Iterable, ids: Optional[list[str]] = None, knowledg
     if not all(stable_ids) or len(stable_ids) != len(documents):
         raise ValueError("每个片段必须具备唯一的 chunk_id")
     chroma_documents = [_to_chroma_document(document) for document in documents]
-    return get_vector_store(kb_id).add_documents(chroma_documents, ids=stable_ids)
+    result = get_vector_store(kb_id).add_documents(chroma_documents, ids=stable_ids)
+    _LEXICAL_DOCUMENT_CACHE.pop(kb_id, None)
+    return result
 
 
 def synchronize_documents(
@@ -145,7 +249,9 @@ def vector_store_count(knowledge_base_id: Optional[str] = None) -> int:
 
 def reset_vector_store(knowledge_base_id: Optional[str] = None) -> None:
     """删除指定知识库的向量集合，用于显式全量重建。"""
-    get_vector_store(knowledge_base_id).delete_collection()
+    kb_id = _resolve_knowledge_base_id(knowledge_base_id)
+    get_vector_store(kb_id).delete_collection()
+    _LEXICAL_DOCUMENT_CACHE.pop(kb_id, None)
 
 
 def similarity_search(query: str, top_k: int = 5, knowledge_base_id: Optional[str] = None):
@@ -173,20 +279,136 @@ class ChromaVectorSearchBackend:
     ) -> list[VectorCandidate]:
         if not query.strip():
             raise ValueError("retrieval query cannot be empty")
-        results = get_vector_store(knowledge_base_id).similarity_search_with_score(
+        from app.core.reranker import mark_rerank_fallback, rerank_documents
+
+        candidate_k = max(top_k, self.settings.rerank_candidate_k)
+        hybrid_results = hybrid_search(
             query,
-            k=top_k,
+            top_k=candidate_k,
+            knowledge_base_id=knowledge_base_id,
         )
+        try:
+            results = rerank_documents(query, hybrid_results, top_k=top_k)
+        except Exception:
+            results = mark_rerank_fallback(hybrid_results, top_k, "unavailable")
         return [
             VectorCandidate(
                 chunk_id=str(document.metadata.get("chunk_id") or ""),
                 text=document.page_content,
                 metadata=dict(document.metadata),
-                raw_score=float(score),
-                score_kind=ScoreKind.DISTANCE,
+                raw_score=2.0 * float(score) - 1.0,
+                score_kind=ScoreKind.SIMILARITY,
                 metric=self.settings.vector_distance_metric,
                 query=query,
                 query_rank=rank,
             )
             for rank, (document, score) in enumerate(results, start=1)
         ]
+
+
+def hybrid_search(query: str, top_k: int = 5, knowledge_base_id: Optional[str] = None):
+    """Fuse dense vector retrieval and lexical BM25 ranking with RRF.
+
+    The returned score is a normalized RRF relevance score in ``[0, 1]`` where
+    larger is better. Channel-specific ranks and raw scores remain available in
+    document metadata for tracing and evaluation.
+    """
+    if not query or not query.strip():
+        raise ValueError("检索查询不能为空")
+    if top_k <= 0:
+        raise ValueError("top_k 必须大于 0")
+
+    kb_id = _resolve_knowledge_base_id(knowledge_base_id)
+    store = get_vector_store(kb_id)
+    candidate_k = max(20, top_k * 4)
+    vector_error: Exception | None = None
+    lexical_error: Exception | None = None
+
+    try:
+        vector_results = store.similarity_search_with_score(query, k=candidate_k)
+        vector_results = [
+            (_restore_retrieved_metadata(document), float(score))
+            for document, score in vector_results
+        ]
+    except Exception as exc:
+        vector_error = exc
+        vector_results = []
+
+    try:
+        lexical_documents = _load_lexical_documents(store, kb_id)
+        lexical_results = _bm25_search(query, lexical_documents, candidate_k)
+    except Exception as exc:
+        lexical_error = exc
+        lexical_results = []
+
+    if not vector_results and not lexical_results and (vector_error or lexical_error):
+        raise vector_error or lexical_error  # type: ignore[misc]
+
+    fused: dict[str, dict[str, object]] = {}
+    for rank, (document, score) in enumerate(vector_results, start=1):
+        key = _result_key(document)
+        fused[key] = {
+            "document": document,
+            "vector_rank": rank,
+            "vector_score": score,
+            "lexical_rank": None,
+            "lexical_score": None,
+            "fusion_score": 1 / (_RRF_K + rank),
+        }
+
+    for rank, (document, score) in enumerate(lexical_results, start=1):
+        key = _result_key(document)
+        entry = fused.setdefault(
+            key,
+            {
+                "document": document,
+                "vector_rank": None,
+                "vector_score": None,
+                "lexical_rank": None,
+                "lexical_score": None,
+                "fusion_score": 0.0,
+            },
+        )
+        entry["lexical_rank"] = rank
+        entry["lexical_score"] = float(score)
+        entry["fusion_score"] = float(entry["fusion_score"]) + 1 / (_RRF_K + rank)
+
+    maximum_rrf_score = 2 / (_RRF_K + 1)
+    ranked = sorted(
+        fused.values(),
+        key=lambda item: (
+            float(item["fusion_score"]),
+            -(int(item["vector_rank"]) if item["vector_rank"] is not None else candidate_k + 1),
+            -(int(item["lexical_rank"]) if item["lexical_rank"] is not None else candidate_k + 1),
+        ),
+        reverse=True,
+    )
+
+    results: list[tuple[Document, float]] = []
+    for item in ranked[:top_k]:
+        source_document = item["document"]
+        if not isinstance(source_document, Document):
+            continue
+        document = Document(
+            page_content=source_document.page_content,
+            metadata=dict(source_document.metadata),
+        )
+        normalized_score = min(1.0, float(item["fusion_score"]) / maximum_rrf_score)
+        channels = []
+        if item["vector_rank"] is not None:
+            channels.append("vector")
+        if item["lexical_rank"] is not None:
+            channels.append("bm25")
+        document.metadata.update(
+            {
+                "retrieval_method": "hybrid_rrf",
+                "retrieval_channels": channels,
+                "hybrid_score": normalized_score,
+                "vector_rank": item["vector_rank"],
+                "vector_score": item["vector_score"],
+                "lexical_rank": item["lexical_rank"],
+                "lexical_score": item["lexical_score"],
+            }
+        )
+        results.append((document, normalized_score))
+    return results

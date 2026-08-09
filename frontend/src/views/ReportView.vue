@@ -1,10 +1,15 @@
 <template>
-  <div>
-    <h2>学情报告</h2>
-    <el-input v-model="learnerId" placeholder="输入学习者ID" style="width: 200px; margin-right: 10px;" />
-    <el-button type="primary" @click="loadReport">查询</el-button>
-
-    <el-divider />
+  <div class="report-page">
+    <section class="report-toolbar">
+      <div>
+        <h2>学习报告</h2>
+        <p>{{ currentLearnerLabel }}</p>
+      </div>
+      <div class="report-actions">
+        <el-input v-model="learnerId" placeholder="画像编号（内部使用）" class="report-input" />
+        <el-button type="primary" @click="loadReport">查询</el-button>
+      </div>
+    </section>
 
     <ReportChart :data="report" />
 
@@ -20,7 +25,7 @@
               :timestamp="item.difficulty"
             >
               <strong>{{ item.resource_type }}</strong>
-              <p>{{ item.resource_id }}</p>
+              <p>{{ item.topic || '未命名主题' }}</p>
               <p>{{ (item.knowledge_points || []).join('、') }}</p>
             </el-timeline-item>
           </el-timeline>
@@ -31,7 +36,11 @@
           <template #header>最近反馈</template>
           <el-empty v-if="!recentFeedback.length" description="暂无反馈" />
           <el-table v-else :data="recentFeedback" style="width: 100%;">
-            <el-table-column prop="resource_id" label="资源ID" min-width="180" />
+            <el-table-column label="资源" min-width="180">
+              <template #default="{ row }">
+                {{ feedbackResourceLabel(row) }}
+              </template>
+            </el-table-column>
             <el-table-column prop="correct_rate" label="正确率" width="100">
               <template #default="{ row }">{{ Math.round(row.correct_rate * 100) }}%</template>
             </el-table-column>
@@ -44,15 +53,33 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { reportApi } from '../api'
+import { useAppStore } from '../stores/app'
 import ReportChart from '../components/ReportChart.vue'
 
-const learnerId = ref(localStorage.getItem('last_learner_id') || 'stu_001')
+const store = useAppStore()
+const learnerId = ref(localStorage.getItem('last_learner_id') || '')
 const report = reactive({})
 const recentResources = computed(() => report.recent_resources || [])
 const recentFeedback = computed(() => report.recent_feedback || [])
+const currentLearnerLabel = computed(() => {
+  const name =
+    store.currentUserProfile?.display_name ||
+    store.currentProfile?.learning_preferences?.metadata?.user_profile_snapshot?.display_name ||
+    '当前用户'
+  const direction = store.currentLearningDirectionName || localStorage.getItem('learning_direction_name') || '未选择方向'
+  return `${name} / ${direction}`
+})
+
+function feedbackResourceLabel(row) {
+  const resource = recentResources.value.find((item) => item.resource_id === row.resource_id)
+  if (resource) {
+    return `${resource.resource_type} / ${resource.topic || '未命名主题'}`
+  }
+  return row.resource_id ? `资源 ${row.resource_id.slice(0, 8)}` : '未命名资源'
+}
 
 async function loadReport() {
   try {
@@ -66,3 +93,51 @@ async function loadReport() {
 
 onMounted(loadReport)
 </script>
+
+<style scoped>
+.report-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.report-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 22px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.report-toolbar h2 {
+  margin: 0;
+}
+
+.report-toolbar p {
+  margin: 8px 0 0;
+  color: #667085;
+}
+
+.report-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.report-input {
+  width: 260px;
+}
+
+@media (max-width: 920px) {
+  .report-toolbar {
+    flex-direction: column;
+  }
+
+  .report-input {
+    width: min(100%, 320px);
+  }
+}
+</style>
