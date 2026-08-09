@@ -209,14 +209,45 @@ class GeneratedResourceBatch(StrictLLMOutput):
         return resources
 
 
+class ReviewIssue(StrictLLMOutput):
+    code: Literal[
+        "factual_risk",
+        "evidence_gap",
+        "procedure_error",
+        "difficulty_mismatch",
+        "coverage_gap",
+        "structure_quality",
+        "other",
+    ]
+    severity: Literal["low", "medium", "high", "critical"]
+    resource_type: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    knowledge_point: Optional[str] = Field(default=None, min_length=1, max_length=256)
+    description: str = Field(min_length=1, max_length=2000)
+
+
+class RevisionInstruction(StrictLLMOutput):
+    issue_codes: List[str] = Field(min_length=1, max_length=20)
+    target_resource_type: str = Field(min_length=1, max_length=64)
+    action: str = Field(min_length=1, max_length=4000)
+    priority: int = Field(default=1, ge=1, le=100)
+
+
 class ReviewLLMOutput(StrictLLMOutput):
-    decision: Literal["approve", "revise", "reject"]
+    decision: Literal["approve", "revise", "reject", "human_review"]
     hallucination_score: float = Field(ge=0.0, le=1.0)
-    issues: List[str] = Field(default_factory=list, max_length=100)
+    issues: List[ReviewIssue] = Field(default_factory=list, max_length=100)
     difficulty_match: bool
     coverage_rate: float = Field(ge=0.0, le=1.0)
     suggestion: str = Field(min_length=1, max_length=4000)
-    revision_instructions: List[str] = Field(default_factory=list, max_length=100)
+    revision_instructions: List[RevisionInstruction] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_decision_payload(self) -> "ReviewLLMOutput":
+        if self.decision == "revise" and not self.revision_instructions:
+            raise ValueError("revise requires revision_instructions")
+        if self.decision == "approve" and self.revision_instructions:
+            raise ValueError("approve forbids revision_instructions")
+        return self
 
 
 def make_error_info(

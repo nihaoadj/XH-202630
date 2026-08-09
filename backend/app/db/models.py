@@ -66,6 +66,8 @@ class GeneratedResourceORM(Base):
     learning_path_node = Column(String(128), nullable=True, comment="学习路径节点")
     review_status = Column(String(32), nullable=True, comment="审核状态")
     review_id = Column(String(64), nullable=True, comment="审核记录 ID")
+    publication_status = Column(String(32), nullable=False, default="unpublished", index=True)
+    published_at = Column(DateTime(timezone=True), nullable=True)
     claim_count = Column(Integer, nullable=True, comment="Claim 总数")
     hallucination_rate = Column(Float, nullable=True, comment="幻觉率")
     difficulty_match = Column(Boolean, nullable=True, comment="难度是否匹配")
@@ -571,6 +573,8 @@ class ResourceReviewORM(Base):
     review_pass_rate = Column(Float, nullable=False, default=0.0)
     revision_count = Column(Integer, nullable=False, default=0)
     issues = Column(JSON, default=list)
+    revision_instructions = Column(JSON, default=list)
+    review_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

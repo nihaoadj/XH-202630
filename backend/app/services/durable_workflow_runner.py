@@ -18,9 +18,10 @@ from app.models.persistence import (
 
 
 class DurableWorkflowRunner:
-    def __init__(self, workflow: Any, repository: BaseAuditRepository):
+    def __init__(self, workflow: Any, repository: BaseAuditRepository, artifact_recorder: Any | None = None):
         self.workflow = workflow
         self.repository = repository
+        self.artifact_recorder = artifact_recorder
 
     def invoke(self, initial_state: dict[str, Any]) -> dict[str, Any]:
         if not hasattr(self.workflow, "stream"):
@@ -46,6 +47,8 @@ class DurableWorkflowRunner:
             step_id = str(item["step_id"])
             if step_id in checkpointed:
                 continue
+            if self.artifact_recorder is not None:
+                self.artifact_recorder.record(latest, item)
             projection = build_checkpoint_projection(latest)
             encoded = canonical_json(projection).encode("utf-8")
             if len(encoded) > get_settings().workflow_checkpoint_max_bytes:

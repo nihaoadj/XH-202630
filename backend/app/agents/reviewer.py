@@ -18,6 +18,8 @@ from app.models.agent_contracts import (
 )
 from app.models.llm import LLMCallContext
 from app.models.workflow import ReviewDecision, StepStatus
+from app.agents.policies import decide_review
+from app.agents.validators import revision_instructions_are_valid
 
 
 REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习资源进行审核，重点检查：
@@ -28,16 +30,59 @@ REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习�
 
 请用 JSON 格式输出：
 {
-  "decision": "approve" | "revise" | "reject",
+  "decision": "approve" | "revise" | "reject" | "human_review",
   "hallucination_score": float (0-1, 越高表示幻觉越严重),
-  "issues": ["问题描述"],
+  "issues": [{
+    "code": "factual_risk|evidence_gap|procedure_error|difficulty_mismatch|coverage_gap|structure_quality|other",
+    "severity": "low|medium|high|critical",
+    "resource_type": "目标资源类型或 null",
+    "knowledge_point": "目标知识点或 null",
+    "description": "问题描述"
+  }],
   "difficulty_match": bool,
   "coverage_rate": float (0-1),
   "suggestion": "审核判断或改进建议",
-  "revision_instructions": ["可执行的修改要求"]
+  "revision_instructions": [{
+    "issue_codes": ["关联问题码"],
+    "target_resource_type": "必须是待审核资源类型之一",
+    "action": "可直接执行的修改要求",
+    "priority": 1
+  }]
 }
+revise 必须包含至少一条 revision_instructions；approve 不得包含 revision_instructions。
 不要包含额外解释。
 """
+
+
+def _decorate_review_items(review: dict, *, run_id: str, generation_attempt: int) -> dict:
+    decorated = dict(review)
+    decorated["issues"] = [
+        {
+            "issue_id": str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{run_id}:review:{generation_attempt}:issue:{index}",
+                )
+            ),
+            **item,
+        }
+        for index, item in enumerate(review.get("issues", []), start=1)
+        if isinstance(item, dict)
+    ]
+    decorated["revision_instructions"] = [
+        {
+            "instruction_id": str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{run_id}:review:{generation_attempt}:instruction:{index}",
+                )
+            ),
+            **item,
+        }
+        for index, item in enumerate(review.get("revision_instructions", []), start=1)
+        if isinstance(item, dict)
+    ]
+    return decorated
 
 
 def review_node(
@@ -94,11 +139,17 @@ def review_node(
             "decision": ReviewDecision.HUMAN_REVIEW.value,
             "passed": False,
             "hallucination_score": 1.0,
-            "issues": ["资源引用未能映射到本次检索证据"],
+            "issues": [{
+                "code": "evidence_gap",
+                "severity": "critical",
+                "resource_type": None,
+                "knowledge_point": None,
+                "description": "资源引用未能映射到本次检索证据",
+            }],
             "difficulty_match": False,
             "coverage_rate": 0.0,
             "suggestion": "引用证据不完整，禁止自动批准。",
-            "revision_instructions": ["仅使用本次工作流返回的 EvidenceItem 重建引用"],
+            "revision_instructions": [],
         }
     else:
         try:
@@ -127,28 +178,37 @@ def review_node(
                 "decision": ReviewDecision.HUMAN_REVIEW.value,
                 "passed": False,
                 "hallucination_score": 0.3 if evidence else 0.5,
-                "issues": ["使用保底审核结果，建议补充知识库证据或配置 LLM 后复核"],
+                "issues": [{
+                    "code": "evidence_gap",
+                    "severity": "high",
+                    "resource_type": None,
+                    "knowledge_point": None,
+                    "description": "审核能力暂不可用，无法安全完成自动审核",
+                }],
                 "difficulty_match": False,
                 "coverage_rate": 0.8,
                 "suggestion": "",
-                "revision_instructions": ["转人工复核，不得自动批准"],
+                "revision_instructions": [],
             }
 
-    if error:
-        decision = ReviewDecision.HUMAN_REVIEW
-    else:
-        requested_decision = ReviewDecision(review["decision"])
-        if requested_decision == ReviewDecision.REJECT:
-            decision = ReviewDecision.REJECT
-        elif (
-            requested_decision == ReviewDecision.APPROVE
-            and review["hallucination_score"] < 0.2
-            and review["difficulty_match"]
-            and review["coverage_rate"] >= 0.8
-        ):
-            decision = ReviewDecision.APPROVE
-        else:
-            decision = ReviewDecision.REVISE
+    review = _decorate_review_items(
+        review,
+        run_id=node_input.run_id,
+        generation_attempt=node_input.generation_attempt,
+    )
+    instructions_valid = revision_instructions_are_valid(
+        review.get("revision_instructions", []),
+        [resource.resource_type for resource in resources],
+    )
+    decision = (
+        ReviewDecision.HUMAN_REVIEW
+        if error
+        else decide_review(
+            review,
+            valid_source_refs=not invalid_source_refs,
+            valid_revision_instructions=instructions_valid,
+        )
+    )
 
     review.update({
         "passed": decision == ReviewDecision.APPROVE,

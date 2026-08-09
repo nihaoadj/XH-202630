@@ -18,6 +18,8 @@ def download_resource(resource_id: str, request: Request):
     resource = resource_service.get(resource_id)
     if resource is None:
         raise HTTPException(status_code=404, detail="资源不存在")
+    if resource.publication_status != "published":
+        raise HTTPException(status_code=404, detail="资源不存在")
     if not resource.file_path:
         raise HTTPException(status_code=404, detail="该资源没有可下载文件")
     try:

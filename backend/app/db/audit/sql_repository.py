@@ -868,9 +868,13 @@ class SQLAuditRepository(BaseAuditRepository):
         claim_supported = review.get("claim_supported", sum(bool(claim.get("supported")) for claim in claims))
         claim_unsupported = review.get("claim_unsupported", max(0, claim_total - claim_supported))
         hallucination_rate = review.get("hallucination_rate", review.get("hallucination_score", 0.0))
+        payload = {"resource_id": resource_id, "run_id": run_id, **review}
+        review_hash = canonical_hash(payload)
         with self.session_factory() as db:
             existing = db.get(ResourceReviewORM, review_id)
             if existing is not None:
+                if existing.review_hash and existing.review_hash != review_hash:
+                    raise PersistenceConflict("review payload conflict")
                 return review_id
             db.add(
                 ResourceReviewORM(
@@ -889,6 +893,8 @@ class SQLAuditRepository(BaseAuditRepository):
                     ),
                     revision_count=review.get("revision_count", 0),
                     issues=review.get("issues", []),
+                    revision_instructions=review.get("revision_instructions", []),
+                    review_hash=review_hash,
                 )
             )
             for claim in claims:
@@ -909,6 +915,35 @@ class SQLAuditRepository(BaseAuditRepository):
                 )
             db.commit()
         return review_id
+
+    def list_reviews_by_run(self, run_id: str) -> list[dict[str, Any]]:
+        with self.session_factory() as db:
+            reviews = (
+                db.query(ResourceReviewORM)
+                .filter_by(run_id=run_id)
+                .order_by(
+                    ResourceReviewORM.revision_count,
+                    ResourceReviewORM.created_at,
+                    ResourceReviewORM.review_id,
+                )
+                .all()
+            )
+            return [
+                {
+                    "review_id": review.review_id,
+                    "resource_id": review.resource_id,
+                    "run_id": review.run_id,
+                    "status": review.status,
+                    "hallucination_rate": review.hallucination_rate,
+                    "review_pass_rate": review.review_pass_rate,
+                    "revision_count": review.revision_count,
+                    "issues": review.issues or [],
+                    "revision_instructions": review.revision_instructions or [],
+                    "review_hash": review.review_hash,
+                    "created_at": review.created_at,
+                }
+                for review in reviews
+            ]
 
     def get_review_by_resource(self, resource_id: str) -> Optional[ReviewSummary]:
         with self.session_factory() as db:
@@ -938,6 +973,7 @@ class SQLAuditRepository(BaseAuditRepository):
                 review_pass_rate=review.review_pass_rate,
                 revision_count=review.revision_count,
                 issues=review.issues or [],
+                revision_instructions=review.revision_instructions or [],
                 claims=[
                     ResourceClaim(
                         claim_id=claim.claim_id,

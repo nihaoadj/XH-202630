@@ -55,9 +55,15 @@ class ResourceStatus(str, Enum):
     DRAFT = "draft"
     UNREVIEWED_DRAFT = "unreviewed_draft"
     PENDING_REVIEW = "pending_review"
+    REVISION_REQUESTED = "revision_requested"
     APPROVED = "approved"
     REJECTED = "rejected"
     HUMAN_REVIEW = "human_review"
+
+
+class PublicationStatus(str, Enum):
+    UNPUBLISHED = "unpublished"
+    PUBLISHED = "published"
 
 
 class WorkflowConstraints(BaseModel):

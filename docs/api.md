@@ -196,7 +196,7 @@
 
 LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_CONNECTION_FAILED`、`LLM_UPSTREAM_5XX`、`LLM_AUTH_FAILED`、`LLM_BAD_REQUEST`、`LLM_CONTENT_REFUSED`、`LLM_OUTPUT_EMPTY`、`LLM_OUTPUT_TRUNCATED`、`LLM_OUTPUT_PARSE_FAILED`、`LLM_OUTPUT_SCHEMA_INVALID`。响应和 trace 不返回 Provider 原始错误 body、prompt、模型原文或凭据。
 
-资源审核状态为：`draft | unreviewed_draft | pending_review | approved | rejected | human_review`。未执行 Reviewer 或 Claim 能力不可用时，资源不得标记为 `approved`。
+资源审核状态为：`draft | unreviewed_draft | pending_review | revision_requested | approved | rejected | human_review`。资源还包含独立的 `publication_status=unpublished|published` 和可空 `published_at`；只有最终 Reviewer 决策为 `approve` 的当前叶子版本才能发布。未执行 Reviewer、返工中、拒绝、人工审核或 Claim 能力不可用时，资源不得标记为 `published`。
 
 ## 4.8 FeedbackRequest
 
@@ -543,6 +543,8 @@ LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_C
 
 - `include_review=false`：`generate -> finalize_draft`，审核决策为 `not_requested`。
 - Reviewer 返回 `revise` 且 `revision_count < max_iterations`：先增加返工计数，再重新进入 Generator；下一版资源使用新 `resource_id`，并通过 `parent_resource_id/version` 关联上一版。
+- Reviewer 决策为 `approve | revise | reject | human_review`；`issues` 为带 code、severity、目标资源/知识点的结构化问题，`revision_instructions` 为带 issue_codes、target_resource_type、action、priority 和系统生成 instruction_id 的可执行指令。
+- 返工时 Generator 显式读取上一版本和结构化指令，只为指令命中的资源类型生成新版本；未命中的当前版本沿用。
 - 返工额度用尽、Reviewer 无法自动决策或严格模式中存在降级结果：`workflow_status=human_review`。
 - Reviewer 只有在 typed decision 为 `approve`、幻觉分低于安全阈值、难度匹配且覆盖率达标时才能批准；模型超时、限流、5xx、空输出、截断、解析或 schema 错误均不得 approve。
 - `include_claim_check=true`：P0-06 前返回 `claim_check_status=unavailable`、错误码 `CLAIM_CHECK_NOT_IMPLEMENTED`，不得把空 `claims` 当作通过。
@@ -550,6 +552,8 @@ LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_C
 ### 5.15 `GET /api/resources/{learner_id}`
 
 查询某个学习者的资源列表。
+
+默认只返回 `publication_status=published` 的资源。未审核草稿、返工版本、拒绝和人工审核资源仅保留用于 Run 审计，不进入学习者资源库。
 
 路径参数：
 
@@ -565,6 +569,8 @@ LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_C
 ### 5.16 `GET /api/resources/file/{resource_id}`
 
 下载某个资源文件。
+
+只有 `published` 资源可下载；未发布或不存在统一返回 404，前端不得根据 `file_path` 绕过门禁。
 
 说明：
 
@@ -654,7 +660,7 @@ LLM 失败会使用稳定细分码：`LLM_TIMEOUT`、`LLM_RATE_LIMITED`、`LLM_C
 
 ### 5.23 `GET /api/runs/{run_id}/timeline`
 
-按 `event_sequence` 升序返回 Run、Step、Event、Checkpoint 摘要和 Evidence
+按 `event_sequence` 升序返回 Run、Step、Event、Checkpoint 摘要、Evidence、`resource_versions` 和 `reviews`
 snapshot。查询参数：
 
 - `after_sequence`：默认 `0`，只返回更大的事件序号。
@@ -694,7 +700,7 @@ score 和 config hash，但不返回原始 query。知识库当前内容或 Chun
   - `retrieval_evidence_snapshots`
 
 生成链路在首个 Agent/LLM 调用前创建 Run；节点副作用前创建 running Step；
-状态合并后保存 checkpoint；资源和审核完成后才把 Run 从 `finalizing` 写成终态。
+状态合并后先由制品记录器保存本轮资源版本和审核，再保存 checkpoint；最终批准资源发布后才把 Run 从 `finalizing` 写成终态。早期版本和每轮返工指令均可跨进程回放。
 持久化失败始终 fail closed，不受 demo/degraded 生成策略放宽。
 
 这意味着：

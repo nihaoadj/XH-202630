@@ -282,6 +282,8 @@ class LearningResource(BaseModel):
     learning_path_node: Optional[str] = None
     review_status: Optional[str] = None
     review_id: Optional[str] = None
+    publication_status: Literal["unpublished", "published"] = "unpublished"
+    published_at: Optional[datetime] = None
     claim_count: Optional[int] = None
     hallucination_rate: Optional[float] = None
     difficulty_match: Optional[bool] = None
@@ -317,7 +319,37 @@ class ReviewSummary(BaseModel):
     review_pass_rate: float = 0.0
     revision_count: int = 0
     issues: List[Dict[str, Any]] = Field(default_factory=list)
+    revision_instructions: List[Dict[str, Any]] = Field(default_factory=list)
     claims: List[ResourceClaim] = Field(default_factory=list)
+
+    @field_validator("issues", mode="before")
+    @classmethod
+    def normalize_legacy_issues(cls, value: Any) -> List[Dict[str, Any]]:
+        return [
+            item
+            if isinstance(item, dict)
+            else {
+                "code": "other",
+                "severity": "medium",
+                "description": str(item),
+            }
+            for item in (value or [])
+        ]
+
+    @field_validator("revision_instructions", mode="before")
+    @classmethod
+    def normalize_legacy_instructions(cls, value: Any) -> List[Dict[str, Any]]:
+        return [
+            item
+            if isinstance(item, dict)
+            else {
+                "issue_codes": ["other"],
+                "target_resource_type": "legacy_unknown",
+                "action": str(item),
+                "priority": 1,
+            }
+            for item in (value or [])
+        ]
 
 
 class AgentTrace(BaseModel):

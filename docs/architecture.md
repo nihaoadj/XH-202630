@@ -147,7 +147,8 @@ backend/app/agents
   ├─ generator: 个性化资源生成 Agent
   ├─ reviewer: 审核纠偏 Agent
   ├─ feedback: 反馈决策 Agent
-  └─ workflow: 审核开关、Claim 预留、返工额度与终态决策
+  ├─ policies/validators: 审核阈值、返工指令、版本链与发布门禁
+  └─ workflow: 审核开关、Claim 预留、定向返工额度与终态决策
   ↓
 backend/app/core + backend/app/db
   ├─ LLMGateway -> LLMTransport -> OpenAI-compatible Provider
@@ -172,6 +173,8 @@ P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim �
 
 `max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
 
+P0-05 中 Reviewer 只提供候选结论，`policies.py` 以证据范围、幻觉分、覆盖率、难度和阻断问题执行确定性二次裁决。revise 必须携带结构化可执行指令；Generator 只修改命中的资源类型，新版本使用新 ID 并指向直接父版本。`review_status` 与 `publication_status` 分离：只有 supervisor 最终 approve 的叶子版本 published，其余版本仅用于审计。
+
 ### 4.3 LLM 调用边界
 
 - Diagnosis、Planner、Generator、Reviewer 仅依赖注入的 `LLMGateway`；Gateway 的 transport 可在离线测试中替换。
@@ -191,6 +194,7 @@ readiness
 -> Agent/Supervisor node side effect
 -> complete_step + Evidence snapshot + terminal Event
 -> LangGraph state merge
+-> WorkflowArtifactRecorder(Resource version / Review round / publication)
 -> WorkflowCheckpoint(state projection + SHA-256)
 -> mark_run_finalizing
 -> persist Resource/Review with run_id
@@ -200,7 +204,7 @@ readiness
 - `RecordedNode` 在组合根统一包装所有 LangGraph 节点，预分配的 Step context 也是
   State trace、LLM call context 和数据库记录的唯一身份来源。
 - `DurableWorkflowRunner` 消费 `stream_mode=values`，只在 LangGraph 完成状态合并后保存
-  白名单 checkpoint；不 pickle Python 对象。
+  本轮业务制品和白名单 checkpoint；不 pickle Python 对象。制品写入发生在 checkpoint 前，避免回放引用尚未落库的版本。
 - `workflow_events` 是 append-only 顺序账本，业务正文仍由 Resource/Review/Evidence
   事实表负责。
 - 回放只读数据库，不是 resume；P0-04 不自动重新调用模型、不提供 SSE/取消接口。

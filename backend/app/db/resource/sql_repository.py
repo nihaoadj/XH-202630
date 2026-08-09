@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.db.models import GeneratedResourceORM
 from app.db.resource.base import BaseResourceRepository
 from app.models.schemas import ExerciseItem, LearningResource, SourceRef
+from app.agents.validators import immutable_resource_payload
+from app.db.audit.base import PersistenceConflict
 
 
 def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
@@ -26,6 +28,8 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         learning_path_node=orm.learning_path_node,
         review_status=orm.review_status,
         review_id=orm.review_id,
+        publication_status=orm.publication_status or "unpublished",
+        published_at=orm.published_at,
         claim_count=orm.claim_count,
         hallucination_rate=orm.hallucination_rate,
         difficulty_match=orm.difficulty_match,
@@ -63,6 +67,8 @@ def _pydantic_to_orm(
         learning_path_node=resource.learning_path_node,
         review_status=resource.review_status,
         review_id=resource.review_id,
+        publication_status=resource.publication_status,
+        published_at=resource.published_at,
         claim_count=resource.claim_count,
         hallucination_rate=resource.hallucination_rate,
         difficulty_match=resource.difficulty_match,
@@ -92,36 +98,47 @@ class SQLResourceRepository(BaseResourceRepository):
         run_id: str | None = None,
         generation_step_id: str | None = None,
     ) -> None:
+        normalized = resource.model_copy(update={"learner_id": learner_id, "topic": topic})
         with self.session_factory() as db:
             orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource.resource_id).first()
+            if run_id is not None:
+                duplicate = (
+                    db.query(GeneratedResourceORM)
+                    .filter(
+                        GeneratedResourceORM.run_id == run_id,
+                        GeneratedResourceORM.resource_type == normalized.resource_type,
+                        GeneratedResourceORM.version == normalized.version,
+                        GeneratedResourceORM.resource_id != normalized.resource_id,
+                    )
+                    .first()
+                )
+                if duplicate is not None:
+                    raise PersistenceConflict("duplicate resource version in run")
             if orm:
+                existing = _orm_to_pydantic(orm)
+                if immutable_resource_payload(existing) != immutable_resource_payload(normalized):
+                    raise PersistenceConflict("resource immutable payload conflict")
                 if run_id is not None:
+                    if orm.run_id is not None and orm.run_id != run_id:
+                        raise PersistenceConflict("resource run_id conflict")
                     orm.run_id = run_id
                 if generation_step_id is not None:
+                    if orm.generation_step_id is not None and orm.generation_step_id != generation_step_id:
+                        raise PersistenceConflict("resource generation_step_id conflict")
                     orm.generation_step_id = generation_step_id
-                orm.learner_id = learner_id
-                orm.topic = topic
-                orm.resource_type = resource.resource_type
-                orm.difficulty = resource.difficulty
-                orm.storage_type = resource.storage_type
-                orm.content_text = resource.content_text
                 orm.file_path = resource.file_path
                 orm.file_size = resource.file_size
                 orm.mime_type = resource.mime_type
-                orm.knowledge_points = resource.knowledge_points
-                orm.source_refs = [ref.model_dump() for ref in resource.source_refs]
-                orm.learning_path_node = resource.learning_path_node
                 orm.review_status = resource.review_status
                 orm.review_id = resource.review_id
+                orm.publication_status = resource.publication_status
+                orm.published_at = resource.published_at
                 orm.claim_count = resource.claim_count
                 orm.hallucination_rate = resource.hallucination_rate
                 orm.difficulty_match = resource.difficulty_match
-                orm.version = resource.version
-                orm.parent_resource_id = resource.parent_resource_id
-                orm.exercise_items = [item.model_dump() for item in resource.exercise_items]
             else:
                 orm = _pydantic_to_orm(
-                    resource,
+                    normalized,
                     learner_id,
                     topic,
                     run_id=run_id,
@@ -132,7 +149,24 @@ class SQLResourceRepository(BaseResourceRepository):
 
     def list_by_learner(self, learner_id: str) -> List[LearningResource]:
         with self.session_factory() as db:
-            orms = db.query(GeneratedResourceORM).filter_by(learner_id=learner_id).all()
+            orms = db.query(GeneratedResourceORM).filter_by(
+                learner_id=learner_id,
+                publication_status="published",
+            ).all()
+        return [_orm_to_pydantic(orm) for orm in orms]
+
+    def list_by_run(self, run_id: str) -> List[LearningResource]:
+        with self.session_factory() as db:
+            orms = (
+                db.query(GeneratedResourceORM)
+                .filter_by(run_id=run_id)
+                .order_by(
+                    GeneratedResourceORM.resource_type,
+                    GeneratedResourceORM.version,
+                    GeneratedResourceORM.resource_id,
+                )
+                .all()
+            )
         return [_orm_to_pydantic(orm) for orm in orms]
 
     def delete(self, resource_id: str) -> bool:
@@ -148,7 +182,10 @@ class SQLResourceRepository(BaseResourceRepository):
         self, learner_id: str, resource_type: Optional[str] = None, difficulty: Optional[str] = None
     ) -> List[LearningResource]:
         with self.session_factory() as db:
-            query = db.query(GeneratedResourceORM).filter_by(learner_id=learner_id)
+            query = db.query(GeneratedResourceORM).filter_by(
+                learner_id=learner_id,
+                publication_status="published",
+            )
             if resource_type:
                 query = query.filter_by(resource_type=resource_type)
             if difficulty:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import partial
 from inspect import signature
+from datetime import datetime, timezone
 from typing import Any
 
 from langgraph.graph import END, StateGraph
@@ -32,6 +33,7 @@ from app.models.workflow import (
     StepStatus,
     WorkflowStatus,
 )
+from app.agents.policies import may_publish, target_resource_types
 from app.models.knowledge import RetrievalStatus
 from app.services.recorded_node import recorded_node
 
@@ -50,7 +52,23 @@ def _resource_copies(
     resources: list[LearningResource],
     status: ResourceStatus,
 ) -> list[LearningResource]:
-    return [resource.model_copy(update={"review_status": status.value}) for resource in resources]
+    publication_status = (
+        "published" if status == ResourceStatus.APPROVED else "unpublished"
+    )
+    return [
+        resource.model_copy(
+            update={
+                "review_status": status.value,
+                "publication_status": publication_status,
+                "published_at": (
+                    resource.published_at
+                    if publication_status == "published"
+                    else None
+                ),
+            }
+        )
+        for resource in resources
+    ]
 
 
 def _has_degradation(state: AgentState) -> bool:
@@ -230,6 +248,15 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
     generation_attempt = revision_count + 1
     step_context = start_step(state, attempt=generation_attempt)
     review = state.get("review_result", {})
+    targets = target_resource_types(review.get("revision_instructions", []))
+    resources = [
+        resource.model_copy(
+            update={"review_status": ResourceStatus.REVISION_REQUESTED.value}
+        )
+        if resource.resource_type in targets
+        else resource
+        for resource in state.get("generated_resources", [])
+    ]
     trace_item = build_trace_item(
         state,
         agent_name="supervisor",
@@ -243,6 +270,7 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
         step_context=step_context,
     )
     return {
+        "generated_resources": resources,
         "revision_count": revision_count,
         "generation_attempt": generation_attempt,
         "current_node": "prepare_revision",
@@ -384,6 +412,26 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     review["claim_check_status"] = ClaimCheckStatus.NOT_REQUESTED.value
     review["revision_count"] = state.get("revision_count", 0)
     resources = _resource_copies(state.get("generated_resources", []), resource_status)
+    review_ids = review.get("review_ids", {})
+    resources = [
+        resource.model_copy(
+            update={
+                "review_id": review_ids.get(resource.resource_id),
+                "claim_count": review.get("claim_total", len(review.get("claims", []))),
+                "hallucination_rate": review.get(
+                    "hallucination_rate", review.get("hallucination_score")
+                ),
+                "difficulty_match": review.get("difficulty_match"),
+            }
+        )
+        for resource in resources
+    ]
+    if may_publish(
+        decision=decision.value,
+        review_status=resource_status.value,
+    ):
+        now = datetime.now(timezone.utc)
+        resources = [resource.model_copy(update={"published_at": now}) for resource in resources]
     trace_status = (
         StepStatus.HUMAN_REVIEW
         if workflow_status == WorkflowStatus.HUMAN_REVIEW

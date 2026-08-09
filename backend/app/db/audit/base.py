@@ -55,6 +55,11 @@ class BaseAuditRepository(ABC):
         """获取资源最近一次审核及其 Claim 证据。"""
 
     @abstractmethod
+    def list_reviews_by_run(self, run_id: str) -> list[dict[str, Any]]:
+        """按稳定顺序读取一次 Run 的全部审核轮次。"""
+        pass
+
+    @abstractmethod
     def create_run(self, command: CreateRunCommand) -> AgentRunRecord:
         pass
 

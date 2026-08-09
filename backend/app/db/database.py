@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings, resolve_backend_path
 from app.db.models import Base
-from app.db.migrations import apply_p0_04_migration
+from app.db.migrations import apply_p0_04_migration, apply_p0_05_migration
 
 
 def _resolve_database_url(url: str) -> str:
@@ -63,6 +63,7 @@ def init_database():
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
     apply_p0_04_migration(engine)
+    apply_p0_05_migration(engine)
     if engine.url.get_backend_name() == "sqlite":
         _migrate_sqlite_learner_profiles(engine)
         _migrate_sqlite_questionnaire_submissions(engine)

@@ -3,6 +3,8 @@ from typing import Dict, List, Optional
 
 from app.db.resource.base import BaseResourceRepository
 from app.models.schemas import LearningResource
+from app.agents.validators import immutable_resource_payload
+from app.db.audit.base import PersistenceConflict
 
 
 class MemoryResourceRepository(BaseResourceRepository):
@@ -14,7 +16,8 @@ class MemoryResourceRepository(BaseResourceRepository):
         self.associations: Dict[str, Dict[str, str | None]] = {}
 
     def get(self, resource_id: str) -> Optional[LearningResource]:
-        return self._store.get(resource_id)
+        resource = self._store.get(resource_id)
+        return resource.model_copy(deep=True) if resource else None
 
     def save(
         self,
@@ -25,7 +28,25 @@ class MemoryResourceRepository(BaseResourceRepository):
         run_id: str | None = None,
         generation_step_id: str | None = None,
     ) -> None:
-        self._store[resource.resource_id] = resource
+        normalized = resource.model_copy(
+            update={"learner_id": learner_id, "topic": topic},
+            deep=True,
+        )
+        existing = self._store.get(resource.resource_id)
+        if existing and immutable_resource_payload(existing) != immutable_resource_payload(normalized):
+            raise PersistenceConflict("resource immutable payload conflict")
+        if run_id is not None:
+            for stored_id, association in self.associations.items():
+                stored = self._store.get(stored_id)
+                if (
+                    stored is not None
+                    and stored_id != resource.resource_id
+                    and association.get("run_id") == run_id
+                    and stored.resource_type == normalized.resource_type
+                    and stored.version == normalized.version
+                ):
+                    raise PersistenceConflict("duplicate resource version in run")
+        self._store[resource.resource_id] = normalized
         if run_id is not None or generation_step_id is not None:
             self.associations[resource.resource_id] = {
                 "run_id": run_id,
@@ -38,7 +59,19 @@ class MemoryResourceRepository(BaseResourceRepository):
 
     def list_by_learner(self, learner_id: str) -> List[LearningResource]:
         resource_ids = self._learner_index.get(learner_id, [])
-        return [self._store[rid] for rid in resource_ids if rid in self._store]
+        return [
+            self._store[rid].model_copy(deep=True)
+            for rid in resource_ids
+            if rid in self._store and self._store[rid].publication_status == "published"
+        ]
+
+    def list_by_run(self, run_id: str) -> List[LearningResource]:
+        resources = [
+            self._store[resource_id].model_copy(deep=True)
+            for resource_id, association in self.associations.items()
+            if association.get("run_id") == run_id and resource_id in self._store
+        ]
+        return sorted(resources, key=lambda item: (item.resource_type, item.version, item.resource_id))
 
     def delete(self, resource_id: str) -> bool:
         if resource_id in self._store:

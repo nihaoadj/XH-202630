@@ -57,19 +57,36 @@ def test_generated_resource_batch_requires_unique_types_and_content():
         })
 
 
-def test_review_output_has_no_model_controlled_passed_or_human_review():
+def test_review_output_uses_structured_issues_and_instructions():
     valid = ReviewLLMOutput(
         decision="revise",
         hallucination_score=0.2,
-        issues=["缺少边界条件"],
+        issues=[{
+            "code": "coverage_gap",
+            "severity": "medium",
+            "resource_type": "讲义",
+            "knowledge_point": None,
+            "description": "缺少边界条件",
+        }],
         difficulty_match=True,
         coverage_rate=0.8,
         suggestion="补充边界条件。",
-        revision_instructions=["增加失败示例"],
+        revision_instructions=[{
+            "issue_codes": ["coverage_gap"],
+            "target_resource_type": "讲义",
+            "action": "增加失败示例",
+            "priority": 1,
+        }],
     )
     assert valid.decision == "revise"
 
     with pytest.raises(ValidationError):
         ReviewLLMOutput.model_validate({**valid.model_dump(), "passed": True})
-    with pytest.raises(ValidationError):
-        ReviewLLMOutput.model_validate({**valid.model_dump(), "decision": "human_review"})
+    human_review = ReviewLLMOutput.model_validate(
+        {
+            **valid.model_dump(),
+            "decision": "human_review",
+            "revision_instructions": [],
+        }
+    )
+    assert human_review.decision == "human_review"

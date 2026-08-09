@@ -28,6 +28,7 @@ from app.models.workflow import (
     WorkflowStatus,
 )
 from app.services.durable_workflow_runner import DurableWorkflowRunner
+from app.services.workflow_artifact_recorder import WorkflowArtifactRecorder
 
 
 def build_workflow_state(
@@ -140,7 +141,11 @@ def _persist_resources(
         resource.learner_id = learner_id
         resource.topic = topic
 
-        if resource.storage_type == "text" and resource.content_text:
+        if (
+            resource.publication_status == "published"
+            and resource.storage_type == "text"
+            and resource.content_text
+        ):
             file_path, file_size, mime_type = save_text_resource(
                 learner_id=learner_id,
                 resource_type=resource.resource_type,
@@ -300,7 +305,11 @@ class GenerationService:
             raise ApplicationError(ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE) from exc
 
         try:
-            result = DurableWorkflowRunner(self.workflow, self.audit_repo).invoke(initial_state)
+            result = DurableWorkflowRunner(
+                self.workflow,
+                self.audit_repo,
+                WorkflowArtifactRecorder(self.resource_repo, self.audit_repo),
+            ).invoke(initial_state)
         except Exception as exc:
             error_code = (
                 exc.code.value if isinstance(exc, ApplicationError) else ErrorCode.INTERNAL_ERROR.value

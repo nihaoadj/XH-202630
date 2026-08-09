@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.core.errors import ApplicationError, ErrorCode
 from app.db.audit.base import BaseAuditRepository
+from app.db.resource.base import BaseResourceRepository
 from app.models.persistence import (
     AgentRunRecord,
     PersistedEvidenceSnapshot,
@@ -14,8 +15,13 @@ from app.models.persistence import (
 
 
 class RunQueryService:
-    def __init__(self, repository: BaseAuditRepository):
+    def __init__(
+        self,
+        repository: BaseAuditRepository,
+        resource_repository: BaseResourceRepository | None = None,
+    ):
         self.repository = repository
+        self.resource_repository = resource_repository
 
     def get_run(self, run_id: str) -> AgentRunRecord:
         run = self.repository.get_run(run_id)
@@ -69,6 +75,12 @@ class RunQueryService:
                 for item in checkpoints
             ],
             evidence=evidence,
+            resource_versions=(
+                [resource.model_dump(mode="json") for resource in self.resource_repository.list_by_run(run_id)]
+                if self.resource_repository is not None
+                else []
+            ),
+            reviews=self.repository.list_reviews_by_run(run_id),
             replay_completeness=run.replay_completeness,
             next_event_sequence=page[-1].event_sequence if has_more and page else None,
         )

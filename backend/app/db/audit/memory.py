@@ -731,8 +731,26 @@ class MemoryAuditRepository(BaseAuditRepository):
 
     def save_review(self, resource_id: str, review: dict[str, Any], run_id: Optional[str]) -> str:
         review_id = review.get("review_ids", {}).get(resource_id) or review.get("review_id") or str(uuid.uuid4())
-        self.reviews[review_id] = {"resource_id": resource_id, "run_id": run_id, **review}
+        payload = {"resource_id": resource_id, "run_id": run_id, **review}
+        review_hash = canonical_hash(payload)
+        existing = self.reviews.get(review_id)
+        if existing is not None:
+            if existing.get("review_hash") != review_hash:
+                raise PersistenceConflict("review payload conflict")
+            return review_id
+        self.reviews[review_id] = {
+            "review_id": review_id,
+            **payload,
+            "review_hash": review_hash,
+        }
         return review_id
+
+    def list_reviews_by_run(self, run_id: str) -> list[dict[str, Any]]:
+        return [
+            dict(review)
+            for _, review in sorted(self.reviews.items())
+            if review.get("run_id") == run_id
+        ]
 
     def get_review_by_resource(self, resource_id: str) -> Optional[ReviewSummary]:
         for review_id, review in reversed(list(self.reviews.items())):
@@ -779,6 +797,7 @@ class MemoryAuditRepository(BaseAuditRepository):
                 ),
                 revision_count=review.get("revision_count", 0),
                 issues=review.get("issues", []),
+                revision_instructions=review.get("revision_instructions", []),
                 claims=claims,
             )
         return None

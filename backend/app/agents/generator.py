@@ -19,6 +19,7 @@ from app.models.agent_contracts import (
 from app.models.llm import LLMCallContext
 from app.models.schemas import LearningResource
 from app.models.workflow import ResourceStatus, StepStatus
+from app.agents.policies import target_resource_types
 
 
 GENERATION_PROMPT = """你是一名个性化资源生成 Agent。请严格依据用户输入的学习主题、学习者画像、学习路径规划和知识库片段，为学习者生成个性化领域知识训练资源。
@@ -33,10 +34,12 @@ GENERATION_PROMPT = """你是一名个性化资源生成 Agent。请严格依据
 """
 
 
-def _fallback_resources(state: AgentState):
+def _fallback_resources(state: AgentState, resource_types: list[str] | None = None):
     learner = state["learner"]
     topic = state["topic"]
-    resource_types = state.get("resource_types", ["定制讲义", "实操指南", "分阶测试题"])
+    resource_types = resource_types or state.get(
+        "resource_types", ["定制讲义", "实操指南", "分阶测试题"]
+    )
     learning_plan = state.get("learning_plan", {})
     evidence = state.get("retrieved_evidence", [])
     source_refs = source_refs_from_evidence(evidence)
@@ -70,6 +73,8 @@ def _fallback_resources(state: AgentState):
 """
         resources.append(LearningResource(
             resource_id=str(uuid.uuid4()),
+            learner_id=state.get("learner_id"),
+            topic=topic,
             resource_type=resource_type,
             difficulty=state.get("difficulty_preference") or learner.skill_level or "中级",
             content_text=content,
@@ -102,6 +107,15 @@ def generate_node(
     topic = node_input.topic
     learning_plan = node_input.learning_plan
     generation_attempt = node_input.generation_attempt
+    instructions = node_input.review_result.get("revision_instructions", [])
+    revision_targets = target_resource_types(instructions)
+    active_resource_types = (
+        [item for item in resource_types if item in revision_targets]
+        if node_input.revision_count > 0 and node_input.generated_resources
+        else list(resource_types)
+    )
+    if node_input.revision_count > 0 and node_input.generated_resources and not active_resource_types:
+        raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
     step_context = start_step(state, attempt=generation_attempt)
 
     context = "\n\n".join(
@@ -121,10 +135,12 @@ strong_points（优势领域）：{learner.strong_points}
 生成模式：{node_input.generation_mode}
 生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}
 当前生成轮次：{generation_attempt}
-上一轮审核意见：{json.dumps(node_input.review_result, ensure_ascii=False)}
+上一轮结构化问题与返工指令：{json.dumps(node_input.review_result, ensure_ascii=False)}
+上一版本资源（仅修改被指令命中的类型）：
+{json.dumps([resource.model_dump(mode='json') for resource in node_input.generated_resources if resource.resource_type in active_resource_types], ensure_ascii=False)}
 学习路径规划：
 {json.dumps(learning_plan, ensure_ascii=False)}
-需要生成的资源类型：{resource_types}
+本轮需要生成的资源类型：{active_resource_types}
 
 专业知识片段：
 {context}
@@ -152,9 +168,9 @@ strong_points（优势领域）：{learner.strong_points}
             options=llm_gateway.options_for("generator", temperature=0.2),
         )
         drafts = llm_result.output.resources
-        expected_types = set(resource_types)
+        expected_types = set(active_resource_types)
         actual_types = {draft.resource_type for draft in drafts}
-        if actual_types != expected_types or len(drafts) != len(resource_types):
+        if actual_types != expected_types or len(drafts) != len(active_resource_types):
             error = require_agent_fallback(
                 state,
                 make_error_info(
@@ -183,6 +199,8 @@ strong_points（优势领域）：{learner.strong_points}
         previous = previous_by_type.get(resource_type)
         resources.append(LearningResource(
             resource_id=str(uuid.uuid4()),
+            learner_id=node_input.learner.learner_id,
+            topic=topic,
             resource_type=resource_type,
             difficulty=node_input.difficulty_preference or r.get("difficulty", "中级"),
             content_text=r.get("content_text") or r.get("content", ""),
@@ -208,7 +226,16 @@ strong_points（优势领域）：{learner.strong_points}
                     safe_detail="resources:empty",
                 ),
             )
-        resources = _fallback_resources(state)
+        resources = _fallback_resources(state, active_resource_types)
+
+    generated_now = list(resources)
+    if node_input.revision_count > 0 and node_input.generated_resources:
+        revised_by_type = {resource.resource_type: resource for resource in resources}
+        resources = [
+            revised_by_type.get(resource_type) or previous_by_type[resource_type]
+            for resource_type in resource_types
+            if resource_type in revised_by_type or resource_type in previous_by_type
+        ]
 
     status = StepStatus.DEGRADED if error else StepStatus.SUCCESS
     NodeResult[GeneratorOutput](
@@ -225,11 +252,11 @@ strong_points（优势领域）：{learner.strong_points}
         agent_name="generator",
         action="个性化资源生成",
         status=status,
-        input_summary=f"资源类型：{resource_types}；路径节点数：{len(learning_plan.get('learning_path', []))}；返工次数：{node_input.revision_count}",
+        input_summary=f"本轮资源类型：{active_resource_types}；路径节点数：{len(learning_plan.get('learning_path', []))}；返工次数：{node_input.revision_count}",
         output_summary=f"生成 {len(resources)} 种资源：{[r.resource_type for r in resources]}",
         decision_reason="依据学习路径、请求难度、生成约束、检索证据及上一轮审核意见生成资源。",
         evidence_refs=[item.evidence_id for item in evidence[:5]],
-        resource_ids=[resource.resource_id for resource in resources],
+        resource_ids=[resource.resource_id for resource in generated_now],
         error=error,
         attempt=generation_attempt,
         step_context=step_context,

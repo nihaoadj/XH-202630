@@ -85,7 +85,10 @@ class WorkflowEventType(str, Enum):
     CHECKPOINT_SAVED = "checkpoint_saved"
     RUN_FINALIZING = "run_finalizing"
     RESOURCE_PERSISTED = "resource_persisted"
+    RESOURCE_VERSION_CREATED = "resource_version_created"
     REVIEW_PERSISTED = "review_persisted"
+    REVISION_REQUESTED = "revision_requested"
+    RESOURCE_PUBLISHED = "resource_published"
     RUN_COMPLETED = "run_completed"
     RUN_FAILED = "run_failed"
     RUN_INTERRUPTED = "run_interrupted"
@@ -402,6 +405,8 @@ class RunTimeline(StrictPersistenceModel):
     events: list[WorkflowEvent]
     checkpoints: list[WorkflowCheckpointSummary]
     evidence: list[PersistedEvidenceSnapshot]
+    resource_versions: list[dict[str, Any]] = Field(default_factory=list)
+    reviews: list[dict[str, Any]] = Field(default_factory=list)
     replay_completeness: ReplayCompleteness
     next_event_sequence: int | None = None
 

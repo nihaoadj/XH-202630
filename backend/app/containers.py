@@ -205,6 +205,7 @@ class Container(containers.DeclarativeContainer):
     run_query_service = providers.Singleton(
         RunQueryService,
         repository=audit_repository,
+        resource_repository=resource_repository,
     )
 
     evaluation_service = providers.Singleton(

@@ -10,9 +10,10 @@ from app.agents.reviewer import review_node
 from app.config import Settings
 from app.core import errors as errors_module
 from app.core.errors import ApplicationError, ErrorCode
+from app.core.evidence import source_refs_from_evidence
 from app.core.llm_gateway import LLMGateway
 from app.models.llm import RawLLMResponse
-from app.models.schemas import LearnerProfile
+from app.models.schemas import LearnerProfile, LearningResource
 from tests.fakes.llm import ScriptedLLMGateway, ScriptedLLMTransport
 from tests.fakes.evidence import make_evidence
 
@@ -47,12 +48,20 @@ def _response_error(error_type, status):
 
 
 def _review_state(**overrides):
+    evidence = make_evidence()
     state = {
         "schema_version": "1.0",
         "run_id": "run-review-failure",
         "generation_mode": "standard",
-        "generated_resources": [],
-        "retrieved_chunks": [],
+        "generated_resources": [LearningResource(
+            resource_id="review-resource",
+            resource_type="讲义",
+            difficulty="初级",
+            content_text="待审核资源",
+            knowledge_points=["检索"],
+            source_refs=source_refs_from_evidence([evidence]),
+        )],
+        "retrieved_evidence": [evidence],
         "trace": [],
         "generation_attempt": 1,
         "revision_count": 0,
@@ -147,7 +156,12 @@ def test_reviewer_accepts_only_typed_decisions(requested, expected):
         "difficulty_match": True,
         "coverage_rate": 1.0,
         "suggestion": "已完成严格审核。",
-        "revision_instructions": [],
+        "revision_instructions": ([{
+            "issue_codes": ["coverage_gap"],
+            "target_resource_type": "讲义",
+            "action": "补充缺失内容",
+            "priority": 1,
+        }] if requested == "revise" else []),
     }])
 
     result = review_node(_review_state(), llm_gateway=gateway)
