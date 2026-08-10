@@ -207,7 +207,9 @@ backend/chroma_db/
 | `agent_runs` | Agent 运行主记录 |
 | `agent_steps` | Agent 步骤记录 |
 | `resource_reviews` | 资源审核摘要 |
-| `resource_claims` | Claim 与证据记录 |
+| `resource_claims` | Claim 原文、资源版本、稳定 ID 与抽取元数据（兼容旧字段） |
+| `claim_judgements` | Claim 的独立判定、模型/Prompt 版本与置信度 |
+| `claim_evidence` | Judgement 到冻结 `retrieval_evidence_snapshots` 的受约束绑定 |
 
 ### 3.8 评测
 

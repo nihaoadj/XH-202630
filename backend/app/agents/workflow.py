@@ -14,6 +14,7 @@ from app.agents.generator import generate_node
 from app.agents.planner import plan_node
 from app.agents.retriever import retrieve_node
 from app.agents.reviewer import review_node
+from app.agents.claim_review import claim_decide_node, claim_extract_node, claim_judge_node
 from app.agents.state import AgentState
 from app.core.errors import ErrorCode
 from app.core.evidence_retriever import (
@@ -83,7 +84,7 @@ def route_after_generate(state: AgentState) -> str:
     if state.get("include_review", True):
         return "review"
     if state.get("include_claim_check", False):
-        return "claim_check"
+        return "claim_extract"
     return "finalize_draft"
 
 
@@ -229,9 +230,25 @@ def route_after_review(state: AgentState) -> str:
     if decision == ReviewDecision.REVISE:
         if state.get("revision_count", 0) < state.get("max_iterations", 2):
             return "prepare_revision"
-        return "claim_check" if state.get("include_claim_check", False) else "finalize"
-    if state.get("include_claim_check", False):
-        return "claim_check"
+        return "finalize"
+    if decision == ReviewDecision.APPROVE and state.get("include_claim_check", False):
+        return "claim_extract"
+    return "finalize"
+
+
+def route_after_claim_extract(state: AgentState) -> str:
+    return (
+        "claim_judge"
+        if state.get("claim_check_status") == ClaimCheckStatus.PENDING.value
+        else "claim_decide"
+    )
+
+
+def route_after_claim_decide(state: AgentState) -> str:
+    if _review_decision(state) == ReviewDecision.REVISE and (
+        state.get("revision_count", 0) < state.get("max_iterations", 2)
+    ):
+        return "prepare_revision"
     return "finalize"
 
 
@@ -271,6 +288,10 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
     )
     return {
         "generated_resources": resources,
+        "extracted_claims": [],
+        "claim_judgements": [],
+        "claim_metrics": {},
+        "claim_check_status": ClaimCheckStatus.PENDING.value,
         "revision_count": revision_count,
         "generation_attempt": generation_attempt,
         "current_node": "prepare_revision",
@@ -319,70 +340,6 @@ def finalize_draft_node(state: AgentState) -> dict[str, Any]:
     }
 
 
-def claim_check_node(state: AgentState) -> dict[str, Any]:
-    """Explicit P0-06 capability placeholder; never reports a false pass."""
-    step_context = start_step(state)
-    error = make_error_info(
-        ErrorCode.CLAIM_CHECK_NOT_IMPLEMENTED,
-        source="claim_checker",
-        attempt=state.get("generation_attempt", 1),
-        category="capability",
-    )
-    review = dict(state.get("review_result", {}))
-    review.update({
-        "claim_check_status": ClaimCheckStatus.UNAVAILABLE.value,
-        "claims": [],
-    })
-    if not state.get("include_review", True):
-        review.update({
-            "decision": ReviewDecision.NOT_REQUESTED.value,
-            "status": ReviewDecision.NOT_REQUESTED.value,
-            "review_ids": {},
-        })
-        resource_status = ResourceStatus.UNREVIEWED_DRAFT
-        workflow_status = WorkflowStatus.HUMAN_REVIEW
-        final_decision = "Claim 审核不可用，需人工复核"
-    else:
-        review_decision = _review_decision(state)
-        if review_decision == ReviewDecision.REJECT:
-            resource_status = ResourceStatus.REJECTED
-            workflow_status = WorkflowStatus.FAILED
-            final_decision = "审核拒绝；Claim 审核能力不可用"
-        else:
-            resource_status = ResourceStatus.HUMAN_REVIEW
-            workflow_status = WorkflowStatus.HUMAN_REVIEW
-            final_decision = "Claim 审核不可用，需人工复核"
-
-    resources = _resource_copies(state.get("generated_resources", []), resource_status)
-    trace_item = build_trace_item(
-        state,
-        agent_name="claim_checker",
-        action="Claim 级审核",
-        status=(
-            StepStatus.FAILED
-            if workflow_status == WorkflowStatus.FAILED
-            else StepStatus.HUMAN_REVIEW
-        ),
-        input_summary=f"请求 Claim 审核；资源数：{len(resources)}",
-        output_summary="Claim 审核能力尚未启用，转人工复核",
-        decision_reason="P0-06 能力未接入，不能以空 Claim 列表代表审核通过。",
-        resource_ids=[resource.resource_id for resource in resources],
-        review_ids=list(review.get("review_ids", {}).values()),
-        error=error,
-        step_context=step_context,
-    )
-    return {
-        "generated_resources": resources,
-        "review_result": review,
-        "claim_check_status": ClaimCheckStatus.UNAVAILABLE.value,
-        "workflow_status": workflow_status.value,
-        "final_decision": final_decision,
-        "current_node": "claim_check",
-        "trace": [trace_item],
-        "errors": [error.model_dump(mode="json")],
-    }
-
-
 def decide_node(state: AgentState) -> dict[str, Any]:
     """Finalize review semantics without silently approving risky output."""
     step_context = start_step(state)
@@ -409,23 +366,29 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             else "返工额度已用尽或审核无法自动决策，需人工复核"
         )
 
-    review["claim_check_status"] = ClaimCheckStatus.NOT_REQUESTED.value
+    claim_status = (
+        state.get("claim_check_status", ClaimCheckStatus.NOT_REQUESTED.value)
+        if state.get("include_claim_check", False)
+        else ClaimCheckStatus.NOT_REQUESTED.value
+    )
+    review["claim_check_status"] = claim_status
     review["revision_count"] = state.get("revision_count", 0)
     resources = _resource_copies(state.get("generated_resources", []), resource_status)
     review_ids = review.get("review_ids", {})
-    resources = [
-        resource.model_copy(
-            update={
-                "review_id": review_ids.get(resource.resource_id),
-                "claim_count": review.get("claim_total", len(review.get("claims", []))),
-                "hallucination_rate": review.get(
-                    "hallucination_rate", review.get("hallucination_score")
-                ),
-                "difficulty_match": review.get("difficulty_match"),
-            }
-        )
-        for resource in resources
-    ]
+    metrics = state.get("claim_metrics", {})
+    enriched_resources = []
+    for resource in resources:
+        metric = metrics.get(resource.resource_id, {})
+        enriched_resources.append(resource.model_copy(update={
+            "review_id": review_ids.get(resource.resource_id),
+            "claim_count": metric.get("claim_total", review.get("claim_total")),
+            "legacy_reviewer_score": review.get("hallucination_score"),
+            "claim_hallucination_rate": metric.get("claim_hallucination_rate"),
+            "claim_metric_status": metric.get("metric_status"),
+            "hallucination_rate": review.get("hallucination_rate", review.get("hallucination_score")),
+            "difficulty_match": review.get("difficulty_match"),
+        }))
+    resources = enriched_resources
     if may_publish(
         decision=decision.value,
         review_status=resource_status.value,
@@ -456,7 +419,7 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     return {
         "generated_resources": resources,
         "review_result": review,
-        "claim_check_status": ClaimCheckStatus.NOT_REQUESTED.value,
+        "claim_check_status": claim_status,
         "workflow_status": workflow_status.value,
         "final_decision": final_decision,
         "current_node": "supervisor",
@@ -500,7 +463,9 @@ def build_workflow(
     add_recorded("review", _bind_llm_gateway(review_node, gateway))
     add_recorded("prepare_revision", prepare_revision_node)
     add_recorded("finalize_draft", finalize_draft_node)
-    add_recorded("claim_check", claim_check_node)
+    add_recorded("claim_extract", _bind_llm_gateway(claim_extract_node, gateway))
+    add_recorded("claim_judge", _bind_llm_gateway(claim_judge_node, gateway))
+    add_recorded("claim_decide", claim_decide_node)
     add_recorded("finalize", decide_node)
     add_recorded("finalize_evidence_insufficient", finalize_evidence_insufficient_node)
 
@@ -521,7 +486,7 @@ def build_workflow(
         route_after_generate,
         {
             "review": "review",
-            "claim_check": "claim_check",
+            "claim_extract": "claim_extract",
             "finalize_draft": "finalize_draft",
         },
     )
@@ -530,13 +495,23 @@ def build_workflow(
         route_after_review,
         {
             "prepare_revision": "prepare_revision",
-            "claim_check": "claim_check",
+            "claim_extract": "claim_extract",
             "finalize": "finalize",
         },
     )
     workflow.add_edge("prepare_revision", "generate")
     workflow.add_edge("finalize_draft", END)
-    workflow.add_edge("claim_check", END)
+    workflow.add_conditional_edges(
+        "claim_extract",
+        route_after_claim_extract,
+        {"claim_judge": "claim_judge", "claim_decide": "claim_decide"},
+    )
+    workflow.add_edge("claim_judge", "claim_decide")
+    workflow.add_conditional_edges(
+        "claim_decide",
+        route_after_claim_decide,
+        {"prepare_revision": "prepare_revision", "finalize": "finalize"},
+    )
     workflow.add_edge("finalize", END)
     workflow.add_edge("finalize_evidence_insufficient", END)
 

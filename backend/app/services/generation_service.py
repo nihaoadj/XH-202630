@@ -11,6 +11,8 @@ from app.config import get_settings
 from app.db.resource.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
 from app.db.audit.memory import MemoryAuditRepository
+from app.db.claim.base import BaseClaimRepository
+from app.db.claim.memory import MemoryClaimRepository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.models.schemas import GenerateRequest, GenerateResponse, LearnerProfile, LearningResource
 from app.models.persistence import (
@@ -116,6 +118,9 @@ def _build_report(learner: LearnerProfile, diagnosis: dict, review: dict, learni
             "claim_unsupported": review.get("claim_unsupported", 0),
         },
         "hallucination_rate": hallucination_rate,
+        "legacy_reviewer_score": review.get("hallucination_score"),
+        "claim_hallucination_rate": review.get("claim_hallucination_rate"),
+        "claim_metric_status": review.get("claim_metric_status"),
         "coverage_rate": review.get("coverage_rate", 0.0),
         "difficulty_match": review.get("difficulty_match", False),
         "retrieval_hit_rate": review.get("retrieval_hit_rate", 0.0),
@@ -249,11 +254,13 @@ class GenerationService:
         workflow,
         audit_repo: BaseAuditRepository | None = None,
         knowledge_catalog: KnowledgeCatalogRepository | None = None,
+        claim_repo: BaseClaimRepository | None = None,
     ):
         self.resource_repo = resource_repo
         self.workflow = workflow
         self.audit_repo = audit_repo or MemoryAuditRepository()
         self.knowledge_catalog = knowledge_catalog
+        self.claim_repo = claim_repo or MemoryClaimRepository()
 
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         return self.generate_with_run_id(learner, req)
@@ -307,7 +314,7 @@ class GenerationService:
             result = DurableWorkflowRunner(
                 self.workflow,
                 self.audit_repo,
-                WorkflowArtifactRecorder(self.resource_repo, self.audit_repo),
+                WorkflowArtifactRecorder(self.resource_repo, self.audit_repo, self.claim_repo),
             ).invoke(initial_state)
         except Exception as exc:
             error_code = (

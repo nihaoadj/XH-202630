@@ -791,6 +791,9 @@ class MemoryAuditRepository(BaseAuditRepository):
                 claim_unsupported=review.get("claim_unsupported", sum(not claim.supported for claim in claims)),
                 suspected_hallucinations=review.get("suspected_hallucinations", sum(not claim.supported for claim in claims)),
                 hallucination_rate=review.get("hallucination_rate", review.get("hallucination_score", 0.0)),
+                legacy_reviewer_score=review.get("hallucination_score"),
+                claim_hallucination_rate=review.get("claim_hallucination_rate"),
+                claim_metric_status=review.get("claim_metric_status"),
                 review_pass_rate=review.get(
                     "review_pass_rate",
                     1.0 if review.get("passed") or status in {"approve", "approved", "passed"} else 0.0,

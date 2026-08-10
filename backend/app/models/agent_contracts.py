@@ -221,6 +221,9 @@ class ReviewIssue(StrictLLMOutput):
     ]
     severity: Literal["low", "medium", "high", "critical"]
     resource_type: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    resource_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    resource_version: Optional[int] = Field(default=None, ge=1)
+    claim_ids: List[str] = Field(default_factory=list, max_length=100)
     knowledge_point: Optional[str] = Field(default=None, min_length=1, max_length=256)
     description: str = Field(min_length=1, max_length=2000)
 
@@ -228,6 +231,7 @@ class ReviewIssue(StrictLLMOutput):
 class RevisionInstruction(StrictLLMOutput):
     issue_codes: List[str] = Field(min_length=1, max_length=20)
     target_resource_type: str = Field(min_length=1, max_length=64)
+    target_claim_ids: List[str] = Field(default_factory=list, max_length=100)
     action: str = Field(min_length=1, max_length=4000)
     priority: int = Field(default=1, ge=1, le=100)
 

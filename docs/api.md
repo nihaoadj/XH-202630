@@ -499,6 +499,7 @@ GenerationJob 预分配 run_id
 -> AgentRun created/running
 -> RecordedNode 持久化 Step
 -> Generator / Reviewer 节点状态合并
+-> 可选 Claim Extractor / Judge / deterministic decision
 -> WorkflowArtifactRecorder 保存资源版本与审核轮次
 -> WorkflowCheckpoint
 -> Run finalizing
@@ -518,6 +519,9 @@ GenerationJob 预分配 run_id
 - `review_status` 与 `publication_status` 分离。只有最终 approve 的当前叶子版本可以 published。
 - 默认资源列表及文件下载只暴露 published；unpublished 与不存在的下载统一返回 404。
 - 历史字符串 issues/instructions 在读取时兼容归一化，但不会补造不存在的审核事实。
+- `include_claim_check=true` 要求 `include_review=true`；否则请求校验失败。
+- `hallucination_rate` 保留为旧 Reviewer 主观分兼容字段；正式 Claim 指标使用
+  `claim_hallucination_rate` 和 `claim_metric_status`。
 
 ### 14.1 `GET /api/runs/{run_id}`
 
@@ -541,7 +545,23 @@ reviews。查询参数：
 返回运行时不可变 Evidence snapshot，包括 query_hash、excerpt、locator、score 和
 config hash；不返回原始 query。后续知识库更新不会改写历史 snapshot。
 
-### 14.4 健康与错误语义
+### 14.4 `GET /api/runs/{run_id}/claims`
+
+返回 P0-06 Claim、独立 Judgement 与逐资源指标。旧 Run 没有 Claim 审计时返回
+`audit_status=legacy_unavailable`、空数组和空指标，不用 `0%` 冒充已审核。事实 Claim
+未全部完成判定时，`claim_hallucination_rate=null` 且 `metric_status=incomplete`；无事实
+Claim 时状态为 `not_applicable`。
+
+正式公式：
+
+```text
+claim_hallucination_rate =
+  (contradicted + not_in_evidence) / factual_claim_total
+```
+
+`non_factual` 与 `instructional` 不进入分母；一条 Claim 即使绑定多条 Evidence 也只计一次。
+
+### 14.5 健康与错误语义
 
 公共 `/health`、`/health/ready` 只检查默认 KB 和核心依赖；非默认 KB 异常不使
 公共服务返回 503。管理员 `/api/admin/knowledge-bases/health` 返回全部 KB 脱敏状态。

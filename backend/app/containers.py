@@ -10,6 +10,7 @@ from app.core.llm_gateway import LLMGateway
 from app.core.vector_store import ChromaVectorSearchBackend, get_vector_store
 from app.db.audit.repository import create_audit_repository
 from app.db.database import get_session_factory
+from app.db.claim.repository import create_claim_repository
 from app.db.diagnosis.repository import create_diagnosis_repository
 from app.db.feedback.repository import create_feedback_repository
 from app.db.generation_job.repository import create_generation_job_repository
@@ -88,6 +89,11 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
+    claim_repository = providers.Singleton(
+        create_claim_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+    )
     diagnosis_repository = providers.Singleton(
         create_diagnosis_repository,
         db_type=config.db_type,
@@ -142,6 +148,7 @@ class Container(containers.DeclarativeContainer):
         workflow=workflow,
         audit_repo=audit_repository,
         knowledge_catalog=knowledge_catalog,
+        claim_repo=claim_repository,
     )
     generation_job_service = providers.Singleton(
         GenerationJobService,
@@ -170,6 +177,7 @@ class Container(containers.DeclarativeContainer):
         RunQueryService,
         repository=audit_repository,
         resource_repository=resource_repository,
+        claim_repository=claim_repository,
     )
     evaluation_service = providers.Singleton(
         EvaluationService,

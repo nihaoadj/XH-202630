@@ -887,6 +887,9 @@ class SQLAuditRepository(BaseAuditRepository):
                     claim_unsupported=claim_unsupported,
                     suspected_hallucinations=review.get("suspected_hallucinations", claim_unsupported),
                     hallucination_rate=hallucination_rate,
+                    legacy_reviewer_score=review.get("hallucination_score"),
+                    claim_hallucination_rate=review.get("claim_hallucination_rate"),
+                    claim_metric_status=review.get("claim_metric_status"),
                     review_pass_rate=review.get(
                         "review_pass_rate",
                         1.0 if status in {"approve", "approved", "passed"} else 0.0,
@@ -935,6 +938,9 @@ class SQLAuditRepository(BaseAuditRepository):
                     "run_id": review.run_id,
                     "status": review.status,
                     "hallucination_rate": review.hallucination_rate,
+                    "legacy_reviewer_score": review.legacy_reviewer_score,
+                    "claim_hallucination_rate": review.claim_hallucination_rate,
+                    "claim_metric_status": review.claim_metric_status,
                     "review_pass_rate": review.review_pass_rate,
                     "revision_count": review.revision_count,
                     "issues": review.issues or [],
@@ -958,6 +964,10 @@ class SQLAuditRepository(BaseAuditRepository):
             claims = (
                 db.query(ResourceClaimORM)
                 .filter_by(review_id=review.review_id)
+                .filter(
+                    (ResourceClaimORM.schema_version.is_(None))
+                    | (ResourceClaimORM.schema_version != "2.0")
+                )
                 .order_by(ResourceClaimORM.claim_id)
                 .all()
             )
@@ -970,6 +980,9 @@ class SQLAuditRepository(BaseAuditRepository):
                 claim_unsupported=review.claim_unsupported,
                 suspected_hallucinations=review.suspected_hallucinations,
                 hallucination_rate=review.hallucination_rate,
+                legacy_reviewer_score=review.legacy_reviewer_score,
+                claim_hallucination_rate=review.claim_hallucination_rate,
+                claim_metric_status=review.claim_metric_status,
                 review_pass_rate=review.review_pass_rate,
                 revision_count=review.revision_count,
                 issues=review.issues or [],

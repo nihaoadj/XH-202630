@@ -164,7 +164,8 @@ backend/app/agents
   |- generator: 个性化资源生成 Agent
   |- reviewer: 审核纠偏 Agent
   |- feedback: 反馈决策 Agent
-  |- workflow: 审核开关、Claim 预留、返工额度与终态决策
+  |- claim_review: 独立 Claim 抽取、冻结 Evidence 判定与确定性指标
+  |- workflow: 审核开关、Claim 返工闭环、返工额度与终态决策
   ->
 backend/app/core + backend/app/db
   |- RuntimeHealth / failure policy / LLM / Embedding / ChromaDB / 知识库 / 文件存储
@@ -187,13 +188,20 @@ POST /api/generate/jobs
 diagnose -> retrieve -> plan -> generate
                                   |- include_review=false -> finalize_draft
                                   |- include_review=true  -> review
-                                                               |- approve -> finalize
+                                                               |- approve + include_claim_check=true
+                                                               |     -> claim_extract -> claim_judge -> claim_decide
+                                                               |            |- 通过 -> finalize
+                                                               |            |- 问题 Claim 且有额度 -> prepare_revision -> generate
+                                                               |            |- 失败/额度耗尽 -> finalize(human_review)
+                                                               |- approve + include_claim_check=false -> finalize
                                                                |- revise 且有额度 -> prepare_revision -> generate
                                                                |- reject/额度耗尽 -> finalize
-
-任一终结分支在 include_claim_check=true 时先进入 claim_check 预留节点。
-P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim 审核。
 ```
+
+P0-06 的 Claim 抽取器与 Generator 相互独立。模型只能从资源、目标技能节点和当前
+Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、
+资源版本、知识点与 Evidence 边界。判定失败、漏判或伪造 ID 均 fail closed 到
+`human_review`。新资源版本必须重新抽取，旧版本判定不会复制。
 
 `max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
 

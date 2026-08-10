@@ -158,4 +158,5 @@ LLM。SQLite migration 已包含幂等回归；PostgreSQL 上线前仍需数据�
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>
 Invoke-RestMethod "http://127.0.0.1:8000/api/runs/<run_id>/timeline?after_sequence=0&limit=100"
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/evidence
+Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/claims
 ```

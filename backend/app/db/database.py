@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import get_settings, resolve_backend_path
 from app.db import extended_models  # noqa: F401
 from app.db.models import Base
-from app.db.migrations import apply_p0_04_migration, apply_p0_05_migration
+from app.db.migrations import apply_p0_04_migration, apply_p0_05_migration, apply_p0_06_migration
 
 
 def _resolve_database_url(url: str) -> str:
@@ -59,6 +59,7 @@ def init_database():
     Base.metadata.create_all(bind=engine)
     apply_p0_04_migration(engine)
     apply_p0_05_migration(engine)
+    apply_p0_06_migration(engine)
     if engine.url.get_backend_name() == "sqlite":
         _migrate_sqlite_users(engine)
         _migrate_sqlite_learner_profiles(engine)
@@ -138,6 +139,9 @@ def _migrate_sqlite_generated_resources(engine) -> None:
         "review_id": "VARCHAR(64)",
         "claim_count": "INTEGER",
         "hallucination_rate": "FLOAT",
+        "legacy_reviewer_score": "FLOAT",
+        "claim_hallucination_rate": "FLOAT",
+        "claim_metric_status": "VARCHAR(32)",
         "difficulty_match": "BOOLEAN",
         "run_id": "VARCHAR(128)",
         "version": "INTEGER NOT NULL DEFAULT 1",

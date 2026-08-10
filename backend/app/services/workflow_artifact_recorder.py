@@ -7,6 +7,8 @@ from typing import Any
 
 from app.db.audit.base import BaseAuditRepository
 from app.db.resource.base import BaseResourceRepository
+from app.db.claim.base import BaseClaimRepository
+from app.models.claims import ClaimJudgement, ClaimRecord
 from app.models.persistence import WorkflowEventType, canonical_hash
 from app.models.schemas import LearningResource
 from app.agents.validators import validate_resource_lineage
@@ -28,9 +30,11 @@ class WorkflowArtifactRecorder:
         self,
         resource_repository: BaseResourceRepository,
         audit_repository: BaseAuditRepository,
+        claim_repository: BaseClaimRepository | None = None,
     ) -> None:
         self.resource_repository = resource_repository
         self.audit_repository = audit_repository
+        self.claim_repository = claim_repository
 
     def record(self, state: dict[str, Any], trace_item: dict[str, Any]) -> None:
         run_id = str(state["run_id"])
@@ -127,6 +131,77 @@ class WorkflowArtifactRecorder:
                 )
             return
 
+        if node_name == "claim_extractor":
+            claim_ids = [
+                str(item.get("claim_id"))
+                for item in state.get("extracted_claims", [])
+                if isinstance(item, dict) and item.get("claim_id")
+            ]
+            event_type = (
+                WorkflowEventType.CLAIM_EXTRACTION_COMPLETED
+                if state.get("claim_check_status") == "pending"
+                else WorkflowEventType.CLAIM_REVIEW_FAILED
+            )
+            self._append(
+                run_id,
+                WorkflowEventType.CLAIM_EXTRACTION_STARTED,
+                str(trace_item.get("step_id")),
+                trace_item,
+                status="started",
+                payload={"resource_ids": [str(value) for value in trace_item.get("resource_ids", [])]},
+            )
+            self._append(
+                run_id,
+                event_type,
+                str(trace_item.get("step_id")),
+                trace_item,
+                status=str(state.get("claim_check_status")),
+                payload={"claim_ids": claim_ids, "claim_count": len(claim_ids)},
+            )
+            return
+
+        if node_name == "claim_judge":
+            if state.get("claim_check_status") != "completed":
+                self._append(
+                    run_id,
+                    WorkflowEventType.CLAIM_REVIEW_FAILED,
+                    str(trace_item.get("step_id")),
+                    trace_item,
+                    status=str(state.get("claim_check_status")),
+                    payload={"claim_count": len(state.get("extracted_claims", []))},
+                )
+                return
+            claims = [ClaimRecord.model_validate(item) for item in state.get("extracted_claims", [])]
+            judgements = [ClaimJudgement.model_validate(item) for item in state.get("claim_judgements", [])]
+            if self.claim_repository is None:
+                raise PersistenceConflict("claim repository is required for completed audit")
+            self.claim_repository.save_audit(claims, judgements)
+            verdict_counts: dict[str, int] = {}
+            for item in judgements:
+                verdict = item.verdict.value if item.verdict else "incomplete"
+                verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
+            self._append(
+                run_id,
+                WorkflowEventType.CLAIM_JUDGEMENT_COMPLETED,
+                str(trace_item.get("step_id")),
+                trace_item,
+                status="completed",
+                payload={
+                    "claim_ids": [item.claim_id for item in claims],
+                    "claim_count": len(claims),
+                    "verdict_counts": verdict_counts,
+                },
+            )
+            self._append(
+                run_id,
+                WorkflowEventType.CLAIM_METRIC_COMPUTED,
+                str(trace_item.get("step_id")),
+                trace_item,
+                status="completed",
+                payload={"resource_metrics": state.get("claim_metrics", {})},
+            )
+            return
+
         if node_name == "prepare_revision":
             self._append(
                 run_id,
@@ -143,8 +218,8 @@ class WorkflowArtifactRecorder:
 
         if node_name in {
             "supervisor",
+            "claim_supervisor",
             "finalize_draft",
-            "claim_check",
             "finalize_evidence_insufficient",
         }:
             for resource in resources.values():

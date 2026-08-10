@@ -29,7 +29,9 @@ NODE_METADATA: dict[str, tuple[str, str]] = {
     "review": ("reviewer", "审核纠偏"),
     "prepare_revision": ("supervisor", "准备返工"),
     "finalize_draft": ("supervisor", "草稿终结"),
-    "claim_check": ("claim_checker", "Claim 级审核"),
+    "claim_extract": ("claim_extractor", "独立 Claim 抽取"),
+    "claim_judge": ("claim_judge", "冻结证据 Claim 判定"),
+    "claim_decide": ("claim_supervisor", "Claim 确定性决策"),
     "finalize": ("supervisor", "协同决策"),
     "finalize_evidence_insufficient": ("supervisor", "证据不足终结"),
 }

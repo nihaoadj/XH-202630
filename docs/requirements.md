@@ -79,6 +79,11 @@
 | 检索命中率 | `>= 90%` |
 | 反馈后测试提升率 | 有明显提升 |
 
+P0-06 起正式幻觉率口径为最终 published 叶子资源的事实 Claim 微平均：
+`(contradicted + not_in_evidence) / factual_claim_total`。判定不完整时指标为 null；
+`non_factual` 与 `instructional` 不进入分母。知识点覆盖率只认绑定稳定目标技能节点且
+判为 supported 的事实 Claim。难度适配准确率必须基于固定版本金标 fixture 计算。
+
 ## 8. 非目标说明
 
 系统不以通用问答为最终目标，也不把某个领域硬编码为系统边界。所有检索、生成、审核和反馈能力都服务于可迁移的领域知识个性化学习闭环。

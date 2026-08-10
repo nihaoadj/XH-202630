@@ -117,6 +117,9 @@ class WorkflowState(TypedDict, total=False):
     learning_plan: Dict[str, Any]
     generated_resources: List[LearningResource]
     review_result: Dict[str, Any]
+    extracted_claims: List[Dict[str, Any]]
+    claim_judgements: List[Dict[str, Any]]
+    claim_metrics: Dict[str, Dict[str, Any]]
     final_decision: str
 
     trace: Annotated[List[Dict[str, Any]], operator.add]
@@ -165,6 +168,9 @@ class WorkflowStateSnapshot(BaseModel):
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
     generated_resources: List[LearningResource] = Field(default_factory=list)
     review_result: Dict[str, Any] = Field(default_factory=dict)
+    extracted_claims: List[Dict[str, Any]] = Field(default_factory=list)
+    claim_judgements: List[Dict[str, Any]] = Field(default_factory=list)
+    claim_metrics: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     final_decision: str = ""
     trace: List[Dict[str, Any]] = Field(default_factory=list)
     errors: List[ErrorInfo] = Field(default_factory=list)

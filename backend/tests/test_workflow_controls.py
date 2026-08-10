@@ -155,18 +155,14 @@ def test_max_iterations_counts_revisions_not_initial_generation(monkeypatch, max
     assert result["workflow_status"] == "human_review"
 
 
-def test_claim_check_request_is_explicitly_unavailable_before_p0_06(monkeypatch):
-    result, calls = _invoke(
-        monkeypatch,
-        include_review=False,
-        include_claim_check=True,
-    )
-
-    assert calls == {"generate": 1, "review": 0}
-    assert result["claim_check_status"] == "unavailable"
-    assert result["workflow_status"] == "human_review"
-    assert result["generated_resources"][0].review_status == "unreviewed_draft"
-    assert "CLAIM_CHECK_NOT_IMPLEMENTED" in [error["code"] for error in result["errors"]]
+def test_claim_check_without_resource_review_is_rejected():
+    with pytest.raises(ValueError, match="include_claim_check requires include_review"):
+        GenerateRequest(
+            learner_id="flow-001",
+            topic="控制流",
+            include_review=False,
+            include_claim_check=True,
+        )
 
 
 def test_review_approve_marks_resources_approved(monkeypatch):

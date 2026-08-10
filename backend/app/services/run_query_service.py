@@ -5,6 +5,8 @@ from __future__ import annotations
 from app.core.errors import ApplicationError, ErrorCode
 from app.db.audit.base import BaseAuditRepository
 from app.db.resource.base import BaseResourceRepository
+from app.db.claim.base import BaseClaimRepository
+from app.models.claims import ClaimMetricStatus, RunClaimsResponse, compute_claim_metric
 from app.models.persistence import (
     AgentRunRecord,
     PersistedEvidenceSnapshot,
@@ -19,9 +21,11 @@ class RunQueryService:
         self,
         repository: BaseAuditRepository,
         resource_repository: BaseResourceRepository | None = None,
+        claim_repository: BaseClaimRepository | None = None,
     ):
         self.repository = repository
         self.resource_repository = resource_repository
+        self.claim_repository = claim_repository
 
     def get_run(self, run_id: str) -> AgentRunRecord:
         run = self.repository.get_run(run_id)
@@ -94,3 +98,32 @@ class RunQueryService:
                 ErrorCode.WORKFLOW_EVIDENCE_SNAPSHOT_CONFLICT,
                 status_code=409,
             ) from exc
+
+    def get_claims(self, run_id: str) -> RunClaimsResponse:
+        self.get_run(run_id)
+        if self.claim_repository is None:
+            return RunClaimsResponse(run_id=run_id)
+        claims = self.claim_repository.list_claims_by_run(run_id)
+        judgements = self.claim_repository.list_judgements_by_run(run_id)
+        if not claims:
+            return RunClaimsResponse(run_id=run_id)
+        resource_ids = sorted({item.resource_id for item in claims})
+        metrics = {
+            resource_id: compute_claim_metric(
+                [item for item in claims if item.resource_id == resource_id],
+                [item for item in judgements if item.resource_id == resource_id],
+            )
+            for resource_id in resource_ids
+        }
+        audit_status = (
+            ClaimMetricStatus.INCOMPLETE
+            if any(item.metric_status == ClaimMetricStatus.INCOMPLETE for item in metrics.values())
+            else ClaimMetricStatus.COMPLETE
+        )
+        return RunClaimsResponse(
+            run_id=run_id,
+            audit_status=audit_status,
+            claims=claims,
+            judgements=judgements,
+            resource_metrics=metrics,
+        )

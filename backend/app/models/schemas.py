@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StatusResponse(BaseModel):
@@ -213,6 +213,12 @@ class GenerateRequest(BaseModel):
             raise ValueError("resource_types cannot be empty")
         return normalized
 
+    @model_validator(mode="after")
+    def require_resource_review_for_claim_audit(self) -> "GenerateRequest":
+        if self.include_claim_check and not self.include_review:
+            raise ValueError("include_claim_check requires include_review=true")
+        return self
+
 
 class GenerationJobCreateResponse(StatusResponse):
     """异步资源生成任务创建响应"""
@@ -316,6 +322,9 @@ class LearningResource(BaseModel):
     published_at: Optional[datetime] = None
     run_id: Optional[str] = None
     claim_count: Optional[int] = None
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     hallucination_rate: Optional[float] = None
     difficulty_match: Optional[bool] = None
     version: int = 1
@@ -347,6 +356,9 @@ class ReviewSummary(BaseModel):
     claim_unsupported: int = 0
     suspected_hallucinations: int = 0
     hallucination_rate: float = 0.0
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     review_pass_rate: float = 0.0
     revision_count: int = 0
     issues: List[Dict[str, Any]] = Field(default_factory=list)
@@ -452,6 +464,9 @@ class GenerateReport(BaseModel):
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
     review_summary: Dict[str, Any] = Field(default_factory=dict)
     hallucination_rate: float = 0.0
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     coverage_rate: float = 0.0
     difficulty_match: bool = False
     retrieval_hit_rate: float = 0.0

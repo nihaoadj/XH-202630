@@ -32,6 +32,9 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         published_at=orm.published_at,
         run_id=orm.run_id,
         claim_count=orm.claim_count,
+        legacy_reviewer_score=orm.legacy_reviewer_score,
+        claim_hallucination_rate=orm.claim_hallucination_rate,
+        claim_metric_status=orm.claim_metric_status,
         hallucination_rate=orm.hallucination_rate,
         difficulty_match=orm.difficulty_match,
         version=orm.version or 1,
@@ -71,6 +74,9 @@ def _pydantic_to_orm(
         publication_status=resource.publication_status,
         published_at=resource.published_at,
         claim_count=resource.claim_count,
+        legacy_reviewer_score=resource.legacy_reviewer_score,
+        claim_hallucination_rate=resource.claim_hallucination_rate,
+        claim_metric_status=resource.claim_metric_status,
         hallucination_rate=resource.hallucination_rate,
         difficulty_match=resource.difficulty_match,
         version=resource.version,
@@ -138,6 +144,9 @@ class SQLResourceRepository(BaseResourceRepository):
                 orm.publication_status = resource.publication_status
                 orm.published_at = resource.published_at
                 orm.claim_count = resource.claim_count
+                orm.legacy_reviewer_score = resource.legacy_reviewer_score
+                orm.claim_hallucination_rate = resource.claim_hallucination_rate
+                orm.claim_metric_status = resource.claim_metric_status
                 orm.hallucination_rate = resource.hallucination_rate
                 orm.difficulty_match = resource.difficulty_match
             else:

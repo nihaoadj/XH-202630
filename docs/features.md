@@ -207,3 +207,16 @@
 - 草稿、旧版本、返工、拒绝和人工审核资源保留用于审计，但不进入学习者默认资源库。
 - 只有最终审核通过的当前叶子版本可下载。
 - 混合检索和 Rerank 的结果仍需通过 KB、Chunk 版本与内容哈希验证后才能用于生成。
+
+## 10. Claim 级知识溯源与评测（P0-06）
+
+- 独立 Claim Extractor 不依赖 Generator 自报，按资源版本生成稳定 `clm_*` ID。
+- Claim Judge 只允许使用当前 Run 已冻结的 Evidence；跨 Run、未知或伪造 ID 会拒绝。
+- 支持 `supported`、`contradicted`、`not_in_evidence`、`non_factual` 四类判定。
+- 自动发布要求事实 Claim 完整判定，且当前版本不存在 contradicted/not_in_evidence。
+- 问题 Claim 会生成带 `target_claim_ids` 的返工指令，新版本重新抽取和判定。
+- Run 回放只记录 Claim ID、数量、判定计数和指标；全文通过专用 Claims 接口查询。
+- 比赛幻觉率按最终发布叶子版本做事实 Claim 微平均；覆盖率仅认绑定稳定技能节点且
+  判为 supported 的事实 Claim。
+- 难度适配评测要求固定 `fixture_version` 金标，输出准确率和混淆矩阵；不把 Reviewer
+  自评分当作金标。

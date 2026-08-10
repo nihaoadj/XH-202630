@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, Request
 
 from app.config import get_settings
 from app.models.persistence import PersistedEvidenceSnapshot, RunSummary, RunTimeline
+from app.models.claims import RunClaimsResponse
 from app.services.run_query_service import RunQueryService
 
 
@@ -36,3 +37,9 @@ def get_run_timeline(
 def get_run_evidence(run_id: str, request: Request):
     service: RunQueryService = request.app.container.run_query_service()
     return service.get_evidence(run_id)
+
+
+@router.get("/{run_id}/claims", response_model=RunClaimsResponse)
+def get_run_claims(run_id: str, request: Request):
+    service: RunQueryService = request.app.container.run_query_service()
+    return service.get_claims(run_id)
