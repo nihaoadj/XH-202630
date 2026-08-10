@@ -2,6 +2,7 @@ import uuid
 import os
 import socket
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import List
 
 from app.core.errors import ApplicationError, ErrorCode
@@ -10,6 +11,7 @@ from app.core.health import ensure_generation_ready
 from app.config import get_settings
 from app.db.resource.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
+from app.db.audit.base import PersistenceConflict
 from app.db.audit.memory import MemoryAuditRepository
 from app.db.claim.base import BaseClaimRepository
 from app.db.claim.memory import MemoryClaimRepository
@@ -129,7 +131,10 @@ def _build_report(learner: LearnerProfile, diagnosis: dict, review: dict, learni
     }
 
 
-def _persist_resources(
+logger = logging.getLogger(__name__)
+
+
+def _materialize_resources(
     resources: List[LearningResource],
     learner_id: str,
     topic: str,
@@ -139,13 +144,16 @@ def _persist_resources(
     generation_steps: dict[str, str],
     audit_repo: BaseAuditRepository,
 ) -> List[LearningResource]:
-    """Persist generated resources to the filesystem and repository."""
+    """Materialize files and reconcile storage metadata on recorder-owned rows."""
     persisted = []
     for resource in resources:
         resource.learner_id = learner_id
         resource.topic = topic
         resource.run_id = run_id
 
+        existing = resource_repo.get(resource.resource_id)
+        if existing is None:
+            raise PersistenceConflict("recorder-owned resource is missing")
         if (
             resource.publication_status == "published"
             and resource.storage_type == "text"
@@ -161,9 +169,14 @@ def _persist_resources(
             resource.file_size = file_size
             resource.mime_type = mime_type
 
+        materialized = existing.model_copy(update={
+            "file_path": resource.file_path,
+            "file_size": resource.file_size,
+            "mime_type": resource.mime_type,
+        })
         generation_step_id = generation_steps.get(resource.resource_id)
         resource_repo.save(
-            resource,
+            materialized,
             learner_id,
             topic,
             run_id=run_id,
@@ -175,15 +188,38 @@ def _persist_resources(
             payload={"resource_ids": [resource.resource_id]},
             occurred_at=datetime.now(timezone.utc),
             step_id=generation_step_id,
-            status=resource.review_status,
+            status=materialized.review_status,
             event_id=_event_id(
                 run_id,
                 WorkflowEventType.RESOURCE_PERSISTED.value,
                 resource.resource_id,
             ),
         )
-        persisted.append(resource)
+        persisted.append(materialized)
     return persisted
+
+
+def _reconcile_reviews(
+    resources: List[LearningResource],
+    review: dict,
+    *,
+    run_id: str,
+    audit_repo: BaseAuditRepository,
+) -> None:
+    """Verify recorder-owned review links without creating a second Review."""
+
+    if not review or review.get("decision") == ReviewDecision.NOT_REQUESTED.value:
+        return
+    expected = {str(key): str(value) for key, value in (review.get("review_ids") or {}).items()}
+    persisted = {
+        str(item.get("resource_id")): str(item.get("review_id"))
+        for item in audit_repo.list_reviews_by_run(run_id)
+        if item.get("resource_id") and item.get("review_id")
+    }
+    for resource in resources:
+        expected_id = expected.get(resource.resource_id)
+        if expected_id is None or persisted.get(resource.resource_id) != expected_id:
+            raise PersistenceConflict("recorder-owned review is missing")
 
 
 def _request_snapshot(req: GenerateRequest, state: WorkflowState) -> dict:
@@ -357,19 +393,25 @@ class GenerationService:
             WorkflowStatus.RUNNING.value: "running",
         }[workflow_status]
 
+        finalization_stage = "mark_finalizing"
         try:
-            self.audit_repo.mark_finalizing(
-                run_id,
-                workflow_status=workflow_status,
-                current_node=result.get("current_node"),
-                generation_attempt=int(result.get("generation_attempt", 1)),
-                revision_count=int(result.get("revision_count", 0)),
-                retrieval_status=result.get("retrieval_status"),
-                final_decision=result.get("final_decision"),
-                occurred_at=datetime.now(timezone.utc),
-            )
+            existing_run = self.audit_repo.get_run(run_id)
+            target_status = _run_status(workflow_status)
+            # A completed retry must not transition a terminal Run backwards.
+            if existing_run is None or existing_run.status != target_status:
+                self.audit_repo.mark_finalizing(
+                    run_id,
+                    workflow_status=workflow_status,
+                    current_node=result.get("current_node"),
+                    generation_attempt=int(result.get("generation_attempt", 1)),
+                    revision_count=int(result.get("revision_count", 0)),
+                    retrieval_status=result.get("retrieval_status"),
+                    final_decision=result.get("final_decision"),
+                    occurred_at=datetime.now(timezone.utc),
+                )
+            finalization_stage = "materialize_resources"
             raw_resources = result.get("generated_resources", [])
-            persisted_resources = _persist_resources(
+            persisted_resources = _materialize_resources(
                 raw_resources,
                 req.learner_id,
                 req.topic,
@@ -378,37 +420,14 @@ class GenerationService:
                 generation_steps=_generation_step_map(trace),
                 audit_repo=self.audit_repo,
             )
-            if review and review.get("decision") != ReviewDecision.NOT_REQUESTED.value:
-                for resource in persisted_resources:
-                    review_id = self.audit_repo.save_review(resource.resource_id, review, run_id)
-                    self.audit_repo.append_event(
-                        run_id,
-                        WorkflowEventType.REVIEW_PERSISTED,
-                        payload={
-                            "resource_ids": [resource.resource_id],
-                            "review_ids": [review_id],
-                        },
-                        occurred_at=datetime.now(timezone.utc),
-                        status=str(review.get("status") or review.get("decision") or "unknown"),
-                        event_id=_event_id(
-                            run_id,
-                            WorkflowEventType.REVIEW_PERSISTED.value,
-                            review_id,
-                        ),
-                    )
-                    resource.review_id = review_id
-                    resource.claim_count = review.get("claim_total", len(review.get("claims", [])))
-                    resource.hallucination_rate = review.get(
-                        "hallucination_rate", review.get("hallucination_score")
-                    )
-                    resource.difficulty_match = review.get("difficulty_match")
-                    self.resource_repo.save(
-                        resource,
-                        req.learner_id,
-                        req.topic,
-                        run_id=run_id,
-                        generation_step_id=_generation_step_map(trace).get(resource.resource_id),
-                    )
+            finalization_stage = "reconcile_review"
+            _reconcile_reviews(
+                persisted_resources,
+                review,
+                run_id=run_id,
+                audit_repo=self.audit_repo,
+            )
+            finalization_stage = "complete_run"
             self.audit_repo.complete_run(
                 run_id,
                 status=_run_status(workflow_status),
@@ -418,7 +437,30 @@ class GenerationService:
                 occurred_at=datetime.now(timezone.utc),
             )
         except Exception as exc:
+            logger.error(
+                "Workflow finalization failed run_id=%s finalization_stage=%s exception_type=%s",
+                run_id,
+                finalization_stage,
+                type(exc).__name__,
+            )
             try:
+                self.audit_repo.append_event(
+                    run_id,
+                    WorkflowEventType.WORKFLOW_FINALIZATION_FAILED,
+                    payload={
+                        "finalization_stage": finalization_stage,
+                        "exception_type": type(exc).__name__,
+                        "safe_message": "finalization_stage_failed",
+                    },
+                    occurred_at=datetime.now(timezone.utc),
+                    status="failed",
+                    error_code=ErrorCode.WORKFLOW_FINALIZATION_FAILED.value,
+                    event_id=_event_id(
+                        run_id,
+                        WorkflowEventType.WORKFLOW_FINALIZATION_FAILED.value,
+                        finalization_stage,
+                    ),
+                )
                 self.audit_repo.fail_run(
                     run_id,
                     error_code=ErrorCode.WORKFLOW_FINALIZATION_FAILED.value,

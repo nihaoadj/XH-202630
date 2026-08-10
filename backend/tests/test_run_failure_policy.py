@@ -85,7 +85,7 @@ def test_create_run_failure_prevents_workflow_invocation(monkeypatch):
     assert workflow.calls == 0
 
 
-def test_resource_failure_cannot_leave_completed_run(monkeypatch):
+def test_recorder_resource_failure_cannot_leave_completed_run(monkeypatch):
     monkeypatch.setattr(
         generation_module,
         "ensure_generation_ready",
@@ -100,6 +100,6 @@ def test_resource_failure_cannot_leave_completed_run(monkeypatch):
     service = GenerationService(FailingResourceRepository(), _Workflow(), audit)
     with pytest.raises(ApplicationError) as caught:
         service.generate(_learner(), _request())
-    assert caught.value.code == ErrorCode.WORKFLOW_FINALIZATION_FAILED
+    assert caught.value.code == ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE
     run = next(iter(audit.runs.values()))
     assert run["status"] == "failed"

@@ -85,6 +85,7 @@ class WorkflowEventType(str, Enum):
     CHECKPOINT_SAVED = "checkpoint_saved"
     RUN_FINALIZING = "run_finalizing"
     RESOURCE_PERSISTED = "resource_persisted"
+    WORKFLOW_FINALIZATION_FAILED = "workflow_finalization_failed"
     RESOURCE_VERSION_CREATED = "resource_version_created"
     REVIEW_PERSISTED = "review_persisted"
     REVISION_REQUESTED = "revision_requested"
@@ -210,6 +211,9 @@ class AgentStepRecord(StrictPersistenceModel):
     retrieval_candidate_count: int | None = Field(default=None, ge=0)
     retrieval_dropped_candidate_count: int | None = Field(default=None, ge=0)
     retrieval_partial_failure_count: int | None = Field(default=None, ge=0)
+    retrieval_profile: dict[str, Any] = Field(default_factory=dict)
+    workflow_elapsed_ms: int | None = Field(default=None, ge=0)
+    workflow_remaining_ms: int | None = Field(default=None, ge=0)
     payload_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     started_at: datetime
     ended_at: datetime | None = None

@@ -317,6 +317,22 @@ def start_step(
     }
 
 
+def workflow_budget_metadata(
+    state: Dict[str, Any],
+    entered_at: datetime,
+) -> Dict[str, int]:
+    """Return safe global-deadline timing captured at node entry."""
+
+    started_at = state.get("workflow_started_at")
+    deadline_at = state.get("workflow_deadline_at")
+    if not isinstance(started_at, datetime) or not isinstance(deadline_at, datetime):
+        return {}
+    return {
+        "workflow_elapsed_ms": max(0, int((entered_at - started_at).total_seconds() * 1000)),
+        "workflow_remaining_ms": max(0, int((deadline_at - entered_at).total_seconds() * 1000)),
+    }
+
+
 def build_trace_item(
     state: Dict[str, Any],
     *,
@@ -371,4 +387,5 @@ def build_trace_item(
         item.update(llm_metadata)
     if retrieval_metadata:
         item.update(retrieval_metadata)
+    item.update(workflow_budget_metadata(state, started_at))
     return item

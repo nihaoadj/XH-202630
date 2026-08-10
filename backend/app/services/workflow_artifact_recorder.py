@@ -39,9 +39,9 @@ class WorkflowArtifactRecorder:
     def record(self, state: dict[str, Any], trace_item: dict[str, Any]) -> None:
         run_id = str(state["run_id"])
         node_name = str(
-            state.get("current_node")
+            trace_item.get("agent_name")
+            or state.get("current_node")
             or trace_item.get("node_name")
-            or trace_item.get("agent_name")
             or "unknown"
         )
         resources = {

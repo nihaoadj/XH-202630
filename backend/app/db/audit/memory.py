@@ -278,6 +278,9 @@ class MemoryAuditRepository(BaseAuditRepository):
                     "retrieval_candidate_count",
                     "retrieval_dropped_candidate_count",
                     "retrieval_partial_failure_count",
+                    "retrieval_profile",
+                    "workflow_elapsed_ms",
+                    "workflow_remaining_ms",
                 )
                 if trace.get(key) is not None
             }
@@ -323,6 +326,9 @@ class MemoryAuditRepository(BaseAuditRepository):
                     "retrieval_candidate_count",
                     "retrieval_dropped_candidate_count",
                     "retrieval_partial_failure_count",
+                    "retrieval_profile",
+                    "workflow_elapsed_ms",
+                    "workflow_remaining_ms",
                     "payload_hash",
                     "ended_at",
                     "duration_ms",
@@ -354,6 +360,9 @@ class MemoryAuditRepository(BaseAuditRepository):
                 retrieval_candidate_count=trace.get("retrieval_candidate_count"),
                 retrieval_dropped_candidate_count=trace.get("retrieval_dropped_candidate_count"),
                 retrieval_partial_failure_count=trace.get("retrieval_partial_failure_count"),
+                retrieval_profile=trace.get("retrieval_profile") or {},
+                workflow_elapsed_ms=trace.get("workflow_elapsed_ms"),
+                workflow_remaining_ms=trace.get("workflow_remaining_ms"),
                 payload_hash=payload_hash,
                 ended_at=command.ended_at,
                 duration_ms=max(

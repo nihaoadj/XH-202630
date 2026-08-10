@@ -448,6 +448,9 @@ class AgentTrace(BaseModel):
     retrieval_query_count: Optional[int] = Field(default=None, ge=0)
     retrieval_evidence_count: Optional[int] = Field(default=None, ge=0)
     retrieval_dropped_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_profile: Dict[str, Any] = Field(default_factory=dict)
+    workflow_elapsed_ms: Optional[int] = Field(default=None, ge=0)
+    workflow_remaining_ms: Optional[int] = Field(default=None, ge=0)
     timestamp: Optional[str] = None
     started_at: Optional[str] = None
     ended_at: Optional[str] = None

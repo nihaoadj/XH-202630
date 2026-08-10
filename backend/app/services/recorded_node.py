@@ -12,6 +12,7 @@ from app.db.audit.base import BaseAuditRepository, PersistenceConflict, Persiste
 from app.models.agent_contracts import (
     bind_recorded_step_context,
     reset_recorded_step_context,
+    workflow_budget_metadata,
 )
 from app.models.persistence import (
     BeginStepCommand,
@@ -120,6 +121,7 @@ class RecordedNode:
                 "error_message": "工作流步骤执行失败",
                 "started_at": started_at.isoformat(),
                 "ended_at": ended_at.isoformat(),
+                **workflow_budget_metadata(state, started_at),
             }
             try:
                 self.repository.complete_step(

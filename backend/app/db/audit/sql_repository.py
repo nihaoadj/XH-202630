@@ -132,6 +132,9 @@ class SQLAuditRepository(BaseAuditRepository):
             retrieval_candidate_count=orm.retrieval_candidate_count,
             retrieval_dropped_candidate_count=orm.retrieval_dropped_candidate_count,
             retrieval_partial_failure_count=orm.retrieval_partial_failure_count,
+            retrieval_profile=orm.retrieval_profile or {},
+            workflow_elapsed_ms=orm.workflow_elapsed_ms,
+            workflow_remaining_ms=orm.workflow_remaining_ms,
             payload_hash=orm.payload_hash,
             started_at=_as_utc(orm.started_at) or _utcnow(),
             ended_at=_as_utc(orm.ended_at),
@@ -414,6 +417,7 @@ class SQLAuditRepository(BaseAuditRepository):
                     "llm_attempts", "retrieval_status", "retrieval_config_hash",
                     "retrieval_query_hashes", "retrieval_candidate_count",
                     "retrieval_dropped_candidate_count", "retrieval_partial_failure_count",
+                    "retrieval_profile", "workflow_elapsed_ms", "workflow_remaining_ms",
                 )
                 if trace.get(key) is not None
             }
@@ -449,6 +453,9 @@ class SQLAuditRepository(BaseAuditRepository):
             step.retrieval_candidate_count = trace.get("retrieval_candidate_count")
             step.retrieval_dropped_candidate_count = trace.get("retrieval_dropped_candidate_count")
             step.retrieval_partial_failure_count = trace.get("retrieval_partial_failure_count")
+            step.retrieval_profile = trace.get("retrieval_profile") or {}
+            step.workflow_elapsed_ms = trace.get("workflow_elapsed_ms")
+            step.workflow_remaining_ms = trace.get("workflow_remaining_ms")
             step.payload_hash = payload_hash
             step.ended_at = command.ended_at
             started_at = _as_utc(step.started_at) or command.ended_at

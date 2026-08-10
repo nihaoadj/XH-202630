@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -62,3 +63,34 @@ def test_trace_ids_are_assigned_before_persistence_and_are_unique():
     uuid.UUID(second["step_id"])
     AgentTrace.model_validate(first)
     AgentTrace.model_validate(second)
+
+
+def test_trace_records_safe_workflow_budget_at_node_entry():
+    started = datetime.now(timezone.utc)
+    state = {
+        "schema_version": "1.0",
+        "run_id": "run-budget",
+        "trace": [],
+        "workflow_started_at": started - timedelta(seconds=5),
+        "workflow_deadline_at": started + timedelta(seconds=45),
+    }
+    item = build_trace_item(
+        state,
+        agent_name="reviewer",
+        action="审核",
+        status=StepStatus.SUCCESS,
+        input_summary="safe",
+        output_summary="safe",
+        decision_reason="safe",
+        step_context={
+            "step_id": "step-budget",
+            "sequence": 1,
+            "attempt": 1,
+            "started_at": started,
+        },
+    )
+
+    assert 4_900 <= item["workflow_elapsed_ms"] <= 5_100
+    assert 44_900 <= item["workflow_remaining_ms"] <= 45_100
+    validated = AgentTrace.model_validate(item)
+    assert validated.workflow_remaining_ms == item["workflow_remaining_ms"]
