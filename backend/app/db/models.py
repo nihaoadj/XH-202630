@@ -50,6 +50,7 @@ class LearnerProfileORM(Base):
     learning_goal = Column(String(512), nullable=False, comment="学习目标")
     learning_preferences = Column(JSON, default=dict, comment="学习偏好")
     last_feedback_summary = Column(JSON, default=dict, comment="最近反馈摘要")
+    profile_version = Column(Integer, nullable=False, default=1, comment="画像乐观并发版本")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
@@ -133,6 +134,155 @@ class GenerationJobORM(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     started_at = Column(DateTime(timezone=True), nullable=True, comment="开始执行时间")
     finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
+
+
+class LearningAttemptORM(Base):
+    __tablename__ = "learning_attempts"
+    __table_args__ = (
+        UniqueConstraint("learner_id", "idempotency_key", name="uq_learning_attempt_idempotency"),
+    )
+
+    attempt_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    source_resource_id = Column(String(64), ForeignKey("generated_resources.resource_id"), nullable=False, index=True)
+    source_resource_version = Column(Integer, nullable=False)
+    source_run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
+    path_node_id = Column(String(128), nullable=True, index=True)
+    idempotency_key = Column(String(128), nullable=False)
+    request_hash = Column(String(64), nullable=False, index=True)
+    expected_profile_version = Column(Integer, nullable=False)
+    overall_score = Column(Float, nullable=False)
+    duration_ms = Column(Integer, nullable=False, default=0)
+    hint_count = Column(Integer, nullable=False, default=0)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class LearningAttemptPointResultORM(Base):
+    __tablename__ = "learning_attempt_point_results"
+    __table_args__ = (
+        UniqueConstraint("attempt_id", "knowledge_point_id", name="uq_attempt_knowledge_point"),
+    )
+
+    result_id = Column(String(128), primary_key=True)
+    attempt_id = Column(String(128), ForeignKey("learning_attempts.attempt_id"), nullable=False, index=True)
+    knowledge_point_id = Column(String(256), nullable=False, index=True)
+    question_ids = Column(JSON, nullable=False, default=list)
+    correct_count = Column(Integer, nullable=False)
+    total_count = Column(Integer, nullable=False)
+    score = Column(Float, nullable=False)
+    duration_ms = Column(Integer, nullable=False, default=0)
+    hint_count = Column(Integer, nullable=False, default=0)
+
+
+class FeedbackDecisionORM(Base):
+    __tablename__ = "feedback_decisions"
+
+    decision_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    attempt_id = Column(String(128), ForeignKey("learning_attempts.attempt_id"), nullable=False, unique=True, index=True)
+    action = Column(String(32), nullable=False, index=True)
+    reason_codes = Column(JSON, nullable=False, default=list)
+    decision_reason = Column(Text, nullable=False)
+    target_knowledge_point_ids = Column(JSON, nullable=False, default=list)
+    decision_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class KnowledgeStateMutationORM(Base):
+    __tablename__ = "knowledge_state_mutations"
+    __table_args__ = (
+        UniqueConstraint("attempt_id", "knowledge_point_id", name="uq_state_mutation_attempt_point"),
+    )
+
+    mutation_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    knowledge_point_id = Column(String(256), nullable=False, index=True)
+    attempt_id = Column(String(128), ForeignKey("learning_attempts.attempt_id"), nullable=False, index=True)
+    before_state = Column(JSON, nullable=True)
+    after_state = Column(JSON, nullable=False)
+    reason = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class LearnerProfileVersionORM(Base):
+    __tablename__ = "learner_profile_versions"
+    __table_args__ = (
+        UniqueConstraint("learner_id", "profile_version", name="uq_learner_profile_version"),
+    )
+
+    version_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    profile_version = Column(Integer, nullable=False)
+    source_attempt_id = Column(String(128), ForeignKey("learning_attempts.attempt_id"), nullable=False, unique=True)
+    source_decision_id = Column(String(128), ForeignKey("feedback_decisions.decision_id"), nullable=False)
+    change_summary = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class LearningPathORM(Base):
+    __tablename__ = "learning_paths"
+
+    path_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, unique=True, index=True)
+    version = Column(Integer, nullable=False, default=1)
+    status = Column(String(32), nullable=False, default="active")
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class LearningPathNodeORM(Base):
+    __tablename__ = "learning_path_nodes"
+
+    node_id = Column(String(128), primary_key=True)
+    path_id = Column(String(128), ForeignKey("learning_paths.path_id"), nullable=False, index=True)
+    knowledge_point_id = Column(String(256), nullable=False, index=True)
+    node_type = Column(String(32), nullable=False, index=True)
+    sequence = Column(Integer, nullable=False)
+    status = Column(String(32), nullable=False, index=True)
+    prerequisite_ids = Column(JSON, nullable=False, default=list)
+    parent_node_id = Column(String(128), nullable=True, index=True)
+    source = Column(String(32), nullable=False)
+    difficulty = Column(String(32), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class LearningPathMutationORM(Base):
+    __tablename__ = "learning_path_mutations"
+
+    mutation_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    path_id = Column(String(128), ForeignKey("learning_paths.path_id"), nullable=False, index=True)
+    attempt_id = Column(String(128), ForeignKey("learning_attempts.attempt_id"), nullable=False, unique=True, index=True)
+    decision_id = Column(String(128), ForeignKey("feedback_decisions.decision_id"), nullable=False)
+    mutation_type = Column(String(32), nullable=False)
+    target_node_id = Column(String(128), nullable=True)
+    inserted_node_ids = Column(JSON, nullable=False, default=list)
+    unlocked_node_ids = Column(JSON, nullable=False, default=list)
+    completed_node_ids = Column(JSON, nullable=False, default=list)
+    reason_codes = Column(JSON, nullable=False, default=list)
+    path_version_before = Column(Integer, nullable=False)
+    path_version_after = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class FeedbackFollowUpRunORM(Base):
+    __tablename__ = "feedback_followup_runs"
+
+    relation_id = Column(String(128), primary_key=True)
+    attempt_id = Column(String(128), ForeignKey("learning_attempts.attempt_id"), nullable=False, unique=True, index=True)
+    decision_id = Column(String(128), ForeignKey("feedback_decisions.decision_id"), nullable=False, index=True)
+    parent_run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
+    child_run_id = Column(String(128), ForeignKey("generation_jobs.run_id"), nullable=True, unique=True, index=True)
+    trigger_type = Column(String(32), nullable=False)
+    status = Column(String(32), nullable=False)
+    error_code = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 # 以下模型承接知识库、图谱、审核和评测。JSON 仅用于可扩展负载；可查询的核心
@@ -438,6 +588,9 @@ class KnowledgeStateORM(Base):
     mastery_score = Column(Float, nullable=True)
     status = Column(String(32), nullable=True)
     evidence = Column(JSON, default=list)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    last_attempt_id = Column(String(128), nullable=True, index=True)
+    row_version = Column(Integer, nullable=False, default=1)
     last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

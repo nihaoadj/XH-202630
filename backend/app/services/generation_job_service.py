@@ -31,23 +31,36 @@ class GenerationJobService:
         self,
         learner: LearnerProfile,
         req: GenerateRequest,
+        *,
+        run_id: str | None = None,
     ) -> GenerationJobCreateResponse:
-        run_id = str(uuid.uuid4())
+        run_id = run_id or str(uuid.uuid4())
         knowledge_base_id = req.knowledge_base_id or learner.knowledge_base_id
-        self.job_repo.create(
-            run_id=run_id,
-            learner_id=req.learner_id,
-            topic=req.topic,
-            knowledge_base_id=knowledge_base_id,
-            request_payload=req.model_dump(mode="json"),
-        )
+        existing = self.job_repo.get(run_id)
+        if existing is not None:
+            if (
+                existing.learner_id != req.learner_id
+                or existing.topic != req.topic
+                or existing.knowledge_base_id != knowledge_base_id
+            ):
+                raise ValueError("run_id already belongs to another generation request")
+            job_status = existing.job_status
+        else:
+            self.job_repo.create(
+                run_id=run_id,
+                learner_id=req.learner_id,
+                topic=req.topic,
+                knowledge_base_id=knowledge_base_id,
+                request_payload=req.model_dump(mode="json"),
+            )
+            job_status = "queued"
         return GenerationJobCreateResponse(
             message="generation job accepted",
             run_id=run_id,
             learner_id=req.learner_id,
             topic=req.topic,
             knowledge_base_id=knowledge_base_id,
-            job_status="queued",
+            job_status=job_status,
         )
 
     def get_job(self, run_id: str) -> GenerationJobStatusResponse | None:

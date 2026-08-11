@@ -76,6 +76,9 @@
 | 反馈 | `POST` | `/api/feedback/evaluation/run/submit` | 提交任务级测评与反馈 |
 | 反馈 | `POST` | `/api/feedback/` | 提交学习反馈 |
 | 反馈 | `GET` | `/api/feedback/history/{learner_id}` | 查询反馈历史 |
+| 反馈闭环 | `POST` | `/api/feedback/attempts` | 提交幂等、版本化的正式学习 Attempt |
+| 反馈闭环 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询持久化 Attempt |
+| 反馈闭环 | `GET` | `/api/feedback/path/{learner_id}` | 查询当前持久化学习路径 |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/timeline` | 查询学习过程时间线 |
 | 报告 | `GET` | `/api/report/{learner_id}` | 查询学习报告 |
 
@@ -444,6 +447,68 @@
 - 提交成功后，后端会保存反馈记录并回写学习者画像。
 - 反馈页“基于反馈重新生成”当前采用“选中某条反馈记录 + 当前最新画像”的方式发起新任务。
 
+### 11.3 `POST /api/feedback/attempts`
+
+用途：提交 P0-07 正式学习事实，并在一个本地事务中写入 Attempt、知识点结果、反馈决策、掌握度变更、画像版本和学习路径变更。补救或进阶所需的新资源在事务提交后通过现有异步生成任务入口创建。
+
+请求体核心字段：
+
+```json
+{
+  "learner_id": "learner-id",
+  "source_resource_id": "resource-id",
+  "source_resource_version": 1,
+  "source_run_id": "source-run-id",
+  "path_node_id": null,
+  "idempotency_key": "feedback-20260811-0001",
+  "expected_profile_version": 1,
+  "started_at": "2026-08-11T09:59:00+08:00",
+  "submitted_at": "2026-08-11T10:00:00+08:00",
+  "duration_ms": 60000,
+  "hint_count": 1,
+  "knowledge_point_results": [
+    {
+      "knowledge_point_id": "stable-skill-node-id",
+      "question_ids": ["q-1", "q-2"],
+      "correct_count": 1,
+      "total_count": 2,
+      "duration_ms": 60000,
+      "hint_count": 1
+    }
+  ],
+  "metadata": {"source": "web", "client_version": "1.0"}
+}
+```
+
+约束：
+
+- 服务端按所有知识点的 `sum(correct_count) / sum(total_count)` 重算 `overall_score`；客户端如传汇总分，必须完全一致。
+- `knowledge_point_id` 在正式容器中必须是当前知识库的稳定技能节点；自由文本不作为知识点 ID。
+- `(learner_id, idempotency_key)` 唯一。相同 key、相同 canonical payload 返回原结果且 `idempotent_replay=true`；相同 key、不同 payload 返回 `409 FEEDBACK_IDEMPOTENCY_CONFLICT`。
+- `expected_profile_version` 是乐观并发条件；过期版本返回 `409 LEARNER_PROFILE_VERSION_CONFLICT`。
+- `metadata` 只接受 `source`、`client_version`、`session_id` 三个标量字段；不得上传 Prompt、模型原文或自由文本答案。
+
+响应重点字段：
+
+- `attempt`、`decision.action`、`decision.reason_codes`
+- `profile_version`、`knowledge_state_updates`
+- `learning_path`、`path_mutation`
+- `feedback_status=applied`
+- `followup_generation_status=not_requested|queued|failed`
+- `followup_run_id` / `followup_job_id`
+- `idempotent_replay`
+
+`feedback_status` 与 `followup_generation_status` 必须分开解释：后续生成失败不会撤销已经成功提交的 Attempt。
+
+### 11.4 P0-07 查询接口
+
+- `GET /api/feedback/attempts/{learner_id}?limit=20`：返回最近的不可变 Attempt 事实。
+- `GET /api/feedback/path/{learner_id}`：返回当前路径版本及节点状态。
+- `GET /api/report/{learner_id}`：新增 `profile_version`、`knowledge_mastery`、`current_learning_path`、`recent_attempts`、`recent_feedback_decisions`、`recent_knowledge_state_mutations`、`recent_followup_runs`、`profile_versions`；`agent_flow` 同时聚合持久化反馈决策。
+- `GET /api/runs/{child_run_id}/timeline`：`trigger_relation` 可反查触发它的 Attempt、Decision、父 Run 和触发类型。
+
+旧 `/api/feedback/` 与 evaluation submit 接口在兼容期保留，但新前端闭环应使用 `/api/feedback/attempts`，不要把旧 `next_action` 文本当作任务已经创建。
+
 ## 12. 前端调用约定
 
 - 用户资料页：
@@ -466,6 +531,10 @@
   `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
 - 任务级测评提交：
   `POST /api/feedback/evaluation/run/submit`
+- 正式反馈闭环提交：
+  `POST /api/feedback/attempts`
+- 当前学习路径：
+  `GET /api/feedback/path/{learner_id}`
 - 反馈历史：
   `GET /api/feedback/history/{learner_id}`
 - 下载资源文件：

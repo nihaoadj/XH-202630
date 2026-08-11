@@ -154,8 +154,9 @@ backend/app/api
 backend/app/services
   |- generation_job_service: 创建异步任务、查询状态、后台执行
   |- generation_service: 先执行 readiness gate，再调用多 Agent 生成闭环并保存资源
-  |- feedback_service: 调用反馈决策 Agent，保存反馈记录并更新画像
-  |- report_service: 聚合画像、资源、反馈生成报告
+  |- feedback_service: 提交正式 Attempt，执行确定性反馈策略并协调事务与后续生成
+  |- learning_path_policy: 校验并生成路径状态变更
+  |- report_service: 聚合画像、资源、Attempt、版本历史和持久化路径
   ->
 backend/app/agents
   |- diagnosis: 学情诊断 Agent
@@ -197,6 +198,35 @@ diagnose -> retrieve -> plan -> generate
                                                                |- revise 且有额度 -> prepare_revision -> generate
                                                                |- reject/额度耗尽 -> finalize
 ```
+
+### 4.3 P0-07 反馈后真实闭环
+
+```text
+POST /api/feedback/attempts
+-> 校验 learner、published source resource/version、稳定知识点与请求分数
+-> 读取 profile_version、knowledge state、最近趋势和当前 path
+-> deterministic policy
+   |- overall < 0.60 或任一点 < 0.60 -> remediate
+   |- 0.60 <= overall <= 0.85       -> practice
+   |- overall > 0.85 且无 blocker   -> advance
+-> Transaction A
+   |- learning_attempts + point_results
+   |- feedback_decisions
+   |- knowledge_states + mutation history
+   |- learner_profiles.profile_version + version history
+   |- learning_paths/nodes + path mutation
+-> commit
+-> remediate/advance 时幂等创建现有 generation job
+-> 保存 parent run / attempt / decision / child run 关系
+-> BackgroundTasks 调用 GenerationJobService.run_job
+-> 新 Run 继续经过 Evidence、Review、Claim Audit 和 Publication Gate
+```
+
+知识点掌握度采用可解释 EWMA：已有状态为 `0.7 * old + 0.3 * attempt_score`，首次作答直接取 attempt score。hint 与 duration 仅进入决策上下文和审计，不暗中改变 mastery。每次成功更新将画像版本从 N 变为 N+1，并以 `expected_profile_version` 做 CAS；重复请求不会再次加权。
+
+路径 mutation 由 policy 生成并校验自环、缺失前置条件、环路和重复节点。低分插入/复用 remedial，中分插入/复用 practice，高分完成当前节点并解锁满足前置条件的下一节点；无下一节点时增加 challenge。路径只有实际变化才递增版本。
+
+Follow-up 属于 after-commit 副作用。其 run_id 由 attempt 稳定派生；创建失败时 Attempt 保持 `applied`、关联状态为 `failed`，相同幂等请求可安全对账重试。反馈事件只存稳定 ID、计数、分数摘要、action/reason code 和版本，不保存完整答案、画像、Prompt 或模型原文。
 
 P0-06 的 Claim 抽取器与 Generator 相互独立。模型只能从资源、目标技能节点和当前
 Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、

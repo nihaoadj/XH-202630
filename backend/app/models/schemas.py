@@ -72,6 +72,7 @@ class LearnerProfile(BaseModel):
     learning_goal: str = Field(..., description="学习目标")
     learning_preferences: Optional[LearningPreferences] = Field(default=None, description="学习偏好")
     last_feedback_summary: Dict[str, Any] = Field(default_factory=dict, description="最近反馈摘要")
+    profile_version: int = Field(default=1, ge=1, description="画像乐观并发版本")
 
 
 class InitialProfileQuestionnaire(BaseModel):
@@ -593,6 +594,14 @@ class ReportResponse(BaseModel):
     next_suggestions: List[str] = Field(default_factory=list)
     recent_resources: List[LearningResource] = Field(default_factory=list)
     recent_feedback: List[FeedbackRecord] = Field(default_factory=list)
+    profile_version: int = 1
+    knowledge_mastery: Dict[str, Any] = Field(default_factory=dict)
+    current_learning_path: Optional[Dict[str, Any]] = None
+    recent_attempts: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_feedback_decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_knowledge_state_mutations: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_followup_runs: List[Dict[str, Any]] = Field(default_factory=list)
+    profile_versions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class FeedbackHistoryResponse(BaseModel):

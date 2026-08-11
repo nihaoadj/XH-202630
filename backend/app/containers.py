@@ -13,6 +13,7 @@ from app.db.database import get_session_factory
 from app.db.claim.repository import create_claim_repository
 from app.db.diagnosis.repository import create_diagnosis_repository
 from app.db.feedback.repository import create_feedback_repository
+from app.db.feedback_loop.repository import create_feedback_loop_repository
 from app.db.generation_job.repository import create_generation_job_repository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.learner.repository import create_learner_repository
@@ -89,6 +90,12 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
+    feedback_loop_repository = providers.Singleton(
+        create_feedback_loop_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+        learner_repository=learner_repository,
+    )
     claim_repository = providers.Singleton(
         create_claim_repository,
         db_type=config.db_type,
@@ -159,11 +166,16 @@ class Container(containers.DeclarativeContainer):
     feedback_service = providers.Singleton(
         FeedbackService,
         feedback_repo=feedback_repository,
+        feedback_loop_repo=feedback_loop_repository,
+        generation_job_service=generation_job_service,
+        audit_repo=audit_repository,
+        knowledge_catalog=knowledge_catalog,
     )
     report_service = providers.Singleton(
         ReportService,
         resource_repo=resource_repository,
         feedback_repo=feedback_repository,
+        feedback_loop_repo=feedback_loop_repository,
     )
     knowledge_service = providers.Singleton(KnowledgeService, catalog=knowledge_catalog)
     diagnosis_service = providers.Singleton(
@@ -178,6 +190,7 @@ class Container(containers.DeclarativeContainer):
         repository=audit_repository,
         resource_repository=resource_repository,
         claim_repository=claim_repository,
+        feedback_loop_repository=feedback_loop_repository,
     )
     evaluation_service = providers.Singleton(
         EvaluationService,

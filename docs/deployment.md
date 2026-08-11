@@ -160,3 +160,33 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/runs/<run_id>/timeline?after_sequen
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/evidence
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/claims
 ```
+
+## 9. P0-07 反馈闭环迁移与验收
+
+应用初始化会幂等执行 `20260811_p0_07_feedback_profile_path_closed_loop`。该迁移只做 additive 列/表创建，不删除或重写 legacy feedback。生产 PostgreSQL 上线前需审核唯一约束、FK、索引、`SELECT FOR UPDATE` 和 profile CAS 的并发行为。
+
+最小验收：
+
+```powershell
+$body = @{
+  learner_id = "<learner_id>"
+  source_resource_id = "<published_resource_id>"
+  source_resource_version = 1
+  source_run_id = "<source_run_id>"
+  idempotency_key = "feedback-e2e-0001"
+  expected_profile_version = 1
+  submitted_at = (Get-Date).ToString("o")
+  knowledge_point_results = @(@{
+    knowledge_point_id = "<stable_skill_node_id>"
+    question_ids = @("q-1", "q-2")
+    correct_count = 1
+    total_count = 2
+  })
+} | ConvertTo-Json -Depth 8
+$result = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/feedback/attempts -ContentType "application/json" -Body $body
+$result
+Invoke-RestMethod http://127.0.0.1:8000/api/feedback/path/<learner_id>
+Invoke-RestMethod http://127.0.0.1:8000/api/report/<learner_id>
+```
+
+用同一 body 再提交一次，应返回同一 `attempt_id`、`idempotent_replay=true`，且画像版本、路径版本和 child run 数量不再增加。服务重启后再次查询 Attempt、Path 和 Report，结果必须保持。
