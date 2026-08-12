@@ -79,6 +79,7 @@
 | 反馈闭环 | `POST` | `/api/feedback/attempts` | 提交幂等、版本化的正式学习 Attempt |
 | 反馈闭环 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询持久化 Attempt |
 | 反馈闭环 | `GET` | `/api/feedback/path/{learner_id}` | 查询当前持久化学习路径 |
+| Run 实时流 | `GET` | `/api/runs/{run_id}/events` | WorkflowEvent 的 SSE replay + live tail |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/timeline` | 查询学习过程时间线 |
 | 报告 | `GET` | `/api/report/{learner_id}` | 查询学习报告 |
 
@@ -508,6 +509,41 @@
 - `GET /api/runs/{child_run_id}/timeline`：`trigger_relation` 可反查触发它的 Attempt、Decision、父 Run 和触发类型。
 
 旧 `/api/feedback/` 与 evaluation submit 接口在兼容期保留，但新前端闭环应使用 `/api/feedback/attempts`，不要把旧 `next_action` 文本当作任务已经创建。
+
+## 11.5 Run WorkflowEvent SSE（P0-08）
+
+```http
+GET /api/runs/{run_id}/events?after_sequence=18
+Accept: text/event-stream
+Last-Event-ID: 18
+```
+
+游标语义固定为：`Last-Event-ID > after_sequence > 0`。原生 EventSource 重连同一 URL 时会自动携带 `Last-Event-ID`，因此 header 优先；游标必须是非负整数且不能超过当前 `last_event_sequence`。
+
+首次连接先返回不消耗业务 sequence 的 snapshot：
+
+```text
+event: snapshot
+data: {run_id,run_status,workflow_status,current_node,current_step_sequence,
+       generation_attempt,revision_count,retrieval_status,final_decision,
+       replay_completeness,started_at,updated_at,ended_at,
+       last_event_sequence,job_status,is_terminal}
+```
+
+持久化事件帧：
+
+```text
+id: 19
+event: step_started
+data: {schema_version,run_id,event_id,sequence,event_type,step_id,
+       step_sequence,node_name,status,summary,payload,error_code,occurred_at}
+```
+
+无新事件时发送 `event: ping`，只含 run_id、最后 sequence 和 server time；ping 不写数据库、不推进 cursor。Run 进入 completed/degraded/human_review/failed/interrupted 且 backlog 已发送后，服务端正常关闭流。
+
+Job 已 queued 但 AgentRun 尚未创建时仍返回 HTTP 200 snapshot：`job_status=queued, run_status=null` 并继续等待；Job 和 Run 都不存在返回 404 `WORKFLOW_STREAM_RUN_NOT_FOUND`。不可解释的 sequence gap 通过 `stream_error` 返回 `WORKFLOW_STREAM_EVENT_SEQUENCE_INVALID` 后关闭；`legacy_partial` 只发真实事件，不补造。
+
+SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模型响应、完整 Evidence/Claim、资源正文、画像、查询、密钥、DSN、绝对路径或 Provider 原始异常。详情继续使用 `/timeline`、`/evidence`、`/claims` 和资源 API。
 
 ## 12. 前端调用约定
 

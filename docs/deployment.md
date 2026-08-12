@@ -190,3 +190,22 @@ Invoke-RestMethod http://127.0.0.1:8000/api/report/<learner_id>
 ```
 
 用同一 body 再提交一次，应返回同一 `attempt_id`、`idempotent_replay=true`，且画像版本、路径版本和 child run 数量不再增加。服务重启后再次查询 Attempt、Path 和 Report，结果必须保持。
+
+## 10. P0-08 SSE 配置与反向代理
+
+```dotenv
+WORKFLOW_SSE_POLL_INTERVAL_SECONDS=0.5
+WORKFLOW_SSE_HEARTBEAT_SECONDS=15
+WORKFLOW_SSE_EVENT_PAGE_SIZE=100
+```
+
+约束：poll 至少 50ms，heartbeat 必须大于 poll，page size 最大 500。SSE 不属于生成 hard dependency；传输失败时前端回退到 Job/timeline 查询，但底层 Workflow persistence 失败仍按既有策略 fail closed。
+
+接口响应包含 `Cache-Control: no-cache`、`Connection: keep-alive`、`X-Accel-Buffering: no`。Nginx/网关还需关闭该路由的响应缓冲，并将 read timeout 配置为大于 heartbeat；不得由 CDN 聚合或缓存事件流。手工查看：
+
+```powershell
+curl.exe -N -H "Accept: text/event-stream" "http://127.0.0.1:8000/api/runs/<run_id>/events?after_sequence=0"
+curl.exe -N -H "Last-Event-ID: 18" "http://127.0.0.1:8000/api/runs/<run_id>/events"
+```
+
+浏览器 EventSource 使用同源 cookie/session（当前仓库尚未引入应用登录鉴权），不把 bearer token 放到 URL。未来增加 Run ownership 后，SSE 必须与 `/runs/{id}` 使用同一授权依赖。

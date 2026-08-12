@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     workflow_checkpoint_max_bytes: int = Field(default=65536, ge=4096, le=1048576)
     workflow_timeline_default_limit: int = Field(default=100, ge=1, le=500)
     workflow_timeline_max_limit: int = Field(default=500, ge=1, le=1000)
+    workflow_sse_poll_interval_seconds: float = Field(default=0.5, ge=0.05, le=10)
+    workflow_sse_heartbeat_seconds: float = Field(default=15.0, ge=0.1, le=300)
+    workflow_sse_event_page_size: int = Field(default=100, ge=1, le=500)
     vector_distance_metric: str = "cosine"
     db_type: str = "sqlite"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"
@@ -211,6 +214,8 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
         if self.retrieval_min_evidence > self.retrieval_max_evidence:
             raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        if self.workflow_sse_heartbeat_seconds <= self.workflow_sse_poll_interval_seconds:
+            raise ValueError("CFG_INVALID_WORKFLOW_STREAMING_POLICY")
         if self.rerank_enabled:
             if not self.rerank_model.strip():
                 raise ValueError("CFG_RERANK_MODEL_MISSING")

@@ -229,3 +229,13 @@
 - 低分激活补救节点，中分保持主路径并避免重复练习节点，高分完成当前节点并解锁后继或挑战节点。
 - 补救/进阶通过当前 `GenerationJobService` 创建真实异步任务；父子 Run 可追溯，失败状态与反馈成功状态分离。
 - Report 读取持久化掌握度、最近 Attempt、画像版本和当前路径；重启后不回退。
+
+## 12. WorkflowEvent SSE 与 Agent 实时轨迹（P0-08）
+
+- `GET /api/runs/{run_id}/events` 将已提交的 WorkflowEvent 以 snapshot + replay + live tail 形式输出。
+- 浏览器断线通过 Last-Event-ID 补齐缺失事件，前端 reducer 按 sequence/event ID 去重，不产生重复 Agent Step。
+- 生成页以 SSE 为实时主通道；连续传输错误后才启用现有 Job/timeline 轮询，不同时高频运行两套机制。
+- 页面刷新从 local run_id、Job 和持久化 timeline 恢复，再从最后 sequence 继续订阅。
+- Agent 轨迹展示 running/success/degraded/failed/human_review/skipped、耗时、重试、Evidence/Claim 计数和返工轮次。
+- P0-07 follow-up event 可跳转并订阅 child Run；不创建跨 Run 全局合并流。
+- Evidence/Claim/资源正文仍使用专用详情 API，SSE 不暴露内部推理或大对象。

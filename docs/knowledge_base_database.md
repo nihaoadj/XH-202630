@@ -265,6 +265,18 @@ P0-07 正式接口还会原子读写 `learning_attempts`、`learning_attempt_poi
 - `20260811_p0_07_feedback_profile_path_closed_loop` 是幂等 additive migration；旧 `feedback_records` 不删除、不回填伪造 Attempt。
 - SQLite 开发环境通过单事务和版本条件控制并发；PostgreSQL 生产环境还使用行锁语义。上线前数据库负责人仍需核验 DDL、索引、FK 与真实并发行为。
 
+### 4.8 P0-08 WorkflowEvent tail query
+
+P0-08 零 migration：继续复用 `workflow_events` 的 `(run_id,event_sequence)` 唯一约束/索引和 `agent_runs.last_event_sequence`。SSE 每次只执行有界查询：
+
+```sql
+WHERE run_id = :run_id AND event_sequence > :cursor
+ORDER BY event_sequence
+LIMIT :page_size
+```
+
+长 SSE 连接不持有 Session、事务或锁，不增加 delivered/ack 字段；不同客户端只读同一 append-only Ledger。SQLite 用短连接轮询，PostgreSQL 上线时需结合 worker 数、SSE 客户端数和 0.5 秒默认间隔评估连接池。Event retention 尚未在 P0-08 自动清理，删除策略必须保留比赛回放与 `legacy_partial` 语义。
+
 ### 4.3 用户资料
 
 - `GET /api/users/`

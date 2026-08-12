@@ -35,6 +35,7 @@ from app.services.report_service import ReportService
 from app.services.resource_service import ResourceService
 from app.services.review_service import ReviewService
 from app.services.run_query_service import RunQueryService
+from app.services.run_event_stream_service import RunEventStreamService
 from app.services.user_service import UserService
 
 
@@ -191,6 +192,12 @@ class Container(containers.DeclarativeContainer):
         resource_repository=resource_repository,
         claim_repository=claim_repository,
         feedback_loop_repository=feedback_loop_repository,
+    )
+    run_event_stream_service = providers.Singleton(
+        RunEventStreamService,
+        repository=audit_repository,
+        generation_job_repository=generation_job_repository,
+        settings=runtime_settings,
     )
     evaluation_service = providers.Singleton(
         EvaluationService,

@@ -228,6 +228,26 @@ POST /api/feedback/attempts
 
 Follow-up 属于 after-commit 副作用。其 run_id 由 attempt 稳定派生；创建失败时 Attempt 保持 `applied`、关联状态为 `failed`，相同幂等请求可安全对账重试。反馈事件只存稳定 ID、计数、分数摘要、action/reason code 和版本，不保存完整答案、画像、Prompt 或模型原文。
 
+### 4.4 P0-08 WorkflowEvent SSE
+
+```text
+业务动作 / Agent step
+-> 资源、审核、Claim、状态事实先持久化
+-> WorkflowEvent append + commit
+-> RunEventStreamService 短事务查询 event_sequence > cursor
+-> public allow-list mapper
+-> StreamingResponse(text/event-stream)
+-> EventSource
+-> sequence-deduplicating reducer
+-> AgentVisualization realtime timeline
+```
+
+WorkflowEvent Ledger 是唯一事件事实源，SSE 只是只读 transport，不创建第二套 UI event 表或进程内 progress ledger。每个 SSE poll 都打开并关闭独立 Repository Session，不在长连接期间持有数据库事务或行锁；同步 SQL 查询通过 thread offload 避免阻塞 ASGI event loop。
+
+连接先发 snapshot，再补发 durable event backlog，最后 live tail。浏览器断线只停止观看，不取消 BackgroundTasks/Workflow；重连使用原 EventSource 的 `Last-Event-ID`，或页面刷新后以 timeline 最后 sequence 作为 `after_sequence`。heartbeat 不进入 Event Ledger。两个客户端独立读取同一 append-only ledger，不存在 delivered/ack 或破坏性消费。
+
+GenerationJob/AgentRun 的 queued 竞态保持现有 ownership：Job 可先存在，SSE snapshot 此时 run_status 为空并等待 AgentRun。P0-08 没有引入 Redis、消息队列、WebSocket、自动 resume/cancel 或 token streaming。
+
 P0-06 的 Claim 抽取器与 Generator 相互独立。模型只能从资源、目标技能节点和当前
 Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、
 资源版本、知识点与 Evidence 边界。判定失败、漏判或伪造 ID 均 fail closed 到
