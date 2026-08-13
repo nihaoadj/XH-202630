@@ -77,12 +77,12 @@ export const resourceApi = {
 }
 
 export const feedbackApi = {
-  submit: (data) => api.post('/feedback/', data),
-  history: (learnerId) => api.get(`/feedback/history/${learnerId}`),
   getEvaluationSession: (learnerId, resourceId) => api.get(`/feedback/evaluation/${learnerId}/${resourceId}`),
   getRunEvaluationSession: (learnerId, runId) => api.get(`/feedback/evaluation/run/${learnerId}/${runId}`),
-  submitEvaluation: (data) => api.post('/feedback/evaluation/submit', data),
-  submitRunEvaluation: (data) => api.post('/feedback/evaluation/run/submit', data),
+  submitAttempt: (data) => api.post('/feedback/attempts', data),
+  submitRunAttempt: (data) => api.post('/feedback/attempts/run/submit', data),
+  listAttempts: (learnerId, params = {}) => api.get(`/feedback/attempts/${learnerId}`, { params }),
+  getPath: (learnerId) => api.get(`/feedback/path/${learnerId}`),
 }
 
 export const reportApi = {

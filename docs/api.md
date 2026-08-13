@@ -25,9 +25,9 @@
 -> GET /api/resources/{learner_id}?run_id={run_id}
 -> GET /api/resources/file/{resource_id}
 -> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
--> POST /api/feedback/evaluation/run/submit
--> POST /api/feedback/
--> GET /api/feedback/history/{learner_id}
+-> POST /api/feedback/attemptsattempts/run/submit
+-> POST /api/feedback/attempts
+-> GET /api/feedback/attempts/{learner_id}
 -> GET /api/learning-history/{learner_id}/timeline
 -> GET /api/report/{learner_id}
 ```
@@ -73,9 +73,9 @@
 | 资源 | `GET` | `/api/resources/file/{resource_id}` | 下载资源文件 |
 | 审核 | `GET` | `/api/reviews/{resource_id}` | 查询资源审核摘要 |
 | 反馈 | `GET` | `/api/feedback/evaluation/run/{learner_id}/{run_id}` | 获取任务级测评题 |
-| 反馈 | `POST` | `/api/feedback/evaluation/run/submit` | 提交任务级测评与反馈 |
+| 反馈 | `POST` | `/api/feedback/attempts/run/submit` | 提交任务级测评与反馈 |
 | 反馈 | `POST` | `/api/feedback/` | 提交学习反馈 |
-| 反馈 | `GET` | `/api/feedback/history/{learner_id}` | 查询反馈历史 |
+| 反馈 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询反馈历史 |
 | 反馈闭环 | `POST` | `/api/feedback/attempts` | 提交幂等、版本化的正式学习 Attempt |
 | 反馈闭环 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询持久化 Attempt |
 | 反馈闭环 | `GET` | `/api/feedback/path/{learner_id}` | 查询当前持久化学习路径 |
@@ -417,7 +417,7 @@
 - 当前学习反馈页优先按任务而不是单个资源加载测评题。
 - 题目优先取该任务资源内的练习题；不足时再回退到知识库诊断题。
 
-### 11.2 `POST /api/feedback/evaluation/run/submit`
+### 11.2 `POST /api/feedback/attemptsattempts/run/submit`
 
 用途：
 
@@ -448,7 +448,7 @@
 - 提交成功后，后端会保存反馈记录并回写学习者画像。
 - 反馈页“基于反馈重新生成”当前采用“选中某条反馈记录 + 当前最新画像”的方式发起新任务。
 
-### 11.3 `POST /api/feedback/attempts`
+### 11.3 `POST /api/feedback/attemptsattempts`
 
 用途：提交 P0-07 正式学习事实，并在一个本地事务中写入 Attempt、知识点结果、反馈决策、掌握度变更、画像版本和学习路径变更。补救或进阶所需的新资源在事务提交后通过现有异步生成任务入口创建。
 
@@ -508,7 +508,7 @@
 - `GET /api/report/{learner_id}`：新增 `profile_version`、`knowledge_mastery`、`current_learning_path`、`recent_attempts`、`recent_feedback_decisions`、`recent_knowledge_state_mutations`、`recent_followup_runs`、`profile_versions`；`agent_flow` 同时聚合持久化反馈决策。
 - `GET /api/runs/{child_run_id}/timeline`：`trigger_relation` 可反查触发它的 Attempt、Decision、父 Run 和触发类型。
 
-旧 `/api/feedback/` 与 evaluation submit 接口在兼容期保留，但新前端闭环应使用 `/api/feedback/attempts`，不要把旧 `next_action` 文本当作任务已经创建。
+旧 `/api/feedback/` 与 evaluation submit 写入接口已移除；新前端闭环统一使用 `/api/feedback/attempts` 或 `/api/feedback/attempts/run/submit`。
 
 ## 11.5 Run WorkflowEvent SSE（P0-08）
 
@@ -566,13 +566,13 @@ SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模�
 - 任务级测评加载：
   `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
 - 任务级测评提交：
-  `POST /api/feedback/evaluation/run/submit`
+  `POST /api/feedback/attemptsattempts/run/submit`
 - 正式反馈闭环提交：
-  `POST /api/feedback/attempts`
+  `POST /api/feedback/attemptsattempts`
 - 当前学习路径：
   `GET /api/feedback/path/{learner_id}`
 - 反馈历史：
-  `GET /api/feedback/history/{learner_id}`
+  `GET /api/feedback/attempts/{learner_id}`
 - 下载资源文件：
   `GET /api/resources/file/{resource_id}`
 - 历史学习记录：

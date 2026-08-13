@@ -202,7 +202,7 @@ diagnose -> retrieve -> plan -> generate
 ### 4.3 P0-07 反馈后真实闭环
 
 ```text
-POST /api/feedback/attempts
+POST /api/feedback/attemptsattempts
 -> 校验 learner、published source resource/version、稳定知识点与请求分数
 -> 读取 profile_version、knowledge state、最近趋势和当前 path
 -> deterministic policy
@@ -279,9 +279,9 @@ POST /api/users/
 -> GET /api/resources/{learner_id}
 -> GET /api/resources/file/{resource_id}
 -> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
--> POST /api/feedback/evaluation/run/submit
--> POST /api/feedback/
--> GET /api/feedback/history/{learner_id}
+-> POST /api/feedback/attemptsattempts/run/submit
+-> POST /api/feedback/attempts
+-> GET /api/feedback/attempts/{learner_id}
 -> GET /api/learning-history/{learner_id}/timeline
 -> GET /api/report/{learner_id}
 ```
@@ -298,8 +298,8 @@ POST /api/users/
 - `GET /api/reviews/{resource_id}`
 - `GET /api/generate/jobs?learner_id={learner_id}`
 - `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
-- `POST /api/feedback/evaluation/run/submit`
-- `GET /api/feedback/history/{learner_id}`
+- `POST /api/feedback/attemptsattempts/run/submit`
+- `GET /api/feedback/attempts/{learner_id}`
 - `GET /api/evaluation/summary`
 
 ## 6. 当前数据与运行目录

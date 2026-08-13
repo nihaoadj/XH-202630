@@ -657,8 +657,11 @@ class ResourceEvaluationQuestion(BaseModel):
     question_type: str
     question: str
     options: List[str] = Field(default_factory=list)
+    skill_node_id: Optional[str] = None
+    path_node_id: Optional[str] = None
     knowledge_point: Optional[str] = None
     difficulty: Optional[str] = None
+    diagnostic_dimension: Optional[str] = None
     source: Literal["resource", "knowledge_base"] = "resource"
 
 
@@ -685,6 +688,22 @@ class ResourceEvaluationAnswerSubmission(BaseModel):
     """学习后测评单题作答"""
     question_id: str
     answer: Any
+
+
+class RunAttemptSubmitRequest(BaseModel):
+    """Submit scored run answers into the formal feedback attempt loop."""
+    learner_id: str
+    run_id: str
+    source_resource_id: Optional[str] = None
+    path_node_id: Optional[str] = None
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    expected_profile_version: int = Field(ge=1)
+    started_at: Optional[datetime] = None
+    submitted_at: datetime
+    duration_ms: int = Field(default=0, ge=0)
+    hint_count: int = Field(default=0, ge=0)
+    answers: List[ResourceEvaluationAnswerSubmission] = Field(default_factory=list, min_length=1)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ResourceEvaluationSubmitRequest(BaseModel):

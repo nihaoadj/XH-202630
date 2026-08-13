@@ -13,6 +13,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 FEEDBACK_SCHEMA_VERSION = "1.0"
 
 
+def _is_json_safe(value: Any) -> bool:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return True
+    if isinstance(value, list):
+        return all(_is_json_safe(item) for item in value)
+    if isinstance(value, dict):
+        return all(isinstance(key, str) and _is_json_safe(item) for key, item in value.items())
+    return False
+
+
 class FeedbackAction(str, Enum):
     REMEDIATE = "remediate"
     PRACTICE = "practice"
@@ -94,11 +104,19 @@ class LearningAttemptSubmit(StrictFeedbackModel):
     @field_validator("metadata")
     @classmethod
     def validate_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
-        allowed = {"source", "client_version", "session_id"}
+        allowed = {
+            "source",
+            "client_version",
+            "session_id",
+            "evaluation_source",
+            "question_count",
+            "question_trace",
+            "point_trace",
+        }
         if set(value) - allowed:
             raise ValueError("metadata contains unsupported keys")
-        if any(not isinstance(item, (str, int, float, bool, type(None))) for item in value.values()):
-            raise ValueError("metadata values must be scalar")
+        if not _is_json_safe(value):
+            raise ValueError("metadata values must be JSON-safe")
         return value
 
     @model_validator(mode="after")
