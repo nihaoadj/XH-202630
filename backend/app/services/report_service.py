@@ -1,6 +1,7 @@
 from app.db.feedback.base import BaseFeedbackRepository
 from app.db.resource.base import BaseResourceRepository
 from app.models.schemas import LearnerProfile
+from app.db.feedback_loop.base import BaseFeedbackLoopRepository
 
 
 class ReportService:
@@ -13,9 +14,11 @@ class ReportService:
         self,
         resource_repo: BaseResourceRepository,
         feedback_repo: BaseFeedbackRepository,
+        feedback_loop_repo: BaseFeedbackLoopRepository | None = None,
     ):
         self.resource_repo = resource_repo
         self.feedback_repo = feedback_repo
+        self.feedback_loop_repo = feedback_loop_repo
 
     def build_report(self, profile: LearnerProfile) -> dict:
         """构建学情报告"""
@@ -30,6 +33,10 @@ class ReportService:
             if feedback
             else None
         )
+        attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10) if self.feedback_loop_repo else []
+        loop_results = self.feedback_loop_repo.list_results(profile.learner_id, 10) if self.feedback_loop_repo else []
+        path = self.feedback_loop_repo.get_current_path(profile.learner_id) if self.feedback_loop_repo else None
+        versions = self.feedback_loop_repo.list_profile_versions(profile.learner_id, 10) if self.feedback_loop_repo else []
 
         return {
             "learner_id": profile.learner_id,
@@ -67,7 +74,32 @@ class ReportService:
                 }
                 for point in weak_points
             ],
-            "agent_flow": [],
+            "agent_flow": [
+                {
+                    "agent_name": "feedback_decision",
+                    "node_name": "feedback_decision",
+                    "action": item.decision.action.value,
+                    "output_summary": item.decision.decision_reason,
+                    "run_id": item.attempt.source_run_id,
+                    "status": "success",
+                    "input_payload": {
+                        "attempt_id": item.attempt.attempt_id,
+                        "overall_score": item.attempt.overall_score,
+                        "knowledge_point_count": len(item.attempt.knowledge_point_results),
+                        "expected_profile_version": item.attempt.expected_profile_version,
+                    },
+                    "output_payload": {
+                        "decision_id": item.decision.decision_id,
+                        "reason_codes": item.decision.reason_codes,
+                        "profile_version": item.profile_version,
+                        "path_mutation_id": item.path_mutation.mutation_id,
+                        "followup_generation_status": item.followup_generation_status.value,
+                        "child_run_id": item.followup_run_id,
+                    },
+                    "decision_reason": item.decision.decision_reason,
+                }
+                for item in loop_results
+            ],
             "resource_difficulty_match": [
                 {
                     "resource_id": resource.resource_id,
@@ -105,6 +137,37 @@ class ReportService:
             "next_suggestions": weak_points[:3] or profile.last_feedback_summary.get("recommended_topics", []),
             "recent_resources": resources[-5:],
             "recent_feedback": feedback[:5],
+            "profile_version": profile.profile_version,
+            "knowledge_mastery": {
+                key: value.model_dump(mode="json") for key, value in profile.knowledge_states.items()
+            },
+            "current_learning_path": path.model_dump(mode="json") if path else None,
+            "recent_attempts": [item.model_dump(mode="json") for item in attempts],
+            "recent_feedback_decisions": [
+                item.decision.model_dump(mode="json") for item in loop_results
+            ],
+            "recent_knowledge_state_mutations": [
+                {
+                    "attempt_id": item.attempt.attempt_id,
+                    **mutation.model_dump(mode="json"),
+                }
+                for item in loop_results
+                for mutation in item.knowledge_state_updates
+            ],
+            "recent_followup_runs": [
+                {
+                    "attempt_id": item.attempt.attempt_id,
+                    "decision_id": item.decision.decision_id,
+                    "parent_run_id": item.attempt.source_run_id,
+                    "child_run_id": item.followup_run_id,
+                    "trigger_type": item.decision.action.value,
+                    "status": item.followup_generation_status.value,
+                    "error_code": item.followup_error_code,
+                }
+                for item in loop_results
+                if item.followup_generation_status.value != "not_requested"
+            ],
+            "profile_versions": [item.model_dump(mode="json") for item in versions],
         }
 
     def _average_hallucination_rate(self, resources) -> float:

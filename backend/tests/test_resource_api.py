@@ -38,6 +38,7 @@ def test_resource_filter_and_resource_id_download(monkeypatch):
             mime_type="text/markdown",
             knowledge_points=["RAG 基础概念"],
             source_refs=[],
+            publication_status="published",
         ),
         "resource_learner",
         "RAG",
@@ -50,6 +51,22 @@ def test_resource_filter_and_resource_id_download(monkeypatch):
             resource_type="实操指南",
             difficulty="进阶",
             run_id="run_older",
+            knowledge_points=[],
+            source_refs=[],
+            publication_status="published",
+        ),
+        "resource_learner",
+        "RAG",
+    )
+    resource_repo.save(
+        LearningResource(
+            resource_id="resource_draft",
+            learner_id="resource_learner",
+            topic="RAG",
+            resource_type="讲义",
+            difficulty="初级",
+            run_id="run_draft",
+            file_path="data/generated_resources/text/resource_learner/resource_draft.md",
             knowledge_points=[],
             source_refs=[],
         ),
@@ -78,6 +95,7 @@ def test_resource_filter_and_resource_id_download(monkeypatch):
     assert downloaded.status_code == 200
     assert downloaded.content == b"# generated resource"
     assert "attachment" in downloaded.headers["content-disposition"]
+    assert client.get("/api/resources/file/resource_draft").status_code == 404
 
 
 def test_file_loader_rejects_paths_outside_generated_resources():

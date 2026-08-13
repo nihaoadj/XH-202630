@@ -1,8 +1,8 @@
 # API 文档
 
-> 项目编号：XH-202630  
-> 文档版本：2.0  
-> 文档更新时间：2026-07-31  
+> 项目编号：XH-202630
+> 文档版本：2.0
+> 文档更新时间：2026-07-31
 > 说明：本文档以当前代码实现为准，覆盖 `backend/app/api` 中已经启用的核心接口。
 
 ## 1. 基本信息
@@ -76,6 +76,10 @@
 | 反馈 | `POST` | `/api/feedback/evaluation/run/submit` | 提交任务级测评与反馈 |
 | 反馈 | `POST` | `/api/feedback/` | 提交学习反馈 |
 | 反馈 | `GET` | `/api/feedback/history/{learner_id}` | 查询反馈历史 |
+| 反馈闭环 | `POST` | `/api/feedback/attempts` | 提交幂等、版本化的正式学习 Attempt |
+| 反馈闭环 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询持久化 Attempt |
+| 反馈闭环 | `GET` | `/api/feedback/path/{learner_id}` | 查询当前持久化学习路径 |
+| Run 实时流 | `GET` | `/api/runs/{run_id}/events` | WorkflowEvent 的 SSE replay + live tail |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/timeline` | 查询学习过程时间线 |
 | 报告 | `GET` | `/api/report/{learner_id}` | 查询学习报告 |
 
@@ -361,6 +365,9 @@
 - `resources` 表示“该学习者已经生成并入库的资源记录”。
 - 它不是知识库原始文档列表，而是面向用户交付的学习资源列表。
 - 同一次生成任务产出的多个资源，会通过同一个 `run_id` 关联起来。
+- `source_refs[].score` 是 0 到 1 的最终相关度；精排可用时为 CrossEncoder logits 经 sigmoid 映射后的分数，降级时为归一化 RRF 分数，数值越大排名越靠前。
+- `source_refs[].metadata.retrieval_method` 正常为 `hybrid_rrf_cross_encoder`，精排关闭或不可用时回退为 `hybrid_rrf`；`retrieval_channels` 标识片段来自 `vector`、`bm25` 或两路共同召回。
+- `source_refs[].metadata` 保留 `vector_rank`、`vector_score`、`lexical_rank`、`lexical_score`、`hybrid_rank`、`hybrid_score`、`rerank_rank`、`rerank_raw_score`、`rerank_score`、`reranker_model`、`rerank_latency_ms` 和 `rerank_candidate_count`，用于检索审计和消融评测。
 
 ### 9.2 `GET /api/resources/file/{resource_id}`
 
@@ -441,6 +448,103 @@
 - 提交成功后，后端会保存反馈记录并回写学习者画像。
 - 反馈页“基于反馈重新生成”当前采用“选中某条反馈记录 + 当前最新画像”的方式发起新任务。
 
+### 11.3 `POST /api/feedback/attempts`
+
+用途：提交 P0-07 正式学习事实，并在一个本地事务中写入 Attempt、知识点结果、反馈决策、掌握度变更、画像版本和学习路径变更。补救或进阶所需的新资源在事务提交后通过现有异步生成任务入口创建。
+
+请求体核心字段：
+
+```json
+{
+  "learner_id": "learner-id",
+  "source_resource_id": "resource-id",
+  "source_resource_version": 1,
+  "source_run_id": "source-run-id",
+  "path_node_id": null,
+  "idempotency_key": "feedback-20260811-0001",
+  "expected_profile_version": 1,
+  "started_at": "2026-08-11T09:59:00+08:00",
+  "submitted_at": "2026-08-11T10:00:00+08:00",
+  "duration_ms": 60000,
+  "hint_count": 1,
+  "knowledge_point_results": [
+    {
+      "knowledge_point_id": "stable-skill-node-id",
+      "question_ids": ["q-1", "q-2"],
+      "correct_count": 1,
+      "total_count": 2,
+      "duration_ms": 60000,
+      "hint_count": 1
+    }
+  ],
+  "metadata": {"source": "web", "client_version": "1.0"}
+}
+```
+
+约束：
+
+- 服务端按所有知识点的 `sum(correct_count) / sum(total_count)` 重算 `overall_score`；客户端如传汇总分，必须完全一致。
+- `knowledge_point_id` 在正式容器中必须是当前知识库的稳定技能节点；自由文本不作为知识点 ID。
+- `(learner_id, idempotency_key)` 唯一。相同 key、相同 canonical payload 返回原结果且 `idempotent_replay=true`；相同 key、不同 payload 返回 `409 FEEDBACK_IDEMPOTENCY_CONFLICT`。
+- `expected_profile_version` 是乐观并发条件；过期版本返回 `409 LEARNER_PROFILE_VERSION_CONFLICT`。
+- `metadata` 只接受 `source`、`client_version`、`session_id` 三个标量字段；不得上传 Prompt、模型原文或自由文本答案。
+
+响应重点字段：
+
+- `attempt`、`decision.action`、`decision.reason_codes`
+- `profile_version`、`knowledge_state_updates`
+- `learning_path`、`path_mutation`
+- `feedback_status=applied`
+- `followup_generation_status=not_requested|queued|failed`
+- `followup_run_id` / `followup_job_id`
+- `idempotent_replay`
+
+`feedback_status` 与 `followup_generation_status` 必须分开解释：后续生成失败不会撤销已经成功提交的 Attempt。
+
+### 11.4 P0-07 查询接口
+
+- `GET /api/feedback/attempts/{learner_id}?limit=20`：返回最近的不可变 Attempt 事实。
+- `GET /api/feedback/path/{learner_id}`：返回当前路径版本及节点状态。
+- `GET /api/report/{learner_id}`：新增 `profile_version`、`knowledge_mastery`、`current_learning_path`、`recent_attempts`、`recent_feedback_decisions`、`recent_knowledge_state_mutations`、`recent_followup_runs`、`profile_versions`；`agent_flow` 同时聚合持久化反馈决策。
+- `GET /api/runs/{child_run_id}/timeline`：`trigger_relation` 可反查触发它的 Attempt、Decision、父 Run 和触发类型。
+
+旧 `/api/feedback/` 与 evaluation submit 接口在兼容期保留，但新前端闭环应使用 `/api/feedback/attempts`，不要把旧 `next_action` 文本当作任务已经创建。
+
+## 11.5 Run WorkflowEvent SSE（P0-08）
+
+```http
+GET /api/runs/{run_id}/events?after_sequence=18
+Accept: text/event-stream
+Last-Event-ID: 18
+```
+
+游标语义固定为：`Last-Event-ID > after_sequence > 0`。原生 EventSource 重连同一 URL 时会自动携带 `Last-Event-ID`，因此 header 优先；游标必须是非负整数且不能超过当前 `last_event_sequence`。
+
+首次连接先返回不消耗业务 sequence 的 snapshot：
+
+```text
+event: snapshot
+data: {run_id,run_status,workflow_status,current_node,current_step_sequence,
+       generation_attempt,revision_count,retrieval_status,final_decision,
+       replay_completeness,started_at,updated_at,ended_at,
+       last_event_sequence,job_status,is_terminal}
+```
+
+持久化事件帧：
+
+```text
+id: 19
+event: step_started
+data: {schema_version,run_id,event_id,sequence,event_type,step_id,
+       step_sequence,node_name,status,summary,payload,error_code,occurred_at}
+```
+
+无新事件时发送 `event: ping`，只含 run_id、最后 sequence 和 server time；ping 不写数据库、不推进 cursor。Run 进入 completed/degraded/human_review/failed/interrupted 且 backlog 已发送后，服务端正常关闭流。
+
+Job 已 queued 但 AgentRun 尚未创建时仍返回 HTTP 200 snapshot：`job_status=queued, run_status=null` 并继续等待；Job 和 Run 都不存在返回 404 `WORKFLOW_STREAM_RUN_NOT_FOUND`。不可解释的 sequence gap 通过 `stream_error` 返回 `WORKFLOW_STREAM_EVENT_SEQUENCE_INVALID` 后关闭；`legacy_partial` 只发真实事件，不补造。
+
+SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模型响应、完整 Evidence/Claim、资源正文、画像、查询、密钥、DSN、绝对路径或 Provider 原始异常。详情继续使用 `/timeline`、`/evidence`、`/claims` 和资源 API。
+
 ## 12. 前端调用约定
 
 - 用户资料页：
@@ -463,6 +567,10 @@
   `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
 - 任务级测评提交：
   `POST /api/feedback/evaluation/run/submit`
+- 正式反馈闭环提交：
+  `POST /api/feedback/attempts`
+- 当前学习路径：
+  `GET /api/feedback/path/{learner_id}`
 - 反馈历史：
   `GET /api/feedback/history/{learner_id}`
 - 下载资源文件：
@@ -486,3 +594,84 @@
 - 未执行：独立任务队列
 - 未执行：任务取消
 - 未执行：失败任务自动重试
+## 14. Agent 可靠执行、审核返工与回放接口
+
+异步生成任务的 `run_id` 同时作为 Agent Run 的稳定 ID。后台任务调用
+`GenerationService.generate_with_run_id()` 后，正式执行顺序为：
+
+```text
+GenerationJob 预分配 run_id
+-> AgentRun created/running
+-> RecordedNode 持久化 Step
+-> Generator / Reviewer 节点状态合并
+-> 可选 Claim Extractor / Judge / deterministic decision
+-> WorkflowArtifactRecorder 保存资源版本与审核轮次
+-> WorkflowCheckpoint
+-> Run finalizing
+-> 仅最终 approve 的叶子资源 published
+-> Run completed/degraded/human_review/failed
+-> GenerationJob 同步终态
+```
+
+关键契约：
+
+- `max_iterations` 是最大业务返工次数，不包含首次生成；LLM 技术重试不增加该值。
+- Reviewer 决策为 `approve | revise | reject | human_review`。
+- `issues` 是带 code、severity、目标资源/知识点的结构化数组。
+- `revision_instructions` 包含 issue_codes、target_resource_type、action、priority 和系统生成的 instruction_id。
+- revise 必须携带可执行指令；指令无效、证据不足、Reviewer 异常或额度耗尽时进入 human_review。
+- Generator 返工时读取上一版本，只为指令命中的资源类型创建新 resource_id/version；未命中类型沿用当前版本。
+- `review_status` 与 `publication_status` 分离。只有最终 approve 的当前叶子版本可以 published。
+- 默认资源列表及文件下载只暴露 published；unpublished 与不存在的下载统一返回 404。
+- 历史字符串 issues/instructions 在读取时兼容归一化，但不会补造不存在的审核事实。
+- `include_claim_check=true` 要求 `include_review=true`；否则请求校验失败。
+- `hallucination_rate` 保留为旧 Reviewer 主观分兼容字段；正式 Claim 指标使用
+  `claim_hallucination_rate` 和 `claim_metric_status`。
+
+### 14.1 `GET /api/runs/{run_id}`
+
+返回脱敏 Run 摘要，包括状态、当前节点、generation_attempt、revision_count、
+retrieval_status、final_decision、时间戳和 replay_completeness。不存在时返回
+`404 + WORKFLOW_RUN_NOT_FOUND`。
+
+### 14.2 `GET /api/runs/{run_id}/timeline`
+
+按 event_sequence 返回 Step、Event、Checkpoint、Evidence、resource_versions 和
+reviews。查询参数：
+
+- `after_sequence`：默认 0。
+- `limit`：1..500。
+- `next_event_sequence`：存在下一页时返回。
+
+该接口只读数据库，不调用 LLM、Embedding 或 Chroma，也不等于自动 resume。
+
+### 14.3 `GET /api/runs/{run_id}/evidence`
+
+返回运行时不可变 Evidence snapshot，包括 query_hash、excerpt、locator、score 和
+config hash；不返回原始 query。后续知识库更新不会改写历史 snapshot。
+
+### 14.4 `GET /api/runs/{run_id}/claims`
+
+返回 P0-06 Claim、独立 Judgement 与逐资源指标。旧 Run 没有 Claim 审计时返回
+`audit_status=legacy_unavailable`、空数组和空指标，不用 `0%` 冒充已审核。事实 Claim
+未全部完成判定时，`claim_hallucination_rate=null` 且 `metric_status=incomplete`；无事实
+Claim 时状态为 `not_applicable`。
+
+正式公式：
+
+```text
+claim_hallucination_rate =
+  (contradicted + not_in_evidence) / factual_claim_total
+```
+
+`non_factual` 与 `instructional` 不进入分母；一条 Claim 即使绑定多条 Evidence 也只计一次。
+
+### 14.5 健康与错误语义
+
+公共 `/health`、`/health/ready` 只检查默认 KB 和核心依赖；非默认 KB 异常不使
+公共服务返回 503。管理员 `/api/admin/knowledge-bases/health` 返回全部 KB 脱敏状态。
+
+工作流持久化不可用时 fail closed。常用稳定错误包括
+`WORKFLOW_PERSISTENCE_UNAVAILABLE`、`WORKFLOW_PERSISTENCE_CONFLICT`、
+`EVIDENCE_INSUFFICIENT`、`EVIDENCE_PROVENANCE_INVALID` 和细分 LLM 错误码。
+响应不得包含 prompt、模型原文、API Key、数据库连接串或原始 provider 异常。

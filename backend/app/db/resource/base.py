@@ -14,13 +14,26 @@ class BaseResourceRepository(ABC):
         pass
 
     @abstractmethod
-    def save(self, resource: LearningResource, learner_id: str, topic: str) -> None:
+    def save(
+        self,
+        resource: LearningResource,
+        learner_id: str,
+        topic: str,
+        *,
+        run_id: str | None = None,
+        generation_step_id: str | None = None,
+    ) -> None:
         """保存或更新生成资源"""
         pass
 
     @abstractmethod
     def list_by_learner(self, learner_id: str) -> List[LearningResource]:
-        """列出某学习者的所有生成资源"""
+        """列出某学习者已发布的生成资源"""
+        pass
+
+    @abstractmethod
+    def list_by_run(self, run_id: str) -> List[LearningResource]:
+        """列出一次 Run 的全部资源版本，包括未发布版本。"""
         pass
 
     @abstractmethod

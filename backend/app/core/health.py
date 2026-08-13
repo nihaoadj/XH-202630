@@ -7,8 +7,9 @@ creating configured runtime directories.
 
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -54,6 +55,15 @@ class KnowledgeBaseHealth(BaseModel):
     collection_name: str
     collection_state: Optional[str] = None
     count: Optional[int] = None
+    index_status: Optional[str] = None
+    index_schema_version: Optional[str] = None
+    active_snapshot_hash: Optional[str] = None
+    expected_chunk_count: Optional[int] = None
+    sql_chunk_count: Optional[int] = None
+    indexed_vector_chunk_count: Optional[int] = None
+    smoke_status: Optional[str] = None
+    last_error_code: Optional[str] = None
+    last_indexed_at: Optional[datetime] = None
 
 
 class KnowledgeBaseHealthReport(BaseModel):
@@ -241,7 +251,12 @@ def _inspect_knowledge_base_collection(
     )
 
 
-def _check_vector_store(settings: Settings, prepare: bool) -> ComponentHealth:
+def _check_vector_store(
+    settings: Settings,
+    prepare: bool,
+    *,
+    index_status_provider: Callable[[str], dict | None] | None = None,
+) -> ComponentHealth:
     vector_dir = resolve_backend_path(settings.vector_store_dir)
     if not _directory_is_writable(vector_dir, prepare):
         return _failure(ErrorCode.VECTOR_DIRECTORY_UNWRITABLE)
@@ -262,12 +277,38 @@ def _check_vector_store(settings: Settings, prepare: bool) -> ComponentHealth:
             settings,
             is_default=True,
         )
-        return ComponentHealth(
+        component = ComponentHealth(
             status=detail.status,
             code=detail.code,
             collection_state=detail.collection_state,
             count=detail.count,
         )
+        if detail.status != "ready" or index_status_provider is None:
+            return component
+        index = index_status_provider(detail.knowledge_base_id)
+        if not index:
+            return component
+        live_sql_count = index.get(
+            "live_sql_active_chunk_count",
+            index.get("sql_chunk_count"),
+        )
+        if (
+            index.get("status") != "ready"
+            or index.get("smoke_status") == "failed"
+            or index.get("expected_chunk_count") != live_sql_count
+            or live_sql_count != detail.count
+        ):
+            return _failure(
+                ErrorCode(
+                    index.get("last_error_code")
+                    or (
+                        ErrorCode.KNOWLEDGE_INGESTION_SMOKE_FAILED.value
+                        if index.get("smoke_status") == "failed"
+                        else ErrorCode.VECTOR_INDEX_OUT_OF_SYNC.value
+                    )
+                )
+            )
+        return component
     except Exception:
         return _failure(ErrorCode.VECTOR_STORE_UNAVAILABLE)
 
@@ -305,6 +346,7 @@ def build_health_report(
     *,
     prepare_directories: bool = False,
     overrides: Dict[str, ErrorCode] | None = None,
+    index_status_provider: Callable[[str], dict | None] | None = None,
 ) -> HealthReport:
     settings = settings or get_settings()
     components = {
@@ -312,7 +354,15 @@ def build_health_report(
         "storage": _check_storage(settings, prepare_directories),
         "llm": _check_llm(settings),
         "embedding": _check_embedding(settings),
-        "vector_store": _check_vector_store(settings, prepare_directories),
+        "vector_store": (
+            _check_vector_store(
+                settings,
+                prepare_directories,
+                index_status_provider=index_status_provider,
+            )
+            if index_status_provider is not None
+            else _check_vector_store(settings, prepare_directories)
+        ),
         "resources": _check_resources(settings, prepare_directories),
     }
     for component_name, code in (overrides or {}).items():
@@ -335,8 +385,15 @@ def build_health_report(
     )
 
 
-def ensure_generation_ready(settings: Settings | None = None) -> HealthReport:
-    report = build_health_report(settings)
+def ensure_generation_ready(
+    settings: Settings | None = None,
+    *,
+    index_status_provider: Callable[[str], dict | None] | None = None,
+) -> HealthReport:
+    report = build_health_report(
+        settings,
+        index_status_provider=index_status_provider,
+    )
     if report.status == "not_ready":
         raise ApplicationError(ErrorCode.GENERATION_DEPENDENCY_UNAVAILABLE)
     return report
@@ -344,6 +401,8 @@ def ensure_generation_ready(settings: Settings | None = None) -> HealthReport:
 
 def build_knowledge_base_health_report(
     settings: Settings | None = None,
+    *,
+    index_status_provider: Callable[[str], dict | None] | None = None,
 ) -> KnowledgeBaseHealthReport:
     """Inspect every configured KB for administrators without loading embeddings.
 
@@ -425,6 +484,55 @@ def build_knowledge_base_health_report(
                 is_default=knowledge_base_id == default_id,
             )
         )
+
+    if index_status_provider is not None:
+        enriched: list[KnowledgeBaseHealth] = []
+        for item in details:
+            try:
+                index = index_status_provider(item.knowledge_base_id)
+            except Exception:
+                index = None
+            if not index:
+                enriched.append(item)
+                continue
+            live_sql_count = index.get(
+                "live_sql_active_chunk_count",
+                index.get("sql_chunk_count"),
+            )
+            expected_count = index.get("expected_chunk_count")
+            counts_match = (
+                item.count is not None
+                and expected_count == live_sql_count == item.count
+            )
+            index_ready = (
+                index.get("status") == "ready"
+                and index.get("smoke_status") != "failed"
+                and counts_match
+            )
+            code = item.code
+            if not index_ready:
+                code = (
+                    index.get("last_error_code")
+                    or (
+                        ErrorCode.KNOWLEDGE_INGESTION_SMOKE_FAILED.value
+                        if index.get("smoke_status") == "failed"
+                        else ErrorCode.VECTOR_INDEX_OUT_OF_SYNC.value
+                    )
+                )
+            enriched.append(item.model_copy(update={
+                "status": item.status if index_ready else "not_ready",
+                "code": code,
+                "index_status": index.get("status"),
+                "index_schema_version": index.get("index_schema_version"),
+                "active_snapshot_hash": index.get("active_snapshot_hash"),
+                "expected_chunk_count": expected_count,
+                "sql_chunk_count": live_sql_count,
+                "indexed_vector_chunk_count": index.get("vector_chunk_count"),
+                "smoke_status": index.get("smoke_status"),
+                "last_error_code": index.get("last_error_code"),
+                "last_indexed_at": index.get("last_indexed_at"),
+            }))
+        details = enriched
 
     expected_names = {item.collection_name for item in details}
     default_health = next((item for item in details if item.is_default), None)

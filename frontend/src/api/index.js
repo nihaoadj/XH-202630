@@ -60,6 +60,13 @@ export const generateApi = {
   getJobStatus: (runId) => api.get(`/generate/jobs/${runId}`),
 }
 
+export const runApi = {
+  get: (runId) => api.get(`/runs/${runId}`),
+  timeline: (runId, params = {}) => api.get(`/runs/${runId}/timeline`, { params }),
+  evidence: (runId) => api.get(`/runs/${runId}/evidence`),
+  claims: (runId) => api.get(`/runs/${runId}/claims`),
+}
+
 export const learningHistoryApi = {
   timeline: (learnerId) => api.get(`/learning-history/${learnerId}/timeline`),
 }

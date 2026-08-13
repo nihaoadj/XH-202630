@@ -31,6 +31,7 @@ def _orm_to_pydantic(orm: LearnerProfileORM) -> LearnerProfile:
         if orm.learning_preferences
         else None,
         last_feedback_summary=orm.last_feedback_summary or {},
+        profile_version=orm.profile_version or 1,
     )
 
 
@@ -57,6 +58,7 @@ def _pydantic_to_orm(profile: LearnerProfile) -> LearnerProfileORM:
         if profile.learning_preferences
         else {},
         last_feedback_summary=profile.last_feedback_summary,
+        profile_version=profile.profile_version,
     )
 
 
@@ -96,6 +98,7 @@ class SQLLearnerRepository(BaseLearnerRepository):
                     else {}
                 )
                 orm.last_feedback_summary = profile.last_feedback_summary
+                orm.profile_version = profile.profile_version
             else:
                 orm = _pydantic_to_orm(profile)
                 db.add(orm)

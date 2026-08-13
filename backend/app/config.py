@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,7 +25,29 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("")
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     llm_model: str = "qwen-max"
+    llm_request_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    llm_workflow_timeout_seconds: float = Field(default=105.0, gt=0, le=600)
+    llm_max_attempts: int = Field(default=2, ge=1, le=3)
+    llm_retry_base_delay_seconds: float = Field(default=0.5, ge=0, le=30)
+    llm_retry_max_delay_seconds: float = Field(default=3.0, ge=0, le=60)
+    llm_max_output_tokens: int = Field(default=4096, ge=256, le=65536)
+    llm_generator_max_output_tokens: int = Field(default=8192, ge=256, le=65536)
+    llm_structured_output_mode: str = "auto"
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
+    retrieval_top_k_default: int = Field(default=3, ge=1, le=10)
+    retrieval_max_queries: int = Field(default=6, ge=1, le=10)
+    retrieval_max_evidence: int = Field(default=8, ge=1, le=20)
+    retrieval_min_evidence: int = Field(default=1, ge=1, le=20)
+    retrieval_min_normalized_score: float = Field(default=0.35, ge=0, le=1)
+    evidence_max_excerpt_chars: int = Field(default=1200, ge=100, le=10000)
+    workflow_run_lease_seconds: int = Field(default=180, ge=30, le=3600)
+    workflow_checkpoint_max_bytes: int = Field(default=65536, ge=4096, le=1048576)
+    workflow_timeline_default_limit: int = Field(default=100, ge=1, le=500)
+    workflow_timeline_max_limit: int = Field(default=500, ge=1, le=1000)
+    workflow_sse_poll_interval_seconds: float = Field(default=0.5, ge=0.05, le=10)
+    workflow_sse_heartbeat_seconds: float = Field(default=15.0, ge=0.1, le=300)
+    workflow_sse_event_page_size: int = Field(default=100, ge=1, le=500)
+    vector_distance_metric: str = "cosine"
     db_type: str = "sqlite"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"
     knowledge_base_dir: str = "../knowledge_base/rag_engineering_training"
@@ -34,6 +56,15 @@ class Settings(BaseSettings):
     # Deprecated compatibility input. During the compatibility window this is
     # interpreted as a prefix, never as one fixed collection shared by all KBs.
     chroma_collection_name: str | None = None
+    rerank_enabled: bool = True
+    rerank_model: str = "BAAI/bge-reranker-base"
+    rerank_model_cache_dir: str = "./data/models"
+    rerank_device: str = "cpu"
+    rerank_candidate_k: int = 20
+    rerank_per_query_k: int = 10
+    rerank_batch_size: int = 4
+    rerank_max_length: int = 512
+    rerank_max_chunks_per_document: int = 2
     resources_dir: str = "./data/generated_resources"
     admin_health_token: SecretStr = SecretStr("")
     auth_jwt_secret: SecretStr = SecretStr("development-only-change-me")
@@ -69,6 +100,111 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_DB_TYPE")
         return normalized
 
+    @field_validator("llm_structured_output_mode")
+    @classmethod
+    def validate_llm_structured_output_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"auto", "json_schema", "function_calling", "json_mode", "text"}:
+            raise ValueError("CFG_INVALID_LLM_STRUCTURED_OUTPUT_MODE")
+        return normalized
+
+    @field_validator("vector_distance_metric")
+    @classmethod
+    def validate_vector_distance_metric(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized != "cosine":
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        return normalized
+
+    @field_validator(
+        "retrieval_top_k_default",
+        "retrieval_max_queries",
+        "retrieval_max_evidence",
+        "retrieval_min_evidence",
+        "evidence_max_excerpt_chars",
+        mode="before",
+    )
+    @classmethod
+    def validate_retrieval_integer_policy(cls, value, info):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY") from None
+        bounds = {
+            "retrieval_top_k_default": (1, 10),
+            "retrieval_max_queries": (1, 10),
+            "retrieval_max_evidence": (1, 20),
+            "retrieval_min_evidence": (1, 20),
+            "evidence_max_excerpt_chars": (100, 10000),
+        }
+        minimum, maximum = bounds[info.field_name]
+        if not normalized.is_integer() or not minimum <= normalized <= maximum:
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        return value
+
+    @field_validator("retrieval_min_normalized_score", mode="before")
+    @classmethod
+    def validate_retrieval_score_policy(cls, value):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY") from None
+        if not 0 <= normalized <= 1:
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        return value
+
+    @field_validator(
+        "llm_request_timeout_seconds",
+        "llm_workflow_timeout_seconds",
+        mode="before",
+    )
+    @classmethod
+    def validate_llm_timeout_value(cls, value, info):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_LLM_TIMEOUT") from None
+        maximum = 120 if info.field_name == "llm_request_timeout_seconds" else 600
+        if normalized <= 0 or normalized > maximum:
+            raise ValueError("CFG_INVALID_LLM_TIMEOUT")
+        return value
+
+    @field_validator(
+        "llm_max_attempts",
+        "llm_retry_base_delay_seconds",
+        "llm_retry_max_delay_seconds",
+        mode="before",
+    )
+    @classmethod
+    def validate_llm_retry_value(cls, value, info):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_LLM_RETRY_POLICY") from None
+        if info.field_name == "llm_max_attempts":
+            if not normalized.is_integer() or not 1 <= normalized <= 3:
+                raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
+        else:
+            maximum = 30 if info.field_name == "llm_retry_base_delay_seconds" else 60
+            if normalized < 0 or normalized > maximum:
+                raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
+        return value
+
+    @field_validator(
+        "llm_max_output_tokens",
+        "llm_generator_max_output_tokens",
+        mode="before",
+    )
+    @classmethod
+    def validate_llm_token_limit(cls, value):
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError):
+            raise ValueError("CFG_INVALID_LLM_TOKEN_LIMIT") from None
+        if not normalized.is_integer() or not 256 <= normalized <= 65536:
+            raise ValueError("CFG_INVALID_LLM_TOKEN_LIMIT")
+        return value
+
     @model_validator(mode="after")
     def validate_runtime_settings(self):
         legacy_prefix = (self.chroma_collection_name or "").strip()
@@ -76,6 +212,24 @@ class Settings(BaseSettings):
             self.chroma_collection_prefix = legacy_prefix
         if not self.chroma_collection_prefix.strip():
             self.chroma_collection_prefix = "kb"
+
+        if self.llm_workflow_timeout_seconds <= self.llm_request_timeout_seconds:
+            raise ValueError("CFG_INVALID_LLM_TIMEOUT")
+        if self.llm_retry_max_delay_seconds < self.llm_retry_base_delay_seconds:
+            raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
+        if self.retrieval_min_evidence > self.retrieval_max_evidence:
+            raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        if self.workflow_sse_heartbeat_seconds <= self.workflow_sse_poll_interval_seconds:
+            raise ValueError("CFG_INVALID_WORKFLOW_STREAMING_POLICY")
+        if self.rerank_enabled:
+            if not self.rerank_model.strip():
+                raise ValueError("CFG_RERANK_MODEL_MISSING")
+            if self.rerank_candidate_k <= 0 or self.rerank_per_query_k <= 0:
+                raise ValueError("CFG_RERANK_CANDIDATE_INVALID")
+            if self.rerank_batch_size <= 0 or self.rerank_max_length <= 0:
+                raise ValueError("CFG_RERANK_RUNTIME_INVALID")
+            if self.rerank_max_chunks_per_document <= 0:
+                raise ValueError("CFG_RERANK_DIVERSITY_INVALID")
 
         if self.db_type == "sqlite" and not self.database_url.startswith("sqlite:///"):
             raise ValueError("CFG_DATABASE_URL_MISMATCH")

@@ -1,93 +1,135 @@
+"""Knowledge retrieval Agent backed by the validated evidence boundary.
+
+The injected backend performs hybrid retrieval/reranking; this node still owns
+the immutable KB/Chunk/hash validation before candidates become Evidence DTOs.
+"""
+
 from app.agents.state import AgentState
-from app.core.errors import ErrorCode, require_degraded_generation
-from app.core.vector_store import similarity_search
+from app.core.evidence_retriever import EvidenceRetriever, retrieval_policy_from_settings
+from app.core.errors import ErrorCode
+from app.core.knowledge_base import load_knowledge_base_manifest
 from app.models.agent_contracts import (
     NodeResult,
     RetrieverInput,
     RetrieverOutput,
     build_trace_item,
     make_error_info,
+    require_agent_fallback,
     start_step,
 )
+from app.models.knowledge import RetrievalRequest, RetrievalStatus
 from app.models.workflow import StepStatus
 
 
-def retrieve_node(state: AgentState) -> dict:
-    """知识检索 Agent：基于诊断结果与学习主题召回领域知识片段"""
+def _queries(node_input: RetrieverInput) -> list[str]:
+    weak_points = node_input.diagnosis.get("weak_points", [])
+    values = [node_input.topic]
+    values.extend(f"{node_input.topic} {node}" for node in node_input.target_skill_nodes[:3])
+    values.extend(f"{node_input.topic} {point}" for point in weak_points[:2])
+    return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+
+
+def retrieve_node(
+    state: AgentState,
+    *,
+    evidence_retriever: EvidenceRetriever,
+) -> dict:
+    """Resolve hybrid/reranked hits into immutable, KB-scoped Evidence DTOs."""
+
     step_context = start_step(state)
     node_input = RetrieverInput.model_validate(state)
-    topic = node_input.topic
-    knowledge_base_id = node_input.knowledge_base_id
-    diagnosis = node_input.diagnosis
-    weak_points = diagnosis.get("weak_points", [])
-
-    # 构造查询：主题 + 目标节点 + 盲区，去重并保留请求顺序。
-    queries = [topic]
-    queries.extend(f"{topic} {node}" for node in node_input.target_skill_nodes[:3])
-    queries.extend(f"{topic} {point}" for point in weak_points[:2])
-    queries = list(dict.fromkeys(queries))
-    configured_top_k = node_input.constraints.get("retrieval_top_k", 3)
-    top_k = configured_top_k if isinstance(configured_top_k, int) else 3
-    top_k = min(10, max(1, top_k))
-    retrieved = []
-    seen = set()
-    fallback_code = None
-
-    for q in queries:
-        try:
-            results = similarity_search(q, top_k=top_k, knowledge_base_id=knowledge_base_id)
-        except Exception:
-            fallback_code = require_degraded_generation(ErrorCode.RETRIEVAL_UPSTREAM_UNAVAILABLE)
-            results = []
-        for rank, (doc, score) in enumerate(results, start=1):
-            key = doc.metadata.get("chunk_id") or doc.page_content[:100]
-            if key in seen:
-                continue
-            seen.add(key)
-            retrieved.append({
-                "content": doc.page_content,
-                "knowledge_base_id": doc.metadata.get("knowledge_base_id"),
-                "document_id": doc.metadata.get("document_id"),
-                "chunk_id": doc.metadata.get("chunk_id"),
-                "title": doc.metadata.get("title"),
-                "source": doc.metadata.get("source_path", "unknown"),
-                "knowledge_points": doc.metadata.get("knowledge_points", []),
-                "score": float(score),
-                "retrieval_query": q,
-                "rank": rank,
-            })
-
-    retrieval_status = "error" if fallback_code and not retrieved else "available" if retrieved else "no_hit"
-    status = StepStatus.DEGRADED if fallback_code else StepStatus.SUCCESS
-    error = (
-        make_error_info(fallback_code, source="retriever")
-        if fallback_code
+    knowledge_base_id = node_input.knowledge_base_id or str(
+        load_knowledge_base_manifest()["knowledge_base_id"]
+    )
+    queries = _queries(node_input)
+    configured_top_k = node_input.constraints.get("retrieval_top_k")
+    top_k_override = (
+        min(10, max(1, configured_top_k))
+        if isinstance(configured_top_k, int) and not isinstance(configured_top_k, bool)
         else None
     )
-    NodeResult[RetrieverOutput](
-        status=status,
-        output=RetrieverOutput(
-            retrieved_chunks=retrieved,
-            retrieval_status=retrieval_status,
-        ),
-        error=error,
+    policy = retrieval_policy_from_settings(
+        evidence_retriever.settings,
+        top_k_override=top_k_override,
     )
+    request = RetrievalRequest(
+        run_id=node_input.run_id,
+        step_id=step_context["step_id"],
+        knowledge_base_id=knowledge_base_id,
+        queries=queries,
+        policy=policy,
+    )
+    batch = evidence_retriever.retrieve(request)
+
+    error = batch.error
+    if batch.status == RetrievalStatus.RETRIEVAL_ERROR and error is not None:
+        error = require_agent_fallback(state, error)
+    if batch.status == RetrievalStatus.AVAILABLE and batch.partial_failure_count:
+        error = require_agent_fallback(
+            state,
+            make_error_info(
+                ErrorCode.RETRIEVAL_UPSTREAM_UNAVAILABLE,
+                source="retriever",
+                category="retrieval",
+                retryable=True,
+                safe_detail="queries:partial_failure",
+            ),
+        )
+    status = StepStatus.DEGRADED if error else StepStatus.SUCCESS
+    output = RetrieverOutput(
+        retrieved_evidence=batch.evidence,
+        retrieval_status=batch.status,
+        retrieval_config_hash=batch.config_hash,
+        retrieval_query_hashes=batch.query_hashes,
+        retrieval_candidate_count=batch.candidate_count,
+        retrieval_dropped_candidate_count=batch.dropped_candidate_count,
+        retrieval_partial_failure_count=batch.partial_failure_count,
+    )
+    NodeResult[RetrieverOutput](status=status, output=output, error=error)
+
     trace_item = build_trace_item(
         state,
         agent_name="retriever",
-        action="知识库检索",
+        action="混合检索、精排与可信证据校验",
         status=status,
-        input_summary=f"知识库：{knowledge_base_id or '默认'}；检索查询：{queries}",
-        output_summary=f"召回 {len(retrieved)} 条知识片段；状态：{retrieval_status}",
-        decision_reason="围绕学习主题、目标能力节点和薄弱知识点扩展检索，为后续生成提供可溯源证据。",
-        evidence_refs=[item.get("chunk_id") or item["source"] for item in retrieved[:5]],
+        input_summary=(
+            f"知识库：{knowledge_base_id}；查询数：{batch.query_count}；"
+            f"top_k：{policy.top_k_per_query}"
+        ),
+        output_summary=(
+            f"混合候选 {batch.candidate_count} 条；有效证据 {len(batch.evidence)} 条；"
+            f"状态：{batch.status.value}"
+        ),
+        decision_reason=(
+            "候选先经向量/BM25 融合与可选 CrossEncoder 精排，再经知识库边界、"
+            "SQL 历史版本和内容哈希校验后成为证据。"
+        ),
+        evidence_refs=[item.evidence_id for item in batch.evidence],
         error=error,
         step_context=step_context,
+        retrieval_metadata={
+            "retrieval_status": batch.status.value,
+            "retrieval_config_hash": batch.config_hash,
+            "retrieval_query_hashes": batch.query_hashes,
+            "retrieval_candidate_count": batch.candidate_count,
+            "retrieval_dropped_candidate_count": batch.dropped_candidate_count,
+            "retrieval_partial_failure_count": batch.partial_failure_count,
+            "retrieval_query_count": batch.query_count,
+            "retrieval_evidence_count": len(batch.evidence),
+            "retrieval_dropped_count": batch.dropped_candidate_count,
+            "retrieval_profile": batch.retrieval_profile,
+        },
     )
-
     return {
-        "retrieved_chunks": retrieved,
-        "retrieval_status": retrieval_status,
+        "knowledge_base_id": knowledge_base_id,
+        "retrieved_evidence": batch.evidence,
+        "retrieved_chunks": [],
+        "retrieval_status": batch.status.value,
+        "retrieval_config_hash": batch.config_hash,
+        "retrieval_query_hashes": batch.query_hashes,
+        "retrieval_candidate_count": batch.candidate_count,
+        "retrieval_dropped_candidate_count": batch.dropped_candidate_count,
+        "retrieval_partial_failure_count": batch.partial_failure_count,
         "current_node": "retriever",
         "trace": [trace_item],
         "errors": [error.model_dump(mode="json")] if error else [],

@@ -1,15 +1,10 @@
 from app.agents import generator as generator_module
 from app.agents.workflow import build_workflow, decide_next
+from app.core.llm_gateway import LLMGateway
+from app.models.llm import RawLLMResponse
 from app.models.schemas import LearnerProfile
-
-
-class _FakeResponse:
-    content = """[{"resource_type":"讲义","difficulty":"初级","content_text":"测试内容","knowledge_points":["测试"]}]"""
-
-
-class _FakeLLM:
-    def invoke(self, messages):
-        return _FakeResponse()
+from tests.fakes.llm import ScriptedLLMTransport
+from tests.fakes.evidence import make_evidence
 
 
 def test_workflow_compiles_with_expected_baseline_channels():
@@ -51,9 +46,7 @@ def test_workflow_retry_guard_decides_after_max_iteration():
     }) == "decide"
 
 
-def test_generate_node_increments_iteration(monkeypatch):
-    monkeypatch.setattr(generator_module, "get_llm", lambda: _FakeLLM())
-
+def test_generate_node_increments_iteration():
     learner = LearnerProfile(
         learner_id="test_002",
         learner_type="初学者",
@@ -66,19 +59,27 @@ def test_generate_node_increments_iteration(monkeypatch):
         learning_goal="测试",
     )
 
+    gateway = LLMGateway(ScriptedLLMTransport([RawLLMResponse(content={
+        "resources": [{
+            "resource_type": "讲义",
+            "difficulty": "初级",
+            "content_text": "测试内容",
+            "knowledge_points": ["测试"],
+        }],
+    })]))
     result = generator_module.generate_node({
         "learner": learner,
         "topic": "工业互联网",
         "resource_types": ["讲义"],
         "diagnosis": {},
-        "retrieved_chunks": [],
+        "retrieved_evidence": [make_evidence()],
         "learning_plan": {},
         "generated_resources": [],
         "review_result": {},
         "final_decision": "",
         "trace": [],
         "iteration": 0,
-    })
+    }, llm_gateway=gateway)
 
     assert result["iteration"] == 1
     assert result["generation_attempt"] == 1

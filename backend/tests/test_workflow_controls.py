@@ -11,9 +11,17 @@ from app.agents import (
     workflow as workflow_module,
 )
 from app.models.agent_contracts import build_trace_item
+from app.core.llm_gateway import LLMGateway
+from app.models.llm import RawLLMResponse
 from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
 from app.models.workflow import StepStatus
 from app.services.generation_service import build_workflow_state
+from tests.fakes.llm import ScriptedLLMTransport
+from tests.fakes.evidence import (
+    ScriptedEvidenceRetriever,
+    make_available_batch,
+    make_evidence,
+)
 
 
 def _learner() -> LearnerProfile:
@@ -45,9 +53,14 @@ def _install_fake_nodes(monkeypatch, review_decision="approve"):
         return {"diagnosis": {}, "trace": [_trace(state, "diagnosis")], "errors": []}
 
     def retrieve(state):
+        kb_id = state.get("knowledge_base_id") or "kb-default"
+        evidence = make_evidence(knowledge_base_id=kb_id)
         return {
+            "knowledge_base_id": kb_id,
+            "retrieved_evidence": [evidence],
             "retrieved_chunks": [],
-            "retrieval_status": "no_hit",
+            "retrieval_status": "available",
+            "retrieval_config_hash": evidence.config_hash,
             "trace": [_trace(state, "retriever")],
             "errors": [],
         }
@@ -142,18 +155,14 @@ def test_max_iterations_counts_revisions_not_initial_generation(monkeypatch, max
     assert result["workflow_status"] == "human_review"
 
 
-def test_claim_check_request_is_explicitly_unavailable_before_p0_06(monkeypatch):
-    result, calls = _invoke(
-        monkeypatch,
-        include_review=False,
-        include_claim_check=True,
-    )
-
-    assert calls == {"generate": 1, "review": 0}
-    assert result["claim_check_status"] == "unavailable"
-    assert result["workflow_status"] == "human_review"
-    assert result["generated_resources"][0].review_status == "unreviewed_draft"
-    assert "CLAIM_CHECK_NOT_IMPLEMENTED" in [error["code"] for error in result["errors"]]
+def test_claim_check_without_resource_review_is_rejected():
+    with pytest.raises(ValueError, match="include_claim_check requires include_review"):
+        GenerateRequest(
+            learner_id="flow-001",
+            topic="控制流",
+            include_review=False,
+            include_claim_check=True,
+        )
 
 
 def test_review_approve_marks_resources_approved(monkeypatch):
@@ -216,68 +225,50 @@ def test_strict_mode_never_approves_degraded_output():
 def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypatch):
     captured = {}
 
-    class Response:
-        def __init__(self, payload):
-            self.content = json.dumps(payload, ensure_ascii=False)
+    def outcome(name, payload):
+        def respond(call):
+            captured[name] = call["messages"][-1].content
+            return RawLLMResponse(content=payload)
+        return respond
 
-    class LLM:
-        def __init__(self, name, payload):
-            self.name = name
-            self.payload = payload
-
-        def invoke(self, messages):
-            captured[self.name] = messages[-1].content
-            return Response(self.payload)
-
-    monkeypatch.setattr(
-        diagnosis_module,
-        "get_llm",
-        lambda: LLM("diagnosis", {
+    gateway = LLMGateway(ScriptedLLMTransport([
+        outcome("diagnosis", {
             "ability_tags": [],
             "weak_points": [],
             "recommended_difficulty": "初级",
             "suggestion": "ok",
         }),
-    )
-    monkeypatch.setattr(
-        planner_module,
-        "get_llm",
-        lambda: LLM("planner", {
-            "learning_path": [],
+        outcome("planner", {
+            "learning_path": [{"order": 1, "topic": "node-a", "reason": "ok"}],
+            "skip_points": [],
+            "remedial_points": [],
+            "challenge_points": [],
             "resource_requirements": {},
             "decision_reason": "ok",
         }),
-    )
-    monkeypatch.setattr(
-        generator_module,
-        "get_llm",
-        lambda: LLM("generator", [{
-            "resource_type": "讲义",
-            "difficulty": "初级",
-            "content_text": "测试资源",
-            "knowledge_points": ["node-a"],
-        }]),
-    )
-    monkeypatch.setattr(
-        reviewer_module,
-        "get_llm",
-        lambda: LLM("reviewer", {
-            "passed": True,
+        outcome("generator", {"resources": [{
+                "resource_type": "讲义",
+                "difficulty": "初级",
+                "content_text": "测试资源",
+                "knowledge_points": ["node-a"],
+            }]}),
+        outcome("reviewer", {
+            "decision": "approve",
             "hallucination_score": 0.0,
             "issues": [],
             "difficulty_match": True,
             "coverage_rate": 1.0,
             "suggestion": "ok",
+            "revision_instructions": [],
         }),
+    ]))
+    evidence = make_evidence(
+        knowledge_base_id="kb-contract",
+        query="控制流 node-a",
     )
-    retrieval_calls = []
-    monkeypatch.setattr(
-        retriever_module,
-        "similarity_search",
-        lambda query, top_k, knowledge_base_id: retrieval_calls.append(
-            (query, top_k, knowledge_base_id)
-        ) or [],
-    )
+    evidence_retriever = ScriptedEvidenceRetriever([
+        make_available_batch([evidence]),
+    ])
 
     request = GenerateRequest(
         learner_id="flow-001",
@@ -290,7 +281,7 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
         generation_mode="standard",
         constraints={"retrieval_top_k": 4, "language": "zh-CN"},
     )
-    result = workflow_module.build_workflow().invoke(
+    result = workflow_module.build_workflow(gateway, evidence_retriever).invoke(
         build_workflow_state(_learner(), request, run_id="run-contract")
     )
 
@@ -299,7 +290,10 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
     assert "zh-CN" in captured["planner"]
     assert "node-a" in captured["generator"]
     assert "高级" in captured["reviewer"]
-    assert ("控制流 node-a", 4, "kb-contract") in retrieval_calls
+    retrieval_request = evidence_retriever.calls[0]
+    assert "控制流 node-a" in retrieval_request.queries
+    assert retrieval_request.policy.top_k_per_query == 4
+    assert retrieval_request.knowledge_base_id == "kb-contract"
     assert result["generated_resources"][0].difficulty == "高级"
     assert [item["sequence"] for item in result["trace"]] == list(
         range(1, len(result["trace"]) + 1)

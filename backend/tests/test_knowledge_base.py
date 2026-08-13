@@ -1,4 +1,5 @@
 """知识库与关系目录的核心回归测试。"""
+import inspect
 import json
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.agents import retriever
 from app.config import Settings
 from app.core import vector_store
+from app.core.evidence_retriever import EvidenceRetriever
 from app.core.knowledge_base import (
     chunk_documents,
     load_documents,
@@ -16,6 +18,7 @@ from app.core.knowledge_base import (
 )
 from app.core.vector_store import _restore_retrieved_metadata, _to_chroma_document
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
+from app.db.knowledge.memory import MemoryKnowledgeChunkRepository
 from app.db.audit.sql_repository import SQLAuditRepository
 from app.db.diagnosis.memory import MemoryDiagnosisRepository
 from app.db.diagnosis.sql_repository import SQLDiagnosisRepository
@@ -41,8 +44,20 @@ from app.models.schemas import (
     DiagnosticSubmitRequest,
     LearnerProfile,
 )
+from tests.fakes.evidence import (
+    ScriptedVectorSearchBackend,
+    make_knowledge_chunk,
+    make_vector_candidate,
+)
 from app.services.diagnosis_service import DiagnosisService
 from app.services.knowledge_service import KnowledgeService
+
+
+def test_default_chunking_configuration_uses_100_character_overlap():
+    parameters = inspect.signature(chunk_documents).parameters
+
+    assert parameters["chunk_size"].default == 500
+    assert parameters["chunk_overlap"].default == 100
 
 
 def test_chunks_have_stable_complete_provenance():
@@ -71,6 +86,58 @@ def test_chroma_metadata_serialization_preserves_list_provenance():
     assert restored.metadata["knowledge_points"] == chunk.metadata["knowledge_points"]
     assert restored.metadata["learner_levels"] == chunk.metadata["learner_levels"]
     assert restored.metadata["source_urls"] == chunk.metadata["source_urls"]
+
+
+def test_bm25_search_prioritizes_exact_technical_identifier():
+    exact = Document(
+        page_content="系统出现错误码 ERR-42 时，需要检查 collection 的向量维度。",
+        metadata={"chunk_id": "exact"},
+    )
+    semantic_only = Document(
+        page_content="向量数据库发生异常时可以检查索引配置。",
+        metadata={"chunk_id": "semantic"},
+    )
+
+    results = vector_store._bm25_search("ERR-42 如何处理", [semantic_only, exact], top_k=2)
+
+    assert results
+    assert results[0][0].metadata["chunk_id"] == "exact"
+    assert results[0][1] > 0
+
+
+def test_hybrid_search_fuses_vector_and_bm25_with_rrf(monkeypatch):
+    semantic = Document(
+        page_content="向量数据库异常排查方法。",
+        metadata={"chunk_id": "semantic", "knowledge_base_id": "kb-hybrid"},
+    )
+    exact = Document(
+        page_content="错误码 ERR-42 表示 collection 向量维度不一致。",
+        metadata={"chunk_id": "exact", "knowledge_base_id": "kb-hybrid"},
+    )
+
+    class FakeStore:
+        def similarity_search_with_score(self, query, k):
+            return [(semantic, 0.1), (exact, 0.2)]
+
+        def get(self, include):
+            return {
+                "ids": ["semantic", "exact"],
+                "documents": [semantic.page_content, exact.page_content],
+                "metadatas": [semantic.metadata, exact.metadata],
+            }
+
+    vector_store._LEXICAL_DOCUMENT_CACHE.clear()
+    monkeypatch.setattr(vector_store, "get_vector_store", lambda knowledge_base_id: FakeStore())
+
+    results = vector_store.hybrid_search("ERR-42", top_k=2, knowledge_base_id="kb-hybrid")
+
+    assert [document.metadata["chunk_id"] for document, _ in results] == ["exact", "semantic"]
+    exact_result, exact_score = results[0]
+    assert exact_result.metadata["retrieval_method"] == "hybrid_rrf"
+    assert exact_result.metadata["retrieval_channels"] == ["vector", "bm25"]
+    assert exact_result.metadata["vector_rank"] == 2
+    assert exact_result.metadata["lexical_rank"] == 1
+    assert 0 < results[1][1] < exact_score <= 1
 
 
 def test_collection_name_is_kb_scoped_and_uses_compatible_prefix():
@@ -180,16 +247,28 @@ def test_catalog_sync_prunes_removed_documents_and_old_chunks(tmp_path):
         assert db.query(KnowledgeChunkORM).count() == len(retained_chunks)
 
 
-def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs(monkeypatch):
+def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs():
     documents = load_documents()
-    chunk = chunk_documents(documents)[0]
-    calls = []
-
-    def fake_similarity_search(query, top_k, knowledge_base_id):
-        calls.append((query, top_k, knowledge_base_id))
-        return [(chunk, 0.12)]
-
-    monkeypatch.setattr(retriever, "similarity_search", fake_similarity_search)
+    document_chunk = chunk_documents(documents)[0]
+    metadata = document_chunk.metadata
+    chunk = make_knowledge_chunk(
+        knowledge_base_id=metadata["knowledge_base_id"],
+        document_id=metadata["document_id"],
+        document_version=metadata["document_version"],
+        chunk_id=metadata["chunk_id"],
+        text=document_chunk.page_content,
+        source_path=metadata["source_path"],
+    )
+    queries = ["RAG 基础概念", "RAG 基础概念 Embedding"]
+    backend = ScriptedVectorSearchBackend({
+        query: [make_vector_candidate(chunk, query=query, raw_score=0.12)]
+        for query in queries
+    })
+    evidence_retriever = EvidenceRetriever(
+        backend=backend,
+        chunk_repository=MemoryKnowledgeChunkRepository([chunk]),
+        settings=Settings(_env_file=None),
+    )
     learner = LearnerProfile(
         learner_id="test_retriever",
         learner_type="初学者",
@@ -203,7 +282,7 @@ def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs(monkeypa
             "topic": "RAG 基础概念",
             "knowledge_base_id": "rag_engineering_training",
             "diagnosis": {"weak_points": ["Embedding"]},
-            "retrieved_chunks": [],
+            "retrieved_evidence": [],
             "learning_plan": {},
             "generated_resources": [],
             "review_result": {},
@@ -211,13 +290,17 @@ def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs(monkeypa
             "resource_types": ["讲义"],
             "trace": [],
             "iteration": 0,
-        }
+        },
+        evidence_retriever=evidence_retriever,
     )
 
-    assert calls and all(call[2] == "rag_engineering_training" for call in calls)
-    retrieved = result["retrieved_chunks"][0]
-    assert retrieved["document_id"] == chunk.metadata["document_id"]
-    assert retrieved["chunk_id"] == chunk.metadata["chunk_id"]
+    assert backend.calls and all(
+        call["knowledge_base_id"] == "rag_engineering_training"
+        for call in backend.calls
+    )
+    retrieved = result["retrieved_evidence"][0]
+    assert retrieved.document_id == chunk.document_id
+    assert retrieved.chunk_id == chunk.chunk_id
 
 
 def test_audit_repository_persists_agent_steps_and_claim_evidence(tmp_path):
@@ -247,6 +330,7 @@ def test_audit_repository_persists_agent_steps_and_claim_evidence(tmp_path):
         db.commit()
 
     repository = SQLAuditRepository(factory)
+    preallocated_run_id = "audit_run"
     run_id = repository.save_run(
         learner_id="audit_learner",
         knowledge_base_id=None,
@@ -255,7 +339,9 @@ def test_audit_repository_persists_agent_steps_and_claim_evidence(tmp_path):
         input_payload={"topic": "RAG"},
         output_payload={"final_decision": "通过"},
         status="completed",
+        run_id=preallocated_run_id,
     )
+    assert run_id == preallocated_run_id
     review_id = repository.save_review(
         "audit_resource",
         {

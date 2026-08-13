@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StatusResponse(BaseModel):
@@ -73,6 +73,7 @@ class LearnerProfile(BaseModel):
     learning_goal: str = Field(..., description="学习目标")
     learning_preferences: Optional[LearningPreferences] = Field(default=None, description="学习偏好")
     last_feedback_summary: Dict[str, Any] = Field(default_factory=dict, description="最近反馈摘要")
+    profile_version: int = Field(default=1, ge=1, description="画像乐观并发版本")
 
 
 class InitialProfileQuestionnaire(BaseModel):
@@ -214,6 +215,12 @@ class GenerateRequest(BaseModel):
             raise ValueError("resource_types cannot be empty")
         return normalized
 
+    @model_validator(mode="after")
+    def require_resource_review_for_claim_audit(self) -> "GenerateRequest":
+        if self.include_claim_check and not self.include_review:
+            raise ValueError("include_claim_check requires include_review=true")
+        return self
+
 
 class GenerationJobCreateResponse(StatusResponse):
     """异步资源生成任务创建响应"""
@@ -262,12 +269,27 @@ class SourceRef(BaseModel):
     title: str
     snippet: str
     score: float
+    provenance_status: Literal["legacy", "verified"] = "legacy"
+    evidence_id: Optional[str] = None
+    knowledge_base_id: Optional[str] = None
+    document_version: Optional[str] = None
     chunk_id: Optional[str] = None
     knowledge_point: Optional[str] = None
     section: Optional[str] = None
     page: Optional[int] = None
     source_path: Optional[str] = None
+    source_type: Optional[str] = None
+    line_start: Optional[int] = None
+    line_end: Optional[int] = None
+    timestamp_start_ms: Optional[int] = None
+    timestamp_end_ms: Optional[int] = None
     retrieval_query: Optional[str] = None
+    query_hash: Optional[str] = None
+    raw_score: Optional[float] = None
+    score_kind: Optional[str] = None
+    normalized_score: Optional[float] = None
+    excerpt_hash: Optional[str] = None
+    retrieval_config_hash: Optional[str] = None
     rank: Optional[int] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -299,8 +321,13 @@ class LearningResource(BaseModel):
     learning_path_node: Optional[str] = None
     review_status: Optional[str] = None
     review_id: Optional[str] = None
+    publication_status: Literal["unpublished", "published"] = "unpublished"
+    published_at: Optional[datetime] = None
     run_id: Optional[str] = None
     claim_count: Optional[int] = None
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     hallucination_rate: Optional[float] = None
     difficulty_match: Optional[bool] = None
     version: int = 1
@@ -332,14 +359,49 @@ class ReviewSummary(BaseModel):
     claim_unsupported: int = 0
     suspected_hallucinations: int = 0
     hallucination_rate: float = 0.0
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     review_pass_rate: float = 0.0
     revision_count: int = 0
     issues: List[Dict[str, Any]] = Field(default_factory=list)
+    revision_instructions: List[Dict[str, Any]] = Field(default_factory=list)
     claims: List[ResourceClaim] = Field(default_factory=list)
+
+    @field_validator("issues", mode="before")
+    @classmethod
+    def normalize_legacy_issues(cls, value: Any) -> List[Dict[str, Any]]:
+        return [
+            item
+            if isinstance(item, dict)
+            else {
+                "code": "other",
+                "severity": "medium",
+                "description": str(item),
+            }
+            for item in (value or [])
+        ]
+
+    @field_validator("revision_instructions", mode="before")
+    @classmethod
+    def normalize_legacy_instructions(cls, value: Any) -> List[Dict[str, Any]]:
+        return [
+            item
+            if isinstance(item, dict)
+            else {
+                "issue_codes": ["other"],
+                "target_resource_type": "legacy_unknown",
+                "action": str(item),
+                "priority": 1,
+            }
+            for item in (value or [])
+        ]
 
 
 class AgentTrace(BaseModel):
     """Agent 执行轨迹"""
+    model_config = ConfigDict(protected_namespaces=())
+
     schema_version: Literal["1.0"] = "1.0"
     agent_name: str
     node_name: Optional[str] = None
@@ -370,6 +432,28 @@ class AgentTrace(BaseModel):
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     error: Optional[Dict[str, Any]] = None
+    llm_call_id: Optional[str] = None
+    model_name: Optional[str] = None
+    provider_request_id: Optional[str] = None
+    structured_output_mode: Optional[str] = None
+    finish_reason: Optional[str] = None
+    input_tokens: Optional[int] = Field(default=None, ge=0)
+    output_tokens: Optional[int] = Field(default=None, ge=0)
+    total_tokens: Optional[int] = Field(default=None, ge=0)
+    llm_duration_ms: Optional[int] = Field(default=None, ge=0)
+    llm_attempts: List[Dict[str, Any]] = Field(default_factory=list)
+    retrieval_status: Optional[str] = None
+    retrieval_config_hash: Optional[str] = None
+    retrieval_query_hashes: List[str] = Field(default_factory=list)
+    retrieval_candidate_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_dropped_candidate_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_partial_failure_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_query_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_evidence_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_dropped_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_profile: Dict[str, Any] = Field(default_factory=dict)
+    workflow_elapsed_ms: Optional[int] = Field(default=None, ge=0)
+    workflow_remaining_ms: Optional[int] = Field(default=None, ge=0)
     timestamp: Optional[str] = None
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
@@ -386,6 +470,9 @@ class GenerateReport(BaseModel):
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
     review_summary: Dict[str, Any] = Field(default_factory=dict)
     hallucination_rate: float = 0.0
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     coverage_rate: float = 0.0
     difficulty_match: bool = False
     retrieval_hit_rate: float = 0.0
@@ -509,6 +596,14 @@ class ReportResponse(BaseModel):
     next_suggestions: List[str] = Field(default_factory=list)
     recent_resources: List[LearningResource] = Field(default_factory=list)
     recent_feedback: List[FeedbackRecord] = Field(default_factory=list)
+    profile_version: int = 1
+    knowledge_mastery: Dict[str, Any] = Field(default_factory=dict)
+    current_learning_path: Optional[Dict[str, Any]] = None
+    recent_attempts: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_feedback_decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_knowledge_state_mutations: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_followup_runs: List[Dict[str, Any]] = Field(default_factory=list)
+    profile_versions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class FeedbackHistoryResponse(BaseModel):

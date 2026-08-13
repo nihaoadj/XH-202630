@@ -154,17 +154,19 @@ backend/app/api
 backend/app/services
   |- generation_job_service: 创建异步任务、查询状态、后台执行
   |- generation_service: 先执行 readiness gate，再调用多 Agent 生成闭环并保存资源
-  |- feedback_service: 调用反馈决策 Agent，保存反馈记录并更新画像
-  |- report_service: 聚合画像、资源、反馈生成报告
-  -> 
+  |- feedback_service: 提交正式 Attempt，执行确定性反馈策略并协调事务与后续生成
+  |- learning_path_policy: 校验并生成路径状态变更
+  |- report_service: 聚合画像、资源、Attempt、版本历史和持久化路径
+  ->
 backend/app/agents
   |- diagnosis: 学情诊断 Agent
-  |- retriever: 知识库检索 Agent
+  |- retriever: 知识库检索 Agent（BM25 + Chroma 向量召回 + RRF 融合 + CrossEncoder 精排）
   |- planner: 学习路径规划 Agent
   |- generator: 个性化资源生成 Agent
   |- reviewer: 审核纠偏 Agent
   |- feedback: 反馈决策 Agent
-  |- workflow: 审核开关、Claim 预留、返工额度与终态决策
+  |- claim_review: 独立 Claim 抽取、冻结 Evidence 判定与确定性指标
+  |- workflow: 审核开关、Claim 返工闭环、返工额度与终态决策
   ->
 backend/app/core + backend/app/db
   |- RuntimeHealth / failure policy / LLM / Embedding / ChromaDB / 知识库 / 文件存储
@@ -187,13 +189,69 @@ POST /api/generate/jobs
 diagnose -> retrieve -> plan -> generate
                                   |- include_review=false -> finalize_draft
                                   |- include_review=true  -> review
-                                                               |- approve -> finalize
+                                                               |- approve + include_claim_check=true
+                                                               |     -> claim_extract -> claim_judge -> claim_decide
+                                                               |            |- 通过 -> finalize
+                                                               |            |- 问题 Claim 且有额度 -> prepare_revision -> generate
+                                                               |            |- 失败/额度耗尽 -> finalize(human_review)
+                                                               |- approve + include_claim_check=false -> finalize
                                                                |- revise 且有额度 -> prepare_revision -> generate
                                                                |- reject/额度耗尽 -> finalize
-
-任一终结分支在 include_claim_check=true 时先进入 claim_check 预留节点。
-P0-06 前该节点只会输出 unavailable + human_review，不执行伪 Claim 审核。
 ```
+
+### 4.3 P0-07 反馈后真实闭环
+
+```text
+POST /api/feedback/attempts
+-> 校验 learner、published source resource/version、稳定知识点与请求分数
+-> 读取 profile_version、knowledge state、最近趋势和当前 path
+-> deterministic policy
+   |- overall < 0.60 或任一点 < 0.60 -> remediate
+   |- 0.60 <= overall <= 0.85       -> practice
+   |- overall > 0.85 且无 blocker   -> advance
+-> Transaction A
+   |- learning_attempts + point_results
+   |- feedback_decisions
+   |- knowledge_states + mutation history
+   |- learner_profiles.profile_version + version history
+   |- learning_paths/nodes + path mutation
+-> commit
+-> remediate/advance 时幂等创建现有 generation job
+-> 保存 parent run / attempt / decision / child run 关系
+-> BackgroundTasks 调用 GenerationJobService.run_job
+-> 新 Run 继续经过 Evidence、Review、Claim Audit 和 Publication Gate
+```
+
+知识点掌握度采用可解释 EWMA：已有状态为 `0.7 * old + 0.3 * attempt_score`，首次作答直接取 attempt score。hint 与 duration 仅进入决策上下文和审计，不暗中改变 mastery。每次成功更新将画像版本从 N 变为 N+1，并以 `expected_profile_version` 做 CAS；重复请求不会再次加权。
+
+路径 mutation 由 policy 生成并校验自环、缺失前置条件、环路和重复节点。低分插入/复用 remedial，中分插入/复用 practice，高分完成当前节点并解锁满足前置条件的下一节点；无下一节点时增加 challenge。路径只有实际变化才递增版本。
+
+Follow-up 属于 after-commit 副作用。其 run_id 由 attempt 稳定派生；创建失败时 Attempt 保持 `applied`、关联状态为 `failed`，相同幂等请求可安全对账重试。反馈事件只存稳定 ID、计数、分数摘要、action/reason code 和版本，不保存完整答案、画像、Prompt 或模型原文。
+
+### 4.4 P0-08 WorkflowEvent SSE
+
+```text
+业务动作 / Agent step
+-> 资源、审核、Claim、状态事实先持久化
+-> WorkflowEvent append + commit
+-> RunEventStreamService 短事务查询 event_sequence > cursor
+-> public allow-list mapper
+-> StreamingResponse(text/event-stream)
+-> EventSource
+-> sequence-deduplicating reducer
+-> AgentVisualization realtime timeline
+```
+
+WorkflowEvent Ledger 是唯一事件事实源，SSE 只是只读 transport，不创建第二套 UI event 表或进程内 progress ledger。每个 SSE poll 都打开并关闭独立 Repository Session，不在长连接期间持有数据库事务或行锁；同步 SQL 查询通过 thread offload 避免阻塞 ASGI event loop。
+
+连接先发 snapshot，再补发 durable event backlog，最后 live tail。浏览器断线只停止观看，不取消 BackgroundTasks/Workflow；重连使用原 EventSource 的 `Last-Event-ID`，或页面刷新后以 timeline 最后 sequence 作为 `after_sequence`。heartbeat 不进入 Event Ledger。两个客户端独立读取同一 append-only ledger，不存在 delivered/ack 或破坏性消费。
+
+GenerationJob/AgentRun 的 queued 竞态保持现有 ownership：Job 可先存在，SSE snapshot 此时 run_status 为空并等待 AgentRun。P0-08 没有引入 Redis、消息队列、WebSocket、自动 resume/cancel 或 token streaming。
+
+P0-06 的 Claim 抽取器与 Generator 相互独立。模型只能从资源、目标技能节点和当前
+Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、
+资源版本、知识点与 Evidence 边界。判定失败、漏判或伪造 ID 均 fail closed 到
+`human_review`。新资源版本必须重新抽取，旧版本判定不会复制。
 
 `max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
 
@@ -334,3 +392,32 @@ scripts/
 - 学习反馈页当前按任务维度加载测评题，并支持基于选中反馈主动重新生成
 - 学习历史页面应优先依赖 `/api/learning-history/{learner_id}/timeline`
 - 通用问卷不再承担用户资料采集职责
+## 9. Agent 可靠执行与异步任务整合
+
+dev 的异步 `GenerationJob` 负责排队和面向前端的任务状态；`AgentRun` 负责一次
+多 Agent 执行的可信生命周期。两者共享预分配的 run_id，但职责不合并：
+
+```text
+GenerationJobService
+  -> GenerationService.generate_with_run_id
+       -> AgentRun / AgentStep / WorkflowEvent
+       -> EvidenceRetriever
+            -> hybrid vector + BM25
+            -> optional CrossEncoder rerank
+            -> KB / Chunk version / content hash validation
+       -> Generator
+       -> Reviewer
+       -> WorkflowArtifactRecorder
+       -> WorkflowCheckpoint
+       -> publication gate
+```
+
+架构约束：
+
+- 混合召回和精排只产生候选；候选必须经过 SQL Chunk 历史版本、KB 范围和内容哈希校验后才能成为 Evidence。
+- `RecordedNode` 在节点副作用前创建 running Step；`DurableWorkflowRunner` 在状态合并后、checkpoint 前保存业务制品。
+- Generator 定向返工使用上一版本和结构化指令，新版本不可原地覆盖旧正文。
+- Reviewer 的模型建议必须经过确定性 policy 二次裁决。
+- Resource 的 `run_id` 单一关联 AgentRun；GenerationJob 以同值关联，避免 ORM 中出现两个竞争的 run_id 字段。
+- `review_status` 描述审核状态，`publication_status` 描述分发状态；只有最终批准叶子版本发布。
+- Run 回放只读数据库，不重新执行模型；自动 resume、SSE、取消仍为后续能力。

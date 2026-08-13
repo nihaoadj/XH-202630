@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -21,6 +22,7 @@ from app.api import (
     report,
     resources,
     reviews,
+    runs,
     skills,
     users,
 )
@@ -54,6 +56,16 @@ async def lifespan(app: FastAPI):
         logger.info("Detected DB_TYPE=%s, initializing database tables...", settings.db_type)
         try:
             init_database()
+            now = datetime.now(timezone.utc)
+            interrupted = container.audit_repository().mark_stale_interrupted(
+                before=now,
+                occurred_at=now,
+            )
+            if interrupted:
+                logger.warning(
+                    "Marked %s expired workflow runs as interrupted",
+                    interrupted,
+                )
             logger.info("Database tables initialized.")
         except Exception:
             logger.error(
@@ -62,10 +74,16 @@ async def lifespan(app: FastAPI):
             )
             health_overrides["storage"] = ErrorCode.STORAGE_DATABASE_UNAVAILABLE
 
+    index_status_provider = (
+        container.knowledge_catalog().get_index_status
+        if hasattr(container, "knowledge_catalog")
+        else None
+    )
     report = build_health_report(
         settings,
         prepare_directories=True,
         overrides=health_overrides,
+        index_status_provider=index_status_provider,
     )
     app.state.health_report = report
     logger.info(
@@ -179,6 +197,7 @@ app.include_router(diagnosis.router, prefix="/api/diagnosis", tags=["diagnosis"]
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
 app.include_router(reviews.router, prefix="/api/reviews", tags=["reviews"], dependencies=private_api)
 app.include_router(evaluation.router, prefix="/api/evaluation", tags=["evaluation"], dependencies=private_api)
+app.include_router(runs.router, prefix="/api/runs", tags=["workflow-runs"], dependencies=private_api)
 app.include_router(
     learning_history.router,
     prefix="/api/learning-history",
@@ -197,7 +216,16 @@ def read_root():
 @app.get("/health/ready")
 def health(request: Request):
     settings = get_settings()
-    report = build_health_report(settings)
+    container = getattr(request.app, "container", None)
+    index_status_provider = (
+        container.knowledge_catalog().get_index_status
+        if container is not None and hasattr(container, "knowledge_catalog")
+        else None
+    )
+    report = build_health_report(
+        settings,
+        index_status_provider=index_status_provider,
+    )
     request.app.state.health_report = report
     return JSONResponse(
         status_code=503 if report.status == "not_ready" else 200,

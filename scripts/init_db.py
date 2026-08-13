@@ -151,7 +151,14 @@ def main():
             track = _enrich_real_track(track, manifest, documents, questions)
             catalog.upsert_knowledge_base(manifest)
             catalog.upsert_learning_catalog(domain, track)
-            catalog.sync_documents(documents, chunks)
+            # 只预写不可变目录；正式 active 状态由 ingest_knowledge.py 在
+            # SQL/Chroma/count/smoke 全部对账成功后统一激活。
+            catalog.sync_documents(
+                documents,
+                chunks,
+                knowledge_base_id=manifest["knowledge_base_id"],
+                activate=False,
+            )
             catalog.upsert_skill_nodes(manifest.get("skill_nodes", []), manifest["knowledge_base_id"])
             catalog.upsert_diagnostic_questions(questions)
             questionnaire_path = kb_dir / "questionnaire.json"

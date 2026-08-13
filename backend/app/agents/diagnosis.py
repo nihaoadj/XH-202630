@@ -1,17 +1,17 @@
-import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
-from app.core.errors import ErrorCode, require_degraded_generation
-from app.core.llm import get_llm
+from app.core.llm_gateway import LLMGateway, LLMGatewayError
 from app.models.agent_contracts import (
+    DiagnosisLLMOutput,
     DiagnosisInput,
     DiagnosisOutput,
     NodeResult,
     build_trace_item,
-    make_error_info,
+    require_agent_fallback,
     start_step,
 )
+from app.models.llm import LLMCallContext
 from app.models.workflow import StepStatus
 
 
@@ -25,7 +25,11 @@ DIAGNOSIS_PROMPT = """你是一名专业的学情诊断 Agent。请根据学习�
 """
 
 
-def diagnose_node(state: AgentState) -> dict:
+def diagnose_node(
+    state: AgentState,
+    *,
+    llm_gateway: LLMGateway,
+) -> dict:
     """学情诊断 Agent：解析学习者画像"""
     step_context = start_step(state)
     node_input = DiagnosisInput.model_validate(state)
@@ -45,19 +49,30 @@ def diagnose_node(state: AgentState) -> dict:
 - 目标能力节点：{node_input.target_skill_nodes or ['未指定']}
 - 请求难度偏好：{node_input.difficulty_preference or '未指定'}
 """
-    fallback_code = None
+    llm_result = None
+    error = None
     try:
-        llm = get_llm()
         messages = [
             SystemMessage(content=DIAGNOSIS_PROMPT),
             HumanMessage(content=user_input),
         ]
-        response = llm.invoke(messages)
-        diagnosis = json.loads(response.content)
-        if not isinstance(diagnosis, dict):
-            raise ValueError("diagnosis output must be an object")
-    except Exception:
-        fallback_code = require_degraded_generation(ErrorCode.LLM_UPSTREAM_UNAVAILABLE)
+        llm_result = llm_gateway.invoke_structured(
+            messages=messages,
+            output_schema=DiagnosisLLMOutput,
+            context=LLMCallContext(
+                run_id=node_input.run_id,
+                step_id=step_context["step_id"],
+                node_name="diagnosis",
+                schema_name=DiagnosisLLMOutput.__name__,
+                generation_attempt=step_context["attempt"],
+                workflow_deadline_at=state.get("workflow_deadline_at"),
+            ),
+            options=llm_gateway.options_for("diagnosis", temperature=0.1),
+        )
+        diagnosis = llm_result.output.model_dump(mode="python")
+    except LLMGatewayError as exc:
+        error = require_agent_fallback(state, exc.error)
+        llm_result = exc
         diagnosis = {
             "ability_tags": learner.strong_points,
             "weak_points": learner.weak_points,
@@ -71,12 +86,7 @@ def diagnose_node(state: AgentState) -> dict:
     diagnosis["diagnostic_result_id"] = node_input.diagnostic_result_id
     diagnosis["target_skill_nodes"] = node_input.target_skill_nodes
 
-    status = StepStatus.DEGRADED if fallback_code else StepStatus.SUCCESS
-    error = (
-        make_error_info(fallback_code, source="diagnosis")
-        if fallback_code
-        else None
-    )
+    status = StepStatus.DEGRADED if error else StepStatus.SUCCESS
     NodeResult[DiagnosisOutput](
         status=status,
         output=DiagnosisOutput(diagnosis=diagnosis),
@@ -92,6 +102,7 @@ def diagnose_node(state: AgentState) -> dict:
         decision_reason=diagnosis.get("suggestion", "根据画像得分、知识盲区和学习目标判断能力起点。"),
         error=error,
         step_context=step_context,
+        llm_metadata=llm_result.trace_metadata() if llm_result else None,
     )
 
     return {

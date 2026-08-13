@@ -83,6 +83,15 @@
       </template>
     </el-card>
 
+    <AgentVisualization
+      v-if="selectedRunId"
+      :trace="timelineState.steps"
+      :markers="timelineState.markers"
+      :connection-status="connectionStatus"
+      :legacy-partial="timelineState.replayCompleteness === 'legacy_partial'"
+      @open-child-run="openChildRun"
+    />
+
     <el-card v-if="selectedJob" class="resources-card">
       <template #header>
         <div class="status-head">
@@ -131,9 +140,17 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { generateApi, resourceApi } from '../api'
+import { generateApi, resourceApi, runApi } from '../api'
+import { createRunEventClient } from '../api/runEvents'
 import ResourceViewer from '../components/ResourceViewer.vue'
+import AgentVisualization from '../components/AgentVisualization.vue'
 import { useAppStore } from '../stores/app'
+import {
+  applyRunSnapshot,
+  createInitialTimelineState,
+  hydrateWorkflowTimeline,
+  reduceWorkflowEvent,
+} from '../utils/workflowEventReducer'
 
 const store = useAppStore()
 
@@ -167,6 +184,10 @@ const resources = ref([])
 const retrying = ref(false)
 const selectedRunId = ref(initialRunId)
 const selectedResourceId = ref('')
+const timelineState = ref(createInitialTimelineState())
+const connectionStatus = ref('idle')
+let streamClient = null
+let streamGeneration = 0
 
 const selectedJob = computed(
   () => jobs.value.find((item) => item.run_id === selectedRunId.value) || null
@@ -241,6 +262,86 @@ function stopPolling() {
   }
 }
 
+function closeRealtime() {
+  streamGeneration += 1
+  streamClient?.close()
+  streamClient = null
+}
+
+async function hydrateTimeline(runId) {
+  let state = createInitialTimelineState()
+  let afterSequence = 0
+  let firstPage = true
+  try {
+    while (true) {
+      const response = await runApi.timeline(runId, { after_sequence: afterSequence, limit: 500 })
+      if (firstPage) {
+        state = hydrateWorkflowTimeline(response.data)
+        firstPage = false
+      } else {
+        for (const event of response.data.events || []) state = reduceWorkflowEvent(state, event)
+      }
+      if (!response.data.next_event_sequence) break
+      afterSequence = response.data.next_event_sequence
+    }
+  } catch (error) {
+    // A queued GenerationJob can legitimately precede AgentRun creation.
+    if (error?.response?.status !== 404) throw error
+  }
+  timelineState.value = state
+  return state.lastSequence
+}
+
+async function startRealtime(runId) {
+  closeRealtime()
+  stopPolling()
+  timelineState.value = createInitialTimelineState()
+  if (!runId) {
+    connectionStatus.value = 'idle'
+    return
+  }
+  const generation = streamGeneration
+  connectionStatus.value = 'connecting'
+  let lastSequence = 0
+  try {
+    lastSequence = await hydrateTimeline(runId)
+  } catch (error) {
+    console.error(error)
+    connectionStatus.value = 'fallback'
+    startPolling()
+    return
+  }
+  if (generation !== streamGeneration) return
+  streamClient = createRunEventClient({
+    runId,
+    afterSequence: lastSequence,
+    onSnapshot: (snapshot) => {
+      if (generation !== streamGeneration) return
+      timelineState.value = applyRunSnapshot(timelineState.value, snapshot)
+      connectionStatus.value = snapshot.is_terminal ? 'terminal' : 'live'
+    },
+    onWorkflowEvent: (event) => {
+      if (generation !== streamGeneration) return
+      timelineState.value = reduceWorkflowEvent(timelineState.value, event)
+    },
+    onTerminal: () => {
+      if (generation !== streamGeneration) return
+      connectionStatus.value = 'terminal'
+      void refreshStatus()
+    },
+    onError: (error) => {
+      if (generation !== streamGeneration) return
+      if (error?.code !== 'SSE_TRANSPORT_DISCONNECTED') connectionStatus.value = 'error'
+    },
+    onFallback: () => {
+      if (generation !== streamGeneration) return
+      connectionStatus.value = 'fallback'
+      startPolling()
+    },
+  })
+  streamClient.connect()
+}
+
 function startPolling() {
   stopPolling()
   if (!selectedJob.value || !['queued', 'running'].includes(selectedJob.value.job_status)) {
@@ -264,7 +365,10 @@ async function loadJobs(preferDefault = false) {
     const res = await generateApi.listJobs(learnerId)
     jobs.value = (res.data.items || []).filter((item) => item.job_status !== 'failed')
     if (!jobs.value.length) {
+      closeRealtime()
       selectedRunId.value = ''
+      timelineState.value = createInitialTimelineState()
+      connectionStatus.value = 'idle'
       resources.value = []
       resourcesLoaded.value = false
       selectedResourceId.value = ''
@@ -281,7 +385,6 @@ async function loadJobs(preferDefault = false) {
     }
 
     persistSelectedJob()
-    startPolling()
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.response?.data?.message || '任务列表加载失败')
@@ -345,6 +448,7 @@ async function refreshJobs() {
   if (selectedJob.value?.job_status === 'completed') {
     await loadResourcesForSelectedJob()
   }
+  await startRealtime(selectedRunId.value)
 }
 
 async function handleTaskChange() {
@@ -360,7 +464,17 @@ async function handleTaskChange() {
   } else {
     resourcesLoaded.value = true
   }
-  startPolling()
+  await startRealtime(selectedRunId.value)
+}
+
+async function openChildRun(runId) {
+  selectedRunId.value = runId
+  localStorage.setItem('current_generation_run_id', runId)
+  await loadJobs(false)
+  resources.value = []
+  resourcesLoaded.value = false
+  selectedResourceId.value = ''
+  await startRealtime(runId)
 }
 
 async function retryGeneration() {
@@ -380,7 +494,7 @@ async function retryGeneration() {
     const res = await generateApi.createJob(payload)
     selectedRunId.value = res.data.run_id
     await loadJobs(true)
-    startPolling()
+    await startRealtime(selectedRunId.value)
     ElMessage.success('已重新发起生成任务')
   } catch (error) {
     console.error(error)
@@ -397,9 +511,13 @@ onMounted(async () => {
   } else {
     resourcesLoaded.value = true
   }
+  await startRealtime(selectedRunId.value)
 })
 
-onBeforeUnmount(stopPolling)
+onBeforeUnmount(() => {
+  closeRealtime()
+  stopPolling()
+})
 </script>
 
 <style scoped>

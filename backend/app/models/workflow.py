@@ -9,6 +9,8 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.common import ErrorInfo
+from app.models.knowledge import EvidenceItem, RetrievalStatus
 from app.models.schemas import LearnerProfile, LearningResource
 
 
@@ -53,22 +55,15 @@ class ResourceStatus(str, Enum):
     DRAFT = "draft"
     UNREVIEWED_DRAFT = "unreviewed_draft"
     PENDING_REVIEW = "pending_review"
+    REVISION_REQUESTED = "revision_requested"
     APPROVED = "approved"
     REJECTED = "rejected"
     HUMAN_REVIEW = "human_review"
 
 
-class ErrorInfo(BaseModel):
-    """Sanitized workflow error safe for API responses and audit storage."""
-
-    code: str
-    category: str
-    message: str
-    retryable: bool = False
-    source: str
-    attempt: int = Field(default=1, ge=1)
-    occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    safe_detail: Optional[str] = None
+class PublicationStatus(str, Enum):
+    UNPUBLISHED = "unpublished"
+    PUBLISHED = "published"
 
 
 class WorkflowConstraints(BaseModel):
@@ -104,14 +99,27 @@ class WorkflowState(TypedDict, total=False):
     current_node: str
     generation_attempt: int
     revision_count: int
+    workflow_started_at: datetime
+    workflow_deadline_at: datetime
     claim_check_status: str
     retrieval_status: str
+    retrieval_config_hash: Optional[str]
+    retrieval_query_hashes: List[str]
+    retrieval_candidate_count: int
+    retrieval_dropped_candidate_count: int
+    retrieval_partial_failure_count: int
 
     diagnosis: Dict[str, Any]
+    retrieved_evidence: List[EvidenceItem]
+    # Compatibility projection retained for P0-02 callers. It is never accepted
+    # as factual evidence by the P0-03 generation path.
     retrieved_chunks: List[Dict[str, Any]]
     learning_plan: Dict[str, Any]
     generated_resources: List[LearningResource]
     review_result: Dict[str, Any]
+    extracted_claims: List[Dict[str, Any]]
+    claim_judgements: List[Dict[str, Any]]
+    claim_metrics: Dict[str, Dict[str, Any]]
     final_decision: str
 
     trace: Annotated[List[Dict[str, Any]], operator.add]
@@ -144,14 +152,25 @@ class WorkflowStateSnapshot(BaseModel):
     current_node: str = "pending"
     generation_attempt: int = Field(default=1, ge=1)
     revision_count: int = Field(default=0, ge=0)
+    workflow_started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    workflow_deadline_at: datetime
     claim_check_status: ClaimCheckStatus = ClaimCheckStatus.NOT_REQUESTED
-    retrieval_status: Literal["pending", "available", "no_hit", "error"] = "pending"
+    retrieval_status: RetrievalStatus = RetrievalStatus.PENDING
+    retrieval_config_hash: Optional[str] = None
+    retrieval_query_hashes: List[str] = Field(default_factory=list)
+    retrieval_candidate_count: int = Field(default=0, ge=0)
+    retrieval_dropped_candidate_count: int = Field(default=0, ge=0)
+    retrieval_partial_failure_count: int = Field(default=0, ge=0)
 
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
+    retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
     retrieved_chunks: List[Dict[str, Any]] = Field(default_factory=list)
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
     generated_resources: List[LearningResource] = Field(default_factory=list)
     review_result: Dict[str, Any] = Field(default_factory=dict)
+    extracted_claims: List[Dict[str, Any]] = Field(default_factory=list)
+    claim_judgements: List[Dict[str, Any]] = Field(default_factory=list)
+    claim_metrics: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     final_decision: str = ""
     trace: List[Dict[str, Any]] = Field(default_factory=list)
     errors: List[ErrorInfo] = Field(default_factory=list)
@@ -175,4 +194,5 @@ class WorkflowStateSnapshot(BaseModel):
         payload["generated_resources"] = self.generated_resources
         payload["workflow_status"] = self.workflow_status.value
         payload["claim_check_status"] = self.claim_check_status.value
+        payload["retrieval_status"] = self.retrieval_status.value
         return payload  # type: ignore[return-value]

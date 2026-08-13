@@ -2,7 +2,7 @@
 
 import hmac
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
@@ -22,10 +22,17 @@ def _require_admin_health_token(supplied_token: str | None) -> None:
 
 
 @router.get("/knowledge-bases/health")
-def knowledge_base_health(x_admin_token: str | None = Header(default=None)):
+def knowledge_base_health(
+    request: Request,
+    x_admin_token: str | None = Header(default=None),
+):
     """Return sanitized per-KB status; disabled unless an admin token is set."""
     _require_admin_health_token(x_admin_token)
-    report = build_knowledge_base_health_report(get_settings())
+    catalog = request.app.container.knowledge_catalog()
+    report = build_knowledge_base_health_report(
+        get_settings(),
+        index_status_provider=catalog.get_index_status,
+    )
     return JSONResponse(
         status_code=503 if report.status == "not_ready" else 200,
         content=report.model_dump(mode="json", exclude_none=True),
