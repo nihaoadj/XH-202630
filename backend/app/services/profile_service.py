@@ -36,5 +36,11 @@ class ProfileService:
     def update_partial(self, learner_id: str, updates: dict) -> Optional[LearnerProfile]:
         return self.repo.update_partial(learner_id, updates)
 
-    def list_with_pagination(self, page: int, page_size: int, skill_level: Optional[str] = None) -> dict:
-        return self.repo.list_with_pagination(page, page_size, skill_level)
+    def list_with_pagination(
+        self,
+        page: int,
+        page_size: int,
+        skill_level: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> dict:
+        return self.repo.list_with_pagination(page, page_size, skill_level, user_id)

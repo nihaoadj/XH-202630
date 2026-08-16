@@ -1,25 +1,14 @@
 <template>
   <div class="generate-page">
-    <section class="hero-card">
-      <div class="hero-copy">
-        <h2>资源生成状态</h2>
-        <p>默认展示当前正在进行的生成任务；如果你想回看之前的任务，也可以在下方切换历史任务并查看该任务下的资源。</p>
-      </div>
-      <el-tag v-if="learningDirectionName" type="info" effect="plain">
-        当前学习方向：{{ learningDirectionName }}
-      </el-tag>
-    </section>
-
-    <el-card class="status-card">
-      <template #header>
-        <div class="status-head">
-          <div>
-            <span>生成任务</span>
-            <p class="section-tip">默认优先定位到当前生产中的任务，也支持下拉查看历史任务。</p>
-          </div>
-          <el-button text @click="refreshJobs" :loading="loadingJobs">刷新任务</el-button>
+    <section class="control-panel">
+      <div class="panel-title">
+        <div>
+          <span class="eyebrow">Batch Selection</span>
+          <h3>选择学习画像与资源批次</h3>
+          <p>默认定位到最新任务，也可以切换历史批次查看当时生成的教学资源。</p>
         </div>
-      </template>
+        <el-button class="ghost-button" @click="refreshJobs" :loading="loadingJobs">刷新任务</el-button>
+      </div>
 
       <el-empty
         v-if="!jobs.length"
@@ -28,31 +17,72 @@
 
       <template v-else>
         <div class="task-selector">
-          <el-select
-            v-model="selectedRunId"
-            filterable
-            placeholder="选择要查看的生成任务"
-            class="task-select"
-            @change="handleTaskChange"
-          >
-            <el-option
-              v-for="task in jobs"
-              :key="task.run_id"
-              :label="taskLabel(task)"
-              :value="task.run_id"
-            />
-          </el-select>
+          <div class="selector-field">
+            <span>学习画像</span>
+            <el-select
+              v-model="selectedLearnerId"
+              filterable
+              placeholder="选择学习画像"
+              class="task-select"
+              @change="handleProfileChange"
+            >
+              <el-option
+                v-for="item in profileOptions"
+                :key="item.learner_id"
+                :label="item.label"
+                :value="item.learner_id"
+              />
+            </el-select>
+          </div>
+          <div class="selector-field">
+            <span>资源批次</span>
+            <el-select
+              v-model="selectedRunId"
+              filterable
+              placeholder="选择要查看的生成任务"
+              class="task-select"
+              @change="handleTaskChange"
+            >
+              <el-option
+                v-for="task in jobs"
+                :key="task.run_id"
+                :label="taskLabel(task)"
+                :value="task.run_id"
+              />
+            </el-select>
+          </div>
         </div>
 
         <div v-if="selectedJob" class="job-summary">
-          <p><strong>用户：</strong>{{ currentDisplayName }}</p>
-          <p><strong>学习方向：</strong>{{ learningDirectionName || '-' }}</p>
-          <p><strong>任务编号：</strong>{{ shortRunId }}</p>
-          <p><strong>任务状态：</strong><el-tag :type="statusTagType(selectedJob.job_status)">{{ statusLabel(selectedJob.job_status) }}</el-tag></p>
-          <p><strong>创建时间：</strong>{{ formatDateTime(selectedJob.created_at) }}</p>
-          <p v-if="selectedJob.finished_at"><strong>完成时间：</strong>{{ formatDateTime(selectedJob.finished_at) }}</p>
-          <p v-if="selectedJob.error_message"><strong>错误信息：</strong>{{ selectedJob.error_message }}</p>
+          <div class="summary-item">
+            <span>学习方向</span>
+            <strong>{{ learningDirectionName || '-' }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>任务编号</span>
+            <strong>{{ shortRunId }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>任务状态</span>
+            <strong class="status-value" :class="`status-${selectedJob.job_status || 'idle'}`">
+              {{ statusLabel(selectedJob.job_status) }}
+            </strong>
+          </div>
+          <div class="summary-item">
+            <span>资源数量</span>
+            <strong>{{ resources.length }} 份</strong>
+          </div>
+          <div class="summary-item">
+            <span>创建时间</span>
+            <strong>{{ formatDateTime(selectedJob.created_at) }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>完成时间</span>
+            <strong>{{ selectedJob.finished_at ? formatDateTime(selectedJob.finished_at) : '等待完成' }}</strong>
+          </div>
         </div>
+
+        <p v-if="selectedJob?.error_message" class="error-message">{{ selectedJob.error_message }}</p>
 
         <div class="status-actions">
           <el-button
@@ -71,8 +101,7 @@
           </el-button>
           <el-button
             v-if="selectedJob && selectedJob.job_status === 'completed'"
-            type="primary"
-            plain
+            class="primary-action"
             @click="loadResourcesForSelectedJob"
             :loading="loadingResources"
           >
@@ -81,70 +110,100 @@
           <el-button @click="$router.push('/learning/history')">查看学习历史</el-button>
         </div>
       </template>
-    </el-card>
+    </section>
 
-    <AgentVisualization
-      v-if="selectedRunId"
-      :trace="timelineState.steps"
-      :markers="timelineState.markers"
-      :connection-status="connectionStatus"
-      :legacy-partial="timelineState.replayCompleteness === 'legacy_partial'"
-      @open-child-run="openChildRun"
-    />
-
-    <el-card v-if="selectedJob" class="resources-card">
-      <template #header>
-        <div class="status-head">
+    <section v-if="selectedJob" class="studio-grid">
+      <div class="process-panel">
+        <div class="panel-title compact">
           <div>
-            <span>{{ selectedJob.job_status === 'completed' ? '任务资源' : '任务资源预览' }}</span>
-            <p class="section-tip">资源按任务维度展示；先选任务，再从该任务下选择任意一份资源阅读。</p>
+            <span class="eyebrow">Workflow Trace</span>
+            <h3>生成过程</h3>
+          </div>
+          <el-tag :type="connectionStatus === 'live' ? 'success' : 'info'" effect="plain">
+            {{ connectionStatus === 'live' ? '实时同步' : '任务记录' }}
+          </el-tag>
+        </div>
+        <AgentVisualization
+          v-if="selectedRunId"
+          :trace="timelineState.steps"
+          :markers="timelineState.markers"
+          :connection-status="connectionStatus"
+          :legacy-partial="timelineState.replayCompleteness === 'legacy_partial'"
+          @open-child-run="openChildRun"
+        />
+      </div>
+
+      <div class="resources-panel">
+        <div class="panel-title compact">
+          <div>
+            <span class="eyebrow">Teaching Assets</span>
+            <h3>{{ selectedJob.job_status === 'completed' ? '任务资源' : '资源预览' }}</h3>
           </div>
           <el-tag :type="selectedJob.job_status === 'completed' ? 'success' : 'info'" effect="plain">
             {{ resources.length }} 份资源
           </el-tag>
         </div>
-      </template>
 
-      <div v-loading="loadingResources">
-        <el-empty
-          v-if="selectedJob.job_status !== 'completed'"
-          :description="selectedJob.job_status === 'failed' ? '该任务生成失败，当前没有可展示的资源。' : '该任务仍在生成中，完成后这里会展示本任务的资源。'"
-        />
-        <el-empty
-          v-else-if="resourcesLoaded && !resources.length"
-          description="该任务已完成，但暂时还没有查到资源内容。可以稍后再刷新一次。"
-        />
-        <template v-else-if="resources.length">
-          <div class="resource-selector">
-            <el-select
-              v-model="selectedResourceId"
-              filterable
-              placeholder="选择要阅读的资源"
-              class="resource-select"
-            >
-              <el-option
-                v-for="item in resources"
-                :key="item.resource_id"
-                :label="resourceLabel(item)"
-                :value="item.resource_id"
-              />
-            </el-select>
-          </div>
-          <ResourceViewer v-if="selectedResource" :resources="[selectedResource]" />
-        </template>
+        <div v-loading="loadingResources" class="resource-stage">
+          <el-empty
+            v-if="selectedJob.job_status !== 'completed'"
+            :description="selectedJob.job_status === 'failed' ? '该任务生成失败，当前没有可展示的资源。' : '该任务仍在生成中，完成后这里会展示本任务的资源。'"
+          />
+          <el-empty
+            v-else-if="resourcesLoaded && !resources.length"
+            description="该任务已完成，但暂时还没有查到资源内容。可以稍后再刷新一次。"
+          />
+          <template v-else-if="resources.length">
+            <div class="resource-toolbar">
+              <div>
+                <span class="eyebrow">Now Reading</span>
+                <strong>{{ selectedResource ? resourceLabel(selectedResource) : '选择资源' }}</strong>
+              </div>
+              <el-select
+                v-model="selectedResourceId"
+                filterable
+                placeholder="选择要阅读的资源"
+                class="resource-select"
+              >
+                <el-option
+                  v-for="item in resources"
+                  :key="item.resource_id"
+                  :label="resourceLabel(item)"
+                  :value="item.resource_id"
+                />
+              </el-select>
+            </div>
+            <ResourceViewer v-if="selectedResource" :resources="[selectedResource]" />
+          </template>
+        </div>
       </div>
-    </el-card>
+    </section>
+
+    <section v-else class="empty-studio">
+      <div>
+        <span class="eyebrow">Waiting</span>
+        <h3>还没有可查看的生成任务</h3>
+        <p>完成一次学习方向诊断并发起资源生成后，这里会展示资源批次、过程记录与阅读入口。</p>
+      </div>
+      <el-button type="primary" @click="$router.push('/learning/new')">新建学习方向</el-button>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { generateApi, resourceApi, runApi } from '../api'
+import { generateApi, knowledgeApi, profileApi, resourceApi, runApi } from '../api'
 import { createRunEventClient } from '../api/runEvents'
 import ResourceViewer from '../components/ResourceViewer.vue'
 import AgentVisualization from '../components/AgentVisualization.vue'
 import { useAppStore } from '../stores/app'
+import {
+  formatDateTime,
+  formatResourceLabel,
+  formatSupplementalRequirements,
+  formatTaskLabel,
+} from '../utils/generationDisplay'
 import {
   applyRunSnapshot,
   createInitialTimelineState,
@@ -165,11 +224,12 @@ const currentDisplayName = computed(
     '当前用户'
 )
 
-const learnerId =
+const selectedLearnerId = ref(
   new URLSearchParams(window.location.search).get('learnerId') ||
   localStorage.getItem('last_learner_id') ||
   store.currentLearnerId ||
   ''
+)
 const initialRunId =
   new URLSearchParams(window.location.search).get('runId') ||
   localStorage.getItem('current_generation_run_id') ||
@@ -184,11 +244,22 @@ const resources = ref([])
 const retrying = ref(false)
 const selectedRunId = ref(initialRunId)
 const selectedResourceId = ref('')
+const profiles = ref([])
+const tracks = ref([])
 const timelineState = ref(createInitialTimelineState())
 const connectionStatus = ref('idle')
 let streamClient = null
 let streamGeneration = 0
 
+const activeProfile = computed(
+  () => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null
+)
+const profileOptions = computed(() =>
+  profiles.value.map((profile) => ({
+    ...profile,
+    label: `${resolveTrackName(profile.knowledge_base_id)} / ${profile.skill_level || '未分级'}`,
+  }))
+)
 const selectedJob = computed(
   () => jobs.value.find((item) => item.run_id === selectedRunId.value) || null
 )
@@ -219,9 +290,18 @@ function statusTagType(status) {
   )
 }
 
+function resolveTrackName(trackId) {
+  return tracks.value.find((item) => item.track_id === trackId)?.name || trackId || '未命名方向'
+}
+
+function profileDisplayName(profile) {
+  const snapshot = profile?.learning_preferences?.metadata?.user_profile_snapshot
+  return snapshot?.display_name || snapshot?.name || profile?.learner_type || '未命名画像'
+}
+
 function taskLabel(task) {
   const prefix = task.job_status === 'running' || task.job_status === 'queued' ? '当前' : '历史'
-  return `${prefix} / ${task.run_id.slice(0, 8).toUpperCase()} / ${task.topic || '未命名主题'} / ${formatDateTime(task.finished_at || task.created_at)}`
+  return `${prefix} / ${task.run_id.slice(0, 8).toUpperCase()} / ${formatDateTime(task.finished_at || task.created_at)}`
 }
 
 function persistSelectedJob() {
@@ -230,20 +310,7 @@ function persistSelectedJob() {
 }
 
 function resourceLabel(resource) {
-  return `${resource.resource_type} / ${resource.difficulty} / ${resource.topic || '未命名主题'}`
-}
-
-function formatDateTime(value) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+  return formatResourceLabel(resource, resolveTrackName(activeProfile.value?.knowledge_base_id))
 }
 
 function readLastGenerationRequest() {
@@ -358,11 +425,44 @@ function pickDefaultRunId(items) {
   return items[0].run_id
 }
 
+function syncProfileContext() {
+  const profile = activeProfile.value
+  if (!profile) return
+  store.resumeProfile(profile, profile.knowledge_base_id, resolveTrackName(profile.knowledge_base_id))
+  localStorage.setItem('last_learner_id', profile.learner_id)
+}
+
+async function loadProfiles() {
+  const [profileRes, domainRes] = await Promise.all([
+    profileApi.list({ page: 1, page_size: 50 }),
+    knowledgeApi.listDomains(),
+  ])
+  profiles.value = profileRes.data.items || profileRes.data.profiles || []
+  tracks.value = (domainRes.data.domains || []).flatMap((domain) => domain.tracks || [])
+  if (!profiles.value.length) {
+    selectedLearnerId.value = ''
+    return
+  }
+  if (!profiles.value.some((item) => item.learner_id === selectedLearnerId.value)) {
+    selectedLearnerId.value = store.currentLearnerId || profiles.value[0].learner_id
+  }
+  syncProfileContext()
+}
+
 async function loadJobs(preferDefault = false) {
-  if (!learnerId) return
+  if (!selectedLearnerId.value) {
+    jobs.value = []
+    selectedRunId.value = ''
+    resources.value = []
+    resourcesLoaded.value = false
+    closeRealtime()
+    stopPolling()
+    connectionStatus.value = 'idle'
+    return
+  }
   loadingJobs.value = true
   try {
-    const res = await generateApi.listJobs(learnerId)
+    const res = await generateApi.listJobs(selectedLearnerId.value)
     jobs.value = (res.data.items || []).filter((item) => item.job_status !== 'failed')
     if (!jobs.value.length) {
       closeRealtime()
@@ -394,7 +494,7 @@ async function loadJobs(preferDefault = false) {
 }
 
 async function loadResourcesForSelectedJob() {
-  if (!learnerId || !selectedJob.value?.run_id || selectedJob.value.job_status !== 'completed') {
+  if (!selectedLearnerId.value || !selectedJob.value?.run_id || selectedJob.value.job_status !== 'completed') {
     resources.value = []
     resourcesLoaded.value = true
     selectedResourceId.value = ''
@@ -403,7 +503,7 @@ async function loadResourcesForSelectedJob() {
 
   loadingResources.value = true
   try {
-    const res = await resourceApi.listByLearner(learnerId, { run_id: selectedJob.value.run_id })
+    const res = await resourceApi.listByLearner(selectedLearnerId.value, { run_id: selectedJob.value.run_id })
     resources.value = res.data.resources || []
     resourcesLoaded.value = true
     if (!resources.value.length) {
@@ -467,6 +567,24 @@ async function handleTaskChange() {
   await startRealtime(selectedRunId.value)
 }
 
+async function handleProfileChange() {
+  syncProfileContext()
+  selectedRunId.value = ''
+  selectedResourceId.value = ''
+  resources.value = []
+  resourcesLoaded.value = false
+  timelineState.value = createInitialTimelineState()
+  closeRealtime()
+  stopPolling()
+  await loadJobs(true)
+  if (selectedJob.value?.job_status === 'completed') {
+    await loadResourcesForSelectedJob()
+  } else {
+    resourcesLoaded.value = true
+  }
+  await startRealtime(selectedRunId.value)
+}
+
 async function openChildRun(runId) {
   selectedRunId.value = runId
   localStorage.setItem('current_generation_run_id', runId)
@@ -505,6 +623,7 @@ async function retryGeneration() {
 }
 
 onMounted(async () => {
+  await loadProfiles()
   await loadJobs(true)
   if (selectedJob.value?.job_status === 'completed') {
     await loadResourcesForSelectedJob()
@@ -524,80 +643,333 @@ onBeforeUnmount(() => {
 .generate-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
+  color: #172033;
 }
 
-.hero-card,
-.status-card,
-.resources-card {
-  padding: 22px;
-  border-radius: 16px;
+.control-panel,
+.process-panel,
+.resources-panel,
+.empty-studio {
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
   background: #fff;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 18px 42px rgba(32, 47, 73, 0.08);
 }
 
-.hero-card {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
+.eyebrow {
+  display: block;
+  color: #2f6e5f;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
-.hero-copy h2 {
-  margin: 0;
-  font-size: 28px;
-}
-
-.hero-copy p {
-  margin: 10px 0 0;
-  color: #667085;
-  line-height: 1.7;
-  max-width: 760px;
-}
-
-.status-head,
-.status-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.status-head p,
-.section-tip {
-  margin: 6px 0 0;
-  color: #667085;
+.summary-item span {
+  display: block;
+  color: #6a7689;
   font-size: 13px;
+  margin-bottom: 8px;
 }
 
-.task-selector {
+.control-panel,
+.process-panel,
+.resources-panel,
+.empty-studio {
+  padding: 24px 28px;
+}
+
+.panel-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e4ebf3;
+}
+
+.panel-title.compact {
+  padding-bottom: 14px;
   margin-bottom: 18px;
 }
 
-.task-select,
-.resource-select {
-  width: min(560px, 100%);
+.panel-title h3 {
+  margin: 5px 0 0;
+  font-size: 22px;
+  line-height: 1.25;
 }
 
-.job-summary p {
-  margin: 0 0 10px;
-  color: #1f2937;
+.panel-title p {
+  margin: 8px 0 0;
+  color: #5d6b82;
+  line-height: 1.6;
+}
+
+.ghost-button {
+  border-color: #b8c8db;
+  color: #243246;
+}
+
+.task-selector {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(360px, 1.05fr);
+  gap: 16px;
+  margin: 22px 0;
+  max-width: none;
+}
+
+.selector-field {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #d6e0ec;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.selector-field span {
+  display: block;
+  margin-bottom: 8px;
+  color: #63728a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.selector-field :deep(.el-select__wrapper) {
+  min-height: 42px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.selector-field :deep(.el-select__placeholder),
+.selector-field :deep(.el-select__selected-item) {
+  color: #172033;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.task-select {
+  width: 100%;
+}
+
+.job-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fbff;
+}
+
+.summary-item {
+  min-height: 92px;
+  padding: 16px 18px;
+  border-right: 1px solid #d9e1ec;
+  background: linear-gradient(180deg, #fff, #f7fafc);
+}
+
+.summary-item:last-child {
+  border-right: 0;
+}
+
+.summary-item strong {
+  display: block;
+  color: #172033;
+  font-size: 18px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.summary-item .status-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+}
+
+.status-value::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7a8798;
+}
+
+.status-completed {
+  color: #2f6e5f;
+}
+
+.status-completed::before {
+  background: #2f8f6a;
+}
+
+.status-running,
+.status-queued {
+  color: #9a6a1b;
+}
+
+.status-running::before,
+.status-queued::before {
+  background: #d99a2b;
+}
+
+.status-failed {
+  color: #a43f37;
+}
+
+.status-failed::before {
+  background: #c94a43;
+}
+
+.error-message {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: #9f322b;
+  background: #fff2f0;
+  border: 1px solid #ffd2cd;
 }
 
 .status-actions {
+  display: flex;
   justify-content: flex-end;
+  gap: 12px;
   margin-top: 18px;
   flex-wrap: wrap;
 }
 
-.resource-selector {
+.primary-action {
+  border-color: #2f6e5f;
+  background: #2f6e5f;
+  color: #fff;
+}
+
+.studio-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.88fr) minmax(520px, 1.12fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.process-panel,
+.resources-panel {
+  min-width: 0;
+}
+
+.process-panel :deep(.el-card) {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.process-panel :deep(.el-card__header) {
+  display: none;
+}
+
+.process-panel :deep(.el-card__body) {
+  padding: 0;
+}
+
+.process-panel :deep(.el-timeline) {
+  padding-left: 8px;
+}
+
+.process-panel :deep(.el-timeline-item__content strong) {
+  font-size: 16px;
+  color: #172033;
+}
+
+.resource-stage {
+  min-height: 360px;
+}
+
+.resource-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
   margin-bottom: 18px;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(47, 110, 95, 0.08), transparent 42%),
+    #f8fbff;
+}
+
+.resource-toolbar strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  color: #172033;
+}
+
+.resource-select {
+  width: min(420px, 46%);
+  min-width: 260px;
+}
+
+.resources-panel :deep(.resource-reader) {
+  box-shadow: none;
+}
+
+.empty-studio {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.empty-studio h3 {
+  margin: 6px 0 8px;
+  font-size: 22px;
+}
+
+.empty-studio p {
+  margin: 0;
+  color: #5d6b82;
+}
+
+@media (max-width: 1200px) {
+  .job-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .summary-item {
+    border-bottom: 1px solid #d9e1ec;
+  }
+
+  .studio-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 920px) {
-  .hero-card,
-  .status-head {
+  .panel-title,
+  .task-selector,
+  .resource-toolbar,
+  .empty-studio {
     flex-direction: column;
+  }
+
+  .task-selector {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .job-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-item {
+    border-right: 0;
+  }
+
+  .resource-select {
+    width: 100%;
+    min-width: 0;
   }
 }
 </style>

@@ -327,9 +327,9 @@ LIMIT :page_size
 - `GET /api/resources/file/{resource_id}`
 - `GET /api/reviews/{resource_id}`
 - `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
-- `POST /api/feedback/evaluation/run/submit`
-- `POST /api/feedback/`
-- `GET /api/feedback/history/{learner_id}`
+- `POST /api/feedback/attemptsattempts/run/submit`
+- `POST /api/feedback/attempts`
+- `GET /api/feedback/attempts/{learner_id}`
 - `GET /api/learning-history/{learner_id}/timeline`
 - `GET /api/report/{learner_id}`
 

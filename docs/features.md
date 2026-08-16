@@ -228,7 +228,7 @@
 
 ## 12. 反馈后画像与学习路径闭环（P0-07）
 
-- 正式入口为 `POST /api/feedback/attempts`；旧反馈接口保留兼容，不作为新闭环事实源。
+- 正式入口为 `POST /api/feedback/attemptsattempts`；旧反馈写入接口已移除，新闭环事实源统一为 attempt。
 - 总分由后端按逐知识点题数加权重算，边界为 `<0.60 remediate`、`0.60~0.85 practice`、`>0.85 advance`，任一知识点低于 0.60 会阻止整体进阶。
 - 一次本地事务写入 Attempt、Decision、知识状态变更、画像 N+1 和路径 mutation。
 - 低分激活补救节点，中分保持主路径并避免重复练习节点，高分完成当前节点并解锁后继或挑战节点。

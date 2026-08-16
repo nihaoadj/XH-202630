@@ -20,6 +20,7 @@ def _to_schema(orm: GenerationJobORM) -> GenerationJobStatusResponse:
         job_status=orm.status,
         resource_ids=orm.resource_ids or [],
         error_message=orm.error_message,
+        request_payload=orm.request_payload or {},
         created_at=orm.created_at,
         started_at=orm.started_at,
         finished_at=orm.finished_at,

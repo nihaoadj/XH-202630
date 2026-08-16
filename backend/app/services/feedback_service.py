@@ -35,6 +35,7 @@ from app.models.schemas import (
     ResourceEvaluationSessionResponse,
     ResourceEvaluationSubmitRequest,
     ResourceEvaluationSubmitResponse,
+    RunAttemptSubmitRequest,
     RunEvaluationSessionResponse,
     RunEvaluationSubmitRequest,
     RunEvaluationSubmitResponse,
@@ -428,6 +429,102 @@ class FeedbackService:
             questions=questions,
         )
 
+    def submit_run_attempt(
+        self,
+        profile: LearnerProfile,
+        run_id: str,
+        resources: list[LearningResource],
+        payload: RunAttemptSubmitRequest,
+        knowledge_service: KnowledgeService,
+        *,
+        schedule_followup: Callable[[LearnerProfile, GenerateRequest, str], None] | None = None,
+    ) -> FeedbackLoopResult:
+        questions, answer_key = self._build_run_question_specs(profile, resources, knowledge_service)
+        if not questions:
+            raise ValueError("当前任务暂时没有可用测评题目")
+
+        selected_resource = self._select_attempt_resource(resources, payload.source_resource_id)
+        submitted_answers = {item.question_id: item.answer for item in payload.answers}
+        point_results: dict[str, dict[str, object]] = {}
+
+        for question in questions:
+            knowledge_point_id = self._question_result_key(question)
+            result = point_results.setdefault(
+                knowledge_point_id,
+                {
+                    "question_ids": [],
+                    "correct_count": 0,
+                    "total_count": 0,
+                    "skill_node_ids": [],
+                    "knowledge_points": [],
+                    "diagnostic_dimensions": [],
+                },
+            )
+            result["question_ids"].append(question.question_id)
+            result["total_count"] += 1
+            if question.skill_node_id and question.skill_node_id not in result["skill_node_ids"]:
+                result["skill_node_ids"].append(question.skill_node_id)
+            if question.knowledge_point and question.knowledge_point not in result["knowledge_points"]:
+                result["knowledge_points"].append(question.knowledge_point)
+            if question.diagnostic_dimension and question.diagnostic_dimension not in result["diagnostic_dimensions"]:
+                result["diagnostic_dimensions"].append(question.diagnostic_dimension)
+            if self._answer_score(
+                question.question_type,
+                answer_key.get(question.question_id),
+                submitted_answers.get(question.question_id),
+            ) >= 1.0:
+                result["correct_count"] += 1
+
+        metadata = dict(payload.metadata)
+        metadata.update(
+            {
+                "evaluation_source": "knowledge_base",
+                "question_count": len(questions),
+                "question_trace": [
+                    self._question_trace_item(question, selected_resource.learning_path_node)
+                    for question in questions
+                ],
+                "point_trace": {
+                    knowledge_point_id: {
+                        "skill_node_ids": values["skill_node_ids"],
+                        "knowledge_points": values["knowledge_points"],
+                        "diagnostic_dimensions": values["diagnostic_dimensions"],
+                    }
+                    for knowledge_point_id, values in point_results.items()
+                },
+            }
+        )
+
+        attempt = LearningAttemptSubmit(
+            learner_id=payload.learner_id,
+            source_resource_id=selected_resource.resource_id,
+            source_resource_version=selected_resource.version,
+            source_run_id=run_id,
+            path_node_id=payload.path_node_id,
+            idempotency_key=payload.idempotency_key,
+            expected_profile_version=payload.expected_profile_version,
+            started_at=payload.started_at,
+            submitted_at=payload.submitted_at,
+            duration_ms=payload.duration_ms,
+            hint_count=payload.hint_count,
+            knowledge_point_results=[
+                {
+                    "knowledge_point_id": knowledge_point_id,
+                    "question_ids": values["question_ids"],
+                    "correct_count": values["correct_count"],
+                    "total_count": values["total_count"],
+                }
+                for knowledge_point_id, values in point_results.items()
+            ],
+            metadata=metadata,
+        )
+        return self.process_learning_attempt(
+            profile,
+            selected_resource,
+            attempt,
+            schedule_followup=schedule_followup,
+        )
+
     def submit_evaluation_feedback(
         self,
         profile: LearnerProfile,
@@ -447,7 +544,7 @@ class FeedbackService:
         for question in questions:
             actual_answer = submitted_answers.get(question.question_id)
             expected_answer = answer_key.get(question.question_id)
-            is_correct = self._answers_match(expected_answer, actual_answer)
+            is_correct = self._answer_score(question.question_type, expected_answer, actual_answer) >= 1.0
             if is_correct:
                 correct_count += 1
             elif question.knowledge_point:
@@ -515,7 +612,7 @@ class FeedbackService:
         for question in questions:
             actual_answer = submitted_answers.get(question.question_id)
             expected_answer = answer_key.get(question.question_id)
-            is_correct = self._answers_match(expected_answer, actual_answer)
+            is_correct = self._answer_score(question.question_type, expected_answer, actual_answer) >= 1.0
             if is_correct:
                 correct_count += 1
             elif question.knowledge_point:
@@ -573,33 +670,27 @@ class FeedbackService:
         profile: LearnerProfile,
         resource: LearningResource,
         knowledge_service: KnowledgeService,
-        limit: int = 5,
+        limit: int = 10,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
         questions: list[ResourceEvaluationQuestion] = []
         answer_key: dict[str, object] = {}
 
-        for item in resource.exercise_items:
-            questions.append(
-                ResourceEvaluationQuestion(
-                    question_id=item.question_id,
-                    question_type="short_answer",
-                    question=item.question,
-                    knowledge_point=item.knowledge_point,
-                    difficulty=item.difficulty,
-                    source="resource",
-                )
-            )
-            answer_key[item.question_id] = item.answer
-
-        if questions:
-            return questions[:limit], answer_key
-
         if not profile.knowledge_base_id:
-            return [], {}
+            return questions, answer_key
+
+        target_skill_nodes = [item for item in self._resource_target_skill_nodes(resource) if item]
+        candidates = knowledge_service.load_diagnostic_questions(profile.knowledge_base_id)
+        related = [
+            item
+            for item in candidates
+            if target_skill_nodes and item.skill_node_id in target_skill_nodes
+        ]
+        seen_related_ids = {item.question_id for item in related}
 
         tokens = [resource.topic or "", *(resource.knowledge_points or [])]
-        related = []
-        for item in knowledge_service.load_diagnostic_questions(profile.knowledge_base_id):
+        for item in candidates:
+            if item.question_id in seen_related_ids:
+                continue
             searchable = " ".join(
                 [
                     item.question or "",
@@ -609,22 +700,32 @@ class FeedbackService:
             )
             if any(token and token in searchable for token in tokens):
                 related.append(item)
+                seen_related_ids.add(item.question_id)
 
-        if not related:
-            related = knowledge_service.select_diagnostic_questions(
+        if len(related) < limit:
+            for item in knowledge_service.select_diagnostic_questions(
                 profile.knowledge_base_id,
                 limit=limit,
-            )
+            ):
+                if item.question_id in seen_related_ids:
+                    continue
+                related.append(item)
+                seen_related_ids.add(item.question_id)
+                if len(related) >= limit:
+                    break
 
-        for item in related[:limit]:
+        for item in self._order_questions_for_coverage(related)[:limit]:
             questions.append(
                 ResourceEvaluationQuestion(
                     question_id=item.question_id,
                     question_type=item.question_type,
                     question=item.question,
                     options=item.options or [],
+                    skill_node_id=item.skill_node_id,
+                    path_node_id=resource.learning_path_node,
                     knowledge_point=item.knowledge_point,
                     difficulty=item.difficulty,
+                    diagnostic_dimension=item.metadata.get("diagnostic_dimension"),
                     source="knowledge_base",
                 )
             )
@@ -632,19 +733,105 @@ class FeedbackService:
 
         return questions, answer_key
 
+    @staticmethod
+    def _resource_target_skill_nodes(resource: LearningResource) -> list[str]:
+        values = []
+        if resource.learning_path_node:
+            values.append(resource.learning_path_node)
+        return list(dict.fromkeys(values))
+
+    @staticmethod
+    def _order_questions_for_coverage(questions: list) -> list:
+        dimensions = ("concept", "scenario", "misconception")
+        ordered = []
+        seen = set()
+        for dimension in dimensions:
+            for question in questions:
+                if question.question_id in seen:
+                    continue
+                if question.metadata.get("diagnostic_dimension") == dimension:
+                    ordered.append(question)
+                    seen.add(question.question_id)
+        for question in questions:
+            if question.question_id not in seen:
+                ordered.append(question)
+        return ordered
+
+    @staticmethod
+    def _question_result_key(question: ResourceEvaluationQuestion) -> str:
+        return question.skill_node_id or question.knowledge_point or "综合能力"
+
+    @staticmethod
+    def _question_trace_item(question: ResourceEvaluationQuestion, fallback_path_node_id: str | None) -> dict[str, object]:
+        return {
+            "question_id": question.question_id,
+            "question_type": question.question_type,
+            "skill_node_id": question.skill_node_id,
+            "path_node_id": question.path_node_id or fallback_path_node_id,
+            "knowledge_point": question.knowledge_point,
+            "difficulty": question.difficulty,
+            "diagnostic_dimension": question.diagnostic_dimension,
+            "source": question.source,
+        }
+
+    def _answer_score(self, question_type: str | None, expected: object, actual: object) -> float:
+        normalized_type = (question_type or "").lower()
+        if normalized_type in {"multiple_choice", "multi_choice", "multiple_select", "checkbox"}:
+            expected_values = self._normalize_answer_set(expected)
+            actual_values = self._normalize_answer_set(actual)
+            if not expected_values:
+                return 1.0 if not actual_values else 0.0
+            return 1.0 if expected_values == actual_values else 0.0
+        return 1.0 if self._answers_match(expected, actual) else 0.0
+
+    @staticmethod
+    def _normalize_answer_set(value: object) -> set[str]:
+        if value is None:
+            return set()
+        if isinstance(value, (list, tuple, set)):
+            raw_values = value
+        else:
+            raw_values = [value]
+        return {str(item).strip().casefold() for item in raw_values if str(item).strip()}
+
+    @staticmethod
+    def _normalize_answer_value(value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        if isinstance(value, list):
+            return [FeedbackService._normalize_answer_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                str(key).strip(): FeedbackService._normalize_answer_value(item)
+                for key, item in value.items()
+            }
+        return value
+
+    @staticmethod
+    def _answers_match(expected: object, actual: object) -> bool:
+        return json.dumps(
+            FeedbackService._normalize_answer_value(expected),
+            ensure_ascii=False,
+            sort_keys=True,
+        ) == json.dumps(
+            FeedbackService._normalize_answer_value(actual),
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
     def _build_run_question_specs(
         self,
         profile: LearnerProfile,
         resources: list[LearningResource],
         knowledge_service: KnowledgeService,
-        limit: int = 8,
+        limit: int = 10,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
         merged_questions: list[ResourceEvaluationQuestion] = []
         merged_answer_key: dict[str, object] = {}
         seen_question_ids: set[str] = set()
 
         for resource in resources:
-            questions, answer_key = self._build_question_specs(profile, resource, knowledge_service, limit=5)
+            questions, answer_key = self._build_question_specs(profile, resource, knowledge_service, limit=10)
             for question in questions:
                 if question.question_id in seen_question_ids:
                     continue
@@ -663,9 +850,13 @@ class FeedbackService:
         return " / ".join(unique_topics[:3]) if unique_topics else ""
 
     @staticmethod
-    def _answers_match(expected: object, actual: object) -> bool:
-        return json.dumps(expected, ensure_ascii=False, sort_keys=True) == json.dumps(
-            actual,
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+    def _select_attempt_resource(resources: list[LearningResource], resource_id: str | None) -> LearningResource:
+        if resource_id:
+            for resource in resources:
+                if resource.resource_id == resource_id:
+                    return resource
+            raise ValueError("指定的反馈资源不存在")
+        for resource in resources:
+            if resource.publication_status == "published":
+                return resource
+        return resources[0]

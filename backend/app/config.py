@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     rerank_max_chunks_per_document: int = 2
     resources_dir: str = "./data/generated_resources"
     admin_health_token: SecretStr = SecretStr("")
+    auth_jwt_secret: SecretStr = SecretStr("development-only-change-me")
+    auth_jwt_algorithm: str = "HS256"
+    auth_token_expire_minutes: int = 480
+    auth_cookie_name: str = "training_pilot_token"
+    auth_cookie_secure: bool = False
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     debug: bool = False

@@ -5,6 +5,8 @@ from sqlalchemy import create_engine, text
 from app.db.database import (
     _migrate_sqlite_feedback_records,
     _migrate_sqlite_generated_resources,
+    _migrate_sqlite_learner_profiles,
+    _migrate_sqlite_users,
 )
 
 
@@ -87,3 +89,62 @@ def test_generated_resources_and_feedback_records_migrations_fill_legacy_columns
         "updated_knowledge_states",
         "regenerate_suggestion",
     }.issubset(feedback_columns)
+
+
+def test_auth_columns_and_learner_owner_are_migrated(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-auth.db'}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE users (
+                    user_id VARCHAR(64) PRIMARY KEY,
+                    display_name VARCHAR(128) NOT NULL,
+                    identity VARCHAR(64) NOT NULL,
+                    education VARCHAR(64) NOT NULL,
+                    major VARCHAR(128) NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE learner_profiles (
+                    learner_id VARCHAR(64) PRIMARY KEY,
+                    learner_type VARCHAR(64) NOT NULL,
+                    education VARCHAR(32) NOT NULL,
+                    major VARCHAR(64) NOT NULL,
+                    learning_goal VARCHAR(512) NOT NULL,
+                    learning_preferences JSON
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO users (user_id, display_name, identity, education, major) "
+                "VALUES ('user_1', 'alice', '其他', '未填写', '未填写')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO learner_profiles "
+                "(learner_id, learner_type, education, major, learning_goal, learning_preferences) "
+                "VALUES ('learner_1', '测试', '本科', '计算机', '学习', "
+                "'{\"metadata\": {\"user_id\": \"user_1\"}}')"
+            )
+        )
+
+    _migrate_sqlite_users(engine)
+    _migrate_sqlite_learner_profiles(engine)
+
+    assert {"username", "password_hash", "is_active", "last_login_at"}.issubset(
+        _columns(engine, "users")
+    )
+    assert "user_id" in _columns(engine, "learner_profiles")
+    with engine.begin() as conn:
+        owner = conn.execute(
+            text("SELECT user_id FROM learner_profiles WHERE learner_id = 'learner_1'")
+        ).scalar_one()
+    assert owner == "user_1"

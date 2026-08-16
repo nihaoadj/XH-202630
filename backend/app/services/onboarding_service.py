@@ -1,6 +1,7 @@
 """根据 onboarding 问卷创建初始学习画像。"""
 from __future__ import annotations
 
+from uuid import uuid4
 from typing import Any
 
 from app.db.learner.base import BaseLearnerRepository
@@ -19,6 +20,7 @@ from app.services.knowledge_service import KnowledgeService
 
 class OnboardingService:
     COMMON_QUESTIONNAIRE_ID = "common_initial_profile_v1"
+    DIAGNOSTIC_QUESTION_LIMIT = 10
 
     def __init__(
         self,
@@ -32,10 +34,17 @@ class OnboardingService:
         self.questionnaire_repo = questionnaire_repo
         self.user_repo = user_repo
 
-    def create_initial_profile(self, request: InitialProfileQuestionnaire) -> InitialProfileResponse:
+    def create_initial_profile(
+        self,
+        request: InitialProfileQuestionnaire,
+        authenticated_user: UserProfile | None = None,
+    ) -> InitialProfileResponse:
         manifest = self.knowledge_service._ensure_knowledge_base(request.learning_direction_id)
         self._validate_answers(request, manifest)
-        user = self._resolve_user(request)
+        user = authenticated_user or self._resolve_user(request)
+        request = request.model_copy(
+            update={"learner_id": self._build_learner_id(user.user_id, request.learning_direction_id)}
+        )
         nodes = self.knowledge_service.list_skill_nodes(manifest["knowledge_base_id"])
         node_by_id = {node.node_id: node for node in nodes}
 
@@ -54,12 +63,9 @@ class OnboardingService:
         self.learner_repo.save(profile)
         self._save_questionnaire_submissions(request, manifest, profile)
 
-        questions = (
-            self.knowledge_service.select_diagnostic_questions(
-                manifest["knowledge_base_id"], skill_node_ids=diagnostic_node_ids
-            )
-            if diagnostic_node_ids
-            else []
+        questions = self._select_initial_diagnostic_questions(
+            manifest["knowledge_base_id"],
+            diagnostic_node_ids,
         )
         return InitialProfileResponse(
             learner_id=profile.learner_id,
@@ -70,6 +76,38 @@ class OnboardingService:
             diagnostic_questions=[self.knowledge_service.public_question(question) for question in questions],
             next_step="提交诊断答案到 POST /api/diagnosis/submit，然后进入第 5 步选择资源类型。",
         )
+
+    @staticmethod
+    def _build_learner_id(user_id: str, learning_direction_id: str | None) -> str:
+        direction = (learning_direction_id or "general").strip() or "general"
+        return f"{user_id}__{direction}__{uuid4().hex[:12]}"
+
+    def _select_initial_diagnostic_questions(
+        self,
+        knowledge_base_id: str,
+        diagnostic_node_ids: list[str],
+    ):
+        selected = (
+            self.knowledge_service.select_diagnostic_questions(
+                knowledge_base_id,
+                skill_node_ids=diagnostic_node_ids,
+            )
+            if diagnostic_node_ids
+            else []
+        )
+        if len(selected) >= self.DIAGNOSTIC_QUESTION_LIMIT:
+            return selected[: self.DIAGNOSTIC_QUESTION_LIMIT]
+
+        seen = {question.question_id for question in selected}
+        fill = [
+            question
+            for question in self.knowledge_service.select_diagnostic_questions(
+                knowledge_base_id,
+                limit=self.DIAGNOSTIC_QUESTION_LIMIT,
+            )
+            if question.question_id not in seen
+        ]
+        return [*selected, *fill][: self.DIAGNOSTIC_QUESTION_LIMIT]
 
     def questionnaire(self, learning_direction_id: str | None = None) -> list[dict[str, Any]]:
         manifest = self.knowledge_service._ensure_knowledge_base(learning_direction_id)
@@ -167,6 +205,7 @@ class OnboardingService:
         preserved_weak_points = list(existing.weak_points) if existing else []
         return LearnerProfile(
             learner_id=request.learner_id,
+            user_id=user.user_id,
             learner_type=mapped["root"].get("learner_type") or user.identity or (existing.learner_type if existing else "问卷学习者"),
             education=user.education,
             major=user.major,

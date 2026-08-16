@@ -22,6 +22,7 @@ from app.db.resource.repository import create_resource_repository
 from app.db.user.repository import create_user_repository
 from app.models.llm import LLMCallOptions
 from app.services.diagnosis_service import DiagnosisService
+from app.services.auth_service import AuthService
 from app.services.evaluation_service import EvaluationService
 from app.services.feedback_service import FeedbackService
 from app.services.generation_job_service import GenerationJobService
@@ -150,6 +151,7 @@ class Container(containers.DeclarativeContainer):
 
     profile_service = providers.Singleton(ProfileService, repo=learner_repository)
     user_service = providers.Singleton(UserService, repo=user_repository)
+    auth_service = providers.Singleton(AuthService, repo=user_repository)
     generation_service = providers.Singleton(
         GenerationService,
         resource_repo=resource_repository,
@@ -217,6 +219,7 @@ class Container(containers.DeclarativeContainer):
         questionnaire_repo=questionnaire_repository,
         diagnosis_repo=diagnosis_repository,
         generation_job_repo=generation_job_repository,
+        feedback_repo=feedback_repository,
     )
 
 

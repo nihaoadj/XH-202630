@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from app.api.dependencies import ensure_profile_access
 from app.models.schemas import DiagnosticQuestionListResponse, DiagnosticSubmitRequest, DiagnosticResult
 from app.services.diagnosis_service import DiagnosisService
 from app.services.knowledge_service import KnowledgeService
@@ -38,6 +39,9 @@ def get_diagnostic_questions(
 def submit_diagnosis(payload: DiagnosticSubmitRequest, request: Request):
     """服务端判分，更新学习者画像、知识状态和诊断答题记录。"""
     service: DiagnosisService = request.app.container.diagnosis_service()
+    profile = service.learner_repo.get(payload.learner_id)
+    if ensure_profile_access(request, profile) is None:
+        raise HTTPException(status_code=404, detail="学习者画像不存在")
     try:
         return service.submit(payload)
     except LookupError as exc:

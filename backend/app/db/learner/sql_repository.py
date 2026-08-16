@@ -12,6 +12,7 @@ def _orm_to_pydantic(orm: LearnerProfileORM) -> LearnerProfile:
     """将 ORM 对象转换为 Pydantic 模型"""
     return LearnerProfile(
         learner_id=orm.learner_id,
+        user_id=orm.user_id,
         learner_type=orm.learner_type,
         education=orm.education,
         major=orm.major,
@@ -38,6 +39,7 @@ def _pydantic_to_orm(profile: LearnerProfile) -> LearnerProfileORM:
     """将 Pydantic 模型转换为 ORM 对象"""
     return LearnerProfileORM(
         learner_id=profile.learner_id,
+        user_id=profile.user_id,
         learner_type=profile.learner_type,
         education=profile.education,
         major=profile.major,
@@ -75,6 +77,7 @@ class SQLLearnerRepository(BaseLearnerRepository):
         with self.session_factory() as db:
             orm = db.query(LearnerProfileORM).filter_by(learner_id=profile.learner_id).first()
             if orm:
+                orm.user_id = profile.user_id
                 orm.learner_type = profile.learner_type
                 orm.education = profile.education
                 orm.major = profile.major
@@ -127,9 +130,17 @@ class SQLLearnerRepository(BaseLearnerRepository):
         self.save(updated)
         return updated
 
-    def list_with_pagination(self, page: int, page_size: int, skill_level: Optional[str] = None) -> dict:
+    def list_with_pagination(
+        self,
+        page: int,
+        page_size: int,
+        skill_level: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> dict:
         with self.session_factory() as db:
             query = db.query(LearnerProfileORM)
+            if user_id:
+                query = query.filter_by(user_id=user_id)
             if skill_level:
                 query = query.filter_by(skill_level=skill_level)
             total = query.count()

@@ -75,6 +75,30 @@ export const useAppStore = defineStore('app', () => {
     setCurrentProfile(profile)
   }
 
+  function clearUserContext() {
+    currentUserId.value = ''
+    currentUserProfile.value = null
+    currentLearnerId.value = ''
+    currentLearningDirectionId.value = ''
+    currentLearningDirectionName.value = ''
+    currentProfile.value = null
+    pendingDiagnosticQuestions.value = []
+    diagnosisResult.value = null
+    ;[
+      'current_user_id',
+      'current_user_profile',
+      'last_learner_id',
+      'learning_direction_id',
+      'learning_direction_name',
+      'current_profile',
+      'pending_diagnostic_questions',
+      'diagnosis_result',
+      'current_generation_run_id',
+      'current_generation_learner_id',
+      'last_generation_request',
+    ].forEach((key) => localStorage.removeItem(key))
+  }
+
   return {
     currentUserId,
     currentUserProfile,
@@ -94,5 +118,6 @@ export const useAppStore = defineStore('app', () => {
     clearPendingDiagnosis,
     setDiagnosisResult,
     resumeProfile,
+    clearUserContext,
   }
 })

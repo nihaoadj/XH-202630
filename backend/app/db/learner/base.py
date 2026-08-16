@@ -32,5 +32,11 @@ class BaseLearnerRepository(ABC):
         pass
 
     @abstractmethod
-    def list_with_pagination(self, page: int, page_size: int, skill_level: Optional[str] = None) -> dict:
+    def list_with_pagination(
+        self,
+        page: int,
+        page_size: int,
+        skill_level: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> dict:
         pass

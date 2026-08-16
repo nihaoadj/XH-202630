@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (
     admin,
+    auth,
     diagnosis,
     evaluation,
     feedback,
@@ -25,6 +26,7 @@ from app.api import (
     skills,
     users,
 )
+from app.api.dependencies import get_current_user
 from app.config import get_settings
 from app.containers import init_container
 from app.core.errors import ApplicationError, ErrorCode
@@ -180,20 +182,28 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.include_router(onboarding.router, prefix="/api/onboarding", tags=["onboarding"])
-app.include_router(profiles.router, prefix="/api/profiles", tags=["profiles"])
-app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(generate.router, prefix="/api/generate", tags=["generate"])
-app.include_router(resources.router, prefix="/api/resources", tags=["resources"])
-app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
-app.include_router(report.router, prefix="/api/report", tags=["report"])
+private_api = [Depends(get_current_user)]
+
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["onboarding"], dependencies=private_api)
+app.include_router(profiles.router, prefix="/api/profiles", tags=["profiles"], dependencies=private_api)
+app.include_router(users.router, prefix="/api/users", tags=["users"], dependencies=private_api)
+app.include_router(generate.router, prefix="/api/generate", tags=["generate"], dependencies=private_api)
+app.include_router(resources.router, prefix="/api/resources", tags=["resources"], dependencies=private_api)
+app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"], dependencies=private_api)
+app.include_router(report.router, prefix="/api/report", tags=["report"], dependencies=private_api)
 app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
-app.include_router(diagnosis.router, prefix="/api/diagnosis", tags=["diagnosis"])
+app.include_router(diagnosis.router, prefix="/api/diagnosis", tags=["diagnosis"], dependencies=private_api)
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
-app.include_router(reviews.router, prefix="/api/reviews", tags=["reviews"])
-app.include_router(runs.router, prefix="/api/runs", tags=["workflow-runs"])
-app.include_router(evaluation.router, prefix="/api/evaluation", tags=["evaluation"])
-app.include_router(learning_history.router, prefix="/api/learning-history", tags=["learning-history"])
+app.include_router(reviews.router, prefix="/api/reviews", tags=["reviews"], dependencies=private_api)
+app.include_router(evaluation.router, prefix="/api/evaluation", tags=["evaluation"], dependencies=private_api)
+app.include_router(runs.router, prefix="/api/runs", tags=["workflow-runs"], dependencies=private_api)
+app.include_router(
+    learning_history.router,
+    prefix="/api/learning-history",
+    tags=["learning-history"],
+    dependencies=private_api,
+)
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 
