@@ -48,7 +48,18 @@ class DurableWorkflowRunner:
             if step_id in checkpointed:
                 continue
             if self.artifact_recorder is not None:
-                self.artifact_recorder.record(latest, item)
+                try:
+                    self.artifact_recorder.record(latest, item)
+                except Exception as exc:
+                    code = (
+                        ErrorCode.WORKFLOW_PERSISTENCE_CONFLICT
+                        if isinstance(exc, PersistenceConflict)
+                        else ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE
+                    )
+                    raise ApplicationError(
+                        code,
+                        status_code=409 if isinstance(exc, PersistenceConflict) else 503,
+                    ) from exc
             projection = build_checkpoint_projection(latest)
             encoded = canonical_json(projection).encode("utf-8")
             if len(encoded) > get_settings().workflow_checkpoint_max_bytes:
@@ -78,7 +89,22 @@ class DurableWorkflowRunner:
 
         run_id = str(result["run_id"])
         existing_ids = {item.step_id for item in self.repository.list_steps(run_id)}
-        for sequence, raw in enumerate(result.get("trace", []), start=1):
+        traces = [dict(item) for item in result.get("trace", []) if isinstance(item, dict)]
+        resources = [
+            item for item in result.get("generated_resources", []) if hasattr(item, "resource_id")
+        ]
+        agents = {str(item.get("agent_name") or "") for item in traces}
+        if resources and "generator" not in agents:
+            traces.insert(0, {
+                "step_id": f"{run_id}:compat-generator",
+                "agent_name": "generator",
+                "node_name": "generator",
+                "action": "compatibility artifact boundary",
+                "status": "success",
+                "resource_ids": [item.resource_id for item in resources],
+            })
+
+        for sequence, raw in enumerate(traces, start=1):
             if not isinstance(raw, dict):
                 continue
             trace = dict(raw)
@@ -86,6 +112,8 @@ class DurableWorkflowRunner:
             if step_id in existing_ids:
                 continue
             trace.update(run_id=run_id, step_id=step_id, sequence=sequence)
+            if trace.get("agent_name") == "generator" and not trace.get("resource_ids"):
+                trace["resource_ids"] = [item.resource_id for item in resources]
             started_at = datetime.now(timezone.utc)
             self.repository.begin_step(
                 BeginStepCommand(
@@ -99,6 +127,22 @@ class DurableWorkflowRunner:
                     started_at=started_at,
                 )
             )
+            # Test doubles use invoke() rather than LangGraph streaming. They
+            # still honor the production ownership rule: artifacts are durable
+            # before the corresponding compatibility checkpoint is accepted.
+            if self.artifact_recorder is not None:
+                try:
+                    self.artifact_recorder.record(result, trace)
+                except Exception as exc:
+                    code = (
+                        ErrorCode.WORKFLOW_PERSISTENCE_CONFLICT
+                        if isinstance(exc, PersistenceConflict)
+                        else ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE
+                    )
+                    raise ApplicationError(
+                        code,
+                        status_code=409 if isinstance(exc, PersistenceConflict) else 503,
+                    ) from exc
             self.repository.complete_step(
                 CompleteStepCommand(
                     run_id=run_id,

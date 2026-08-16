@@ -1,8 +1,29 @@
 import json
 import uuid
+import hashlib
+import logging
+from collections.abc import Callable
+from datetime import datetime, timezone
 
 from app.agents.feedback import apply_feedback_decision, decide_feedback
 from app.db.feedback.base import BaseFeedbackRepository
+from app.db.feedback_loop.base import (
+    BaseFeedbackLoopRepository,
+    FeedbackIdempotencyConflict,
+    LearnerProfileVersionConflict,
+    LearningPathMutationConflict,
+)
+from app.db.audit.base import BaseAuditRepository
+from app.core.errors import ApplicationError, ErrorCode
+from app.models.feedback_loop import (
+    FeedbackDecision,
+    FeedbackLoopResult,
+    FollowUpGenerationStatus,
+    LearningAttempt,
+    LearningAttemptSubmit,
+    ProfileVersionRecord,
+)
+from app.models.persistence import WorkflowEventType, canonical_hash
 from app.models.schemas import (
     FeedbackAnswer,
     FeedbackRecord,
@@ -14,18 +35,326 @@ from app.models.schemas import (
     ResourceEvaluationSessionResponse,
     ResourceEvaluationSubmitRequest,
     ResourceEvaluationSubmitResponse,
+    RunAttemptSubmitRequest,
     RunEvaluationSessionResponse,
     RunEvaluationSubmitRequest,
     RunEvaluationSubmitResponse,
 )
 from app.services.knowledge_service import KnowledgeService
+from app.services.generation_job_service import GenerationJobService
+from app.models.schemas import GenerateRequest
+from app.agents.feedback_policy import build_mastery_mutations, decide_attempt
+from app.services.learning_path_policy import mutate_learning_path
+from app.db.knowledge.catalog import KnowledgeCatalogRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class FeedbackService:
     """Handle learning feedback and post-learning evaluations."""
 
-    def __init__(self, feedback_repo: BaseFeedbackRepository):
+    def __init__(
+        self,
+        feedback_repo: BaseFeedbackRepository,
+        feedback_loop_repo: BaseFeedbackLoopRepository | None = None,
+        generation_job_service: GenerationJobService | None = None,
+        audit_repo: BaseAuditRepository | None = None,
+        knowledge_catalog: KnowledgeCatalogRepository | None = None,
+    ):
         self.feedback_repo = feedback_repo
+        self.feedback_loop_repo = feedback_loop_repo
+        self.generation_job_service = generation_job_service
+        self.audit_repo = audit_repo
+        self.knowledge_catalog = knowledge_catalog
+
+    def process_learning_attempt(
+        self,
+        profile: LearnerProfile,
+        resource: LearningResource,
+        req: LearningAttemptSubmit,
+        *,
+        schedule_followup: Callable[[LearnerProfile, GenerateRequest, str], None] | None = None,
+    ) -> FeedbackLoopResult:
+        """Commit learner facts first, then enqueue generation as an after-commit side effect."""
+
+        if self.feedback_loop_repo is None:
+            raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=503)
+        if profile.learner_id != req.learner_id or resource.learner_id != req.learner_id:
+            raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+        if resource.resource_id != req.source_resource_id or resource.version != req.source_resource_version:
+            raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+        if resource.publication_status != "published":
+            raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+        if req.source_run_id and resource.run_id != req.source_run_id:
+            raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+        if self.knowledge_catalog is not None and profile.knowledge_base_id:
+            allowed_nodes = {
+                item.node_id for item in self.knowledge_catalog.list_skill_nodes(profile.knowledge_base_id)
+            }
+            requested_nodes = {item.knowledge_point_id for item in req.knowledge_point_results}
+            if requested_nodes - allowed_nodes:
+                raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+
+        request_payload = req.model_dump(mode="json", exclude_none=False)
+        request_hash = canonical_hash(request_payload)
+        existing = self.feedback_loop_repo.get_by_idempotency_key(req.learner_id, req.idempotency_key)
+        if existing:
+            if existing.attempt.request_hash != request_hash:
+                raise ApplicationError(ErrorCode.FEEDBACK_IDEMPOTENCY_CONFLICT, status_code=409)
+            return self._ensure_followup(profile, existing, schedule_followup)
+
+        attempt_id = self._stable_id("att", req.learner_id, req.idempotency_key)
+        attempt = LearningAttempt(
+            attempt_id=attempt_id,
+            request_hash=request_hash,
+            **req.model_dump(mode="python"),
+        )
+        point_ids = [item.knowledge_point_id for item in attempt.knowledge_point_results]
+        context = self.feedback_loop_repo.get_context(req.learner_id, point_ids)
+        policy = decide_attempt(attempt, context)
+        decision_id = self._stable_id("fdc", attempt_id)
+        decision_payload = {
+            "decision_id": decision_id,
+            "learner_id": req.learner_id,
+            "attempt_id": attempt_id,
+            "action": policy.action.value,
+            "reason_codes": list(policy.reason_codes),
+            "decision_reason": policy.decision_reason,
+            "target_knowledge_point_ids": list(policy.target_knowledge_point_ids),
+        }
+        decision = FeedbackDecision(
+            **decision_payload,
+            decision_hash=canonical_hash(decision_payload),
+        )
+        state_mutations = build_mastery_mutations(attempt, context)
+        try:
+            learning_path, path_mutation = mutate_learning_path(
+                attempt=attempt,
+                decision_id=decision_id,
+                policy=policy,
+                existing=context.learning_path,
+            )
+        except ValueError as exc:
+            raise ApplicationError(ErrorCode.LEARNING_PATH_MUTATION_INVALID, status_code=422) from exc
+        new_version = context.profile_version + 1
+        profile_patch = self._profile_patch(profile, attempt, decision, state_mutations)
+        version_record = ProfileVersionRecord(
+            learner_id=profile.learner_id,
+            profile_version=new_version,
+            source_attempt_id=attempt_id,
+            source_decision_id=decision_id,
+            change_summary={
+                "action": decision.action.value,
+                "knowledge_point_ids": point_ids,
+                "path_mutation_id": path_mutation.mutation_id,
+                "mastery_update_count": len(state_mutations),
+            },
+        )
+        try:
+            result = self.feedback_loop_repo.apply_feedback(
+                attempt=attempt,
+                decision=decision,
+                state_mutations=state_mutations,
+                learning_path=learning_path,
+                path_mutation=path_mutation,
+                profile_version=version_record,
+                profile_patch=profile_patch,
+            )
+        except FeedbackIdempotencyConflict as exc:
+            raise ApplicationError(ErrorCode.FEEDBACK_IDEMPOTENCY_CONFLICT, status_code=409) from exc
+        except LearnerProfileVersionConflict as exc:
+            raise ApplicationError(ErrorCode.LEARNER_PROFILE_VERSION_CONFLICT, status_code=409) from exc
+        except LearningPathMutationConflict as exc:
+            raise ApplicationError(ErrorCode.LEARNING_PATH_MUTATION_INVALID, status_code=409) from exc
+
+        self._apply_profile_copy(profile, profile_patch, state_mutations, new_version)
+        self._record_feedback_events(result)
+        return self._ensure_followup(profile, result, schedule_followup)
+
+    def list_attempts(self, learner_id: str, limit: int = 20) -> list[LearningAttempt]:
+        return self.feedback_loop_repo.list_attempts(learner_id, limit) if self.feedback_loop_repo else []
+
+    def get_current_path(self, learner_id: str):
+        return self.feedback_loop_repo.get_current_path(learner_id) if self.feedback_loop_repo else None
+
+    def list_profile_versions(self, learner_id: str, limit: int = 20):
+        return self.feedback_loop_repo.list_profile_versions(learner_id, limit) if self.feedback_loop_repo else []
+
+    @staticmethod
+    def _stable_id(prefix: str, *parts: object) -> str:
+        material = "\x1f".join(str(part) for part in parts)
+        return f"{prefix}_{hashlib.sha256(material.encode()).hexdigest()[:32]}"
+
+    def _profile_patch(self, profile, attempt, decision, mutations) -> dict:
+        weak = list(profile.weak_points)
+        strong = list(profile.strong_points)
+        targets = decision.target_knowledge_point_ids
+        if decision.action.value == "remediate":
+            weak = list(dict.fromkeys([*weak, *targets]))
+            skill_level = "初级"
+        elif decision.action.value == "advance":
+            weak = [item for item in weak if item not in targets]
+            strong = list(dict.fromkeys([*strong, *targets]))
+            skill_level = "高级"
+        else:
+            skill_level = profile.skill_level
+        return {
+            "skill_level": skill_level,
+            "weak_points": weak,
+            "strong_points": strong,
+            "last_feedback_summary": {
+                "attempt_id": attempt.attempt_id,
+                "resource_id": attempt.source_resource_id,
+                "overall_score": attempt.overall_score,
+                "action": decision.action.value,
+                "knowledge_point_ids": [item.knowledge_point_id for item in mutations],
+            },
+        }
+
+    @staticmethod
+    def _apply_profile_copy(profile, patch, mutations, profile_version):
+        from app.models.schemas import KnowledgeState
+
+        profile.profile_version = profile_version
+        profile.skill_level = patch["skill_level"]
+        profile.weak_points = list(patch["weak_points"])
+        profile.strong_points = list(patch["strong_points"])
+        profile.last_feedback_summary = dict(patch["last_feedback_summary"])
+        for item in mutations:
+            profile.knowledge_states[item.knowledge_point_id] = KnowledgeState(
+                score=item.after.mastery,
+                status=item.after.status,
+                evidence=[item.source_attempt_id],
+            )
+
+    def _ensure_followup(self, profile, result, schedule_followup):
+        if result.followup_generation_status == FollowUpGenerationStatus.QUEUED:
+            return result
+        if result.decision.action.value not in {"remediate", "advance"}:
+            return result
+        if self.generation_job_service is None:
+            return self.feedback_loop_repo.attach_followup(
+                attempt_id=result.attempt.attempt_id,
+                decision_id=result.decision.decision_id,
+                parent_run_id=result.attempt.source_run_id,
+                child_run_id=None,
+                trigger_type=result.decision.action.value,
+                status=FollowUpGenerationStatus.FAILED.value,
+                error_code=ErrorCode.FOLLOWUP_GENERATION_FAILED.value,
+            )
+        difficulty = "初级" if result.decision.action.value == "remediate" else "高级"
+        suffix = "补救训练" if result.decision.action.value == "remediate" else "进阶挑战"
+        generation_request = GenerateRequest(
+            learner_id=result.attempt.learner_id,
+            topic=f"{result.decision.target_knowledge_point_ids[0]} {suffix}",
+            knowledge_base_id=profile.knowledge_base_id,
+            target_skill_nodes=result.decision.target_knowledge_point_ids,
+            resource_types=["定制讲义", "分阶测试题"],
+            difficulty_preference=difficulty,
+            generation_mode="standard",
+            include_review=True,
+            include_claim_check=True,
+            max_iterations=2,
+            constraints={"must_include_citations": True, "feedback_attempt_id": result.attempt.attempt_id},
+        )
+        try:
+            followup_run_id = self._stable_id("run", result.attempt.attempt_id, "followup")
+            job = self.generation_job_service.create_job(
+                profile,
+                generation_request,
+                run_id=followup_run_id,
+            )
+            updated = self.feedback_loop_repo.attach_followup(
+                attempt_id=result.attempt.attempt_id,
+                decision_id=result.decision.decision_id,
+                parent_run_id=result.attempt.source_run_id,
+                child_run_id=job.run_id,
+                trigger_type=result.decision.action.value,
+                status=FollowUpGenerationStatus.QUEUED.value,
+            )
+            updated.idempotent_replay = result.idempotent_replay
+            self._append_event(
+                result.attempt.source_run_id,
+                WorkflowEventType.FOLLOWUP_GENERATION_CREATED,
+                result.attempt.attempt_id,
+                {"attempt_id": result.attempt.attempt_id, "decision_id": result.decision.decision_id, "child_run_id": job.run_id},
+                "queued",
+            )
+            if schedule_followup:
+                schedule_followup(profile.model_copy(deep=True), generation_request, job.run_id)
+            return updated
+        except Exception:
+            logger.exception("Follow-up generation creation failed attempt_id=%s", result.attempt.attempt_id)
+            updated = self.feedback_loop_repo.attach_followup(
+                attempt_id=result.attempt.attempt_id,
+                decision_id=result.decision.decision_id,
+                parent_run_id=result.attempt.source_run_id,
+                child_run_id=None,
+                trigger_type=result.decision.action.value,
+                status=FollowUpGenerationStatus.FAILED.value,
+                error_code=ErrorCode.FOLLOWUP_GENERATION_FAILED.value,
+            )
+            updated.idempotent_replay = result.idempotent_replay
+            self._append_event(
+                result.attempt.source_run_id,
+                WorkflowEventType.FOLLOWUP_GENERATION_FAILED,
+                result.attempt.attempt_id,
+                {"attempt_id": result.attempt.attempt_id, "decision_id": result.decision.decision_id},
+                "failed",
+                ErrorCode.FOLLOWUP_GENERATION_FAILED.value,
+            )
+            return updated
+
+    def _record_feedback_events(self, result: FeedbackLoopResult) -> None:
+        run_id = result.attempt.source_run_id
+        if not run_id:
+            return
+        attempt_id = result.attempt.attempt_id
+        summary = {
+            "attempt_id": attempt_id,
+            "decision_id": result.decision.decision_id,
+            "overall_score": result.attempt.overall_score,
+            "knowledge_point_ids": [item.knowledge_point_id for item in result.knowledge_state_updates],
+        }
+        self._append_event(run_id, WorkflowEventType.ATTEMPT_SUBMITTED, attempt_id, summary, "submitted")
+        self._append_event(run_id, WorkflowEventType.FEEDBACK_DECISION_STARTED, attempt_id, {"attempt_id": attempt_id}, "started")
+        self._append_event(run_id, WorkflowEventType.FEEDBACK_DECISION_COMPLETED, attempt_id, {
+            **summary, "action": result.decision.action.value, "reason_codes": result.decision.reason_codes,
+        }, "completed")
+        self._append_event(run_id, WorkflowEventType.KNOWLEDGE_STATE_UPDATED, attempt_id, {
+            "attempt_id": attempt_id, "knowledge_point_ids": summary["knowledge_point_ids"], "count": len(result.knowledge_state_updates),
+        }, "applied")
+        self._append_event(run_id, WorkflowEventType.PROFILE_UPDATED, attempt_id, {
+            "attempt_id": attempt_id, "profile_version": result.profile_version,
+        }, "applied")
+        self._append_event(run_id, WorkflowEventType.PATH_MUTATED, attempt_id, {
+            "attempt_id": attempt_id,
+            "mutation_id": result.path_mutation.mutation_id,
+            "path_id": result.path_mutation.path_id,
+            "inserted_node_ids": result.path_mutation.inserted_node_ids,
+            "unlocked_node_ids": result.path_mutation.unlocked_node_ids,
+            "completed_node_ids": result.path_mutation.completed_node_ids,
+        }, "applied")
+
+    def _append_event(self, run_id, event_type, subject_id, payload, status, error_code=None):
+        if not run_id or self.audit_repo is None or self.audit_repo.get_run(run_id) is None:
+            return
+        try:
+            self.audit_repo.append_event(
+                run_id,
+                event_type,
+                payload=payload,
+                occurred_at=datetime.now(timezone.utc),
+                node_name="feedback_loop",
+                status=status,
+                error_code=error_code,
+                event_id=self._stable_id("evt", run_id, event_type.value, subject_id),
+            )
+        except Exception:
+            # Attempt/profile/path facts are already committed; audit outage must not
+            # pretend the learner action never happened.
+            logger.exception("Feedback audit event failed run_id=%s type=%s", run_id, event_type.value)
 
     def process_feedback(self, profile: LearnerProfile, req: FeedbackRequest) -> FeedbackResponse:
         history = self.feedback_repo.list_by_learner(req.learner_id)
@@ -100,6 +429,102 @@ class FeedbackService:
             questions=questions,
         )
 
+    def submit_run_attempt(
+        self,
+        profile: LearnerProfile,
+        run_id: str,
+        resources: list[LearningResource],
+        payload: RunAttemptSubmitRequest,
+        knowledge_service: KnowledgeService,
+        *,
+        schedule_followup: Callable[[LearnerProfile, GenerateRequest, str], None] | None = None,
+    ) -> FeedbackLoopResult:
+        questions, answer_key = self._build_run_question_specs(profile, resources, knowledge_service)
+        if not questions:
+            raise ValueError("当前任务暂时没有可用测评题目")
+
+        selected_resource = self._select_attempt_resource(resources, payload.source_resource_id)
+        submitted_answers = {item.question_id: item.answer for item in payload.answers}
+        point_results: dict[str, dict[str, object]] = {}
+
+        for question in questions:
+            knowledge_point_id = self._question_result_key(question)
+            result = point_results.setdefault(
+                knowledge_point_id,
+                {
+                    "question_ids": [],
+                    "correct_count": 0,
+                    "total_count": 0,
+                    "skill_node_ids": [],
+                    "knowledge_points": [],
+                    "diagnostic_dimensions": [],
+                },
+            )
+            result["question_ids"].append(question.question_id)
+            result["total_count"] += 1
+            if question.skill_node_id and question.skill_node_id not in result["skill_node_ids"]:
+                result["skill_node_ids"].append(question.skill_node_id)
+            if question.knowledge_point and question.knowledge_point not in result["knowledge_points"]:
+                result["knowledge_points"].append(question.knowledge_point)
+            if question.diagnostic_dimension and question.diagnostic_dimension not in result["diagnostic_dimensions"]:
+                result["diagnostic_dimensions"].append(question.diagnostic_dimension)
+            if self._answer_score(
+                question.question_type,
+                answer_key.get(question.question_id),
+                submitted_answers.get(question.question_id),
+            ) >= 1.0:
+                result["correct_count"] += 1
+
+        metadata = dict(payload.metadata)
+        metadata.update(
+            {
+                "evaluation_source": "knowledge_base",
+                "question_count": len(questions),
+                "question_trace": [
+                    self._question_trace_item(question, selected_resource.learning_path_node)
+                    for question in questions
+                ],
+                "point_trace": {
+                    knowledge_point_id: {
+                        "skill_node_ids": values["skill_node_ids"],
+                        "knowledge_points": values["knowledge_points"],
+                        "diagnostic_dimensions": values["diagnostic_dimensions"],
+                    }
+                    for knowledge_point_id, values in point_results.items()
+                },
+            }
+        )
+
+        attempt = LearningAttemptSubmit(
+            learner_id=payload.learner_id,
+            source_resource_id=selected_resource.resource_id,
+            source_resource_version=selected_resource.version,
+            source_run_id=run_id,
+            path_node_id=payload.path_node_id,
+            idempotency_key=payload.idempotency_key,
+            expected_profile_version=payload.expected_profile_version,
+            started_at=payload.started_at,
+            submitted_at=payload.submitted_at,
+            duration_ms=payload.duration_ms,
+            hint_count=payload.hint_count,
+            knowledge_point_results=[
+                {
+                    "knowledge_point_id": knowledge_point_id,
+                    "question_ids": values["question_ids"],
+                    "correct_count": values["correct_count"],
+                    "total_count": values["total_count"],
+                }
+                for knowledge_point_id, values in point_results.items()
+            ],
+            metadata=metadata,
+        )
+        return self.process_learning_attempt(
+            profile,
+            selected_resource,
+            attempt,
+            schedule_followup=schedule_followup,
+        )
+
     def submit_evaluation_feedback(
         self,
         profile: LearnerProfile,
@@ -119,7 +544,7 @@ class FeedbackService:
         for question in questions:
             actual_answer = submitted_answers.get(question.question_id)
             expected_answer = answer_key.get(question.question_id)
-            is_correct = self._answers_match(expected_answer, actual_answer)
+            is_correct = self._answer_score(question.question_type, expected_answer, actual_answer) >= 1.0
             if is_correct:
                 correct_count += 1
             elif question.knowledge_point:
@@ -187,7 +612,7 @@ class FeedbackService:
         for question in questions:
             actual_answer = submitted_answers.get(question.question_id)
             expected_answer = answer_key.get(question.question_id)
-            is_correct = self._answers_match(expected_answer, actual_answer)
+            is_correct = self._answer_score(question.question_type, expected_answer, actual_answer) >= 1.0
             if is_correct:
                 correct_count += 1
             elif question.knowledge_point:
@@ -245,33 +670,27 @@ class FeedbackService:
         profile: LearnerProfile,
         resource: LearningResource,
         knowledge_service: KnowledgeService,
-        limit: int = 5,
+        limit: int = 10,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
         questions: list[ResourceEvaluationQuestion] = []
         answer_key: dict[str, object] = {}
 
-        for item in resource.exercise_items:
-            questions.append(
-                ResourceEvaluationQuestion(
-                    question_id=item.question_id,
-                    question_type="short_answer",
-                    question=item.question,
-                    knowledge_point=item.knowledge_point,
-                    difficulty=item.difficulty,
-                    source="resource",
-                )
-            )
-            answer_key[item.question_id] = item.answer
-
-        if questions:
-            return questions[:limit], answer_key
-
         if not profile.knowledge_base_id:
-            return [], {}
+            return questions, answer_key
+
+        target_skill_nodes = [item for item in self._resource_target_skill_nodes(resource) if item]
+        candidates = knowledge_service.load_diagnostic_questions(profile.knowledge_base_id)
+        related = [
+            item
+            for item in candidates
+            if target_skill_nodes and item.skill_node_id in target_skill_nodes
+        ]
+        seen_related_ids = {item.question_id for item in related}
 
         tokens = [resource.topic or "", *(resource.knowledge_points or [])]
-        related = []
-        for item in knowledge_service.load_diagnostic_questions(profile.knowledge_base_id):
+        for item in candidates:
+            if item.question_id in seen_related_ids:
+                continue
             searchable = " ".join(
                 [
                     item.question or "",
@@ -281,22 +700,32 @@ class FeedbackService:
             )
             if any(token and token in searchable for token in tokens):
                 related.append(item)
+                seen_related_ids.add(item.question_id)
 
-        if not related:
-            related = knowledge_service.select_diagnostic_questions(
+        if len(related) < limit:
+            for item in knowledge_service.select_diagnostic_questions(
                 profile.knowledge_base_id,
                 limit=limit,
-            )
+            ):
+                if item.question_id in seen_related_ids:
+                    continue
+                related.append(item)
+                seen_related_ids.add(item.question_id)
+                if len(related) >= limit:
+                    break
 
-        for item in related[:limit]:
+        for item in self._order_questions_for_coverage(related)[:limit]:
             questions.append(
                 ResourceEvaluationQuestion(
                     question_id=item.question_id,
                     question_type=item.question_type,
                     question=item.question,
                     options=item.options or [],
+                    skill_node_id=item.skill_node_id,
+                    path_node_id=resource.learning_path_node,
                     knowledge_point=item.knowledge_point,
                     difficulty=item.difficulty,
+                    diagnostic_dimension=item.metadata.get("diagnostic_dimension"),
                     source="knowledge_base",
                 )
             )
@@ -304,19 +733,105 @@ class FeedbackService:
 
         return questions, answer_key
 
+    @staticmethod
+    def _resource_target_skill_nodes(resource: LearningResource) -> list[str]:
+        values = []
+        if resource.learning_path_node:
+            values.append(resource.learning_path_node)
+        return list(dict.fromkeys(values))
+
+    @staticmethod
+    def _order_questions_for_coverage(questions: list) -> list:
+        dimensions = ("concept", "scenario", "misconception")
+        ordered = []
+        seen = set()
+        for dimension in dimensions:
+            for question in questions:
+                if question.question_id in seen:
+                    continue
+                if question.metadata.get("diagnostic_dimension") == dimension:
+                    ordered.append(question)
+                    seen.add(question.question_id)
+        for question in questions:
+            if question.question_id not in seen:
+                ordered.append(question)
+        return ordered
+
+    @staticmethod
+    def _question_result_key(question: ResourceEvaluationQuestion) -> str:
+        return question.skill_node_id or question.knowledge_point or "综合能力"
+
+    @staticmethod
+    def _question_trace_item(question: ResourceEvaluationQuestion, fallback_path_node_id: str | None) -> dict[str, object]:
+        return {
+            "question_id": question.question_id,
+            "question_type": question.question_type,
+            "skill_node_id": question.skill_node_id,
+            "path_node_id": question.path_node_id or fallback_path_node_id,
+            "knowledge_point": question.knowledge_point,
+            "difficulty": question.difficulty,
+            "diagnostic_dimension": question.diagnostic_dimension,
+            "source": question.source,
+        }
+
+    def _answer_score(self, question_type: str | None, expected: object, actual: object) -> float:
+        normalized_type = (question_type or "").lower()
+        if normalized_type in {"multiple_choice", "multi_choice", "multiple_select", "checkbox"}:
+            expected_values = self._normalize_answer_set(expected)
+            actual_values = self._normalize_answer_set(actual)
+            if not expected_values:
+                return 1.0 if not actual_values else 0.0
+            return 1.0 if expected_values == actual_values else 0.0
+        return 1.0 if self._answers_match(expected, actual) else 0.0
+
+    @staticmethod
+    def _normalize_answer_set(value: object) -> set[str]:
+        if value is None:
+            return set()
+        if isinstance(value, (list, tuple, set)):
+            raw_values = value
+        else:
+            raw_values = [value]
+        return {str(item).strip().casefold() for item in raw_values if str(item).strip()}
+
+    @staticmethod
+    def _normalize_answer_value(value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        if isinstance(value, list):
+            return [FeedbackService._normalize_answer_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                str(key).strip(): FeedbackService._normalize_answer_value(item)
+                for key, item in value.items()
+            }
+        return value
+
+    @staticmethod
+    def _answers_match(expected: object, actual: object) -> bool:
+        return json.dumps(
+            FeedbackService._normalize_answer_value(expected),
+            ensure_ascii=False,
+            sort_keys=True,
+        ) == json.dumps(
+            FeedbackService._normalize_answer_value(actual),
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
     def _build_run_question_specs(
         self,
         profile: LearnerProfile,
         resources: list[LearningResource],
         knowledge_service: KnowledgeService,
-        limit: int = 8,
+        limit: int = 10,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
         merged_questions: list[ResourceEvaluationQuestion] = []
         merged_answer_key: dict[str, object] = {}
         seen_question_ids: set[str] = set()
 
         for resource in resources:
-            questions, answer_key = self._build_question_specs(profile, resource, knowledge_service, limit=5)
+            questions, answer_key = self._build_question_specs(profile, resource, knowledge_service, limit=10)
             for question in questions:
                 if question.question_id in seen_question_ids:
                     continue
@@ -335,9 +850,13 @@ class FeedbackService:
         return " / ".join(unique_topics[:3]) if unique_topics else ""
 
     @staticmethod
-    def _answers_match(expected: object, actual: object) -> bool:
-        return json.dumps(expected, ensure_ascii=False, sort_keys=True) == json.dumps(
-            actual,
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+    def _select_attempt_resource(resources: list[LearningResource], resource_id: str | None) -> LearningResource:
+        if resource_id:
+            for resource in resources:
+                if resource.resource_id == resource_id:
+                    return resource
+            raise ValueError("指定的反馈资源不存在")
+        for resource in resources:
+            if resource.publication_status == "published":
+                return resource
+        return resources[0]

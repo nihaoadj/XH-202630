@@ -6,7 +6,7 @@ import math
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import PurePosixPath
-from typing import Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -236,6 +236,8 @@ class EvidenceBatch(StrictKnowledgeModel):
     dropped_candidate_count: int = Field(ge=0)
     partial_failure_count: int = Field(default=0, ge=0)
     config_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    # Safe timing/count metadata only; query and evidence bodies are forbidden.
+    retrieval_profile: Dict[str, Any] = Field(default_factory=dict)
     error: Optional[ErrorInfo] = None
 
     @model_validator(mode="after")

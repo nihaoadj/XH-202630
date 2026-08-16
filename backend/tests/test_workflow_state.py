@@ -30,7 +30,7 @@ def test_generate_request_maps_every_control_field_to_workflow_state():
         resource_types=["讲义", "实操指南"],
         difficulty_preference="中级",
         generation_mode="strict",
-        include_review=False,
+        include_review=True,
         include_claim_check=True,
         max_iterations=1,
         constraints={"must_include_citations": True, "retrieval_top_k": 5},
@@ -49,13 +49,23 @@ def test_generate_request_maps_every_control_field_to_workflow_state():
     assert state["resource_types"] == ["讲义", "实操指南"]
     assert state["difficulty_preference"] == "中级"
     assert state["generation_mode"] == "strict"
-    assert state["include_review"] is False
+    assert state["include_review"] is True
     assert state["include_claim_check"] is True
     assert state["max_iterations"] == 1
     assert state["constraints"]["retrieval_top_k"] == 5
     assert state["generation_attempt"] == 1
     assert state["revision_count"] == 0
     assert state["claim_check_status"] == "pending"
+
+
+def test_claim_check_requires_resource_review():
+    with pytest.raises(ValidationError, match="include_claim_check requires include_review"):
+        GenerateRequest(
+            learner_id="contract_001",
+            topic="工业视觉",
+            include_review=False,
+            include_claim_check=True,
+        )
 
 
 def test_workflow_state_json_round_trip_preserves_schema_version_and_ids():

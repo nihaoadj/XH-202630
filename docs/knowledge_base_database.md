@@ -204,10 +204,20 @@ backend/chroma_db/
 | `generation_jobs` | 异步资源生成任务 |
 | `generated_resources` | 已生成资源 |
 | `feedback_records` | 学习反馈 |
+| `learning_attempts` | P0-07 正式学习尝试与幂等请求摘要 |
+| `learning_attempt_point_results` | Attempt 的逐知识点答题汇总 |
+| `feedback_decisions` | 确定性反馈决策事实 |
+| `knowledge_state_mutations` | 掌握度 before/after 历史 |
+| `learner_profile_versions` | 画像版本变化原因与摘要 |
+| `learning_paths` / `learning_path_nodes` | 当前持久化路径和节点状态 |
+| `learning_path_mutations` | 路径变更审计记录 |
+| `feedback_followup_runs` | Attempt/Decision 与后续生成 Run 的来源关系 |
 | `agent_runs` | Agent 运行主记录 |
 | `agent_steps` | Agent 步骤记录 |
 | `resource_reviews` | 资源审核摘要 |
-| `resource_claims` | Claim 与证据记录 |
+| `resource_claims` | Claim 原文、资源版本、稳定 ID 与抽取元数据（兼容旧字段） |
+| `claim_judgements` | Claim 的独立判定、模型/Prompt 版本与置信度 |
+| `claim_evidence` | Judgement 到冻结 `retrieval_evidence_snapshots` 的受约束绑定 |
 
 ### 3.8 评测
 
@@ -243,6 +253,29 @@ backend/chroma_db/
 - `questionnaire_submissions`
 - `questionnaire_answers`
 - `learner_profiles`
+
+P0-07 正式接口还会原子读写 `learning_attempts`、`learning_attempt_point_results`、`feedback_decisions`、`knowledge_states`、`knowledge_state_mutations`、`learner_profile_versions`、`learning_paths`、`learning_path_nodes` 和 `learning_path_mutations`。事务提交后才创建 `generation_jobs`，随后写 `feedback_followup_runs`；外部生成失败不回滚 Attempt。
+
+### 4.7 P0-07 一致性与迁移
+
+- `learning_attempts` 对 `(learner_id, idempotency_key)` 建唯一约束，并保存 canonical JSON SHA-256 `request_hash`。
+- `learner_profiles.profile_version` 从 1 起；请求的 `expected_profile_version` 与当前值不一致时拒绝更新。
+- `knowledge_states` additive 增加 `attempt_count`、`last_attempt_id`、`row_version`，继续演进诊断阶段已有表，不另建竞争当前态。
+- 所有 mutation 记录 before/after、source attempt 和 reason；同一 Attempt 重放不会二次加权。
+- `20260811_p0_07_feedback_profile_path_closed_loop` 是幂等 additive migration；旧 `feedback_records` 不删除、不回填伪造 Attempt。
+- SQLite 开发环境通过单事务和版本条件控制并发；PostgreSQL 生产环境还使用行锁语义。上线前数据库负责人仍需核验 DDL、索引、FK 与真实并发行为。
+
+### 4.8 P0-08 WorkflowEvent tail query
+
+P0-08 零 migration：继续复用 `workflow_events` 的 `(run_id,event_sequence)` 唯一约束/索引和 `agent_runs.last_event_sequence`。SSE 每次只执行有界查询：
+
+```sql
+WHERE run_id = :run_id AND event_sequence > :cursor
+ORDER BY event_sequence
+LIMIT :page_size
+```
+
+长 SSE 连接不持有 Session、事务或锁，不增加 delivered/ack 字段；不同客户端只读同一 append-only Ledger。SQLite 用短连接轮询，PostgreSQL 上线时需结合 worker 数、SSE 客户端数和 0.5 秒默认间隔评估连接池。Event retention 尚未在 P0-08 自动清理，删除策略必须保留比赛回放与 `legacy_partial` 语义。
 
 ### 4.3 用户资料
 
@@ -294,9 +327,9 @@ backend/chroma_db/
 - `GET /api/resources/file/{resource_id}`
 - `GET /api/reviews/{resource_id}`
 - `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
-- `POST /api/feedback/evaluation/run/submit`
-- `POST /api/feedback/`
-- `GET /api/feedback/history/{learner_id}`
+- `POST /api/feedback/attemptsattempts/run/submit`
+- `POST /api/feedback/attempts`
+- `GET /api/feedback/attempts/{learner_id}`
 - `GET /api/learning-history/{learner_id}/timeline`
 - `GET /api/report/{learner_id}`
 

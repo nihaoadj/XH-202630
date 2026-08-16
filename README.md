@@ -10,7 +10,9 @@
 ## 项目亮点
 
 - 多智能体协同：基于 LangGraph 实现学情诊断、知识库检索、学习路径规划、个性化资源生成、审核纠偏、反馈决策等 Agent 的协同闭环。
-- 幻觉防控：引入知识库约束、审核纠偏、知识溯源等机制。
+- 反馈真实闭环：正式 Attempt 会原子更新知识点掌握度、画像版本和持久化学习路径；补救或进阶决策复用异步生成任务，并保留父子 Run 来源关系。
+- 实时 Agent 轨迹：生成页通过 SSE 只读持久化 WorkflowEvent，支持 queued snapshot、断线续传、事件去重、terminal close 与轮询降级。
+- 幻觉防控：引入冻结 Evidence、独立 Claim 抽取/判定、审核纠偏与可复核指标。
 - 个性化适配：基于学习者画像动态匹配资源难度、生成学习路径与分阶测试。
 - 可视化决策：提供 Agent 调度过程、学情报告、资源难度匹配曲线等可视化能力。
 - 可回放运行记录：Run 在模型调用前建档，节点 Step/Event/Evidence/Checkpoint 持续落库，可跨进程只读查询并识别中断。
@@ -63,6 +65,8 @@ npm run dev
 | `production` | 永远禁止 | SQLite/PostgreSQL | 核心依赖或默认 KB not-ready 时 fail-fast |
 
 `scripts/check_environment.py` 不调用计费 LLM、不下载 Embedding，退出码为 0=ready、2=degraded、1=not-ready。公共 `/health` 与 `/health/ready` 只检查默认 KB 和核心依赖；其他 KB 的异常不会轻易把整个服务变成 503。全 KB 详情位于 token 保护的管理员接口，见 `docs/api.md`。
+
+`LLM_STRUCTURED_OUTPUT_MODE=auto` 会先尝试 function calling。若所用 OpenAI-compatible 服务明确不支持该能力，请在本地 `.env` 显式设为 `text`，避免每个 Agent 固定产生一次 BAD_REQUEST 后再回退；不要提交真实 `.env` 或 API Key。
 
 四个生成 Agent 统一通过可注入的 `LLMGateway` 调用模型。默认单次请求预算为 30 秒、同步工作流预算为 105 秒、总尝试次数为 2；SDK 自带重试关闭，技术重试和资源返工分别计数。结构化输出会经过严格 Pydantic 校验，Reviewer 的异常或非法输出不会被自动批准。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
 

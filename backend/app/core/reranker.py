@@ -5,14 +5,19 @@ from functools import lru_cache
 import hashlib
 import math
 from time import perf_counter
+from typing import Sequence
 
 from langchain.schema import Document
 
 from app.config import get_settings, resolve_backend_path
 
 
+_RERANKER_LOAD_FAILURE_AT: float | None = None
+_RERANKER_LOAD_RETRY_SECONDS = 60.0
+
+
 @lru_cache(maxsize=1)
-def get_reranker():
+def _load_reranker():
     """Load one process-local CrossEncoder from the configured C-drive cache."""
     settings = get_settings()
     if not settings.rerank_enabled:
@@ -30,6 +35,37 @@ def get_reranker():
         cache_dir=str(cache_dir),
         default_activation_function=torch.nn.Identity(),
     )
+
+
+def get_reranker():
+    """Load the model once and briefly back off after a failed cold load.
+
+    Failed ``lru_cache`` calls are not cached. Without this guard, every query
+    repeats the same network/model-load retry storm. The cooldown is bounded so
+    a repaired cache or network is retried without restarting the process.
+    """
+
+    global _RERANKER_LOAD_FAILURE_AT
+    now = perf_counter()
+    if (
+        _RERANKER_LOAD_FAILURE_AT is not None
+        and now - _RERANKER_LOAD_FAILURE_AT < _RERANKER_LOAD_RETRY_SECONDS
+    ):
+        get_reranker.last_cache_status = "failure_backoff"  # type: ignore[attr-defined]
+        raise RuntimeError("RERANK_MODEL_LOAD_BACKOFF")
+    before = _load_reranker.cache_info()
+    try:
+        model = _load_reranker()
+    except Exception:
+        _RERANKER_LOAD_FAILURE_AT = now
+        get_reranker.last_cache_status = "load_failed"  # type: ignore[attr-defined]
+        raise
+    after = _load_reranker.cache_info()
+    _RERANKER_LOAD_FAILURE_AT = None
+    get_reranker.last_cache_status = (  # type: ignore[attr-defined]
+        "cold" if after.misses > before.misses else "warm"
+    )
+    return model
 
 
 def _sigmoid(value: float) -> float:
@@ -113,9 +149,11 @@ def _select_diverse_results(
 
 
 def rerank_documents(
-    query: str,
+    query: str | Sequence[str],
     candidates: list[tuple[Document, float]],
     top_k: int,
+    *,
+    profile: dict[str, object] | None = None,
 ) -> list[tuple[Document, float]]:
     """Score query-passage pairs, then select a diverse final evidence set."""
     if top_k <= 0:
@@ -125,11 +163,37 @@ def rerank_documents(
 
     settings = get_settings()
     if not settings.rerank_enabled:
+        if profile is not None:
+            profile.update(
+                rerank_status="disabled",
+                rerank_model_load_ms=0.0,
+                rerank_inference_ms=0.0,
+                rerank_candidate_count=min(len(candidates), settings.rerank_candidate_k),
+                rerank_pair_count=0,
+                rerank_fallback_count=1,
+                fallback_reason="reranker_disabled",
+            )
         return mark_rerank_fallback(candidates, top_k, "disabled")
 
     limited_candidates = candidates[: settings.rerank_candidate_k]
-    pairs = [(query, document.page_content) for document, _ in limited_candidates]
-    model = get_reranker()
+    pair_queries = [query] * len(limited_candidates) if isinstance(query, str) else list(query)
+    if len(pair_queries) != len(limited_candidates):
+        raise ValueError("rerank query count must match candidate count")
+    pairs = [
+        (pair_query, document.page_content)
+        for pair_query, (document, _) in zip(pair_queries, limited_candidates)
+    ]
+    load_started = perf_counter()
+    try:
+        model = get_reranker()
+    except Exception:
+        if profile is not None:
+            profile.update(
+                rerank_model_load_ms=round((perf_counter() - load_started) * 1000, 3),
+                rerank_status="model_load_failed",
+            )
+        raise
+    model_load_ms = round((perf_counter() - load_started) * 1000, 3)
     started = perf_counter()
     raw_output = model.predict(
         pairs,
@@ -138,6 +202,16 @@ def rerank_documents(
         convert_to_numpy=True,
     )
     latency_ms = round((perf_counter() - started) * 1000, 3)
+    if profile is not None:
+        profile.update(
+            rerank_status="available",
+            rerank_model_load_ms=model_load_ms,
+            rerank_model_cache_status=getattr(get_reranker, "last_cache_status", "unknown"),
+            rerank_inference_ms=latency_ms,
+            rerank_candidate_count=len(limited_candidates),
+            rerank_pair_count=len(pairs),
+            rerank_fallback_count=0,
+        )
 
     if hasattr(raw_output, "reshape"):
         raw_values = [float(value) for value in raw_output.reshape(-1).tolist()]
@@ -148,10 +222,9 @@ def rerank_documents(
     if len(raw_values) != len(limited_candidates):
         raise RuntimeError("RERANK_SCORE_COUNT_MISMATCH")
 
-    query_hash = hashlib.sha256(query.encode("utf-8")).hexdigest()[:20]
     scored: list[tuple[Document, float]] = []
-    for hybrid_rank, ((source, hybrid_score), raw_score) in enumerate(
-        zip(limited_candidates, raw_values),
+    for hybrid_rank, ((source, hybrid_score), raw_score, pair_query) in enumerate(
+        zip(limited_candidates, raw_values, pair_queries),
         start=1,
     ):
         document = Document(page_content=source.page_content, metadata=dict(source.metadata))
@@ -165,7 +238,7 @@ def rerank_documents(
                 "rerank_raw_score": raw_score,
                 "rerank_score": rerank_score,
                 "reranker_model": settings.rerank_model,
-                "rerank_query_hash": query_hash,
+                "rerank_query_hash": hashlib.sha256(pair_query.encode("utf-8")).hexdigest()[:20],
                 "rerank_latency_ms": latency_ms,
                 "rerank_candidate_count": len(limited_candidates),
             }
@@ -173,7 +246,11 @@ def rerank_documents(
         scored.append((document, rerank_score))
 
     scored.sort(
-        key=lambda item: (item[1], float(item[0].metadata.get("hybrid_score", 0.0))),
+        key=lambda item: (
+            item[1],
+            float(item[0].metadata.get("hybrid_score", 0.0)),
+            str(item[0].metadata.get("chunk_id", "")),
+        ),
         reverse=True,
     )
     for rerank_rank, (document, rerank_score) in enumerate(scored, start=1):

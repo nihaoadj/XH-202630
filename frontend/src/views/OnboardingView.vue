@@ -7,26 +7,12 @@
       </div>
 
       <div class="user-actions">
-        <el-select v-model="selectedUserId" placeholder="请选择当前用户" class="user-select" @change="applySelectedUser">
-          <el-option
-            v-for="user in users"
-            :key="user.user_id"
-            :label="`${user.display_name} / ${user.identity}`"
-            :value="user.user_id"
-          />
-        </el-select>
+        <el-tag effect="plain">{{ currentUser?.username || currentUser?.display_name }}</el-tag>
         <el-button @click="$router.push('/user/profile')">维护用户资料</el-button>
       </div>
     </section>
 
-    <el-empty
-      v-if="!users.length"
-      description="请先创建用户资料，再开始新建学习方向。"
-    >
-      <el-button type="primary" @click="$router.push('/user/profile')">去创建用户资料</el-button>
-    </el-empty>
-
-    <section v-else class="wizard-layout">
+    <section class="wizard-layout">
       <aside class="progress-panel">
         <button
           v-for="step in steps"
@@ -281,16 +267,16 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { diagnosisApi, generateApi, knowledgeApi, onboardingApi, userApi } from '../api'
+import { diagnosisApi, generateApi, knowledgeApi, onboardingApi } from '../api'
+import { useAuthStore } from '../stores/auth'
 import { useAppStore } from '../stores/app'
 
 const router = useRouter()
+const auth = useAuthStore()
 const store = useAppStore()
 
-const users = ref([])
 const domains = ref([])
 const questions = ref([])
-const selectedUserId = ref(store.currentUserId || '')
 const selectedDomainId = ref('')
 const selectedDirectionId = ref('')
 const stepStage = ref('domain')
@@ -303,7 +289,7 @@ const generationTopic = ref('基于当前诊断结果生成一组从入门到实
 const form = reactive({})
 const diagnosticAnswers = reactive({})
 
-const currentUser = computed(() => users.value.find((item) => item.user_id === selectedUserId.value) || store.currentUserProfile || null)
+const currentUser = computed(() => auth.currentUser || store.currentUserProfile || null)
 const selectedDomain = computed(() => domains.value.find((item) => item.domain_id === selectedDomainId.value))
 const tracks = computed(() => selectedDomain.value?.tracks || [])
 const selectedDirection = computed(() => tracks.value.find((item) => item.track_id === selectedDirectionId.value))
@@ -312,8 +298,8 @@ const diagnosticQuestions = computed(() => store.pendingDiagnosticQuestions || [
 const diagnosisResult = computed(() => store.diagnosisResult)
 const questionnaireCompleted = computed(() => Boolean(currentProfile.value && selectedDirectionId.value))
 const learnerId = computed(() => {
-  if (!selectedUserId.value || !selectedDirectionId.value) return ''
-  return `${selectedUserId.value}__${selectedDirectionId.value}`
+  if (!currentUser.value?.user_id || !selectedDirectionId.value) return ''
+  return `${currentUser.value.user_id}__${selectedDirectionId.value}`
 })
 const learnerLabel = computed(() => {
   const userName = currentUser.value?.display_name || '当前用户'
@@ -380,12 +366,6 @@ function goStep(target) {
   if (canEnter(target)) {
     stepStage.value = target
   }
-}
-
-function applySelectedUser() {
-  const user = users.value.find((item) => item.user_id === selectedUserId.value)
-  if (!user) return
-  store.setCurrentUserProfile(user)
 }
 
 function initDiagnosticAnswers() {
@@ -467,15 +447,6 @@ function selectDirection(item) {
   store.setDiagnosisResult(null)
 }
 
-async function loadUsers() {
-  const res = await userApi.list()
-  users.value = res.data.items || []
-  if (!selectedUserId.value && users.value.length) {
-    selectedUserId.value = store.currentUserId || users.value[0].user_id
-    applySelectedUser()
-  }
-}
-
 async function loadDomains() {
   const res = await knowledgeApi.listDomains()
   domains.value = res.data.domains || []
@@ -499,7 +470,7 @@ async function prepareQuestionnaire() {
 
 async function submitQuestionnaire() {
   if (!currentUser.value || !learnerId.value) {
-    ElMessage.warning('请先选择用户和学习方向')
+    ElMessage.warning('请先选择学习方向')
     return
   }
 
@@ -512,7 +483,6 @@ async function submitQuestionnaire() {
 
     const res = await onboardingApi.createInitialProfile({
       learner_id: learnerId.value,
-      user_id: currentUser.value.user_id,
       learning_direction_id: selectedDirectionId.value,
       answers,
     })
@@ -616,7 +586,7 @@ onMounted(async () => {
     store.setCurrentProfile(null)
     store.setPendingDiagnosis([])
     store.setDiagnosisResult(null)
-    await Promise.all([loadUsers(), loadDomains()])
+    await loadDomains()
   } catch (error) {
     console.error(error)
     ElMessage.error('初始化学习方向页面失败')
@@ -626,12 +596,16 @@ onMounted(async () => {
 
 <style scoped>
 .onboarding-page {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow: hidden;
 }
 
 .user-bar {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -640,6 +614,7 @@ onMounted(async () => {
   background: #fff;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
 }
 
 .user-bar h2 {
@@ -662,15 +637,27 @@ onMounted(async () => {
 }
 
 .wizard-layout {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   gap: 20px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
 }
 
 .progress-panel {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
 }
 
 .progress-card {
@@ -857,6 +844,20 @@ onMounted(async () => {
   .wizard-layout {
     grid-template-columns: 1fr;
   }
+
+  .progress-panel {
+    position: static;
+    flex-direction: row;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0 6px;
+  }
+
+  .progress-card {
+    flex: 0 0 260px;
+    min-height: 92px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -866,6 +867,31 @@ onMounted(async () => {
 
   .user-select {
     width: 100%;
+  }
+
+  .user-actions {
+    width: 100%;
+  }
+
+  .user-actions .el-button {
+    width: 100%;
+  }
+
+  .progress-panel {
+    top: 0;
+  }
+
+  .progress-card {
+    flex-basis: 220px;
+  }
+
+  .action-row {
+    position: sticky;
+    bottom: 0;
+    z-index: 8;
+    margin: 22px -1px -1px;
+    padding: 12px 0 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0), #ffffff 30%);
   }
 }
 </style>

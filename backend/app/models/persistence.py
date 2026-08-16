@@ -85,9 +85,23 @@ class WorkflowEventType(str, Enum):
     CHECKPOINT_SAVED = "checkpoint_saved"
     RUN_FINALIZING = "run_finalizing"
     RESOURCE_PERSISTED = "resource_persisted"
+    WORKFLOW_FINALIZATION_FAILED = "workflow_finalization_failed"
     RESOURCE_VERSION_CREATED = "resource_version_created"
     REVIEW_PERSISTED = "review_persisted"
     REVISION_REQUESTED = "revision_requested"
+    CLAIM_EXTRACTION_STARTED = "claim_extraction_started"
+    CLAIM_EXTRACTION_COMPLETED = "claim_extraction_completed"
+    CLAIM_JUDGEMENT_COMPLETED = "claim_judgement_completed"
+    CLAIM_REVIEW_FAILED = "claim_review_failed"
+    CLAIM_METRIC_COMPUTED = "claim_metric_computed"
+    ATTEMPT_SUBMITTED = "attempt_submitted"
+    FEEDBACK_DECISION_STARTED = "feedback_decision_started"
+    FEEDBACK_DECISION_COMPLETED = "feedback_decision_completed"
+    KNOWLEDGE_STATE_UPDATED = "knowledge_state_updated"
+    PROFILE_UPDATED = "profile_updated"
+    PATH_MUTATED = "path_mutated"
+    FOLLOWUP_GENERATION_CREATED = "followup_generation_created"
+    FOLLOWUP_GENERATION_FAILED = "followup_generation_failed"
     RESOURCE_PUBLISHED = "resource_published"
     RUN_COMPLETED = "run_completed"
     RUN_FAILED = "run_failed"
@@ -205,6 +219,9 @@ class AgentStepRecord(StrictPersistenceModel):
     retrieval_candidate_count: int | None = Field(default=None, ge=0)
     retrieval_dropped_candidate_count: int | None = Field(default=None, ge=0)
     retrieval_partial_failure_count: int | None = Field(default=None, ge=0)
+    retrieval_profile: dict[str, Any] = Field(default_factory=dict)
+    workflow_elapsed_ms: int | None = Field(default=None, ge=0)
+    workflow_remaining_ms: int | None = Field(default=None, ge=0)
     payload_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     started_at: datetime
     ended_at: datetime | None = None
@@ -407,6 +424,7 @@ class RunTimeline(StrictPersistenceModel):
     evidence: list[PersistedEvidenceSnapshot]
     resource_versions: list[dict[str, Any]] = Field(default_factory=list)
     reviews: list[dict[str, Any]] = Field(default_factory=list)
+    trigger_relation: dict[str, Any] | None = None
     replay_completeness: ReplayCompleteness
     next_event_sequence: int | None = None
 
@@ -506,6 +524,12 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         getattr(item, "resource_id", None) or str(item.get("resource_id", ""))
         for item in state.get("generated_resources", [])
     ]
+    projection["claim_ids"] = [
+        str(item.get("claim_id"))
+        for item in state.get("extracted_claims", [])
+        if isinstance(item, dict) and item.get("claim_id")
+    ][:2000]
+    projection["claim_metrics"] = _jsonable(dict(state.get("claim_metrics", {})))
     review = dict(state.get("review_result", {}))
     projection["review"] = {
         key: _jsonable(review.get(key))
@@ -514,6 +538,9 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
             "status",
             "claim_check_status",
             "hallucination_rate",
+            "legacy_reviewer_score",
+            "claim_hallucination_rate",
+            "claim_metric_status",
             "coverage_rate",
             "difficulty_match",
             "revision_count",

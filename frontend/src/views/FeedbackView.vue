@@ -154,33 +154,33 @@
       <template #header>
         <div class="card-head">
           <span>本次反馈结果</span>
-          <el-tag type="success" effect="plain">{{ Math.round(result.correct_rate * 100) }}%</el-tag>
+          <el-tag type="success" effect="plain">{{ Math.round(result.attempt.overall_score * 100) }}%</el-tag>
         </div>
       </template>
 
       <div class="result-grid">
         <div>
           <span>答对题数</span>
-          <strong>{{ result.correct_count }} / {{ result.total_questions }}</strong>
+          <strong>{{ attemptCorrectSummary }}</strong>
         </div>
         <div>
           <span>系统决策</span>
-          <strong>{{ result.feedback.decision }}</strong>
+          <strong>{{ feedbackActionLabel(result.decision.action) }}</strong>
         </div>
         <div>
           <span>下一步</span>
-          <strong>{{ result.feedback.next_action || '-' }}</strong>
+          <strong>{{ followupStatusLabel(result.followup_generation_status) }}</strong>
         </div>
         <div>
           <span>建议主题</span>
-          <strong>{{ (result.feedback.recommended_topics || []).join('、') || '-' }}</strong>
+          <strong>{{ result.profile_version ? `画像 v${result.profile_version}` : '-' }}</strong>
         </div>
       </div>
 
-      <p class="result-reason">{{ result.feedback.decision_reason || result.feedback.message }}</p>
+      <p class="result-reason">{{ result.decision.decision_reason }}</p>
 
-      <p v-if="result.wrong_knowledge_points?.length" class="result-wrong">
-        重点薄弱知识点：{{ result.wrong_knowledge_points.join('、') }}
+      <p v-if="weakKnowledgePoints.length" class="result-wrong">
+        重点薄弱知识点：{{ weakKnowledgePoints.join('、') }}
       </p>
     </el-card>
 
@@ -190,7 +190,7 @@
       <el-table v-else :data="history" style="width: 100%;">
         <el-table-column label="选择" width="80">
           <template #default="{ row }">
-            <el-radio :model-value="selectedFeedbackId" :label="row.feedback_id" @change="selectFeedback(row.feedback_id)">
+            <el-radio :model-value="selectedFeedbackId" :label="row.attempt_id" @change="selectFeedback(row.attempt_id)">
               &nbsp;
             </el-radio>
           </template>
@@ -200,10 +200,10 @@
             {{ historyResourceLabel(row) }}
           </template>
         </el-table-column>
-        <el-table-column prop="correct_rate" label="正确率" width="110">
-          <template #default="{ row }">{{ Math.round(row.correct_rate * 100) }}%</template>
+        <el-table-column prop="overall_score" label="正确率" width="110">
+          <template #default="{ row }">{{ Math.round(row.overall_score * 100) }}%</template>
         </el-table-column>
-        <el-table-column prop="decision" label="系统决策" width="140" />
+        <el-table-column prop="source_run_id" label="系统决策" width="140" />
         <el-table-column prop="created_at" label="时间" min-width="180" />
       </el-table>
 
@@ -211,8 +211,8 @@
         <span class="history-selection-tip">
           {{ selectedFeedbackSummary }}
         </span>
-        <el-button type="success" plain @click="regenerateFromFeedback" :loading="regenerating" :disabled="!canRegenerate">
-          基于反馈重新生成
+        <el-button type="success" plain @click="goToFollowupRun" :disabled="!result?.followup_run_id">
+          查看后续生成任务
         </el-button>
       </div>
     </el-card>
@@ -223,7 +223,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { feedbackApi, generateApi, resourceApi } from '../api'
+import { feedbackApi, resourceApi } from '../api'
 import { useAppStore } from '../stores/app'
 
 const router = useRouter()
@@ -245,7 +245,6 @@ const selectedRunId = ref(localStorage.getItem('current_generation_run_id') || '
 const history = ref([])
 const selectedFeedbackId = ref('')
 const submitting = ref(false)
-const regenerating = ref(false)
 const result = ref(null)
 const evaluation = reactive({
   topic: '',
@@ -301,15 +300,25 @@ const activeTask = computed(() => {
 
 const canSubmit = computed(() => Boolean(selectedRunId.value && evaluation.questions.length))
 const selectedFeedbackRecord = computed(
-  () => history.value.find((item) => item.feedback_id === selectedFeedbackId.value) || null
+  () => history.value.find((item) => item.attempt_id === selectedFeedbackId.value) || null
 )
 const selectedFeedbackSummary = computed(() => {
   if (!selectedFeedbackRecord.value) {
-    return '请选择一条反馈记录后，再发起重新生成'
+    return '请选择一条反馈记录查看详情'
   }
-  return `当前将基于 ${historyResourceLabel(selectedFeedbackRecord.value)} / ${formatTaskTime(selectedFeedbackRecord.value.created_at)} 重新生成`
+  return `当前选择 ${historyResourceLabel(selectedFeedbackRecord.value)} / ${formatTaskTime(selectedFeedbackRecord.value.created_at)}`
 })
-const canRegenerate = computed(() => Boolean(form.learner_id && selectedFeedbackRecord.value))
+const weakKnowledgePoints = computed(() =>
+  (result.value?.knowledge_state_updates || [])
+    .filter((item) => item.after?.status === 'weak')
+    .map((item) => item.knowledge_point_id)
+)
+const attemptCorrectSummary = computed(() => {
+  if (!result.value?.attempt?.knowledge_point_results?.length) return '-'
+  const total = result.value.attempt.knowledge_point_results.reduce((sum, item) => sum + item.total_count, 0)
+  const correct = result.value.attempt.knowledge_point_results.reduce((sum, item) => sum + item.correct_count, 0)
+  return `${correct} / ${total}`
+})
 
 watch(
   () => store.currentLearnerId,
@@ -343,9 +352,9 @@ function syncSelectedRun() {
 }
 
 function historyResourceLabel(row) {
-  const matched = resources.value.find((item) => item.resource_id === row.resource_id)
+  const matched = resources.value.find((item) => item.resource_id === row.source_resource_id)
   if (!matched) {
-    return row.resource_id ? `资源 ${row.resource_id.slice(0, 8)}` : '未命名资源'
+    return row.source_resource_id ? `资源 ${row.source_resource_id.slice(0, 8)}` : '未命名资源'
   }
   const runId = matched.run_id
   const task = runId ? `任务 ${runId.slice(0, 8).toUpperCase()}` : matched.resource_type
@@ -367,52 +376,6 @@ function formatTaskTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
-}
-
-function readLastGenerationRequest() {
-  try {
-    const raw = localStorage.getItem('last_generation_request')
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function buildRegenerationPayload() {
-  const lastRequest = readLastGenerationRequest()
-  const feedbackRecord = selectedFeedbackRecord.value
-  const suggestion = feedbackRecord?.regenerate_suggestion || {}
-  const recommendedTopics = feedbackRecord?.recommended_topics || []
-  const matchedResource = resources.value.find((item) => item.resource_id === feedbackRecord?.resource_id)
-  const basedRunId = feedbackRecord?.practice_result?.run_id || matchedResource?.run_id || ''
-  const basedResourceIds =
-    feedbackRecord?.practice_result?.evaluated_resource_ids ||
-    (feedbackRecord?.resource_id ? [feedbackRecord.resource_id] : [])
-  const directionId = store.currentLearningDirectionId || localStorage.getItem('learning_direction_id') || ''
-  const fallbackTopic = recommendedTopics[0]
-    ? `${recommendedTopics[0]} 个性化巩固`
-    : matchedResource?.topic || activeTask.value?.topic || `${currentDirectionName.value} 个性化巩固`
-
-  return {
-    learner_id: form.learner_id,
-    knowledge_base_id: directionId || lastRequest?.knowledge_base_id || undefined,
-    diagnostic_result_id:
-      store.diagnosisResult?.diagnostic_result_id || lastRequest?.diagnostic_result_id || undefined,
-    topic: suggestion.topic || fallbackTopic,
-    resource_types: suggestion.resource_types || lastRequest?.resource_types || ['讲义', '分阶测试题'],
-    difficulty_preference:
-      suggestion.constraints?.difficulty ||
-      store.currentProfile?.learning_preferences?.difficulty_preference ||
-      lastRequest?.difficulty_preference ||
-      undefined,
-    constraints: {
-      ...(lastRequest?.constraints || {}),
-      ...(suggestion.constraints || {}),
-      based_on_feedback_id: feedbackRecord?.feedback_id || '',
-      based_on_feedback_run_id: basedRunId,
-      based_on_feedback_resource_ids: basedResourceIds,
-    },
-  }
 }
 
 async function loadResources() {
@@ -453,12 +416,12 @@ async function loadEvaluationSession() {
 async function loadHistory() {
   if (!form.learner_id) return
   try {
-    const res = await feedbackApi.history(form.learner_id)
-    history.value = res.data.items || []
+    const res = await feedbackApi.listAttempts(form.learner_id)
+    history.value = res.data || []
     if (!history.value.length) {
       selectedFeedbackId.value = ''
-    } else if (!history.value.some((item) => item.feedback_id === selectedFeedbackId.value)) {
-      selectedFeedbackId.value = history.value[0].feedback_id
+    } else if (!history.value.some((item) => item.attempt_id === selectedFeedbackId.value)) {
+      selectedFeedbackId.value = history.value[0].attempt_id
     }
   } catch (error) {
     console.error(error)
@@ -475,36 +438,37 @@ async function submitEvaluation() {
 
   submitting.value = true
   try {
+    const submittedAt = new Date()
     const payload = {
       learner_id: form.learner_id,
       run_id: selectedRunId.value,
+      source_resource_id: evaluation.resourceIds[0] || activeTask.value?.resources?.[0]?.resource_id,
+      idempotency_key: buildIdempotencyKey(selectedRunId.value, submittedAt),
+      expected_profile_version: store.currentProfile?.profile_version || 1,
+      submitted_at: submittedAt.toISOString(),
+      duration_ms: (form.time_spent_seconds || 0) * 1000,
+      hint_count: 0,
       answers: evaluation.questions.map((question) => ({
         question_id: question.question_id,
         answer: evaluationAnswers[question.question_id],
       })),
-      completed: form.completed,
-      time_spent_seconds: form.time_spent_seconds,
-      self_rating: form.self_rating,
-      practice_result: {
-        difficulty_feeling: form.difficulty_feeling,
-        helpful_part: form.helpful_part,
-        confusing_part: form.confusing_part,
-        comment: form.comment,
+      metadata: {
+        source: 'feedback_view',
+        client_version: 'web',
+        session_id: selectedRunId.value,
       },
     }
 
-    const res = await feedbackApi.submitRunEvaluation(payload)
+    const res = await feedbackApi.submitRunAttempt(payload)
     result.value = res.data
 
-    if (res.data.feedback?.updated_profile) {
-      store.setCurrentProfile(res.data.feedback.updated_profile)
+    if (store.currentProfile) {
+      store.setCurrentProfile({ ...store.currentProfile, profile_version: res.data.profile_version })
     }
 
     ElMessage.success('任务测评与反馈已提交')
     await loadHistory()
-    if (res.data.feedback?.feedback_id) {
-      selectedFeedbackId.value = res.data.feedback.feedback_id
-    }
+    selectedFeedbackId.value = res.data.attempt.attempt_id
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.response?.data?.message || '提交失败，请稍后再试')
@@ -513,33 +477,39 @@ async function submitEvaluation() {
   }
 }
 
-async function regenerateFromFeedback() {
-  if (!canRegenerate.value) {
-    ElMessage.warning('请先选择一条反馈记录，再发起基于反馈的重新生成')
-    return
-  }
+function feedbackActionLabel(action) {
+  return {
+    remediate: '补救学习',
+    practice: '强化练习',
+    advance: '继续进阶',
+    hold: '保持路径',
+    human_review: '人工复核',
+  }[action] || action || '-'
+}
 
-  regenerating.value = true
-  try {
-    const payload = buildRegenerationPayload()
-    localStorage.setItem('last_generation_request', JSON.stringify(payload))
-    const res = await generateApi.createJob(payload)
-    localStorage.setItem('current_generation_run_id', res.data.run_id)
-    localStorage.setItem('current_generation_status', res.data.job_status || 'queued')
-    ElMessage.success('已发起基于反馈的重新生成任务')
-    router.push({
-      path: '/generate',
-      query: {
-        runId: res.data.run_id,
-        learnerId: form.learner_id,
-      },
-    })
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error?.response?.data?.message || '重新生成发起失败，请稍后再试')
-  } finally {
-    regenerating.value = false
-  }
+function followupStatusLabel(status) {
+  return {
+    not_requested: '未触发',
+    queued: '已排队',
+    failed: '触发失败',
+  }[status] || status || '-'
+}
+
+function buildIdempotencyKey(runId, submittedAt) {
+  const stamp = submittedAt.toISOString().replace(/[^0-9]/g, '')
+  return `web-${runId.slice(0, 24)}-${stamp}`.slice(0, 128)
+}
+
+function goToFollowupRun() {
+  if (!result.value?.followup_run_id) return
+  localStorage.setItem('current_generation_run_id', result.value.followup_run_id)
+  router.push({
+    path: '/generate',
+    query: {
+      runId: result.value.followup_run_id,
+      learnerId: form.learner_id,
+    },
+  })
 }
 
 onMounted(async () => {

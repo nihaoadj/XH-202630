@@ -117,6 +117,7 @@ def retrieve_node(
             "retrieval_query_count": batch.query_count,
             "retrieval_evidence_count": len(batch.evidence),
             "retrieval_dropped_count": batch.dropped_candidate_count,
+            "retrieval_profile": batch.retrieval_profile,
         },
     )
     return {

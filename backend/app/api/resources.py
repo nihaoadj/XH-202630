@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
+from app.api.dependencies import ensure_profile_access
 from app.core.file_storage import load_resource_file
 from app.models.schemas import ResourceListResponse
 from app.services.profile_service import ProfileService
@@ -17,6 +18,9 @@ def download_resource(resource_id: str, request: Request):
     resource_service: ResourceService = request.app.container.resource_service()
     resource = resource_service.get(resource_id)
     if resource is None:
+        raise HTTPException(status_code=404, detail="资源不存在")
+    profile = request.app.container.profile_service().get(resource.learner_id or "")
+    if ensure_profile_access(request, profile) is None:
         raise HTTPException(status_code=404, detail="资源不存在")
     if resource.publication_status != "published":
         raise HTTPException(status_code=404, detail="资源不存在")
@@ -46,7 +50,7 @@ def list_resources(
     container = request.app.container
 
     profile_service: ProfileService = container.profile_service()
-    profile = profile_service.get(learner_id)
+    profile = ensure_profile_access(request, profile_service.get(learner_id))
     if not profile:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 

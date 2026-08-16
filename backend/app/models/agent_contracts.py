@@ -221,6 +221,9 @@ class ReviewIssue(StrictLLMOutput):
     ]
     severity: Literal["low", "medium", "high", "critical"]
     resource_type: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    resource_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    resource_version: Optional[int] = Field(default=None, ge=1)
+    claim_ids: List[str] = Field(default_factory=list, max_length=100)
     knowledge_point: Optional[str] = Field(default=None, min_length=1, max_length=256)
     description: str = Field(min_length=1, max_length=2000)
 
@@ -228,6 +231,7 @@ class ReviewIssue(StrictLLMOutput):
 class RevisionInstruction(StrictLLMOutput):
     issue_codes: List[str] = Field(min_length=1, max_length=20)
     target_resource_type: str = Field(min_length=1, max_length=64)
+    target_claim_ids: List[str] = Field(default_factory=list, max_length=100)
     action: str = Field(min_length=1, max_length=4000)
     priority: int = Field(default=1, ge=1, le=100)
 
@@ -313,6 +317,22 @@ def start_step(
     }
 
 
+def workflow_budget_metadata(
+    state: Dict[str, Any],
+    entered_at: datetime,
+) -> Dict[str, int]:
+    """Return safe global-deadline timing captured at node entry."""
+
+    started_at = state.get("workflow_started_at")
+    deadline_at = state.get("workflow_deadline_at")
+    if not isinstance(started_at, datetime) or not isinstance(deadline_at, datetime):
+        return {}
+    return {
+        "workflow_elapsed_ms": max(0, int((entered_at - started_at).total_seconds() * 1000)),
+        "workflow_remaining_ms": max(0, int((deadline_at - entered_at).total_seconds() * 1000)),
+    }
+
+
 def build_trace_item(
     state: Dict[str, Any],
     *,
@@ -367,4 +387,5 @@ def build_trace_item(
         item.update(llm_metadata)
     if retrieval_metadata:
         item.update(retrieval_metadata)
+    item.update(workflow_budget_metadata(state, started_at))
     return item

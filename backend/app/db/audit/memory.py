@@ -278,6 +278,9 @@ class MemoryAuditRepository(BaseAuditRepository):
                     "retrieval_candidate_count",
                     "retrieval_dropped_candidate_count",
                     "retrieval_partial_failure_count",
+                    "retrieval_profile",
+                    "workflow_elapsed_ms",
+                    "workflow_remaining_ms",
                 )
                 if trace.get(key) is not None
             }
@@ -323,6 +326,9 @@ class MemoryAuditRepository(BaseAuditRepository):
                     "retrieval_candidate_count",
                     "retrieval_dropped_candidate_count",
                     "retrieval_partial_failure_count",
+                    "retrieval_profile",
+                    "workflow_elapsed_ms",
+                    "workflow_remaining_ms",
                     "payload_hash",
                     "ended_at",
                     "duration_ms",
@@ -354,6 +360,9 @@ class MemoryAuditRepository(BaseAuditRepository):
                 retrieval_candidate_count=trace.get("retrieval_candidate_count"),
                 retrieval_dropped_candidate_count=trace.get("retrieval_dropped_candidate_count"),
                 retrieval_partial_failure_count=trace.get("retrieval_partial_failure_count"),
+                retrieval_profile=trace.get("retrieval_profile") or {},
+                workflow_elapsed_ms=trace.get("workflow_elapsed_ms"),
+                workflow_remaining_ms=trace.get("workflow_remaining_ms"),
                 payload_hash=payload_hash,
                 ended_at=command.ended_at,
                 duration_ms=max(
@@ -382,6 +391,10 @@ class MemoryAuditRepository(BaseAuditRepository):
                     "evidence_ids": record.evidence_refs,
                     "resource_ids": record.resource_ids,
                     "review_ids": record.review_ids,
+                    "duration_ms": record.duration_ms,
+                    "candidate_count": record.retrieval_candidate_count,
+                    "dropped_count": record.retrieval_dropped_candidate_count,
+                    "valid_evidence_count": len(record.evidence_refs),
                 },
                 occurred_at=command.ended_at,
                 step_id=record.step_id,
@@ -791,6 +804,9 @@ class MemoryAuditRepository(BaseAuditRepository):
                 claim_unsupported=review.get("claim_unsupported", sum(not claim.supported for claim in claims)),
                 suspected_hallucinations=review.get("suspected_hallucinations", sum(not claim.supported for claim in claims)),
                 hallucination_rate=review.get("hallucination_rate", review.get("hallucination_score", 0.0)),
+                legacy_reviewer_score=review.get("hallucination_score"),
+                claim_hallucination_rate=review.get("claim_hallucination_rate"),
+                claim_metric_status=review.get("claim_metric_status"),
                 review_pass_rate=review.get(
                     "review_pass_rate",
                     1.0 if review.get("passed") or status in {"approve", "approved", "passed"} else 0.0,

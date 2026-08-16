@@ -318,6 +318,20 @@ def test_auto_mode_falls_back_to_text_once_for_structured_bad_request():
     ]
 
 
+def test_explicit_text_mode_never_probes_function_calling():
+    transport = ScriptedLLMTransport([raw('{"value":"text"}')])
+    result = LLMGateway(transport).invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(),
+        options=options(structured_output_mode=StructuredOutputMode.TEXT),
+    )
+
+    assert result.output.value == "text"
+    assert result.attempt_count == 1
+    assert [call["mode"] for call in transport.calls] == [StructuredOutputMode.TEXT]
+
+
 def test_explicit_structured_mode_does_not_fall_back_to_text():
     bad_request = response_error(BadRequestError, 400)
     transport = ScriptedLLMTransport([bad_request, raw('{"value":"unused"}')])

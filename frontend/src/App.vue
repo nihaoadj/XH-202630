@@ -1,5 +1,7 @@
 <template>
-  <div id="app" class="shell">
+  <router-view v-if="isAuthRoute" />
+
+  <div v-else id="app" class="shell">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">TP</div>
@@ -29,24 +31,18 @@
             <span>用户</span>
             <router-link to="/user/profile" class="context-action">编辑</router-link>
           </div>
-          <strong>{{ store.currentUserProfile?.display_name || '未设置' }}</strong>
+          <strong>{{ auth.currentUser?.username || store.currentUserProfile?.display_name || '未设置' }}</strong>
         </div>
         <div class="context-item">
           <span>学习方向</span>
           <strong>{{ store.currentLearningDirectionName || '未选择' }}</strong>
         </div>
       </div>
+      <el-button class="logout-button" plain @click="handleLogout">退出登录</el-button>
     </aside>
 
     <main class="main">
-      <header class="topbar">
-        <div>
-          <h1>{{ pageTitle }}</h1>
-          <p>{{ pageDescription }}</p>
-        </div>
-      </header>
-
-      <section class="content">
+      <section class="content" :class="{ 'is-contained-scroll': containedScroll }">
         <router-view />
       </section>
     </main>
@@ -55,10 +51,13 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from './stores/auth'
 import { useAppStore } from './stores/app'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 const store = useAppStore()
 
 const navigation = [
@@ -70,21 +69,29 @@ const navigation = [
   { to: '/feedback', label: '学习反馈', hint: '记录练习结果' },
 ]
 
-const pageMeta = {
-  home: ['工作台总览', '围绕用户资料、学习方向、诊断、资源与历史记录组织完整流程。'],
-  'user-profile': ['用户资料', '将学历、专业等稳定信息集中维护，供后续学习方向复用。'],
-  onboarding: ['新建学习方向', '完成领域、方向、问卷、诊断和资源选择 5 步流程。'],
-  history: ['学习历史', '按时间线查看问卷、诊断和资源生成过程。'],
-  generate: ['资源生成状态', '任务提交后在这里查看状态，并在完成后跳转资源页。'],
-  report: ['学习报告', '查看学习进展与能力变化。'],
-  feedback: ['学习反馈', '提交练习结果，推进后续资源迭代。'],
-}
+const containedScroll = computed(() => ['onboarding', 'history'].includes(route.name))
+const isAuthRoute = computed(() => Boolean(route.meta.authLayout))
 
-const pageTitle = computed(() => pageMeta[route.name]?.[0] || 'Training Pilot')
-const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
+async function handleLogout() {
+  await auth.logout()
+  await router.replace('/login')
+}
 </script>
 
 <style scoped>
+:global(html),
+:global(body),
+:global(#app) {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+:global(*) {
+  box-sizing: border-box;
+}
+
 .shell {
   height: 100dvh;
   display: grid;
@@ -97,6 +104,8 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
 }
 
 .sidebar {
+  position: relative;
+  z-index: 50;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -178,6 +187,20 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
   border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
+.logout-button {
+  width: 100%;
+  margin-top: auto;
+  border-color: rgba(203, 213, 225, 0.26);
+  background: transparent;
+  color: #f8fafc;
+}
+
+.logout-button:hover {
+  border-color: rgba(125, 211, 252, 0.58);
+  background: rgba(14, 165, 233, 0.12);
+  color: #ffffff;
+}
+
 .context-title {
   margin-bottom: 12px;
   font-size: 13px;
@@ -237,6 +260,8 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
 }
 
 .main {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -244,40 +269,48 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
   overflow: hidden;
 }
 
-.topbar {
-  flex-shrink: 0;
-  padding: 30px 36px 10px;
-}
-
-.topbar h1 {
-  margin: 0;
-  font-size: 30px;
-  line-height: 1.1;
-}
-
-.topbar p {
-  margin: 10px 0 0;
-  color: #526277;
-}
-
 .content {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 18px 36px 36px;
+  padding: 30px 36px 36px;
+}
+
+.content.is-contained-scroll {
+  overflow: hidden;
 }
 
 @media (max-width: 1080px) {
   .shell {
-    height: auto;
-    min-height: 100dvh;
+    height: 100dvh;
     grid-template-columns: 1fr;
-    overflow: visible;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
   }
 
   .sidebar {
     gap: 18px;
-    overflow: visible;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    max-height: 34dvh;
+    overflow-y: auto;
+  }
+
+  .nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .nav-link {
+    min-height: 78px;
+  }
+
+  .main {
+    min-height: 0;
   }
 
   .context-card {
@@ -286,8 +319,42 @@ const pageDescription = computed(() => pageMeta[route.name]?.[1] || '')
 }
 
 @media (max-width: 720px) {
-  .topbar,
+  .sidebar {
+    padding: 16px 18px;
+    max-height: 26dvh;
+  }
+
+  .brand {
+    align-items: flex-start;
+  }
+
+  .nav {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .nav-link {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 10px 12px;
+    justify-content: center;
+  }
+
+  .brand-subtitle,
+  .nav-hint {
+    display: none;
+  }
+
+  .context-card {
+    display: none;
+  }
+
   .content {
+    padding-top: 18px;
     padding-left: 18px;
     padding-right: 18px;
   }

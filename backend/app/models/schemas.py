@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StatusResponse(BaseModel):
@@ -59,6 +59,7 @@ class LearningPreferences(BaseModel):
 class LearnerProfile(BaseModel):
     """学习者画像模型"""
     learner_id: str = Field(..., description="学习者唯一标识")
+    user_id: Optional[str] = Field(default=None, description="所属用户 ID")
     learner_type: str = Field(..., description="学习者类型")
     education: str = Field(..., description="学历背景")
     major: str = Field(..., description="专业方向")
@@ -72,6 +73,7 @@ class LearnerProfile(BaseModel):
     learning_goal: str = Field(..., description="学习目标")
     learning_preferences: Optional[LearningPreferences] = Field(default=None, description="学习偏好")
     last_feedback_summary: Dict[str, Any] = Field(default_factory=dict, description="最近反馈摘要")
+    profile_version: int = Field(default=1, ge=1, description="画像乐观并发版本")
 
 
 class InitialProfileQuestionnaire(BaseModel):
@@ -213,6 +215,12 @@ class GenerateRequest(BaseModel):
             raise ValueError("resource_types cannot be empty")
         return normalized
 
+    @model_validator(mode="after")
+    def require_resource_review_for_claim_audit(self) -> "GenerateRequest":
+        if self.include_claim_check and not self.include_review:
+            raise ValueError("include_claim_check requires include_review=true")
+        return self
+
 
 class GenerationJobCreateResponse(StatusResponse):
     """异步资源生成任务创建响应"""
@@ -232,6 +240,7 @@ class GenerationJobStatusResponse(BaseModel):
     job_status: Literal["queued", "running", "completed", "failed"]
     resource_ids: List[str] = Field(default_factory=list)
     error_message: Optional[str] = None
+    request_payload: Dict[str, Any] = Field(default_factory=dict)
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -316,6 +325,9 @@ class LearningResource(BaseModel):
     published_at: Optional[datetime] = None
     run_id: Optional[str] = None
     claim_count: Optional[int] = None
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     hallucination_rate: Optional[float] = None
     difficulty_match: Optional[bool] = None
     version: int = 1
@@ -347,6 +359,9 @@ class ReviewSummary(BaseModel):
     claim_unsupported: int = 0
     suspected_hallucinations: int = 0
     hallucination_rate: float = 0.0
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     review_pass_rate: float = 0.0
     revision_count: int = 0
     issues: List[Dict[str, Any]] = Field(default_factory=list)
@@ -436,6 +451,9 @@ class AgentTrace(BaseModel):
     retrieval_query_count: Optional[int] = Field(default=None, ge=0)
     retrieval_evidence_count: Optional[int] = Field(default=None, ge=0)
     retrieval_dropped_count: Optional[int] = Field(default=None, ge=0)
+    retrieval_profile: Dict[str, Any] = Field(default_factory=dict)
+    workflow_elapsed_ms: Optional[int] = Field(default=None, ge=0)
+    workflow_remaining_ms: Optional[int] = Field(default=None, ge=0)
     timestamp: Optional[str] = None
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
@@ -452,6 +470,9 @@ class GenerateReport(BaseModel):
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
     review_summary: Dict[str, Any] = Field(default_factory=dict)
     hallucination_rate: float = 0.0
+    legacy_reviewer_score: Optional[float] = None
+    claim_hallucination_rate: Optional[float] = None
+    claim_metric_status: Optional[str] = None
     coverage_rate: float = 0.0
     difficulty_match: bool = False
     retrieval_hit_rate: float = 0.0
@@ -575,6 +596,14 @@ class ReportResponse(BaseModel):
     next_suggestions: List[str] = Field(default_factory=list)
     recent_resources: List[LearningResource] = Field(default_factory=list)
     recent_feedback: List[FeedbackRecord] = Field(default_factory=list)
+    profile_version: int = 1
+    knowledge_mastery: Dict[str, Any] = Field(default_factory=dict)
+    current_learning_path: Optional[Dict[str, Any]] = None
+    recent_attempts: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_feedback_decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_knowledge_state_mutations: List[Dict[str, Any]] = Field(default_factory=list)
+    recent_followup_runs: List[Dict[str, Any]] = Field(default_factory=list)
+    profile_versions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class FeedbackHistoryResponse(BaseModel):
@@ -628,8 +657,11 @@ class ResourceEvaluationQuestion(BaseModel):
     question_type: str
     question: str
     options: List[str] = Field(default_factory=list)
+    skill_node_id: Optional[str] = None
+    path_node_id: Optional[str] = None
     knowledge_point: Optional[str] = None
     difficulty: Optional[str] = None
+    diagnostic_dimension: Optional[str] = None
     source: Literal["resource", "knowledge_base"] = "resource"
 
 
@@ -656,6 +688,22 @@ class ResourceEvaluationAnswerSubmission(BaseModel):
     """学习后测评单题作答"""
     question_id: str
     answer: Any
+
+
+class RunAttemptSubmitRequest(BaseModel):
+    """Submit scored run answers into the formal feedback attempt loop."""
+    learner_id: str
+    run_id: str
+    source_resource_id: Optional[str] = None
+    path_node_id: Optional[str] = None
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    expected_profile_version: int = Field(ge=1)
+    started_at: Optional[datetime] = None
+    submitted_at: datetime
+    duration_ms: int = Field(default=0, ge=0)
+    hint_count: int = Field(default=0, ge=0)
+    answers: List[ResourceEvaluationAnswerSubmission] = Field(default_factory=list, min_length=1)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ResourceEvaluationSubmitRequest(BaseModel):

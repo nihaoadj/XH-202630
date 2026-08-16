@@ -41,7 +41,7 @@ LLM_GENERATOR_MAX_OUTPUT_TOKENS=8192
 LLM_STRUCTURED_OUTPUT_MODE=auto
 ```
 
-LLM 预算约束：workflow timeout 必须大于单次 request timeout，并建议小于前端当前 120 秒 Axios timeout；attempts 允许 `1..3`，delay 不得为负且 max delay 不得小于 base delay。`auto` 优先使用结构化调用，Provider 不支持时受控切到 text + 严格 parser。SDK retry 固定关闭，所有重试都计入 Gateway 总预算。
+LLM 预算约束：workflow timeout 必须大于单次 request timeout，并建议小于前端当前 120 秒 Axios timeout；attempts 允许 `1..3`，delay 不得为负且 max delay 不得小于 base delay。`auto` 优先使用结构化调用，Provider 不支持时受控切到 text + 严格 parser。对于已知不支持 function calling 的 OpenAI-compatible 服务，应显式设置 `LLM_STRUCTURED_OUTPUT_MODE=text`，这样每个 Agent 不会先付出一次固定的 BAD_REQUEST 探测开销。SDK retry 固定关闭，所有重试都计入 Gateway 总预算。
 
 填入真实 `LLM_API_KEY` 后执行只读环境检查：
 
@@ -158,4 +158,54 @@ LLM。SQLite migration 已包含幂等回归；PostgreSQL 上线前仍需数据�
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>
 Invoke-RestMethod "http://127.0.0.1:8000/api/runs/<run_id>/timeline?after_sequence=0&limit=100"
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/evidence
+Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/claims
 ```
+
+## 9. P0-07 反馈闭环迁移与验收
+
+应用初始化会幂等执行 `20260811_p0_07_feedback_profile_path_closed_loop`。该迁移只做 additive 列/表创建，不删除或重写 legacy feedback。生产 PostgreSQL 上线前需审核唯一约束、FK、索引、`SELECT FOR UPDATE` 和 profile CAS 的并发行为。
+
+最小验收：
+
+```powershell
+$body = @{
+  learner_id = "<learner_id>"
+  source_resource_id = "<published_resource_id>"
+  source_resource_version = 1
+  source_run_id = "<source_run_id>"
+  idempotency_key = "feedback-e2e-0001"
+  expected_profile_version = 1
+  submitted_at = (Get-Date).ToString("o")
+  knowledge_point_results = @(@{
+    knowledge_point_id = "<stable_skill_node_id>"
+    question_ids = @("q-1", "q-2")
+    correct_count = 1
+    total_count = 2
+  })
+} | ConvertTo-Json -Depth 8
+$result = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/feedback/attempts -ContentType "application/json" -Body $body
+$result
+Invoke-RestMethod http://127.0.0.1:8000/api/feedback/path/<learner_id>
+Invoke-RestMethod http://127.0.0.1:8000/api/report/<learner_id>
+```
+
+用同一 body 再提交一次，应返回同一 `attempt_id`、`idempotent_replay=true`，且画像版本、路径版本和 child run 数量不再增加。服务重启后再次查询 Attempt、Path 和 Report，结果必须保持。
+
+## 10. P0-08 SSE 配置与反向代理
+
+```dotenv
+WORKFLOW_SSE_POLL_INTERVAL_SECONDS=0.5
+WORKFLOW_SSE_HEARTBEAT_SECONDS=15
+WORKFLOW_SSE_EVENT_PAGE_SIZE=100
+```
+
+约束：poll 至少 50ms，heartbeat 必须大于 poll，page size 最大 500。SSE 不属于生成 hard dependency；传输失败时前端回退到 Job/timeline 查询，但底层 Workflow persistence 失败仍按既有策略 fail closed。
+
+接口响应包含 `Cache-Control: no-cache`、`Connection: keep-alive`、`X-Accel-Buffering: no`。Nginx/网关还需关闭该路由的响应缓冲，并将 read timeout 配置为大于 heartbeat；不得由 CDN 聚合或缓存事件流。手工查看：
+
+```powershell
+curl.exe -N -H "Accept: text/event-stream" "http://127.0.0.1:8000/api/runs/<run_id>/events?after_sequence=0"
+curl.exe -N -H "Last-Event-ID: 18" "http://127.0.0.1:8000/api/runs/<run_id>/events"
+```
+
+浏览器 EventSource 使用同源 cookie/session（当前仓库尚未引入应用登录鉴权），不把 bearer token 放到 URL。未来增加 Run ownership 后，SSE 必须与 `/runs/{id}` 使用同一授权依赖。

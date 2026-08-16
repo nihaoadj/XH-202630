@@ -3,7 +3,27 @@ import axios from 'axios'
 const api = axios.create({
   baseURL: '/api',
   timeout: 120000,
+  withCredentials: true,
 })
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const isAuthPage = ['/login', '/register'].includes(window.location.pathname)
+    const isAuthRequest = String(error?.config?.url || '').startsWith('/auth/')
+    if (error?.response?.status === 401 && !isAuthPage && !isAuthRequest) {
+      window.location.assign(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+    }
+    return Promise.reject(error)
+  },
+)
+
+export const authApi = {
+  register: (data) => api.post('/auth/register', data),
+  login: (data) => api.post('/auth/login', data),
+  me: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
+}
 
 export const profileApi = {
   list: (params) => api.get('/profiles/', { params }),
@@ -40,6 +60,13 @@ export const generateApi = {
   getJobStatus: (runId) => api.get(`/generate/jobs/${runId}`),
 }
 
+export const runApi = {
+  get: (runId) => api.get(`/runs/${runId}`),
+  timeline: (runId, params = {}) => api.get(`/runs/${runId}/timeline`, { params }),
+  evidence: (runId) => api.get(`/runs/${runId}/evidence`),
+  claims: (runId) => api.get(`/runs/${runId}/claims`),
+}
+
 export const learningHistoryApi = {
   timeline: (learnerId) => api.get(`/learning-history/${learnerId}/timeline`),
 }
@@ -50,12 +77,12 @@ export const resourceApi = {
 }
 
 export const feedbackApi = {
-  submit: (data) => api.post('/feedback/', data),
-  history: (learnerId) => api.get(`/feedback/history/${learnerId}`),
   getEvaluationSession: (learnerId, resourceId) => api.get(`/feedback/evaluation/${learnerId}/${resourceId}`),
   getRunEvaluationSession: (learnerId, runId) => api.get(`/feedback/evaluation/run/${learnerId}/${runId}`),
-  submitEvaluation: (data) => api.post('/feedback/evaluation/submit', data),
-  submitRunEvaluation: (data) => api.post('/feedback/evaluation/run/submit', data),
+  submitAttempt: (data) => api.post('/feedback/attempts', data),
+  submitRunAttempt: (data) => api.post('/feedback/attempts/run/submit', data),
+  listAttempts: (learnerId, params = {}) => api.get(`/feedback/attempts/${learnerId}`, { params }),
+  getPath: (learnerId) => api.get(`/feedback/path/${learnerId}`),
 }
 
 export const reportApi = {

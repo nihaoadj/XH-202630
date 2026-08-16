@@ -10,8 +10,10 @@ from app.core.llm_gateway import LLMGateway
 from app.core.vector_store import ChromaVectorSearchBackend, get_vector_store
 from app.db.audit.repository import create_audit_repository
 from app.db.database import get_session_factory
+from app.db.claim.repository import create_claim_repository
 from app.db.diagnosis.repository import create_diagnosis_repository
 from app.db.feedback.repository import create_feedback_repository
+from app.db.feedback_loop.repository import create_feedback_loop_repository
 from app.db.generation_job.repository import create_generation_job_repository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.learner.repository import create_learner_repository
@@ -20,6 +22,7 @@ from app.db.resource.repository import create_resource_repository
 from app.db.user.repository import create_user_repository
 from app.models.llm import LLMCallOptions
 from app.services.diagnosis_service import DiagnosisService
+from app.services.auth_service import AuthService
 from app.services.evaluation_service import EvaluationService
 from app.services.feedback_service import FeedbackService
 from app.services.generation_job_service import GenerationJobService
@@ -33,6 +36,7 @@ from app.services.report_service import ReportService
 from app.services.resource_service import ResourceService
 from app.services.review_service import ReviewService
 from app.services.run_query_service import RunQueryService
+from app.services.run_event_stream_service import RunEventStreamService
 from app.services.user_service import UserService
 
 
@@ -88,6 +92,17 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
+    feedback_loop_repository = providers.Singleton(
+        create_feedback_loop_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+        learner_repository=learner_repository,
+    )
+    claim_repository = providers.Singleton(
+        create_claim_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+    )
     diagnosis_repository = providers.Singleton(
         create_diagnosis_repository,
         db_type=config.db_type,
@@ -136,12 +151,14 @@ class Container(containers.DeclarativeContainer):
 
     profile_service = providers.Singleton(ProfileService, repo=learner_repository)
     user_service = providers.Singleton(UserService, repo=user_repository)
+    auth_service = providers.Singleton(AuthService, repo=user_repository)
     generation_service = providers.Singleton(
         GenerationService,
         resource_repo=resource_repository,
         workflow=workflow,
         audit_repo=audit_repository,
         knowledge_catalog=knowledge_catalog,
+        claim_repo=claim_repository,
     )
     generation_job_service = providers.Singleton(
         GenerationJobService,
@@ -152,11 +169,16 @@ class Container(containers.DeclarativeContainer):
     feedback_service = providers.Singleton(
         FeedbackService,
         feedback_repo=feedback_repository,
+        feedback_loop_repo=feedback_loop_repository,
+        generation_job_service=generation_job_service,
+        audit_repo=audit_repository,
+        knowledge_catalog=knowledge_catalog,
     )
     report_service = providers.Singleton(
         ReportService,
         resource_repo=resource_repository,
         feedback_repo=feedback_repository,
+        feedback_loop_repo=feedback_loop_repository,
     )
     knowledge_service = providers.Singleton(KnowledgeService, catalog=knowledge_catalog)
     diagnosis_service = providers.Singleton(
@@ -170,6 +192,14 @@ class Container(containers.DeclarativeContainer):
         RunQueryService,
         repository=audit_repository,
         resource_repository=resource_repository,
+        claim_repository=claim_repository,
+        feedback_loop_repository=feedback_loop_repository,
+    )
+    run_event_stream_service = providers.Singleton(
+        RunEventStreamService,
+        repository=audit_repository,
+        generation_job_repository=generation_job_repository,
+        settings=runtime_settings,
     )
     evaluation_service = providers.Singleton(
         EvaluationService,
@@ -189,6 +219,7 @@ class Container(containers.DeclarativeContainer):
         questionnaire_repo=questionnaire_repository,
         diagnosis_repo=diagnosis_repository,
         generation_job_repo=generation_job_repository,
+        feedback_repo=feedback_repository,
     )
 
 

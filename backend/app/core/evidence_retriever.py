@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from time import perf_counter
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Callable, Protocol
@@ -216,6 +217,7 @@ class EvidenceRetriever:
         partial_failure_count: int,
         failure: _EvidenceFailure,
         status: RetrievalStatus = RetrievalStatus.RETRIEVAL_ERROR,
+        retrieval_profile: dict[str, object] | None = None,
     ) -> EvidenceBatch:
         logger.warning(
             "Evidence retrieval failed run_id=%s step_id=%s kb_id=%s code=%s candidates=%s",
@@ -235,10 +237,12 @@ class EvidenceRetriever:
             dropped_candidate_count=candidate_count,
             partial_failure_count=partial_failure_count,
             config_hash=config_hash,
+            retrieval_profile=retrieval_profile or {},
             error=_error_info(failure),
         )
 
     def retrieve(self, request: RetrievalRequest) -> EvidenceBatch:
+        retrieval_started = perf_counter()
         policy = request.policy
         queries = request.queries[: policy.max_query_count]
         query_hashes = [query_hash(query) for query in queries]
@@ -247,16 +251,48 @@ class EvidenceRetriever:
         )
         candidates: list[VectorCandidate] = []
         partial_failures = 0
+        query_profiles: list[dict[str, object]] = []
 
-        for query in queries:
+        search_many = getattr(self.backend, "search_many", None)
+        if callable(search_many):
             try:
-                candidates.extend(self.backend.search(
-                    query=query,
+                candidates.extend(search_many(
+                    queries=queries,
                     top_k=policy.top_k_per_query,
                     knowledge_base_id=request.knowledge_base_id,
                 ))
+                backend_profile = getattr(self.backend, "last_profile", None)
+                if isinstance(backend_profile, dict):
+                    query_profiles = [
+                        dict(item)
+                        for item in backend_profile.get("query_profiles", [])
+                        if isinstance(item, dict)
+                    ]
+                    partial_failures = int(backend_profile.get("partial_failure_count", 0))
             except Exception:
-                partial_failures += 1
+                partial_failures = len(queries)
+        else:
+            for query in queries:
+                try:
+                    candidates.extend(self.backend.search(
+                        query=query,
+                        top_k=policy.top_k_per_query,
+                        knowledge_base_id=request.knowledge_base_id,
+                    ))
+                    backend_profile = getattr(self.backend, "last_profile", None)
+                    if isinstance(backend_profile, dict):
+                        query_profiles.append(dict(backend_profile))
+                except Exception:
+                    partial_failures += 1
+
+        retrieval_profile = {
+            "query_count": len(queries),
+            "query_profiles": query_profiles,
+            "total_retrieval_ms": round((perf_counter() - retrieval_started) * 1000, 3),
+        }
+        backend_profile = getattr(self.backend, "last_profile", None)
+        if isinstance(backend_profile, dict) and callable(search_many):
+            retrieval_profile.update(backend_profile)
 
         if not candidates:
             if partial_failures:
@@ -271,6 +307,7 @@ class EvidenceRetriever:
                         category="retrieval",
                         retryable=True,
                     ),
+                    retrieval_profile=retrieval_profile,
                 )
             return EvidenceBatch(
                 status=RetrievalStatus.NO_HIT,
@@ -281,6 +318,7 @@ class EvidenceRetriever:
                 candidate_count=0,
                 dropped_candidate_count=0,
                 config_hash=config_hash,
+                retrieval_profile=retrieval_profile,
             )
 
         query_order = {query: index for index, query in enumerate(queries)}
@@ -318,6 +356,7 @@ class EvidenceRetriever:
                 candidate_count=len(candidates),
                 partial_failure_count=partial_failures,
                 failure=failure,
+                retrieval_profile=retrieval_profile,
             )
 
         ranked = sorted(
@@ -343,6 +382,7 @@ class EvidenceRetriever:
                         retryable=True,
                         safe_detail="queries:partial_failure_insufficient",
                     ),
+                    retrieval_profile=retrieval_profile,
                 )
             return self._failed_batch(
                 request=request,
@@ -356,6 +396,7 @@ class EvidenceRetriever:
                     safe_detail="policy:min_evidence_count",
                 ),
                 status=RetrievalStatus.EVIDENCE_INSUFFICIENT,
+                retrieval_profile=retrieval_profile,
             )
 
         retrieved_at = self.clock()
@@ -399,6 +440,12 @@ class EvidenceRetriever:
             dropped_candidate_count=max(0, len(candidates) - len(evidence)),
             partial_failure_count=partial_failures,
             config_hash=config_hash,
+            retrieval_profile={
+                **retrieval_profile,
+                "total_retrieval_ms": round((perf_counter() - retrieval_started) * 1000, 3),
+                "unique_candidate_count": len(validated),
+                "final_evidence_count": len(evidence),
+            },
         )
 
 

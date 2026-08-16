@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field
 
 class UserProfile(BaseModel):
     user_id: str
+    username: Optional[str] = None
+    is_active: bool = True
+    last_login_at: Optional[datetime] = None
     display_name: str
     identity: str
     education: str

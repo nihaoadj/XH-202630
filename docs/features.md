@@ -93,7 +93,7 @@
 | F04 | 能力诊断 | 已完成基础版 | 返回能力结果与推荐路径 |
 | F05 | 异步资源生成 | 已完成基础版 | 通过任务方式触发生成 |
 | F06 | 资源列表与下载 | 已完成基础版 | 支持按 `run_id` 过滤、按任务切换与下载 |
-| F07 | 学习反馈 | 已完成基础版 | 支持任务级测评、提交反馈并更新画像 |
+| F07 | 学习反馈 | 已完成 P0-07 闭环 | Attempt、知识状态、画像版本、路径 mutation 与后续生成均可持久化追溯 |
 | F08 | 学习历史时间线 | 已完成基础版 | 汇总学习全过程 |
 | F09 | 学习报告 | 已完成基础版 | 提供学习结果摘要 |
 
@@ -207,3 +207,35 @@
 - 草稿、旧版本、返工、拒绝和人工审核资源保留用于审计，但不进入学习者默认资源库。
 - 只有最终审核通过的当前叶子版本可下载。
 - 混合检索和 Rerank 的结果仍需通过 KB、Chunk 版本与内容哈希验证后才能用于生成。
+
+## 10. Claim 级知识溯源与评测（P0-06）
+
+- 独立 Claim Extractor 不依赖 Generator 自报，按资源版本生成稳定 `clm_*` ID。
+- Claim Judge 只允许使用当前 Run 已冻结的 Evidence；跨 Run、未知或伪造 ID 会拒绝。
+- 支持 `supported`、`contradicted`、`not_in_evidence`、`non_factual` 四类判定。
+- 自动发布要求事实 Claim 完整判定，且当前版本不存在 contradicted/not_in_evidence。
+- 问题 Claim 会生成带 `target_claim_ids` 的返工指令，新版本重新抽取和判定。
+- Run 回放只记录 Claim ID、数量、判定计数和指标；全文通过专用 Claims 接口查询。
+- 比赛幻觉率按最终发布叶子版本做事实 Claim 微平均；覆盖率仅认绑定稳定技能节点且
+  判为 supported 的事实 Claim。
+- 难度适配评测要求固定 `fixture_version` 金标，输出准确率和混淆矩阵；不把 Reviewer
+  自评分当作金标。
+
+## 11. 反馈后画像与学习路径闭环（P0-07）
+
+- 正式入口为 `POST /api/feedback/attemptsattempts`；旧反馈写入接口已移除，新闭环事实源统一为 attempt。
+- 总分由后端按逐知识点题数加权重算，边界为 `<0.60 remediate`、`0.60~0.85 practice`、`>0.85 advance`，任一知识点低于 0.60 会阻止整体进阶。
+- 一次本地事务写入 Attempt、Decision、知识状态变更、画像 N+1 和路径 mutation。
+- 低分激活补救节点，中分保持主路径并避免重复练习节点，高分完成当前节点并解锁后继或挑战节点。
+- 补救/进阶通过当前 `GenerationJobService` 创建真实异步任务；父子 Run 可追溯，失败状态与反馈成功状态分离。
+- Report 读取持久化掌握度、最近 Attempt、画像版本和当前路径；重启后不回退。
+
+## 12. WorkflowEvent SSE 与 Agent 实时轨迹（P0-08）
+
+- `GET /api/runs/{run_id}/events` 将已提交的 WorkflowEvent 以 snapshot + replay + live tail 形式输出。
+- 浏览器断线通过 Last-Event-ID 补齐缺失事件，前端 reducer 按 sequence/event ID 去重，不产生重复 Agent Step。
+- 生成页以 SSE 为实时主通道；连续传输错误后才启用现有 Job/timeline 轮询，不同时高频运行两套机制。
+- 页面刷新从 local run_id、Job 和持久化 timeline 恢复，再从最后 sequence 继续订阅。
+- Agent 轨迹展示 running/success/degraded/failed/human_review/skipped、耗时、重试、Evidence/Claim 计数和返工轮次。
+- P0-07 follow-up event 可跳转并订阅 child Run；不创建跨 Run 全局合并流。
+- Evidence/Claim/资源正文仍使用专用详情 API，SSE 不暴露内部推理或大对象。
