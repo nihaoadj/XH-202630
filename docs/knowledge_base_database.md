@@ -1,8 +1,8 @@
 # 知识库与数据库实现说明
 
 > 项目编号：XH-202630
-> 文档版本：2.0
-> 文档更新时间：2026-08-12
+> 文档版本：2.1
+> 文档更新时间：2026-08-16
 > 文档定位：说明当前项目中知识库源文件、SQLite 数据库、问卷、诊断、画像与资源的真实落库方式。
 
 ## 1. 当前运行方式
@@ -40,6 +40,7 @@ python scripts/ingest_knowledge.py
 - `ingest_knowledge.py`
   - 构建知识库向量索引
   - 将知识文档切片写入 Chroma
+  - 可使用 `--knowledge-base-id <id>` 显式重新入库并对账 SQL/Chroma
 
 ## 2. 当前知识源目录
 
@@ -256,7 +257,7 @@ backend/chroma_db/
 
 P0-07 正式接口还会原子读写 `learning_attempts`、`learning_attempt_point_results`、`feedback_decisions`、`knowledge_states`、`knowledge_state_mutations`、`learner_profile_versions`、`learning_paths`、`learning_path_nodes` 和 `learning_path_mutations`。事务提交后才创建 `generation_jobs`，随后写 `feedback_followup_runs`；外部生成失败不回滚 Attempt。
 
-### 4.7 P0-07 一致性与迁移
+### 4.3 P0-07 一致性与迁移
 
 - `learning_attempts` 对 `(learner_id, idempotency_key)` 建唯一约束，并保存 canonical JSON SHA-256 `request_hash`。
 - `learner_profiles.profile_version` 从 1 起；请求的 `expected_profile_version` 与当前值不一致时拒绝更新。
@@ -265,9 +266,9 @@ P0-07 正式接口还会原子读写 `learning_attempts`、`learning_attempt_poi
 - `20260811_p0_07_feedback_profile_path_closed_loop` 是幂等 additive migration；旧 `feedback_records` 不删除、不回填伪造 Attempt。
 - SQLite 开发环境通过单事务和版本条件控制并发；PostgreSQL 生产环境还使用行锁语义。上线前数据库负责人仍需核验 DDL、索引、FK 与真实并发行为。
 
-### 4.8 P0-08 WorkflowEvent tail query
+### 4.4 P0-08 WorkflowEvent tail query
 
-P0-08 零 migration：继续复用 `workflow_events` 的 `(run_id,event_sequence)` 唯一约束/索引和 `agent_runs.last_event_sequence`。SSE 每次只执行有界查询：
+P0-08 的 SSE 能力本身不新建事件表：继续复用 `workflow_events` 的 `(run_id,event_sequence)` 唯一约束/索引和 `agent_runs.last_event_sequence`。SSE 每次只执行有界查询：
 
 ```sql
 WHERE run_id = :run_id AND event_sequence > :cursor
@@ -277,7 +278,61 @@ LIMIT :page_size
 
 长 SSE 连接不持有 Session、事务或锁，不增加 delivered/ack 字段；不同客户端只读同一 append-only Ledger。SQLite 用短连接轮询，PostgreSQL 上线时需结合 worker 数、SSE 客户端数和 0.5 秒默认间隔评估连接池。Event retention 尚未在 P0-08 自动清理，删除策略必须保留比赛回放与 `legacy_partial` 语义。
 
-### 4.3 用户资料
+### 4.5 数据库完整性与 P0-09 migration
+
+- SQLite engine 在每个新 DBAPI connection 建立时执行并验证 `PRAGMA foreign_keys=ON`，而不是只设置启动时的单个连接。
+- `generated_resources` 对 `(run_id, resource_type, version)` 建数据库级 UNIQUE，同一 Run 的同类型同版本资源只能有一条；legacy `run_id IS NULL` 仍允许并存。
+- Resource 的 `run_id`、`generation_step_id` 和 `parent_resource_id` 分别引用 Run、Step 和父资源版本。旧 SQLite 表缺少声明式 FK 时，`20260815_p0_09_database_integrity` 会在预检通过后事务化重建该表。
+- migration 不自动删除重复记录、不补造 Run/Step/父资源，也不为非空 Run 的 NULL version 猜测版本；发现这些情况会 fail closed，要求先人工处理。
+- SQL Repository 保留业务查重，并将并发下数据库返回的 `IntegrityError` 映射为稳定 `PersistenceConflict`。
+
+只读预检命令：
+
+```powershell
+python scripts/check_database_integrity.py
+```
+
+预检输出包括 `foreign_keys_enabled`、`foreign_key_violations`、`resource_version_duplicates`、`resource_version_null_count`、`resource_version_unique`、`missing_resource_foreign_keys` 和 `resource_reference_orphans`。团队真实数据升级前必须先备份 SQLite/PostgreSQL、生成资源目录、Chroma collection 与知识库 manifest/hash，再对脱敏副本执行两次 migration 验证幂等。
+
+比赛阶段没有真实历史数据库时，可执行合成旧库演练：
+
+```powershell
+python scripts/rehearse_synthetic_database_migration.py
+```
+
+脚本基于历史 schema 临时生成正常旧库、资源版本重复库和孤儿引用库。正常库会连续执行两次当前 migration，并核对行数、migration IDs、`legacy_partial`、`legacy_unavailable`、旧资源发布状态以及是否伪造 Claim/Attempt/Evidence 等事实；两类脏库必须 fail closed。脚本不读取或修改配置中的应用数据库。
+
+### 4.5.1 Knowledge SQL/Chroma 崩溃恢复
+
+知识入库开始时先把 `knowledge_index_status.status` 写成 `indexing`。服务启动时会原子扫描超过
+`KNOWLEDGE_INDEX_STALE_SECONDS`（默认 900 秒）仍处于该状态的记录，并转换为：
+
+```text
+status=not_ready
+last_error_code=KNOWLEDGE_INDEXING_INTERRUPTED
+```
+
+转换会保留当时的 snapshot hash、SQL/Chroma 计数和上一次成功入库时间，便于管理员判断崩溃窗口。
+启动过程只标记异常，不自动运行 Embedding 或重建索引，避免拖慢/阻断服务启动。
+
+管理员确认项目内源文件无误后，可通过以下受保护接口执行完整恢复：
+
+```text
+POST /api/admin/knowledge-bases/{knowledge_base_id}/reconcile
+X-Admin-Token: <ADMIN_HEALTH_TOKEN>
+```
+
+也可以执行本地命令：
+
+```powershell
+python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
+```
+
+恢复操作不猜测 SQL 和 Chroma 哪一侧较新，而是重新读取权威源文件、生成稳定文档/切片 ID、
+替换该 KB 的 Chroma 活跃集合、运行 smoke query，最后才激活 SQL 快照并写入 `ready`。
+因此进程可能在 SQL staging、Chroma 替换、smoke 或 SQL activation 任一阶段被中断，后续重试仍然幂等。
+
+### 4.6 用户资料
 
 - `GET /api/users/`
 - `GET /api/users/{user_id}`
@@ -288,7 +343,7 @@ LIMIT :page_size
 
 - `users`
 
-### 4.4 画像
+### 4.7 画像
 
 - `GET /api/profiles/`
 - `GET /api/profiles/{learner_id}`
@@ -301,7 +356,7 @@ LIMIT :page_size
 
 删除时还会联动清理相关诊断记录。
 
-### 4.5 诊断
+### 4.8 诊断
 
 - `GET /api/diagnosis/questions`
 - `POST /api/diagnosis/submit`
@@ -318,7 +373,7 @@ LIMIT :page_size
 - `knowledge_states`
 - `learner_profiles`
 
-### 4.6 资源与反馈
+### 4.9 资源与反馈
 
 - `POST /api/generate/jobs`
 - `GET /api/generate/jobs?learner_id={learner_id}`
@@ -465,6 +520,12 @@ python -m pytest backend/tests -q
 - 审核 API
 - 评测 API
 - 问卷数据库读写
+- SQLite 每连接外键执行与非法审计/反馈引用阻断
+- P0-09 资源版本唯一约束、旧表 FK 重建与 migration 幂等
+- Resource Repository 数据库冲突映射和 legacy NULL Run 行为
+- Feedback 事务回滚、FastAPI lifespan 重启与真实 Uvicorn 进程重启
+- SQLite 遗留 GenerationJob/Follow-up 启动对账及幂等重排队
+- Knowledge `indexing` 超时检测、启动恢复和显式 SQL/Chroma 重入库
 
 说明：
 
@@ -515,4 +576,4 @@ python -m pytest backend/tests -q
 
 P0-09 preflight 会只读检查 migration 集合、正式 demo 数据库可达性、SQLite `PRAGMA foreign_keys`、`generated_resources(run_id, resource_type, version)` 数据库唯一约束，以及默认 KB 的本地 retrieval smoke。检查失败不会被公共 `/health/ready` 的 200 覆盖。
 
-截至 2026-08-12 当前 SQLite demo 基线：migration 为最新，但连接未强制启用外键，资源版本仅有非唯一索引而无数据库唯一约束。因此数据库比赛 Gate 为 `FAIL`；这份文档不把“模型层约束”描述成已完成的数据库不变量。PostgreSQL migration 与并发行为也尚未完成正式验证。
+截至 2026-08-16，SQLite 每连接外键 hook、资源版本数据库唯一约束、旧表重建 migration、完整性检查和合成迁移演练已经进入代码与自动测试。正式 demo 数据仍须先运行只读完整性检查和受控 migration rehearsal，不能仅凭模型层约束宣布放行；PostgreSQL migration 与并发行为也尚未完成正式验证。

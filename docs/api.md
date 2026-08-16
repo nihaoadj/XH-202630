@@ -501,6 +501,10 @@
 
 `feedback_status` 与 `followup_generation_status` 必须分开解释：后续生成失败不会撤销已经成功提交的 Attempt。
 
+SQLite 服务重启发现遗留的 queued/running Job 时，Job 返回 `job_status=failed`、
+`error_message=GENERATION_JOB_INTERRUPTED`，对应 Follow-up 返回
+`followup_generation_status=failed` 和同名 `followup_error_code`。原幂等请求可安全重放并复用原 `followup_run_id`。
+
 ### 11.4 P0-07 查询接口
 
 - `GET /api/feedback/attempts/{learner_id}?limit=20`：返回最近的不可变 Attempt 事实。
@@ -671,6 +675,25 @@ claim_hallucination_rate =
 公共 `/health`、`/health/ready` 只检查默认 KB 和核心依赖；非默认 KB 异常不使
 公共服务返回 503。管理员 `/api/admin/knowledge-bases/health` 返回全部 KB 脱敏状态。
 
+服务启动时会把超过 `KNOWLEDGE_INDEX_STALE_SECONDS`（默认 900 秒）仍停留在
+`indexing` 的记录转为 `not_ready`，错误码为
+`KNOWLEDGE_INDEXING_INTERRUPTED`，并保留快照、计数和上次成功入库时间用于排查。
+
+### 14.6 `POST /api/admin/knowledge-bases/{knowledge_base_id}/reconcile`
+
+受 `X-Admin-Token` 保护。该接口从项目内对应知识库的权威源文件重新加载文档，
+全量、幂等地重建该知识库的 Chroma collection，并在 smoke query 通过后激活 SQL
+快照。成功返回 `200` 和 `status=ready`；入库或对账失败返回 `503` 和脱敏后的
+`IngestionReport`；知识库 ID 不存在返回 `404`。该操作可能执行 Embedding，不应由
+普通前端用户调用。
+
+```powershell
+$headers = @{ "X-Admin-Token" = "<ADMIN_HEALTH_TOKEN>" }
+Invoke-RestMethod -Method Post `
+  http://127.0.0.1:8000/api/admin/knowledge-bases/rag_engineering_training/reconcile `
+  -Headers $headers
+```
+
 工作流持久化不可用时 fail closed。常用稳定错误包括
 `WORKFLOW_PERSISTENCE_UNAVAILABLE`、`WORKFLOW_PERSISTENCE_CONFLICT`、
 `EVIDENCE_INSUFFICIENT`、`EVIDENCE_PROVENANCE_INVALID` 和细分 LLM 错误码。
@@ -680,4 +703,4 @@ claim_hallucination_rate =
 
 P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py` 组合现有 Generate Job、Run/Timeline/Evidence/Claims、Formal Feedback Attempt、Report 与 SSE 契约，输出脱敏 machine-readable manifest。`--offline` 使用 FakeGateway/固定 fixture；`--runtime` 只读验证真实 FastAPI、默认 KB、数据库与前端契约；`--live` 只有显式环境开关时才调用 Provider。
 
-当前浏览器基线仍未完整使用 Formal Attempt、Profile/Mastery/Path、Claim/Evidence 和 SourceRef V2，因此即使上述后端接口存在，P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。
+当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。

@@ -12,7 +12,7 @@
 - 浏览器人工 E2E checklist 全部确认。
 - live provider smoke 如被列入本次演示范围，必须显式启用并单独记录结果。
 
-`DEGRADED` 只能用于排障或受控预演；`NOT_READY` 与任一 required Gate 的 `FAIL` 都是 No-Go。当前基线的公共 health 可为 ready，但 SQLite 外键、资源版本唯一约束或前端比赛页面缺口仍会使 runtime Gate 失败。
+`DEGRADED` 只能用于排障或受控预演；`NOT_READY` 与任一 required Gate 的 `FAIL` 都是 No-Go。当前代码已包含 SQLite 外键 hook 和资源版本唯一约束 migration，但正式 demo 数据仍须完成迁移演练；前端 Claim/Evidence、SourceRef V2 和画像/路径报告缺口仍会使 runtime Gate 失败。
 
 ## 2. 启动前准备
 

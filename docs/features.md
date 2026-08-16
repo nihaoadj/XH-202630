@@ -180,8 +180,7 @@
 - 独立消息队列或任务队列
 - 任务取消与任务恢复
 - 更复杂的扩展 Agent 工作流
-- 前端正式 P0-07 Attempt/Profile/Mastery/Path 页面与 Claim/Evidence/SourceRef V2 的完整比赛对齐
-- SQLite 外键强制启用及资源版本数据库唯一约束
+- 前端 Profile/Mastery/Path 完整报告与 Claim/Evidence/SourceRef V2 的比赛对齐
 
 ## 9. 当前阶段结论
 
@@ -198,7 +197,7 @@
 
 当前进入比赛级 Gate 收敛，重点是：
 
-- 补齐前端正式闭环与数据库 Gate，并完成浏览器人工 E2E
+- 补齐前端 Claim/Evidence 与画像/路径报告，并完成浏览器人工 E2E 和正式数据迁移演练
 - 扩大真实/金标评测样本；样本不足时保持 `NOT_MEASURABLE`
 
 ## 10. 审核返工、版本与发布能力
@@ -251,4 +250,4 @@
 - acceptance runner 分开执行 deterministic offline、local runtime 与显式 opt-in live smoke，manifest 不保存 Key、Prompt、模型原始响应或完整画像。
 - 比赛方案数值阈值为幻觉率 `<5%`、难度适配准确率 `>=85%`、核心知识点覆盖率 `>=90%`；正式口径不用 Reviewer 自评分。
 - 当前 fixture 只有 3 个 learner，未达到比赛高分测试计划所要求的至少 50 组用例，因此三项 fixture 实际值只作管线校验，正式结论为 `NOT_MEASURABLE`。
-- 当前 runtime Gate 会因前端比赛对齐项、SQLite 外键和资源版本唯一约束缺失而 `FAIL`；公共 health ready 不能替代比赛 Gate。
+- SQLite 外键 hook、资源版本唯一约束和迁移演练脚本已同步；当前 runtime Gate 仍会因前端 Claim/Evidence、SourceRef V2 和画像/路径报告缺口而 `FAIL`。公共 health ready 不能替代比赛 Gate。

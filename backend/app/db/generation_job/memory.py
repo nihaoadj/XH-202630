@@ -1,7 +1,7 @@
 """异步生成任务仓储的内存实现。"""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.db.generation_job.base import BaseGenerationJobRepository
@@ -64,6 +64,32 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         record["error_message"] = error_message
         record["finished_at"] = datetime.utcnow()
         return GenerationJobStatusResponse(**record)
+
+    def mark_queued(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
+        record = self._store.get(run_id)
+        if record is None:
+            return None
+        record["job_status"] = "queued"
+        record["error_message"] = None
+        record["started_at"] = None
+        record["finished_at"] = None
+        return GenerationJobStatusResponse(**record)
+
+    def fail_incomplete_before(self, before: datetime, error_message: str) -> list[str]:
+        cutoff = before.astimezone(timezone.utc).replace(tzinfo=None)
+        affected = []
+        for run_id, record in self._store.items():
+            created_at = record.get("created_at")
+            if (
+                record["job_status"] in {"queued", "running"}
+                and created_at is not None
+                and created_at < cutoff
+            ):
+                record["job_status"] = "failed"
+                record["error_message"] = error_message
+                record["finished_at"] = datetime.utcnow()
+                affected.append(run_id)
+        return affected
 
     def list_by_learner(self, learner_id: str) -> list[GenerationJobStatusResponse]:
         records = [

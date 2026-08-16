@@ -264,6 +264,7 @@ class FeedbackService:
                 profile,
                 generation_request,
                 run_id=followup_run_id,
+                retry_failed=True,
             )
             updated = self.feedback_loop_repo.attach_followup(
                 attempt_id=result.attempt.attempt_id,

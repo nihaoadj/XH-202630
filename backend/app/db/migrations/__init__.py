@@ -5,6 +5,7 @@ from app.db.migrations.p0_05 import apply_p0_05_migration
 from app.db.migrations.p0_06 import apply_p0_06_migration
 from app.db.migrations.p0_07 import apply_p0_07_migration
 from app.db.migrations.p0_07_feedback import apply_p0_07_feedback_migration
+from app.db.migrations.p0_09 import apply_p0_09_migration
 
 __all__ = [
     "apply_p0_04_migration",
@@ -12,4 +13,5 @@ __all__ = [
     "apply_p0_06_migration",
     "apply_p0_07_migration",
     "apply_p0_07_feedback_migration",
+    "apply_p0_09_migration",
 ]

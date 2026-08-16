@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.generation_job.base import BaseGenerationJobRepository
@@ -93,6 +94,43 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
             db.commit()
             db.refresh(orm)
             return _to_schema(orm)
+
+    def mark_queued(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
+        with self.session_factory() as db:
+            orm = db.query(GenerationJobORM).filter_by(run_id=run_id).with_for_update().first()
+            if orm is None:
+                return None
+            orm.status = "queued"
+            orm.error_message = None
+            orm.started_at = None
+            orm.finished_at = None
+            db.commit()
+            db.refresh(orm)
+            return _to_schema(orm)
+
+    def fail_incomplete_before(self, before: datetime, error_message: str) -> list[str]:
+        with self.session_factory() as db:
+            rows = (
+                db.query(GenerationJobORM)
+                .filter(
+                    GenerationJobORM.status.in_(("queued", "running")),
+                    or_(
+                        GenerationJobORM.created_at < before,
+                        GenerationJobORM.created_at.is_(None),
+                    ),
+                )
+                .with_for_update()
+                .all()
+            )
+            finished_at = datetime.now(timezone.utc)
+            run_ids = []
+            for row in rows:
+                row.status = "failed"
+                row.error_message = error_message
+                row.finished_at = finished_at
+                run_ids.append(row.run_id)
+            db.commit()
+            return run_ids
 
     def list_by_learner(self, learner_id: str) -> list[GenerationJobStatusResponse]:
         with self.session_factory() as db:
