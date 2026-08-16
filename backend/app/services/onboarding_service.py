@@ -1,6 +1,7 @@
 """根据 onboarding 问卷创建初始学习画像。"""
 from __future__ import annotations
 
+from uuid import uuid4
 from typing import Any
 
 from app.db.learner.base import BaseLearnerRepository
@@ -38,12 +39,12 @@ class OnboardingService:
         request: InitialProfileQuestionnaire,
         authenticated_user: UserProfile | None = None,
     ) -> InitialProfileResponse:
-        if authenticated_user is not None:
-            expected_learner_id = f"{authenticated_user.user_id}__{request.learning_direction_id}"
-            request = request.model_copy(update={"learner_id": expected_learner_id})
         manifest = self.knowledge_service._ensure_knowledge_base(request.learning_direction_id)
         self._validate_answers(request, manifest)
         user = authenticated_user or self._resolve_user(request)
+        request = request.model_copy(
+            update={"learner_id": self._build_learner_id(user.user_id, request.learning_direction_id)}
+        )
         nodes = self.knowledge_service.list_skill_nodes(manifest["knowledge_base_id"])
         node_by_id = {node.node_id: node for node in nodes}
 
@@ -75,6 +76,11 @@ class OnboardingService:
             diagnostic_questions=[self.knowledge_service.public_question(question) for question in questions],
             next_step="提交诊断答案到 POST /api/diagnosis/submit，然后进入第 5 步选择资源类型。",
         )
+
+    @staticmethod
+    def _build_learner_id(user_id: str, learning_direction_id: str | None) -> str:
+        direction = (learning_direction_id or "general").strip() or "general"
+        return f"{user_id}__{direction}__{uuid4().hex[:12]}"
 
     def _select_initial_diagnostic_questions(
         self,

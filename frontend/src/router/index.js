@@ -9,7 +9,7 @@ const routes = [
   { path: '/user/profile', name: 'user-profile', component: () => import('../views/UserProfileView.vue'), meta: { requiresAuth: true } },
   { path: '/learning/new', name: 'onboarding', component: () => import('../views/OnboardingView.vue'), meta: { requiresAuth: true } },
   { path: '/learning/history', name: 'history', component: () => import('../views/HistoryView.vue'), meta: { requiresAuth: true } },
-  { path: '/resources', redirect: '/generate' },
+  { path: '/resources', name: 'resources', component: () => import('../views/ResourcesView.vue'), meta: { requiresAuth: true } },
   { path: '/generate', name: 'generate', component: () => import('../views/GenerateView.vue'), meta: { requiresAuth: true } },
   { path: '/report', name: 'report', component: () => import('../views/ReportView.vue'), meta: { requiresAuth: true } },
   { path: '/feedback', name: 'feedback', component: () => import('../views/FeedbackView.vue'), meta: { requiresAuth: true } },

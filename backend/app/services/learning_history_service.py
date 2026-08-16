@@ -1,6 +1,8 @@
 """聚合学习历史并输出给前端时间线。"""
 from __future__ import annotations
 
+from collections import defaultdict
+
 from app.db.diagnosis.base import BaseDiagnosisRepository
 from app.db.feedback.base import BaseFeedbackRepository
 from app.db.generation_job.base import BaseGenerationJobRepository
@@ -36,10 +38,13 @@ class LearningHistoryService:
             return None
 
         events: list[LearningHistoryEvent] = []
-        for submission in self.questionnaire_repo.list_submissions_by_learner(learner_id):
-            title = "完成问卷"
+        submissions = self.questionnaire_repo.list_submissions_by_learner(learner_id)
+        initial_profile_submissions: list[dict] = []
+        for submission in submissions:
             if submission.get("metadata", {}).get("purpose") == "initial_profile":
-                title = "创建学习方向画像"
+                initial_profile_submissions.append(submission)
+                continue
+            title = "完成问卷"
             events.append(
                 LearningHistoryEvent(
                     event_id=submission["submission_id"],
@@ -54,6 +59,7 @@ class LearningHistoryService:
                     },
                 )
             )
+        events.extend(self._build_initial_profile_events(initial_profile_submissions))
 
         for run in self.diagnosis_repo.list_runs_by_learner(learner_id):
             events.append(
@@ -76,6 +82,7 @@ class LearningHistoryService:
         for job in self.generation_job_repo.list_by_learner(learner_id):
             request_payload = job.request_payload or {}
             constraints = request_payload.get("constraints") or {}
+            supplemental_requirements = str(constraints.get("supplemental_requirements") or "").strip()
             based_on_feedback_id = constraints.get("based_on_feedback_id") or ""
             title = "发起资源生成"
             if job.job_status == "completed":
@@ -85,12 +92,16 @@ class LearningHistoryService:
             if based_on_feedback_id:
                 title = "基于反馈重新生成" if job.job_status == "completed" else "发起反馈后重新生成"
             linked_feedback = feedback_by_id.get(based_on_feedback_id)
-            description = f"主题: {job.topic}"
+            description = f"任务摘要：{job.topic}"
+            if supplemental_requirements:
+                description = f"{description}；补充要求：{supplemental_requirements}"
             if linked_feedback:
                 description = (
                     f"基于学习后测评 {linked_feedback.correct_rate:.0%} 和反馈决策"
-                    f"「{linked_feedback.decision}」重新生成；主题: {job.topic}"
+                    f"「{linked_feedback.decision}」重新生成；任务摘要：{job.topic}"
                 )
+                if supplemental_requirements:
+                    description = f"{description}；补充要求：{supplemental_requirements}"
             events.append(
                 LearningHistoryEvent(
                     event_id=job.run_id,
@@ -105,6 +116,7 @@ class LearningHistoryService:
                         "resource_ids": job.resource_ids,
                         "error_message": job.error_message,
                         "topic": job.topic,
+                        "supplemental_requirements": supplemental_requirements or None,
                         "based_on_feedback_id": based_on_feedback_id or None,
                         "based_on_feedback_run_id": constraints.get("based_on_feedback_run_id"),
                         "based_on_feedback_resource_ids": constraints.get("based_on_feedback_resource_ids", []),
@@ -167,3 +179,52 @@ class LearningHistoryService:
             profile=profile,
             events=events,
         )
+
+    def _build_initial_profile_events(self, submissions: list[dict]) -> list[LearningHistoryEvent]:
+        grouped: dict[tuple[str, str], list[dict]] = defaultdict(list)
+        for submission in submissions:
+            key = (
+                submission.get("learner_id") or "",
+                self._created_at_key(submission.get("created_at")),
+            )
+            grouped[key].append(submission)
+
+        events: list[LearningHistoryEvent] = []
+        for grouped_submissions in grouped.values():
+            ordered = sorted(
+                grouped_submissions,
+                key=lambda item: (
+                    item.get("created_at").timestamp() if item.get("created_at") else 0.0,
+                    item.get("submission_id") or "",
+                ),
+            )
+            first = ordered[0]
+            merged_answers: dict = {}
+            questionnaire_ids: list[str] = []
+            for submission in ordered:
+                merged_answers.update(submission.get("answers", {}))
+                questionnaire_id = submission.get("questionnaire_id")
+                if questionnaire_id:
+                    questionnaire_ids.append(questionnaire_id)
+            events.append(
+                LearningHistoryEvent(
+                    event_id="__".join(item["submission_id"] for item in ordered),
+                    event_type="initial_profile_created",
+                    title="创建学习方向画像",
+                    description=f"学习方向 {first.get('knowledge_base_id') or '-'} 的问卷已提交。",
+                    occurred_at=first.get("created_at"),
+                    payload={
+                        "questionnaire_ids": questionnaire_ids,
+                        "knowledge_base_id": first.get("knowledge_base_id"),
+                        "answers": merged_answers,
+                        "submission_count": len(ordered),
+                    },
+                )
+            )
+        return events
+
+    @staticmethod
+    def _created_at_key(value) -> str:
+        if value is None:
+            return "none"
+        return value.isoformat()

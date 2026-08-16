@@ -10,6 +10,67 @@ from app.services.learning_history_service import LearningHistoryService
 from app.services.profile_service import ProfileService
 
 
+def test_learning_history_merges_initial_profile_submissions_into_one_event():
+    learner_repo = MemoryLearnerRepository()
+    learner_repo.save(
+        LearnerProfile(
+            learner_id="history_initial_001",
+            learner_type="测试学习者",
+            education="本科",
+            major="软件工程",
+            knowledge_base_id="rag_engineering_training",
+            learning_goal="完成画像创建",
+        )
+    )
+    questionnaire_repo = MemoryQuestionnaireRepository()
+    questionnaire_repo.submissions = [
+        {
+            "submission_id": "submission_common",
+            "questionnaire_id": "common_initial_profile_v1",
+            "learner_id": "history_initial_001",
+            "track_id": "rag_engineering_training",
+            "knowledge_base_id": "rag_engineering_training",
+            "answers": {"learning_goal": "了解基础概念"},
+            "profile_updates": {},
+            "metadata": {"purpose": "initial_profile"},
+            "created_at": datetime(2026, 8, 16, 2, 45, 29, tzinfo=timezone.utc),
+        },
+        {
+            "submission_id": "submission_track",
+            "questionnaire_id": "rag_track_profile_v1",
+            "learner_id": "history_initial_001",
+            "track_id": "rag_engineering_training",
+            "knowledge_base_id": "rag_engineering_training",
+            "answers": {"known_rag_nodes": ["Embedding"]},
+            "profile_updates": {},
+            "metadata": {"purpose": "initial_profile"},
+            "created_at": datetime(2026, 8, 16, 2, 45, 29, tzinfo=timezone.utc),
+        },
+    ]
+
+    service = LearningHistoryService(
+        profile_service=ProfileService(learner_repo),
+        questionnaire_repo=questionnaire_repo,
+        diagnosis_repo=MemoryDiagnosisRepository(),
+        generation_job_repo=MemoryGenerationJobRepository(),
+        feedback_repo=MemoryFeedbackRepository(),
+    )
+
+    timeline = service.timeline("history_initial_001")
+
+    assert timeline is not None
+    initial_events = [event for event in timeline.events if event.event_type == "initial_profile_created"]
+    assert len(initial_events) == 1
+    assert initial_events[0].title == "创建学习方向画像"
+    assert initial_events[0].payload["submission_count"] == 2
+    assert initial_events[0].payload["questionnaire_ids"] == [
+        "common_initial_profile_v1",
+        "rag_track_profile_v1",
+    ]
+    assert initial_events[0].payload["answers"]["learning_goal"] == "了解基础概念"
+    assert initial_events[0].payload["answers"]["known_rag_nodes"] == ["Embedding"]
+
+
 def test_learning_history_includes_feedback_before_feedback_based_regeneration():
     learner_repo = MemoryLearnerRepository()
     learner_repo.save(

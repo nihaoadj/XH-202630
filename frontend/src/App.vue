@@ -6,8 +6,7 @@
       <div class="brand">
         <div class="brand-mark">TP</div>
         <div>
-          <div class="brand-title">Training Pilot</div>
-          <div class="brand-subtitle">学习方向与资源生成工作台</div>
+          <div class="brand-title">学习资源生成工作台</div>
         </div>
       </div>
 
@@ -63,13 +62,13 @@ const store = useAppStore()
 const navigation = [
   { to: '/', label: '总览', hint: '查看当前进度与主入口' },
   { to: '/learning/new', label: '新建学习方向', hint: '5 步完成问卷、诊断与生成' },
-  { to: '/learning/history', label: '学习历史', hint: '按时间线查看学习过程' },
   { to: '/generate', label: '资源生成', hint: '查看生成任务状态' },
-  { to: '/report', label: '学习报告', hint: '查看诊断与进展' },
   { to: '/feedback', label: '学习反馈', hint: '记录练习结果' },
+  { to: '/report', label: '学习报告', hint: '查看诊断与进展' },
+  { to: '/learning/history', label: '学习历史', hint: '按时间线查看学习过程' },
 ]
 
-const containedScroll = computed(() => ['onboarding', 'history'].includes(route.name))
+const containedScroll = computed(() => ['home', 'onboarding', 'history'].includes(route.name))
 const isAuthRoute = computed(() => Boolean(route.meta.authLayout))
 
 async function handleLogout() {
@@ -95,7 +94,7 @@ async function handleLogout() {
 .shell {
   height: 100dvh;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 236px minmax(0, 1fr);
   overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 26%),
@@ -109,7 +108,7 @@ async function handleLogout() {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 28px 22px;
+  padding: 24px 18px;
   overflow-y: auto;
   background: rgba(10, 23, 44, 0.96);
   color: #f8fbff;
@@ -122,9 +121,10 @@ async function handleLogout() {
 }
 
 .brand-mark {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, #60a5fa, #34d399);
@@ -133,14 +133,18 @@ async function handleLogout() {
 }
 
 .brand-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .brand-subtitle {
   margin-top: 4px;
   color: rgba(226, 236, 248, 0.78);
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav {
@@ -172,11 +176,17 @@ async function handleLogout() {
 
 .nav-label {
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-hint {
   color: rgba(203, 213, 225, 0.78);
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .context-card {
@@ -276,7 +286,7 @@ async function handleLogout() {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 30px 36px 36px;
+  padding: 30px 40px 36px;
 }
 
 .content.is-contained-scroll {

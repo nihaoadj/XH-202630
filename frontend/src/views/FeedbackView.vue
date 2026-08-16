@@ -36,7 +36,7 @@
         </el-button>
       </div>
       <p v-if="activeTask" class="selector-tip">
-        当前任务共 {{ activeTask.resources.length }} 份资源，主题：{{ activeTask.topic || '未命名主题' }}
+        当前任务共 {{ activeTask.resources.length }} 份资源，方向：{{ currentDirectionName }}
       </p>
     </el-card>
 
@@ -45,7 +45,7 @@
         <div class="card-head">
           <div>
             <span>任务测评</span>
-            <p class="muted" v-if="evaluation.topic">{{ evaluation.topic }}</p>
+            <p class="muted">{{ currentDirectionName }}</p>
           </div>
           <el-tag effect="plain">{{ evaluation.questions.length }} 题</el-tag>
         </div>
@@ -225,6 +225,7 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { feedbackApi, resourceApi } from '../api'
 import { useAppStore } from '../stores/app'
+import { formatDateTime, formatResourceLabel } from '../utils/generationDisplay'
 
 const router = useRouter()
 const store = useAppStore()
@@ -277,7 +278,6 @@ const taskGroups = computed(() => {
       groups.set(runId, {
         runId,
         shortRunId: runId.startsWith('resource:') ? '未关联任务' : runId.slice(0, 8).toUpperCase(),
-        topic: resource.topic || '',
         finishedAt: resource.created_at || '',
         resources: [],
       })
@@ -358,7 +358,7 @@ function historyResourceLabel(row) {
   }
   const runId = matched.run_id
   const task = runId ? `任务 ${runId.slice(0, 8).toUpperCase()}` : matched.resource_type
-  return `${task} / ${matched.topic || '未命名主题'}`
+  return `${task} / ${formatResourceLabel(matched, currentDirectionName.value)}`
 }
 
 function selectFeedback(feedbackId) {
@@ -366,16 +366,7 @@ function selectFeedback(feedbackId) {
 }
 
 function formatTaskTime(value) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+  return formatDateTime(value)
 }
 
 async function loadResources() {

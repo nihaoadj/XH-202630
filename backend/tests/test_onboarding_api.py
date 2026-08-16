@@ -80,6 +80,8 @@ def test_onboarding_creates_profile_and_only_returns_known_node_questions():
 
     assert response.status_code == 200
     body = response.json()
+    learner_id = body["learner_id"]
+    assert learner_id.startswith("user_001__rag_engineering_training__")
     assert body["diagnostic_node_ids"] == ["rag_basics", "embedding", "rerank"]
     assert body["screening_results"] == {}
     assert len(body["diagnostic_questions"]) == 10
@@ -88,7 +90,7 @@ def test_onboarding_creates_profile_and_only_returns_known_node_questions():
     assert all("answer" not in question and "explanation" not in question for question in body["diagnostic_questions"])
     assert "chunking" in body["not_started_node_ids"]
 
-    profile = repository.get("user_001__rag_engineering_training")
+    profile = repository.get(learner_id)
     assert profile.knowledge_states["Chunk 切分"].status == "not_started"
     assert "Chunk 切分" in profile.weak_points
     assert profile.learning_preferences.metadata["onboarding"]["weekly_time_budget"] == "2-4 小时"
@@ -113,7 +115,8 @@ def test_onboarding_creates_profile_and_only_returns_known_node_questions():
 
 def test_diagnosis_keeps_not_started_nodes_after_adaptive_submission():
     client, repository, knowledge_service = _client()
-    client.post("/api/onboarding/initial-profile", json=_questionnaire_payload())
+    onboarding_response = client.post("/api/onboarding/initial-profile", json=_questionnaire_payload())
+    learner_id = onboarding_response.json()["learner_id"]
     questions = knowledge_service.select_diagnostic_questions(
         "rag_engineering_training",
         skill_node_ids=["rag_basics", "embedding", "rerank"],
@@ -121,14 +124,14 @@ def test_diagnosis_keeps_not_started_nodes_after_adaptive_submission():
     response = client.post(
         "/api/diagnosis/submit",
         json={
-            "learner_id": "user_001__rag_engineering_training",
+            "learner_id": learner_id,
             "learning_direction_id": "rag_engineering_training",
             "answers": [{"question_id": question.question_id, "answer": question.answer} for question in questions],
         },
     )
 
     assert response.status_code == 200
-    profile = repository.get("user_001__rag_engineering_training")
+    profile = repository.get(learner_id)
     assert "Chunk 切分" in profile.weak_points
     assert "Embedding" in profile.strong_points
 
@@ -155,3 +158,18 @@ def test_learning_focus_is_profile_preference_not_diagnostic_gate():
     assert response.status_code == 200
     assert response.json()["screening_results"] == {}
     assert "embedding" in response.json()["diagnostic_node_ids"]
+
+
+def test_same_direction_creates_distinct_profiles_and_histories():
+    client, repository, _ = _client()
+
+    first = client.post("/api/onboarding/initial-profile", json=_questionnaire_payload())
+    second = client.post("/api/onboarding/initial-profile", json=_questionnaire_payload())
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_learner_id = first.json()["learner_id"]
+    second_learner_id = second.json()["learner_id"]
+    assert first_learner_id != second_learner_id
+    assert repository.get(first_learner_id) is not None
+    assert repository.get(second_learner_id) is not None
