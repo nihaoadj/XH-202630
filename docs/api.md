@@ -2,7 +2,7 @@
 
 > 项目编号：XH-202630
 > 文档版本：2.0
-> 文档更新时间：2026-07-31
+> 文档更新时间：2026-08-12
 > 说明：本文档以当前代码实现为准，覆盖 `backend/app/api` 中已经启用的核心接口。
 
 ## 1. 基本信息
@@ -590,7 +590,7 @@ SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模�
 - 已执行：学习反馈页支持按任务加载测评题与提交反馈
 - 已执行：资源文件下载接口可用
 - 已执行：学习历史时间线接口可用
-- 未执行：实时推送
+- 已执行：`GET /api/runs/{run_id}/events` 提供 WorkflowEvent SSE replay + live tail，前端支持断线续传与轮询降级
 - 未执行：独立任务队列
 - 未执行：任务取消
 - 未执行：失败任务自动重试
@@ -675,3 +675,9 @@ claim_hallucination_rate =
 `WORKFLOW_PERSISTENCE_UNAVAILABLE`、`WORKFLOW_PERSISTENCE_CONFLICT`、
 `EVIDENCE_INSUFFICIENT`、`EVIDENCE_PROVENANCE_INVALID` 和细分 LLM 错误码。
 响应不得包含 prompt、模型原文、API Key、数据库连接串或原始 provider 异常。
+
+## 15. P0-09 接口验收口径
+
+P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py` 组合现有 Generate Job、Run/Timeline/Evidence/Claims、Formal Feedback Attempt、Report 与 SSE 契约，输出脱敏 machine-readable manifest。`--offline` 使用 FakeGateway/固定 fixture；`--runtime` 只读验证真实 FastAPI、默认 KB、数据库与前端契约；`--live` 只有显式环境开关时才调用 Provider。
+
+当前浏览器基线仍未完整使用 Formal Attempt、Profile/Mastery/Path、Claim/Evidence 和 SourceRef V2，因此即使上述后端接口存在，P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。

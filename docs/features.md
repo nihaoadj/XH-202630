@@ -3,7 +3,7 @@
 > 项目编号：XH-202630
 > 项目名称：领域知识个性化生成与多智能体协同决策系统
 > 文档版本：2.0
-> 文档更新时间：2026-07-31
+> 文档更新时间：2026-08-12
 > 文档定位：说明当前系统已经落地的能力边界、核心流程和页面职责。
 
 ## 1. 当前产品定位
@@ -172,18 +172,20 @@
 - 资源结果按 `run_id` 查看
 - 学习历史时间线接口提供
 - 本地数据库已按当前结构重建并同步
+- WorkflowEvent SSE replay/live tail、断线续传和前端轮询降级
 
 尚未完成：
 
 - 诊断结果展示后的“第五步资源类型选择”完整前端体验
-- 资源生成完成后的实时推送
 - 独立消息队列或任务队列
 - 任务取消与任务恢复
 - 更复杂的扩展 Agent 工作流
+- 前端正式 P0-07 Attempt/Profile/Mastery/Path 页面与 Claim/Evidence/SourceRef V2 的完整比赛对齐
+- SQLite 外键强制启用及资源版本数据库唯一约束
 
 ## 9. 当前阶段结论
 
-截至 2026-07-31，系统已经具备“最小可验证流程”的基础能力：
+截至 2026-08-12，后端已经具备可重复验证的 P0-00～P0-08 业务闭环：
 
 - 可以创建用户资料
 - 可以提交问卷并生成初始画像
@@ -191,12 +193,15 @@
 - 可以发起异步资源生成任务
 - 可以查询和下载生成资源
 - 可以从历史时间线查看学习过程
+- 可以通过 SSE 观察并断线续传持久化 WorkflowEvent
+- 可以回放 Evidence、审核版本、Claim 判定和反馈后的画像/路径变化
 
-当前更适合继续做两类工作：
+当前进入比赛级 Gate 收敛，重点是：
 
-- 补齐新版 onboarding 第五步和前端串联体验
-- 在不破坏现有闭环的前提下，逐步增强任务调度与 Agent 工作流
-## 9. 审核返工、版本与发布能力
+- 补齐前端正式闭环与数据库 Gate，并完成浏览器人工 E2E
+- 扩大真实/金标评测样本；样本不足时保持 `NOT_MEASURABLE`
+
+## 10. 审核返工、版本与发布能力
 
 当前资源生成闭环在异步任务之内提供以下可靠能力：
 
@@ -208,7 +213,7 @@
 - 只有最终审核通过的当前叶子版本可下载。
 - 混合检索和 Rerank 的结果仍需通过 KB、Chunk 版本与内容哈希验证后才能用于生成。
 
-## 10. Claim 级知识溯源与评测（P0-06）
+## 11. Claim 级知识溯源与评测（P0-06）
 
 - 独立 Claim Extractor 不依赖 Generator 自报，按资源版本生成稳定 `clm_*` ID。
 - Claim Judge 只允许使用当前 Run 已冻结的 Evidence；跨 Run、未知或伪造 ID 会拒绝。
@@ -221,7 +226,7 @@
 - 难度适配评测要求固定 `fixture_version` 金标，输出准确率和混淆矩阵；不把 Reviewer
   自评分当作金标。
 
-## 11. 反馈后画像与学习路径闭环（P0-07）
+## 12. 反馈后画像与学习路径闭环（P0-07）
 
 - 正式入口为 `POST /api/feedback/attempts`；旧反馈接口保留兼容，不作为新闭环事实源。
 - 总分由后端按逐知识点题数加权重算，边界为 `<0.60 remediate`、`0.60~0.85 practice`、`>0.85 advance`，任一知识点低于 0.60 会阻止整体进阶。
@@ -230,7 +235,7 @@
 - 补救/进阶通过当前 `GenerationJobService` 创建真实异步任务；父子 Run 可追溯，失败状态与反馈成功状态分离。
 - Report 读取持久化掌握度、最近 Attempt、画像版本和当前路径；重启后不回退。
 
-## 12. WorkflowEvent SSE 与 Agent 实时轨迹（P0-08）
+## 13. WorkflowEvent SSE 与 Agent 实时轨迹（P0-08）
 
 - `GET /api/runs/{run_id}/events` 将已提交的 WorkflowEvent 以 snapshot + replay + live tail 形式输出。
 - 浏览器断线通过 Last-Event-ID 补齐缺失事件，前端 reducer 按 sequence/event ID 去重，不产生重复 Agent Step。
@@ -239,3 +244,11 @@
 - Agent 轨迹展示 running/success/degraded/failed/human_review/skipped、耗时、重试、Evidence/Claim 计数和返工轮次。
 - P0-07 follow-up event 可跳转并订阅 child Run；不创建跨 Run 全局合并流。
 - Evidence/Claim/资源正文仍使用专用详情 API，SSE 不暴露内部推理或大对象。
+
+## 14. P0-09 比赛验收边界
+
+- `p0-09-demo-suite/v1` 固定 KB、稳定 DocumentVersion/Chunk/knowledge point，以及三档 learner、Attempt、Review、Claim、SSE 和 failure injection。
+- acceptance runner 分开执行 deterministic offline、local runtime 与显式 opt-in live smoke，manifest 不保存 Key、Prompt、模型原始响应或完整画像。
+- 比赛方案数值阈值为幻觉率 `<5%`、难度适配准确率 `>=85%`、核心知识点覆盖率 `>=90%`；正式口径不用 Reviewer 自评分。
+- 当前 fixture 只有 3 个 learner，未达到比赛高分测试计划所要求的至少 50 组用例，因此三项 fixture 实际值只作管线校验，正式结论为 `NOT_MEASURABLE`。
+- 当前 runtime Gate 会因前端比赛对齐项、SQLite 外键和资源版本唯一约束缺失而 `FAIL`；公共 health ready 不能替代比赛 Gate。

@@ -2,7 +2,7 @@
 
 > 项目编号：XH-202630
 > 文档版本：2.0
-> 文档更新时间：2026-07-31
+> 文档更新时间：2026-08-12
 > 文档定位：说明当前项目中知识库源文件、SQLite 数据库、问卷、诊断、画像与资源的真实落库方式。
 
 ## 1. 当前运行方式
@@ -510,3 +510,9 @@ python -m pytest backend/tests -q
 `CHROMA_COLLECTION_NAME` 兼容期只解释为前缀；创建、写入、查询、删除和 health
 统一通过 `_collection_name(kb_id)` 定位集合。公共 readiness 仅以默认 KB 和核心依赖
 为准，所有 KB 的详细状态由管理员接口提供。
+
+## 11. P0-09 数据库 Gate
+
+P0-09 preflight 会只读检查 migration 集合、正式 demo 数据库可达性、SQLite `PRAGMA foreign_keys`、`generated_resources(run_id, resource_type, version)` 数据库唯一约束，以及默认 KB 的本地 retrieval smoke。检查失败不会被公共 `/health/ready` 的 200 覆盖。
+
+截至 2026-08-12 当前 SQLite demo 基线：migration 为最新，但连接未强制启用外键，资源版本仅有非唯一索引而无数据库唯一约束。因此数据库比赛 Gate 为 `FAIL`；这份文档不把“模型层约束”描述成已完成的数据库不变量。PostgreSQL migration 与并发行为也尚未完成正式验证。
