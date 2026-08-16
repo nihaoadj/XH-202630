@@ -213,6 +213,20 @@ def build_manifest(
         or live["status"] == "SKIP"
     )
     overall = "FAIL" if failed else "PARTIAL" if partial else "PASS"
+    known_limitations = [
+        "fixture suite has fewer than the official 50-profile high-score test plan",
+        "BackgroundTasks is not a distributed durable queue",
+        "Replay is not automatic Resume",
+        "PostgreSQL migration and concurrency are not validated",
+    ]
+    if runtime.get("frontend_gate") == "FAIL":
+        known_limitations.append(
+            "frontend Claim/Evidence, SourceRef V2, or profile/path report alignment is incomplete"
+        )
+    if runtime.get("database_gate") == "FAIL":
+        known_limitations.append(
+            "the selected demo database has not passed the P0-09 integrity gate"
+        )
     return {
         "suite_id": SUITE_ID,
         "suite_version": SUITE_VERSION,
@@ -228,14 +242,7 @@ def build_manifest(
         "runtime": runtime,
         "live_provider_smoke": live,
         "overall_status": overall,
-        "known_limitations": [
-            "fixture suite has fewer than the official 50-profile high-score test plan",
-            "BackgroundTasks is not a distributed durable queue",
-            "Replay is not automatic Resume",
-            "frontend formal P0-07 and Claim/Evidence alignment is not present on this baseline",
-            "SQLite foreign-key enforcement and resource-version DB unique are not present on this baseline",
-            "PostgreSQL migration and concurrency are not validated",
-        ],
+        "known_limitations": known_limitations,
     }
 
 
