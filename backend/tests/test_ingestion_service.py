@@ -1,13 +1,16 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.db.database import configure_sqlite_foreign_keys
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.models import (
     Base,
     KnowledgeChunkVersionORM,
     KnowledgeDocumentVersionORM,
+    KnowledgeIndexStatusORM,
 )
 from app.models.knowledge import ScoreKind, VectorCandidate
 from app.services.ingestion_service import IngestionService
@@ -100,7 +103,9 @@ def _kb(tmp_path):
 
 
 def _catalog(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'ingestion.db'}")
+    engine = configure_sqlite_foreign_keys(
+        create_engine(f"sqlite:///{tmp_path / 'ingestion.db'}")
+    )
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     return KnowledgeCatalogRepository(factory), factory
@@ -137,6 +142,35 @@ def test_ingestion_reconciles_counts_smoke_and_is_idempotent(tmp_path):
     with factory() as db:
         assert db.query(KnowledgeDocumentVersionORM).count() == 1
         assert db.query(KnowledgeChunkVersionORM).count() == 1
+
+
+def test_ingestion_flushes_all_document_parents_before_multi_document_chunks(tmp_path):
+    kb_dir = _kb(tmp_path)
+    (kb_dir / "second.md").write_text(
+        "# Second\n\nsecond trusted document",
+        encoding="utf-8",
+    )
+    metadata_path = kb_dir / "metadata.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["documents"].append({
+        "id": "doc-second",
+        "title": "Second",
+        "file": "second.md",
+        "source_type": "markdown",
+        "enabled": True,
+    })
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    catalog, factory = _catalog(tmp_path)
+    service = IngestionService(catalog=catalog, vector_index=MemoryVectorIndex())
+
+    report = service.ingest(str(kb_dir))
+
+    assert report.status == "ready"
+    assert report.document_count == 2
+    assert report.expected_active_chunk_count == 2
+    with factory() as db:
+        assert db.query(KnowledgeDocumentVersionORM).count() == 2
+        assert db.query(KnowledgeChunkVersionORM).count() == 2
 
 
 def test_ingestion_retains_old_version_but_only_new_chunks_are_active(tmp_path):
@@ -204,5 +238,84 @@ def test_vector_provider_failure_is_sanitized_and_retryable(tmp_path):
 
     assert report.status == "not_ready"
     assert report.error.code == "KNOWLEDGE_INGESTION_FAILED"
-    assert report.error.safe_detail == "operation:failed"
+    assert report.error.safe_detail == "vector_synchronize:failed"
     assert "provider detail" not in report.model_dump_json()
+
+
+def test_stale_indexing_is_marked_not_ready_and_diagnostics_are_preserved(tmp_path):
+    kb_dir = _kb(tmp_path)
+    catalog, factory = _catalog(tmp_path)
+    manifest = json.loads((kb_dir / "metadata.json").read_text(encoding="utf-8"))
+    manifest.update(name="Test KB", version="1.0", raw_metadata={})
+    catalog.upsert_knowledge_base(manifest)
+    catalog.set_index_status(
+        "kb-ingestion",
+        status="indexing",
+        active_snapshot_hash="a" * 64,
+        expected_chunk_count=3,
+        sql_chunk_count=2,
+        vector_chunk_count=3,
+        smoke_status="not_run",
+    )
+    now = datetime.now(timezone.utc)
+    with factory() as db:
+        row = db.get(KnowledgeIndexStatusORM, "kb-ingestion")
+        row.updated_at = now - timedelta(hours=1)
+        db.commit()
+
+    stale_ids = catalog.mark_stale_indexing_not_ready(
+        before=now - timedelta(minutes=15),
+        error_code="KNOWLEDGE_INDEXING_INTERRUPTED",
+    )
+
+    assert stale_ids == ["kb-ingestion"]
+    status = catalog.get_index_status("kb-ingestion")
+    assert status["status"] == "not_ready"
+    assert status["last_error_code"] == "KNOWLEDGE_INDEXING_INTERRUPTED"
+    assert status["active_snapshot_hash"] == "a" * 64
+    assert status["expected_chunk_count"] == 3
+    assert status["sql_chunk_count"] == 2
+    assert status["vector_chunk_count"] == 3
+    assert catalog.mark_stale_indexing_not_ready(
+        before=now,
+        error_code="KNOWLEDGE_INDEXING_INTERRUPTED",
+    ) == []
+
+
+def test_recent_indexing_is_not_marked_stale(tmp_path):
+    kb_dir = _kb(tmp_path)
+    catalog, _ = _catalog(tmp_path)
+    manifest = json.loads((kb_dir / "metadata.json").read_text(encoding="utf-8"))
+    manifest.update(name="Test KB", version="1.0", raw_metadata={})
+    catalog.upsert_knowledge_base(manifest)
+    catalog.set_index_status("kb-ingestion", status="indexing")
+
+    stale_ids = catalog.mark_stale_indexing_not_ready(
+        before=datetime.now(timezone.utc) - timedelta(minutes=15),
+        error_code="KNOWLEDGE_INDEXING_INTERRUPTED",
+    )
+
+    assert stale_ids == []
+    assert catalog.get_index_status("kb-ingestion")["status"] == "indexing"
+
+
+def test_explicit_reconcile_resolves_id_and_reingests_idempotently(
+    tmp_path,
+    monkeypatch,
+):
+    kb_dir = _kb(tmp_path)
+    catalog, _ = _catalog(tmp_path)
+    vector_index = MemoryVectorIndex()
+    service = IngestionService(catalog=catalog, vector_index=vector_index)
+    monkeypatch.setattr(
+        "app.services.ingestion_service.resolve_knowledge_base_dir_by_id",
+        lambda knowledge_base_id: kb_dir,
+    )
+
+    first = service.reconcile("kb-ingestion")
+    second = service.reconcile("kb-ingestion")
+
+    assert first.status == second.status == "ready"
+    assert first.active_snapshot_hash == second.active_snapshot_hash
+    assert first.sql_active_chunk_count == second.sql_active_chunk_count == 1
+    assert first.vector_chunk_count == second.vector_chunk_count == 1

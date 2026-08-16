@@ -33,6 +33,7 @@ class GenerationJobService:
         req: GenerateRequest,
         *,
         run_id: str | None = None,
+        retry_failed: bool = False,
     ) -> GenerationJobCreateResponse:
         run_id = run_id or str(uuid.uuid4())
         knowledge_base_id = req.knowledge_base_id or learner.knowledge_base_id
@@ -44,6 +45,11 @@ class GenerationJobService:
                 or existing.knowledge_base_id != knowledge_base_id
             ):
                 raise ValueError("run_id already belongs to another generation request")
+            if existing.job_status == "failed" and retry_failed:
+                requeued = self.job_repo.mark_queued(run_id)
+                if requeued is None:
+                    raise ValueError("generation job disappeared during retry")
+                existing = requeued
             job_status = existing.job_status
         else:
             self.job_repo.create(

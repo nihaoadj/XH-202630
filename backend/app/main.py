@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -55,6 +55,20 @@ async def lifespan(app: FastAPI):
         try:
             init_database()
             now = datetime.now(timezone.utc)
+            stale_knowledge_base_ids = (
+                container.knowledge_catalog().mark_stale_indexing_not_ready(
+                    before=now - timedelta(
+                        seconds=settings.knowledge_index_stale_seconds
+                    ),
+                    error_code=ErrorCode.KNOWLEDGE_INDEXING_INTERRUPTED.value,
+                )
+            )
+            if stale_knowledge_base_ids:
+                logger.warning(
+                    "Marked stale knowledge indexes not_ready count=%s knowledge_base_ids=%s",
+                    len(stale_knowledge_base_ids),
+                    ",".join(stale_knowledge_base_ids),
+                )
             interrupted = container.audit_repository().mark_stale_interrupted(
                 before=now,
                 occurred_at=now,
@@ -64,6 +78,25 @@ async def lifespan(app: FastAPI):
                     "Marked %s expired workflow runs as interrupted",
                     interrupted,
                 )
+            if settings.db_type == "sqlite":
+                stale_job_ids = (
+                    container.generation_job_repository().fail_incomplete_before(
+                        now,
+                        ErrorCode.GENERATION_JOB_INTERRUPTED.value,
+                    )
+                )
+                reconciled_followups = (
+                    container.feedback_loop_repository().reconcile_incomplete_followups(
+                        stale_child_run_ids=stale_job_ids,
+                        error_code=ErrorCode.GENERATION_JOB_INTERRUPTED.value,
+                    )
+                )
+                if stale_job_ids or reconciled_followups:
+                    logger.warning(
+                        "Reconciled restart state stale_generation_jobs=%s feedback_followups=%s",
+                        len(stale_job_ids),
+                        reconciled_followups,
+                    )
             logger.info("Database tables initialized.")
         except Exception:
             logger.error(
