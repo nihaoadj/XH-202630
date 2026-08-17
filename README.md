@@ -56,6 +56,13 @@ cd frontend
 npm install
 npm run dev
 ```
+
+知识索引异常后，可按知识库 ID 显式重新入库并对账 SQL/Chroma：
+
+```bash
+python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
+```
+
 运行模式和退出语义：
 
 | 模式 | degraded fallback | 存储建议 | 启动/生成语义 |
@@ -65,6 +72,14 @@ npm run dev
 | `production` | 永远禁止 | SQLite/PostgreSQL | 核心依赖或默认 KB not-ready 时 fail-fast |
 
 `scripts/check_environment.py` 不调用计费 LLM、不下载 Embedding，退出码为 0=ready、2=degraded、1=not-ready。公共 `/health` 与 `/health/ready` 只检查默认 KB 和核心依赖；其他 KB 的异常不会轻易把整个服务变成 503。全 KB 详情位于 token 保护的管理员接口，见 `docs/api.md`。
+
+数据库迁移或比赛联调前，可在项目根目录执行只读完整性预检：
+
+```powershell
+python scripts/check_database_integrity.py
+```
+
+该脚本检查 SQLite 外键开关、现有 FK 违规、资源版本重复/NULL、数据库唯一约束和 Resource 到 Run、Step、父版本的真实外键。退出码为 0=ready、2=约束缺失警告、1=存在阻塞迁移的数据问题；脚本不会修改或删除数据。
 
 `LLM_STRUCTURED_OUTPUT_MODE=auto` 会先尝试 function calling。若所用 OpenAI-compatible 服务明确不支持该能力，请在本地 `.env` 显式设为 `text`，避免每个 Agent 固定产生一次 BAD_REQUEST 后再回退；不要提交真实 `.env` 或 API Key。
 

@@ -69,6 +69,14 @@ class GeneratedResourceORM(Base):
       表中记录 file_path、file_size、mime_type，content_text 可保存摘要
     """
     __tablename__ = "generated_resources"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "resource_type",
+            "version",
+            name="uq_generated_resources_run_type_version",
+        ),
+    )
 
     resource_id = Column(String(64), primary_key=True, index=True, comment="资源唯一标识")
     run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
@@ -95,8 +103,13 @@ class GeneratedResourceORM(Base):
     claim_metric_status = Column(String(32), nullable=True)
     hallucination_rate = Column(Float, nullable=True, comment="幻觉率")
     difficulty_match = Column(Boolean, nullable=True, comment="难度是否匹配")
-    version = Column(Integer, default=1, comment="资源版本")
-    parent_resource_id = Column(String(64), nullable=True, comment="父资源 ID")
+    version = Column(Integer, nullable=False, default=1, comment="资源版本")
+    parent_resource_id = Column(
+        String(64),
+        ForeignKey("generated_resources.resource_id"),
+        nullable=True,
+        comment="父资源 ID",
+    )
     exercise_items = Column(JSON, default=list, comment="练习项")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
 

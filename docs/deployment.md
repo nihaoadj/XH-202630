@@ -96,6 +96,25 @@ $headers = @{ "X-Admin-Token" = "<ADMIN_HEALTH_TOKEN>" }
 Invoke-RestMethod http://127.0.0.1:8000/api/admin/knowledge-bases/health -Headers $headers
 ```
 
+知识索引崩溃恢复：服务启动时会将超过
+`KNOWLEDGE_INDEX_STALE_SECONDS=900` 仍处于 `indexing` 的记录标为
+`not_ready/KNOWLEDGE_INDEXING_INTERRUPTED`，不会在启动阶段自动下载模型或阻塞重建。
+确认源文件无误后，由管理员显式执行：
+
+```powershell
+$headers = @{ "X-Admin-Token" = "<ADMIN_HEALTH_TOKEN>" }
+Invoke-RestMethod -Method Post `
+  http://127.0.0.1:8000/api/admin/knowledge-bases/rag_engineering_training/reconcile `
+  -Headers $headers
+```
+
+也可以在服务器本地执行：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\ingest_knowledge.py `
+  --knowledge-base-id rag_engineering_training
+```
+
 未配置 token 返回 404，错误 token 返回 401；部分非默认 KB 异常返回 HTTP 200 + `status=degraded`。响应不包含 token、绝对路径、Embedding 内容或完整异常。
 
 ## 5. 运行模式
@@ -151,6 +170,14 @@ WORKFLOW_TIMELINE_MAX_LIMIT=500
 LLM。SQLite migration 已包含幂等回归；PostgreSQL 上线前仍需数据库负责人对 DDL、
 索引和锁行为执行受控验证。
 
+SQLite 单进程重启时还会将上一进程遗留的 `queued/running` GenerationJob 标记为
+`failed`，错误码为 `GENERATION_JOB_INTERRUPTED`；对应的 `feedback_followup_runs`
+同步转为 `failed`。如果 Feedback 已提交、但进程在创建 Follow-up 关系前退出，启动
+扫描会补一条 `failed` 关系，不会伪造 child Run。相同幂等请求再次提交时复用稳定
+run_id，将失败 Job 安全重排队，不会再次增加 mastery、profile version 或 PathMutation。
+该自动扫描当前只对 SQLite 单进程模式启用；PostgreSQL 多 worker 部署必须先增加租约
+或 worker ownership 验证，不能直接套用单进程判定。
+
 迁移或生命周期 Repository 不可用属于核心持久化故障；即使 demo 模式允许生成降级，
 也不得绕过 Run/Step/Event 写入继续调用模型。查询验证：
 
@@ -190,6 +217,12 @@ Invoke-RestMethod http://127.0.0.1:8000/api/report/<learner_id>
 ```
 
 用同一 body 再提交一次，应返回同一 `attempt_id`、`idempotent_replay=true`，且画像版本、路径版本和 child run 数量不再增加。服务重启后再次查询 Attempt、Path 和 Report，结果必须保持。
+
+真实 Uvicorn 进程重启演练使用隔离临时数据库且不调用 LLM：
+
+```powershell
+python scripts/rehearse_feedback_process_restart.py
+```
 
 ## 10. P0-08 SSE 配置与反向代理
 

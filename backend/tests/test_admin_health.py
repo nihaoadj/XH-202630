@@ -10,6 +10,7 @@ from app.core.health import (
     KnowledgeBaseHealth,
     KnowledgeBaseHealthReport,
 )
+from app.models.knowledge import IngestionReport
 
 
 def _runtime_report():
@@ -61,7 +62,23 @@ def _client(monkeypatch, token):
     )
     monkeypatch.setattr(main_module, "get_settings", lambda: settings)
     catalog = SimpleNamespace(get_index_status=lambda knowledge_base_id: None)
-    container = SimpleNamespace(knowledge_catalog=lambda: catalog)
+    ingestion = SimpleNamespace(
+        reconcile=lambda knowledge_base_id: IngestionReport(
+            knowledge_base_id=knowledge_base_id,
+            status="ready",
+            index_schema_version="1.0",
+            active_snapshot_hash="a" * 64,
+            document_count=1,
+            expected_active_chunk_count=1,
+            sql_active_chunk_count=1,
+            vector_chunk_count=1,
+            smoke_status="passed",
+        )
+    )
+    container = SimpleNamespace(
+        knowledge_catalog=lambda: catalog,
+        ingestion_service=lambda: ingestion,
+    )
     monkeypatch.setattr(main_module, "init_container", lambda: container)
     monkeypatch.setattr(main_module, "init_database", lambda: None)
     monkeypatch.setattr(main_module, "build_health_report", lambda *args, **kwargs: _runtime_report())
@@ -106,3 +123,27 @@ def test_partial_kb_failure_returns_degraded_http_200_to_admin(monkeypatch):
     assert response.json()["knowledge_bases"][0]["is_default"] is True
     assert response.json()["knowledge_bases"][1]["status"] == "not_ready"
     assert "expected-token" not in response.text
+
+
+def test_admin_can_explicitly_reconcile_one_knowledge_base(monkeypatch):
+    with _client(monkeypatch, "expected-token") as client:
+        response = client.post(
+            "/api/admin/knowledge-bases/default_kb/reconcile",
+            headers={"X-Admin-Token": "expected-token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["knowledge_base_id"] == "default_kb"
+    assert response.json()["status"] == "ready"
+    assert response.json()["sql_active_chunk_count"] == 1
+    assert response.json()["vector_chunk_count"] == 1
+
+
+def test_admin_reconcile_requires_token(monkeypatch):
+    with _client(monkeypatch, "expected-token") as client:
+        response = client.post(
+            "/api/admin/knowledge-bases/default_kb/reconcile",
+        )
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "ADMIN_UNAUTHORIZED"

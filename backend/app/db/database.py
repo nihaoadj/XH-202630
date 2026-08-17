@@ -2,7 +2,8 @@
 import json
 from functools import lru_cache
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings, resolve_backend_path
@@ -14,6 +15,7 @@ from app.db.migrations import (
     apply_p0_06_migration,
     apply_p0_07_migration,
     apply_p0_07_feedback_migration,
+    apply_p0_09_migration,
 )
 
 
@@ -31,17 +33,45 @@ def _resolve_database_url(url: str) -> str:
     return f"sqlite:///{absolute_path.as_posix()}"
 
 
+def _set_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+    """Enable FK enforcement for every newly-created SQLite DBAPI connection."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys = ON")
+        enabled = cursor.execute("PRAGMA foreign_keys").fetchone()
+        if not enabled or int(enabled[0]) != 1:
+            raise RuntimeError("SQLITE_FOREIGN_KEYS_NOT_ENABLED")
+    finally:
+        cursor.close()
+
+
+def configure_sqlite_foreign_keys(engine: Engine) -> Engine:
+    """Attach the SQLite FK hook before the engine opens its first connection."""
+    # Configuration-only callers may replace ``create_engine`` with a simple
+    # sentinel. SQLAlchemy connection events apply only to real engines.
+    if not isinstance(engine, Engine):
+        return engine
+    if engine.url.get_backend_name() == "sqlite" and not event.contains(
+        engine,
+        "connect",
+        _set_sqlite_foreign_keys,
+    ):
+        event.listen(engine, "connect", _set_sqlite_foreign_keys)
+    return engine
+
+
 @lru_cache()
 def get_engine():
     """获取数据库引擎。"""
     settings = get_settings()
     database_url = _resolve_database_url(settings.database_url)
-    return create_engine(
+    engine = create_engine(
         database_url,
         connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {},
         echo=settings.sql_echo,
         hide_parameters=True,
     )
+    return configure_sqlite_foreign_keys(engine)
 
 
 @lru_cache()
@@ -76,6 +106,7 @@ def init_database():
         _migrate_sqlite_generated_resources(engine)
         _migrate_sqlite_generation_jobs(engine)
         _migrate_sqlite_feedback_records(engine)
+    apply_p0_09_migration(engine)
 
 
 def _sqlite_tables(conn) -> set[str]:
