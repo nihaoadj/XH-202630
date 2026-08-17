@@ -77,6 +77,7 @@ knowledge_base/<track_id>/
   metadata.json
   questionnaire.json
   diagnostic_questions.json
+  assessment_questions.json
   raw/
 ```
 
@@ -90,6 +91,7 @@ knowledge_base/<track_id>/
 - `metadata.json`：知识库元数据
 - `questionnaire.json`：方向专属问卷源文件
 - `diagnostic_questions.json`：诊断题源文件
+- `assessment_questions.json`：学习反馈使用的分层测评题库；不参与初始画像诊断
 - `raw/`：原始知识文档
 
 ## 3. 当前数据库分层
@@ -477,12 +479,13 @@ knowledge_base/rag_engineering_training/
 当前已知事实：
 
 - `knowledge_base_id = rag_engineering_training`
-- 知识库版本：`2.2.0`
+- 知识库版本：`2.3.0`
 - 综合学习模块：6 个，不再拆分教学卡、概要参考和深度参考
 - 向量切片：84 个，已经写入该知识库独立的 Chroma 集合
 - 在线检索：多查询扩展后分别执行 BM25 关键词召回与 Chroma 向量召回，按 `chunk_id` 去重并使用 RRF 融合，再由 `BAAI/bge-reranker-base` CrossEncoder 对候选精排
 - 能力节点：13 个
 - 诊断题：39 道
+- 学习后测评题：130 道；每个能力节点 10 道，难度分布为简单 3、中等 3、困难 4
 - 方向问卷题：6 道
 
 6 个模块统一采用“学习目标与路径 → 原理与工程正文 → 诊断与练习 → 验收标准 → 权威来源”的结构：
@@ -501,6 +504,14 @@ knowledge_base/rag_engineering_training/metadata.json
 ```
 
 6 个模块共同覆盖 13 个能力节点；一个模块可以承载多个紧密相关的节点，但每个节点只指定一个主模块，避免检索时反复召回内容相似的卡片和参考文档。诊断题仍按 13 个细粒度能力节点组织，不因资料合并而降低诊断粒度。
+
+学习后测评题独立保存在：
+
+```text
+knowledge_base/rag_engineering_training/assessment_questions.json
+```
+
+它与 `diagnostic_questions.json` 分工不同：诊断题用于初始画像和诊断更新；测评题用于学习反馈。资源中存在 AI 生成且带标准答案的 `exercise_items` 时优先使用资源题，否则按资源对应能力节点从测评题库抽取。题库在服务端保留答案、解析和权威 `source_urls`，对外会话只下发题干、选项和难度。
 
 ## 8. 当前测试口径
 
@@ -526,6 +537,8 @@ python -m pytest backend/tests -q
 - Feedback 事务回滚、FastAPI lifespan 重启与真实 Uvicorn 进程重启
 - SQLite 遗留 GenerationJob/Follow-up 启动对账及幂等重排队
 - Knowledge `indexing` 超时检测、启动恢复和显式 SQL/Chroma 重入库
+- 学习反馈 AI 资源题优先与独立测评题库回退
+- 测评题库 130 道题的节点覆盖、3/3/4 难度分布、答案与来源结构校验
 
 说明：
 

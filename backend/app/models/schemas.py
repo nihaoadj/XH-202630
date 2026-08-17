@@ -297,8 +297,12 @@ class SourceRef(BaseModel):
 class ExerciseItem(BaseModel):
     """资源内练习项"""
     question_id: str
+    question_type: str = "short_answer"
+    options: List[str] = Field(default_factory=list)
+    skill_node_id: Optional[str] = None
     knowledge_point: Optional[str] = None
     difficulty: Optional[str] = None
+    diagnostic_dimension: Optional[str] = None
     question: str
     answer: Optional[Any] = None
     explanation: Optional[str] = None
@@ -662,7 +666,7 @@ class ResourceEvaluationQuestion(BaseModel):
     knowledge_point: Optional[str] = None
     difficulty: Optional[str] = None
     diagnostic_dimension: Optional[str] = None
-    source: Literal["resource", "knowledge_base"] = "resource"
+    source: Literal["resource", "assessment_bank", "knowledge_base"] = "resource"
 
 
 class ResourceEvaluationSessionResponse(BaseModel):
