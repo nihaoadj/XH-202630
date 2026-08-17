@@ -77,6 +77,32 @@ def test_attempt_recomputes_and_rejects_client_score_mismatch():
         )
 
 
+def test_attempt_accepts_json_safe_learning_reflection_metadata():
+    attempt = LearningAttemptSubmit(
+        learner_id="learner",
+        source_resource_id="resource",
+        idempotency_key="reflection-idempotency",
+        expected_profile_version=1,
+        submitted_at=datetime.now(timezone.utc),
+        knowledge_point_results=[KnowledgePointAttemptResult(
+            knowledge_point_id="skill-a",
+            question_ids=["q1"],
+            correct_count=1,
+            total_count=1,
+        )],
+        metadata={
+            "learning_reflection": {
+                "completed": True,
+                "self_rating": 4,
+                "difficulty_feeling": "fit",
+                "comment": "案例很有帮助",
+            },
+        },
+    )
+
+    assert attempt.metadata["learning_reflection"]["self_rating"] == 4
+
+
 @pytest.mark.parametrize("payload", [
     {"correct_count": 2, "total_count": 1},
     {"correct_count": 0, "total_count": 0},
