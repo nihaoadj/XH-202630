@@ -112,6 +112,7 @@ class LearningAttemptSubmit(StrictFeedbackModel):
             "question_count",
             "question_trace",
             "point_trace",
+            "learning_reflection",
         }
         if set(value) - allowed:
             raise ValueError("metadata contains unsupported keys")
