@@ -5,6 +5,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, List
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -285,6 +286,11 @@ class KnowledgeCatalogRepository:
                                 f"不可变文档版本字段冲突：{key}"
                             )
 
+            # ORM models intentionally do not define relationship() mappings.
+            # Flush both parent tables explicitly so SQLite FK enforcement can
+            # never batch child chunks before their document/version parents.
+            db.flush()
+
             for chunk in chunks:
                 metadata = chunk.metadata
                 chunk_id = metadata["chunk_id"]
@@ -507,10 +513,11 @@ class KnowledgeCatalogRepository:
                 "vector_chunk_count": vector_chunk_count,
                 "smoke_status": smoke_status,
                 "last_error_code": last_error_code,
-                "last_indexed_at": (
-                    datetime.now(timezone.utc) if status == "ready" else None
-                ),
             }
+            if status == "ready":
+                values["last_indexed_at"] = datetime.now(timezone.utc)
+            elif row is None:
+                values["last_indexed_at"] = None
             if row is None:
                 db.add(KnowledgeIndexStatusORM(
                     knowledge_base_id=knowledge_base_id,
@@ -543,6 +550,38 @@ class KnowledgeCatalogRepository:
                     active=True,
                 ).count(),
             }
+
+    def mark_stale_indexing_not_ready(
+        self,
+        *,
+        before: datetime,
+        error_code: str,
+    ) -> List[str]:
+        """Atomically fail indexing rows whose owner process no longer reports progress.
+
+        The existing snapshot/count metadata is deliberately preserved for
+        diagnostics. A later explicit ingestion replaces it with a reconciled
+        SQL/Chroma snapshot.
+        """
+        with self.session_factory() as db:
+            rows = (
+                db.query(KnowledgeIndexStatusORM)
+                .filter(
+                    KnowledgeIndexStatusORM.status == "indexing",
+                    or_(
+                        KnowledgeIndexStatusORM.updated_at.is_(None),
+                        KnowledgeIndexStatusORM.updated_at < before,
+                    ),
+                )
+                .order_by(KnowledgeIndexStatusORM.knowledge_base_id)
+                .all()
+            )
+            stale_ids = [row.knowledge_base_id for row in rows]
+            for row in rows:
+                row.status = "not_ready"
+                row.last_error_code = error_code
+            db.commit()
+            return stale_ids
 
     def upsert_skill_nodes(self, nodes: Iterable[SkillNode | Dict[str, Any] | str], knowledge_base_id: str) -> List[str]:
         """写入节点和 prerequisite 边；字符串节点兼容旧 metadata.json。"""

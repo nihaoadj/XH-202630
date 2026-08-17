@@ -174,6 +174,36 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
                 return {"attempt_id": attempt_id, **item}
         return None
 
+    def reconcile_incomplete_followups(
+        self,
+        *,
+        stale_child_run_ids: list[str],
+        error_code: str,
+    ) -> int:
+        stale = set(stale_child_run_ids)
+        reconciled = 0
+        with self._lock:
+            for attempt_id, decision in self._decisions.items():
+                if decision.action.value not in {"remediate", "advance"}:
+                    continue
+                attempt = self._attempts[attempt_id]
+                relation = self._followups.get(attempt_id)
+                if relation is None:
+                    self._followups[attempt_id] = {
+                        "decision_id": decision.decision_id,
+                        "parent_run_id": attempt.source_run_id,
+                        "child_run_id": None,
+                        "trigger_type": decision.action.value,
+                        "status": "failed",
+                        "error_code": error_code,
+                    }
+                    reconciled += 1
+                elif relation.get("child_run_id") in stale and relation.get("status") == "queued":
+                    relation["status"] = "failed"
+                    relation["error_code"] = error_code
+                    reconciled += 1
+        return reconciled
+
     def _result(self, attempt_id: str, *, replay: bool) -> FeedbackLoopResult:
         attempt = self._attempts[attempt_id]
         followup = self._followups.get(attempt_id, {})

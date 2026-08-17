@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     # Deprecated compatibility input. During the compatibility window this is
     # interpreted as a prefix, never as one fixed collection shared by all KBs.
     chroma_collection_name: str | None = None
+    knowledge_index_stale_seconds: int = Field(default=900, ge=30, le=86400)
     rerank_enabled: bool = True
     rerank_model: str = "BAAI/bge-reranker-base"
     rerank_model_cache_dir: str = "./data/models"

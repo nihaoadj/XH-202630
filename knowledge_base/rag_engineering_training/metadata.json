@@ -6,7 +6,7 @@
   "chunking": {
     "strategy": "recursive_v1",
     "chunk_size": 500,
-    "chunk_overlap": 50
+    "chunk_overlap": 100
   },
   "smoke_queries": [
     {

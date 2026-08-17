@@ -88,3 +88,12 @@ class BaseFeedbackLoopRepository(ABC):
     @abstractmethod
     def get_followup_relation(self, child_run_id: str) -> dict | None:
         pass
+
+    @abstractmethod
+    def reconcile_incomplete_followups(
+        self,
+        *,
+        stale_child_run_ids: list[str],
+        error_code: str,
+    ) -> int:
+        """Record missing relations and fail relations whose child job was interrupted."""

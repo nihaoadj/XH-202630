@@ -158,6 +158,10 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                     submitted_at=attempt.submitted_at,
                     created_at=attempt.created_at,
                 ))
+                # The ORM models intentionally do not expose relationship
+                # attributes. Flush the parent fact first so real SQLite FK
+                # enforcement cannot reorder Decision/Point rows ahead of it.
+                db.flush()
                 for item in attempt.knowledge_point_results:
                     db.add(LearningAttemptPointResultORM(
                         result_id=_stable_id("apr", attempt.attempt_id, item.knowledge_point_id),
@@ -181,6 +185,7 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                     decision_hash=decision.decision_hash,
                     created_at=decision.created_at,
                 ))
+                db.flush()
                 profile_states = dict(profile.knowledge_states or {})
                 if not profile.knowledge_base_id:
                     raise ValueError("learner knowledge_base_id is required for mastery updates")
@@ -233,6 +238,7 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                         updated_at=learning_path.updated_at,
                     )
                     db.add(stored_path)
+                    db.flush()
                 else:
                     stored_path.version = learning_path.version
                     stored_path.status = learning_path.status
@@ -390,6 +396,48 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                 "status": row.status,
                 "error_code": row.error_code,
             }
+
+    def reconcile_incomplete_followups(
+        self,
+        *,
+        stale_child_run_ids: list[str],
+        error_code: str,
+    ) -> int:
+        stale = set(stale_child_run_ids)
+        reconciled = 0
+        with self.session_factory() as db:
+            rows = (
+                db.query(LearningAttemptORM, FeedbackDecisionORM, FeedbackFollowUpRunORM)
+                .join(
+                    FeedbackDecisionORM,
+                    FeedbackDecisionORM.attempt_id == LearningAttemptORM.attempt_id,
+                )
+                .outerjoin(
+                    FeedbackFollowUpRunORM,
+                    FeedbackFollowUpRunORM.attempt_id == LearningAttemptORM.attempt_id,
+                )
+                .filter(FeedbackDecisionORM.action.in_(("remediate", "advance")))
+                .all()
+            )
+            for attempt, decision, relation in rows:
+                if relation is None:
+                    db.add(FeedbackFollowUpRunORM(
+                        relation_id=_stable_id("fur", attempt.attempt_id),
+                        attempt_id=attempt.attempt_id,
+                        decision_id=decision.decision_id,
+                        parent_run_id=attempt.source_run_id,
+                        child_run_id=None,
+                        trigger_type=decision.action,
+                        status="failed",
+                        error_code=error_code,
+                    ))
+                    reconciled += 1
+                elif relation.child_run_id in stale and relation.status == "queued":
+                    relation.status = "failed"
+                    relation.error_code = error_code
+                    reconciled += 1
+            db.commit()
+        return reconciled
 
     def _load_attempt(self, db: Session, row: LearningAttemptORM) -> LearningAttempt:
         points = db.query(LearningAttemptPointResultORM).filter_by(attempt_id=row.attempt_id).order_by(

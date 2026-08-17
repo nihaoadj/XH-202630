@@ -1,6 +1,7 @@
 """SQLAlchemy 实现的生成资源仓库"""
 from typing import List, Optional, Callable
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import GeneratedResourceORM
@@ -110,55 +111,72 @@ class SQLResourceRepository(BaseResourceRepository):
             update={"learner_id": learner_id, "topic": topic, "run_id": effective_run_id}
         )
         with self.session_factory() as db:
-            orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource.resource_id).first()
-            if effective_run_id is not None:
-                duplicate = (
-                    db.query(GeneratedResourceORM)
-                    .filter(
-                        GeneratedResourceORM.run_id == effective_run_id,
-                        GeneratedResourceORM.resource_type == normalized.resource_type,
-                        GeneratedResourceORM.version == normalized.version,
-                        GeneratedResourceORM.resource_id != normalized.resource_id,
-                    )
-                    .first()
-                )
-                if duplicate is not None:
-                    raise PersistenceConflict("duplicate resource version in run")
-            if orm:
-                existing = _orm_to_pydantic(orm)
-                if immutable_resource_payload(existing) != immutable_resource_payload(normalized):
-                    raise PersistenceConflict("resource immutable payload conflict")
+            try:
+                orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource.resource_id).first()
                 if effective_run_id is not None:
-                    if orm.run_id is not None and orm.run_id != effective_run_id:
-                        raise PersistenceConflict("resource run_id conflict")
-                    orm.run_id = effective_run_id
-                if generation_step_id is not None:
-                    if orm.generation_step_id is not None and orm.generation_step_id != generation_step_id:
-                        raise PersistenceConflict("resource generation_step_id conflict")
-                    orm.generation_step_id = generation_step_id
-                orm.file_path = resource.file_path
-                orm.file_size = resource.file_size
-                orm.mime_type = resource.mime_type
-                orm.review_status = resource.review_status
-                orm.review_id = resource.review_id
-                orm.publication_status = resource.publication_status
-                orm.published_at = resource.published_at
-                orm.claim_count = resource.claim_count
-                orm.legacy_reviewer_score = resource.legacy_reviewer_score
-                orm.claim_hallucination_rate = resource.claim_hallucination_rate
-                orm.claim_metric_status = resource.claim_metric_status
-                orm.hallucination_rate = resource.hallucination_rate
-                orm.difficulty_match = resource.difficulty_match
-            else:
-                orm = _pydantic_to_orm(
-                    normalized,
-                    learner_id,
-                    topic,
-                    run_id=effective_run_id,
-                    generation_step_id=generation_step_id,
-                )
-                db.add(orm)
-            db.commit()
+                    duplicate = (
+                        db.query(GeneratedResourceORM)
+                        .filter(
+                            GeneratedResourceORM.run_id == effective_run_id,
+                            GeneratedResourceORM.resource_type == normalized.resource_type,
+                            GeneratedResourceORM.version == normalized.version,
+                            GeneratedResourceORM.resource_id != normalized.resource_id,
+                        )
+                        .first()
+                    )
+                    if duplicate is not None:
+                        raise PersistenceConflict("duplicate resource version in run")
+                if orm:
+                    existing = _orm_to_pydantic(orm)
+                    if immutable_resource_payload(existing) != immutable_resource_payload(normalized):
+                        raise PersistenceConflict("resource immutable payload conflict")
+                    if effective_run_id is not None:
+                        if orm.run_id is not None and orm.run_id != effective_run_id:
+                            raise PersistenceConflict("resource run_id conflict")
+                        orm.run_id = effective_run_id
+                    if generation_step_id is not None:
+                        if orm.generation_step_id is not None and orm.generation_step_id != generation_step_id:
+                            raise PersistenceConflict("resource generation_step_id conflict")
+                        orm.generation_step_id = generation_step_id
+                    orm.file_path = resource.file_path
+                    orm.file_size = resource.file_size
+                    orm.mime_type = resource.mime_type
+                    orm.review_status = resource.review_status
+                    orm.review_id = resource.review_id
+                    orm.publication_status = resource.publication_status
+                    orm.published_at = resource.published_at
+                    orm.claim_count = resource.claim_count
+                    orm.legacy_reviewer_score = resource.legacy_reviewer_score
+                    orm.claim_hallucination_rate = resource.claim_hallucination_rate
+                    orm.claim_metric_status = resource.claim_metric_status
+                    orm.hallucination_rate = resource.hallucination_rate
+                    orm.difficulty_match = resource.difficulty_match
+                else:
+                    orm = _pydantic_to_orm(
+                        normalized,
+                        learner_id,
+                        topic,
+                        run_id=effective_run_id,
+                        generation_step_id=generation_step_id,
+                    )
+                    db.add(orm)
+                db.commit()
+            except IntegrityError as exc:
+                db.rollback()
+                if effective_run_id is not None:
+                    duplicate = (
+                        db.query(GeneratedResourceORM)
+                        .filter(
+                            GeneratedResourceORM.run_id == effective_run_id,
+                            GeneratedResourceORM.resource_type == normalized.resource_type,
+                            GeneratedResourceORM.version == normalized.version,
+                            GeneratedResourceORM.resource_id != normalized.resource_id,
+                        )
+                        .first()
+                    )
+                    if duplicate is not None:
+                        raise PersistenceConflict("duplicate resource version in run") from exc
+                raise PersistenceConflict("resource persistence constraint conflict") from exc
 
     def list_by_learner(self, learner_id: str) -> List[LearningResource]:
         with self.session_factory() as db:

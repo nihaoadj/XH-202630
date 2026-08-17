@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Protocol
 
 from langchain.schema import Document
@@ -12,6 +13,7 @@ from app.core.knowledge_base import (
     chunk_documents,
     load_documents,
     load_knowledge_base_manifest,
+    resolve_knowledge_base_dir_by_id,
 )
 from app.core.knowledge_ids import canonical_json, query_hash, sha256_hex
 from app.core.vector_store import (
@@ -26,6 +28,9 @@ from app.models.knowledge import (
     IngestionSmokeResult,
     VectorCandidate,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeVectorIndex(Protocol):
@@ -106,6 +111,17 @@ class IngestionService:
     ):
         self.catalog = catalog
         self.vector_index = vector_index
+
+    def reconcile(self, knowledge_base_id: str) -> IngestionReport:
+        """Explicitly rebuild one configured KB from its authoritative files.
+
+        ``ingest`` is already snapshot-based and idempotent, so reconciliation
+        intentionally performs a complete re-ingest. This repairs every crash
+        window (before/after SQL staging, Chroma replacement, smoke checks, or
+        SQL activation) without trying to infer which partial side is newer.
+        """
+        knowledge_base_dir = resolve_knowledge_base_dir_by_id(knowledge_base_id)
+        return self.ingest(str(knowledge_base_dir))
 
     @staticmethod
     def _validate_snapshot(
@@ -218,6 +234,7 @@ class IngestionService:
         smoke_results: list[IngestionSmokeResult] = []
         sql_count = 0
         vector_count = 0
+        stage = "snapshot_load"
         try:
             chunking = manifest.get("chunking") or {}
             strategy = str(chunking.get("strategy") or DEFAULT_CHUNKING_STRATEGY)
@@ -227,7 +244,7 @@ class IngestionService:
                     "manifest:chunking_strategy_unsupported",
                 )
             chunk_size = int(chunking.get("chunk_size", 500))
-            chunk_overlap = int(chunking.get("chunk_overlap", 50))
+            chunk_overlap = int(chunking.get("chunk_overlap", 100))
             documents = load_documents(knowledge_base_dir)
             chunks = chunk_documents(
                 documents,
@@ -243,6 +260,7 @@ class IngestionService:
                 ),
                 "chunk_ids": sorted(item.metadata["chunk_id"] for item in chunks),
             }))
+            stage = "sql_staging"
             self.catalog.upsert_knowledge_base(manifest)
             self.catalog.set_index_status(
                 knowledge_base_id,
@@ -258,16 +276,19 @@ class IngestionService:
                 knowledge_base_id=knowledge_base_id,
                 activate=False,
             )
+            stage = "vector_synchronize"
             self.vector_index.synchronize(
                 chunks,
                 knowledge_base_id=knowledge_base_id,
             )
+            stage = "vector_count"
             vector_count = self.vector_index.count(knowledge_base_id)
             if len(chunks) != vector_count:
                 raise _IngestionFailure(
                     ErrorCode.VECTOR_INDEX_OUT_OF_SYNC,
                     "counts:mismatch",
                 )
+            stage = "smoke_queries"
             smoke_status, smoke_results = self._smoke(
                 knowledge_base_id=knowledge_base_id,
                 specs=manifest.get("smoke_queries"),
@@ -277,6 +298,7 @@ class IngestionService:
                     ErrorCode.KNOWLEDGE_INGESTION_SMOKE_FAILED,
                     "smoke:expectation_not_met",
                 )
+            stage = "sql_activation"
             self.catalog.activate_snapshot(
                 knowledge_base_id,
                 document_versions=[
@@ -284,6 +306,7 @@ class IngestionService:
                 ],
                 chunk_ids=[item.metadata["chunk_id"] for item in chunks],
             )
+            stage = "count_reconciliation"
             sql_count = self.catalog.active_chunk_count(knowledge_base_id)
             if len(chunks) != sql_count or sql_count != vector_count:
                 raise _IngestionFailure(
@@ -292,10 +315,16 @@ class IngestionService:
                 )
         except _IngestionFailure as failure:
             error = _error(failure)
-        except Exception:
+        except Exception as exc:
+            logger.error(
+                "Knowledge ingestion failed knowledge_base_id=%s stage=%s exception_type=%s",
+                knowledge_base_id,
+                stage,
+                type(exc).__name__,
+            )
             error = _error(_IngestionFailure(
                 ErrorCode.KNOWLEDGE_INGESTION_FAILED,
-                "operation:failed",
+                f"{stage}:failed",
             ))
         else:
             self.catalog.set_index_status(
