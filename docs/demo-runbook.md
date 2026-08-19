@@ -153,4 +153,15 @@ P0-04 的 Replay 是“重建后查询历史事实”，不是服务重启后自
 
 保留 acceptance manifest、preflight JSON、浏览器 checklist 和必要截图。真实 Golden Run 可调用 `build_safe_evidence_bundle()` 导出 allowlist 摘要，只包含稳定 ID、计数、状态和安全 locator；不得导出 prompt、raw provider response、Chain-of-Thought、API Key、绝对路径或完整学习者画像。
 
+## 8. Tutor 1~2 分钟演示脚本
+
+1. 在资源书架打开一个已发布资源，点击“向 Tutor 提问”。
+2. 第一次询问具体卡点，展示服务端给出的“提示 1/3”和 Evidence 来源。
+3. 明确表示仍未理解，展示“提示 2/3”的结构化拆解。
+4. 第三次继续追问，展示“提示 3/3”的 grounded explanation 与理解检查问题。
+5. 刷新页面并重新打开抽屉，确认会话与三轮内容恢复。
+6. 进入反馈页，在某道题旁点击“需要提示”，说明题目上下文由后端按 `question_id` 解析，答案未暴露给客户端或 Tutor context。
+7. 完成测评并提交，展示 Attempt 的 `hint_count` 来自服务端持久化 Tutor 轮次，同时 Feedback Decision、Mastery 与路径仍沿用原确定性策略。
+8. 可选安全分支：使用无 Frozen Evidence、无 SourceRef 且检索不可用的 fixture，展示 HTTP 200 `evidence_insufficient`，并说明该轮不会调用模型自由知识回答。
+
 演示结束后记录 Git SHA、suite/fixture 版本、APP_MODE、DB_TYPE、默认 KB、offline/runtime/live 结果以及所有 FAIL/NOT_MEASURABLE。不要因为现场演示成功而把未执行的统计评测标成 PASS。

@@ -438,3 +438,27 @@ versioned fixture
 固定 fixture loader 只验证稳定 ID 和场景集合；acceptance runner 复用现有业务测试，不创建第二套工作流。安全证据导出采用 allowlist，只允许 Run/Resource/Review/Claim/Evidence/Feedback 的稳定 ID、计数和状态，不输出 Prompt、模型原文或完整画像。
 
 系统 health 与比赛 Gate 分层：`/health/ready` 只表达默认 KB 和核心依赖的服务 readiness；P0-09 runtime 还要求迁移完整性、SQLite FK、资源版本唯一约束和前端正式闭环。前者 ready 时后者仍可 FAIL。
+
+## 11. 交互式 Tutor 子系统
+
+Tutor 是资源发布后的独立用户交互子系统，不进入一次性 Generation LangGraph：
+
+```mermaid
+flowchart TD
+    R[Published Resource / Evaluation Question] --> API[Tutor API]
+    API --> S[TutorService]
+    S --> C[TutorContextBuilder]
+    C --> P[Learner Profile projection]
+    C --> E[Frozen Evidence / SourceRef / Fresh Retrieval]
+    C --> H[Recent Tutor Turns]
+    S --> TP[Deterministic TutorPolicy]
+    C --> A[TutorAgent]
+    TP --> A
+    A --> G[LLMGateway]
+    G --> V[Schema + citation subset validation]
+    V --> DB[(TutorSession / TutorTurn)]
+```
+
+`TutorPolicy` 在服务端控制 0~3 级提示，客户端不能提交 `hint_level`。`TutorContextBuilder` 只投影教学必要画像字段、相关资源片段、后端解析的题目字段、有限历史和有限 Evidence；题目答案、原始 Prompt、模型原文和 Chain-of-Thought 不进入公开契约。Evidence 顺序固定为当前 Run 的 Frozen Evidence、资源 SourceRef、Ready 知识库上的受控 Fresh Retrieval，全部不可用时返回 `evidence_insufficient` 且不调用模型自由回答。
+
+Tutor 持久化仅记录会话、轮次、教学动作、引用与脱敏调用遥测。正式状态迁移仍由 `Formal Attempt -> Feedback Policy -> ProfileVersion / Mastery / LearningPath` 完成。测评提交时，`FeedbackService` 从 Tutor Repository 统计该 Run 的真实 `question_help` 轮次写入现有 `hint_count`，但不改变掌握度公式或 0.60/0.85 阈值。
