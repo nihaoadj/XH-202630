@@ -2,18 +2,38 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from dependency_injector import providers
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from app import config as config_module
 from app import main as main_module
+from app.api.dependencies import get_current_user
 from app.db import database as database_module
 from app.db.models import KnowledgeBaseORM, RagSkillNodeORM
 from app.models.schemas import LearnerProfile, LearningResource
+from app.models.user_schemas import UserProfile
 from app.services.generation_job_service import GenerationJobService
 
 
 class _NoopGenerationService:
     pass
+
+
+def _restart_user() -> UserProfile:
+    return UserProfile(
+        user_id="restart-user",
+        username="restart-user",
+        display_name="Restart User",
+        identity="测试",
+        education="本科",
+        major="软件工程",
+    )
+
+
+def _authenticated_restart_user(request: Request) -> UserProfile:
+    user = _restart_user()
+    request.state.current_user = user
+    return user
 
 
 def _ready_report(*_args, **_kwargs):
@@ -52,6 +72,11 @@ def test_feedback_survives_full_fastapi_lifespan_restart(monkeypatch, tmp_path):
     monkeypatch.setenv("RERANK_ENABLED", "false")
     monkeypatch.setattr(main_module, "build_health_report", _ready_report)
     monkeypatch.setattr(GenerationJobService, "run_job", lambda *_args, **_kwargs: None)
+    monkeypatch.setitem(
+        main_module.app.dependency_overrides,
+        get_current_user,
+        _authenticated_restart_user,
+    )
     _clear_runtime_caches()
 
     payload = {
@@ -72,6 +97,7 @@ def test_feedback_survives_full_fastapi_lifespan_restart(monkeypatch, tmp_path):
     with TestClient(main_module.app) as first_client:
         container = main_module.app.container
         _override_generation(container)
+        container.user_repository().save(_restart_user())
         with container.db_session_factory()() as db:
             db.add(KnowledgeBaseORM(
                 knowledge_base_id="restart-kb",
@@ -87,6 +113,7 @@ def test_feedback_survives_full_fastapi_lifespan_restart(monkeypatch, tmp_path):
             db.commit()
         container.learner_repository().save(LearnerProfile(
             learner_id="restart-learner",
+            user_id="restart-user",
             learner_type="测试",
             education="本科",
             major="软件工程",

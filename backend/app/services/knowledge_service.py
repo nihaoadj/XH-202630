@@ -149,6 +149,112 @@ class KnowledgeService:
             raw_questions = json.load(file)
         return [DiagnosticQuestion(**question) for question in raw_questions]
 
+    def load_assessment_questions(self, knowledge_base_id: str | None = None) -> list[DiagnosticQuestion]:
+        """加载学习反馈使用的分层测评题库。
+
+        测评题库与初始诊断题职责不同，因此始终以知识库目录中的独立文件为准，
+        不复用诊断题的 catalog 表，避免两种题目在同步后被混在一起。
+        """
+        manifest = self._ensure_knowledge_base(knowledge_base_id)
+        try:
+            kb_dir = resolve_knowledge_base_dir_by_id(manifest["knowledge_base_id"])
+        except FileNotFoundError:
+            # 数据库中可能登记了尚未配置本地题库文件的其他学习方向。
+            return []
+        path = kb_dir / "assessment_questions.json"
+        if not path.exists():
+            return []
+        import json
+
+        with path.open("r", encoding="utf-8") as file:
+            raw_questions = json.load(file)
+        if not isinstance(raw_questions, list):
+            raise ValueError(f"测评题库格式错误，应为 JSON 数组：{path}")
+        return [DiagnosticQuestion(**question) for question in raw_questions]
+
+    def select_assessment_questions(
+        self,
+        knowledge_base_id: str | None = None,
+        skill_node_ids: Iterable[str] | None = None,
+        level: str | None = None,
+        limit: int | None = None,
+    ) -> list[DiagnosticQuestion]:
+        """按能力节点和难度分层选择测评题，结果顺序稳定、便于复现。"""
+        requested_nodes = {item for item in (skill_node_ids or []) if item}
+        nodes = {node.node_id: node for node in self.list_skill_nodes(knowledge_base_id)}
+        if requested_nodes - set(nodes):
+            raise ValueError(f"包含不存在的能力节点：{', '.join(sorted(requested_nodes - set(nodes)))}")
+
+        questions = [
+            question
+            for question in self.load_assessment_questions(knowledge_base_id)
+            if (not requested_nodes or question.skill_node_id in requested_nodes)
+            and (not level or (nodes.get(question.skill_node_id) and nodes[question.skill_node_id].level == level))
+        ]
+        if limit is None or limit >= len(questions):
+            return self._order_assessment_questions(questions)
+        if limit <= 0:
+            return []
+        ordered = self._order_assessment_questions(questions)
+        # 十题会话保持题库约定的 3/3/4 分层；更小或更大题量按同一周期扩展。
+        difficulty_cycle = (
+            "简单", "中等", "困难", "困难", "简单",
+            "中等", "困难", "简单", "中等", "困难",
+        )
+        quotas = {
+            difficulty: sum(
+                1
+                for index in range(limit)
+                if difficulty_cycle[index % len(difficulty_cycle)] == difficulty
+            )
+            for difficulty in ("简单", "中等", "困难")
+        }
+        selected: list[DiagnosticQuestion] = []
+        selected_nodes: set[str | None] = set()
+        for difficulty in ("简单", "中等", "困难"):
+            difficulty_questions = [
+                question
+                for question in ordered
+                if question.difficulty == difficulty
+            ]
+            # 跨节点抽题时先覆盖尚未出现的能力节点；节点不足时再回到已选节点补题。
+            difficulty_questions.sort(
+                key=lambda question: question.skill_node_id in selected_nodes
+            )
+            chosen = difficulty_questions[:quotas[difficulty]]
+            selected.extend(chosen)
+            selected_nodes.update(question.skill_node_id for question in chosen)
+
+        # 某些知识库可能没有完整的三档难度，用其余题补满而不是返回不足题量。
+        selected_ids = {question.question_id for question in selected}
+        selected.extend(question for question in ordered if question.question_id not in selected_ids)
+        return selected[:limit]
+
+    @staticmethod
+    def _order_assessment_questions(questions: list[DiagnosticQuestion]) -> list[DiagnosticQuestion]:
+        """在每个难度层内轮转节点，避免小题量被单一节点占满。"""
+        difficulties = ("简单", "中等", "困难")
+        node_order = list(dict.fromkeys(question.skill_node_id for question in questions))
+        ordered: list[DiagnosticQuestion] = []
+        seen: set[str] = set()
+        for difficulty in difficulties:
+            buckets = {
+                node_id: [
+                    question
+                    for question in questions
+                    if question.skill_node_id == node_id and question.difficulty == difficulty
+                ]
+                for node_id in node_order
+            }
+            while any(buckets.values()):
+                for node_id in node_order:
+                    if buckets[node_id]:
+                        question = buckets[node_id].pop(0)
+                        ordered.append(question)
+                        seen.add(question.question_id)
+        ordered.extend(question for question in questions if question.question_id not in seen)
+        return ordered
+
     def select_diagnostic_questions(
         self,
         knowledge_base_id: str | None = None,
@@ -201,6 +307,9 @@ class KnowledgeService:
                 "description": manifest.get("description"),
                 "version": manifest.get("version"),
                 **counts,
+                "assessment_question_count": len(
+                    self.load_assessment_questions(manifest["knowledge_base_id"])
+                ),
                 "index_status": index_status,
                 "updated_at": None,
             }
@@ -221,5 +330,6 @@ class KnowledgeService:
             "chunk_count": len(chunks),
             "skill_node_count": len(manifest.get("skill_nodes", [])),
             "diagnostic_question_count": len(self.load_diagnostic_questions(manifest["knowledge_base_id"])),
+            "assessment_question_count": len(self.load_assessment_questions(manifest["knowledge_base_id"])),
             "updated_at": updated_at.isoformat(),
         }

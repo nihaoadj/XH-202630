@@ -1,4 +1,6 @@
 """知识库与关系目录的核心回归测试。"""
+from collections import Counter
+
 import inspect
 import json
 from pathlib import Path
@@ -410,6 +412,62 @@ def test_diagnosis_submission_scores_on_server_and_updates_profile():
     updated = learner_repo.get(learner.learner_id)
     assert updated is not None
     assert updated.theory_scores["RAG 基础概念"] == round(200 / 3, 1)
+
+
+def test_assessment_question_bank_has_ten_layered_questions_per_skill_node():
+    knowledge_service = KnowledgeService()
+    questions = knowledge_service.load_assessment_questions("rag_engineering_training")
+    node_ids = {
+        node.node_id
+        for node in knowledge_service.list_skill_nodes("rag_engineering_training")
+    }
+
+    assert len(questions) == 130
+    assert len({question.question_id for question in questions}) == 130
+    assert len({question.question for question in questions}) == 130
+    assert {question.skill_node_id for question in questions} == node_ids
+
+    for node_id in node_ids:
+        node_questions = [question for question in questions if question.skill_node_id == node_id]
+        assert len(node_questions) == 10
+        assert Counter(question.difficulty for question in node_questions) == {
+            "简单": 3,
+            "中等": 3,
+            "困难": 4,
+        }
+        for question in node_questions:
+            assert question.question_type == "single_choice"
+            assert len(question.options) == 4
+            assert len(set(question.options)) == 4
+            assert question.answer in question.options
+            assert question.explanation and len(question.explanation) >= 20
+            assert all(
+                source_url.startswith("https://")
+                for source_url in question.metadata["source_urls"]
+            )
+
+    selected = knowledge_service.select_assessment_questions(
+        "rag_engineering_training",
+        skill_node_ids=["rag_basics"],
+        limit=10,
+    )
+    assert [question.difficulty for question in selected] == [
+        "简单", "简单", "简单",
+        "中等", "中等", "中等",
+        "困难", "困难", "困难", "困难",
+    ]
+    assert all("answer" not in knowledge_service.public_question(question) for question in selected)
+
+    cross_node_selection = knowledge_service.select_assessment_questions(
+        "rag_engineering_training",
+        limit=10,
+    )
+    assert Counter(question.difficulty for question in cross_node_selection) == {
+        "简单": 3,
+        "中等": 3,
+        "困难": 4,
+    }
+    assert len({question.skill_node_id for question in cross_node_selection}) == 10
 
 
 def test_diagnosis_submission_persists_answers_and_states_in_sqlite(tmp_path):

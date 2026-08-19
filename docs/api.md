@@ -1,8 +1,8 @@
 # API 文档
 
 > 项目编号：XH-202630
-> 文档版本：2.0
-> 文档更新时间：2026-07-31
+> 文档版本：2.1
+> 文档更新时间：2026-08-16
 > 说明：本文档以当前代码实现为准，覆盖 `backend/app/api` 中已经启用的核心接口。
 
 ## 1. 基本信息
@@ -415,9 +415,13 @@
 说明：
 
 - 当前学习反馈页优先按任务而不是单个资源加载测评题。
-- 题目优先取该任务资源内的练习题；不足时再回退到知识库诊断题。
+- 如果任务资源包含 AI 生成且可判分的 `exercise_items`，测评优先使用资源内题目。
+- 如果资源没有可判分题目，则从独立的 `assessment_questions.json` 测评题库按能力节点抽取；不会占用初始画像使用的诊断题。
+- `questions[].source` 为 `resource`（资源内 AI 题）、`assessment_bank`（测评题库）或兼容旧知识库的 `knowledge_base`。
+- RAG 默认测评题库覆盖 13 个能力节点，每节点 10 道，并固定为简单 3 道、中等 3 道、困难 4 道。
+- API 不返回标准答案和解析，提交后由服务端按会话使用的答案键判分。
 
-### 11.2 `POST /api/feedback/attemptsattempts/run/submit`
+### 11.2 `POST /api/feedback/attempts/run/submit`
 
 用途：
 
@@ -448,7 +452,7 @@
 - 提交成功后，后端会保存反馈记录并回写学习者画像。
 - 反馈页“基于反馈重新生成”当前采用“选中某条反馈记录 + 当前最新画像”的方式发起新任务。
 
-### 11.3 `POST /api/feedback/attemptsattempts`
+### 11.3 `POST /api/feedback/attempts`
 
 用途：提交 P0-07 正式学习事实，并在一个本地事务中写入 Attempt、知识点结果、反馈决策、掌握度变更、画像版本和学习路径变更。补救或进阶所需的新资源在事务提交后通过现有异步生成任务入口创建。
 
@@ -594,7 +598,7 @@ SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模�
 - 已执行：学习反馈页支持按任务加载测评题与提交反馈
 - 已执行：资源文件下载接口可用
 - 已执行：学习历史时间线接口可用
-- 未执行：实时推送
+- 已执行：`GET /api/runs/{run_id}/events` 提供 WorkflowEvent SSE replay + live tail，前端支持断线续传与轮询降级
 - 未执行：独立任务队列
 - 未执行：任务取消
 - 未执行：失败任务自动重试
@@ -698,3 +702,9 @@ Invoke-RestMethod -Method Post `
 `WORKFLOW_PERSISTENCE_UNAVAILABLE`、`WORKFLOW_PERSISTENCE_CONFLICT`、
 `EVIDENCE_INSUFFICIENT`、`EVIDENCE_PROVENANCE_INVALID` 和细分 LLM 错误码。
 响应不得包含 prompt、模型原文、API Key、数据库连接串或原始 provider 异常。
+
+## 15. P0-09 接口验收口径
+
+P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py` 组合现有 Generate Job、Run/Timeline/Evidence/Claims、Formal Feedback Attempt、Report 与 SSE 契约，输出脱敏 machine-readable manifest。`--offline` 使用 FakeGateway/固定 fixture；`--runtime` 只读验证真实 FastAPI、默认 KB、数据库与前端契约；`--live` 只有显式环境开关时才调用 Provider。
+
+当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。

@@ -242,3 +242,17 @@ curl.exe -N -H "Last-Event-ID: 18" "http://127.0.0.1:8000/api/runs/<run_id>/even
 ```
 
 浏览器 EventSource 使用同源 cookie/session（当前仓库尚未引入应用登录鉴权），不把 bearer token 放到 URL。未来增加 Run ownership 后，SSE 必须与 `/runs/{id}` 使用同一授权依赖。
+
+## 11. P0-09 Demo Gate
+
+正式 demo 前从仓库根目录执行：
+
+```powershell
+python scripts/p0_09_preflight.py --output wzx/out/p0-09-preflight.json
+python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-manifest.json
+python scripts/run_p0_09_acceptance.py --runtime --output wzx/out/p0-09-runtime-manifest.json
+```
+
+preflight 为只读检查：数据库可达与 migration、默认 KB/Chroma、一次本地 retrieval smoke、LLM/structured-output 配置和前端构建产物。它不打印 secret、不调用收费 LLM、不重建数据库。退出码为 `0 READY`、`1 NOT_READY`、`2 DEGRADED`；acceptance runner 对应 `0 PASS`、`1 FAIL`、`2 PARTIAL`。
+
+正式放行要求 preflight `READY`、offline Scenario A～J 全 PASS、runtime PASS 和浏览器 checklist 通过。`/health/ready=200` 不能覆盖数据库或前端比赛 Gate。当前代码已强制 SQLite 每连接 FK，并通过 P0-09 migration 建立 `generated_resources(run_id, resource_type, version)` 唯一约束；正式数据仍必须完成只读完整性检查和受控 migration rehearsal。完整操作见 `docs/demo-runbook.md`。

@@ -16,10 +16,10 @@ from app.services.resource_service import ResourceService
 
 
 class _KnowledgeService:
-    def load_diagnostic_questions(self, knowledge_base_id):
+    def load_assessment_questions(self, knowledge_base_id):
         return [
             DiagnosticQuestion(
-                question_id="kb_q1",
+                question_id="bank_q1",
                 knowledge_base_id=knowledge_base_id,
                 skill_node_id="skill_retrieval",
                 knowledge_point="retrieval",
@@ -30,7 +30,7 @@ class _KnowledgeService:
                 answer="Retrieval",
             ),
             DiagnosticQuestion(
-                question_id="kb_q2",
+                question_id="bank_q2",
                 knowledge_base_id=knowledge_base_id,
                 skill_node_id="skill_generation",
                 knowledge_point="generation",
@@ -43,12 +43,23 @@ class _KnowledgeService:
             ),
         ]
 
+    def load_diagnostic_questions(self, knowledge_base_id):
+        return []
+
+    def select_assessment_questions(self, knowledge_base_id, skill_node_ids=None, limit=None):
+        questions = self.load_assessment_questions(knowledge_base_id)
+        if skill_node_ids:
+            selected = [question for question in questions if question.skill_node_id in skill_node_ids]
+            if selected:
+                questions = selected
+        return questions[:limit] if limit is not None else questions
+
     def select_diagnostic_questions(self, knowledge_base_id, limit=None):
         questions = self.load_diagnostic_questions(knowledge_base_id)
         return questions[:limit] if limit is not None else questions
 
 
-def _app():
+def _app(*, include_resource_exercises=True):
     learner_repo = MemoryLearnerRepository()
     learner_repo.save(
         LearnerProfile(
@@ -76,6 +87,7 @@ def _app():
             exercise_items=[
                 ExerciseItem(
                     question_id="q1",
+                    skill_node_id="skill_retrieval",
                     question="What does R stand for in RAG?",
                     answer="Retrieval",
                     knowledge_point="retrieval",
@@ -83,12 +95,13 @@ def _app():
                 ),
                 ExerciseItem(
                     question_id="q2",
+                    skill_node_id="skill_generation",
                     question="What does G stand for in RAG?",
                     answer="Generation",
                     knowledge_point="generation",
                     difficulty="beginner",
                 ),
-            ],
+            ] if include_resource_exercises else [],
         ),
         "feedback_001",
         "RAG basics",
@@ -117,11 +130,11 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     body = session_response.json()
     assert body["total"] == 2
     question_by_id = {question["question_id"]: question for question in body["questions"]}
-    assert set(question_by_id) == {"kb_q1", "kb_q2"}
-    assert body["questions"][0]["question_id"] == "kb_q2"
-    assert body["questions"][0]["source"] == "knowledge_base"
-    assert all(question["source"] == "knowledge_base" for question in body["questions"])
-    assert question_by_id["kb_q1"]["skill_node_id"] == "skill_retrieval"
+    assert set(question_by_id) == {"res_feedback_001:q1", "res_feedback_001:q2"}
+    assert body["questions"][0]["question_id"] == "res_feedback_001:q1"
+    assert body["questions"][0]["source"] == "resource"
+    assert all(question["source"] == "resource" for question in body["questions"])
+    assert question_by_id["res_feedback_001:q1"]["skill_node_id"] == "skill_retrieval"
     assert body["questions"][0]["path_node_id"] == "skill_generation"
     assert "answer" not in body["questions"][0]
 
@@ -135,8 +148,8 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
             "expected_profile_version": 1,
             "submitted_at": datetime(2026, 8, 13, tzinfo=timezone.utc).isoformat(),
             "answers": [
-                {"question_id": "kb_q1", "answer": "Retrieval"},
-                {"question_id": "kb_q2", "answer": ["Grounding", "Generation"]},
+                {"question_id": "res_feedback_001:q1", "answer": "Retrieval"},
+                {"question_id": "res_feedback_001:q2", "answer": "Generation"},
             ],
         },
     )
@@ -145,12 +158,12 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     result = submit_response.json()
     assert result["attempt"]["overall_score"] == 1.0
     assert result["attempt"]["path_node_id"] is None
-    assert result["attempt"]["metadata"]["evaluation_source"] == "knowledge_base"
+    assert result["attempt"]["metadata"]["evaluation_source"] == "resource"
     trace_by_id = {
         question["question_id"]: question
         for question in result["attempt"]["metadata"]["question_trace"]
     }
-    assert trace_by_id["kb_q1"]["skill_node_id"] == "skill_retrieval"
+    assert trace_by_id["res_feedback_001:q1"]["skill_node_id"] == "skill_retrieval"
     assert result["attempt"]["metadata"]["question_trace"][0]["path_node_id"] == "skill_generation"
     assert result["attempt"]["metadata"]["point_trace"]["skill_retrieval"]["knowledge_points"] == ["retrieval"]
     assert result["decision"]["action"] == "advance"
@@ -167,3 +180,65 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     profile = learner_repo.get("feedback_001")
     assert profile is not None
     assert profile.profile_version == 2
+
+
+def test_feedback_evaluation_falls_back_to_assessment_bank_without_resource_exercises():
+    client, _ = _app(include_resource_exercises=False)
+
+    session_response = client.get("/api/feedback/evaluation/run/feedback_001/run_feedback_001")
+
+    assert session_response.status_code == 200
+    body = session_response.json()
+    assert body["total"] == 2
+    assert {question["question_id"] for question in body["questions"]} == {"bank_q1", "bank_q2"}
+    assert all(question["source"] == "assessment_bank" for question in body["questions"])
+    assert all("answer" not in question for question in body["questions"])
+
+
+def test_run_evaluation_prefers_generated_questions_from_any_resource_before_bank_fallback():
+    service = FeedbackService(MemoryFeedbackRepository())
+    profile = LearnerProfile(
+        learner_id="priority_learner",
+        learner_type="test learner",
+        education="undergraduate",
+        major="software engineering",
+        knowledge_base_id="kb-feedback",
+        learning_goal="test evaluation priority",
+    )
+    resource_without_questions = LearningResource(
+        resource_id="resource_without_questions",
+        resource_type="lecture",
+        difficulty="beginner",
+        knowledge_points=["retrieval"],
+        source_refs=[],
+        learning_path_node="skill_retrieval",
+    )
+    resource_with_questions = LearningResource(
+        resource_id="resource_with_questions",
+        resource_type="exercise",
+        difficulty="beginner",
+        knowledge_points=["generation"],
+        source_refs=[],
+        learning_path_node="skill_generation",
+        exercise_items=[
+            ExerciseItem(
+                question_id="generated_q1",
+                question_type="single_choice",
+                question="Generated question",
+                options=["A", "B"],
+                answer="A",
+            )
+        ],
+    )
+
+    questions, answer_key = service._build_run_question_specs(
+        profile,
+        [resource_without_questions, resource_with_questions],
+        _KnowledgeService(),
+    )
+
+    assert [question.question_id for question in questions] == [
+        "resource_with_questions:generated_q1"
+    ]
+    assert questions[0].source == "resource"
+    assert answer_key == {"resource_with_questions:generated_q1": "A"}

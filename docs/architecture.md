@@ -2,8 +2,8 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：2.0  
-> 文档更新时间：2026-07-31
+> 文档版本：2.1
+> 文档更新时间：2026-08-16
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 1. 架构目标
@@ -420,4 +420,21 @@ GenerationJobService
 - Reviewer 的模型建议必须经过确定性 policy 二次裁决。
 - Resource 的 `run_id` 单一关联 AgentRun；GenerationJob 以同值关联，避免 ORM 中出现两个竞争的 run_id 字段。
 - `review_status` 描述审核状态，`publication_status` 描述分发状态；只有最终批准叶子版本发布。
-- Run 回放只读数据库，不重新执行模型；自动 resume、SSE、取消仍为后续能力。
+- Run 回放只读数据库，不重新执行模型；P0-08 已增加基于持久化 WorkflowEvent 的 SSE replay/live tail，自动 resume 与取消仍不在 P0 范围。
+
+## 10. P0-09 验收层
+
+P0-09 不增加业务 Agent，而是在现有架构外建立可重复验证层：
+
+```text
+versioned fixture
+  -> deterministic executable scenarios A..J
+  -> official metric provenance gate
+  -> sanitized acceptance manifest
+  -> read-only runtime preflight
+  -> browser/manual Demo Runbook
+```
+
+固定 fixture loader 只验证稳定 ID 和场景集合；acceptance runner 复用现有业务测试，不创建第二套工作流。安全证据导出采用 allowlist，只允许 Run/Resource/Review/Claim/Evidence/Feedback 的稳定 ID、计数和状态，不输出 Prompt、模型原文或完整画像。
+
+系统 health 与比赛 Gate 分层：`/health/ready` 只表达默认 KB 和核心依赖的服务 readiness；P0-09 runtime 还要求迁移完整性、SQLite FK、资源版本唯一约束和前端正式闭环。前者 ready 时后者仍可 FAIL。

@@ -1,0 +1,34 @@
+{
+  "knowledge_base_id": "p0-09-rag-fixture",
+  "name": "P0-09 RAG Acceptance Fixture",
+  "version": "v1",
+  "index_schema_version": "1.0",
+  "learner_levels": ["beginner", "intermediate", "advanced"],
+  "chunking": {
+    "strategy": "recursive_v1",
+    "chunk_size": 500,
+    "chunk_overlap": 50
+  },
+  "skill_nodes": [
+    {"id": "kp-rrf", "name": "RRF 融合"},
+    {"id": "kp-evidence-gate", "name": "Evidence Gate"},
+    {"id": "kp-claim-audit", "name": "Claim 审核"}
+  ],
+  "documents": [
+    {
+      "id": "doc-p0-09-rag-ground-truth",
+      "title": "RAG 可信生成验收事实",
+      "file": "ground_truth.md",
+      "source_type": "markdown",
+      "version": "v1",
+      "enabled": true,
+      "knowledge_points": ["kp-rrf", "kp-evidence-gate", "kp-claim-audit"]
+    }
+  ],
+  "smoke_queries": [
+    {
+      "query": "RRF 是否直接累加不同检索器的原始分数",
+      "expected_document_ids": ["doc-p0-09-rag-ground-truth"]
+    }
+  ]
+}

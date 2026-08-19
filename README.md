@@ -31,7 +31,7 @@
 
 ## 快速开始
 
-> 当前项目仍处于基础架构阶段，仅支持后端框架导入、接口文档访问、单元测试和基础 service 链路验证；不支持完整业务运行或生产部署。
+> 当前后端已经形成从证据检索、审核返工、Claim 审计、发布到反馈闭环和 SSE 回放的可执行 P0 链路，但尚未通过 P0-09 全部比赛 Gate，不能宣称生产就绪。正式演示前请先执行 `docs/demo-runbook.md` 中的离线、runtime、数据库和前端验收。
 
 配置文件默认读取 `backend/.env`，运行时数据统一落在 `backend/data/` 和 `backend/chroma_db/`。  
 默认 `KNOWLEDGE_BASE_DIR` 指向 RAG 工程训练示例知识库；接入其他领域时，将该配置改为对应知识库目录即可，后端 Agent 不会把生成方向固定为 RAG。
@@ -225,9 +225,22 @@ version1/
 
 ## 协作开发入口
 
-当前处于架构搭建与并行开发准备阶段，分发任务时优先阅读：
+当前处于 P0 比赛级收敛与验收阶段，分发任务时优先阅读：
 
 - `docs/architecture.md`：统一系统分层、模块职责、运行时路径和主流程口径。
 - `docs/api.md`：当前真实接口契约。
 - `docs/knowledge_base_database.md`：当前知识库、问卷、诊断与数据库落库说明。
 - `git-workflow.md`：Git 分支、提交信息、禁止提交内容和文档同步规则。
+- `docs/demo-runbook.md`：P0-09 固定 fixture、分层 Gate、主 Demo、故障恢复与浏览器 checklist。
+
+## P0-09 比赛验收
+
+默认离线验收不访问公网、不调用收费 Provider：
+
+```powershell
+python scripts/p0_09_preflight.py --output wzx/out/p0-09-preflight.json
+python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-manifest.json
+python scripts/run_p0_09_acceptance.py --runtime --output wzx/out/p0-09-runtime-manifest.json
+```
+
+状态只使用 `PASS`、`FAIL`、`SKIP`、`NOT_MEASURABLE`；小型 fixture 的实际值不等于正式统计达标。Live Provider 测试必须显式设置 `RUN_LIVE_LLM=1`，并与 deterministic offline 结果分开报告。
