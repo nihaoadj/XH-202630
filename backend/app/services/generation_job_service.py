@@ -33,9 +33,11 @@ class GenerationJobService:
         req: GenerateRequest,
         *,
         run_id: str | None = None,
+        batch_id: str | None = None,
         retry_failed: bool = False,
     ) -> GenerationJobCreateResponse:
         run_id = run_id or str(uuid.uuid4())
+        batch_id = batch_id or run_id
         knowledge_base_id = req.knowledge_base_id or learner.knowledge_base_id
         existing = self.job_repo.get(run_id)
         if existing is not None:
@@ -54,6 +56,7 @@ class GenerationJobService:
         else:
             self.job_repo.create(
                 run_id=run_id,
+                batch_id=batch_id,
                 learner_id=req.learner_id,
                 topic=req.topic,
                 knowledge_base_id=knowledge_base_id,
@@ -63,6 +66,7 @@ class GenerationJobService:
         return GenerationJobCreateResponse(
             message="generation job accepted",
             run_id=run_id,
+            batch_id=batch_id,
             learner_id=req.learner_id,
             topic=req.topic,
             knowledge_base_id=knowledge_base_id,
@@ -72,6 +76,9 @@ class GenerationJobService:
     def get_job(self, run_id: str) -> GenerationJobStatusResponse | None:
         return self.job_repo.get(run_id)
 
+    def mark_superseded(self, run_id: str, replacement_run_id: str) -> GenerationJobStatusResponse | None:
+        return self.job_repo.mark_superseded(run_id, replacement_run_id)
+
     def list_jobs(self, learner_id: str) -> GenerationJobListResponse:
         items = self.job_repo.list_by_learner(learner_id)
         return GenerationJobListResponse(
@@ -80,10 +87,23 @@ class GenerationJobService:
             items=items,
         )
 
-    def run_job(self, learner: LearnerProfile, req: GenerateRequest, run_id: str) -> None:
+    def run_job(
+        self,
+        learner: LearnerProfile,
+        req: GenerateRequest,
+        run_id: str,
+        batch_id: str | None = None,
+    ) -> None:
         self.job_repo.mark_running(run_id)
         try:
-            response = self.generation_service.generate_with_run_id(learner, req, run_id=run_id)
+            job = self.job_repo.get(run_id)
+            effective_batch_id = batch_id or (job.batch_id if job else run_id)
+            response = self.generation_service.generate_with_run_id(
+                learner,
+                req,
+                run_id=run_id,
+                batch_id=effective_batch_id,
+            )
             self.job_repo.mark_completed(
                 run_id,
                 [resource.resource_id for resource in response.resources],

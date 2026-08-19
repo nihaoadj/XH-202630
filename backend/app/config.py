@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("")
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     llm_model: str = "qwen-max"
-    llm_request_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    llm_request_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     llm_workflow_timeout_seconds: float = Field(default=105.0, gt=0, le=600)
     llm_max_attempts: int = Field(default=2, ge=1, le=3)
     llm_retry_base_delay_seconds: float = Field(default=0.5, ge=0, le=30)
@@ -165,7 +165,7 @@ class Settings(BaseSettings):
             normalized = float(value)
         except (TypeError, ValueError):
             raise ValueError("CFG_INVALID_LLM_TIMEOUT") from None
-        maximum = 120 if info.field_name == "llm_request_timeout_seconds" else 600
+        maximum = 300 if info.field_name == "llm_request_timeout_seconds" else 600
         if normalized <= 0 or normalized > maximum:
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         return value

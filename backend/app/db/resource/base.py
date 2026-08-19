@@ -21,6 +21,7 @@ class BaseResourceRepository(ABC):
         topic: str,
         *,
         run_id: str | None = None,
+        batch_id: str | None = None,
         generation_step_id: str | None = None,
     ) -> None:
         """保存或更新生成资源"""

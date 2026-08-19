@@ -16,6 +16,9 @@ from app.db.migrations import (
     apply_p0_07_migration,
     apply_p0_07_feedback_migration,
     apply_p0_09_migration,
+    apply_p0_10_migration,
+    apply_p0_11_resource_batches_migration,
+    apply_p0_12_superseded_generation_jobs_migration,
 )
 
 
@@ -107,6 +110,9 @@ def init_database():
         _migrate_sqlite_generation_jobs(engine)
         _migrate_sqlite_feedback_records(engine)
     apply_p0_09_migration(engine)
+    apply_p0_10_migration(engine)
+    apply_p0_11_resource_batches_migration(engine)
+    apply_p0_12_superseded_generation_jobs_migration(engine)
 
 
 def _sqlite_tables(conn) -> set[str]:

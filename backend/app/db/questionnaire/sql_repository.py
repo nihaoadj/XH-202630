@@ -160,6 +160,9 @@ class SQLQuestionnaireRepository(BaseQuestionnaireRepository):
                     extra_metadata=dict(metadata or {}),
                 )
             )
+            # The models intentionally avoid relationship() mappings, so flush
+            # the parent row before adding answer rows that reference it.
+            db.flush()
             questions = db.query(QuestionnaireQuestionORM).filter_by(questionnaire_id=questionnaire_id).all()
             by_field = {question.field_key: question for question in questions}
             by_id = {question.question_id: question for question in questions}

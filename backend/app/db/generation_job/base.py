@@ -15,6 +15,7 @@ class BaseGenerationJobRepository(ABC):
         topic: str,
         knowledge_base_id: Optional[str],
         request_payload: dict[str, Any],
+        batch_id: str | None = None,
     ) -> None:
         pass
 
@@ -37,6 +38,14 @@ class BaseGenerationJobRepository(ABC):
     @abstractmethod
     def mark_queued(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
         """Reset one failed deterministic job so an idempotent retry can run it."""
+
+    @abstractmethod
+    def mark_superseded(
+        self,
+        run_id: str,
+        replacement_run_id: str,
+    ) -> Optional[GenerationJobStatusResponse]:
+        """Keep a failed job for audit while hiding it behind its replacement."""
 
     @abstractmethod
     def fail_incomplete_before(self, before: datetime, error_message: str) -> list[str]:

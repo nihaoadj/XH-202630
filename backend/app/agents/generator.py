@@ -75,6 +75,7 @@ def _fallback_resources(state: AgentState, resource_types: list[str] | None = No
             resource_id=str(uuid.uuid4()),
             learner_id=state.get("learner_id"),
             topic=topic,
+            batch_id=state.get("batch_id"),
             resource_type=resource_type,
             difficulty=state.get("difficulty_preference") or learner.skill_level or "中级",
             content_text=content,
@@ -134,6 +135,8 @@ strong_points（优势领域）：{learner.strong_points}
 目标能力节点：{node_input.target_skill_nodes or ['未指定']}
 生成模式：{node_input.generation_mode}
 生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}
+同批次已有资源摘要（补充时避免重复，并与其形成连续学习体验）：{json.dumps(node_input.constraints.get('continuation_context', []), ensure_ascii=False)}
+补充生成指令：{node_input.constraints.get('continuation_instructions', '无')}
 当前生成轮次：{generation_attempt}
 上一轮结构化问题与返工指令：{json.dumps(node_input.review_result, ensure_ascii=False)}
 上一版本资源（仅修改被指令命中的类型）：
@@ -201,6 +204,7 @@ strong_points（优势领域）：{learner.strong_points}
             resource_id=str(uuid.uuid4()),
             learner_id=node_input.learner.learner_id,
             topic=topic,
+            batch_id=node_input.batch_id,
             resource_type=resource_type,
             difficulty=node_input.difficulty_preference or r.get("difficulty", "中级"),
             content_text=r.get("content_text") or r.get("content", ""),

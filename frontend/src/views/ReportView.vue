@@ -3,29 +3,24 @@
     <section class="report-hero">
       <div class="report-hero-copy">
         <span class="report-kicker">LEARNING REPORT</span>
-        <h2>我的学习进展</h2>
-        <p>围绕学习画像汇总能力掌握、资源学习与练习反馈，为下一轮学习提供清晰依据。</p>
+        <h2>学习报告</h2>
       </div>
-      <div class="profile-selector">
-        <span>当前学习画像</span>
+
+      <div class="report-focus">
+        <span><i />当前学习方向</span>
+        <strong>{{ directionName }}</strong>
+        <b>能力等级 {{ report.skill_level || activeProfile?.skill_level || '待诊断' }}</b>
+      </div>
+
+      <div class="profile-selector report-selector-row">
+        <span>学习画像</span>
         <el-select v-model="selectedLearnerId" placeholder="选择学习画像" class="report-input" filterable @change="handleProfileChange">
           <el-option v-for="item in profileOptions" :key="item.learner_id" :label="item.label" :value="item.learner_id" />
         </el-select>
-        <el-button type="primary" @click="loadReport" :disabled="!selectedLearnerId">更新报告</el-button>
+        <el-button class="report-refresh-button" type="primary" :icon="Refresh" @click="loadReport" :disabled="!selectedLearnerId">更新报告</el-button>
       </div>
-    </section>
 
-    <section class="report-snapshot">
-      <article class="learning-focus">
-        <span class="focus-state"><i />正在学习</span>
-        <strong>{{ directionName }}</strong>
-        <span class="focus-goal">{{ report.learning_goal || activeProfile?.learning_goal || '继续完善你的学习目标' }}</span>
-        <div class="focus-meta">
-          <span>能力层级 <b>{{ report.skill_level || activeProfile?.skill_level || '待诊断' }}</b></span>
-          <span>画像版本 <b>V{{ report.profile_version || activeProfile?.profile_version || 1 }}</b></span>
-        </div>
-      </article>
-      <div class="summary-metrics">
+      <div class="summary-metrics report-summary-metrics">
         <article class="summary-metric mint"><span>学习资源</span><strong>{{ metricSummary.resource_count || 0 }}</strong><small>已生成资源批次</small></article>
         <article class="summary-metric blue"><span>练习反馈</span><strong>{{ metricSummary.feedback_count || 0 }}</strong><small>已记录练习结果</small></article>
         <article class="summary-metric amber"><span>平均正确率</span><strong>{{ averageCorrectRate }}</strong><small>基于已提交反馈</small></article>
@@ -76,6 +71,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { knowledgeApi, profileApi, reportApi } from '../api'
 import { useAppStore } from '../stores/app'
 import ReportChart from '../components/ReportChart.vue'
@@ -143,4 +139,64 @@ onMounted(async () => { await loadProfiles(); if (selectedLearnerId.value) await
 .resource-list,.feedback-list { display:grid; gap:9px; }.resource-item { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:11px; padding:12px; border:1px solid #e0e8f1; border-radius:11px; background:#fbfdff; }.resource-type { padding:5px 7px; border-radius:7px; background:#eaf3ff; color:#2e72c7; font-size:11px; font-weight:800; white-space:nowrap; }.resource-item div { min-width:0; }.resource-item strong,.resource-item p { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.resource-item strong { color:#203b5a; font-size:14px; }.resource-item p { margin:5px 0 0; color:#72849a; font-size:12px; }.difficulty-tag { padding:5px 7px; border:1px solid #d3e9df; border-radius:999px; background:#f2fbf7; color:#228265; font-size:11px; white-space:nowrap; }.feedback-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid #e0e8f1; border-radius:11px; background:#fbfdff; }.feedback-item div { min-width:0; }.feedback-item strong,.feedback-item span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.feedback-item strong { color:#203b5a; font-size:14px; }.feedback-item span { margin-top:5px; color:#75889f; font-size:12px; }.feedback-item b { flex:0 0 auto; color:#168369; font-size:22px; }
 .next-round-panel { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(0,1.2fr); gap:24px; align-items:center; padding:20px 24px; overflow:hidden; background:linear-gradient(105deg,#f9fcff,#f0faf7); }.next-round-panel p { margin:9px 0 0; color:#5c738d; font-size:14px; line-height:1.55; }.suggestion-list { display:flex; flex-wrap:wrap; gap:9px; align-content:center; }.suggestion-list span { padding:9px 12px; border:1px solid #bfe5d8; border-radius:999px; background:rgba(255,255,255,.72); color:#227a64; font-size:13px; font-weight:700; }.suggestion-list em { color:#72849a; font-size:13px; font-style:normal; }
 @media (max-width:1180px) { .report-snapshot { grid-template-columns:1fr; }.report-hero { grid-template-columns:1fr; }.profile-selector { max-width:560px; }.next-round-panel { grid-template-columns:1fr; gap:16px; } } @media (max-width:860px) { .report-page { gap:14px; }.report-detail-grid { grid-template-columns:1fr; }.summary-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }.report-hero { padding:22px; }.report-section { min-height:0; }.resource-item { grid-template-columns:auto minmax(0,1fr); }.difficulty-tag { grid-column:2; justify-self:start; }.next-round-panel { padding:20px; } } @media (max-width:560px) { .report-hero h2 { font-size:30px; }.profile-selector { grid-template-columns:1fr; }.profile-selector :deep(.el-button) { width:100%; }.summary-metrics { grid-template-columns:1fr; }.focus-meta { gap:12px; }.resource-item { grid-template-columns:1fr; }.resource-type { justify-self:start; }.difficulty-tag { grid-column:auto; }.report-section { padding:18px; } }
+
+/* Report context is compact so charts and actionable details remain above the fold. */
+.report-page { gap: 12px; }
+.report-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .38fr);
+  gap: 11px 22px;
+  min-height: 0;
+  padding: 16px 20px;
+  border-radius: 10px;
+}
+.report-hero::after { right: 10%; bottom: -108px; width: 170px; height: 126px; }
+.report-hero h2 { margin-top: 5px; font-size: 28px; letter-spacing: 0; }
+.report-focus {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px 12px;
+  padding: 11px 14px;
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 76%);
+}
+.report-focus > span { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; color: #5f7691; font-size: 11px; }
+.report-focus i { width: 8px; height: 8px; border-radius: 50%; background: #1bb695; box-shadow: 0 0 0 5px rgb(27 182 149 / 12%); }
+.report-focus strong { overflow: hidden; color: #18354d; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.report-focus b { color: #52708a; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.report-selector-row { grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; max-width: none; padding: 0; border: 0; background: transparent; }
+.report-selector-row > span { grid-column: auto; color: #47637e; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.report-selector-row :deep(.el-select__wrapper) { min-height: 34px; }
+.report-refresh-button {
+  min-width: 108px;
+  border-color: #236e62 !important;
+  color: #fff !important;
+  background: #236e62 !important;
+  box-shadow: 0 7px 14px rgb(35 110 98 / 18%);
+}
+.report-refresh-button:hover, .report-refresh-button:focus-visible { border-color: #194f48 !important; background: #194f48 !important; }
+.report-refresh-button.is-disabled { border-color: #d7e3e6 !important; color: #8ca1ae !important; background: #e8f0f2 !important; box-shadow: none; }
+.report-summary-metrics { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.summary-metric { min-height: 66px; padding: 9px 12px; border-radius: 8px; }
+.summary-metric strong { margin-top: 4px; font-size: 21px; }
+.summary-metric small { margin-top: 3px; font-size: 10px; }
+.report-detail-grid { gap: 12px; }
+.report-section { padding: 17px; border-radius: 10px; }
+
+@media (max-width: 1180px) {
+  .report-hero { grid-template-columns: minmax(0, 1fr) minmax(230px, .42fr); }
+}
+@media (max-width: 860px) {
+  .report-hero { grid-template-columns: 1fr; }
+  .report-focus { display: none; }
+}
+@media (max-width: 560px) {
+  .report-selector-row { grid-template-columns: 1fr auto; }
+  .report-selector-row > span { grid-column: 1 / -1; }
+  .report-refresh-button { width: auto !important; min-width: 42px; padding: 0 11px; }
+  .report-summary-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 </style>

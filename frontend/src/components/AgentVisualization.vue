@@ -1,5 +1,5 @@
 <template>
-  <el-card>
+  <el-card class="workflow-timeline">
     <template #header>
       <div class="timeline-header">
         <span>Agent 实时协同轨迹</span>
@@ -17,7 +17,7 @@
     <el-empty v-if="!trace.length && !markers.length" description="等待持久化工作流事件" />
     <el-timeline>
       <el-timeline-item
-        v-for="(item, index) in trace"
+        v-for="(item, index) in displayTrace"
         :key="item.key || item.step_id || index"
         :type="statusType(item.status)"
         :timestamp="`${item.action || ''} · ${statusLabel(item.status)}`"
@@ -38,7 +38,7 @@
         </div>
       </el-timeline-item>
       <el-timeline-item
-        v-for="marker in markers"
+        v-for="marker in displayMarkers"
         :key="marker.key"
         :type="statusType(marker.status)"
         :timestamp="marker.label"
@@ -94,6 +94,12 @@ const connectionTagType = computed(() => ({
   error: 'danger',
 }[props.connectionStatus] || 'info'))
 
+const displayTrace = computed(() => [...props.trace]
+  .sort((left, right) => Number(right.sequence || 0) - Number(left.sequence || 0)))
+
+const displayMarkers = computed(() => [...props.markers]
+  .sort((left, right) => Number(right.sequence || 0) - Number(left.sequence || 0)))
+
 function statusLabel(status) {
   return ({
     running: '进行中', success: '完成', succeeded: '完成', completed: '完成',
@@ -130,5 +136,16 @@ function statusType(status) {
 
 .timeline-alert {
   margin-bottom: 16px;
+}
+
+.workflow-timeline {
+  height: 100%;
+  overflow: hidden;
+}
+
+.workflow-timeline :deep(.el-card__body) {
+  max-height: min(620px, calc(100vh - 230px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 </style>

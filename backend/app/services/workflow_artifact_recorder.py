@@ -245,6 +245,7 @@ class WorkflowArtifactRecorder:
             str(state["learner_id"]),
             str(state["topic"]),
             run_id=str(state["run_id"]),
+            batch_id=str(state.get("batch_id") or state["run_id"]),
             generation_step_id=(
                 str(trace_item["step_id"])
                 if trace_item.get("agent_name") == "generator"

@@ -77,6 +77,7 @@ def _app(*, include_resource_exercises=True):
             resource_id="res_feedback_001",
             learner_id="feedback_001",
             run_id="run_feedback_001",
+            batch_id="batch_feedback_001",
             topic="RAG basics",
             resource_type="lecture",
             difficulty="beginner",
@@ -128,15 +129,14 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     session_response = client.get("/api/feedback/evaluation/run/feedback_001/run_feedback_001")
     assert session_response.status_code == 200
     body = session_response.json()
-    assert body["total"] == 2
+    assert body["total"] == 4
     question_by_id = {question["question_id"]: question for question in body["questions"]}
-    assert set(question_by_id) == {"res_feedback_001:q1", "res_feedback_001:q2"}
-    assert body["questions"][0]["question_id"] == "res_feedback_001:q1"
-    assert body["questions"][0]["source"] == "resource"
-    assert all(question["source"] == "resource" for question in body["questions"])
+    assert set(question_by_id) == {"res_feedback_001:q1", "res_feedback_001:q2", "bank_q1", "bank_q2"}
+    assert question_by_id["res_feedback_001:q1"]["source"] == "resource"
+    assert question_by_id["bank_q1"]["source"] == "assessment_bank"
     assert question_by_id["res_feedback_001:q1"]["skill_node_id"] == "skill_retrieval"
-    assert body["questions"][0]["path_node_id"] == "skill_generation"
-    assert "answer" not in body["questions"][0]
+    assert question_by_id["res_feedback_001:q1"]["path_node_id"] == "skill_generation"
+    assert "answer" not in question_by_id["res_feedback_001:q1"]
 
     submit_response = client.post(
         "/api/feedback/attempts/run/submit",
@@ -150,6 +150,8 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
             "answers": [
                 {"question_id": "res_feedback_001:q1", "answer": "Retrieval"},
                 {"question_id": "res_feedback_001:q2", "answer": "Generation"},
+                {"question_id": "bank_q1", "answer": "Retrieval"},
+                {"question_id": "bank_q2", "answer": ["Generation", "Grounding"]},
             ],
         },
     )
@@ -158,7 +160,7 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     result = submit_response.json()
     assert result["attempt"]["overall_score"] == 1.0
     assert result["attempt"]["path_node_id"] is None
-    assert result["attempt"]["metadata"]["evaluation_source"] == "resource"
+    assert result["attempt"]["metadata"]["evaluation_source"] == "mixed"
     trace_by_id = {
         question["question_id"]: question
         for question in result["attempt"]["metadata"]["question_trace"]
@@ -193,6 +195,40 @@ def test_feedback_evaluation_falls_back_to_assessment_bank_without_resource_exer
     assert {question["question_id"] for question in body["questions"]} == {"bank_q1", "bank_q2"}
     assert all(question["source"] == "assessment_bank" for question in body["questions"])
     assert all("answer" not in question for question in body["questions"])
+
+
+def test_batch_evaluation_uses_resource_batch_and_stably_shuffles_options():
+    client, _ = _app(include_resource_exercises=False)
+
+    first_response = client.get("/api/feedback/evaluation/batch/feedback_001/batch_feedback_001")
+    second_response = client.get("/api/feedback/evaluation/batch/feedback_001/batch_feedback_001")
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    first_body = first_response.json()
+    assert first_body["batch_id"] == "batch_feedback_001"
+    assert first_body["resource_ids"] == ["res_feedback_001"]
+    assert first_body["questions"] == second_response.json()["questions"]
+
+    submit_response = client.post(
+        "/api/feedback/attempts/batch/submit",
+        json={
+            "learner_id": "feedback_001",
+            "batch_id": "batch_feedback_001",
+            "source_resource_id": "res_feedback_001",
+            "idempotency_key": "frontend-batch-attempt",
+            "expected_profile_version": 1,
+            "submitted_at": datetime(2026, 8, 13, tzinfo=timezone.utc).isoformat(),
+            "answers": [
+                {"question_id": "bank_q1", "answer": "Retrieval"},
+                {"question_id": "bank_q2", "answer": ["Generation", "Grounding"]},
+            ],
+        },
+    )
+
+    assert submit_response.status_code == 200
+    assert submit_response.json()["attempt"]["overall_score"] == 1.0
+    assert submit_response.json()["attempt"]["metadata"]["session_id"] == "batch_feedback_001"
 
 
 def test_run_evaluation_prefers_generated_questions_from_any_resource_before_bank_fallback():
@@ -237,8 +273,11 @@ def test_run_evaluation_prefers_generated_questions_from_any_resource_before_ban
         _KnowledgeService(),
     )
 
-    assert [question.question_id for question in questions] == [
-        "resource_with_questions:generated_q1"
-    ]
-    assert questions[0].source == "resource"
-    assert answer_key == {"resource_with_questions:generated_q1": "A"}
+    assert {question.question_id for question in questions} == {
+        "bank_q1",
+        "bank_q2",
+        "resource_with_questions:generated_q1",
+    }
+    assert [question.skill_node_id for question in questions].count("skill_retrieval") == 1
+    assert [question.skill_node_id for question in questions].count("skill_generation") == 2
+    assert answer_key["resource_with_questions:generated_q1"] == "A"
