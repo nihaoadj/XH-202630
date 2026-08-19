@@ -9,6 +9,7 @@ from app.db.migrations.p0_09 import apply_p0_09_migration
 from app.db.migrations.p0_10 import apply_p0_10_migration
 from app.db.migrations.p0_11_resource_batches import apply_p0_11_resource_batches_migration
 from app.db.migrations.p0_12_superseded_generation_jobs import apply_p0_12_superseded_generation_jobs_migration
+from app.db.migrations.tutor import apply_tutor_migration
 
 __all__ = [
     "apply_p0_04_migration",
@@ -20,4 +21,5 @@ __all__ = [
     "apply_p0_10_migration",
     "apply_p0_11_resource_batches_migration",
     "apply_p0_12_superseded_generation_jobs_migration",
+    "apply_tutor_migration",
 ]

@@ -22,6 +22,7 @@ LATEST_MIGRATIONS = {
     "20260810_p0_07_runtime_observability",
     "20260811_p0_07_feedback_profile_path_closed_loop",
     "20260815_p0_09_database_integrity",
+    "20260819_tutor_sessions_turns",
 }
 
 

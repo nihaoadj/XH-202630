@@ -19,6 +19,7 @@ from app.db.migrations import (
     apply_p0_10_migration,
     apply_p0_11_resource_batches_migration,
     apply_p0_12_superseded_generation_jobs_migration,
+    apply_tutor_migration,
 )
 
 
@@ -102,6 +103,7 @@ def init_database():
     apply_p0_06_migration(engine)
     apply_p0_07_migration(engine)
     apply_p0_07_feedback_migration(engine)
+    apply_tutor_migration(engine)
     if engine.url.get_backend_name() == "sqlite":
         _migrate_sqlite_users(engine)
         _migrate_sqlite_learner_profiles(engine)
