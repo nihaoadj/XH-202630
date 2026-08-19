@@ -10,6 +10,7 @@
 ## 项目亮点
 
 - 多智能体协同：基于 LangGraph 实现学情诊断、知识库检索、学习路径规划、个性化资源生成、审核纠偏、反馈决策等 Agent 的协同闭环。
+- 证据约束 Tutor：已发布资源与测评题支持多轮启发式导学；提示等级由服务端递进，回答按 Frozen Evidence、SourceRef、受控检索顺序取证，证据不足时安全拒答。
 - 反馈真实闭环：正式 Attempt 会原子更新知识点掌握度、画像版本和持久化学习路径；补救或进阶决策复用异步生成任务，并保留父子 Run 来源关系。
 - 实时 Agent 轨迹：生成页通过 SSE 只读持久化 WorkflowEvent，支持 queued snapshot、断线续传、事件去重、terminal close 与轮询降级。
 - 幻觉防控：引入冻结 Evidence、独立 Claim 抽取/判定、审核纠偏与可复核指标。
@@ -83,7 +84,7 @@ python scripts/check_database_integrity.py
 
 `LLM_STRUCTURED_OUTPUT_MODE=auto` 会先尝试 function calling。若所用 OpenAI-compatible 服务明确不支持该能力，请在本地 `.env` 显式设为 `text`，避免每个 Agent 固定产生一次 BAD_REQUEST 后再回退；不要提交真实 `.env` 或 API Key。
 
-四个生成 Agent 统一通过可注入的 `LLMGateway` 调用模型。默认单次请求预算为 30 秒、同步工作流预算为 105 秒、总尝试次数为 2；SDK 自带重试关闭，技术重试和资源返工分别计数。结构化输出会经过严格 Pydantic 校验，Reviewer 的异常或非法输出不会被自动批准。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
+生成 Agent 与独立交互式 Tutor 统一通过可注入的 `LLMGateway` 调用模型。Tutor 不进入资源生成 LangGraph，也不直接修改画像、掌握度、路径或资源。默认 Tutor 请求预算为 25 秒、最近上下文 6 轮、Evidence 4 条、最高提示等级 3。结构化输出和 Evidence ID 子集均会严格校验。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
 
 ## 后端目录说明
 
