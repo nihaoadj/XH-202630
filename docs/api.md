@@ -415,9 +415,13 @@
 说明：
 
 - 当前学习反馈页优先按任务而不是单个资源加载测评题。
-- 题目优先取该任务资源内的练习题；不足时再回退到知识库诊断题。
+- 如果任务资源包含 AI 生成且可判分的 `exercise_items`，测评优先使用资源内题目。
+- 如果资源没有可判分题目，则从独立的 `assessment_questions.json` 测评题库按能力节点抽取；不会占用初始画像使用的诊断题。
+- `questions[].source` 为 `resource`（资源内 AI 题）、`assessment_bank`（测评题库）或兼容旧知识库的 `knowledge_base`。
+- RAG 默认测评题库覆盖 13 个能力节点，每节点 10 道，并固定为简单 3 道、中等 3 道、困难 4 道。
+- API 不返回标准答案和解析，提交后由服务端按会话使用的答案键判分。
 
-### 11.2 `POST /api/feedback/attemptsattempts/run/submit`
+### 11.2 `POST /api/feedback/attempts/run/submit`
 
 用途：
 
@@ -448,7 +452,7 @@
 - 提交成功后，后端会保存反馈记录并回写学习者画像。
 - 反馈页“基于反馈重新生成”当前采用“选中某条反馈记录 + 当前最新画像”的方式发起新任务。
 
-### 11.3 `POST /api/feedback/attemptsattempts`
+### 11.3 `POST /api/feedback/attempts`
 
 用途：提交 P0-07 正式学习事实，并在一个本地事务中写入 Attempt、知识点结果、反馈决策、掌握度变更、画像版本和学习路径变更。补救或进阶所需的新资源在事务提交后通过现有异步生成任务入口创建。
 

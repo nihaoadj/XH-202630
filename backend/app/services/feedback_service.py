@@ -477,9 +477,10 @@ class FeedbackService:
                 result["correct_count"] += 1
 
         metadata = dict(payload.metadata)
+        evaluation_sources = list(dict.fromkeys(question.source for question in questions))
         metadata.update(
             {
-                "evaluation_source": "knowledge_base",
+                "evaluation_source": evaluation_sources[0] if len(evaluation_sources) == 1 else "mixed",
                 "question_count": len(questions),
                 "question_trace": [
                     self._question_trace_item(question, selected_resource.learning_path_node)
@@ -676,11 +677,38 @@ class FeedbackService:
         questions: list[ResourceEvaluationQuestion] = []
         answer_key: dict[str, object] = {}
 
+        generated_items = self._usable_resource_exercises(resource)
+        if generated_items:
+            for item in generated_items[:limit]:
+                question_id = f"{resource.resource_id}:{item.question_id}"
+                questions.append(
+                    ResourceEvaluationQuestion(
+                        question_id=question_id,
+                        question_type=item.question_type,
+                        question=item.question,
+                        options=item.options,
+                        skill_node_id=item.skill_node_id or resource.learning_path_node,
+                        path_node_id=resource.learning_path_node,
+                        knowledge_point=item.knowledge_point,
+                        difficulty=item.difficulty,
+                        diagnostic_dimension=item.diagnostic_dimension,
+                        source="resource",
+                    )
+                )
+                answer_key[question_id] = item.answer
+            return questions, answer_key
+
         if not profile.knowledge_base_id:
             return questions, answer_key
 
         target_skill_nodes = [item for item in self._resource_target_skill_nodes(resource) if item]
-        candidates = knowledge_service.load_diagnostic_questions(profile.knowledge_base_id)
+        load_assessment = getattr(knowledge_service, "load_assessment_questions", None)
+        candidates = load_assessment(profile.knowledge_base_id) if load_assessment else []
+        question_source = "assessment_bank"
+        if not candidates:
+            # 兼容尚未配置独立测评题库的其他知识库。
+            candidates = knowledge_service.load_diagnostic_questions(profile.knowledge_base_id)
+            question_source = "knowledge_base"
         related = [
             item
             for item in candidates
@@ -704,10 +732,21 @@ class FeedbackService:
                 seen_related_ids.add(item.question_id)
 
         if len(related) < limit:
-            for item in knowledge_service.select_diagnostic_questions(
-                profile.knowledge_base_id,
-                limit=limit,
-            ):
+            select_assessment = getattr(knowledge_service, "select_assessment_questions", None)
+            if question_source == "assessment_bank" and select_assessment:
+                selected = select_assessment(
+                    profile.knowledge_base_id,
+                    # 只有确实命中题库节点时才把路径节点作为硬过滤，兼容历史资源中
+                    # 使用展示名称或旧节点 ID 的 learning_path_node。
+                    skill_node_ids=target_skill_nodes if related else None,
+                    limit=limit,
+                )
+            else:
+                selected = knowledge_service.select_diagnostic_questions(
+                    profile.knowledge_base_id,
+                    limit=limit,
+                )
+            for item in selected:
                 if item.question_id in seen_related_ids:
                     continue
                 related.append(item)
@@ -727,7 +766,7 @@ class FeedbackService:
                     knowledge_point=item.knowledge_point,
                     difficulty=item.difficulty,
                     diagnostic_dimension=item.metadata.get("diagnostic_dimension"),
-                    source="knowledge_base",
+                    source=question_source,
                 )
             )
             answer_key[item.question_id] = item.answer
@@ -740,6 +779,14 @@ class FeedbackService:
         if resource.learning_path_node:
             values.append(resource.learning_path_node)
         return list(dict.fromkeys(values))
+
+    @staticmethod
+    def _usable_resource_exercises(resource: LearningResource) -> list:
+        return [
+            item
+            for item in resource.exercise_items
+            if item.question.strip() and item.answer is not None
+        ]
 
     @staticmethod
     def _order_questions_for_coverage(questions: list) -> list:
@@ -831,7 +878,16 @@ class FeedbackService:
         merged_answer_key: dict[str, object] = {}
         seen_question_ids: set[str] = set()
 
-        for resource in resources:
+        resources_with_generated_questions = [
+            resource
+            for resource in resources
+            if self._usable_resource_exercises(resource)
+        ]
+        # 任务中只要有资源携带 AI 生成题，就只聚合这些题；只有整个任务均未生成
+        # 可判分题目时，才由每个资源对应的能力节点触发题库回退。
+        question_resources = resources_with_generated_questions or resources
+
+        for resource in question_resources:
             questions, answer_key = self._build_question_specs(profile, resource, knowledge_service, limit=10)
             for question in questions:
                 if question.question_id in seen_question_ids:

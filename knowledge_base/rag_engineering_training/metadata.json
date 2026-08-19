@@ -1,8 +1,20 @@
 {
   "knowledge_base_id": "rag_engineering_training",
   "knowledge_base_name": "rag_engineering_training",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "index_schema_version": "1.0",
+  "assessment_question_bank": {
+    "file": "assessment_questions.json",
+    "version": "1.0.0",
+    "question_count": 130,
+    "questions_per_skill_node": 10,
+    "difficulty_distribution_per_node": {
+      "简单": 3,
+      "中等": 3,
+      "困难": 4
+    },
+    "selection_policy": "resource_exercises_first_then_assessment_bank"
+  },
   "chunking": {
     "strategy": "recursive_v1",
     "chunk_size": 500,
