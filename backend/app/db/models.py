@@ -136,6 +136,92 @@ class GeneratedResourceORM(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
 
 
+class TutorSessionORM(Base):
+    """Interactive Tutor session state; isolated from formal learner mutations."""
+
+    __tablename__ = "tutor_sessions"
+
+    session_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    learner_id = Column(
+        String(64),
+        ForeignKey("learner_profiles.learner_id"),
+        nullable=False,
+        index=True,
+    )
+    source_type = Column(String(32), nullable=False)
+    source_resource_id = Column(
+        String(128),
+        ForeignKey("generated_resources.resource_id"),
+        nullable=True,
+        index=True,
+    )
+    source_run_id = Column(
+        String(128),
+        ForeignKey("agent_runs.run_id"),
+        nullable=True,
+        index=True,
+    )
+    knowledge_base_id = Column(String(128), nullable=True, index=True)
+    context_type = Column(String(32), nullable=False, index=True)
+    question_id = Column(String(128), nullable=True, index=True)
+    skill_node_id = Column(String(128), nullable=True)
+    path_node_id = Column(String(128), nullable=True)
+    knowledge_point = Column(String(256), nullable=True)
+    status = Column(String(32), nullable=False, default="active", index=True)
+    current_hint_level = Column(Integer, nullable=False, default=0)
+    turn_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class TutorTurnORM(Base):
+    """Auditable, idempotent Tutor interaction without raw prompts/model bodies."""
+
+    __tablename__ = "tutor_turns"
+    __table_args__ = (
+        UniqueConstraint("session_id", "sequence", name="uq_tutor_turn_sequence"),
+        UniqueConstraint(
+            "session_id",
+            "client_message_id",
+            name="uq_tutor_turn_client_message",
+        ),
+    )
+
+    turn_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    session_id = Column(
+        String(128),
+        ForeignKey("tutor_sessions.session_id"),
+        nullable=False,
+        index=True,
+    )
+    sequence = Column(Integer, nullable=False)
+    client_message_id = Column(String(128), nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    user_message = Column(Text, nullable=False)
+    assistant_message = Column(Text, nullable=False)
+    pedagogy_action = Column(String(32), nullable=False)
+    hint_level = Column(Integer, nullable=False)
+    follow_up_question = Column(Text, nullable=True)
+    target_knowledge_points = Column(JSON, nullable=False, default=list)
+    grounding_status = Column(String(32), nullable=False)
+    grounding_source = Column(String(32), nullable=False)
+    evidence_refs = Column(JSON, nullable=False, default=list)
+    retrieval_query_hash = Column(String(64), nullable=True)
+    retrieval_status = Column(String(64), nullable=True)
+    llm_call_id = Column(String(128), nullable=True, index=True)
+    model_name = Column(String(128), nullable=True)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    llm_duration_ms = Column(Integer, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0)
+    error_code = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class FeedbackRecordORM(Base):
     """学习反馈记录表"""
     __tablename__ = "feedback_records"

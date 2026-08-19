@@ -11,6 +11,7 @@ from app.db.migrations.p0_11_resource_batches import apply_p0_11_resource_batche
 from app.db.migrations.p0_12_superseded_generation_jobs import apply_p0_12_superseded_generation_jobs_migration
 from app.db.migrations.p0_13_resource_workflow import apply_p0_13_resource_workflow_migration
 from app.db.migrations.p0_14_profile_skill_node_labels import apply_p0_14_profile_skill_node_labels_migration
+from app.db.migrations.tutor import apply_tutor_migration
 
 __all__ = [
     "apply_p0_04_migration",
@@ -24,4 +25,5 @@ __all__ = [
     "apply_p0_12_superseded_generation_jobs_migration",
     "apply_p0_13_resource_workflow_migration",
     "apply_p0_14_profile_skill_node_labels_migration",
+    "apply_tutor_migration",
 ]
