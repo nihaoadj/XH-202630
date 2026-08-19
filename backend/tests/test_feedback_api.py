@@ -48,7 +48,7 @@ class _KnowledgeService:
         return questions[:limit] if limit is not None else questions
 
 
-def _app():
+def _app(*, tutor_repo=None):
     learner_repo = MemoryLearnerRepository()
     learner_repo.save(
         LearnerProfile(
@@ -97,6 +97,7 @@ def _app():
     feedback_service = FeedbackService(
         MemoryFeedbackRepository(),
         feedback_loop_repo=MemoryFeedbackLoopRepository(learner_repo),
+        tutor_repo=tutor_repo,
     )
     app = FastAPI()
     app.container = SimpleNamespace(
@@ -107,6 +108,25 @@ def _app():
     )
     app.include_router(feedback.router, prefix="/api/feedback")
     return TestClient(app), learner_repo
+
+
+class _TutorHintCounter:
+    def count_turns(
+        self,
+        learner_id,
+        *,
+        source_run_id=None,
+        context_type=None,
+        question_id=None,
+        created_before=None,
+    ):
+        assert learner_id == "feedback_001"
+        assert source_run_id == "run_feedback_001"
+        assert context_type == "question_help"
+        assert created_before == datetime(2026, 8, 13, tzinfo=timezone.utc)
+        if question_id is None:
+            return 3
+        return {"kb_q1": 2, "kb_q2": 1}.get(question_id, 0)
 
 
 def test_feedback_evaluation_session_and_run_attempt_submit():
@@ -167,3 +187,34 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     profile = learner_repo.get("feedback_001")
     assert profile is not None
     assert profile.profile_version == 2
+
+
+def test_run_attempt_uses_server_side_tutor_hint_counts_without_changing_score():
+    client, _ = _app(tutor_repo=_TutorHintCounter())
+
+    response = client.post(
+        "/api/feedback/attempts/run/submit",
+        json={
+            "learner_id": "feedback_001",
+            "run_id": "run_feedback_001",
+            "source_resource_id": "res_feedback_001",
+            "idempotency_key": "server-tutor-hints",
+            "expected_profile_version": 1,
+            "submitted_at": datetime(2026, 8, 13, tzinfo=timezone.utc).isoformat(),
+            "hint_count": 99,
+            "answers": [
+                {"question_id": "kb_q1", "answer": "Retrieval"},
+                {"question_id": "kb_q2", "answer": ["Grounding", "Generation"]},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    attempt = response.json()["attempt"]
+    assert attempt["hint_count"] == 3
+    assert attempt["overall_score"] == 1.0
+    hints = {
+        item["knowledge_point_id"]: item["hint_count"]
+        for item in attempt["knowledge_point_results"]
+    }
+    assert hints == {"skill_retrieval": 2, "skill_generation": 1}
