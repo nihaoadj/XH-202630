@@ -707,4 +707,29 @@ Invoke-RestMethod -Method Post `
 
 P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py` 组合现有 Generate Job、Run/Timeline/Evidence/Claims、Formal Feedback Attempt、Report 与 SSE 契约，输出脱敏 machine-readable manifest。`--offline` 使用 FakeGateway/固定 fixture；`--runtime` 只读验证真实 FastAPI、默认 KB、数据库与前端契约；`--live` 只有显式环境开关时才调用 Provider。
 
+## 16. Tutor API
+
+Tutor 路由均位于私有 `/api/tutor` 前缀下，复用当前登录用户到 learner 的访问校验。跨用户资源、Run 或会话统一按现有防枚举语义返回 404。
+
+| Method | Path | 用途 | 成功状态 |
+|---|---|---|---|
+| `POST` | `/api/tutor/sessions` | 创建或恢复匹配的活动会话 | 201 |
+| `GET` | `/api/tutor/sessions` | 按 learner/source/context 查询安全会话摘要 | 200 |
+| `GET` | `/api/tutor/sessions/{session_id}` | 恢复会话与安全轮次 | 200 |
+| `POST` | `/api/tutor/sessions/{session_id}/turns` | 提交一轮用户求助 | 200 |
+| `POST` | `/api/tutor/sessions/{session_id}/close` | 幂等关闭会话 | 200 |
+
+创建请求只接受 `learner_id`、`source_type`、`resource_id/run_id`、`context_type` 和可选 `question_id`。`question_help` 的题干、知识点和难度由后端按 `question_id` 解析，客户端不能提交 expected answer 或 hint level。
+
+Turn 请求为：
+
+```json
+{
+  "client_message_id": "web-stable-message-id",
+  "message": "我理解召回，但不懂为什么还需要 rerank"
+}
+```
+
+响应包含 `turn_id`、`sequence`、`hint_level`、`pedagogy_action`、`message`、`follow_up_question`、`grounding_status`、`grounding_source`、`source_refs` 和脱敏的模型调用摘要。相同 `client_message_id` 与相同 payload 返回已持久化结果；不同 payload 返回 409 `TUTOR_IDEMPOTENCY_CONFLICT`。Evidence 不足返回 HTTP 200 和 `grounding_status=evidence_insufficient`；会话不存在为 404，关闭会话继续提交为 409，模型超时/认证/请求或结构化输出失败沿用 LLMGateway 的脱敏 503 语义。响应不包含 raw prompt、raw provider response、Chain-of-Thought、密钥或异常堆栈。
+
 当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。
