@@ -40,6 +40,7 @@ def build_workflow_state(
     req: GenerateRequest,
     *,
     run_id: str | None = None,
+    batch_id: str | None = None,
 ) -> WorkflowState:
     """Validate and map every public request control into workflow channels."""
     if learner.learner_id != req.learner_id:
@@ -52,8 +53,10 @@ def build_workflow_state(
             mode="python",
             exclude_none=True,
         )
+        effective_run_id = run_id or str(uuid.uuid4())
         snapshot = WorkflowStateSnapshot(
-            run_id=run_id or str(uuid.uuid4()),
+            run_id=effective_run_id,
+            batch_id=batch_id or effective_run_id,
             learner_id=req.learner_id,
             learner=learner,
             topic=req.topic,
@@ -141,6 +144,7 @@ def _materialize_resources(
     resource_repo: BaseResourceRepository,
     *,
     run_id: str,
+    batch_id: str,
     generation_steps: dict[str, str],
     audit_repo: BaseAuditRepository,
 ) -> List[LearningResource]:
@@ -150,6 +154,7 @@ def _materialize_resources(
         resource.learner_id = learner_id
         resource.topic = topic
         resource.run_id = run_id
+        resource.batch_id = batch_id
 
         existing = resource_repo.get(resource.resource_id)
         if existing is None:
@@ -180,6 +185,7 @@ def _materialize_resources(
             learner_id,
             topic,
             run_id=run_id,
+            batch_id=batch_id,
             generation_step_id=generation_step_id,
         )
         audit_repo.append_event(
@@ -306,6 +312,7 @@ class GenerationService:
         learner: LearnerProfile,
         req: GenerateRequest,
         run_id: str | None = None,
+        batch_id: str | None = None,
     ) -> GenerateResponse:
         """Generate with a caller-owned Run ID while preserving durable lifecycle semantics."""
         readiness = (
@@ -315,7 +322,7 @@ class GenerationService:
             if self.knowledge_catalog is not None
             else ensure_generation_ready()
         )
-        initial_state = build_workflow_state(learner, req, run_id=run_id)
+        initial_state = build_workflow_state(learner, req, run_id=run_id, batch_id=batch_id)
         run_id = initial_state["run_id"]
         started_at = datetime.now(timezone.utc)
         lease_expires_at = started_at + timedelta(
@@ -417,6 +424,7 @@ class GenerationService:
                 req.topic,
                 self.resource_repo,
                 run_id=run_id,
+                batch_id=str(initial_state["batch_id"]),
                 generation_steps=_generation_step_map(trace),
                 audit_repo=self.audit_repo,
             )

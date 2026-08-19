@@ -2,6 +2,7 @@ import json
 import uuid
 import hashlib
 import logging
+import random
 from collections.abc import Callable
 from datetime import datetime, timezone
 
@@ -29,6 +30,7 @@ from app.models.schemas import (
     FeedbackRecord,
     FeedbackRequest,
     FeedbackResponse,
+    BatchEvaluationSessionResponse,
     LearnerProfile,
     LearningResource,
     ResourceEvaluationQuestion,
@@ -409,7 +411,7 @@ class FeedbackService:
             resource_id=resource.resource_id,
             topic=resource.topic,
             total=len(questions),
-            questions=questions,
+            questions=self._shuffle_question_options(questions, profile.learner_id, resource.resource_id),
         )
 
     def build_run_evaluation_session(
@@ -427,7 +429,24 @@ class FeedbackService:
             topic=topic,
             resource_ids=[resource.resource_id for resource in resources],
             total=len(questions),
-            questions=questions,
+            questions=self._shuffle_question_options(questions, profile.learner_id, run_id),
+        )
+
+    def build_batch_evaluation_session(
+        self,
+        profile: LearnerProfile,
+        batch_id: str,
+        resources: list[LearningResource],
+        knowledge_service: KnowledgeService,
+    ) -> BatchEvaluationSessionResponse:
+        questions, _ = self._build_run_question_specs(profile, resources, knowledge_service)
+        return BatchEvaluationSessionResponse(
+            learner_id=profile.learner_id,
+            batch_id=batch_id,
+            topic=self._merge_topics(resources),
+            resource_ids=[resource.resource_id for resource in resources],
+            total=len(questions),
+            questions=self._shuffle_question_options(questions, profile.learner_id, batch_id),
         )
 
     def submit_run_attempt(
@@ -797,13 +816,33 @@ class FeedbackService:
             for question in questions:
                 if question.question_id in seen:
                     continue
-                if question.metadata.get("diagnostic_dimension") == dimension:
+                diagnostic_dimension = getattr(question, "diagnostic_dimension", None)
+                if diagnostic_dimension is None:
+                    diagnostic_dimension = getattr(question, "metadata", {}).get("diagnostic_dimension")
+                if diagnostic_dimension == dimension:
                     ordered.append(question)
                     seen.add(question.question_id)
         for question in questions:
             if question.question_id not in seen:
                 ordered.append(question)
         return ordered
+
+    @staticmethod
+    def _shuffle_question_options(
+        questions: list[ResourceEvaluationQuestion],
+        learner_id: str,
+        session_id: str,
+    ) -> list[ResourceEvaluationQuestion]:
+        """Shuffle choices deterministically so a session stays resumable and gradable."""
+        shuffled_questions = []
+        for question in questions:
+            options = list(question.options or [])
+            if len(options) > 1:
+                seed_material = f"{learner_id}\x1f{session_id}\x1f{question.question_id}"
+                seed = int.from_bytes(hashlib.sha256(seed_material.encode("utf-8")).digest()[:8], "big")
+                random.Random(seed).shuffle(options)
+            shuffled_questions.append(question.model_copy(update={"options": options}))
+        return shuffled_questions
 
     @staticmethod
     def _question_result_key(question: ResourceEvaluationQuestion) -> str:
@@ -872,11 +911,15 @@ class FeedbackService:
         profile: LearnerProfile,
         resources: list[LearningResource],
         knowledge_service: KnowledgeService,
-        limit: int = 10,
+        questions_per_skill_node: int = 2,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
-        merged_questions: list[ResourceEvaluationQuestion] = []
-        merged_answer_key: dict[str, object] = {}
+        """Build a balanced session with at least two questions per covered skill node."""
+        candidates: list[ResourceEvaluationQuestion] = []
+        answer_key: dict[str, object] = {}
         seen_question_ids: set[str] = set()
+        skill_nodes = list(dict.fromkeys(
+            resource.learning_path_node for resource in resources if resource.learning_path_node
+        ))
 
         resources_with_generated_questions = [
             resource
@@ -888,17 +931,71 @@ class FeedbackService:
         question_resources = resources_with_generated_questions or resources
 
         for resource in question_resources:
-            questions, answer_key = self._build_question_specs(profile, resource, knowledge_service, limit=10)
+            questions, resource_answer_key = self._build_question_specs(
+                profile,
+                resource,
+                knowledge_service,
+                limit=50,
+            )
             for question in questions:
                 if question.question_id in seen_question_ids:
                     continue
-                merged_questions.append(question)
-                merged_answer_key[question.question_id] = answer_key.get(question.question_id)
+                candidates.append(question)
+                answer_key[question.question_id] = resource_answer_key.get(question.question_id)
                 seen_question_ids.add(question.question_id)
-                if len(merged_questions) >= limit:
-                    return merged_questions, merged_answer_key
+                if question.skill_node_id and question.skill_node_id not in skill_nodes:
+                    skill_nodes.append(question.skill_node_id)
 
-        return merged_questions, merged_answer_key
+        if not skill_nodes:
+            return candidates, answer_key
+
+        # AI-generated resource exercises can be sparse. Supplement each covered
+        # node from the assessment bank so every node has a comparable check.
+        load_assessment = getattr(knowledge_service, "load_assessment_questions", None)
+        assessment_candidates = load_assessment(profile.knowledge_base_id) if load_assessment else []
+        assessment_source = "assessment_bank"
+        if not assessment_candidates:
+            assessment_candidates = knowledge_service.load_diagnostic_questions(profile.knowledge_base_id)
+            assessment_source = "knowledge_base"
+
+        for skill_node_id in skill_nodes:
+            current_count = sum(question.skill_node_id == skill_node_id for question in candidates)
+            if current_count >= questions_per_skill_node:
+                continue
+            for item in assessment_candidates:
+                if item.question_id in seen_question_ids or item.skill_node_id != skill_node_id:
+                    continue
+                candidates.append(
+                    ResourceEvaluationQuestion(
+                        question_id=item.question_id,
+                        question_type=item.question_type,
+                        question=item.question,
+                        options=item.options or [],
+                        skill_node_id=item.skill_node_id,
+                        path_node_id=skill_node_id,
+                        knowledge_point=item.knowledge_point,
+                        difficulty=item.difficulty,
+                        diagnostic_dimension=item.metadata.get("diagnostic_dimension"),
+                        source=assessment_source,
+                    )
+                )
+                answer_key[item.question_id] = item.answer
+                seen_question_ids.add(item.question_id)
+                current_count += 1
+                if current_count >= questions_per_skill_node:
+                    break
+
+        selected_questions: list[ResourceEvaluationQuestion] = []
+        selected_answer_key: dict[str, object] = {}
+        for skill_node_id in skill_nodes:
+            node_questions = self._order_questions_for_coverage(
+                [question for question in candidates if question.skill_node_id == skill_node_id]
+            )[:questions_per_skill_node]
+            for question in node_questions:
+                selected_questions.append(question)
+                selected_answer_key[question.question_id] = answer_key[question.question_id]
+
+        return selected_questions, selected_answer_key
 
     @staticmethod
     def _merge_topics(resources: list[LearningResource]) -> str:

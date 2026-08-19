@@ -225,6 +225,7 @@ class GenerateRequest(BaseModel):
 class GenerationJobCreateResponse(StatusResponse):
     """异步资源生成任务创建响应"""
     run_id: str
+    batch_id: str
     learner_id: str
     topic: str
     knowledge_base_id: Optional[str] = None
@@ -234,12 +235,14 @@ class GenerationJobCreateResponse(StatusResponse):
 class GenerationJobStatusResponse(BaseModel):
     """异步资源生成任务状态响应"""
     run_id: str
+    batch_id: Optional[str] = None
     learner_id: str
     topic: str
     knowledge_base_id: Optional[str] = None
     job_status: Literal["queued", "running", "completed", "failed"]
     resource_ids: List[str] = Field(default_factory=list)
     error_message: Optional[str] = None
+    superseded_by_run_id: Optional[str] = None
     request_payload: Dict[str, Any] = Field(default_factory=dict)
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
@@ -251,6 +254,26 @@ class GenerationJobListResponse(BaseModel):
     learner_id: str
     total: int
     items: List[GenerationJobStatusResponse] = Field(default_factory=list)
+
+
+class ContinueResourceBatchRequest(BaseModel):
+    """在既有资源批次内继续补充资源。"""
+
+    learner_id: str = Field(min_length=1)
+    resource_types: List[str] = Field(min_length=1)
+    instructions: Optional[str] = Field(default=None, max_length=2000)
+    source_run_id: Optional[str] = Field(
+        default=None,
+        description="可选：明确复用该生成任务的原始请求，用于失败任务重试",
+    )
+
+    @field_validator("resource_types")
+    @classmethod
+    def normalize_resource_types(cls, values: List[str]) -> List[str]:
+        normalized = list(dict.fromkeys(value.strip() for value in values if value and value.strip()))
+        if not normalized:
+            raise ValueError("resource_types cannot be empty")
+        return normalized
 
 
 class LearningPlan(BaseModel):
@@ -328,6 +351,7 @@ class LearningResource(BaseModel):
     publication_status: Literal["unpublished", "published"] = "unpublished"
     published_at: Optional[datetime] = None
     run_id: Optional[str] = None
+    batch_id: Optional[str] = None
     claim_count: Optional[int] = None
     legacy_reviewer_score: Optional[float] = None
     claim_hallucination_rate: Optional[float] = None
@@ -688,6 +712,16 @@ class RunEvaluationSessionResponse(BaseModel):
     questions: List[ResourceEvaluationQuestion] = Field(default_factory=list)
 
 
+class BatchEvaluationSessionResponse(BaseModel):
+    """按学习资源批次聚合的学习后测评题目列表。"""
+    learner_id: str
+    batch_id: str
+    topic: Optional[str] = None
+    resource_ids: List[str] = Field(default_factory=list)
+    total: int
+    questions: List[ResourceEvaluationQuestion] = Field(default_factory=list)
+
+
 class ResourceEvaluationAnswerSubmission(BaseModel):
     """学习后测评单题作答"""
     question_id: str
@@ -698,6 +732,22 @@ class RunAttemptSubmitRequest(BaseModel):
     """Submit scored run answers into the formal feedback attempt loop."""
     learner_id: str
     run_id: str
+    source_resource_id: Optional[str] = None
+    path_node_id: Optional[str] = None
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    expected_profile_version: int = Field(ge=1)
+    started_at: Optional[datetime] = None
+    submitted_at: datetime
+    duration_ms: int = Field(default=0, ge=0)
+    hint_count: int = Field(default=0, ge=0)
+    answers: List[ResourceEvaluationAnswerSubmission] = Field(default_factory=list, min_length=1)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class BatchAttemptSubmitRequest(BaseModel):
+    """Submit one learning-resource batch as a formal feedback attempt."""
+    learner_id: str
+    batch_id: str
     source_resource_id: Optional[str] = None
     path_node_id: Optional[str] = None
     idempotency_key: str = Field(min_length=8, max_length=128)

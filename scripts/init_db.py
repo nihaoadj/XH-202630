@@ -21,15 +21,15 @@ from app.db.questionnaire.repository import create_questionnaire_repository
 from app.models.schemas import DiagnosticQuestion, LearnerProfile
 
 
-def _load_diagnostic_questions(kb_dir: Path) -> list[DiagnosticQuestion]:
-    """读取可版本管理的诊断题数据；缺少文件时允许只初始化目录和图谱。"""
-    questions_path = kb_dir / "diagnostic_questions.json"
+def _load_questions(kb_dir: Path, filename: str) -> list[DiagnosticQuestion]:
+    """读取可版本管理的题库数据；缺少文件时允许只初始化目录和图谱。"""
+    questions_path = kb_dir / filename
     if not questions_path.exists():
         return []
     with questions_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, list):
-        raise ValueError(f"诊断题文件必须是 JSON 数组：{questions_path}")
+        raise ValueError(f"题库文件必须是 JSON 数组：{questions_path}")
     return [DiagnosticQuestion(**item) for item in data]
 
 
@@ -122,7 +122,8 @@ def main():
             manifest = load_knowledge_base_manifest(str(kb_dir))
             documents = load_documents(str(kb_dir))
             chunks = chunk_documents(documents)
-            questions = _load_diagnostic_questions(kb_dir)
+            questions = _load_questions(kb_dir, "diagnostic_questions.json")
+            assessment_questions = _load_questions(kb_dir, "assessment_questions.json")
             domain, track = seed_by_kb.get(
                 manifest["knowledge_base_id"],
                 (
@@ -161,6 +162,7 @@ def main():
             )
             catalog.upsert_skill_nodes(manifest.get("skill_nodes", []), manifest["knowledge_base_id"])
             catalog.upsert_diagnostic_questions(questions)
+            catalog.upsert_assessment_questions(assessment_questions)
             questionnaire_path = kb_dir / "questionnaire.json"
             questionnaire = _load_questionnaire_template(questionnaire_path)
             if questionnaire is not None:
@@ -172,6 +174,7 @@ def main():
             print(
                 f"已同步学习方向：{domain['name']} / {track['name']} -> {manifest['knowledge_base_id']}，"
                 f"{len(documents)} 篇文档、{len(chunks)} 个切片、{len(questions)} 道诊断题、"
+                f"{len(assessment_questions)} 道测评题、"
                 f"{len(questionnaire.get('questions', [])) if questionnaire else 0} 道方向问卷题"
             )
         for domain, track in seed_entries:

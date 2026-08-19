@@ -81,6 +81,7 @@ class WorkflowState(TypedDict, total=False):
 
     schema_version: Literal["1.0"]
     run_id: str
+    batch_id: str
     learner_id: str
     learner: LearnerProfile
     topic: str
@@ -134,6 +135,7 @@ class WorkflowStateSnapshot(BaseModel):
 
     schema_version: Literal["1.0"] = WORKFLOW_SCHEMA_VERSION
     run_id: str = Field(min_length=1)
+    batch_id: str = Field(min_length=1)
     learner_id: str = Field(min_length=1)
     learner: LearnerProfile
     topic: str = Field(min_length=1)

@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.models import (
+    AssessmentQuestionORM,
     DiagnosticQuestionORM,
     KnowledgeBaseORM,
     KnowledgeChunkORM,
@@ -673,6 +674,30 @@ class KnowledgeCatalogRepository:
                         setattr(row, key, value)
             db.commit()
 
+    def upsert_assessment_questions(self, questions: Iterable[DiagnosticQuestion]) -> None:
+        """同步版本化测评题库到 SQL 运行时投影。"""
+        with self.session_factory() as db:
+            for question in questions:
+                values = {
+                    "knowledge_base_id": question.knowledge_base_id,
+                    "skill_node_id": question.skill_node_id,
+                    "knowledge_point": question.knowledge_point,
+                    "question_type": question.question_type,
+                    "difficulty": question.difficulty,
+                    "question": question.question,
+                    "options": question.options,
+                    "answer": question.answer,
+                    "explanation": question.explanation,
+                    "extra_metadata": question.metadata,
+                }
+                row = db.get(AssessmentQuestionORM, question.question_id)
+                if row is None:
+                    db.add(AssessmentQuestionORM(question_id=question.question_id, **values))
+                else:
+                    for key, value in values.items():
+                        setattr(row, key, value)
+            db.commit()
+
     def list_skill_nodes(self, knowledge_base_id: str) -> List[SkillNode]:
         with self.session_factory() as db:
             rows = (
@@ -739,6 +764,31 @@ class KnowledgeCatalogRepository:
             for row in rows
         ]
 
+    def list_assessment_questions(self, knowledge_base_id: str) -> List[DiagnosticQuestion]:
+        with self.session_factory() as db:
+            rows = (
+                db.query(AssessmentQuestionORM)
+                .filter_by(knowledge_base_id=knowledge_base_id)
+                .order_by(AssessmentQuestionORM.skill_node_id, AssessmentQuestionORM.question_id)
+                .all()
+            )
+        return [
+            DiagnosticQuestion(
+                question_id=row.question_id,
+                knowledge_base_id=row.knowledge_base_id,
+                skill_node_id=row.skill_node_id,
+                knowledge_point=row.knowledge_point,
+                question_type=row.question_type,
+                difficulty=row.difficulty,
+                question=row.question,
+                options=row.options or [],
+                answer=row.answer,
+                explanation=row.explanation,
+                metadata=row.extra_metadata or {},
+            )
+            for row in rows
+        ]
+
     def knowledge_base_counts(self, knowledge_base_id: str) -> Dict[str, int]:
         with self.session_factory() as db:
             return {
@@ -749,4 +799,5 @@ class KnowledgeCatalogRepository:
                 "historical_chunk_count": db.query(KnowledgeChunkVersionORM).filter_by(knowledge_base_id=knowledge_base_id).count(),
                 "skill_node_count": db.query(RagSkillNodeORM).filter_by(knowledge_base_id=knowledge_base_id).count(),
                 "diagnostic_question_count": db.query(DiagnosticQuestionORM).filter_by(knowledge_base_id=knowledge_base_id).count(),
+                "assessment_question_count": db.query(AssessmentQuestionORM).filter_by(knowledge_base_id=knowledge_base_id).count(),
             }

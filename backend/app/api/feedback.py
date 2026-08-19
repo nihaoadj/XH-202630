@@ -3,6 +3,8 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from app.api.dependencies import ensure_profile_access
 from app.models.feedback_loop import FeedbackLoopResult, LearningAttempt, LearningAttemptSubmit, LearningPath
 from app.models.schemas import (
+    BatchAttemptSubmitRequest,
+    BatchEvaluationSessionResponse,
     ResourceEvaluationSessionResponse,
     RunAttemptSubmitRequest,
     RunEvaluationSessionResponse,
@@ -93,6 +95,72 @@ def submit_run_attempt(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/attempts/batch/submit", response_model=FeedbackLoopResult)
+def submit_batch_attempt(
+    payload: BatchAttemptSubmitRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """Score all resources in one learning batch as one feedback event."""
+    container = request.app.container
+    profile_service: ProfileService = container.profile_service()
+    resource_service: ResourceService = container.resource_service()
+    feedback_service: FeedbackService = container.feedback_service()
+    knowledge_service: KnowledgeService = container.knowledge_service()
+
+    profile = ensure_profile_access(request, profile_service.get(payload.learner_id))
+    if not profile:
+        raise HTTPException(status_code=404, detail="学习画像不存在")
+
+    resources = [
+        resource
+        for resource in resource_service.list_by_learner(payload.learner_id)
+        if (resource.batch_id or resource.run_id) == payload.batch_id
+    ]
+    if not resources:
+        raise HTTPException(status_code=404, detail="资源批次不存在")
+    source_resource = next(
+        (resource for resource in resources if resource.resource_id == payload.source_resource_id),
+        resources[0],
+    )
+    source_run_id = source_resource.run_id or payload.batch_id
+    run_payload = RunAttemptSubmitRequest(
+        learner_id=payload.learner_id,
+        run_id=source_run_id,
+        source_resource_id=source_resource.resource_id,
+        path_node_id=payload.path_node_id,
+        idempotency_key=payload.idempotency_key,
+        expected_profile_version=payload.expected_profile_version,
+        started_at=payload.started_at,
+        submitted_at=payload.submitted_at,
+        duration_ms=payload.duration_ms,
+        hint_count=payload.hint_count,
+        answers=payload.answers,
+        metadata={**payload.metadata, "session_id": payload.batch_id},
+    )
+
+    def schedule(learner, generate_request, run_id):
+        if feedback_service.generation_job_service is not None:
+            background_tasks.add_task(
+                feedback_service.generation_job_service.run_job,
+                learner,
+                generate_request,
+                run_id,
+            )
+
+    try:
+        return feedback_service.submit_run_attempt(
+            profile,
+            source_run_id,
+            resources,
+            run_payload,
+            knowledge_service,
+            schedule_followup=schedule,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/attempts/{learner_id}", response_model=list[LearningAttempt])
 def list_learning_attempts(
     learner_id: str,
@@ -152,3 +220,24 @@ def get_run_evaluation(learner_id: str, run_id: str, request: Request):
         raise HTTPException(status_code=404, detail="任务资源不存在")
 
     return feedback_service.build_run_evaluation_session(profile, run_id, resources, knowledge_service)
+
+
+@router.get("/evaluation/batch/{learner_id}/{batch_id}", response_model=BatchEvaluationSessionResponse)
+def get_batch_evaluation(learner_id: str, batch_id: str, request: Request):
+    container = request.app.container
+    profile_service: ProfileService = container.profile_service()
+    resource_service: ResourceService = container.resource_service()
+    feedback_service: FeedbackService = container.feedback_service()
+    knowledge_service: KnowledgeService = container.knowledge_service()
+
+    profile = ensure_profile_access(request, profile_service.get(learner_id))
+    if not profile:
+        raise HTTPException(status_code=404, detail="学习画像不存在")
+    resources = [
+        resource
+        for resource in resource_service.list_by_learner(learner_id)
+        if (resource.batch_id or resource.run_id) == batch_id
+    ]
+    if not resources:
+        raise HTTPException(status_code=404, detail="资源批次不存在")
+    return feedback_service.build_batch_evaluation_session(profile, batch_id, resources, knowledge_service)

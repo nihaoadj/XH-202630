@@ -26,14 +26,17 @@ class MemoryResourceRepository(BaseResourceRepository):
         topic: str,
         *,
         run_id: str | None = None,
+        batch_id: str | None = None,
         generation_step_id: str | None = None,
     ) -> None:
         effective_run_id = run_id or resource.run_id
+        effective_batch_id = batch_id or resource.batch_id or effective_run_id
         normalized = resource.model_copy(
             update={
                 "learner_id": learner_id,
                 "topic": topic,
                 "run_id": effective_run_id,
+                "batch_id": effective_batch_id,
             },
             deep=True,
         )

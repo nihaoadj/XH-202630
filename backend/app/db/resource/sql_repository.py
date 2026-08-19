@@ -32,6 +32,7 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         publication_status=orm.publication_status or "unpublished",
         published_at=orm.published_at,
         run_id=orm.run_id,
+        batch_id=orm.batch_id,
         claim_count=orm.claim_count,
         legacy_reviewer_score=orm.legacy_reviewer_score,
         claim_hallucination_rate=orm.claim_hallucination_rate,
@@ -51,12 +52,14 @@ def _pydantic_to_orm(
     topic: str,
     *,
     run_id: str | None = None,
+    batch_id: str | None = None,
     generation_step_id: str | None = None,
 ) -> GeneratedResourceORM:
     """将 Pydantic 模型转换为 ORM 对象"""
     return GeneratedResourceORM(
         resource_id=resource.resource_id,
         run_id=run_id or resource.run_id,
+        batch_id=batch_id or resource.batch_id,
         generation_step_id=generation_step_id,
         learner_id=learner_id,
         topic=topic,
@@ -104,11 +107,18 @@ class SQLResourceRepository(BaseResourceRepository):
         topic: str,
         *,
         run_id: str | None = None,
+        batch_id: str | None = None,
         generation_step_id: str | None = None,
     ) -> None:
         effective_run_id = run_id or resource.run_id
+        effective_batch_id = batch_id or resource.batch_id or effective_run_id
         normalized = resource.model_copy(
-            update={"learner_id": learner_id, "topic": topic, "run_id": effective_run_id}
+            update={
+                "learner_id": learner_id,
+                "topic": topic,
+                "run_id": effective_run_id,
+                "batch_id": effective_batch_id,
+            }
         )
         with self.session_factory() as db:
             try:
@@ -134,6 +144,10 @@ class SQLResourceRepository(BaseResourceRepository):
                         if orm.run_id is not None and orm.run_id != effective_run_id:
                             raise PersistenceConflict("resource run_id conflict")
                         orm.run_id = effective_run_id
+                    if effective_batch_id is not None:
+                        if orm.batch_id is not None and orm.batch_id != effective_batch_id:
+                            raise PersistenceConflict("resource batch_id conflict")
+                        orm.batch_id = effective_batch_id
                     if generation_step_id is not None:
                         if orm.generation_step_id is not None and orm.generation_step_id != generation_step_id:
                             raise PersistenceConflict("resource generation_step_id conflict")
@@ -157,6 +171,7 @@ class SQLResourceRepository(BaseResourceRepository):
                         learner_id,
                         topic,
                         run_id=effective_run_id,
+                        batch_id=effective_batch_id,
                         generation_step_id=generation_step_id,
                     )
                     db.add(orm)

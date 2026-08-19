@@ -3,57 +3,67 @@
     <section class="control-panel">
       <div class="panel-title">
         <div>
-          <span class="eyebrow">Batch Selection</span>
-          <h3>选择学习画像与资源批次</h3>
-          <p>默认定位到最新任务，也可以切换历史批次查看当时生成的教学资源。</p>
+          <span class="eyebrow">Resource Generation</span>
+          <h3>学习资源生成</h3>
         </div>
-        <el-button class="ghost-button" @click="refreshJobs" :loading="loadingJobs">刷新任务</el-button>
       </div>
 
-      <el-empty
-        v-if="!jobs.length"
-        description="当前还没有生成任务。请先在学习方向流程中完成诊断并发起资源生成。"
-      />
-
-      <template v-else>
-        <div class="task-selector">
-          <div class="selector-field">
-            <span>学习画像</span>
-            <el-select
-              v-model="selectedLearnerId"
-              filterable
-              placeholder="选择学习画像"
-              class="task-select"
-              @change="handleProfileChange"
+      <div class="task-selector">
+        <div class="selector-field">
+          <span>学习画像</span>
+          <el-select
+            v-model="selectedLearnerId"
+            filterable
+            placeholder="选择学习画像"
+            class="task-select"
+            popper-class="refined-select-dropdown profile-select-dropdown"
+            @change="handleProfileChange"
+          >
+            <el-option
+              v-for="item in profileOptions"
+              :key="item.learner_id"
+              :label="item.label"
+              :value="item.learner_id"
             >
-              <el-option
-                v-for="item in profileOptions"
-                :key="item.learner_id"
-                :label="item.label"
-                :value="item.learner_id"
-              />
-            </el-select>
-          </div>
-          <div class="selector-field">
-            <span>资源批次</span>
-            <el-select
-              v-model="selectedRunId"
-              filterable
-              placeholder="选择要查看的生成任务"
-              class="task-select"
-              @change="handleTaskChange"
-            >
-              <el-option
-                v-for="task in jobs"
-                :key="task.run_id"
-                :label="taskLabel(task)"
-                :value="task.run_id"
-              />
-            </el-select>
-          </div>
+              <div class="profile-option">
+                <span>{{ item.label }}</span>
+                <el-tooltip content="删除学习画像" placement="right">
+                  <el-button
+                    class="profile-delete"
+                    text
+                    circle
+                    :icon="Delete"
+                    aria-label="删除学习画像"
+                    @mousedown.stop
+                    @click.stop="deleteProfile(item)"
+                  />
+                </el-tooltip>
+              </div>
+            </el-option>
+          </el-select>
         </div>
+        <div class="selector-field">
+          <span>资源批次</span>
+          <el-select
+            v-model="selectedRunId"
+            filterable
+            :disabled="!jobs.length"
+            :placeholder="jobs.length ? '选择要查看的生成任务' : '暂无资源批次'"
+            class="task-select"
+            popper-class="refined-select-dropdown"
+            @change="handleTaskChange"
+          >
+            <el-option
+              v-for="task in jobs"
+              :key="task.run_id"
+              :label="taskLabel(task)"
+              :value="task.run_id"
+            />
+          </el-select>
+        </div>
+      </div>
 
-        <div v-if="selectedJob" class="job-summary">
+      <div v-if="selectedJob" class="job-summary">
           <div class="summary-item">
             <span>学习方向</span>
             <strong>{{ learningDirectionName || '-' }}</strong>
@@ -80,36 +90,63 @@
             <span>完成时间</span>
             <strong>{{ selectedJob.finished_at ? formatDateTime(selectedJob.finished_at) : '等待完成' }}</strong>
           </div>
+      </div>
+      <div v-else class="job-summary">
+        <div class="summary-item">
+          <span>学习方向</span>
+          <strong>{{ learningDirectionName || '-' }}</strong>
         </div>
-
-        <p v-if="selectedJob?.error_message" class="error-message">{{ selectedJob.error_message }}</p>
-
-        <div class="status-actions">
-          <el-button
-            v-if="selectedJob && (selectedJob.job_status === 'running' || selectedJob.job_status === 'queued')"
-            @click="refreshStatus"
-          >
-            刷新状态
-          </el-button>
-          <el-button
-            v-if="selectedJob && selectedJob.job_status === 'failed'"
-            type="primary"
-            @click="retryGeneration"
-            :loading="retrying"
-          >
-            重新生成
-          </el-button>
-          <el-button
-            v-if="selectedJob && selectedJob.job_status === 'completed'"
-            class="primary-action"
-            @click="loadResourcesForSelectedJob"
-            :loading="loadingResources"
-          >
-            刷新资源
-          </el-button>
-          <el-button @click="$router.push('/learning/history')">查看学习历史</el-button>
+        <div class="summary-item">
+          <span>任务编号</span>
+          <strong>-</strong>
         </div>
-      </template>
+        <div class="summary-item">
+          <span>任务状态</span>
+          <strong class="status-value status-idle">尚未生成</strong>
+        </div>
+        <div class="summary-item">
+          <span>资源数量</span>
+          <strong>0 份</strong>
+        </div>
+        <div class="summary-item">
+          <span>创建时间</span>
+          <strong>-</strong>
+        </div>
+        <div class="summary-item">
+          <span>完成时间</span>
+          <strong>-</strong>
+        </div>
+      </div>
+
+      <p v-if="selectedJob?.error_message" class="error-message">{{ selectedJob.error_message }}</p>
+
+      <div class="status-actions">
+        <el-button
+          v-if="selectedJob && (selectedJob.job_status === 'running' || selectedJob.job_status === 'queued')"
+          @click="refreshStatus"
+        >
+          刷新状态
+        </el-button>
+        <el-button
+          v-if="selectedJob && selectedJob.job_status === 'failed'"
+          type="primary"
+          @click="retryGeneration"
+          :loading="retrying"
+        >
+          重新生成
+        </el-button>
+        <el-button
+          v-if="selectedJob && selectedJob.job_status === 'completed'"
+          class="primary-action"
+          @click="loadResourcesForSelectedJob"
+          :loading="loadingResources"
+        >
+          刷新资源
+        </el-button>
+        <el-button class="history-action" :icon="Clock" @click="$router.push('/learning/history')">
+          查看学习历史
+        </el-button>
+      </div>
     </section>
 
     <section v-if="selectedJob" class="studio-grid">
@@ -164,6 +201,7 @@
                 filterable
                 placeholder="选择要阅读的资源"
                 class="resource-select"
+                popper-class="refined-select-dropdown"
               >
                 <el-option
                   v-for="item in resources"
@@ -172,6 +210,11 @@
                   :value="item.resource_id"
                 />
               </el-select>
+              <el-button class="learning-mode-action" @click="enterLearningMode">
+                <el-icon><Reading /></el-icon>
+                <span>进入学习模式</span>
+                <el-icon class="mode-arrow"><ArrowRight /></el-icon>
+              </el-button>
             </div>
             <ResourceViewer v-if="selectedResource" :resources="[selectedResource]" />
           </template>
@@ -192,7 +235,9 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowRight, Clock, Delete, Reading } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { generateApi, knowledgeApi, profileApi, resourceApi, runApi } from '../api'
 import { createRunEventClient } from '../api/runEvents'
 import ResourceViewer from '../components/ResourceViewer.vue'
@@ -212,6 +257,7 @@ import {
 } from '../utils/workflowEventReducer'
 
 const store = useAppStore()
+const router = useRouter()
 
 const learningDirectionName = computed(
   () => store.currentLearningDirectionName || localStorage.getItem('learning_direction_name') || ''
@@ -268,6 +314,17 @@ const selectedResource = computed(
   () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
 )
 
+function enterLearningMode() {
+  if (!selectedJob.value || !selectedResource.value) return
+  router.push({
+    path: '/resources',
+    query: {
+      learnerId: selectedLearnerId.value,
+      runId: selectedJob.value.batch_id || selectedJob.value.run_id,
+    },
+  })
+}
+
 function statusLabel(status) {
   return (
     {
@@ -311,15 +368,6 @@ function persistSelectedJob() {
 
 function resourceLabel(resource) {
   return formatResourceLabel(resource, resolveTrackName(activeProfile.value?.knowledge_base_id))
-}
-
-function readLastGenerationRequest() {
-  try {
-    const raw = localStorage.getItem('last_generation_request')
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
 }
 
 function stopPolling() {
@@ -419,9 +467,9 @@ function startPolling() {
 
 function pickDefaultRunId(items) {
   if (!items.length) return ''
+  if (initialRunId && items.some((item) => item.run_id === initialRunId)) return initialRunId
   const currentJob = items.find((item) => item.job_status === 'running' || item.job_status === 'queued')
   if (currentJob) return currentJob.run_id
-  if (initialRunId && items.some((item) => item.run_id === initialRunId)) return initialRunId
   return items[0].run_id
 }
 
@@ -463,7 +511,7 @@ async function loadJobs(preferDefault = false) {
   loadingJobs.value = true
   try {
     const res = await generateApi.listJobs(selectedLearnerId.value)
-    jobs.value = (res.data.items || []).filter((item) => item.job_status !== 'failed')
+    jobs.value = (res.data.items || []).filter((item) => !item.superseded_by_run_id)
     if (!jobs.value.length) {
       closeRealtime()
       selectedRunId.value = ''
@@ -494,7 +542,7 @@ async function loadJobs(preferDefault = false) {
 }
 
 async function loadResourcesForSelectedJob() {
-  if (!selectedLearnerId.value || !selectedJob.value?.run_id || selectedJob.value.job_status !== 'completed') {
+  if (!selectedLearnerId.value || !selectedJob.value?.run_id) {
     resources.value = []
     resourcesLoaded.value = true
     selectedResourceId.value = ''
@@ -532,9 +580,6 @@ async function refreshStatus() {
       await loadResourcesForSelectedJob()
     } else if (nextJob.job_status === 'failed') {
       stopPolling()
-      resources.value = []
-      resourcesLoaded.value = true
-      selectedResourceId.value = ''
     }
   } catch (error) {
     console.error(error)
@@ -585,6 +630,36 @@ async function handleProfileChange() {
   await startRealtime(selectedRunId.value)
 }
 
+async function deleteProfile(profile) {
+  try {
+    await ElMessageBox.confirm(
+      `将删除“${profile.label}”及其关联画像数据，此操作无法撤销。`,
+      '删除学习画像',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+    )
+    await profileApi.delete(profile.learner_id)
+    profiles.value = profiles.value.filter((item) => item.learner_id !== profile.learner_id)
+    if (selectedLearnerId.value === profile.learner_id) {
+      selectedLearnerId.value = profiles.value[0]?.learner_id || ''
+      selectedRunId.value = ''
+      selectedResourceId.value = ''
+      if (selectedLearnerId.value) {
+        syncProfileContext()
+        await loadJobs(true)
+      } else {
+        jobs.value = []
+        localStorage.removeItem('last_learner_id')
+        localStorage.removeItem('current_generation_run_id')
+      }
+    }
+    ElMessage.success('学习画像已删除')
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error?.response?.data?.detail || '删除学习画像失败')
+  }
+}
+
 async function openChildRun(runId) {
   selectedRunId.value = runId
   localStorage.setItem('current_generation_run_id', runId)
@@ -596,9 +671,10 @@ async function openChildRun(runId) {
 }
 
 async function retryGeneration() {
-  const payload = readLastGenerationRequest()
-  if (!payload?.learner_id || !payload?.topic || !Array.isArray(payload?.resource_types)) {
-    ElMessage.warning('缺少上一轮生成参数，请返回学习方向页面重新发起生成')
+  const failedJob = selectedJob.value
+  const payload = failedJob?.request_payload
+  if (!failedJob?.run_id || !payload?.learner_id || !Array.isArray(payload?.resource_types) || !payload.resource_types.length) {
+    ElMessage.warning('该任务缺少原始生成参数，无法保证重试内容一致')
     return
   }
 
@@ -609,11 +685,17 @@ async function retryGeneration() {
   stopPolling()
 
   try {
-    const res = await generateApi.createJob(payload)
+    const batchId = selectedJob.value?.batch_id || selectedJob.value?.run_id
+    const res = await generateApi.continueBatch(batchId, {
+      learner_id: failedJob.learner_id,
+      resource_types: payload.resource_types,
+      instructions: payload.constraints?.continuation_instructions || '重新生成失败任务的学习材料。',
+      source_run_id: failedJob.run_id,
+    })
     selectedRunId.value = res.data.run_id
-    await loadJobs(true)
+    await loadJobs(false)
     await startRealtime(selectedRunId.value)
-    ElMessage.success('已重新发起生成任务')
+    ElMessage.success('已在原资源批次中重新发起生成任务')
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.response?.data?.message || '重新生成失败')
@@ -670,14 +752,19 @@ onBeforeUnmount(() => {
   display: block;
   color: #6a7689;
   font-size: 13px;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
 }
 
 .control-panel,
 .process-panel,
 .resources-panel,
 .empty-studio {
-  padding: 24px 28px;
+  padding: 20px 24px;
+}
+
+.control-panel {
+  padding-top: 14px;
+  padding-bottom: 14px;
 }
 
 .panel-title {
@@ -685,7 +772,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 18px;
   align-items: flex-start;
-  padding-bottom: 18px;
+  padding-bottom: 10px;
   border-bottom: 1px solid #e4ebf3;
 }
 
@@ -695,8 +782,8 @@ onBeforeUnmount(() => {
 }
 
 .panel-title h3 {
-  margin: 5px 0 0;
-  font-size: 22px;
+  margin: 3px 0 0;
+  font-size: 19px;
   line-height: 1.25;
 }
 
@@ -714,29 +801,33 @@ onBeforeUnmount(() => {
 .task-selector {
   display: grid;
   grid-template-columns: minmax(280px, 0.95fr) minmax(360px, 1.05fr);
-  gap: 16px;
-  margin: 22px 0;
+  gap: 12px;
+  margin: 10px 0;
   max-width: none;
 }
 
 .selector-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 18px;
   min-width: 0;
-  padding: 14px 16px;
+  min-height: 54px;
+  padding: 7px 14px;
   border: 1px solid #d6e0ec;
   border-radius: 8px;
   background: linear-gradient(180deg, #ffffff, #f8fbff);
 }
 
 .selector-field span {
-  display: block;
-  margin-bottom: 8px;
+  margin: 0;
   color: #63728a;
   font-size: 13px;
   font-weight: 700;
 }
 
 .selector-field :deep(.el-select__wrapper) {
-  min-height: 42px;
+  min-height: 36px;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -746,7 +837,7 @@ onBeforeUnmount(() => {
 .selector-field :deep(.el-select__placeholder),
 .selector-field :deep(.el-select__selected-item) {
   color: #172033;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -754,9 +845,82 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+:deep(.refined-select-dropdown.el-popper) {
+  overflow: hidden;
+  border: 1px solid #d8e3ef;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(30, 52, 80, 0.14);
+}
+
+:deep(.refined-select-dropdown .el-popper__arrow::before) {
+  border-color: #d8e3ef;
+  background: #fff;
+}
+
+:deep(.refined-select-dropdown .el-select-dropdown__list) {
+  padding: 6px;
+}
+
+:deep(.refined-select-dropdown .el-select-dropdown__item) {
+  height: 44px;
+  margin: 2px 0;
+  padding: 0 12px;
+  border-radius: 7px;
+  color: #41536c;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 44px;
+}
+
+:deep(.refined-select-dropdown .el-select-dropdown__item.hover),
+:deep(.refined-select-dropdown .el-select-dropdown__item:hover) {
+  background: #f1f6fb;
+  color: #204f80;
+}
+
+:deep(.refined-select-dropdown .el-select-dropdown__item.is-selected) {
+  background: #e8f3f1;
+  color: #216557;
+  font-weight: 750;
+}
+
+.profile-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.profile-option > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-delete {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+  color: #a65a53;
+}
+
+:deep(.profile-select-dropdown .el-select-dropdown__item:hover) .profile-delete,
+:deep(.profile-select-dropdown .el-select-dropdown__item.is-selected) .profile-delete {
+  opacity: 1;
+}
+
+.profile-delete:hover,
+.profile-delete:focus-visible {
+  background: #fff0ee;
+  color: #b9483e;
+}
+
 .job-summary {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 0.95fr)) repeat(3, minmax(0, 1.05fr));
   border: 1px solid #d9e1ec;
   border-radius: 8px;
   overflow: hidden;
@@ -764,8 +928,8 @@ onBeforeUnmount(() => {
 }
 
 .summary-item {
-  min-height: 92px;
-  padding: 16px 18px;
+  min-height: 58px;
+  padding: 9px 14px;
   border-right: 1px solid #d9e1ec;
   background: linear-gradient(180deg, #fff, #f7fafc);
 }
@@ -777,7 +941,7 @@ onBeforeUnmount(() => {
 .summary-item strong {
   display: block;
   color: #172033;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -786,7 +950,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 17px;
+  font-size: 15px;
 }
 
 .status-value::before {
@@ -846,9 +1010,22 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
+.history-action {
+  border-color: transparent;
+  background: #f3f6fa;
+  color: #52647c;
+}
+
+.history-action:hover,
+.history-action:focus-visible {
+  border-color: #c8d7e8;
+  background: #eef5fc;
+  color: #285d98;
+}
+
 .studio-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 0.88fr) minmax(520px, 1.12fr);
+  grid-template-columns: minmax(300px, 0.42fr) minmax(620px, 1.58fr);
   gap: 20px;
   align-items: start;
 }
@@ -856,6 +1033,11 @@ onBeforeUnmount(() => {
 .process-panel,
 .resources-panel {
   min-width: 0;
+}
+
+.process-panel {
+  position: sticky;
+  top: 16px;
 }
 
 .process-panel :deep(.el-card) {
@@ -870,6 +1052,10 @@ onBeforeUnmount(() => {
 
 .process-panel :deep(.el-card__body) {
   padding: 0;
+}
+
+.process-panel :deep(.workflow-timeline) {
+  max-height: min(680px, calc(100vh - 180px));
 }
 
 .process-panel :deep(.el-timeline) {
@@ -897,6 +1083,39 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(135deg, rgba(47, 110, 95, 0.08), transparent 42%),
     #f8fbff;
+}
+
+.resource-toolbar > .el-button {
+  flex: 0 0 auto;
+}
+
+.learning-mode-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 148px;
+  height: 38px;
+  border-color: #2f6e5f;
+  background: #2f6e5f;
+  color: #fff;
+  font-weight: 700;
+}
+
+.learning-mode-action:hover,
+.learning-mode-action:focus-visible {
+  border-color: #255a4e;
+  background: #255a4e;
+  color: #fff;
+}
+
+.learning-mode-action .mode-arrow {
+  margin-left: 1px;
+  font-size: 14px;
+  transition: transform .18s ease;
+}
+
+.learning-mode-action:hover .mode-arrow {
+  transform: translateX(2px);
 }
 
 .resource-toolbar strong {
@@ -944,6 +1163,10 @@ onBeforeUnmount(() => {
   .studio-grid {
     grid-template-columns: 1fr;
   }
+
+  .process-panel {
+    position: static;
+  }
 }
 
 @media (max-width: 920px) {
@@ -971,5 +1194,6 @@ onBeforeUnmount(() => {
     width: 100%;
     min-width: 0;
   }
+
 }
 </style>

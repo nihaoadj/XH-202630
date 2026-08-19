@@ -1,15 +1,109 @@
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response
 
 from app.api.dependencies import ensure_profile_access
+from app.config import get_settings
 from app.core.file_storage import load_resource_file
-from app.models.schemas import ResourceListResponse
+from app.core.health import build_health_report
+from app.models.schemas import (
+    ContinueResourceBatchRequest,
+    GenerateRequest,
+    GenerationJobCreateResponse,
+    ResourceListResponse,
+)
+from app.services.generation_job_service import GenerationJobService
 from app.services.profile_service import ProfileService
 from app.services.resource_service import ResourceService
 
 router = APIRouter()
+
+
+def _resource_context(resources: list) -> list[dict]:
+    """Keep the continuation prompt bounded while retaining batch context."""
+    summaries = []
+    for resource in resources[-12:]:
+        content = " ".join((resource.content_text or "").split())
+        summaries.append(
+            {
+                "resource_type": resource.resource_type,
+                "difficulty": resource.difficulty,
+                "knowledge_points": resource.knowledge_points[:8],
+                "content_summary": content[:600],
+            }
+        )
+    return summaries
+
+
+@router.post("/batches/{batch_id}/continuations", response_model=GenerationJobCreateResponse)
+def continue_resource_batch(
+    batch_id: str,
+    payload: ContinueResourceBatchRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """Create a new auditable Run that appends resources to one existing batch."""
+    report = build_health_report(get_settings())
+    if report.status == "not_ready":
+        detail = "生成依赖未就绪"
+        if report.error_codes:
+            detail = f"{detail}：{', '.join(report.error_codes)}"
+        raise HTTPException(status_code=503, detail=detail)
+
+    container = request.app.container
+    profile_service: ProfileService = container.profile_service()
+    learner = ensure_profile_access(request, profile_service.get(payload.learner_id))
+    if not learner:
+        raise HTTPException(status_code=404, detail="学习者画像不存在")
+
+    generation_job_service: GenerationJobService = container.generation_job_service()
+    batch_jobs = [
+        item
+        for item in generation_job_service.list_jobs(learner.learner_id).items
+        if (item.batch_id or item.run_id) == batch_id
+    ]
+    source_job = next(
+        (item for item in batch_jobs if item.run_id == payload.source_run_id),
+        None,
+    ) if payload.source_run_id else next(iter(batch_jobs), None)
+    if source_job is None:
+        detail = "指定的源任务不属于该资源批次" if payload.source_run_id else "资源批次不存在"
+        raise HTTPException(status_code=404, detail=detail)
+
+    try:
+        source_request = GenerateRequest.model_validate(source_job.request_payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="资源批次的原始生成参数不可用") from exc
+
+    resource_service: ResourceService = container.resource_service()
+    batch_resources = [
+        item
+        for item in resource_service.list_by_learner(learner.learner_id)
+        if (item.batch_id or item.run_id) == batch_id
+    ]
+    constraints = dict(source_request.constraints)
+    constraints["continuation_context"] = _resource_context(batch_resources)
+    if payload.instructions and payload.instructions.strip():
+        constraints["continuation_instructions"] = payload.instructions.strip()
+    generation_request = source_request.model_copy(
+        update={"resource_types": payload.resource_types, "constraints": constraints}
+    )
+    job = generation_job_service.create_job(
+        learner,
+        generation_request,
+        batch_id=batch_id,
+    )
+    if payload.source_run_id:
+        generation_job_service.mark_superseded(payload.source_run_id, job.run_id)
+    background_tasks.add_task(
+        generation_job_service.run_job,
+        learner,
+        generation_request,
+        job.run_id,
+        job.batch_id,
+    )
+    return job
 
 
 @router.get("/file/{resource_id}")

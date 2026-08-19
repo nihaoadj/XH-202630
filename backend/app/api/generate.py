@@ -37,7 +37,13 @@ def create_generation_job(
 
     generation_job_service: GenerationJobService = container.generation_job_service()
     job = generation_job_service.create_job(learner, req)
-    background_tasks.add_task(generation_job_service.run_job, learner, req, job.run_id)
+    background_tasks.add_task(
+        generation_job_service.run_job,
+        learner,
+        req,
+        job.run_id,
+        job.batch_id,
+    )
     return job
 
 

@@ -80,6 +80,7 @@ class GeneratedResourceORM(Base):
 
     resource_id = Column(String(64), primary_key=True, index=True, comment="资源唯一标识")
     run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
+    batch_id = Column(String(128), nullable=True, index=True, comment="资源批次标识")
     generation_step_id = Column(String(128), ForeignKey("agent_steps.step_id"), nullable=True, index=True)
     learner_id = Column(String(64), nullable=False, index=True, comment="学习者ID")
     topic = Column(String(256), nullable=False, comment="学习主题")
@@ -142,6 +143,7 @@ class GenerationJobORM(Base):
     __tablename__ = "generation_jobs"
 
     run_id = Column(String(128), primary_key=True, comment="生成任务唯一标识")
+    batch_id = Column(String(128), nullable=False, index=True, comment="资源批次标识")
     learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True, comment="学习者ID")
     knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=True, index=True, comment="知识库ID")
     topic = Column(String(256), nullable=False, comment="生成主题")
@@ -149,6 +151,7 @@ class GenerationJobORM(Base):
     request_payload = Column(JSON, default=dict, comment="原始生成请求")
     resource_ids = Column(JSON, default=list, comment="产出的资源ID列表")
     error_message = Column(String(512), nullable=True, comment="错误信息")
+    superseded_by_run_id = Column(String(128), nullable=True, index=True, comment="替代该失败任务的新任务ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     started_at = Column(DateTime(timezone=True), nullable=True, comment="开始执行时间")
     finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
@@ -565,6 +568,24 @@ class SkillNodeRelationORM(Base):
 
 class DiagnosticQuestionORM(Base):
     __tablename__ = "diagnostic_questions"
+
+    question_id = Column(String(128), primary_key=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    skill_node_id = Column(String(128), ForeignKey("rag_skill_nodes.node_id"), nullable=True, index=True)
+    knowledge_point = Column(String(256), nullable=True, index=True)
+    question_type = Column(String(32), nullable=False)
+    difficulty = Column(String(32), nullable=True)
+    question = Column(Text, nullable=False)
+    options = Column(JSON, default=list)
+    answer = Column(JSON, nullable=True)
+    explanation = Column(Text, nullable=True)
+    extra_metadata = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AssessmentQuestionORM(Base):
+    """学习后测评题库，与初始诊断题分表保存。"""
+    __tablename__ = "assessment_questions"
 
     question_id = Column(String(128), primary_key=True)
     knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)

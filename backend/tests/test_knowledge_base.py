@@ -29,6 +29,7 @@ from app.db.learner.sql_repository import SQLLearnerRepository
 from app.db.models import (
     AgentRunORM,
     AgentStepORM,
+    AssessmentQuestionORM,
     Base,
     DiagnosticQuestionORM,
     DiagnosticAnswerORM,
@@ -207,6 +208,11 @@ def test_catalog_sync_is_idempotent_and_preserves_graph(tmp_path):
     repository.upsert_skill_nodes(manifest["skill_nodes"], manifest["knowledge_base_id"])
     questions_path = Path(__file__).resolve().parents[2] / "knowledge_base" / "rag_engineering_training" / "diagnostic_questions.json"
     questions = [DiagnosticQuestion(**item) for item in json.loads(questions_path.read_text(encoding="utf-8"))]
+    assessment_questions_path = questions_path.with_name("assessment_questions.json")
+    assessment_questions = [
+        DiagnosticQuestion(**item)
+        for item in json.loads(assessment_questions_path.read_text(encoding="utf-8"))
+    ]
     question_counts = {}
     dimensions = set()
     for question in questions:
@@ -216,6 +222,7 @@ def test_catalog_sync_is_idempotent_and_preserves_graph(tmp_path):
     assert set(question_counts.values()) == {3}
     assert dimensions == {"concept", "scenario", "misconception"}
     repository.upsert_diagnostic_questions(questions)
+    repository.upsert_assessment_questions(assessment_questions)
     # 重复同步不应产生文档、切片或节点的重复行。
     repository.sync_documents(documents, chunks)
     repository.upsert_skill_nodes(manifest["skill_nodes"], manifest["knowledge_base_id"])
@@ -224,9 +231,11 @@ def test_catalog_sync_is_idempotent_and_preserves_graph(tmp_path):
         assert db.query(KnowledgeDocumentORM).count() == len(documents)
         assert db.query(KnowledgeChunkORM).count() == len(chunks)
         assert db.query(DiagnosticQuestionORM).count() == 39
+        assert db.query(AssessmentQuestionORM).count() == 130
     nodes = repository.list_skill_nodes(manifest["knowledge_base_id"])
     assert len(nodes) == 13
     assert next(node for node in nodes if node.name == "Chunk 切分").prerequisites == ["文档解析"]
+    assert len(KnowledgeService(catalog=repository).load_assessment_questions(manifest["knowledge_base_id"])) == 130
 
 
 def test_catalog_sync_prunes_removed_documents_and_old_chunks(tmp_path):

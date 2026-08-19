@@ -19,15 +19,18 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         topic: str,
         knowledge_base_id: Optional[str],
         request_payload: dict[str, Any],
+        batch_id: str | None = None,
     ) -> None:
         self._store[run_id] = {
             "run_id": run_id,
+            "batch_id": batch_id or run_id,
             "learner_id": learner_id,
             "topic": topic,
             "knowledge_base_id": knowledge_base_id,
             "job_status": "queued",
             "resource_ids": [],
             "error_message": None,
+            "superseded_by_run_id": None,
             "created_at": datetime.utcnow(),
             "started_at": None,
             "finished_at": None,
@@ -73,6 +76,17 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         record["error_message"] = None
         record["started_at"] = None
         record["finished_at"] = None
+        return GenerationJobStatusResponse(**record)
+
+    def mark_superseded(
+        self,
+        run_id: str,
+        replacement_run_id: str,
+    ) -> Optional[GenerationJobStatusResponse]:
+        record = self._store.get(run_id)
+        if record is None:
+            return None
+        record["superseded_by_run_id"] = replacement_run_id
         return GenerationJobStatusResponse(**record)
 
     def fail_incomplete_before(self, before: datetime, error_message: str) -> list[str]:

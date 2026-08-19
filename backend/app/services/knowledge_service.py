@@ -150,12 +150,13 @@ class KnowledgeService:
         return [DiagnosticQuestion(**question) for question in raw_questions]
 
     def load_assessment_questions(self, knowledge_base_id: str | None = None) -> list[DiagnosticQuestion]:
-        """加载学习反馈使用的分层测评题库。
-
-        测评题库与初始诊断题职责不同，因此始终以知识库目录中的独立文件为准，
-        不复用诊断题的 catalog 表，避免两种题目在同步后被混在一起。
-        """
+        """加载学习反馈使用的分层测评题库。"""
         manifest = self._ensure_knowledge_base(knowledge_base_id)
+        if self.catalog is not None:
+            return self.catalog.list_assessment_questions(manifest["knowledge_base_id"])
+
+        # 无 SQL catalog 的本地开发/离线场景保留 JSON 读取能力；生产运行时
+        # 通过 catalog 构造服务，因此只会读取数据库投影。
         try:
             kb_dir = resolve_knowledge_base_dir_by_id(manifest["knowledge_base_id"])
         except FileNotFoundError:

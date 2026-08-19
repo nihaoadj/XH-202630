@@ -58,6 +58,7 @@ export const generateApi = {
   createJob: (data) => api.post('/generate/jobs', data),
   listJobs: (learnerId) => api.get('/generate/jobs', { params: { learner_id: learnerId } }),
   getJobStatus: (runId) => api.get(`/generate/jobs/${runId}`),
+  continueBatch: (batchId, data) => api.post(`/resources/batches/${batchId}/continuations`, data),
 }
 
 export const runApi = {
@@ -79,8 +80,10 @@ export const resourceApi = {
 export const feedbackApi = {
   getEvaluationSession: (learnerId, resourceId) => api.get(`/feedback/evaluation/${learnerId}/${resourceId}`),
   getRunEvaluationSession: (learnerId, runId) => api.get(`/feedback/evaluation/run/${learnerId}/${runId}`),
+  getBatchEvaluationSession: (learnerId, batchId) => api.get(`/feedback/evaluation/batch/${learnerId}/${batchId}`),
   submitAttempt: (data) => api.post('/feedback/attempts', data),
   submitRunAttempt: (data) => api.post('/feedback/attempts/run/submit', data),
+  submitBatchAttempt: (data) => api.post('/feedback/attempts/batch/submit', data),
   listAttempts: (learnerId, params = {}) => api.get(`/feedback/attempts/${learnerId}`, { params }),
   getPath: (learnerId) => api.get(`/feedback/path/${learnerId}`),
 }

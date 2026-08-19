@@ -6,8 +6,8 @@
         <h2>让学习持续前进</h2>
         <p>从能力诊断到资源练习，每一轮学习都围绕你的目标持续迭代。</p>
         <div class="hero-actions">
-          <el-button type="primary" @click="$router.push('/learning/new')">新建学习方向</el-button>
-          <el-button @click="$router.push('/learning/history')">查看学习历史</el-button>
+          <el-button class="dashboard-primary-button" type="primary" :icon="Plus" @click="$router.push('/learning/new')">新建学习方向</el-button>
+          <el-button class="dashboard-secondary-button" :icon="Clock" @click="$router.push('/learning/history')">查看学习历史</el-button>
         </div>
       </div>
 
@@ -36,7 +36,7 @@
           <div class="profile-card-head">
             <span>学习画像</span>
             <el-dropdown trigger="click" @command="switchProfile">
-              <button class="switch-button" type="button" :disabled="loadingProfileContext">切换 <i>⌄</i></button>
+              <button class="switch-button" type="button" :disabled="loadingProfileContext" aria-label="切换学习画像" title="切换学习画像"><Switch /></button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item
@@ -94,7 +94,7 @@
           <div><span>资源批次</span><strong>{{ completedJobs.length }} 个已完成</strong></div>
           <div><span>最近动态</span><strong>{{ latestEvent?.title || '等待新的学习记录' }}</strong></div>
         </div>
-        <el-button type="primary" @click="$router.push(nextAction.to)">{{ nextAction.button }}</el-button>
+        <el-button class="dashboard-primary-button next-action-button" type="primary" :icon="ArrowRight" @click="$router.push(nextAction.to)">{{ nextAction.button }}</el-button>
       </article>
 
       <article class="tools-card">
@@ -137,6 +137,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowRight, Clock, Plus, Switch } from '@element-plus/icons-vue'
 import { feedbackApi, generateApi, knowledgeApi, learningHistoryApi, profileApi } from '../api'
 import { useAppStore } from '../stores/app'
 
@@ -205,7 +206,7 @@ const nextAction = computed(() => {
 })
 
 const tools = [
-  { index: '01', title: '学习资源', description: '查看资源与生成进度', to: '/generate', tone: 'blue' },
+  { index: '01', title: '学习资源', description: '进入资源学习与阅读', to: '/resources', tone: 'blue' },
   { index: '02', title: '练习反馈', description: '记录练习结果', to: '/feedback', tone: 'mint' },
   { index: '03', title: '学习报告', description: '回看诊断与进步', to: '/report', tone: 'amber' },
   { index: '04', title: '历史资源', description: '按画像查阅内容', to: '/resources', tone: 'slate' },
@@ -343,4 +344,61 @@ onMounted(loadDashboard)
 @media (max-width: 620px) {
   .hero-panel { padding: 18px; }.hero-copy h2 { font-size: 26px; }.hero-copy p { white-space: normal; }.hero-actions { flex-wrap: wrap; }.action-facts { grid-template-columns: 1fr; }.tool-grid { grid-template-columns: 1fr; }.metric-grid { grid-template-columns: 1fr; }
 }
+
+/* Dashboard actions and context controls use the same restrained teal command style. */
+.hero-actions { gap: 9px; margin-top: 13px; }
+.dashboard-primary-button {
+  min-width: 122px;
+  border-color: #236e62 !important;
+  color: #fff !important;
+  background: #236e62 !important;
+  box-shadow: 0 7px 14px rgb(35 110 98 / 18%);
+  font-weight: 750 !important;
+}
+.dashboard-primary-button:hover, .dashboard-primary-button:focus-visible {
+  border-color: #194f48 !important;
+  background: #194f48 !important;
+  box-shadow: 0 8px 18px rgb(25 79 72 / 26%);
+}
+.dashboard-secondary-button {
+  border-color: #b8ced8;
+  color: #315a6b;
+  background: rgb(255 255 255 / 80%);
+  font-weight: 720 !important;
+}
+.dashboard-secondary-button:hover, .dashboard-secondary-button:focus-visible {
+  border-color: #6da397;
+  color: #1d6156;
+  background: #f1faf7;
+}
+.next-action-button { width: 100%; }
+.current-focus {
+  align-self: center;
+  max-width: 650px;
+  margin: 0 8px;
+  padding: 14px 18px;
+  transform: translateY(-7px);
+}
+.current-focus > strong { margin-top: 8px; font-size: 19px; }
+.current-focus > span { margin-top: 4px; }
+.focus-profile { margin-top: 10px; padding-top: 9px; }
+.switch-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border-color: rgb(188 225 247 / 42%);
+  border-radius: 9px;
+  background: rgb(117 183 231 / 18%);
+  color: #e7f5ff;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.switch-button:hover:not(:disabled), .switch-button:focus-visible:not(:disabled) {
+  border-color: rgb(191 236 222 / 72%);
+  background: rgb(59 170 147 / 30%);
+  transform: translateY(-1px);
+}
+.switch-button :deep(svg) { width: 15px; height: 15px; }
+.switch-button:disabled { opacity: .58; }
 </style>

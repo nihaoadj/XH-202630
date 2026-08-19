@@ -15,12 +15,14 @@ from app.models.schemas import GenerationJobStatusResponse
 def _to_schema(orm: GenerationJobORM) -> GenerationJobStatusResponse:
     return GenerationJobStatusResponse(
         run_id=orm.run_id,
+        batch_id=orm.batch_id,
         learner_id=orm.learner_id,
         topic=orm.topic,
         knowledge_base_id=orm.knowledge_base_id,
         job_status=orm.status,
         resource_ids=orm.resource_ids or [],
         error_message=orm.error_message,
+        superseded_by_run_id=orm.superseded_by_run_id,
         request_payload=orm.request_payload or {},
         created_at=orm.created_at,
         started_at=orm.started_at,
@@ -39,11 +41,13 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
         topic: str,
         knowledge_base_id: Optional[str],
         request_payload: dict[str, Any],
+        batch_id: str | None = None,
     ) -> None:
         with self.session_factory() as db:
             db.add(
                 GenerationJobORM(
                     run_id=run_id,
+                    batch_id=batch_id or run_id,
                     learner_id=learner_id,
                     topic=topic,
                     knowledge_base_id=knowledge_base_id,
@@ -104,6 +108,20 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
             orm.error_message = None
             orm.started_at = None
             orm.finished_at = None
+            db.commit()
+            db.refresh(orm)
+            return _to_schema(orm)
+
+    def mark_superseded(
+        self,
+        run_id: str,
+        replacement_run_id: str,
+    ) -> Optional[GenerationJobStatusResponse]:
+        with self.session_factory() as db:
+            orm = db.query(GenerationJobORM).filter_by(run_id=run_id).with_for_update().first()
+            if orm is None:
+                return None
+            orm.superseded_by_run_id = replacement_run_id
             db.commit()
             db.refresh(orm)
             return _to_schema(orm)

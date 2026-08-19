@@ -66,6 +66,7 @@ class NodeResult(BaseModel, Generic[T]):
 class AgentInput(BaseModel):
     schema_version: Literal["1.0"] = WORKFLOW_SCHEMA_VERSION
     run_id: str = "direct-node-call"
+    batch_id: str = "direct-node-call"
 
 
 class DiagnosisInput(AgentInput):

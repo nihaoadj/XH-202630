@@ -1,12 +1,12 @@
 <template>
-  <router-view v-if="isAuthRoute" />
+  <router-view v-if="isAuthRoute || isResourceFocusMode" />
 
-  <div v-else id="app" class="shell">
+  <div v-else id="app" class="shell" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">TP</div>
-        <div>
-          <div class="brand-title">学习资源生成工作台</div>
+        <div class="brand-copy">
+          <div class="brand-title">个性化学习工坊</div>
         </div>
       </div>
 
@@ -18,6 +18,7 @@
           class="nav-link"
           active-class="is-active"
         >
+          <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
           <span class="nav-label">{{ item.label }}</span>
           <span class="nav-hint">{{ item.hint }}</span>
         </router-link>
@@ -37,6 +38,17 @@
           <strong>{{ store.currentLearningDirectionName || '未选择' }}</strong>
         </div>
       </div>
+      <div class="sidebar-control">
+        <el-tooltip :content="sidebarCollapsed ? '展开导航栏' : '收起导航栏'" placement="right">
+          <el-button
+            class="sidebar-toggle"
+            :icon="sidebarCollapsed ? Expand : Fold"
+            circle
+            :aria-label="sidebarCollapsed ? '展开导航栏' : '收起导航栏'"
+            @click="toggleSidebar"
+          />
+        </el-tooltip>
+      </div>
       <el-button class="logout-button" plain @click="handleLogout">退出登录</el-button>
     </aside>
 
@@ -49,8 +61,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Clock, Collection, DataAnalysis, Document, Expand, Fold, Plus, Reading, ChatDotRound } from '@element-plus/icons-vue'
 import { useAuthStore } from './stores/auth'
 import { useAppStore } from './stores/app'
 
@@ -58,18 +71,26 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const store = useAppStore()
+const sidebarCollapsed = ref(localStorage.getItem('app_sidebar_collapsed') === 'true')
 
 const navigation = [
-  { to: '/', label: '总览', hint: '查看当前进度与主入口' },
-  { to: '/learning/new', label: '新建学习方向', hint: '5 步完成问卷、诊断与生成' },
-  { to: '/generate', label: '资源生成', hint: '查看生成任务状态' },
-  { to: '/feedback', label: '学习反馈', hint: '记录练习结果' },
-  { to: '/report', label: '学习报告', hint: '查看诊断与进展' },
-  { to: '/learning/history', label: '学习历史', hint: '按时间线查看学习过程' },
+  { to: '/', label: '总览', hint: '查看当前进度与主入口', icon: Collection },
+  { to: '/learning/new', label: '新建学习方向', hint: '5 步完成问卷、诊断与生成', icon: Plus },
+  { to: '/generate', label: '资源生成', hint: '查看生成任务状态', icon: Document },
+  { to: '/resources', label: '学习资源', hint: '查看资源并专注学习', icon: Reading },
+  { to: '/feedback', label: '学习反馈', hint: '记录练习结果', icon: ChatDotRound },
+  { to: '/report', label: '学习报告', hint: '查看诊断与进展', icon: DataAnalysis },
+  { to: '/learning/history', label: '学习历史', hint: '按时间线查看学习过程', icon: Clock },
 ]
 
 const containedScroll = computed(() => ['home', 'onboarding', 'history'].includes(route.name))
 const isAuthRoute = computed(() => Boolean(route.meta.authLayout))
+const isResourceFocusMode = computed(() => route.name === 'resources' && route.query.focus === '1')
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('app_sidebar_collapsed', String(sidebarCollapsed.value))
+}
 
 async function handleLogout() {
   await auth.logout()
@@ -100,6 +121,11 @@ async function handleLogout() {
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 26%),
     linear-gradient(180deg, #f4f7fb 0%, #eef3f8 100%);
   color: #132238;
+  transition: grid-template-columns 0.22s ease;
+}
+
+.shell.is-sidebar-collapsed {
+  grid-template-columns: 88px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -118,6 +144,25 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 14px;
+  width: 100%;
+}
+
+.sidebar-control {
+  display: flex;
+  position: absolute;
+  right: 0;
+  bottom: 20px;
+  left: 0;
+  justify-content: center;
+}
+
+.sidebar-toggle {
+  width: 30px;
+  height: 30px;
+  border-color: #cbd9e8;
+  background: #ffffff;
+  color: #355a87;
+  box-shadow: 0 4px 12px rgba(5, 22, 46, 0.18);
 }
 
 .brand-mark {
@@ -154,9 +199,10 @@ async function handleLogout() {
 }
 
 .nav-link {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-areas: 'icon label' 'icon hint';
+  column-gap: 10px;
   padding: 12px 14px;
   border-radius: 10px;
   color: rgba(241, 245, 249, 0.92);
@@ -175,19 +221,53 @@ async function handleLogout() {
 }
 
 .nav-label {
+  grid-area: label;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.nav-icon {
+  grid-area: icon;
+  align-self: center;
+  font-size: 17px;
+}
+
 .nav-hint {
+  grid-area: hint;
   color: rgba(203, 213, 225, 0.78);
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.is-sidebar-collapsed .sidebar {
+  align-items: center;
+  padding: 24px 10px;
+  overflow: visible;
+}
+
+.is-sidebar-collapsed .brand-title,
+.is-sidebar-collapsed .brand-copy,
+.is-sidebar-collapsed .context-card,
+.is-sidebar-collapsed .logout-button { display: none; }
+
+.is-sidebar-collapsed .brand { justify-content: center; gap: 0; }
+.is-sidebar-collapsed .nav { width: 100%; }
+
+.is-sidebar-collapsed .nav-link {
+  grid-template-columns: 1fr;
+  grid-template-areas: 'icon';
+  height: 68px;
+  place-items: center;
+  padding: 10px;
+}
+
+.is-sidebar-collapsed .nav-icon { font-size: 17px; }
+.is-sidebar-collapsed .nav-label,
+.is-sidebar-collapsed .nav-hint { display: none; }
 
 .context-card {
   margin-top: 6px;
@@ -200,6 +280,7 @@ async function handleLogout() {
 .logout-button {
   width: 100%;
   margin-top: auto;
+  margin-bottom: 46px;
   border-color: rgba(203, 213, 225, 0.26);
   background: transparent;
   color: #f8fafc;
@@ -309,6 +390,31 @@ async function handleLogout() {
     max-height: 34dvh;
     overflow-y: auto;
   }
+
+  .is-sidebar-collapsed .sidebar {
+    align-items: stretch;
+    padding: 24px 18px;
+    overflow-y: auto;
+  }
+
+  .sidebar-control { display: none; }
+
+  .is-sidebar-collapsed .brand-title,
+  .is-sidebar-collapsed .brand-copy,
+  .is-sidebar-collapsed .context-card,
+  .is-sidebar-collapsed .logout-button { display: block; }
+
+  .is-sidebar-collapsed .brand { width: auto; }
+  .is-sidebar-collapsed .nav-link {
+    grid-template-columns: 20px minmax(0, 1fr);
+    grid-template-areas: 'icon label' 'icon hint';
+    min-height: 78px;
+    place-items: unset;
+    padding: 12px 14px;
+  }
+
+  .is-sidebar-collapsed .nav-label,
+  .is-sidebar-collapsed .nav-hint { display: block; }
 
   .nav {
     display: grid;
