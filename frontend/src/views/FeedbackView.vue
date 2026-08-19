@@ -50,7 +50,10 @@
           <article v-for="(question, index) in evaluation.questions" :key="question.question_id" class="question-card">
             <div class="question-topline">
               <span class="question-index">{{ String(index + 1).padStart(2, '0') }}</span>
-              <el-tag size="small" effect="plain">{{ question.knowledge_point || '综合能力' }}</el-tag>
+              <div class="question-tools">
+                <el-tag size="small" effect="plain">{{ question.knowledge_point || '综合能力' }}</el-tag>
+                <el-button type="primary" text size="small" @click="requestTutorHint(question)">需要提示</el-button>
+              </div>
             </div>
             <strong>{{ question.question }}</strong>
 
@@ -79,6 +82,7 @@
             <div><strong>本轮学习已完成</strong><span>完成后，系统会更新学习路径</span></div>
             <el-switch v-model="form.completed" />
           </div>
+          <div class="tutor-usage-row"><span>Tutor 求助</span><strong>{{ tutorHelpCount }} 次</strong></div>
           <div class="field-grid">
             <label><span>学习耗时 <small>{{ studyTimeLabel }}</small></span><el-input-number v-model="form.time_spent_seconds" :min="0" :step="300" controls-position="right" /></label>
             <label><span>难度感受</span><el-select v-model="form.difficulty_feeling" placeholder="选择感受"><el-option label="偏简单" value="too_easy" /><el-option label="刚刚好" value="fit" /><el-option label="偏难" value="too_hard" /></el-select></label>
@@ -115,6 +119,18 @@
       <div class="result-actions"><el-button plain @click="router.push('/report')">查看学习报告</el-button><el-button type="primary" plain :disabled="!result.followup_run_id" @click="goToFollowupRun">查看下一轮资源</el-button></div>
     </section>
 
+    <TutorDrawer
+      v-model="tutorOpen"
+      :learner-id="form.learner_id"
+      :resource="tutorResource"
+      :batch-id="selectedRunId"
+      :run-id="tutorResource?.run_id || ''"
+      context-type="question_help"
+      :question-id="tutorQuestion?.question_id || ''"
+      :title="tutorQuestion ? `第 ${evaluation.questions.findIndex((item) => item.question_id === tutorQuestion.question_id) + 1} 题提示` : '题目提示'"
+      @turn-saved="recordTutorHelp"
+      @session-loaded="restoreTutorHelp"
+    />
   </div>
 </template>
 
@@ -126,6 +142,8 @@ import { useRouter } from 'vue-router'
 import { feedbackApi, generateApi, resourceApi } from '../api'
 import { useAppStore } from '../stores/app'
 import { formatDateTime } from '../utils/generationDisplay'
+import TutorDrawer from '../components/TutorDrawer.vue'
+import { countTutorTurns } from '../utils/tutorState'
 
 const router = useRouter()
 const store = useAppStore()
@@ -138,6 +156,9 @@ const submitting = ref(false)
 const result = ref(null)
 const evaluation = reactive({ topic: '', questions: [], resourceIds: [] })
 const evaluationAnswers = reactive({})
+const tutorOpen = ref(false)
+const tutorQuestion = ref(null)
+const tutorHelpCount = ref(0)
 
 const currentDirectionName = computed(() => store.currentLearningDirectionName || localStorage.getItem('learning_direction_name') || '未选择学习方向')
 const taskGroups = computed(() => {
@@ -170,6 +191,12 @@ const taskGroups = computed(() => {
     })
 })
 const activeTask = computed(() => taskGroups.value.find((item) => item.runId === selectedRunId.value) || taskGroups.value[0] || null)
+const tutorResource = computed(() => {
+  const questionResourceId = String(tutorQuestion.value?.question_id || '').split(':', 1)[0]
+  return activeTask.value?.resources?.find((item) => item.resource_id === questionResourceId)
+    || activeTask.value?.resources?.[0]
+    || null
+})
 const answeredCount = computed(() => evaluation.questions.reduce((count, question) => count + (hasAnswer(evaluationAnswers[question.question_id]) ? 1 : 0), 0))
 const allQuestionsAnswered = computed(() => Boolean(evaluation.questions.length && answeredCount.value === evaluation.questions.length))
 const canSubmit = computed(() => Boolean(selectedRunId.value && allQuestionsAnswered.value))
@@ -191,6 +218,17 @@ function followupStatusLabel(status) { return { not_requested: '未触发', queu
 function buildIdempotencyKey(runId, submittedAt) { return `web-${runId.slice(0, 24)}-${submittedAt.toISOString().replace(/[^0-9]/g, '')}`.slice(0, 128) }
 function scrollToWorkspace() { workspaceRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 async function startEvaluation() { await loadEvaluationSession(); scrollToWorkspace() }
+function tutorCountKey(batchId = selectedRunId.value) { return `tutor_help_count:${form.learner_id}:${batchId}` }
+function requestTutorHint(question) { tutorQuestion.value = question; tutorOpen.value = true }
+function recordTutorHelp() {
+  tutorHelpCount.value += 1
+  localStorage.setItem(tutorCountKey(), String(tutorHelpCount.value))
+}
+function restoreTutorHelp({ turns }) {
+  const persisted = Number(localStorage.getItem(tutorCountKey()) || 0)
+  tutorHelpCount.value = Math.max(tutorHelpCount.value, persisted, countTutorTurns(turns))
+  localStorage.setItem(tutorCountKey(), String(tutorHelpCount.value))
+}
 function syncSelectedRun() {
   if (!taskGroups.value.length) { selectedRunId.value = ''; return }
   const storedId = localStorage.getItem('current_generation_run_id') || ''
@@ -222,6 +260,9 @@ async function loadEvaluationSession() {
     evaluation.resourceIds = res.data.resource_ids || []
     resetEvaluationAnswers()
     evaluation.questions.forEach((question) => { evaluationAnswers[question.question_id] = question.question_type === 'multiple_choice' ? [] : '' })
+    localStorage.setItem('current_generation_run_id', selectedRunId.value)
+    tutorQuestion.value = null
+    tutorHelpCount.value = Number(localStorage.getItem(tutorCountKey()) || 0)
   } catch (error) {
     console.error(error); evaluation.topic = ''; evaluation.questions = []; evaluation.resourceIds = []; resetEvaluationAnswers()
     ElMessage.error(error?.response?.data?.message || '测评题加载失败')
@@ -235,7 +276,7 @@ async function submitEvaluation() {
     const payload = {
       learner_id: form.learner_id, batch_id: selectedRunId.value, source_resource_id: evaluation.resourceIds[0] || activeTask.value?.resources?.[0]?.resource_id,
       idempotency_key: buildIdempotencyKey(selectedRunId.value, submittedAt), expected_profile_version: store.currentProfile?.profile_version || 1,
-      submitted_at: submittedAt.toISOString(), duration_ms: (form.time_spent_seconds || 0) * 1000, hint_count: 0,
+      submitted_at: submittedAt.toISOString(), duration_ms: (form.time_spent_seconds || 0) * 1000, hint_count: tutorHelpCount.value,
       answers: evaluation.questions.map((question) => ({ question_id: question.question_id, answer: evaluationAnswers[question.question_id] })),
       metadata: { source: 'feedback_view', client_version: 'web', session_id: selectedRunId.value, learning_reflection: { completed: form.completed, time_spent_seconds: form.time_spent_seconds, self_rating: form.self_rating, difficulty_feeling: form.difficulty_feeling, helpful_part: form.helpful_part.trim(), confusing_part: form.confusing_part.trim(), comment: form.comment.trim() } },
     }
@@ -261,7 +302,7 @@ onMounted(async () => { await loadResources(); if (selectedRunId.value && !selec
 .feedback-hero::after { position:absolute; right:24%; bottom:-80px; width:210px; height:150px; border:1px solid rgba(71,170,148,.16); border-radius:50%; content:''; }.hero-copy,.hero-focus { position:relative; z-index:1; }.page-kicker { display:block; color:#176f61; font-size:12px; font-weight:800; letter-spacing:.09em; line-height:1; }.hero-copy h2 { margin:8px 0 0; font-size:clamp(30px,2.4vw,40px); font-weight:800; letter-spacing:-.045em; line-height:1.08; }.hero-copy p { max-width:720px; margin:10px 0 0; color:#536d8d; font-size:15px; line-height:1.6; }.hero-actions { display:flex; gap:10px; margin-top:15px; }.hero-actions :deep(.el-button) { height:36px; font-weight:700; }
 .hero-focus { padding:18px 20px; border:1px solid rgba(255,255,255,.86); border-radius:14px; background:rgba(255,255,255,.76); backdrop-filter:blur(8px); }.focus-state { display:flex; align-items:center; gap:8px; color:#607891; font-size:12px; }.focus-state i { width:8px; height:8px; border-radius:50%; background:#19af8c; box-shadow:0 0 0 5px rgba(25,175,140,.12); }.hero-focus strong { display:block; margin-top:11px; overflow:hidden; font-size:21px; text-overflow:ellipsis; white-space:nowrap; }.focus-divider { height:1px; margin:14px 0 10px; background:#d9e6ee; }.focus-details { display:grid; grid-template-columns:1fr 1fr; gap:14px; }.focus-details span { color:#6b829a; font-size:12px; }.focus-details b { display:block; margin-top:4px; color:#203b5b; font-size:16px; }
 .task-panel,.evaluation-panel,.reflection-panel,.history-panel { padding:20px; }.section-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }.section-heading h3 { margin:7px 0 0; color:var(--ink); font-size:23px; font-weight:800; letter-spacing:-.035em; line-height:1.1; }.section-heading p { margin:7px 0 0; color:#627691; font-size:13px; line-height:1.5; }.section-heading :deep(.el-button) { font-weight:700; }.task-selection { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; max-width:830px; margin-top:18px; }.task-select { width:100%; }.task-selection :deep(.el-button) { height:34px; font-weight:700; }.task-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:15px; }.task-stats div { min-width:0; padding:12px 14px; border:1px solid #dce7f2; border-radius:11px; background:#fbfdff; }.task-stats div:nth-child(2n) { border-color:#cce9df; background:#f3fbf8; }.task-stats span,.task-stats strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.task-stats span { color:#71859d; font-size:12px; }.task-stats strong { margin-top:6px; color:#1d3958; font-size:17px; }
-.feedback-workspace { display:grid; grid-template-columns:minmax(0,1.42fr) minmax(330px,.58fr); gap:16px; align-items:start; }.progress-pill { padding:7px 10px; border-radius:999px; background:#f1f5f9; color:#667b93; font-size:12px; font-weight:700; white-space:nowrap; }.progress-pill.ready { background:#eaf8f1; color:#168468; }.question-list { display:grid; gap:12px; margin-top:19px; }.question-card { padding:16px; border:1px solid #e0e8f1; border-radius:13px; background:#fbfdff; }.question-topline { display:flex; align-items:center; justify-content:space-between; gap:12px; }.question-index { color:#2e73cb; font-size:12px; font-weight:800; letter-spacing:.06em; }.question-card > strong { display:block; margin-top:10px; color:#1b3554; font-size:16px; line-height:1.6; }.answer-options { display:flex; flex-direction:column; gap:8px; margin-top:13px; }.answer-options :deep(.el-radio),.answer-options :deep(.el-checkbox) { height:auto; min-height:25px; margin-right:0; white-space:normal; }.question-card :deep(.el-textarea) { margin-top:13px; }
+.feedback-workspace { display:grid; grid-template-columns:minmax(0,1.42fr) minmax(330px,.58fr); gap:16px; align-items:start; }.progress-pill { padding:7px 10px; border-radius:999px; background:#f1f5f9; color:#667b93; font-size:12px; font-weight:700; white-space:nowrap; }.progress-pill.ready { background:#eaf8f1; color:#168468; }.question-list { display:grid; gap:12px; margin-top:19px; }.question-card { padding:16px; border:1px solid #e0e8f1; border-radius:13px; background:#fbfdff; }.question-topline { display:flex; align-items:center; justify-content:space-between; gap:12px; }.question-index { color:#2e73cb; font-size:12px; font-weight:800; letter-spacing:.06em; }.question-tools { display:flex; align-items:center; gap:6px; }.question-tools :deep(.el-button) { padding:3px 5px; font-weight:750; }.question-card > strong { display:block; margin-top:10px; color:#1b3554; font-size:16px; line-height:1.6; }.answer-options { display:flex; flex-direction:column; gap:8px; margin-top:13px; }.answer-options :deep(.el-radio),.answer-options :deep(.el-checkbox) { height:auto; min-height:25px; margin-right:0; white-space:normal; }.question-card :deep(.el-textarea) { margin-top:13px; }.tutor-usage-row { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:10px; background:#eef7ff; color:#58718c; font-size:12px; }.tutor-usage-row strong { color:#2868ae; font-size:13px; }
 .reflection-panel { position:sticky; top:0; }.compact-heading { padding-bottom:15px; border-bottom:1px solid #e5edf5; }.reflection-fields { display:grid; gap:13px; margin-top:16px; }.reflection-fields label { display:grid; gap:7px; color:#3d5874; font-size:13px; font-weight:700; }.reflection-fields label > span { color:#526b86; }.completion-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px; border:1px solid #d9e9e3; border-radius:11px; background:#f5fcf8; }.completion-row strong,.completion-row span { display:block; }.completion-row strong { color:#1f5f50; font-size:14px; }.completion-row span { margin-top:3px; color:#668377; font-size:11px; }.field-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }.field-grid :deep(.el-input-number),.field-grid :deep(.el-select) { width:100%; }.reflection-fields small { color:#8391a4; font-size:11px; font-weight:500; }.rating-field { padding:12px; border-radius:10px; background:#f7faff; }.submit-box { display:flex; align-items:center; justify-content:space-between; gap:13px; margin-top:17px; padding:14px; border-radius:12px; background:linear-gradient(135deg,#eef6ff,#f0fbf7); }.submit-box strong,.submit-box span { display:block; }.submit-box strong { color:#1b3857; font-size:14px; }.submit-box span { max-width:210px; margin-top:4px; color:#678099; font-size:11px; line-height:1.45; }.submit-box :deep(.el-button) { flex:0 0 auto; height:36px; font-weight:700; }
 .result-panel { display:grid; grid-template-columns:minmax(260px,.7fr) minmax(0,1.3fr); gap:16px; padding:20px; background:linear-gradient(112deg,#fbfefd,#effaf6); }.result-summary h3 { margin:7px 0 0; font-size:23px; letter-spacing:-.035em; }.result-summary p { margin:10px 0 0; color:#567089; font-size:14px; line-height:1.55; }.weak-points { display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }.weak-points span,.weak-points b { padding:6px 8px; border-radius:999px; font-size:11px; }.weak-points span { background:#e8f6ef; color:#247a64; }.weak-points b { background:#fff; color:#b26327; }.result-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; align-content:start; }.result-metrics div { min-width:0; padding:13px; border:1px solid #d8e9e3; border-radius:11px; background:rgba(255,255,255,.78); }.result-metrics span,.result-metrics strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.result-metrics span { color:#70859c; font-size:12px; }.result-metrics strong { margin-top:7px; color:#183856; font-size:18px; }.result-actions { grid-column:2; display:flex; justify-content:flex-end; gap:10px; }.result-actions :deep(.el-button) { font-weight:700; }
 .history-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:17px; }.history-item { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:11px; min-width:0; padding:12px; border:1px solid #e0e8f1; border-radius:11px; background:#fbfdff; color:inherit; text-align:left; cursor:pointer; transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease; }.history-item:hover,.history-item.selected { border-color:#91b9ee; box-shadow:0 6px 14px rgba(31,78,130,.08); transform:translateY(-1px); }.history-score { display:grid; width:45px; height:36px; place-items:center; border-radius:9px; background:#eaf2ff; color:#286bd0; font-size:13px; font-weight:800; }.history-copy { min-width:0; }.history-copy strong,.history-copy small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.history-copy strong { color:#203b59; font-size:13px; }.history-copy small { margin-top:4px; color:#74869c; font-size:11px; }.history-decision { color:#258069; font-size:12px; font-weight:700; white-space:nowrap; }.history-selection-tip { margin:13px 0 0; color:#667b93; font-size:12px; }
@@ -305,7 +346,8 @@ onMounted(async () => { await loadResources(); if (selectedRunId.value && !selec
 .question-card { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; column-gap: 12px; padding: 13px 14px; border-radius: 9px; }
 .question-topline { display: contents; }
 .question-index { grid-column: 1; align-self: start; padding-top: 2px; text-align: center; }
-.question-topline :deep(.el-tag) { grid-column: 3; align-self: start; max-width: 180px; height: auto; padding: 4px 7px; white-space: normal; text-align: center; line-height: 1.25; }
+.question-tools { grid-column: 3; align-self: start; }
+.question-tools :deep(.el-tag) { max-width: 180px; height: auto; padding: 4px 7px; white-space: normal; text-align: center; line-height: 1.25; }
 .question-card > strong { grid-column: 2; margin: 0; font-size: 16px; line-height: 1.55; }
 .answer-options, .question-card :deep(.el-textarea) { grid-column: 2 / -1; }
 .answer-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-top: 9px; }
@@ -346,7 +388,8 @@ onMounted(async () => { await loadResources(); if (selectedRunId.value && !selec
   .question-card { display: block; }
   .question-topline { display: flex; align-items: center; justify-content: space-between; }
   .question-index { padding-top: 0; }
-  .question-topline :deep(.el-tag) { max-width: 72%; text-align: right; }
+  .question-tools { max-width: 78%; }
+  .question-tools :deep(.el-tag) { max-width: 72%; text-align: right; }
   .question-card > strong { margin-top: 8px; }
   .answer-options { grid-template-columns: 1fr; }
 }
