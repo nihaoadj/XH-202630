@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     llm_max_output_tokens: int = Field(default=4096, ge=256, le=65536)
     llm_generator_max_output_tokens: int = Field(default=8192, ge=256, le=65536)
     llm_structured_output_mode: str = "auto"
+    tutor_llm_timeout_seconds: float = Field(default=25.0, gt=0, le=120)
+    tutor_max_output_tokens: int = Field(default=2048, ge=256, le=8192)
+    tutor_max_context_turns: int = Field(default=6, ge=1, le=12)
+    tutor_max_evidence_items: int = Field(default=4, ge=1, le=8)
+    tutor_max_hint_level: int = Field(default=3, ge=0, le=3)
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
     retrieval_top_k_default: int = Field(default=3, ge=1, le=10)
     retrieval_max_queries: int = Field(default=6, ge=1, le=10)
@@ -157,6 +162,7 @@ class Settings(BaseSettings):
     @field_validator(
         "llm_request_timeout_seconds",
         "llm_workflow_timeout_seconds",
+        "tutor_llm_timeout_seconds",
         mode="before",
     )
     @classmethod
@@ -165,7 +171,11 @@ class Settings(BaseSettings):
             normalized = float(value)
         except (TypeError, ValueError):
             raise ValueError("CFG_INVALID_LLM_TIMEOUT") from None
-        maximum = 300 if info.field_name == "llm_request_timeout_seconds" else 600
+        maximum = {
+            "llm_request_timeout_seconds": 300,
+            "llm_workflow_timeout_seconds": 600,
+            "tutor_llm_timeout_seconds": 120,
+        }[info.field_name]
         if normalized <= 0 or normalized > maximum:
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         return value
@@ -194,15 +204,17 @@ class Settings(BaseSettings):
     @field_validator(
         "llm_max_output_tokens",
         "llm_generator_max_output_tokens",
+        "tutor_max_output_tokens",
         mode="before",
     )
     @classmethod
-    def validate_llm_token_limit(cls, value):
+    def validate_llm_token_limit(cls, value, info):
         try:
             normalized = float(value)
         except (TypeError, ValueError):
             raise ValueError("CFG_INVALID_LLM_TOKEN_LIMIT") from None
-        if not normalized.is_integer() or not 256 <= normalized <= 65536:
+        maximum = 8192 if info.field_name == "tutor_max_output_tokens" else 65536
+        if not normalized.is_integer() or not 256 <= normalized <= maximum:
             raise ValueError("CFG_INVALID_LLM_TOKEN_LIMIT")
         return value
 
