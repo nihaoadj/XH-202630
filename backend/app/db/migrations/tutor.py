@@ -21,6 +21,31 @@ def apply_tutor_migration(engine: Engine) -> None:
     for table in NEW_TABLES:
         table.create(bind=engine, checkfirst=True)
 
+    inspector = inspect(engine)
+    session_columns = {
+        column["name"] for column in inspector.get_columns("tutor_sessions")
+    }
+    if "source_batch_id" not in session_columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE tutor_sessions "
+                    "ADD COLUMN source_batch_id VARCHAR(128)"
+                )
+            )
+    inspector = inspect(engine)
+    session_indexes = {
+        index["name"] for index in inspector.get_indexes("tutor_sessions")
+    }
+    if "ix_tutor_sessions_source_batch_id" not in session_indexes:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE INDEX ix_tutor_sessions_source_batch_id "
+                    "ON tutor_sessions (source_batch_id)"
+                )
+            )
+
     if "schema_migrations" not in set(inspect(engine).get_table_names()):
         return
     with engine.begin() as connection:

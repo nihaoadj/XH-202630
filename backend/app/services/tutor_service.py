@@ -70,12 +70,22 @@ class TutorService:
     ) -> TutorSession:
         if profile.learner_id != payload.learner_id:
             raise ApplicationError(ErrorCode.TUTOR_CONTEXT_INVALID, status_code=422)
-        resource, resources, source_run_id = self._resolve_source(profile, payload)
+        resource, resources, source_run_id, source_batch_id = self._resolve_source(
+            profile,
+            payload,
+        )
         question = self._resolve_question_context(
             profile,
             resources,
             payload.question_id,
         )
+        if payload.source_type == "batch":
+            resource = self._select_question_resource(
+                resources,
+                payload.question_id,
+                question,
+            )
+            source_run_id = resource.run_id
 
         existing = self.tutor_repo.list_sessions(
             profile.learner_id,
@@ -84,6 +94,9 @@ class TutorService:
                 resource.resource_id if payload.source_type == "resource" else None
             ),
             source_run_id=(source_run_id if payload.source_type == "run" else None),
+            source_batch_id=(
+                source_batch_id if payload.source_type == "batch" else None
+            ),
             context_type=payload.context_type,
             question_id=payload.question_id,
         )
@@ -91,10 +104,15 @@ class TutorService:
             return existing[0]
 
         now = datetime.now(timezone.utc)
+        source_identity = {
+            "resource": resource.resource_id,
+            "run": source_run_id,
+            "batch": source_batch_id,
+        }[payload.source_type]
         identity = (
             payload.learner_id,
             payload.source_type,
-            resource.resource_id if payload.source_type == "resource" else source_run_id,
+            source_identity,
             payload.context_type,
             payload.question_id or "resource",
             now.isoformat(),
@@ -105,6 +123,7 @@ class TutorService:
             source_type=payload.source_type,
             source_resource_id=resource.resource_id,
             source_run_id=source_run_id,
+            source_batch_id=source_batch_id,
             knowledge_base_id=profile.knowledge_base_id,
             context_type=payload.context_type,
             question_id=payload.question_id,
@@ -144,6 +163,7 @@ class TutorService:
         status: str | None = None,
         resource_id: str | None = None,
         run_id: str | None = None,
+        batch_id: str | None = None,
         context_type: str | None = None,
         question_id: str | None = None,
     ) -> TutorSessionListResponse:
@@ -152,6 +172,7 @@ class TutorService:
             status=status,
             source_resource_id=resource_id,
             source_run_id=run_id,
+            source_batch_id=batch_id,
             context_type=context_type,
             question_id=question_id,
         )
@@ -333,7 +354,7 @@ class TutorService:
         self,
         profile: LearnerProfile,
         payload: TutorSessionCreateRequest,
-    ) -> tuple[LearningResource, list[LearningResource], str | None]:
+    ) -> tuple[LearningResource, list[LearningResource], str | None, str | None]:
         if payload.source_type == "resource":
             resource = self.resource_repo.get(payload.resource_id or "")
             if (
@@ -344,7 +365,22 @@ class TutorService:
                 raise ApplicationError(ErrorCode.TUTOR_CONTEXT_INVALID, status_code=404)
             if payload.run_id and payload.run_id != resource.run_id:
                 raise ApplicationError(ErrorCode.TUTOR_CONTEXT_INVALID, status_code=422)
-            return resource, [resource], resource.run_id
+            return resource, [resource], resource.run_id, None
+
+        if payload.source_type == "batch":
+            resources = [
+                resource
+                for resource in self.resource_repo.list_by_learner(profile.learner_id)
+                if (resource.batch_id or resource.run_id) == payload.batch_id
+            ]
+            if not resources:
+                raise ApplicationError(ErrorCode.TUTOR_CONTEXT_INVALID, status_code=404)
+            selected = self._select_question_resource(
+                resources,
+                payload.question_id,
+                None,
+            )
+            return selected, resources, selected.run_id, payload.batch_id
 
         resources = self.resource_repo.list_by_learner_with_filter(
             profile.learner_id,
@@ -352,7 +388,7 @@ class TutorService:
         )
         if not resources:
             raise ApplicationError(ErrorCode.TUTOR_CONTEXT_INVALID, status_code=404)
-        return resources[0], resources, payload.run_id
+        return resources[0], resources, payload.run_id, None
 
     def _resources_for_session(
         self,
@@ -367,10 +403,17 @@ class TutorService:
             ):
                 if session.source_type == "resource":
                     return resource, [resource]
-        resources = self.resource_repo.list_by_learner_with_filter(
-            session.learner_id,
-            run_id=session.source_run_id,
-        )
+        if session.source_type == "batch":
+            resources = [
+                resource
+                for resource in self.resource_repo.list_by_learner(session.learner_id)
+                if (resource.batch_id or resource.run_id) == session.source_batch_id
+            ]
+        else:
+            resources = self.resource_repo.list_by_learner_with_filter(
+                session.learner_id,
+                run_id=session.source_run_id,
+            )
         if not resources:
             raise ApplicationError(ErrorCode.TUTOR_CONTEXT_INVALID, status_code=404)
         selected = next(
@@ -382,6 +425,34 @@ class TutorService:
             resources[0],
         )
         return selected, resources
+
+    @staticmethod
+    def _select_question_resource(
+        resources: list[LearningResource],
+        question_id: str | None,
+        question: TutorQuestionContext | None,
+    ) -> LearningResource:
+        if question_id and ":" in question_id:
+            resource_id = question_id.split(":", 1)[0]
+            matched = next(
+                (item for item in resources if item.resource_id == resource_id),
+                None,
+            )
+            if matched is not None:
+                return matched
+        if question is not None:
+            matched = next(
+                (
+                    item
+                    for item in resources
+                    if item.learning_path_node
+                    in {question.path_node_id, question.skill_node_id}
+                ),
+                None,
+            )
+            if matched is not None:
+                return matched
+        return resources[0]
 
     def _resolve_question_context(
         self,

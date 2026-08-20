@@ -130,12 +130,14 @@ class _TutorHintCounter:
         learner_id,
         *,
         source_run_id=None,
+        source_batch_id=None,
         context_type=None,
         question_id=None,
         created_before=None,
     ):
         assert learner_id == "feedback_001"
-        assert source_run_id == "run_feedback_001"
+        assert source_run_id is None
+        assert source_batch_id == "batch_feedback_001"
         assert context_type == "question_help"
         assert created_before == datetime(2026, 8, 13, tzinfo=timezone.utc)
         if question_id is None:

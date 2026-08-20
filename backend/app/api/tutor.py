@@ -48,6 +48,7 @@ def list_sessions(
     status: str | None = Query(default=None),
     resource_id: str | None = Query(default=None),
     run_id: str | None = Query(default=None),
+    batch_id: str | None = Query(default=None),
     context_type: str | None = Query(default=None),
     question_id: str | None = Query(default=None),
 ):
@@ -57,6 +58,7 @@ def list_sessions(
         status=status,
         resource_id=resource_id,
         run_id=run_id,
+        batch_id=batch_id,
         context_type=context_type,
         question_id=question_id,
     )

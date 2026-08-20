@@ -16,6 +16,12 @@ def test_tutor_migration_is_additive_idempotent_and_keeps_turn_guards(tmp_path):
 
     inspector = inspect(engine)
     assert {"tutor_sessions", "tutor_turns"}.issubset(inspector.get_table_names())
+    assert "source_batch_id" in {
+        item["name"] for item in inspector.get_columns("tutor_sessions")
+    }
+    assert "ix_tutor_sessions_source_batch_id" in {
+        item["name"] for item in inspector.get_indexes("tutor_sessions")
+    }
     unique_columns = {
         tuple(item["column_names"])
         for item in inspector.get_unique_constraints("tutor_turns")
