@@ -16,9 +16,10 @@ def _session() -> TutorSession:
     return TutorSession(
         session_id="tus_repo_1",
         learner_id="learner-1",
-        source_type="resource",
+        source_type="batch",
         source_resource_id="resource-1",
         source_run_id="run-1",
+        source_batch_id="batch-1",
         knowledge_base_id="kb-1",
         context_type="question_help",
         question_id="question-1",
@@ -74,6 +75,12 @@ def test_repository_persists_session_turn_and_progression(repository):
     assert repository.list_turns("tus_repo_1")[0].assistant_message.startswith("先想")
     assert repository.count_turns(
         "learner-1",
+        source_batch_id="batch-1",
+        context_type="question_help",
+        question_id="question-1",
+    ) == 1
+    assert repository.count_turns(
+        "learner-1",
         source_run_id="run-1",
         context_type="question_help",
         question_id="question-1",
@@ -102,7 +109,7 @@ def test_repository_lists_and_closes_sessions(repository):
     assert repository.list_sessions(
         "learner-1",
         status="active",
-        source_run_id="run-1",
+        source_batch_id="batch-1",
     )[0].session_id == "tus_repo_1"
     closed_at = datetime(2026, 8, 19, 1, tzinfo=timezone.utc)
     closed = repository.update_session_state(

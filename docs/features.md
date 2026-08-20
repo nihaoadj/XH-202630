@@ -280,6 +280,6 @@
 
 - 已发布资源页提供“向 Tutor 提问”，测评页每题提供“需要提示”；抽屉支持活动会话恢复、多轮求助、loading/error 状态和引用展示。
 - 提示阶段由服务端确定性策略控制：首次求助为方向提示，明确继续困惑时升级为结构化拆解，第三轮及以后才允许完整的 grounded explanation。
-- Tutor 只使用当前 Run 的 Frozen Evidence、兼容 SourceRef 或 Ready 知识库上的受控检索；无证据时 fail closed，不使用模型常识兜底。
-- Tutor 不修改画像、Mastery、LearningPath 或 Resource。测评提交时，服务端仅将持久化的题目求助轮次映射到现有 Attempt `hint_count` 审计字段。
+- Tutor 只使用题目对应真实 Run 的 Frozen Evidence、兼容 SourceRef 或 Ready 知识库上的受控检索；无证据时 fail closed，不使用模型常识兜底。
+- Tutor 不修改画像、Mastery、LearningPath 或 Resource。批次测评提交时，服务端按 `batch_id` 汇总持久化的题目求助轮次并映射到现有 Attempt `hint_count` 审计字段；旧 Run 调用保持兼容。
 - 会话与轮次具备访问控制、唯一序列、`client_message_id` 幂等、引用子集校验和脱敏 LLM 遥测。

@@ -742,7 +742,7 @@ P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py` 组合现有 Gener
 
 ## 16. Tutor API
 
-Tutor 路由均位于私有 `/api/tutor` 前缀下，复用当前登录用户到 learner 的访问校验。跨用户资源、Run 或会话统一按现有防枚举语义返回 404。
+Tutor 路由均位于私有 `/api/tutor` 前缀下，复用当前登录用户到 learner 的访问校验。跨用户资源、Run、Batch 或会话统一按现有防枚举语义返回 404。
 
 | Method | Path | 用途 | 成功状态 |
 |---|---|---|---|
@@ -752,7 +752,7 @@ Tutor 路由均位于私有 `/api/tutor` 前缀下，复用当前登录用户到
 | `POST` | `/api/tutor/sessions/{session_id}/turns` | 提交一轮用户求助 | 200 |
 | `POST` | `/api/tutor/sessions/{session_id}/close` | 幂等关闭会话 | 200 |
 
-创建请求只接受 `learner_id`、`source_type`、`resource_id/run_id`、`context_type` 和可选 `question_id`。`question_help` 的题干、知识点和难度由后端按 `question_id` 解析，客户端不能提交 expected answer 或 hint level。
+创建请求只接受 `learner_id`、`source_type`、`resource_id/run_id/batch_id`、`context_type` 和可选 `question_id`。资源页使用 `source_type=resource`；旧任务级调用继续使用 `source_type=run`；批次测评使用 `source_type=batch`，服务端从该批次内解析题目对应资源和真实 Run。`question_help` 的题干、知识点和难度由后端按 `question_id` 解析，客户端不能提交 expected answer 或 hint level。会话列表可用 `resource_id`、`run_id` 或 `batch_id` 过滤。
 
 Turn 请求为：
 

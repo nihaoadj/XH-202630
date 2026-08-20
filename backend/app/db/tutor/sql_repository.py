@@ -31,6 +31,7 @@ def _session_schema(row: TutorSessionORM) -> TutorSession:
         source_type=row.source_type,
         source_resource_id=row.source_resource_id,
         source_run_id=row.source_run_id,
+        source_batch_id=row.source_batch_id,
         knowledge_base_id=row.knowledge_base_id,
         context_type=row.context_type,
         question_id=row.question_id,
@@ -110,6 +111,7 @@ class SQLTutorRepository(BaseTutorRepository):
         status: str | None = None,
         source_resource_id: str | None = None,
         source_run_id: str | None = None,
+        source_batch_id: str | None = None,
         context_type: str | None = None,
         question_id: str | None = None,
         created_before: datetime | None = None,
@@ -120,6 +122,7 @@ class SQLTutorRepository(BaseTutorRepository):
                 "status": status,
                 "source_resource_id": source_resource_id,
                 "source_run_id": source_run_id,
+                "source_batch_id": source_batch_id,
                 "context_type": context_type,
                 "question_id": question_id,
             }
@@ -246,6 +249,7 @@ class SQLTutorRepository(BaseTutorRepository):
         learner_id: str,
         *,
         source_run_id: str | None = None,
+        source_batch_id: str | None = None,
         context_type: str | None = None,
         question_id: str | None = None,
         created_before: datetime | None = None,
@@ -258,6 +262,8 @@ class SQLTutorRepository(BaseTutorRepository):
             )
             if source_run_id is not None:
                 query = query.filter(TutorSessionORM.source_run_id == source_run_id)
+            if source_batch_id is not None:
+                query = query.filter(TutorSessionORM.source_batch_id == source_batch_id)
             if context_type is not None:
                 query = query.filter(TutorSessionORM.context_type == context_type)
             if question_id is not None:

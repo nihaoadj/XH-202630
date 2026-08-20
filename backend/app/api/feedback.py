@@ -159,6 +159,7 @@ def submit_batch_attempt(
             resources,
             run_payload,
             knowledge_service,
+            tutor_batch_id=payload.batch_id,
             schedule_followup=schedule,
         )
     except ValueError as exc:

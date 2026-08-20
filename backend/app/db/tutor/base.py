@@ -37,6 +37,7 @@ class BaseTutorRepository(ABC):
         status: str | None = None,
         source_resource_id: str | None = None,
         source_run_id: str | None = None,
+        source_batch_id: str | None = None,
         context_type: str | None = None,
         question_id: str | None = None,
     ) -> list[TutorSession]:
@@ -76,6 +77,7 @@ class BaseTutorRepository(ABC):
         learner_id: str,
         *,
         source_run_id: str | None = None,
+        source_batch_id: str | None = None,
         context_type: str | None = None,
         question_id: str | None = None,
         created_before: datetime | None = None,

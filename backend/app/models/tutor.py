@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 TUTOR_SCHEMA_VERSION = "1.0"
 
-TutorSourceType = Literal["resource", "run"]
+TutorSourceType = Literal["resource", "run", "batch"]
 TutorContextType = Literal["resource_help", "question_help"]
 TutorSessionStatus = Literal["active", "closed", "failed"]
 TutorGroundingStatus = Literal["grounded", "evidence_insufficient"]
@@ -43,6 +43,7 @@ class TutorSessionCreateRequest(StrictTutorModel):
     source_type: TutorSourceType
     resource_id: str | None = Field(default=None, min_length=1, max_length=128)
     run_id: str | None = Field(default=None, min_length=1, max_length=128)
+    batch_id: str | None = Field(default=None, min_length=1, max_length=128)
     context_type: TutorContextType
     question_id: str | None = Field(default=None, min_length=1, max_length=128)
 
@@ -52,6 +53,8 @@ class TutorSessionCreateRequest(StrictTutorModel):
             raise ValueError("resource source requires resource_id")
         if self.source_type == "run" and self.run_id is None:
             raise ValueError("run source requires run_id")
+        if self.source_type == "batch" and self.batch_id is None:
+            raise ValueError("batch source requires batch_id")
         if self.context_type == "question_help" and self.question_id is None:
             raise ValueError("question_help requires question_id")
         if self.context_type == "resource_help" and self.question_id is not None:
@@ -66,6 +69,7 @@ class TutorSession(StrictTutorModel):
     source_type: TutorSourceType
     source_resource_id: str | None = Field(default=None, max_length=128)
     source_run_id: str | None = Field(default=None, max_length=128)
+    source_batch_id: str | None = Field(default=None, max_length=128)
     knowledge_base_id: str | None = Field(default=None, max_length=128)
     context_type: TutorContextType
     question_id: str | None = Field(default=None, max_length=128)
@@ -81,8 +85,14 @@ class TutorSession(StrictTutorModel):
 
     @model_validator(mode="after")
     def validate_session(self) -> "TutorSession":
-        if self.source_resource_id is None and self.source_run_id is None:
-            raise ValueError("source_resource_id or source_run_id is required")
+        if (
+            self.source_resource_id is None
+            and self.source_run_id is None
+            and self.source_batch_id is None
+        ):
+            raise ValueError(
+                "source_resource_id, source_run_id, or source_batch_id is required"
+            )
         if self.context_type == "question_help" and self.question_id is None:
             raise ValueError("question_help requires question_id")
         if self.status == "closed" and self.closed_at is None:

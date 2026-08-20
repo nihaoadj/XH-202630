@@ -162,6 +162,7 @@ class TutorSessionORM(Base):
         nullable=True,
         index=True,
     )
+    source_batch_id = Column(String(128), nullable=True, index=True)
     knowledge_base_id = Column(String(128), nullable=True, index=True)
     context_type = Column(String(32), nullable=False, index=True)
     question_id = Column(String(128), nullable=True, index=True)

@@ -59,6 +59,7 @@ def _client(current_user_id="user-owner"):
             resource_id="resource-owner",
             learner_id="learner-owner",
             run_id="run-owner",
+            batch_id="batch-owner",
             topic="Rerank",
             resource_type="讲义",
             difficulty="初级",
@@ -167,6 +168,29 @@ def test_tutor_api_hides_cross_user_profile_resource_and_session():
         },
     )
     assert response.status_code == 404
+
+
+def test_tutor_api_creates_and_lists_batch_scoped_session():
+    client = _client()
+    created = client.post(
+        "/api/tutor/sessions",
+        json={
+            "learner_id": "learner-owner",
+            "source_type": "batch",
+            "batch_id": "batch-owner",
+            "context_type": "question_help",
+            "question_id": "question-owner",
+        },
+    )
+
+    assert created.status_code == 201
+    assert created.json()["source_batch_id"] == "batch-owner"
+    listed = client.get(
+        "/api/tutor/sessions",
+        params={"learner_id": "learner-owner", "batch_id": "batch-owner"},
+    )
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 1
 
 
 def test_tutor_api_hides_existing_session_after_cross_user_switch():

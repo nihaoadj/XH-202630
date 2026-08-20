@@ -64,6 +64,7 @@ def _resource() -> LearningResource:
         resource_id="resource-tutor",
         learner_id="learner-tutor",
         run_id="run-tutor",
+        batch_id="batch-tutor",
         topic="RAG rerank",
         resource_type="讲义",
         difficulty="初级",
@@ -201,6 +202,31 @@ def test_service_progresses_three_turns_restores_and_has_no_formal_side_effects(
     assert learner_repo.get("learner-tutor") == before
     assert service.resource_repo.get("resource-tutor") == before_resource
     assert feedback_loop.get_current_path("learner-tutor") == before_path
+
+
+def test_service_creates_and_restores_batch_scoped_question_session():
+    service, learner_repo, tutor_repo, _ = _service()
+    profile = learner_repo.get("learner-tutor")
+    payload = TutorSessionCreateRequest(
+        learner_id="learner-tutor",
+        source_type="batch",
+        batch_id="batch-tutor",
+        context_type="question_help",
+        question_id="q-rerank",
+    )
+
+    first = service.create_session(profile, payload)
+    restored = service.create_session(profile, payload)
+
+    assert restored.session_id == first.session_id
+    assert first.source_batch_id == "batch-tutor"
+    assert first.source_run_id == "run-tutor"
+    assert first.source_resource_id == "resource-tutor"
+    assert tutor_repo.list_sessions(
+        "learner-tutor",
+        source_batch_id="batch-tutor",
+        context_type="question_help",
+    )[0].session_id == first.session_id
 
 
 def test_service_idempotent_replay_and_conflict():

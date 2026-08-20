@@ -38,6 +38,7 @@ class MemoryTutorRepository(BaseTutorRepository):
         status: str | None = None,
         source_resource_id: str | None = None,
         source_run_id: str | None = None,
+        source_batch_id: str | None = None,
         context_type: str | None = None,
         question_id: str | None = None,
         created_before: datetime | None = None,
@@ -52,6 +53,7 @@ class MemoryTutorRepository(BaseTutorRepository):
                 or item.source_resource_id == source_resource_id
             )
             and (source_run_id is None or item.source_run_id == source_run_id)
+            and (source_batch_id is None or item.source_batch_id == source_batch_id)
             and (context_type is None or item.context_type == context_type)
             and (question_id is None or item.question_id == question_id)
         ]
@@ -129,6 +131,7 @@ class MemoryTutorRepository(BaseTutorRepository):
         learner_id: str,
         *,
         source_run_id: str | None = None,
+        source_batch_id: str | None = None,
         context_type: str | None = None,
         question_id: str | None = None,
         created_before: datetime | None = None,
@@ -138,6 +141,7 @@ class MemoryTutorRepository(BaseTutorRepository):
             for session in self._sessions.values()
             if session.learner_id == learner_id
             and (source_run_id is None or session.source_run_id == source_run_id)
+            and (source_batch_id is None or session.source_batch_id == source_batch_id)
             and (context_type is None or session.context_type == context_type)
             and (question_id is None or session.question_id == question_id)
         }
