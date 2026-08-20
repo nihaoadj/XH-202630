@@ -134,6 +134,7 @@ def test_sql_finalization_uses_recorder_owned_review_and_is_idempotent(tmp_path)
     assert audit.get_run(run_id).status == RunStatus.COMPLETED
     assert len(audit.list_reviews_by_run(run_id)) == 1
     assert len(resources.list_by_run(run_id)) == 1
+    assert resources.list_by_run(run_id)[0].batch_id == run_id
     event_types = [item.event_type.value for item in audit.list_events(run_id, limit=100)]
     assert event_types.count("review_persisted") == 1
     assert event_types.count("resource_published") == 1

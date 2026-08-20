@@ -144,17 +144,18 @@ def _materialize_resources(
     resource_repo: BaseResourceRepository,
     *,
     run_id: str,
-    batch_id: str,
+    batch_id: str | None = None,
     generation_steps: dict[str, str],
     audit_repo: BaseAuditRepository,
 ) -> List[LearningResource]:
     """Materialize files and reconcile storage metadata on recorder-owned rows."""
+    effective_batch_id = batch_id or run_id
     persisted = []
     for resource in resources:
         resource.learner_id = learner_id
         resource.topic = topic
         resource.run_id = run_id
-        resource.batch_id = batch_id
+        resource.batch_id = effective_batch_id
 
         existing = resource_repo.get(resource.resource_id)
         if existing is None:
@@ -185,7 +186,7 @@ def _materialize_resources(
             learner_id,
             topic,
             run_id=run_id,
-            batch_id=batch_id,
+            batch_id=effective_batch_id,
             generation_step_id=generation_step_id,
         )
         audit_repo.append_event(
