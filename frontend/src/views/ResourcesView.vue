@@ -307,7 +307,6 @@ watch(activeTask, () => {
   void loadSelectedResourceDetail()
 })
 watch(selectedResourceId, () => {
-  viewMode.value = 'text'
   void loadSelectedResourceDetail()
 })
 onMounted(async () => { await loadProfiles(); await loadResources() })
