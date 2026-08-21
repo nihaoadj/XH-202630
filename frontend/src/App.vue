@@ -421,9 +421,9 @@ async function handleLogout() {
 }
 
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content minmax(320px, max-content);
   align-items: flex-start;
-  justify-content: space-between;
   gap: 18px;
   padding: 22px 28px 18px;
 }
@@ -436,7 +436,8 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  justify-self: center;
 }
 
 .topbar-action {
@@ -561,11 +562,13 @@ async function handleLogout() {
   }
 
   .topbar {
+    display: flex;
     flex-direction: column;
   }
 
   .topbar-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .topbar-meta {
