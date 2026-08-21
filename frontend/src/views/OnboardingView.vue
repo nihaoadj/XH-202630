@@ -1418,7 +1418,10 @@ onMounted(async () => {
 .progress-desc { color: #6b829b; font-size: 12px; line-height: 1.45; }
 
 .compactWizard .work-card :deep(.el-card__body) {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .compactWizard .action-row {
