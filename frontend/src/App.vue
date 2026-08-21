@@ -168,15 +168,14 @@ async function handleLogout() {
 }
 
 .app-shell.is-sidebar-collapsed {
-  /* 精简模式只隐藏文字，不改变侧栏、卡片或图标的几何位置。 */
-  --sidebar-width: 248px;
+  --sidebar-width: 76px;
 }
 
 .sidebar {
   position: relative;
   z-index: 20;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 60px minmax(320px, 1fr) 246px 40px 40px;
   gap: 12px;
   padding: 20px 12px 16px;
   background: linear-gradient(180deg, #0f2a50 0%, #173d72 100%);
@@ -241,11 +240,10 @@ async function handleLogout() {
 }
 
 .nav-list {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  justify-content: space-evenly;
-  min-height: 320px;
+  display: grid;
+  grid-template-rows: repeat(5, minmax(62px, auto));
+  align-content: space-evenly;
+  min-height: 0;
   gap: 8px;
 }
 
@@ -255,6 +253,7 @@ async function handleLogout() {
   grid-template-areas: 'icon text' 'icon hint';
   column-gap: 10px;
   padding: 12px;
+  min-height: 62px;
   border-radius: 12px;
   color: rgba(241, 246, 255, 0.95);
   text-decoration: none;
@@ -309,6 +308,7 @@ async function handleLogout() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  height: 246px;
   padding: 14px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.08);
@@ -539,13 +539,17 @@ async function handleLogout() {
   }
 
   .sidebar {
+    display: flex;
+    flex-direction: column;
     gap: 14px;
     max-height: 35dvh;
     min-height: 0;
   }
 
   .nav-list {
+    display: flex;
     flex: 0 0 auto;
+    flex-direction: column;
     min-height: 0;
     justify-content: flex-start;
   }
