@@ -38,6 +38,7 @@ from app.services.review_service import ReviewService
 from app.services.run_query_service import RunQueryService
 from app.services.run_event_stream_service import RunEventStreamService
 from app.services.user_service import UserService
+from app.services.workflow_artifact_recorder import WorkflowArtifactRecorder
 
 
 class Container(containers.DeclarativeContainer):
@@ -60,8 +61,17 @@ class Container(containers.DeclarativeContainer):
         transport=llm_transport,
         retry_base_delay_seconds=config.llm_retry_base_delay_seconds,
         retry_max_delay_seconds=config.llm_retry_max_delay_seconds,
+        resource_generation_max_attempts=config.llm_resource_generation_max_attempts,
         default_options=llm_call_options,
         generator_max_output_tokens=config.llm_generator_max_output_tokens,
+        resource_generator_max_output_tokens=config.llm_resource_generator_max_output_tokens,
+        html_practice_guide_text_max_output_tokens=(
+            config.llm_html_practice_guide_text_max_output_tokens
+        ),
+        html_practice_guide_max_output_tokens=config.llm_html_practice_guide_max_output_tokens,
+        html_practice_guide_request_timeout_seconds=(
+            config.llm_html_practice_guide_request_timeout_seconds
+        ),
     )
 
     vector_store = providers.Singleton(get_vector_store)
@@ -147,6 +157,12 @@ class Container(containers.DeclarativeContainer):
         llm_gateway=llm_gateway,
         evidence_retriever=evidence_retriever,
         lifecycle_repository=audit_repository,
+        resource_progress_recorder=providers.Singleton(
+            WorkflowArtifactRecorder,
+            resource_repository=resource_repository,
+            audit_repository=audit_repository,
+            claim_repository=claim_repository,
+        ),
     )
 
     profile_service = providers.Singleton(ProfileService, repo=learner_repository)
@@ -173,12 +189,14 @@ class Container(containers.DeclarativeContainer):
         generation_job_service=generation_job_service,
         audit_repo=audit_repository,
         knowledge_catalog=knowledge_catalog,
+        llm_gateway=llm_gateway,
     )
     report_service = providers.Singleton(
         ReportService,
         resource_repo=resource_repository,
         feedback_repo=feedback_repository,
         feedback_loop_repo=feedback_loop_repository,
+        generation_job_repo=generation_job_repository,
     )
     knowledge_service = providers.Singleton(KnowledgeService, catalog=knowledge_catalog)
     diagnosis_service = providers.Singleton(

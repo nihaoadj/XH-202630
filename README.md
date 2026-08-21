@@ -152,7 +152,14 @@ backend/
 │   ├── utils/                    # 通用工具函数层：项目内部复用工具
 │   ├── config.py                 # 应用配置（从 .env 加载）
 │   └── main.py                   # FastAPI 应用入口
-├── tests/                        # 单元测试与集成测试
+├── tests/                        # 分层测试套件
+│   ├── unit/                    # Agent、核心组件、模型契约与纯策略
+│   ├── integration/             # API、持久化、服务与工作流集成
+│   ├── migrations/              # 数据库迁移与历史兼容性
+│   ├── e2e/                     # 生命周期、重启、恢复与回放
+│   ├── live/                    # 显式启用的真实 Provider 冒烟测试
+│   ├── fakes/                   # 共享测试替身
+│   └── fixtures/                # 固定验收数据
 ├── data/                         # 运行时数据目录（自动生成，不进入版本控制）
 │   ├── domain_knowledge.db       # SQLite 数据库文件
 │   ├── generated_resources/      # 生成的资源文件
@@ -216,6 +223,31 @@ version1/
 | `backend/logs/` | 应用日志文件 | 否（保留目录结构） |
 | `examples/` | 示例学习者画像等静态示例数据 | 是 |
 | `knowledge_base/` | 领域知识库原文档 | 是 |
+
+## 测试运行
+
+后端测试按执行层级分类，并由 `backend/tests/conftest.py` 自动添加 pytest marker：
+
+```powershell
+python -m pytest
+python -m pytest -m unit
+python -m pytest -m integration
+python -m pytest -m migration
+python -m pytest -m e2e
+```
+
+真实 LLM 测试默认跳过，必须显式启用：
+
+```powershell
+$env:RUN_LIVE_LLM = "1"
+python -m pytest -m live_llm
+```
+
+前端工作流事件测试：
+
+```powershell
+npm --prefix frontend run test:workflow-events
+```
 
 ## 核心指标
 

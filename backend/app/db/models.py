@@ -5,12 +5,14 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import declarative_base
 
@@ -70,17 +72,46 @@ class GeneratedResourceORM(Base):
     """
     __tablename__ = "generated_resources"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_generated_resources_spec_representation_version",
+            "run_id",
+            "resource_spec_id",
+            "representation",
+            "version",
+            unique=True,
+            sqlite_where=text("resource_spec_id IS NOT NULL"),
+            postgresql_where=text("resource_spec_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_generated_resources_legacy_run_type_version",
             "run_id",
             "resource_type",
             "version",
-            name="uq_generated_resources_run_type_version",
+            unique=True,
+            sqlite_where=text("resource_spec_id IS NULL"),
+            postgresql_where=text("resource_spec_id IS NULL"),
         ),
     )
 
     resource_id = Column(String(64), primary_key=True, index=True, comment="资源唯一标识")
     run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
     batch_id = Column(String(128), nullable=True, index=True, comment="资源批次标识")
+    resource_spec_id = Column(String(64), nullable=True, index=True, comment="Run 内资源规格 ID")
+    resource_family_id = Column(String(64), nullable=True, index=True, comment="同一语义资源的表示族 ID")
+    representation = Column(
+        String(16), nullable=False, default="text", server_default="text",
+        index=True, comment="资源表示：text | html",
+    )
+    derived_from_resource_id = Column(
+        String(64),
+        ForeignKey("generated_resources.resource_id"),
+        nullable=True,
+        index=True,
+        comment="派生表示所依据的源资源 ID",
+    )
+    source_resource_version = Column(Integer, nullable=True, comment="派生表示的源资源版本")
+    canonical_text_hash = Column(String(64), nullable=True, index=True, comment="规范文本及 manifest 的 SHA-256")
+    guide_manifest = Column(JSON, default=dict, comment="实操指南规范结构清单")
     generation_step_id = Column(String(128), ForeignKey("agent_steps.step_id"), nullable=True, index=True)
     learner_id = Column(String(64), nullable=False, index=True, comment="学习者ID")
     topic = Column(String(256), nullable=False, comment="学习主题")
@@ -153,6 +184,71 @@ class GenerationJobORM(Base):
     error_message = Column(String(512), nullable=True, comment="错误信息")
     superseded_by_run_id = Column(String(128), nullable=True, index=True, comment="替代该失败任务的新任务ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    started_at = Column(DateTime(timezone=True), nullable=True, comment="开始时间")
+    finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
+
+
+class ResourceSpecORM(Base):
+    """一次 Run 中冻结的语义资源工作单元。"""
+
+    __tablename__ = "resource_specs"
+    __table_args__ = (
+        UniqueConstraint("run_id", "resource_spec_id", name="uq_resource_specs_run_spec"),
+        UniqueConstraint("run_id", "resource_type", name="uq_resource_specs_run_type"),
+    )
+
+    resource_spec_id = Column(String(64), primary_key=True)
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
+    resource_family_id = Column(String(64), nullable=False, index=True)
+    resource_type = Column(String(32), nullable=False)
+    learning_objective = Column(Text, nullable=False)
+    knowledge_points = Column(JSON, default=list)
+    evidence_ids = Column(JSON, default=list)
+    difficulty = Column(String(16), nullable=False)
+    representations = Column(JSON, default=list)
+    dependencies = Column(JSON, default=list)
+    display_order = Column(Integer, nullable=False, default=0)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ResourceExecutionORM(Base):
+    """资源表示执行单元的最新状态；历史变化由工作流事件保存。"""
+
+    __tablename__ = "resource_executions"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "resource_spec_id",
+            "representation",
+            name="uq_resource_executions_run_spec_representation",
+        ),
+    )
+
+    execution_id = Column(String(128), primary_key=True)
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
+    resource_spec_id = Column(
+        String(64),
+        ForeignKey("resource_specs.resource_spec_id"),
+        nullable=False,
+        index=True,
+    )
+    resource_type = Column(String(32), nullable=False)
+    representation = Column(String(16), nullable=False, default="text")
+    worker_step_id = Column(String(64), nullable=True, index=True)
+    state = Column(String(32), nullable=False, default="queued", index=True)
+    attempt = Column(Integer, nullable=False, default=0)
+    resource_id = Column(String(64), ForeignKey("generated_resources.resource_id"), nullable=True, index=True)
+    review_id = Column(String(128), nullable=True, index=True)
+    error_code = Column(String(128), nullable=True)
+    agent_name = Column(String(128), nullable=False)
+    prompt_version = Column(String(64), nullable=False)
+    artifact_format = Column(String(64), nullable=False)
+    validation_status = Column(String(32), nullable=False, default="pending")
+    renderer_version = Column(String(64), nullable=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     started_at = Column(DateTime(timezone=True), nullable=True, comment="开始执行时间")
     finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
 

@@ -45,7 +45,26 @@
         </aside>
 
         <main class="reading-stage">
-          <ResourceViewer v-if="selectedResource" :resources="[selectedResource]" :progress-label="resourceProgress" />
+          <div v-if="selectedMaterial?.interactiveAvailable" class="representation-switch" role="group" aria-label="实操指南显示方式">
+            <el-button :type="viewMode === 'text' ? 'primary' : 'default'" @click="viewMode = 'text'">文本指南</el-button>
+            <el-button :type="viewMode === 'html' ? 'primary' : 'default'" @click="viewMode = 'html'">互动实践</el-button>
+          </div>
+          <HtmlPracticeGuideViewer
+            v-if="viewMode === 'html' && selectedMaterial?.interactiveAvailable"
+            :resource="selectedMaterial.html"
+            :progress-label="resourceProgress"
+            :resource-choices="isFocusMode ? activeResources : []"
+            :selected-resource-id="selectedResourceId"
+            @select-resource="selectedResourceId = $event"
+          />
+          <ResourceViewer
+            v-else-if="selectedResource"
+            :resources="[selectedResource]"
+            :progress-label="resourceProgress"
+            :resource-choices="isFocusMode ? activeResources : []"
+            :selected-resource-id="selectedResourceId"
+            @select-resource="selectedResourceId = $event"
+          />
         </main>
       </section>
     </template>
@@ -70,6 +89,8 @@ import { generateApi, knowledgeApi, profileApi, resourceApi } from '../api'
 import { useAppStore } from '../stores/app'
 import { formatDateTime } from '../utils/generationDisplay'
 import ResourceViewer from '../components/ResourceViewer.vue'
+import HtmlPracticeGuideViewer from '../components/HtmlPracticeGuideViewer.vue'
+import { buildResourceMaterials, unwrapResourceDetail } from '../utils/resourceRepresentations'
 
 const route = useRoute()
 const router = useRouter()
@@ -83,10 +104,39 @@ const loading = ref(false)
 const profiles = ref([])
 const tracks = ref([])
 const generationJobs = ref([])
+const viewMode = ref('text')
+const resourceDetails = ref({})
+let detailRequestGeneration = 0
 
 const activeProfile = computed(() => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null)
 const isFocusMode = computed(() => route.query.focus === '1')
 const activeDirectionName = computed(() => resolveTrackName(activeProfile.value?.knowledge_base_id))
+const visibleResources = computed(() => {
+  const supersededRunIds = new Set(
+    generationJobs.value.filter((job) => job.superseded_by_run_id).map((job) => job.run_id),
+  )
+  const latestReplacementRunByType = new Map()
+  for (const job of generationJobs.value) {
+    if (job.superseded_by_run_id) continue
+    const batchId = job.batch_id || job.run_id
+    const types = job.request_payload?.constraints?.replacement_resource_types || []
+    for (const type of types) {
+      const key = `${batchId}:${type}`
+      const current = latestReplacementRunByType.get(key)
+      if (!current || String(current.created_at || '') < String(job.created_at || '')) {
+        latestReplacementRunByType.set(key, job)
+      }
+    }
+  }
+  // A full-batch regeneration replaces the source run. Keep its workflow
+  // history, but never mix its published artifacts into the current batch.
+  return resources.value.filter((resource) => {
+    if (supersededRunIds.has(resource.run_id)) return false
+    const batchId = resource.batch_id || resource.run_id
+    const replacement = latestReplacementRunByType.get(`${batchId}:${resource.resource_type}`)
+    return !replacement || resource.run_id === replacement.run_id
+  })
+})
 const profileOptions = computed(() => profiles.value.map((profile) => ({
   ...profile,
   label: `${resolveTrackName(profile.knowledge_base_id)} / ${profile.skill_level || '未分级'}`,
@@ -98,7 +148,7 @@ function resolveTrackName(trackId) {
 
 const taskGroups = computed(() => {
   const groups = new Map()
-  for (const resource of resources.value) {
+  for (const resource of visibleResources.value) {
     const batchId = resource.batch_id || resource.run_id || `resource:${resource.resource_id}`
     if (!groups.has(batchId)) groups.set(batchId, { runId: batchId, batchId, shortRunId: batchId.startsWith('resource:') ? '独立资源' : batchId.slice(0, 8).toUpperCase(), resources: [] })
     groups.get(batchId).resources.push(resource)
@@ -125,8 +175,17 @@ const taskGroups = computed(() => {
   })
 })
 const activeTask = computed(() => taskGroups.value.find((item) => item.runId === selectedRunId.value) || taskGroups.value[0] || null)
-const activeResources = computed(() => activeTask.value?.resources || [])
-const selectedResource = computed(() => activeResources.value.find((item) => item.resource_id === selectedResourceId.value) || activeResources.value[0] || null)
+const activeMaterials = computed(() => buildResourceMaterials(activeTask.value?.resources || []))
+const activeResources = computed(() => activeMaterials.value.map((item) => item.displayResource))
+const selectedMaterial = computed(() => {
+  const material = activeMaterials.value.find(
+    (item) => item.displayResource.resource_id === selectedResourceId.value,
+  ) || activeMaterials.value[0] || null
+  if (!material?.text?.resource_id) return material
+  const detail = resourceDetails.value[material.text.resource_id]
+  return detail ? { ...material, text: detail, displayResource: detail } : material
+})
+const selectedResource = computed(() => selectedMaterial.value?.displayResource || null)
 const activeResourceIndex = computed(() => {
   const index = activeResources.value.findIndex((item) => item.resource_id === selectedResource.value?.resource_id)
   return index < 0 ? 0 : index + 1
@@ -143,7 +202,7 @@ function syncSelectedRun() {
   if (!taskGroups.value.length) { selectedRunId.value = ''; return }
   if (selectedRunId.value && taskGroups.value.some((item) => item.runId === selectedRunId.value)) return
   const currentRunId = localStorage.getItem('current_generation_run_id') || ''
-  const currentResource = resources.value.find((item) => item.run_id === currentRunId)
+  const currentResource = visibleResources.value.find((item) => item.run_id === currentRunId)
   const currentBatchId = currentResource?.batch_id || currentResource?.run_id || currentRunId
   selectedRunId.value = taskGroups.value.some((item) => item.runId === currentBatchId)
     ? currentBatchId
@@ -152,6 +211,26 @@ function syncSelectedRun() {
 
 function syncSelectedResource() {
   if (!activeResources.value.some((item) => item.resource_id === selectedResourceId.value)) selectedResourceId.value = activeResources.value[0]?.resource_id || ''
+  viewMode.value = 'text'
+}
+
+async function loadSelectedResourceDetail() {
+  const resourceId = selectedResourceId.value || activeResources.value[0]?.resource_id
+  detailRequestGeneration += 1
+  const generation = detailRequestGeneration
+  if (!resourceId || resourceDetails.value[resourceId]) return
+  try {
+    const response = await resourceApi.get(resourceId)
+    if (generation !== detailRequestGeneration) return
+    const detail = unwrapResourceDetail(response.data)
+    if (detail?.resource_id === resourceId) {
+      resourceDetails.value = { ...resourceDetails.value, [resourceId]: detail }
+    }
+  } catch (error) {
+    if (generation !== detailRequestGeneration) return
+    console.error(error)
+    ElMessage.error(error?.response?.data?.detail || error?.response?.data?.message || '资源正文加载失败')
+  }
 }
 
 function handleRunChange(value) {
@@ -193,14 +272,21 @@ async function loadResources() {
   loading.value = true
   try {
     const [res, jobsRes] = await Promise.all([
-      resourceApi.listByLearner(selectedLearnerId.value),
+      resourceApi.listByLearner(selectedLearnerId.value, {
+        page: 1,
+        page_size: 100,
+        summary_only: true,
+      }),
       generateApi.listJobs(selectedLearnerId.value),
     ])
+    detailRequestGeneration += 1
+    resourceDetails.value = {}
     resources.value = res.data.resources || []
     generationJobs.value = jobsRes.data.items || []
     loaded.value = true
     syncSelectedRun()
     syncSelectedResource()
+    await loadSelectedResourceDetail()
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.response?.data?.message || '资源加载失败')
@@ -216,7 +302,14 @@ async function handleProfileChange() {
   await loadResources()
 }
 
-watch(activeTask, syncSelectedResource)
+watch(activeTask, () => {
+  syncSelectedResource()
+  void loadSelectedResourceDetail()
+})
+watch(selectedResourceId, () => {
+  viewMode.value = 'text'
+  void loadSelectedResourceDetail()
+})
 onMounted(async () => { await loadProfiles(); await loadResources() })
 </script>
 
@@ -310,12 +403,14 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
 .resource-item { flex: 0 0 clamp(178px, 18vw, 238px); width: auto; padding: 11px 8px; border-color: #d9e1ec; border-radius: 9px; background: #fff; }
 .shelf-footnote { display: none; }
 .reading-stage { min-height: 0; }
+.representation-switch { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.representation-switch :deep(.el-button) { min-width: 96px; }
 .reading-stage :deep(.reader-card) { min-height: calc(100dvh - 153px); }
 
 .resources-page.is-focus-mode { min-height: 100dvh; height: 100dvh; gap: 0; padding: 12px; overflow-y: auto; background: #f3f7fb; }
 .is-focus-mode .learning-toolbar, .is-focus-mode .resource-shelf { display: none; }
 .is-focus-mode .learning-workspace, .is-focus-mode .reading-stage { flex: 1; min-height: calc(100dvh - 24px); }
-.is-focus-mode .reading-stage :deep(.reader-card) { width: 100%; min-height: calc(100dvh - 24px); }
+.is-focus-mode .reading-stage :deep(.reader-card), .is-focus-mode .reading-stage :deep(.html-guide-card) { width: 100%; min-height: calc(100dvh - 24px); }
 .focus-exit { position: fixed; right: 20px; bottom: 20px; z-index: 20; width: 42px; height: 42px; margin: 0; border-color: #8ab7ac; box-shadow: 0 8px 22px rgb(23 58 72 / 20%); color: #fff; background: #276f63; }
 .focus-exit:hover, .focus-exit:focus-visible { border-color: #245e55; color: #fff; background: #1d584f; }
 
@@ -335,7 +430,7 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
   .resource-item { flex-basis: 178px; }
   .reading-stage :deep(.reader-card) { min-height: auto; }
   .resources-page.is-focus-mode { padding: 8px; }
-  .is-focus-mode .learning-workspace, .is-focus-mode .reading-stage, .is-focus-mode .reading-stage :deep(.reader-card) { min-height: calc(100dvh - 16px); }
+  .is-focus-mode .learning-workspace, .is-focus-mode .reading-stage, .is-focus-mode .reading-stage :deep(.reader-card), .is-focus-mode .reading-stage :deep(.html-guide-card) { min-height: calc(100dvh - 16px); }
   .focus-exit { right: 14px; bottom: 14px; }
 }
 </style>

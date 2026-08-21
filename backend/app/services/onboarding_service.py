@@ -201,8 +201,21 @@ class OnboardingService:
             language=old_preferences.language or "zh-CN",
             metadata=metadata,
         )
-        not_started_names = [node_by_id[node_id].name for node_id in not_started_node_ids]
-        preserved_weak_points = list(existing.weak_points) if existing else []
+        names_by_id = {node_id: node.name for node_id, node in node_by_id.items()}
+        ids_by_name = {name: node_id for node_id, name in names_by_id.items()}
+
+        def display_label(value: str) -> str:
+            node_id = value if value in names_by_id else ids_by_name.get(value)
+            if node_id is None:
+                node_id = next(
+                    (candidate for candidate in names_by_id if value.endswith(f"（{candidate}）")),
+                    None,
+                )
+            return names_by_id[node_id] if node_id else value
+
+        not_started_labels = [display_label(node_id) for node_id in not_started_node_ids]
+        preserved_weak_points = [display_label(point) for point in (existing.weak_points if existing else [])]
+        preserved_strong_points = [display_label(point) for point in (existing.strong_points if existing else [])]
         return LearnerProfile(
             learner_id=request.learner_id,
             user_id=user.user_id,
@@ -214,8 +227,8 @@ class OnboardingService:
             theory_scores=prior_scores,
             knowledge_states=prior_states,
             skill_level=skill_level,
-            weak_points=list(dict.fromkeys(preserved_weak_points + not_started_names)),
-            strong_points=list(existing.strong_points) if existing else [],
+            weak_points=list(dict.fromkeys(preserved_weak_points + not_started_labels)),
+            strong_points=list(dict.fromkeys(preserved_strong_points)),
             learning_goal=mapped["root"].get("learning_goal") or (existing.learning_goal if existing else "未填写"),
             learning_preferences=preferences,
             last_feedback_summary=existing.last_feedback_summary if existing else {},

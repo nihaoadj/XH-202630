@@ -138,6 +138,25 @@ def parse_structured_output(
     try:
         return output_schema.model_validate(value)
     except ValidationError as exc:
+        # OpenAI-compatible JSON mode models occasionally add harmless
+        # top-level metadata (for example a title or source identifier) even
+        # when asked for an exact schema.  Keep the contract strict for every
+        # required field and value, but safely ignore *only* extra top-level
+        # fields so that an otherwise valid learning resource is not discarded.
+        errors = exc.errors(include_url=False, include_context=False, include_input=False)
+        if (
+            isinstance(value, dict)
+            and errors
+            and all(item.get("type") == "extra_forbidden" and len(item.get("loc", ())) == 1
+                    for item in errors)
+        ):
+            allowed = set(output_schema.model_fields)
+            try:
+                return output_schema.model_validate(
+                    {key: item for key, item in value.items() if key in allowed}
+                )
+            except ValidationError as repaired:
+                exc = repaired
         first = exc.errors(include_url=False, include_context=False, include_input=False)[0]
         location = ".".join(str(part) for part in first.get("loc", ())) or "root"
         detail = f"{location}:{first.get('type', 'validation_error')}"

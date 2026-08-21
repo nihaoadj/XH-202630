@@ -103,6 +103,10 @@ class WorkflowEventType(str, Enum):
     FOLLOWUP_GENERATION_CREATED = "followup_generation_created"
     FOLLOWUP_GENERATION_FAILED = "followup_generation_failed"
     RESOURCE_PUBLISHED = "resource_published"
+    RESOURCE_EXECUTION_QUEUED = "resource_execution_queued"
+    RESOURCE_GENERATION_STARTED = "resource_generation_started"
+    RESOURCE_GENERATED = "resource_generated"
+    RESOURCE_HUMAN_REVIEW_REQUESTED = "resource_human_review_requested"
     RUN_COMPLETED = "run_completed"
     RUN_FAILED = "run_failed"
     RUN_INTERRUPTED = "run_interrupted"
@@ -516,6 +520,13 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
     )
     projection["diagnosis"] = _jsonable(dict(state.get("diagnosis", {})))
     projection["learning_plan"] = _jsonable(dict(state.get("learning_plan", {})))
+    projection["resource_specs"] = _jsonable(list(state.get("resource_specs", []))[:100])
+    projection["resource_executions"] = _jsonable(
+        list(state.get("resource_executions", []))[:200]
+    )
+    projection["resource_progress_summary"] = _jsonable(
+        dict(state.get("resource_progress_summary", {}))
+    )
     projection["evidence_ids"] = [
         item.evidence_id if isinstance(item, EvidenceItem) else str(item.get("evidence_id", ""))
         for item in state.get("retrieved_evidence", [])

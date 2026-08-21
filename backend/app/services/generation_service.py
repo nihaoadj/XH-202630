@@ -93,8 +93,12 @@ def build_workflow_state(
             retrieved_evidence=[],
             retrieved_chunks=[],
             learning_plan={},
+            resource_specs=[],
+            resource_executions=[],
+            resource_progress_summary={},
             generated_resources=[],
             review_result={},
+            resource_review_results={},
             final_decision="",
             trace=[],
             errors=[],
@@ -144,7 +148,7 @@ def _materialize_resources(
     resource_repo: BaseResourceRepository,
     *,
     run_id: str,
-    batch_id: str,
+    batch_id: str | None = None,
     generation_steps: dict[str, str],
     audit_repo: BaseAuditRepository,
 ) -> List[LearningResource]:
@@ -154,7 +158,7 @@ def _materialize_resources(
         resource.learner_id = learner_id
         resource.topic = topic
         resource.run_id = run_id
-        resource.batch_id = batch_id
+        resource.batch_id = batch_id or run_id
 
         existing = resource_repo.get(resource.resource_id)
         if existing is None:
@@ -185,7 +189,7 @@ def _materialize_resources(
             learner_id,
             topic,
             run_id=run_id,
-            batch_id=batch_id,
+            batch_id=batch_id or run_id,
             generation_step_id=generation_step_id,
         )
         audit_repo.append_event(
@@ -224,6 +228,11 @@ def _reconcile_reviews(
     }
     for resource in resources:
         expected_id = expected.get(resource.resource_id)
+        # A failed/degraded resource is intentionally sent to human review
+        # without a completed automated review record. It must not make the
+        # already-terminal workflow fail during finalization.
+        if expected_id is None and resource.publication_status != "published":
+            continue
         if expected_id is None or persisted.get(resource.resource_id) != expected_id:
             raise PersistenceConflict("recorder-owned review is missing")
 

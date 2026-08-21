@@ -32,14 +32,18 @@ backend/logs/*.log
 # Testing
 .pytest_cache/
 **/.pytest_cache/
+.tmp_pytest/
 
 # Codex / local agent workspace
 .agents/
 .codex/
+.codex_tmp/
+.codex_tmp/
 
 # Frontend
 node_modules/
 dist/
+frontend/.tmp-dist-*/
 *.log
 
 # IDE

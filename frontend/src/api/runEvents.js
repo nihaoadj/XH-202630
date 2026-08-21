@@ -27,6 +27,22 @@ const WORKFLOW_EVENT_TYPES = [
   'followup_generation_created',
   'followup_generation_failed',
   'resource_published',
+  'resource_spec_created',
+  'resource_execution_queued',
+  'resource_execution_state_changed',
+  'resource_execution_updated',
+  'resource_generation_started',
+  'resource_generated',
+  'resource_review_started',
+  'resource_revision_requested',
+  'resource_claim_check_started',
+  'resource_claim_checking',
+  'resource_approved',
+  'resource_execution_failed',
+  'resource_human_review_requested',
+  'html_derivation_started',
+  'html_derivation_completed',
+  'html_derivation_failed',
   'run_completed',
   'run_failed',
   'run_interrupted',
@@ -40,6 +56,27 @@ function parseData(event) {
   } catch {
     return null
   }
+}
+
+function isRecord(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+export function isWorkflowEventPayload(value, expectedType = '') {
+  if (!isRecord(value)) return false
+  const sequence = Number(value.sequence ?? value.event_sequence)
+  if (!Number.isInteger(sequence) || sequence <= 0) return false
+  const eventType = value.event_type || expectedType
+  if (typeof eventType !== 'string' || !eventType) return false
+  return value.payload == null || isRecord(value.payload)
+}
+
+export function isRunSnapshotPayload(value) {
+  return isRecord(value) && (
+    typeof value.run_id === 'string'
+      || typeof value.run_status === 'string'
+      || typeof value.status === 'string'
+  )
 }
 
 export function runEventsUrl(runId, afterSequence = 0) {
@@ -61,6 +98,7 @@ export function createRunEventClient({
   let source = null
   let closed = false
   let lastSequence = Math.max(0, Number(afterSequence) || 0)
+  const seenSequences = new Set()
   let consecutiveErrors = 0
 
   function close() {
@@ -81,7 +119,7 @@ export function createRunEventClient({
 
     source.addEventListener('snapshot', (event) => {
       const payload = parseData(event)
-      if (!payload) return
+      if (!isRunSnapshotPayload(payload)) return
       consecutiveErrors = 0
       onSnapshot(payload)
       if (payload.is_terminal && lastSequence >= (payload.last_event_sequence || 0)) {
@@ -104,13 +142,22 @@ export function createRunEventClient({
     for (const eventType of WORKFLOW_EVENT_TYPES) {
       source.addEventListener(eventType, (event) => {
         const payload = parseData(event)
-        if (!payload) return
-        const sequence = Number(payload.sequence)
-        if (!Number.isInteger(sequence) || sequence <= lastSequence) return
-        lastSequence = sequence
+        if (!isWorkflowEventPayload(payload, eventType)) return
+        const normalized = payload.event_type ? payload : { ...payload, event_type: eventType }
+        const sequence = Number(normalized.sequence ?? normalized.event_sequence)
+        if (seenSequences.has(sequence)) return
+        // Native EventSource can briefly replay older durable events after a
+        // reconnect. Forward an unseen backfill once; the reducer performs
+        // resource-scoped monotonic merging and the cursor remains the max.
+        seenSequences.add(sequence)
+        if (seenSequences.size > 2000) {
+          const floor = Math.max(0, lastSequence - 1000)
+          for (const item of seenSequences) if (item < floor) seenSequences.delete(item)
+        }
+        lastSequence = Math.max(lastSequence, sequence)
         consecutiveErrors = 0
-        onWorkflowEvent(payload)
-        if (TERMINAL_EVENTS.has(payload.event_type)) terminal(payload)
+        onWorkflowEvent(normalized)
+        if (TERMINAL_EVENTS.has(normalized.event_type)) terminal(normalized)
       })
     }
 

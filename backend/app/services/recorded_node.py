@@ -34,6 +34,7 @@ NODE_METADATA: dict[str, tuple[str, str]] = {
     "claim_judge": ("claim_judge", "冻结证据 Claim 判定"),
     "claim_decide": ("claim_supervisor", "Claim 确定性决策"),
     "finalize": ("supervisor", "协同决策"),
+    "derive_html": ("HtmlPracticeGuideAgent", "派生互动 HTML"),
     "finalize_evidence_insufficient": ("supervisor", "证据不足终结"),
 }
 

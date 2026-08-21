@@ -59,6 +59,10 @@ export const generateApi = {
   listJobs: (learnerId) => api.get('/generate/jobs', { params: { learner_id: learnerId } }),
   getJobStatus: (runId) => api.get(`/generate/jobs/${runId}`),
   continueBatch: (batchId, data) => api.post(`/resources/batches/${batchId}/continuations`, data),
+  retryResourceRepresentation: (runId, resourceSpecId, representation) => api.post(
+    `/generate/jobs/${encodeURIComponent(runId)}/resource-specs/${encodeURIComponent(resourceSpecId)}`
+      + `/representations/${encodeURIComponent(representation)}/retry`,
+  ),
 }
 
 export const runApi = {
@@ -74,6 +78,8 @@ export const learningHistoryApi = {
 
 export const resourceApi = {
   listByLearner: (learnerId, params = {}) => api.get(`/resources/${learnerId}`, { params }),
+  get: (resourceId) => api.get(`/resources/items/${encodeURIComponent(resourceId)}`),
+  getPreview: (resourceId) => api.get(`/resources/items/${encodeURIComponent(resourceId)}/preview`),
   downloadUrl: (resourceId) => `/api/resources/file/${resourceId}`,
 }
 
@@ -84,6 +90,8 @@ export const feedbackApi = {
   submitAttempt: (data) => api.post('/feedback/attempts', data),
   submitRunAttempt: (data) => api.post('/feedback/attempts/run/submit', data),
   submitBatchAttempt: (data) => api.post('/feedback/attempts/batch/submit', data),
+  selectFollowup: (data) => api.post('/feedback/followups/select', data),
+  listResults: (learnerId, params = {}) => api.get(`/feedback/results/${learnerId}`, { params }),
   listAttempts: (learnerId, params = {}) => api.get(`/feedback/attempts/${learnerId}`, { params }),
   getPath: (learnerId) => api.get(`/feedback/path/${learnerId}`),
 }

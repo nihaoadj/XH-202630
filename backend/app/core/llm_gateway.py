@@ -135,6 +135,17 @@ def _numeric_retry_after(exc: Exception) -> float | None:
 
 
 def _map_exception(exc: Exception) -> _MappedFailure:
+    # LangChain raises this provider-neutral exception when a structured
+    # response ends because its output-token budget was exhausted.  It is not
+    # an upstream outage: classify it as truncation so the retry path and
+    # observability accurately reflect what happened.
+    if type(exc).__name__ == "LengthFinishReasonError":
+        return _MappedFailure(
+            ErrorCode.LLM_OUTPUT_TRUNCATED,
+            retryable=True,
+            category="parse",
+            safe_detail="finish_reason:length",
+        )
     if isinstance(exc, (APITimeoutError, TimeoutError)):
         return _MappedFailure(ErrorCode.LLM_TIMEOUT, retryable=True, category="timeout")
     if isinstance(exc, RateLimitError):
@@ -164,8 +175,15 @@ def _map_exception(exc: Exception) -> _MappedFailure:
         return _MappedFailure(ErrorCode.LLM_BAD_REQUEST, retryable=False, category="request")
     return _MappedFailure(
         ErrorCode.LLM_UPSTREAM_UNAVAILABLE,
-        retryable=False,
+        # Providers and their compatibility adapters can surface transient
+        # transport failures as plain RuntimeError/ValueError rather than an
+        # OpenAI SDK exception.  Treat an otherwise-unclassified failure as
+        # transient within the bounded call budget.  This is especially
+        # important for long HTML-guide responses: one adapter hiccup must not
+        # immediately turn a recoverable resource into human review.
+        retryable=True,
         category="upstream",
+        safe_detail=f"unexpected:{type(exc).__name__}",
     )
 
 
@@ -216,7 +234,13 @@ class LLMGateway:
         retry_base_delay_seconds: float = 0.5,
         retry_max_delay_seconds: float = 3.0,
         default_options: LLMCallOptions | None = None,
+        resource_generation_max_attempts: int | None = None,
         generator_max_output_tokens: int | None = None,
+        resource_generator_max_output_tokens: int | None = None,
+        html_practice_guide_text_max_output_tokens: int | None = None,
+        html_practice_guide_max_output_tokens: int | None = None,
+        html_practice_guide_request_timeout_seconds: float | None = None,
+        html_practice_guide_html_request_timeout_seconds: float | None = None,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
@@ -226,8 +250,32 @@ class LLMGateway:
         self.retry_base_delay_seconds = retry_base_delay_seconds
         self.retry_max_delay_seconds = retry_max_delay_seconds
         self.default_options = default_options or LLMCallOptions()
+        self.resource_generation_max_attempts = (
+            resource_generation_max_attempts
+            or self.default_options.max_attempts
+        )
         self.generator_max_output_tokens = (
             generator_max_output_tokens or self.default_options.max_output_tokens
+        )
+        self.resource_generator_max_output_tokens = (
+            resource_generator_max_output_tokens
+            or self.generator_max_output_tokens
+        )
+        self.html_practice_guide_max_output_tokens = (
+            html_practice_guide_max_output_tokens
+            or self.resource_generator_max_output_tokens
+        )
+        self.html_practice_guide_text_max_output_tokens = (
+            html_practice_guide_text_max_output_tokens
+            or self.resource_generator_max_output_tokens
+        )
+        self.html_practice_guide_request_timeout_seconds = (
+            html_practice_guide_request_timeout_seconds
+            or self.default_options.request_timeout_seconds
+        )
+        self.html_practice_guide_html_request_timeout_seconds = (
+            html_practice_guide_html_request_timeout_seconds
+            or self.html_practice_guide_request_timeout_seconds
         )
         self.sleep = sleep
         self.monotonic = monotonic
@@ -242,14 +290,52 @@ class LLMGateway:
     ) -> LLMCallOptions:
         """Return one immutable-per-call copy of the configured retry budget."""
 
-        max_tokens = (
-            self.generator_max_output_tokens
-            if node_name == "generator"
-            else self.default_options.max_output_tokens
+        resource_generation_nodes = {
+            "text_resource_agent",
+            "assessment_agent",
+        }
+        html_practice_text_nodes = {
+            # The canonical Markdown phase is the source for the later HTML
+            # derivation and has the same long-output characteristics as the
+            # HTML phase itself.  It must use the practice-guide budget rather
+            # than the ordinary text-resource budget.
+            "html_practice_text",
+            "html_practice_guide_text",
+        }
+        html_generation_nodes = {
+            "html_practice_html",
+            "html_practice_guide_html",
+            "html_practice_guide_agent",
+        }
+        if node_name in html_practice_text_nodes:
+            max_tokens = self.html_practice_guide_text_max_output_tokens
+            request_timeout_seconds = self.html_practice_guide_request_timeout_seconds
+        elif node_name in html_generation_nodes:
+            max_tokens = self.html_practice_guide_max_output_tokens
+            request_timeout_seconds = self.html_practice_guide_html_request_timeout_seconds
+        elif node_name in resource_generation_nodes:
+            max_tokens = self.resource_generator_max_output_tokens
+            request_timeout_seconds = self.default_options.request_timeout_seconds
+        elif node_name == "generator":
+            max_tokens = self.generator_max_output_tokens
+            request_timeout_seconds = self.default_options.request_timeout_seconds
+        else:
+            max_tokens = self.default_options.max_output_tokens
+            request_timeout_seconds = self.default_options.request_timeout_seconds
+        max_attempts = (
+            self.resource_generation_max_attempts
+            if node_name in (
+                resource_generation_nodes
+                | html_practice_text_nodes
+                | html_generation_nodes
+            )
+            else self.default_options.max_attempts
         )
         return self.default_options.model_copy(update={
             "temperature": temperature,
             "max_output_tokens": max_tokens,
+            "request_timeout_seconds": request_timeout_seconds,
+            "max_attempts": max_attempts,
         })
 
     def _remaining_seconds(self, context: LLMCallContext) -> float | None:
@@ -299,6 +385,92 @@ class LLMGateway:
             SystemMessage(content=repair),
         ]
 
+    @staticmethod
+    def _empty_output_recovery_messages(
+        messages: list[BaseMessage],
+        output_schema: type[BaseModel],
+        *,
+        recovery_attempt: int,
+    ) -> list[BaseMessage]:
+        """Ask for a fresh complete response after a provider returned nothing.
+
+        An empty provider response has no partial JSON to repair.  Replaying an
+        empty assistant message biases some OpenAI-compatible providers toward
+        another empty turn, so recovery deliberately starts from the original
+        task messages and adds an explicit completion instruction instead.
+        """
+
+        schema = json.dumps(output_schema.model_json_schema(), ensure_ascii=False)
+        instruction = (
+            "上一轮没有返回任何有效内容。请重新完整生成结果；不得留空、不得省略必填字段，"
+            "即使内容较长也必须先返回一个完整、可解析的 JSON 对象。"
+            f"这是第 {recovery_attempt} 次空输出恢复。\n"
+            f"JSON Schema：{schema}"
+        )
+        return [SystemMessage(content=instruction), *messages]
+
+    @staticmethod
+    def _compact_output_recovery_messages(
+        messages: list[BaseMessage],
+        output_schema: type[BaseModel],
+        *,
+        recovery_attempt: int,
+    ) -> list[BaseMessage]:
+        """Retry a truncated/unparseable response without replaying it verbatim."""
+
+        schema = json.dumps(output_schema.model_json_schema(), ensure_ascii=False)
+        instruction = (
+            "上一轮输出未能在预算内形成完整 JSON。请从头重新生成一个更紧凑、完整的 JSON 对象；"
+            "不得延续上一轮内容，不得解释，不得重复背景。优先保留全部必填字段与可执行步骤，"
+            "压缩每个字段的措辞，并在完成最后一个必填字段后立即结束。"
+            f"这是第 {recovery_attempt} 次紧凑恢复。\n"
+            f"JSON Schema：{schema}"
+        )
+        return [SystemMessage(content=instruction), *messages]
+
+    @staticmethod
+    def _compact_plain_text_recovery_messages(
+        messages: list[BaseMessage],
+        *,
+        content_kind: str,
+        recovery_attempt: int,
+    ) -> list[BaseMessage]:
+        """Retry a length-limited plain-text artifact without changing its format."""
+
+        if content_kind == "html":
+            instruction = (
+                "上一轮互动 HTML fragment 在输出上限前被截断。请从头输出一份完整但更紧凑的"
+                "HTML fragment；不要续写上一轮，不要输出 Markdown、JSON、代码围栏或解释。"
+                "保留所有源 section/step/代码/清单/自测 ID 与必需的 data-practice-* 标记，"
+                "压缩展示包装，并在最后一个 HTML 元素闭合后立即停止。"
+                f"这是第 {recovery_attempt} 次紧凑恢复。"
+            )
+        else:
+            instruction = (
+                "上一轮 Markdown 在输出上限前被截断。请从头输出一份完整但更紧凑的 Markdown，"
+                "不要续写上一轮，不要输出 JSON、代码围栏或解释；保留所有要求的标题层级、知识点与"
+                "练习，压缩措辞后在总结结束处立即停止。"
+                f"这是第 {recovery_attempt} 次紧凑恢复。"
+            )
+        return [SystemMessage(content=instruction), *messages]
+
+    @staticmethod
+    def _json_mode_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+        """Supply the provider-required JSON-object instruction once per call.
+
+        DeepSeek's OpenAI-compatible ``json_object`` response format rejects a
+        request unless one message explicitly contains the lower-case word
+        ``json``.  Keeping that transport compatibility rule here prevents
+        individual resource prompts from carrying provider-specific wording.
+        """
+
+        return [
+            SystemMessage(
+                content="Return exactly one valid json object and no surrounding text."
+            ),
+            *messages,
+        ]
+
     def _raise_final(
         self,
         *,
@@ -313,12 +485,14 @@ class LLMGateway:
         retry_count = max(0, len(attempts) - 1)
         error = _error_info(failure, source=context.node_name, attempt=attempt)
         logger.warning(
-            "LLM call failed run_id=%s step_id=%s call_id=%s node=%s code=%s attempt=%s retry_count=%s",
+            "LLM call failed run_id=%s step_id=%s call_id=%s node=%s code=%s category=%s detail=%s attempt=%s retry_count=%s",
             context.run_id,
             context.step_id,
             context.call_id,
             context.node_name,
             failure.code.value,
+            failure.category,
+            failure.safe_detail,
             attempt,
             retry_count,
         )
@@ -353,7 +527,8 @@ class LLMGateway:
             if auto_mode
             else options.structured_output_mode
         )
-        call_messages = list(messages)
+        original_messages = list(messages)
+        call_messages = list(original_messages)
         finish_reason: str | None = None
         repair_used = False
 
@@ -378,11 +553,12 @@ class LLMGateway:
             timeout = options.request_timeout_seconds
             if remaining is not None:
                 timeout = min(timeout, max(0.001, remaining))
-            prepared_messages = (
-                self._text_messages(call_messages, output_schema)
-                if mode == StructuredOutputMode.TEXT
-                else call_messages
-            )
+            if mode == StructuredOutputMode.TEXT:
+                prepared_messages = self._text_messages(call_messages, output_schema)
+            elif mode == StructuredOutputMode.JSON_MODE:
+                prepared_messages = self._json_mode_messages(call_messages)
+            else:
+                prepared_messages = call_messages
             attempt_started = self.monotonic()
             raw: RawLLMResponse | None = None
             try:
@@ -468,11 +644,14 @@ class LLMGateway:
                 and not repair_used
                 and failure.code
                 in {
-                    ErrorCode.LLM_OUTPUT_EMPTY,
                     ErrorCode.LLM_OUTPUT_TRUNCATED,
                     ErrorCode.LLM_OUTPUT_PARSE_FAILED,
                     ErrorCode.LLM_OUTPUT_SCHEMA_INVALID,
                 }
+            )
+            can_empty_output_retry = (
+                failure.code == ErrorCode.LLM_OUTPUT_EMPTY
+                and attempt < options.max_attempts
             )
             output_failure = failure.code in {
                 ErrorCode.LLM_OUTPUT_EMPTY,
@@ -482,7 +661,10 @@ class LLMGateway:
             }
             can_transport_retry = failure.retryable and not output_failure
             if attempt >= options.max_attempts or not (
-                can_transport_retry or can_text_fallback or can_repair
+                can_transport_retry
+                or can_text_fallback
+                or can_repair
+                or can_empty_output_retry
             ):
                 self._raise_final(
                     failure=failure,
@@ -503,6 +685,35 @@ class LLMGateway:
                     raw.content,
                     failure,
                 )
+            elif can_repair:
+                # A provider can report finish_reason=length before exposing
+                # any parseable raw payload.  Retrying the same prompt merely
+                # repeats the long response; retry once with an explicit
+                # compact-output recovery instruction instead.
+                repair_used = True
+                call_messages = self._compact_output_recovery_messages(
+                    original_messages,
+                    output_schema,
+                    recovery_attempt=attempt,
+                )
+            elif can_empty_output_retry:
+                call_messages = self._empty_output_recovery_messages(
+                    original_messages,
+                    output_schema,
+                    recovery_attempt=attempt,
+                )
+                delay = self._delay_for(attempt, failure.retry_after)
+                remaining = self._remaining_seconds(context)
+                if remaining is not None and delay >= remaining:
+                    self._raise_final(
+                        failure=failure,
+                        context=context,
+                        attempt=attempt,
+                        started_at=started_at,
+                        attempts=attempts,
+                        finish_reason=finish_reason,
+                    )
+                self.sleep(delay)
             else:
                 delay = self._delay_for(attempt, failure.retry_after)
                 remaining = self._remaining_seconds(context)
@@ -519,6 +730,119 @@ class LLMGateway:
 
         raise AssertionError("LLMGateway attempt loop exited unexpectedly")
 
+    def invoke_plain_text(
+        self,
+        *,
+        messages: list[BaseMessage],
+        context: LLMCallContext,
+        options: LLMCallOptions,
+    ) -> LLMCallResult[str]:
+        """Invoke a bounded Markdown/text generation without a JSON wrapper.
+
+        Long learning documents should not be encoded as one escaped JSON
+        string.  Besides wasting output tokens, that made a provider length
+        stop indistinguishable from a malformed resource.  This path retains
+        the gateway's timeout, retry and trace guarantees while returning the
+        model's plain text directly.
+        """
+
+        started_at = self.monotonic()
+        attempts: list[LLMAttemptSummary] = []
+        usages: list[LLMUsage] = []
+        original_messages = list(messages)
+        call_messages = list(original_messages)
+        finish_reason: str | None = None
+        compact_retry_used = False
+
+        for attempt in range(1, options.max_attempts + 1):
+            remaining = self._remaining_seconds(context)
+            if remaining is not None and remaining <= 0:
+                self._raise_final(
+                    failure=_MappedFailure(ErrorCode.LLM_TIMEOUT, retryable=True,
+                                           category="timeout", safe_detail="workflow_deadline_exhausted"),
+                    context=context, attempt=attempt, started_at=started_at,
+                    attempts=attempts, finish_reason=finish_reason,
+                )
+            timeout = options.request_timeout_seconds
+            if remaining is not None:
+                timeout = min(timeout, max(0.001, remaining))
+            attempt_started = self.monotonic()
+            raw: RawLLMResponse | None = None
+            try:
+                raw = self.transport.invoke(
+                    messages=call_messages,
+                    # TEXT mode never reads this schema; the parameter keeps
+                    # the transport protocol shared with structured calls.
+                    output_schema=BaseModel,
+                    mode=StructuredOutputMode.TEXT,
+                    timeout_seconds=timeout,
+                    temperature=options.temperature,
+                    max_output_tokens=options.max_output_tokens,
+                )
+                finish_reason = raw.finish_reason
+                if raw.response_metadata.get("refusal") or finish_reason == "content_filter":
+                    raise _MappedFailure(ErrorCode.LLM_CONTENT_REFUSED, retryable=False,
+                                         category="content")
+                if finish_reason == "length":
+                    raise _MappedFailure(ErrorCode.LLM_OUTPUT_TRUNCATED, retryable=True,
+                                         category="parse", safe_detail="finish_reason:length")
+                content = raw.content.strip() if isinstance(raw.content, str) else ""
+                if not content:
+                    raise _MappedFailure(ErrorCode.LLM_OUTPUT_EMPTY, retryable=True,
+                                         category="parse")
+                latency_ms = max(0, int((self.monotonic() - attempt_started) * 1000))
+                usages.append(raw.usage)
+                attempts.append(LLMAttemptSummary(
+                    attempt=attempt, status="success", latency_ms=latency_ms,
+                    structured_output_mode=StructuredOutputMode.TEXT, usage=raw.usage,
+                ))
+                return LLMCallResult(
+                    output=content, call_id=context.call_id, model_name=self.transport.model_name,
+                    provider_request_id=raw.provider_request_id,
+                    structured_output_mode=StructuredOutputMode.TEXT,
+                    attempt_count=attempt, retry_count=attempt - 1,
+                    latency_ms=max(0, int((self.monotonic() - started_at) * 1000)),
+                    finish_reason=finish_reason, usage=_usage_complete(usages), attempts=attempts,
+                )
+            except _MappedFailure as exc:
+                failure = exc
+            except Exception as exc:
+                failure = _map_exception(exc)
+
+            latency_ms = max(0, int((self.monotonic() - attempt_started) * 1000))
+            if raw:
+                usages.append(raw.usage)
+            attempts.append(LLMAttemptSummary(
+                attempt=attempt, status="retryable_error" if failure.retryable else "failed",
+                error_code=failure.code.value, latency_ms=latency_ms,
+                structured_output_mode=StructuredOutputMode.TEXT,
+                usage=raw.usage if raw else LLMUsage(),
+            ))
+            can_compact_retry = (
+                failure.code == ErrorCode.LLM_OUTPUT_TRUNCATED and not compact_retry_used
+            )
+            can_retry = failure.retryable and failure.code != ErrorCode.LLM_OUTPUT_TRUNCATED
+            if attempt >= options.max_attempts or not (can_compact_retry or can_retry):
+                self._raise_final(failure=failure, context=context, attempt=attempt,
+                                  started_at=started_at, attempts=attempts,
+                                  finish_reason=finish_reason)
+            if can_compact_retry:
+                compact_retry_used = True
+                call_messages = self._compact_plain_text_recovery_messages(
+                    original_messages,
+                    content_kind="html" if context.schema_name == "plain_html" else "markdown",
+                    recovery_attempt=attempt,
+                )
+            delay = self._delay_for(attempt, failure.retry_after)
+            remaining = self._remaining_seconds(context)
+            if remaining is not None and delay >= remaining:
+                self._raise_final(failure=failure, context=context, attempt=attempt,
+                                  started_at=started_at, attempts=attempts,
+                                  finish_reason=finish_reason)
+            self.sleep(delay)
+
+        raise AssertionError("LLMGateway plain-text attempt loop exited unexpectedly")
+
 
 @lru_cache()
 def default_llm_gateway() -> LLMGateway:
@@ -529,6 +853,9 @@ def default_llm_gateway() -> LLMGateway:
         LangChainChatTransport(settings),
         retry_base_delay_seconds=settings.llm_retry_base_delay_seconds,
         retry_max_delay_seconds=settings.llm_retry_max_delay_seconds,
+        resource_generation_max_attempts=(
+            settings.llm_resource_generation_max_attempts
+        ),
         default_options=LLMCallOptions(
             request_timeout_seconds=settings.llm_request_timeout_seconds,
             max_attempts=settings.llm_max_attempts,
@@ -538,4 +865,19 @@ def default_llm_gateway() -> LLMGateway:
             ),
         ),
         generator_max_output_tokens=settings.llm_generator_max_output_tokens,
+        resource_generator_max_output_tokens=(
+            settings.llm_resource_generator_max_output_tokens
+        ),
+        html_practice_guide_max_output_tokens=(
+            settings.llm_html_practice_guide_max_output_tokens
+        ),
+        html_practice_guide_text_max_output_tokens=(
+            settings.llm_html_practice_guide_text_max_output_tokens
+        ),
+        html_practice_guide_request_timeout_seconds=(
+            settings.llm_html_practice_guide_request_timeout_seconds
+        ),
+        html_practice_guide_html_request_timeout_seconds=(
+            settings.llm_html_practice_guide_html_request_timeout_seconds
+        ),
     )

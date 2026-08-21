@@ -2,8 +2,8 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：2.1
-> 文档更新时间：2026-08-16
+> 文档版本：2.2
+> 文档更新时间：2026-08-20
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 1. 架构目标
@@ -115,6 +115,12 @@
 - `generator.py`
 - `reviewer.py`
 - `feedback.py`
+- `resource_spec_builder.py`
+- `resource_agents/base.py`
+- `resource_agents/text.py`
+- `resource_agents/html_practice.py`
+- `resource_agents/assessment.py`
+- `resource_agents/registry.py`
 
 当前代码含义：
 
@@ -123,6 +129,8 @@
 - `backend/app/models/workflow.py` 定义版本化 `WorkflowState`、状态枚举和脱敏 `ErrorInfo`
 - `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 结构
 - `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
+- `generator.py` 保留历史文件名，但只负责资源 Spec 编排、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
+- 公共资源类型词汇由 `backend/app/models/resource_types.py` 唯一定义。首期路由为 `讲义 -> TextResourceAgent`、`实操指南 -> HtmlPracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`，唯一别名为 `定制讲义 -> 讲义`。
 
 ## 4. 当前主流程调用链
 
@@ -162,7 +170,8 @@ backend/app/agents
   |- diagnosis: 学情诊断 Agent
   |- retriever: 知识库检索 Agent（BM25 + Chroma 向量召回 + RRF 融合 + CrossEncoder 精排）
   |- planner: 学习路径规划 Agent
-  |- generator: 个性化资源生成 Agent
+  |- generator: ResourceSpec 编排与受限并发，不持有通用正文 Prompt
+  |- resource_agents: 按 resource_type 精确路由的专用生成 Agent
   |- reviewer: 审核纠偏 Agent
   |- feedback: 反馈决策 Agent
   |- claim_review: 独立 Claim 抽取、冻结 Evidence 判定与确定性指标
@@ -197,7 +206,25 @@ diagnose -> retrieve -> plan -> generate
                                                                |- approve + include_claim_check=false -> finalize
                                                                |- revise 且有额度 -> prepare_revision -> generate
                                                                |- reject/额度耗尽 -> finalize
+finalize -> derive_html -> END
 ```
+
+资源生成内部链路：
+
+```text
+GenerateRequest 请求校验与类型规范化
+-> ResourceSpec Builder 冻结 type/family/evidence/knowledge points/budget
+-> Generator 为每个 Spec 分配独立 worker_step_id，并以最大并发 2 调用专用 Agent
+-> Reviewer 按文本资源独立审核；Claim 启用时也按资源调用
+-> 已批准资源立即发布，不等待同批其他资源
+-> 已批准且已发布的实操指南文本进入 derive_html
+-> HtmlPracticeGuideAgent 使用 canonical Markdown + guide_manifest + hash 派生 HTML
+-> HTML 最小清洗与谱系校验通过后发布；失败只降级 HTML 表示，文本保持可用
+```
+
+实操指南是一个语义资源 family 的两种表示。`representation=text` 是 Reviewer/Claim 的唯一规范内容源，`representation=html` 不再参加通用内容审核；HTML 必须记录 `derived_from_resource_id`、`source_resource_version` 和 `canonical_text_hash`。数据库以 `(run_id, resource_spec_id, representation)` 唯一标识当前执行投影，以 `(run_id, resource_spec_id, representation, version)` 约束资源版本。
+
+第一期 HTML 门禁刻意保持简单：后端检查非空、大小、可清洗解析、危险标签/属性移除以及源 family/version/hash；章节覆盖、逐句一致性和互动完整性主要由转换 Prompt 约束。预览时再次清洗，前端使用 `iframe sandbox="allow-scripts"`，不授予 same-origin、表单、弹窗或顶层导航权限。
 
 ### 4.3 P0-07 反馈后真实闭环
 
@@ -247,6 +274,8 @@ WorkflowEvent Ledger 是唯一事件事实源，SSE 只是只读 transport，不
 连接先发 snapshot，再补发 durable event backlog，最后 live tail。浏览器断线只停止观看，不取消 BackgroundTasks/Workflow；重连使用原 EventSource 的 `Last-Event-ID`，或页面刷新后以 timeline 最后 sequence 作为 `after_sequence`。heartbeat 不进入 Event Ledger。两个客户端独立读取同一 append-only ledger，不存在 delivered/ack 或破坏性消费。
 
 GenerationJob/AgentRun 的 queued 竞态保持现有 ownership：Job 可先存在，SSE snapshot 此时 run_status 为空并等待 AgentRun。P0-08 没有引入 Redis、消息队列、WebSocket、自动 resume/cancel 或 token streaming。
+
+资源事件 payload 只公开 `resource_spec_id`、`resource_family_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`resource_id`、`review_id`、`agent_name`、`prompt_version`、`artifact_format`、`validation_status` 和安全错误码等白名单字段；不下发正文、Prompt 或模型原始响应。前端高层 Agent 流程保持不变，仅在生成/审核节点下展开资源级卡片。
 
 P0-06 的 Claim 抽取器与 Generator 相互独立。模型只能从资源、目标技能节点和当前
 Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、

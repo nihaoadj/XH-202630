@@ -68,6 +68,16 @@ def inspect_database_integrity(engine: Engine) -> dict[str, Any]:
             if missing_columns:
                 report["missing_resource_version_columns"] = sorted(missing_columns)
             else:
+                # Legacy practical guides may have two rows with the same
+                # type/version: Markdown text and its HTML sibling. Distinguish
+                # those representations while inspecting pre-migration data.
+                representation_expr = (
+                    "CASE WHEN lower(coalesce(mime_type, '')) = 'text/html' "
+                    "OR lower(coalesce(storage_type, '')) = 'file' "
+                    "THEN 'html' ELSE 'text' END"
+                    if {"mime_type", "storage_type"}.issubset(columns)
+                    else "'text'"
+                )
                 report["resource_version_duplicates"] = [
                     {
                         "run_id": row[0],
@@ -78,7 +88,8 @@ def inspect_database_integrity(engine: Engine) -> dict[str, Any]:
                     for row in connection.execute(text(
                         "SELECT run_id, resource_type, version, COUNT(*) "
                         "FROM generated_resources WHERE run_id IS NOT NULL "
-                        "GROUP BY run_id, resource_type, version HAVING COUNT(*) > 1"
+                        f"GROUP BY run_id, resource_type, version, {representation_expr} "
+                        "HAVING COUNT(*) > 1"
                     )).fetchall()
                 ]
                 report["resource_version_null_count"] = int(connection.execute(text(

@@ -356,7 +356,7 @@ const stepStage = ref('domain')
 const submittingProfile = ref(false)
 const submittingDiagnosis = ref(false)
 const submittingGeneration = ref(false)
-const selectedResourceTypes = ref(['讲义', '实操指南', '分阶段测试题'])
+const selectedResourceTypes = ref(['讲义', '实操指南', '分阶测试题'])
 const supplementalRequirements = ref('')
 
 const form = reactive({})
@@ -401,7 +401,7 @@ const generatedTopic = computed(() => {
   return `${directionName}${levelSummary}学习资源${focusSummary}${typeSummary}`
 })
 
-const resourceTypeOptions = ['讲义', '实操指南', '分阶段测试题', '复习清单', '学习路径建议']
+const resourceTypeOptions = ['讲义', '实操指南', '分阶测试题']
 
 const steps = [
   {
