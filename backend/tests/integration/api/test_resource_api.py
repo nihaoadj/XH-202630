@@ -36,6 +36,7 @@ def test_resource_filter_and_resource_id_download(monkeypatch):
             resource_type="讲义",
             difficulty="初级",
             run_id="run_recent",
+            batch_id="batch_source",
             file_path="data/generated_resources/text/resource_learner/resource_text.md",
             mime_type="text/markdown",
             knowledge_points=["RAG 基础概念"],
@@ -53,6 +54,7 @@ def test_resource_filter_and_resource_id_download(monkeypatch):
             resource_type="实操指南",
             difficulty="进阶",
             run_id="run_older",
+            batch_id="batch_source",
             knowledge_points=[],
             source_refs=[],
             publication_status="published",
@@ -68,6 +70,7 @@ def test_resource_filter_and_resource_id_download(monkeypatch):
             resource_type="讲义",
             difficulty="初级",
             run_id="run_draft",
+            batch_id="batch_draft",
             file_path="data/generated_resources/text/resource_learner/resource_draft.md",
             knowledge_points=[],
             source_refs=[],
@@ -91,6 +94,10 @@ def test_resource_filter_and_resource_id_download(monkeypatch):
     assert filtered_by_run.status_code == 200
     assert filtered_by_run.json()["total"] == 1
     assert filtered_by_run.json()["resources"][0]["resource_id"] == "resource_text"
+
+    filtered_by_batch = client.get("/api/resources/resource_learner?batch_id=batch_source")
+    assert filtered_by_batch.status_code == 200
+    assert filtered_by_batch.json()["total"] == 2
 
     monkeypatch.setattr(resources, "load_resource_file", lambda _: b"# generated resource")
     downloaded = client.get("/api/resources/file/resource_text")

@@ -231,6 +231,24 @@ def finalize_evidence_insufficient_node(state: AgentState) -> dict[str, Any]:
 
 def route_after_review(state: AgentState) -> str:
     decision = _review_decision(state)
+    retryable_generation_failure = any(
+        isinstance(item, dict)
+        and item.get("resource_id")
+        and (
+            item.get("validation_status") == "failed"
+            or item.get("error_code") in {
+                ErrorCode.LLM_OUTPUT_SCHEMA_INVALID.value,
+                ErrorCode.LLM_CONNECTION_FAILED.value,
+                ErrorCode.LLM_TIMEOUT.value,
+            }
+        )
+        for item in state.get("resource_executions", [])
+    )
+    if retryable_generation_failure and state.get("revision_count", 0) < state.get("max_iterations", 1):
+        # Generation/contract failures are transient and safe to retry. They
+        # previously went straight to human review, so one malformed test
+        # response could also prevent its sibling lecture from being retried.
+        return "prepare_revision"
     if decision == ReviewDecision.REVISE:
         if state.get("revision_count", 0) < state.get("max_iterations", 1):
             return "prepare_revision"
@@ -270,6 +288,30 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
     step_context = start_step(state, attempt=generation_attempt)
     review = state.get("review_result", {})
     targets = target_resource_types(review.get("revision_instructions", []))
+    targets.update(
+        item.get("resource_type")
+        for item in state.get("resource_executions", [])
+        if isinstance(item, dict)
+        and item.get("validation_status") == "failed"
+        and item.get("resource_type")
+    )
+    # Carry actionable reviewer feedback into the next generation context.
+    # Previously only the target resource type was consumed.
+    review_feedback = {
+        "suggestion": review.get("suggestion") or "",
+        "issues": [
+            issue for issue in review.get("issues", [])
+            if isinstance(issue, dict)
+            and (not issue.get("resource_type") or issue.get("resource_type") in targets)
+        ],
+        "revision_instructions": [
+            instruction for instruction in review.get("revision_instructions", [])
+            if isinstance(instruction, dict)
+            and instruction.get("target_resource_type") in targets
+        ],
+    }
+    constraints = dict(state.get("constraints") or {})
+    constraints["revision_feedback"] = review_feedback
     resources = [
         resource.model_copy(
             update={"review_status": ResourceStatus.REVISION_REQUESTED.value}
@@ -301,6 +343,7 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
         "current_node": "prepare_revision",
         "trace": [trace_item],
         "errors": [],
+        "constraints": constraints,
     }
 
 
@@ -399,7 +442,16 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     resources = []
     for resource in state.get("generated_resources", []):
         canonical_id = resource.resource_id
-        item_decision = str((resource_reviews.get(canonical_id) or {}).get("decision") or decision.value)
+        latest_result = resource_reviews.get(canonical_id) or {}
+        # Targeted revisions only return review results for regenerated items.
+        # Keep an already-approved untouched resource published instead of
+        # applying another resource's aggregate ``revise`` decision to it.
+        item_decision = str(latest_result.get("decision") or {
+            ResourceStatus.APPROVED.value: "approve",
+            ResourceStatus.REJECTED.value: "reject",
+            ResourceStatus.HUMAN_REVIEW.value: "human_review",
+            ResourceStatus.REVISION_REQUESTED.value: "revise",
+        }.get(resource.review_status, decision.value))
         if resource.resource_id in locked_resource_ids:
             item_status = ResourceStatus.HUMAN_REVIEW
         elif strict_with_degradation:

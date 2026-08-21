@@ -26,6 +26,7 @@
         <slot name="header-actions" :resource="res" />
         <el-tag round effect="plain" :type="difficultyType(res.difficulty)">{{ res.difficulty || '待分级' }}</el-tag>
         <el-button v-if="res.file_path" class="download-button" :icon="Download" @click="download(res.resource_id)">下载材料</el-button>
+        <slot name="header-end-actions" :resource="res" />
       </div>
     </header>
 

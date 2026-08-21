@@ -120,3 +120,37 @@ def test_report_excludes_superseded_and_replaced_resources():
 
     assert report["metric_summary"]["resource_count"] == 3
     assert {item.resource_id for item in report["recent_resources"]} == {"lecture", "assessment", "guide"}
+
+
+def test_report_keeps_prior_resource_visible_when_later_run_does_not_publish_replacement_type():
+    profile = LearnerProfile(
+        learner_id="learner", learner_type="测试", education="本科",
+        major="软件工程", learning_goal="闭环",
+    )
+    resources = MemoryResourceRepository()
+    jobs = MemoryGenerationJobRepository()
+    jobs.create("base", "learner", "检索", "kb", {"resource_types": ["分阶测试题"]}, batch_id="batch")
+    jobs.create(
+        "append-checklist", "learner", "检索", "kb",
+        {"resource_types": ["复习清单"], "constraints": {"replacement_resource_types": ["分阶测试题"]}},
+        batch_id="batch",
+    )
+    for run_id in ("base", "append-checklist"):
+        jobs.mark_completed(run_id, [])
+    for resource_id, run_id, resource_type in [
+        ("assessment", "base", "分阶测试题"),
+        ("checklist", "append-checklist", "复习清单"),
+    ]:
+        resources.save(
+            LearningResource(
+                resource_id=resource_id, learner_id="learner", topic="检索",
+                resource_type=resource_type, difficulty="初级", content_text="测试",
+                knowledge_points=["kp"], source_refs=[], publication_status="published",
+                run_id=run_id, batch_id="batch",
+            ),
+            "learner", "检索", run_id=run_id, batch_id="batch",
+        )
+
+    report = ReportService(resources, MemoryFeedbackRepository(), generation_job_repo=jobs).build_report(profile)
+
+    assert {item.resource_id for item in report["recent_resources"]} == {"assessment", "checklist"}

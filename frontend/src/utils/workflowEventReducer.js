@@ -205,11 +205,20 @@ function progressItems(source) {
     || []
 }
 
-export function applyResourceProgressSnapshot(state, source) {
+export function applyResourceProgressSnapshot(state, source, { authoritative = false } = {}) {
   if (!source) return state
   let resourceExecutions = state.resourceExecutions || []
   for (const item of progressItems(source)) {
-    resourceExecutions = upsertResourceExecution(resourceExecutions, item, item.last_sequence || 0)
+    // A persisted snapshot represents the latest durable state, even when a
+    // backfilled historical event has a larger sequence number.
+    const snapshotItem = authoritative
+      ? { ...item, last_sequence: Number.MAX_SAFE_INTEGER }
+      : item
+    resourceExecutions = upsertResourceExecution(
+      resourceExecutions,
+      snapshotItem,
+      snapshotItem.last_sequence || 0,
+    )
   }
   const summary = source.resource_progress_summary || source.progress_summary
   return {
@@ -325,7 +334,7 @@ export function hydrateWorkflowTimeline(timeline) {
     replay_completeness: timeline.replay_completeness,
     is_terminal: TERMINAL_STATUSES.has(timeline.run?.status),
   })
-  state = applyResourceProgressSnapshot(state, timeline)
+  state = applyResourceProgressSnapshot(state, timeline, { authoritative: true })
   for (const step of timeline.steps || []) {
     state.steps.push({
       key: step.step_id,
@@ -345,5 +354,9 @@ export function hydrateWorkflowTimeline(timeline) {
   const events = [...(timeline.events || [])]
     .sort((left, right) => Number(left.sequence || left.event_sequence || 0) - Number(right.sequence || right.event_sequence || 0))
   for (const event of events) state = reduceWorkflowEvent(state, event)
+  // The execution snapshot is the durable, current source of truth. Events
+  // are historical and may describe an earlier attempt or an old status before
+  // a targeted retry, so never let replay overwrite current visibility.
+  state = applyResourceProgressSnapshot(state, timeline)
   return state
 }

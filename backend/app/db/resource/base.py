@@ -50,6 +50,7 @@ class BaseResourceRepository(ABC):
         resource_type: Optional[str] = None,
         difficulty: Optional[str] = None,
         run_id: Optional[str] = None,
+        batch_id: Optional[str] = None,
     ) -> List[LearningResource]:
         pass
 
@@ -59,6 +60,7 @@ class BaseResourceRepository(ABC):
         resource_type: Optional[str] = None,
         difficulty: Optional[str] = None,
         run_id: Optional[str] = None,
+        batch_id: Optional[str] = None,
         *,
         offset: int = 0,
         limit: int = 20,
@@ -69,6 +71,7 @@ class BaseResourceRepository(ABC):
             resource_type,
             difficulty,
             run_id,
+            batch_id,
         )
         return resources[offset : offset + limit], len(resources)
 

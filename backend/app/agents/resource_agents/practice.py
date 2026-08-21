@@ -15,7 +15,8 @@ from .base import BaseResourceGenerationAgent
 
 PRACTICE_GUIDE_PROMPT = """你是 PracticeGuideAgent，只生成可直接阅读的 Markdown 实操指南。
 仅使用给定 evidence；不生成 HTML、脚本、组件标记或任何派生格式。内容依次包含：唯一一级标题、准备、实践步骤、检查清单、常见问题、复盘建议。每个步骤可执行且与知识点相关。直接输出 Markdown 正文。
-Markdown 标记必须直接书写，绝不能在行首为 #、>、|、---、列表编号或列表符号添加反斜杠转义。"""
+Markdown 标记必须直接书写，绝不能在行首为 #、>、|、---、列表编号或列表符号添加反斜杠转义。
+安全规则：不得展示、编造或硬编码任何密钥；尤其禁止 `OPENAI_API_KEY="示例值"`、`api_key="..."`、`openai.api_key = ...` 等写法。若需要说明认证，只写“通过部署环境预先注入 OPENAI_API_KEY”，代码仅可使用 `os.getenv("OPENAI_API_KEY")` 读取，且不得提供任何带引号的环境变量赋值示例。"""
 
 
 def _normalize_escaped_markdown_blocks(text: str) -> str:

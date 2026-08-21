@@ -30,7 +30,7 @@ assert.match(resourcesView, /向 Tutor 提问/, 'resource page must expose the T
 assert.match(feedbackView, /需要提示/, 'evaluation questions must expose the Tutor entry')
 assert.match(feedbackView, /hint_count: tutorHelpCount\.value/, 'formal attempt must carry Tutor usage')
 assert.match(drawer, /source_type: props\.contextType === 'question_help' && props\.batchId \? 'batch'/, 'batch feedback must create a batch-scoped Tutor session')
-assert.match(drawer, /@open="ensureSession"/, 'opening the drawer must restore or create a session')
+assert.match(drawer, /watch\(\(\) => props\.modelValue,[\s\S]*?ensureSession\(\)/, 'opening the panel must restore or create a session')
 assert.match(drawer, /tutorApi\.getSession/, 'refresh restore must load persisted turns')
 assert.match(drawer, /:disabled="!canSend"/, 'loading or sending must disable duplicate sends')
 assert.match(drawer, /<SourceRefList/, 'Tutor evidence must use the shared source component')

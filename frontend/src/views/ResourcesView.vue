@@ -1,4 +1,5 @@
 <template>
+  <div class="resources-layout" :class="{ 'has-tutor-panel': tutorOpen, 'is-focus-mode': isFocusMode }">
   <div class="resources-page" :class="{ 'is-focus-mode': isFocusMode }">
     <header class="learning-toolbar">
       <div class="toolbar-title">
@@ -53,8 +54,11 @@
             :selected-resource-id="selectedResourceId"
             @select-resource="selectedResourceId = $event"
           >
-            <template #header-actions>
-              <el-button type="primary" text @click="tutorOpen = true">向 Tutor 提问</el-button>
+            <template #header-end-actions>
+              <el-button class="tutor-trigger" @click="tutorOpen = true">
+                <el-icon><ChatDotRound /></el-icon>
+                <span>向 Tutor 提问</span>
+              </el-button>
             </template>
           </ResourceViewer>
         </main>
@@ -70,22 +74,25 @@
       <el-button class="focus-exit" :icon="Close" circle aria-label="退出专注学习模式" @click="exitFocusMode" />
     </el-tooltip>
 
-    <TutorDrawer
-      v-model="tutorOpen"
-      :learner-id="selectedLearnerId"
-      :resource="selectedResource"
-      :batch-id="activeTask?.batchId || ''"
-      :run-id="selectedResource?.run_id || ''"
-      context-type="resource_help"
-      :title="selectedResource ? `${selectedResource.resource_type || '学习资源'} · Tutor` : '学习导引'"
-    />
+  </div>
+  <TutorDrawer
+    v-model="tutorOpen"
+    :embedded="isFocusMode"
+    :full-height="isFocusMode"
+    :learner-id="selectedLearnerId"
+    :resource="selectedResource"
+    :batch-id="activeTask?.batchId || ''"
+    :run-id="selectedResource?.run_id || ''"
+    context-type="resource_help"
+    :title="selectedResource ? `${selectedResource.resource_type || '学习资源'} · Tutor` : '学习导引'"
+  />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Close, FullScreen, Refresh } from '@element-plus/icons-vue'
+import { ChatDotRound, Close, FullScreen, Refresh } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { generateApi, knowledgeApi, profileApi, resourceApi } from '../api'
 import { useAppStore } from '../stores/app'
@@ -116,11 +123,24 @@ const visibleResources = computed(() => {
   const supersededRunIds = new Set(
     generationJobs.value.filter((job) => job.superseded_by_run_id).map((job) => job.run_id),
   )
+  const publishedTypesByRun = new Map()
+  for (const resource of resources.value) {
+    if (!publishedTypesByRun.has(resource.run_id)) publishedTypesByRun.set(resource.run_id, new Set())
+    publishedTypesByRun.get(resource.run_id).add(resource.resource_type)
+  }
   const latestReplacementRunByType = new Map()
   for (const job of generationJobs.value) {
     if (job.superseded_by_run_id) continue
     const batchId = job.batch_id || job.run_id
-    const types = job.request_payload?.constraints?.replacement_resource_types || []
+    const requestedTypes = new Set(job.request_payload?.resource_types || [])
+    // A continuation can inherit stale replacement metadata from its source
+    // request. It must only replace types that this Run actually generated;
+    // otherwise a later checklist/case Run can hide an already-published test.
+    const types = (job.request_payload?.constraints?.replacement_resource_types || [])
+      .filter((type) => (
+        requestedTypes.has(type)
+        && publishedTypesByRun.get(job.run_id)?.has(type)
+      ))
     for (const type of types) {
       const key = `${batchId}:${type}`
       const current = latestReplacementRunByType.get(key)
@@ -328,6 +348,8 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
   min-height: calc(100dvh - 66px);
   gap: 12px;
   max-width: none;
+  width: 100%;
+  align-self: stretch;
   padding-bottom: 0;
 }
 
@@ -376,6 +398,7 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
   min-height: 0;
   flex: 1;
 }
@@ -388,7 +411,8 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
   width: 100%;
   max-height: none;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-bottom: 1px solid #dbe6ef;
+  border-radius: 10px 10px 0 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -398,15 +422,45 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
 .shelf-heading h3 { color: #172033; font-size: 17px; }
 .resource-item { flex: 0 0 clamp(178px, 18vw, 238px); width: auto; padding: 11px 8px; border-color: #d9e1ec; border-radius: 9px; background: #fff; }
 .shelf-footnote { display: none; }
-.reading-stage { min-height: 0; }
+.reading-stage { width: 100%; min-width: 0; min-height: 0; align-self: stretch; }
+.reading-stage :deep(.reader-card) {
+  width: 100%;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+.tutor-trigger {
+  height: 32px;
+  margin: 0;
+  padding: 0 11px;
+  border-color: #9cd8cf;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #edfafa, #eaf4ff);
+  color: #18756e;
+  font-weight: 750;
+  box-shadow: 0 3px 9px rgba(38, 133, 120, .12);
+}
+.tutor-trigger :deep(.el-icon) { margin-right: 1px; font-size: 15px; }
+.tutor-trigger:hover, .tutor-trigger:focus-visible { border-color: #238f82; background: #238f82; color: #fff; box-shadow: 0 6px 15px rgba(35, 143, 130, .24); }
+
+.resources-layout { min-height: calc(100dvh - 66px); }
+@media (min-width: 1101px) {
+  .resources-layout.has-tutor-panel.is-focus-mode { display: flex; align-items: stretch; gap: 0; }
+  .resources-layout.has-tutor-panel.is-focus-mode .resources-page { flex: 1 1 0; min-width: 0; margin: 0; }
+  .resources-layout.has-tutor-panel.is-focus-mode .reading-stage :deep(.reader-header) { flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+  .resources-layout.has-tutor-panel.is-focus-mode .reading-stage :deep(.reader-title-wrap) { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+  .resources-layout.has-tutor-panel.is-focus-mode .reading-stage :deep(.reader-actions) { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+  .resources-layout.is-focus-mode { min-height: 100dvh; height: 100dvh; }
+  .resources-layout.is-focus-mode .resources-page { flex: 1 1 0; min-width: 0; }
+}
+
 .representation-switch { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 .representation-switch :deep(.el-button) { min-width: 96px; }
 .reading-stage :deep(.reader-card) { min-height: calc(100dvh - 153px); }
 
-.resources-page.is-focus-mode { min-height: 100dvh; height: 100dvh; gap: 0; padding: 12px; overflow-y: auto; background: #f3f7fb; }
+.resources-page.is-focus-mode { min-height: 100dvh; height: 100dvh; gap: 0; padding: 0; overflow-y: auto; background: #f3f7fb; }
 .is-focus-mode .learning-toolbar, .is-focus-mode .resource-shelf { display: none; }
-.is-focus-mode .learning-workspace, .is-focus-mode .reading-stage { flex: 1; min-height: calc(100dvh - 24px); }
-.is-focus-mode .reading-stage :deep(.reader-card), .is-focus-mode .reading-stage :deep(.html-guide-card) { width: 100%; min-height: calc(100dvh - 24px); }
+.is-focus-mode .learning-workspace, .is-focus-mode .reading-stage { flex: 1; min-height: 100dvh; }
+.is-focus-mode .reading-stage :deep(.reader-card), .is-focus-mode .reading-stage :deep(.html-guide-card) { width: 100%; min-height: 100dvh; border-radius: 0; }
 .focus-exit { position: fixed; right: 20px; bottom: 20px; z-index: 20; width: 42px; height: 42px; margin: 0; border-color: #8ab7ac; box-shadow: 0 8px 22px rgb(23 58 72 / 20%); color: #fff; background: #276f63; }
 .focus-exit:hover, .focus-exit:focus-visible { border-color: #245e55; color: #fff; background: #1d584f; }
 
@@ -425,8 +479,8 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
   .shelf-heading { flex-basis: 132px; }
   .resource-item { flex-basis: 178px; }
   .reading-stage :deep(.reader-card) { min-height: auto; }
-  .resources-page.is-focus-mode { padding: 8px; }
-  .is-focus-mode .learning-workspace, .is-focus-mode .reading-stage, .is-focus-mode .reading-stage :deep(.reader-card), .is-focus-mode .reading-stage :deep(.html-guide-card) { min-height: calc(100dvh - 16px); }
+  .resources-page.is-focus-mode { padding: 0; }
+  .is-focus-mode .learning-workspace, .is-focus-mode .reading-stage, .is-focus-mode .reading-stage :deep(.reader-card), .is-focus-mode .reading-stage :deep(.html-guide-card) { min-height: 100dvh; }
   .focus-exit { right: 14px; bottom: 14px; }
 }
 </style>

@@ -336,6 +336,7 @@ class SQLResourceRepository(BaseResourceRepository):
         resource_type: Optional[str] = None,
         difficulty: Optional[str] = None,
         run_id: Optional[str] = None,
+        batch_id: Optional[str] = None,
     ) -> List[LearningResource]:
         with self.session_factory() as db:
             query = db.query(GeneratedResourceORM).filter_by(
@@ -348,6 +349,8 @@ class SQLResourceRepository(BaseResourceRepository):
                 query = query.filter_by(difficulty=difficulty)
             if run_id:
                 query = query.filter_by(run_id=run_id)
+            if batch_id:
+                query = query.filter_by(batch_id=batch_id)
             orms = query.order_by(GeneratedResourceORM.created_at.desc()).all()
         return [_orm_to_pydantic(orm) for orm in orms]
 
@@ -357,6 +360,7 @@ class SQLResourceRepository(BaseResourceRepository):
         resource_type: Optional[str] = None,
         difficulty: Optional[str] = None,
         run_id: Optional[str] = None,
+        batch_id: Optional[str] = None,
         *,
         offset: int = 0,
         limit: int = 20,
@@ -372,6 +376,8 @@ class SQLResourceRepository(BaseResourceRepository):
                 query = query.filter_by(difficulty=difficulty)
             if run_id:
                 query = query.filter_by(run_id=run_id)
+            if batch_id:
+                query = query.filter_by(batch_id=batch_id)
             total = query.with_entities(func.count(GeneratedResourceORM.resource_id)).scalar() or 0
             orms = (
                 query.order_by(

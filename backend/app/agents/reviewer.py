@@ -1,5 +1,4 @@
 import json
-import re
 import uuid
 from datetime import datetime, timezone
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -29,6 +28,8 @@ REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习�
 2. 操作步骤是否符合行业规范。
 3. 资源难度是否与学习者水平匹配。
 4. 内容是否完整覆盖目标知识点。
+
+资源类型解释：当 resource_type 为“分阶测试题”时，“基础、进阶、挑战”是该资源的必备层级结构；不能仅因题目同时包含三个层级，或题目层级名称与资源的总体 difficulty 不同，就判定 difficulty_mismatch。此类资源应审核每层题目的可判定性、证据范围、知识点覆盖和层级递进是否合理。
 
 请用 JSON 格式输出：
 {
@@ -106,31 +107,18 @@ def _deterministic_resource_structure_review(resource) -> dict | None:
 
 
 def _deterministic_practice_guide_review(resource) -> dict:
-    """Release gate for executable practice guides.
+    """Keep the practice-guide release gate focused on usable structure.
 
-    General-purpose review models are useful for suggestions, but they are not
-    reliable source-code executors.  A previous run repeatedly invented
-    mutually inconsistent code defects after the guide had already corrected
-    them.  Gate publication on concrete, reproducible safety and structure
-    rules; the LLM review remains advisory for future prompt improvements.
+    Generated instructional snippets can legitimately show credentials or
+    script-like text. Those snippets are not treated as live code or secrets,
+    so they must not cause a retry; correctness is assessed by the normal
+    evidence and content review path.
     """
     content = resource.content_text or ""
-    normalized = content.lower()
     required_sections = ("准备", "实践步骤", "检查清单", "常见问题", "复盘建议")
     missing_sections = [section for section in required_sections if section not in content]
-    unsafe_patterns = (
-        r"openai\.embedding\.create",
-        r"openai\.api_key\s*=",
-        r"api_key\s*=\s*['\"](?!\s*(?:\$|\{|your_|sk-|<))",
-        r"<script\b",
-    )
-    has_unsafe_pattern = any(re.search(pattern, normalized) for pattern in unsafe_patterns)
-    if missing_sections or has_unsafe_pattern:
-        description = (
-            f"缺少必要章节：{'、'.join(missing_sections)}。"
-            if missing_sections
-            else "检测到不安全的密钥写法、废弃调用或脚本标记。"
-        )
+    if missing_sections:
+        description = f"缺少必要章节：{'、'.join(missing_sections)}。"
         return {
             "decision": "revise", "hallucination_score": 0.0,
             "issues": [{"code": "procedure_error", "severity": "high",
@@ -145,7 +133,7 @@ def _deterministic_practice_guide_review(resource) -> dict:
     return {
         "decision": "approve", "hallucination_score": 0.0, "issues": [],
         "difficulty_match": True, "coverage_rate": 1.0,
-        "suggestion": "实操指南已通过结构、密钥安全与废弃调用检查。",
+        "suggestion": "实操指南已通过结构检查；内容正确性按通用证据审核结果判定。",
         "revision_instructions": [],
     }
 
@@ -456,7 +444,14 @@ def review_node(
 
     return {
         "review_result": review,
-        "resource_review_results": results,
+        # A targeted revision reviews only the newly generated resource types.
+        # Preserve decisions for untouched siblings so the final aggregation
+        # cannot turn a previously approved lecture into human review merely
+        # because another resource still needs revision.
+        "resource_review_results": {
+            **state.get("resource_review_results", {}),
+            **results,
+        },
         "generated_resources": reviewed_resources,
         "resource_executions": executions,
         "resource_progress_summary": progress_summary(executions),

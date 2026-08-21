@@ -227,7 +227,11 @@ def _reconcile_reviews(
         if item.get("resource_id") and item.get("review_id")
     }
     for resource in resources:
-        expected_id = expected.get(resource.resource_id)
+        # The materialized resource is the recorder's authoritative snapshot.
+        # During a revision, the aggregate review map can legitimately lag the
+        # newly materialized version; use its persisted review link before
+        # treating the resource as missing a review.
+        expected_id = expected.get(resource.resource_id) or resource.review_id
         # A failed/degraded resource is intentionally sent to human review
         # without a completed automated review record. It must not make the
         # already-terminal workflow fail during finalization.

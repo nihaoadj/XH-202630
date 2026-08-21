@@ -109,6 +109,7 @@ class MemoryResourceRepository(BaseResourceRepository):
         resource_type: Optional[str] = None,
         difficulty: Optional[str] = None,
         run_id: Optional[str] = None,
+        batch_id: Optional[str] = None,
     ) -> List[LearningResource]:
         resources = self.list_by_learner(learner_id)
         return [
@@ -117,6 +118,7 @@ class MemoryResourceRepository(BaseResourceRepository):
             if (resource_type is None or resource.resource_type == resource_type)
             and (difficulty is None or resource.difficulty == difficulty)
             and (run_id is None or getattr(resource, "run_id", None) == run_id)
+            and (batch_id is None or getattr(resource, "batch_id", None) == batch_id)
         ]
 
     def list_page_by_learner_with_filter(
@@ -125,6 +127,7 @@ class MemoryResourceRepository(BaseResourceRepository):
         resource_type: Optional[str] = None,
         difficulty: Optional[str] = None,
         run_id: Optional[str] = None,
+        batch_id: Optional[str] = None,
         *,
         offset: int = 0,
         limit: int = 20,
@@ -134,6 +137,7 @@ class MemoryResourceRepository(BaseResourceRepository):
             resource_type,
             difficulty,
             run_id,
+            batch_id,
         )
         return resources[offset : offset + limit], len(resources)
 

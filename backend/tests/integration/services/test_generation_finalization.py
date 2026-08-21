@@ -158,6 +158,26 @@ def test_reconcile_allows_unpublished_degraded_resource_without_review_record():
     )
 
 
+def test_reconcile_uses_materialized_review_link_for_published_revision():
+    """A published revision must reconcile even if the aggregate map is stale."""
+    audit = MemoryAuditRepository()
+    resource = _resource(
+        resource_id="lecture-revision",
+        review_id="review-revision",
+        review_status="approved",
+        publication_status="published",
+    )
+    audit.save_review(
+        resource.resource_id,
+        {"review_id": resource.review_id, "decision": "approve", "review_ids": {}},
+        "run-revision",
+    )
+    _reconcile_reviews(
+        [resource],
+        {"decision": "approve", "review_ids": {}},
+        run_id="run-revision",
+        audit_repo=audit,
+    )
 def test_sql_recorder_persists_degraded_resource_before_execution_foreign_key(tmp_path):
     """A degraded worker result remains reviewable instead of failing the run.
 

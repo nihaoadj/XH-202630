@@ -192,6 +192,13 @@ def generate_node(
         raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
     specs = _specs_for_state(state, node_input)
     revision_targets = target_resource_types(node_input.review_result.get("revision_instructions", []))
+    revision_targets.update(
+        item.get("resource_type")
+        for item in state.get("resource_executions", [])
+        if isinstance(item, dict)
+        and item.get("validation_status") == "failed"
+        and item.get("resource_type")
+    )
     active_types = (revision_targets if node_input.revision_count and node_input.generated_resources
                     else {item.resource_type for item in specs})
     if not active_types:

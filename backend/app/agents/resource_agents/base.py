@@ -91,7 +91,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         context: ResourceGenerationContext,
     ) -> dict[str, Any]:
         evidence = self._scoped_evidence(spec, context)
-        return {
+        payload = {
             "topic": context.topic,
             "resource_spec_id": spec.resource_spec_id,
             "resource_type": spec.resource_type,
@@ -112,6 +112,14 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
                 for item in evidence
             ],
         }
+        revision_feedback = context.constraints.get("revision_feedback")
+        if revision_feedback:
+            payload["revision_feedback"] = revision_feedback
+            payload["revision_guidance"] = (
+                "这是一次审核返工。仅修改审核反馈指出的问题，保留其余正确内容；"
+                "必须逐条落实 revision_instructions，并重新检查对应知识点覆盖。"
+            )
+        return payload
 
     @staticmethod
     def json_payload(value: Any) -> str:

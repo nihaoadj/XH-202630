@@ -5,10 +5,15 @@ from types import SimpleNamespace
 import pytest
 
 from app.agents.generator import generate_node
-from app.agents.resource_agents import CaseStudyAgent, ReviewChecklistAgent
+from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, ReviewChecklistAgent
+from app.agents.resource_agents.practice import PRACTICE_GUIDE_PROMPT
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
 from app.agents.resource_spec_builder import build_resource_specs
-from app.agents.reviewer import _deterministic_resource_structure_review, review_node
+from app.agents.reviewer import (
+    _deterministic_practice_guide_review,
+    _deterministic_resource_structure_review,
+    review_node,
+)
 from app.core.errors import ApplicationError, ErrorCode
 from app.models.agent_contracts import ResourceGenerationContext
 from app.models.schemas import GenerateRequest, LearnerProfile
@@ -135,6 +140,48 @@ def test_new_resource_types_are_registered_and_requestable():
         topic="受控检索",
         resource_types=["复习清单", "案例分析"],
     ).resource_types == ["复习清单", "案例分析"]
+
+
+def test_practice_guide_prompt_forbids_literal_secret_examples():
+    assert 'api_key="..."' in PRACTICE_GUIDE_PROMPT
+    assert 'os.getenv("OPENAI_API_KEY")' in PRACTICE_GUIDE_PROMPT
+
+
+def test_practice_guide_review_does_not_block_generated_secret_like_examples():
+    placeholder = SimpleNamespace(
+        resource_type="实操指南",
+        content_text="# 示例\n\n准备\n实践步骤\n检查清单\n常见问题\n复盘建议\n\nOPENAI_API_KEY=\"YOUR_API_KEY\"",
+    )
+    real_secret = SimpleNamespace(
+        resource_type="实操指南",
+        content_text="# 示例\n\n准备\n实践步骤\n检查清单\n常见问题\n复盘建议\n\napi_key=\"sk-abcdefghijklmnopqrstuvwx\"",
+    )
+
+    assert _deterministic_practice_guide_review(placeholder)["decision"] == "approve"
+    assert _deterministic_practice_guide_review(real_secret)["decision"] == "approve"
+
+
+def test_assessment_agent_retries_plain_text_structure_before_failing():
+    spec, context, evidence = _inputs("分阶测试题")
+
+    def output(prefix):
+        questions = "\n\n".join(
+            f"## q-{index:02d} · {level}\n{prefix}：说明受控检索中的关键做法。"
+            for index, level in enumerate(["基础"] * 4 + ["进阶"] * 4 + ["挑战"] * 4, 1)
+        )
+        return f"# 受控检索测试\n\n## 一、题目\n\n{questions}\n\n## 二、参考答案与解析\n\n" + "\n".join(
+            f"q-{index:02d}：依据证据回答。解析：答案应受证据约束。"
+            for index in range(1, 13)
+        )
+
+    malformed = "# 受控检索测试\n\n## 一、题目\n\n只有一题。"
+    gateway = ScriptedLLMGateway([malformed, output("正确")])
+    artifact = AssessmentAgent().generate(spec, context, llm_gateway=gateway)
+
+    assert artifact.metadata.validation_status == "validated"
+    assert len(gateway.calls) == 2
+    assert artifact.mime_type == "text/markdown"
+    assert artifact.artifact_data == {}
 
 
 def test_new_resource_types_have_a_deterministic_review_structure_gate():

@@ -23,16 +23,18 @@ class ResourceService:
         resource_type: str | None = None,
         difficulty: str | None = None,
         run_id: str | None = None,
+        batch_id: str | None = None,
     ) -> List[LearningResource]:
-        return self.repo.list_by_learner_with_filter(learner_id, resource_type, difficulty, run_id)
+        return self.repo.list_by_learner_with_filter(
+            learner_id, resource_type, difficulty, run_id, batch_id)
 
     def list_page_by_learner_with_filter(
         self, learner_id: str, resource_type: str | None = None,
-        difficulty: str | None = None, run_id: str | None = None,
+        difficulty: str | None = None, run_id: str | None = None, batch_id: str | None = None,
         *, page: int = 1, page_size: int = 20,
     ) -> tuple[List[LearningResource], int]:
         return self.repo.list_page_by_learner_with_filter(
-            learner_id, resource_type, difficulty, run_id,
+            learner_id, resource_type, difficulty, run_id, batch_id,
             offset=(page - 1) * page_size, limit=page_size)
 
     def get_published_detail(self, resource_id: str) -> ResourceDetail | None:

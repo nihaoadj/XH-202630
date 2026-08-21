@@ -142,6 +142,15 @@
             <el-option label="中级" value="中级" />
             <el-option label="高级" value="高级" />
           </el-select>
+          <el-button
+            class="custom-generation-button"
+            type="primary"
+            :loading="selectingOption === 'custom-selection'"
+            :disabled="!selectedResourceTypes.length"
+            @click="selectFeedbackOption('custom-selection')"
+          >
+            生成已选资源
+          </el-button>
             </div>
             <div class="recommendation-row"><span>推荐方案：</span>
           <el-button v-for="option in result.resource_options || []" :key="option.option_id" plain type="primary" :loading="selectingOption === option.option_id" :disabled="!selectedResourceTypes.length" @click="selectFeedbackOption(option.option_id)">{{ option.title }}</el-button>
@@ -206,11 +215,21 @@ const visibleResources = computed(() => {
   const supersededRunIds = new Set(
     generationJobs.value.filter((job) => job.superseded_by_run_id).map((job) => job.run_id),
   )
+  const publishedTypesByRun = new Map()
+  for (const resource of resources.value) {
+    if (!publishedTypesByRun.has(resource.run_id)) publishedTypesByRun.set(resource.run_id, new Set())
+    publishedTypesByRun.get(resource.run_id).add(resource.resource_type)
+  }
   const latestReplacementRunByType = new Map()
   for (const job of generationJobs.value) {
     if (job.superseded_by_run_id) continue
     const batchId = job.batch_id || job.run_id
-    const types = job.request_payload?.constraints?.replacement_resource_types || []
+    const requestedTypes = new Set(job.request_payload?.resource_types || [])
+    const types = (job.request_payload?.constraints?.replacement_resource_types || [])
+      .filter((type) => (
+        requestedTypes.has(type)
+        && publishedTypesByRun.get(job.run_id)?.has(type)
+      ))
     for (const type of types) {
       const key = `${batchId}:${type}`
       const current = latestReplacementRunByType.get(key)
@@ -641,6 +660,7 @@ onMounted(async () => { await loadResources() })
 .resource-selection-row,.recommendation-row { display:flex; flex-wrap:wrap; align-items:center; gap:9px; width:100%; color:#49687d; font-size:13px; font-weight:700; }
 .resource-type-choice { display:flex; flex-wrap:wrap; gap:5px 13px; }
 .difficulty-choice { width:120px; }
+.custom-generation-button { margin-left:auto; font-weight:750; }
 .result-actions { display:flex; grid-column:auto; justify-content:flex-end; gap:10px; }
 
 @media (max-width: 900px) {

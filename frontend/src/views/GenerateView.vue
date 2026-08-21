@@ -141,11 +141,11 @@
         <el-button
           v-if="selectedJob && selectedJob.job_status === 'completed'"
           class="status-action status-action-resource"
-          :icon="Refresh"
-          @click="loadResourcesForSelectedJob"
-          :loading="loadingResources"
+          :icon="hasRetryableResources ? RefreshRight : Refresh"
+          @click="hasRetryableResources ? regeneratePendingResources() : loadResourcesForSelectedJob()"
+          :loading="hasRetryableResources ? retrying : loadingResources"
         >
-          刷新资源
+          {{ hasRetryableResources ? `重新生成失败资源（${retryableResourceTypes.length}）` : '刷新资源' }}
         </el-button>
         <el-button
           v-if="selectedJob"
@@ -184,6 +184,7 @@
           :retrying-resource-key="retryingResourceKey"
           :retry-enabled="['completed', 'failed'].includes(selectedJob.job_status)"
           @open-child-run="openChildRun"
+          @open-resource="openGeneratedResource"
           @retry-resource="retryResource"
         />
       </div>
@@ -248,6 +249,29 @@
       </div>
       <el-button type="primary" @click="$router.push('/learning/new')">新建学习方向</el-button>
     </section>
+
+    <el-dialog
+      v-model="appendDialogVisible"
+      title="追加学习资源"
+      width="min(520px, calc(100vw - 32px))"
+      :close-on-click-modal="false"
+    >
+      <p class="append-resource-hint">请选择要加入当前资源批次的资源类型。</p>
+      <el-checkbox-group v-model="selectedAppendResourceTypes" class="append-resource-options">
+        <el-checkbox
+          v-for="option in appendResourceOptions"
+          :key="option.type"
+          :label="option.type"
+          :disabled="option.alreadyIncluded"
+        >
+          {{ option.type }}<span v-if="option.alreadyIncluded" class="append-resource-existing">（本批次已有）</span>
+        </el-checkbox>
+      </el-checkbox-group>
+      <template #footer>
+        <el-button @click="appendDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="appendingResources" @click="confirmAppendResources">开始追加</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -308,6 +332,8 @@ const resources = ref([])
 const retrying = ref(false)
 const retryingResourceKey = ref('')
 const appendingResources = ref(false)
+const appendDialogVisible = ref(false)
+const selectedAppendResourceTypes = ref([])
 const selectedRunId = ref(initialRunId)
 const selectedResourceId = ref('')
 const profiles = ref([])
@@ -334,6 +360,25 @@ const shortRunId = computed(() => (selectedJob.value?.run_id ? selectedJob.value
 const selectedResource = computed(
   () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
 )
+const retryableResourceTypes = computed(() => {
+  const retryableStates = new Set(['failed', 'human_review', 'revision_requested'])
+  const types = (timelineState.value.resourceExecutions || [])
+    .filter((item) => retryableStates.has(item.resource_execution_state))
+    .map((item) => item.resource_type)
+    .filter(Boolean)
+  return [...new Set(types)]
+})
+const hasRetryableResources = computed(() => (
+  selectedJob.value?.job_status === 'completed' && retryableResourceTypes.value.length > 0
+))
+const supportedAppendResourceTypes = ['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析']
+const appendResourceOptions = computed(() => {
+  const existingTypes = new Set(selectedJob.value?.request_payload?.resource_types || [])
+  return supportedAppendResourceTypes.map((type) => ({
+    type,
+    alreadyIncluded: existingTypes.has(type),
+  }))
+})
 
 function enterLearningMode() {
   if (!selectedJob.value || !selectedResource.value) return
@@ -375,6 +420,16 @@ function resolveTrackName(trackId) {
 function profileDisplayName(profile) {
   const snapshot = profile?.learning_preferences?.metadata?.user_profile_snapshot
   return snapshot?.display_name || snapshot?.name || profile?.learner_type || '未命名画像'
+}
+
+async function openGeneratedResource(item) {
+  if (!item?.resource_id || !selectedJob.value) return
+  if (!resources.value.some((resource) => resource.resource_id === item.resource_id)) {
+    await loadResourcesForSelectedJob()
+  }
+  if (resources.value.some((resource) => resource.resource_id === item.resource_id)) {
+    selectedResourceId.value = item.resource_id
+  }
 }
 
 function profileCreatedAt(profile) {
@@ -603,6 +658,8 @@ async function loadResourcesForSelectedJob() {
   loadingResources.value = true
   try {
     const res = await resourceApi.listByLearner(selectedLearnerId.value, {
+      // This page is scoped to the selected task Run. Cross-run aggregation
+      // belongs to the learner-facing Learning Resources page.
       run_id: selectedJob.value.run_id,
       page: 1,
       page_size: 100,
@@ -763,37 +820,59 @@ async function retryGeneration() {
   }
 }
 
-async function appendResources() {
+function appendResources() {
   const sourceJob = selectedJob.value
   const payload = sourceJob?.request_payload
   if (!sourceJob?.learner_id || !payload) {
     ElMessage.warning('该任务缺少追加资源所需的原始参数')
     return
   }
-  let value = ''
-  try {
-    const result = await ElMessageBox.prompt(
-      '填写要追加的资源类型，可用中文逗号分隔：讲义、实操指南、分阶测试题、复习清单、案例分析。',
-      '追加学习资源',
-      {
-        inputValue: (payload.resource_types || []).join('、'),
-        inputPlaceholder: '例如：复习清单、案例分析',
-        confirmButtonText: '开始追加',
-        cancelButtonText: '取消',
-        inputValidator: (input) => {
-          const values = String(input || '').split(/[、，,\s]+/).filter(Boolean)
-          const supported = new Set(['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析'])
-          return values.length && values.every((item) => supported.has(item))
-            ? true
-            : '仅支持：讲义、实操指南、分阶测试题、复习清单、案例分析'
-        },
-      },
-    )
-    value = result.value
-  } catch {
+  selectedAppendResourceTypes.value = appendResourceOptions.value
+    .filter((option) => !option.alreadyIncluded)
+    .map((option) => option.type)
+  appendDialogVisible.value = true
+}
+
+async function regeneratePendingResources() {
+  const sourceJob = selectedJob.value
+  const resourceTypes = retryableResourceTypes.value
+  if (!sourceJob?.learner_id || !resourceTypes.length) {
+    ElMessage.warning('当前任务没有可重新生成的资源')
     return
   }
-  const resourceTypes = [...new Set(String(value).split(/[、，,\s]+/).filter(Boolean))]
+  retrying.value = true
+  try {
+    const batchId = sourceJob.batch_id || sourceJob.run_id
+    const response = await generateApi.continueBatch(batchId, {
+      learner_id: sourceJob.learner_id,
+      resource_types: resourceTypes,
+      source_run_id: sourceJob.run_id,
+      replace_existing_types: true,
+      instructions: `统一重新生成本任务中未通过审核的资源：${resourceTypes.join('、')}。`,
+    })
+    selectedRunId.value = response.data.run_id
+    localStorage.setItem('current_generation_run_id', selectedRunId.value)
+    resources.value = []
+    resourcesLoaded.value = false
+    selectedResourceId.value = ''
+    await loadJobs(false)
+    await startRealtime(selectedRunId.value)
+    ElMessage.success(`已创建一个新任务，统一重新生成：${resourceTypes.join('、')}`)
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error?.response?.data?.detail || '重新生成失败资源失败')
+  } finally {
+    retrying.value = false
+  }
+}
+
+async function confirmAppendResources() {
+  const sourceJob = selectedJob.value
+  const resourceTypes = [...new Set(selectedAppendResourceTypes.value)]
+  if (!sourceJob?.learner_id || !resourceTypes.length) {
+    ElMessage.warning('请至少选择一种要追加的资源类型')
+    return
+  }
   appendingResources.value = true
   try {
     const batchId = sourceJob.batch_id || sourceJob.run_id
@@ -810,6 +889,7 @@ async function appendResources() {
     selectedResourceId.value = ''
     await loadJobs(false)
     await startRealtime(selectedRunId.value)
+    appendDialogVisible.value = false
     ElMessage.success(`已追加：${resourceTypes.join('、')}`)
   } catch (error) {
     console.error(error)
@@ -1349,6 +1429,27 @@ onBeforeUnmount(() => {
   color: #5d6b82;
 }
 
+.append-resource-hint {
+  margin: 0 0 14px;
+  color: #5d6b82;
+  font-size: 14px;
+}
+
+.append-resource-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.append-resource-options :deep(.el-checkbox) {
+  min-width: 0;
+  margin-right: 0;
+}
+
+.append-resource-existing {
+  color: #98a4b5;
+}
+
 @media (max-width: 1200px) {
   .job-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1391,6 +1492,10 @@ onBeforeUnmount(() => {
   .resource-select {
     width: 100%;
     min-width: 0;
+  }
+
+  .append-resource-options {
+    grid-template-columns: 1fr;
   }
 
 }

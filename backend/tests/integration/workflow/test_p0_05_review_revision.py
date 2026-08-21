@@ -125,6 +125,8 @@ def test_generator_revision_only_creates_targeted_resource_version():
             "retrieved_evidence": [evidence],
             "generated_resources": [previous_tutorial, previous_assessment],
             "review_result": {
+                "suggestion": "补充失败边界并说明适用条件。",
+                "issues": [{"code": "coverage_gap", "resource_type": "讲义", "description": "缺少失败边界"}],
                 "revision_instructions": [{
                     "issue_codes": ["coverage_gap"],
                     "target_resource_type": "讲义",
@@ -136,6 +138,19 @@ def test_generator_revision_only_creates_targeted_resource_version():
             "generation_attempt": 2,
             "revision_count": 1,
             "trace": [],
+            "constraints": {
+                "must_include_citations": True,
+                "revision_feedback": {
+                    "suggestion": "补充失败边界并说明适用条件。",
+                    "issues": [{"code": "coverage_gap", "resource_type": "讲义", "description": "缺少失败边界"}],
+                    "revision_instructions": [{
+                        "issue_codes": ["coverage_gap"],
+                        "target_resource_type": "讲义",
+                        "action": "补充失败边界",
+                        "priority": 1,
+                    }],
+                },
+            },
         },
         llm_gateway=gateway,
     )
@@ -144,6 +159,9 @@ def test_generator_revision_only_creates_targeted_resource_version():
     assert by_type["讲义"].parent_resource_id == "tutorial-v1"
     assert by_type["分阶测试题"].resource_id == "assessment-v1"
     assert result["trace"][0]["resource_ids"] == [by_type["讲义"].resource_id]
+    prompt = gateway.calls[0]["messages"][1].content
+    assert "补充失败边界" in prompt
+    assert "revision_feedback" in prompt
 
 
 def test_revision_review_only_rechecks_the_new_target_version():

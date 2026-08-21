@@ -4,6 +4,7 @@ import { createRunEventClient } from '../../../src/api/runEvents.js'
 import {
   applyRunSnapshot,
   createInitialTimelineState,
+  hydrateWorkflowTimeline,
   reduceWorkflowEvent,
 } from '../../../src/utils/workflowEventReducer.js'
 
@@ -61,6 +62,20 @@ assert.equal(state.steps[0].status, 'running')
 state = reduceWorkflowEvent(state, { ...started, event_id: 'evt-4', sequence: 4, event_type: 'step_succeeded', status: 'success' })
 assert.equal(state.steps.length, 1)
 assert.equal(state.steps[0].status, 'success')
+
+const hydrated = hydrateWorkflowTimeline({
+  run: { run_id: 'run-visible', status: 'completed' },
+  resource_executions: [{
+    run_id: 'run-visible', resource_spec_id: 'spec-1', representation: 'text',
+    resource_type: '讲义', state: 'approved', publication_status: 'published',
+  }],
+  events: [{
+    event_id: 'historic-rollback', sequence: 10, event_type: 'resource_human_review_requested',
+    payload: { resource_spec_id: 'spec-1', representation: 'text', state: 'human_review' },
+  }],
+})
+assert.equal(hydrated.resourceExecutions[0].resource_execution_state, 'approved', 'durable snapshot must override stale events')
+assert.equal(hydrated.resourceExecutions[0].publication_status, 'published')
 
 state = reduceWorkflowEvent(state, {
   event_id: 'evt-5',

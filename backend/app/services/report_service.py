@@ -223,6 +223,11 @@ class ReportService:
         superseded_run_ids = {
             job.run_id for job in jobs if job.superseded_by_run_id
         }
+        published_types_by_run: dict[str, set[str]] = {}
+        for resource in resources:
+            published_types_by_run.setdefault(resource.run_id or "", set()).add(
+                resource.resource_type
+            )
         latest_replacement_by_type = {}
         for job in jobs:
             if job.superseded_by_run_id:
@@ -232,6 +237,12 @@ class ReportService:
             )
             batch_id = job.batch_id or job.run_id
             for resource_type in types:
+                # Replacement metadata is declarative. It becomes effective
+                # only when this Run actually published that resource type;
+                # an appended checklist or failed retry must never hide an
+                # earlier published assessment or lecture.
+                if resource_type not in published_types_by_run.get(job.run_id, set()):
+                    continue
                 key = (batch_id, resource_type)
                 current = latest_replacement_by_type.get(key)
                 if current is None or str(job.created_at or "") > str(current.created_at or ""):

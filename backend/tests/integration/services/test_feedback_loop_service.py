@@ -121,6 +121,30 @@ def test_practice_updates_state_without_unnecessary_generation():
     assert jobs.list_by_learner("learner") == []
 
 
+def test_custom_followup_selection_generates_the_checked_resource_types():
+    service, learners, jobs, profile, resource = _setup()
+    result = service.process_learning_attempt(profile, resource, _request(0.4))
+
+    selected_types = ["讲义", "实操指南", "分阶测试题"]
+    selected = service.choose_followup(
+        learners.get("learner"),
+        FeedbackFollowupSelection(
+            learner_id="learner",
+            attempt_id=result.attempt.attempt_id,
+            option_id="custom-selection",
+            resource_types=selected_types,
+            difficulty="初级",
+        ),
+    )
+
+    assert selected.followup_generation_status == "queued"
+    followup_job = jobs.get(selected.followup_run_id)
+    assert followup_job.request_payload["resource_types"] == selected_types
+    assert followup_job.request_payload["difficulty_preference"] == "初级"
+    relation = service.feedback_loop_repo.get_followup_relation(selected.followup_run_id)
+    assert relation["parent_run_id"] == "source-run"
+
+
 def test_same_idempotency_key_replays_without_second_profile_update_or_job():
     service, learners, jobs, profile, resource = _setup()
     request = _request(0.4)

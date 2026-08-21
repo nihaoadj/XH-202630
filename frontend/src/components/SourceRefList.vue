@@ -32,8 +32,8 @@ function referenceScore(ref) {
 </script>
 
 <style scoped>
-.source-ref-list { display:grid; gap:7px; margin:0; padding:0; list-style:none; }
-.source-ref-list li { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:9px 11px; border:1px solid #e2e9f1; border-radius:8px; background:#f5f8fb; color:#53677e; font-size:12px; }
+.source-ref-list { display:grid; min-width:0; max-width:100%; gap:7px; margin:0; padding:0; list-style:none; }
+.source-ref-list li { display:flex; min-width:0; max-width:100%; align-items:center; justify-content:space-between; gap:14px; padding:9px 11px; border:1px solid #e2e9f1; border-radius:8px; background:#f5f8fb; color:#53677e; font-size:12px; }
 .source-ref-list li > div { min-width:0; }
 .source-ref-list strong,.source-ref-list small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .source-ref-list strong { font-weight:650; }.source-ref-list small { margin-top:3px; color:#8796a8; font-size:10px; }

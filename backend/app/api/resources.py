@@ -5,6 +5,7 @@ from fastapi.responses import Response
 
 from app.api.dependencies import ensure_profile_access
 from app.config import get_settings
+from app.core.file_storage import load_resource_file
 from app.core.health import build_health_report
 from app.models.schemas import (
     ContinueResourceBatchRequest,
@@ -168,6 +169,7 @@ def list_resources(
     resource_type: str | None = None,
     difficulty: str | None = None,
     run_id: str | None = None,
+    batch_id: str | None = None,
     page: int | None = Query(default=None, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     summary_only: bool = False,
@@ -183,11 +185,11 @@ def list_resources(
     resource_service: ResourceService = container.resource_service()
     if page is None:
         resources = resource_service.list_by_learner_with_filter(
-            learner_id, resource_type, difficulty, run_id)
+            learner_id, resource_type, difficulty, run_id, batch_id)
         total = len(resources)
     else:
         resources, total = resource_service.list_page_by_learner_with_filter(
-            learner_id, resource_type, difficulty, run_id,
+            learner_id, resource_type, difficulty, run_id, batch_id,
             page=page, page_size=page_size)
     if summary_only:
         resources = [item.model_copy(update={"content_text": None, "file_path": None})

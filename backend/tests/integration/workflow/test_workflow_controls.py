@@ -187,6 +187,41 @@ def test_decide_node_keeps_each_resource_review_lineage_isolated():
     assert executions["text-b"]["review_id"] == "review-b"
 
 
+def test_decide_node_preserves_prior_approval_for_untouched_revision_resource():
+    approved = LearningResource(
+        resource_id="already-approved", resource_spec_id="33333333-3333-3333-3333-333333333333",
+        resource_type="实操指南", difficulty="中级", content_text="approved", knowledge_points=["a"],
+        # The first review decision lives in resource_review_results. This
+        # simulates a targeted second review whose in-memory resource object
+        # was not refreshed, and must not hide the approved lecture.
+        source_refs=[], review_status="pending_review", publication_status="unpublished",
+    )
+    revised = LearningResource(
+        resource_id="needs-revision", resource_spec_id="44444444-4444-4444-4444-444444444444",
+        resource_type="分阶测试题", difficulty="中级", content_text="revision", knowledge_points=["b"],
+        source_refs=[], review_status="revision_requested", publication_status="unpublished",
+    )
+    result = workflow_module.decide_node({
+        "schema_version": "1.0", "run_id": "targeted-revision-run",
+        "generated_resources": [approved, revised],
+        "review_result": {"decision": "revise", "review_ids": {"needs-revision": "review-new"}},
+        "resource_review_results": {
+            "already-approved": {"decision": "approve"},
+            "needs-revision": {"decision": "revise"},
+        },
+        "resource_executions": [
+            {"resource_id": "already-approved", "representation": "text"},
+            {"resource_id": "needs-revision", "representation": "text"},
+        ],
+        "revision_count": 1, "max_iterations": 1, "errors": [], "trace": [],
+    })
+
+    by_id = {resource.resource_id: resource for resource in result["generated_resources"]}
+    assert by_id["already-approved"].review_status == "approved"
+    assert by_id["already-approved"].publication_status == "published"
+    assert by_id["needs-revision"].review_status == "human_review"
+
+
 def test_workflow_retry_guard_decides_after_max_iteration():
     assert workflow_module.decide_next({
         "review_result": {"decision": "revise"},
