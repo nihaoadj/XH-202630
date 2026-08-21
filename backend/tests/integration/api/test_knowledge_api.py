@@ -89,11 +89,14 @@ def test_knowledge_and_diagnosis_endpoints_keep_answers_on_server():
     directions_response = client.get("/api/knowledge/directions")
     assert directions_response.status_code == 200
     direction_ids = {item["learning_direction_id"] for item in directions_response.json()["directions"]}
-    assert {"demo_industrial_internet", "rag_engineering_training"} <= direction_ids
+    assert "rag_engineering_training" in direction_ids
+    assert "demo_industrial_internet" not in direction_ids
     domains_response = client.get("/api/knowledge/domains")
     assert domains_response.status_code == 200
     domains = domains_response.json()["domains"]
-    assert {domain["domain_id"] for domain in domains} >= {"ai_application", "industrial_internet"}
+    domain_ids = {domain["domain_id"] for domain in domains}
+    assert "ai_application" in domain_ids
+    assert "industrial_internet" not in domain_ids
     rag_domain = next(domain for domain in domains if domain["domain_id"] == "ai_application")
     assert any(track["track_id"] == "rag_engineering_training" for track in rag_domain["tracks"])
 

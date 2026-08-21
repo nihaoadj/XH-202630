@@ -59,7 +59,7 @@
       "name": "工业互联网",
       "description": "面向工业互联、边缘计算、设备数据采集与工业协议的培训。",
       "sort_order": 20,
-      "enabled": true,
+      "enabled": false,
       "tracks": [
         {
           "track_id": "demo_industrial_internet",
