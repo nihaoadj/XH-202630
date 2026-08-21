@@ -538,14 +538,8 @@ async function handleLogout() {
 }
 
 .is-sidebar-collapsed .context-panel {
-  max-height: 0;
-  margin: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  border-top-width: 0;
-  border-bottom-width: 0;
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(0);
   pointer-events: none;
 }
 
