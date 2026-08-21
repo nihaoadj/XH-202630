@@ -176,7 +176,7 @@ async function handleLogout() {
   z-index: 20;
   min-width: 0;
   display: grid;
-  grid-template-rows: 60px minmax(320px, 1fr) 246px 40px 40px;
+  grid-template-rows: 60px minmax(320px, 1fr) 184px 40px 40px;
   gap: 12px;
   padding: 20px 12px 16px;
   background: linear-gradient(180deg, #0f2a50 0%, #173d72 100%);
@@ -312,7 +312,7 @@ async function handleLogout() {
   min-width: 0;
   flex-direction: column;
   gap: 10px;
-  height: 246px;
+  height: 184px;
   padding: 14px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.08);
