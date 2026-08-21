@@ -138,8 +138,9 @@ async function handleLogout() {
 :global(#app) {
   width: 100%;
   height: 100%;
+  min-height: 100%;
   margin: 0;
-  overflow: visible;
+  overflow: hidden;
   background: #eef5ff;
   color: #0f2340;
 }
@@ -149,7 +150,9 @@ async function handleLogout() {
 }
 
 .app-shell {
+  height: 100vh;
   height: 100dvh;
+  min-height: 0;
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
   background:
@@ -441,6 +444,8 @@ async function handleLogout() {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 0 28px 28px;
 }
 
@@ -477,6 +482,7 @@ async function handleLogout() {
   .sidebar {
     gap: 14px;
     max-height: 35dvh;
+    min-height: 0;
   }
 
   .topbar {
