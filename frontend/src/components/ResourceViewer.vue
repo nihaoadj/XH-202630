@@ -75,6 +75,8 @@ function resourceKind(type) {
     '讲义': 'LECTURE',
     '实操指南': 'PRACTICAL GUIDE',
     '分阶测试题': 'PROGRESSIVE ASSESSMENT',
+    '复习清单': 'REVIEW CHECKLIST',
+    '案例分析': 'CASE STUDY',
   }
   return type ? `${type} · ${labels[type] || 'LEARNING MATERIAL'}` : 'LEARNING MATERIAL'
 }

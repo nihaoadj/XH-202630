@@ -39,10 +39,7 @@ class Settings(BaseSettings):
         normalized = str(value).strip()
         return normalized or None
     llm_request_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
-    # Resource-oriented runs include generation, review/claim evaluation and an
-    # optional second HTML derivation call.  The workflow budget therefore has
-    # to cover the longest supported serial path rather than one short batch
-    # generation request.
+    # Resource-oriented runs include generation and review/claim evaluation.
     llm_workflow_timeout_seconds: float = Field(default=1200.0, gt=0, le=1800)
     llm_max_attempts: int = Field(default=2, ge=1, le=3)
     # Resource generation produces the user-facing artifact. It receives one
@@ -68,33 +65,6 @@ class Settings(BaseSettings):
         ge=8192,
         le=65536,
     )
-    llm_html_practice_guide_text_max_output_tokens: int = Field(
-        # Canonical Markdown is long-form but no longer carries a duplicate
-        # JSON envelope or manifest, so the budget is usable by learning text.
-        default=32768,
-        ge=8192,
-        le=65536,
-    )
-    # HTML retains its own larger budget: it contains the complete canonical
-    # guide plus semantic/interactive markup.
-    llm_html_practice_guide_max_output_tokens: int = Field(
-        # The interactive representation repeats the complete canonical guide
-        # and adds semantic markup.  Reserve ample headroom for the first
-        # attempt so a valid guide is not needlessly forced into recovery.
-        default=32768,
-        ge=8192,
-        le=65536,
-    )
-    llm_html_practice_guide_request_timeout_seconds: float = Field(
-        default=180.0,
-        gt=0,
-        le=300,
-    )
-    llm_html_practice_guide_html_request_timeout_seconds: float = Field(
-        default=180.0,
-        gt=0,
-        le=300,
-    )
     llm_structured_output_mode: str = "auto"
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
     # The embedding model is part of the local runtime contract.  Do not turn
@@ -114,11 +84,6 @@ class Settings(BaseSettings):
         default=600,
         ge=100,
         le=4000,
-    )
-    html_practice_guide_max_bytes: int = Field(
-        default=1_048_576,
-        ge=4096,
-        le=5_242_880,
     )
     workflow_checkpoint_max_bytes: int = Field(default=65536, ge=4096, le=1048576)
     workflow_timeline_default_limit: int = Field(default=100, ge=1, le=500)
@@ -236,8 +201,6 @@ class Settings(BaseSettings):
     @field_validator(
         "llm_request_timeout_seconds",
         "llm_workflow_timeout_seconds",
-        "llm_html_practice_guide_request_timeout_seconds",
-        "llm_html_practice_guide_html_request_timeout_seconds",
         mode="before",
     )
     @classmethod
@@ -282,8 +245,6 @@ class Settings(BaseSettings):
         "llm_generator_max_output_tokens",
         "llm_resource_generator_max_input_tokens",
         "llm_resource_generator_max_output_tokens",
-        "llm_html_practice_guide_text_max_output_tokens",
-        "llm_html_practice_guide_max_output_tokens",
         mode="before",
     )
     @classmethod
@@ -301,11 +262,7 @@ class Settings(BaseSettings):
             1024
             if info.field_name == "llm_resource_generator_max_input_tokens"
             else 8192
-            if info.field_name in {
-                "llm_resource_generator_max_output_tokens",
-                "llm_html_practice_guide_text_max_output_tokens",
-                "llm_html_practice_guide_max_output_tokens",
-            }
+            if info.field_name == "llm_resource_generator_max_output_tokens"
             else 256
         )
         if not normalized.is_integer() or not lower_bound <= normalized <= upper_bound:
@@ -320,12 +277,7 @@ class Settings(BaseSettings):
         if not self.chroma_collection_prefix.strip():
             self.chroma_collection_prefix = "kb"
 
-        longest_request_timeout = max(
-            self.llm_request_timeout_seconds,
-            self.llm_html_practice_guide_request_timeout_seconds,
-            self.llm_html_practice_guide_html_request_timeout_seconds,
-        )
-        if self.llm_workflow_timeout_seconds <= longest_request_timeout:
+        if self.llm_workflow_timeout_seconds <= self.llm_request_timeout_seconds:
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         if self.workflow_run_lease_seconds < self.llm_workflow_timeout_seconds:
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")

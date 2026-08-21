@@ -172,26 +172,19 @@ def test_decide_node_keeps_each_resource_review_lineage_isolated():
         resource_id="text-b", resource_spec_id="22222222-2222-2222-2222-222222222222",
         resource_type="实操指南", difficulty="初级", content_text="B", knowledge_points=["b"], source_refs=[],
     )
-    html_b = LearningResource(
-        resource_id="html-b", resource_spec_id="22222222-2222-2222-2222-222222222222",
-        resource_type="实操指南", representation="html", difficulty="初级", content_text="<section></section>",
-        knowledge_points=["b"], source_refs=[], derived_from_resource_id="text-b",
-    )
-
     result = workflow_module.decide_node({
-        "schema_version": "1.0", "run_id": "lineage-run", "generated_resources": [text_a, text_b, html_b],
+        "schema_version": "1.0", "run_id": "lineage-run", "generated_resources": [text_a, text_b],
         "review_result": {"decision": "approve", "review_ids": {"text-a": "review-a", "text-b": "review-b"}},
         "resource_review_results": {"text-a": {"decision": "approve"}, "text-b": {"decision": "approve"}},
-        "resource_executions": [{"resource_id": "text-a", "representation": "text"}, {"resource_id": "html-b", "representation": "html"}],
+        "resource_executions": [{"resource_id": "text-a", "representation": "text"}, {"resource_id": "text-b", "representation": "text"}],
         "revision_count": 0, "max_iterations": 1, "errors": [], "trace": [],
     })
 
     by_id = {resource.resource_id: resource for resource in result["generated_resources"]}
     assert by_id["text-a"].review_id == "review-a"
     assert by_id["text-b"].review_id == "review-b"
-    assert by_id["html-b"].review_id == "review-b"
     executions = {item["resource_id"]: item for item in result["resource_executions"]}
-    assert executions["html-b"]["review_id"] == "review-b"
+    assert executions["text-b"]["review_id"] == "review-b"
 
 
 def test_workflow_retry_guard_decides_after_max_iteration():

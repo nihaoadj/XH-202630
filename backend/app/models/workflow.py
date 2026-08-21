@@ -66,11 +66,6 @@ class PublicationStatus(str, Enum):
     PUBLISHED = "published"
 
 
-class ResourceRepresentation(str, Enum):
-    TEXT = "text"
-    HTML = "html"
-
-
 class ResourceExecutionState(str, Enum):
     QUEUED = "queued"
     GENERATING = "generating"

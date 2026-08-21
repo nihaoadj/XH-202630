@@ -57,6 +57,54 @@ revise 必须包含至少一条 revision_instructions；approve 不得包含 rev
 """
 
 
+STRUCTURED_MARKDOWN_SECTIONS = {
+    "复习清单": ("复习目标", "必会清单", "易错点", "自测清单", "复习节奏"),
+    "案例分析": ("案例背景", "任务目标", "分析过程", "参考方案", "复盘要点"),
+}
+
+
+def _deterministic_resource_structure_review(resource) -> dict | None:
+    """Reject malformed specialized Markdown before an advisory LLM review."""
+
+    required_sections = STRUCTURED_MARKDOWN_SECTIONS.get(resource.resource_type)
+    if not required_sections:
+        return None
+    content = (resource.content_text or "").strip()
+    missing_sections = [
+        section for section in required_sections if f"## {section}" not in content
+    ]
+    has_script = "<script" in content.lower()
+    if content.startswith("# ") and not missing_sections and not has_script:
+        return None
+    description = (
+        "缺少唯一一级标题。"
+        if not content.startswith("# ")
+        else f"缺少必要章节：{'、'.join(missing_sections)}。"
+        if missing_sections
+        else "检测到脚本标记，资源只能包含 Markdown 文本。"
+    )
+    return {
+        "decision": "revise",
+        "hallucination_score": 0.0,
+        "issues": [{
+            "code": "structure_quality",
+            "severity": "high",
+            "resource_type": resource.resource_type,
+            "knowledge_point": None,
+            "description": description,
+        }],
+        "difficulty_match": True,
+        "coverage_rate": 0.0,
+        "suggestion": "请补齐资源结构后重新生成。",
+        "revision_instructions": [{
+            "issue_codes": ["structure_quality"],
+            "target_resource_type": resource.resource_type,
+            "action": description,
+            "priority": 1,
+        }],
+    }
+
+
 def _deterministic_practice_guide_review(resource) -> dict:
     """Release gate for executable practice guides.
 
@@ -258,6 +306,8 @@ def review_node(
                                "description": "资源引用未能映射到本次检索证据"}],
                    "difficulty_match": False, "coverage_rate": 0.0,
                    "suggestion": "引用证据不完整，禁止自动批准。", "revision_instructions": []}
+        elif structured_review := _deterministic_resource_structure_review(resource):
+            raw = structured_review
         elif resource.resource_type == "实操指南":
             raw = _deterministic_practice_guide_review(resource)
         else:
@@ -343,27 +393,6 @@ def review_node(
     for resource in node_input.generated_resources:
         canonical_resource_id = resource.resource_id
         result = results.get(canonical_resource_id)
-        # HTML is not an independently reviewed artifact.  It is a generated
-        # representation of the same practical-guide text and inherits that
-        # canonical text's decision and release gate.
-        if result is None and resource.representation.value == "html":
-            canonical = next(
-                (
-                    item for item in node_input.generated_resources
-                    if (
-                        item.resource_id == resource.derived_from_resource_id
-                        or (
-                            not resource.derived_from_resource_id
-                            and item.resource_spec_id == resource.resource_spec_id
-                        )
-                    )
-                    and item.representation.value == "text"
-                ),
-                None,
-            )
-            if canonical is not None:
-                canonical_resource_id = canonical.resource_id
-                result = results.get(canonical_resource_id)
         if result is None:
             reviewed_resources.append(resource)
             continue

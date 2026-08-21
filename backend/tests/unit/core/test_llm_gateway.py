@@ -171,7 +171,7 @@ def test_gateway_retries_unclassified_provider_adapter_failure():
     result = gateway.invoke_structured(
         messages=[HumanMessage(content="test")],
         output_schema=Payload,
-        context=context(node_name="html_practice_guide_agent"),
+        context=context(node_name="text_resource_agent"),
         options=options(),
     )
 
@@ -188,7 +188,7 @@ def test_gateway_classifies_length_finish_reason_as_truncated_and_retries():
     result = gateway.invoke_structured(
         messages=[HumanMessage(content="test")],
         output_schema=Payload,
-        context=context(node_name="html_practice_guide_agent"),
+        context=context(node_name="text_resource_agent"),
         options=options(),
     )
 
@@ -316,29 +316,7 @@ def test_resource_agents_receive_dedicated_empty_output_recovery_budget():
 
     assert gateway.options_for("text_resource_agent").max_attempts == 3
     assert gateway.options_for("assessment_agent").max_attempts == 3
-    assert gateway.options_for("html_practice_guide_html").max_attempts == 3
     assert gateway.options_for("reviewer").max_attempts == 2
-
-
-def test_practice_guide_canonical_text_uses_html_budget_and_timeout():
-    gateway = LLMGateway(
-        ScriptedLLMTransport([]),
-        default_options=options(
-            max_attempts=2,
-            max_output_tokens=4096,
-            request_timeout_seconds=30,
-        ),
-        resource_generation_max_attempts=3,
-        resource_generator_max_output_tokens=8192,
-        html_practice_guide_text_max_output_tokens=16384,
-        html_practice_guide_max_output_tokens=16384,
-        html_practice_guide_request_timeout_seconds=120,
-    )
-
-    practice_options = gateway.options_for("html_practice_guide_text")
-    assert practice_options.max_attempts == 3
-    assert practice_options.max_output_tokens == 16384
-    assert practice_options.request_timeout_seconds == 120
 
 
 @pytest.mark.parametrize(
@@ -546,20 +524,3 @@ def test_plain_text_retries_a_length_stop_with_compact_markdown_instruction():
     assert result.retry_count == 1
     assert result.output.startswith("# 完整讲义")
     assert transport.calls[1]["messages"][0].content.startswith("上一轮 Markdown")
-
-
-def test_plain_html_retries_a_length_stop_without_switching_to_markdown():
-    transport = ScriptedLLMTransport([
-        raw("<section>", finish_reason="length"),
-        raw('<section data-source-section-id="practice"></section>'),
-    ])
-
-    result = LLMGateway(transport, sleep=lambda _: None).invoke_plain_text(
-        messages=[HumanMessage(content="write interactive html")],
-        context=context(node_name="HtmlPracticeGuideAgent", schema_name="plain_html"),
-        options=options(max_attempts=2),
-    )
-
-    assert result.output.startswith("<section")
-    assert "互动 HTML fragment" in transport.calls[1]["messages"][0].content
-    assert "请从头输出一份完整但更紧凑的 Markdown" not in transport.calls[1]["messages"][0].content

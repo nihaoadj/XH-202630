@@ -65,13 +65,6 @@ class Container(containers.DeclarativeContainer):
         default_options=llm_call_options,
         generator_max_output_tokens=config.llm_generator_max_output_tokens,
         resource_generator_max_output_tokens=config.llm_resource_generator_max_output_tokens,
-        html_practice_guide_text_max_output_tokens=(
-            config.llm_html_practice_guide_text_max_output_tokens
-        ),
-        html_practice_guide_max_output_tokens=config.llm_html_practice_guide_max_output_tokens,
-        html_practice_guide_request_timeout_seconds=(
-            config.llm_html_practice_guide_request_timeout_seconds
-        ),
     )
 
     vector_store = providers.Singleton(get_vector_store)

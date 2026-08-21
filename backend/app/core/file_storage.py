@@ -18,13 +18,14 @@ RESOURCE_TYPE_MAP = {
     "讲义": "text",
     "实操指南": "text",
     "分阶测试题": "text",
+    "复习清单": "text",
+    "案例分析": "text",
     "text": "text",
     "ppt": "ppt",
     "video": "video",
     "pdf": "pdf",
     "audio": "audio",
     "image": "image",
-    "html": "html",
 }
 
 # 常见 MIME 类型映射
@@ -35,7 +36,6 @@ MIME_TYPE_MAP = {
     "pdf": "application/pdf",
     "audio": "audio/mpeg",
     "image": "image/png",
-    "html": "text/html",
 }
 
 
@@ -65,7 +65,6 @@ def _guess_extension(resource_type: str) -> str:
         "pdf": ".pdf",
         "audio": ".mp3",
         "image": ".png",
-        "html": ".html",
     }
     sub_dir = _guess_sub_dir(resource_type)
     return ext_map.get(sub_dir, ".bin")
@@ -121,21 +120,6 @@ def save_text_resource(
 ) -> Tuple[str, int, str]:
     """保存文本类资源到磁盘，返回文件路径信息"""
     return save_resource_file(learner_id, resource_type, text.encode("utf-8"), resource_id)
-
-
-def save_html_resource(
-    learner_id: str,
-    html_fragment: str,
-    resource_id: Optional[str] = None,
-) -> Tuple[str, int, str]:
-    """Persist an already-sanitized practice fragment in the controlled HTML tree."""
-
-    return save_resource_file(
-        learner_id,
-        "html",
-        html_fragment.encode("utf-8"),
-        resource_id,
-    )
 
 
 def load_resource_file(relative_path: str) -> bytes:

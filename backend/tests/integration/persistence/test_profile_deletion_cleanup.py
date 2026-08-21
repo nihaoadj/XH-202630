@@ -55,8 +55,8 @@ def test_sql_profile_delete_removes_all_learner_artifacts_and_resource_files(tmp
 
     resources_dir = tmp_path / "generated_resources"
     learner_id = "learner_to_delete"
-    (resources_dir / "html" / learner_id).mkdir(parents=True)
-    (resources_dir / "html" / learner_id / "guide.html").write_text("<main>guide</main>", encoding="utf-8")
+    (resources_dir / "text" / learner_id).mkdir(parents=True)
+    (resources_dir / "text" / learner_id / "guide.md").write_text("# guide", encoding="utf-8")
     monkeypatch.setattr(file_storage, "_get_resources_dir", lambda: resources_dir)
 
     engine = configure_sqlite_foreign_keys(create_engine(
@@ -372,7 +372,7 @@ def test_sql_profile_delete_removes_all_learner_artifacts_and_resource_files(tmp
 
     repository = SQLLearnerRepository(session_factory)
     assert repository.delete(learner_id) is True
-    assert not (resources_dir / "html" / learner_id).exists()
+    assert not (resources_dir / "text" / learner_id).exists()
 
     with session_factory() as db:
         assert db.get(LearnerProfileORM, learner_id) is None

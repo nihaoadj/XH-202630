@@ -396,25 +396,9 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     }
     now = datetime.now(timezone.utc)
 
-    def canonical_resource_id(resource):
-        """Return the text resource that owns review/claim lineage."""
-
-        if resource.representation.value != "html":
-            return resource.resource_id
-        if resource.derived_from_resource_id:
-            return resource.derived_from_resource_id
-        return next(
-            (
-                item.resource_id for item in state.get("generated_resources", [])
-                if item.resource_spec_id == resource.resource_spec_id
-                and item.representation.value == "text"
-            ),
-            resource.resource_id,
-        )
-
     resources = []
     for resource in state.get("generated_resources", []):
-        canonical_id = canonical_resource_id(resource)
+        canonical_id = resource.resource_id
         item_decision = str((resource_reviews.get(canonical_id) or {}).get("decision") or decision.value)
         if resource.resource_id in locked_resource_ids:
             item_status = ResourceStatus.HUMAN_REVIEW
@@ -439,13 +423,9 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     metrics = state.get("claim_metrics", {})
     enriched_resources = []
     for resource in resources:
-        canonical_id = canonical_resource_id(resource)
         metric = metrics.get(resource.resource_id, {})
         enriched_resources.append(resource.model_copy(update={
-            # A derived HTML representation has no independent review.  Keep
-            # the canonical text review instead of leaking the previous loop's
-            # resource ID into this row.
-            "review_id": review_ids.get(canonical_id) or resource.review_id,
+            "review_id": review_ids.get(resource.resource_id) or resource.review_id,
             "claim_count": metric.get("claim_total", review.get("claim_total")),
             "legacy_reviewer_score": review.get("hallucination_score"),
             "claim_hallucination_rate": metric.get("claim_hallucination_rate"),

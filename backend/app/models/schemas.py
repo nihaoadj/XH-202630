@@ -22,7 +22,6 @@ class ResourceRepresentation(str, Enum):
     """A published resource's concrete presentation format."""
 
     TEXT = "text"
-    HTML = "html"
 
 
 class ResourceExecutionState(str, Enum):
@@ -432,10 +431,6 @@ class LearningResource(BaseModel):
     resource_spec_id: Optional[str] = None
     resource_family_id: Optional[str] = None
     representation: ResourceRepresentation = ResourceRepresentation.TEXT
-    derived_from_resource_id: Optional[str] = None
-    source_resource_version: Optional[int] = Field(default=None, ge=1)
-    canonical_text_hash: Optional[str] = Field(default=None, max_length=64)
-    guide_manifest: Dict[str, Any] = Field(default_factory=dict)
     claim_count: Optional[int] = None
     legacy_reviewer_score: Optional[float] = None
     claim_hallucination_rate: Optional[float] = None
@@ -776,30 +771,6 @@ class ResourceDetailResponse(BaseModel):
 
     schema_version: Literal["1.0"] = "1.0"
     resource: ResourceDetail
-
-
-class HtmlResourcePreview(BaseModel):
-    """Safe preview payload for a published interactive HTML representation."""
-
-    schema_version: Literal["1.0"] = "1.0"
-    resource_id: str
-    resource_type: str
-    representation: Literal["html"] = "html"
-    status: Literal["published"] = "published"
-    is_published: Literal[True] = True
-    html_fragment: str
-    resource_family_id: Optional[str] = None
-    derived_from_resource_id: Optional[str] = None
-    source_resource_version: Optional[int] = None
-    canonical_text_hash: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class HtmlResourcePreviewResponse(BaseModel):
-    """Envelope for a published interactive HTML preview fragment."""
-
-    schema_version: Literal["1.0"] = "1.0"
-    preview: HtmlResourcePreview
 
 
 class EvaluationSummary(BaseModel):

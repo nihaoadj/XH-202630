@@ -45,20 +45,8 @@
         </aside>
 
         <main class="reading-stage">
-          <div v-if="selectedMaterial?.interactiveAvailable" class="representation-switch" role="group" aria-label="实操指南显示方式">
-            <el-button :type="viewMode === 'text' ? 'primary' : 'default'" @click="viewMode = 'text'">文本指南</el-button>
-            <el-button :type="viewMode === 'html' ? 'primary' : 'default'" @click="viewMode = 'html'">互动实践</el-button>
-          </div>
-          <HtmlPracticeGuideViewer
-            v-if="viewMode === 'html' && selectedMaterial?.interactiveAvailable"
-            :resource="selectedMaterial.html"
-            :progress-label="resourceProgress"
-            :resource-choices="isFocusMode ? activeResources : []"
-            :selected-resource-id="selectedResourceId"
-            @select-resource="selectedResourceId = $event"
-          />
           <ResourceViewer
-            v-else-if="selectedResource"
+            v-if="selectedResource"
             :resources="[selectedResource]"
             :progress-label="resourceProgress"
             :resource-choices="isFocusMode ? activeResources : []"
@@ -89,8 +77,6 @@ import { generateApi, knowledgeApi, profileApi, resourceApi } from '../api'
 import { useAppStore } from '../stores/app'
 import { formatDateTime } from '../utils/generationDisplay'
 import ResourceViewer from '../components/ResourceViewer.vue'
-import HtmlPracticeGuideViewer from '../components/HtmlPracticeGuideViewer.vue'
-import { buildResourceMaterials, unwrapResourceDetail } from '../utils/resourceRepresentations'
 
 const route = useRoute()
 const router = useRouter()
@@ -104,7 +90,6 @@ const loading = ref(false)
 const profiles = ref([])
 const tracks = ref([])
 const generationJobs = ref([])
-const viewMode = ref('text')
 const resourceDetails = ref({})
 let detailRequestGeneration = 0
 
@@ -175,17 +160,14 @@ const taskGroups = computed(() => {
   })
 })
 const activeTask = computed(() => taskGroups.value.find((item) => item.runId === selectedRunId.value) || taskGroups.value[0] || null)
-const activeMaterials = computed(() => buildResourceMaterials(activeTask.value?.resources || []))
-const activeResources = computed(() => activeMaterials.value.map((item) => item.displayResource))
-const selectedMaterial = computed(() => {
-  const material = activeMaterials.value.find(
-    (item) => item.displayResource.resource_id === selectedResourceId.value,
-  ) || activeMaterials.value[0] || null
-  if (!material?.text?.resource_id) return material
-  const detail = resourceDetails.value[material.text.resource_id]
-  return detail ? { ...material, text: detail, displayResource: detail } : material
+const activeResources = computed(() => activeTask.value?.resources || [])
+const selectedResource = computed(() => {
+  const resource = activeResources.value.find(
+    (item) => item.resource_id === selectedResourceId.value,
+  ) || activeResources.value[0] || null
+  if (!resource?.resource_id) return resource
+  return resourceDetails.value[resource.resource_id] || resource
 })
-const selectedResource = computed(() => selectedMaterial.value?.displayResource || null)
 const activeResourceIndex = computed(() => {
   const index = activeResources.value.findIndex((item) => item.resource_id === selectedResource.value?.resource_id)
   return index < 0 ? 0 : index + 1
@@ -211,7 +193,6 @@ function syncSelectedRun() {
 
 function syncSelectedResource() {
   if (!activeResources.value.some((item) => item.resource_id === selectedResourceId.value)) selectedResourceId.value = activeResources.value[0]?.resource_id || ''
-  viewMode.value = 'text'
 }
 
 async function loadSelectedResourceDetail() {
@@ -222,7 +203,7 @@ async function loadSelectedResourceDetail() {
   try {
     const response = await resourceApi.get(resourceId)
     if (generation !== detailRequestGeneration) return
-    const detail = unwrapResourceDetail(response.data)
+    const detail = response.data?.resource || response.data?.item || response.data
     if (detail?.resource_id === resourceId) {
       resourceDetails.value = { ...resourceDetails.value, [resourceId]: detail }
     }

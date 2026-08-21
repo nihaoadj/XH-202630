@@ -54,7 +54,7 @@ class WorkflowArtifactRecorder:
             for resource in state.get("generated_resources", [])
             if isinstance(resource, LearningResource)
         }
-        if node_name in {"generator", "derive_html"}:
+        if node_name == "generator":
             immediate_resource_events = {
                 event.event_id
                 for event in self.audit_repository.list_events(run_id, limit=10_000)
@@ -149,7 +149,7 @@ class WorkflowArtifactRecorder:
                 # so passing it as-is makes SQLAuditRepository generate a second,
                 # random id and finalization cannot reconcile the recorder-owned
                 # review.  Supplying the single-resource map makes persistence
-                # idempotent and keeps text/HTML inheritance on the same lineage.
+                # idempotent.
                 item_review["review_ids"] = {str(resource_id): str(review_id)}
                 persisted_review_id = self.audit_repository.save_review(
                     str(resource_id), item_review, run_id
@@ -195,34 +195,6 @@ class WorkflowArtifactRecorder:
                             **self._resource_event_payload(updated, state, "approved"),
                         },
                     )
-            # HTML is not independently reviewed, but its durable projection
-            # must inherit the canonical text review before finalization reads
-            # the database. The workflow state already carries this lineage;
-            # persist it here as part of the same reviewer boundary.
-            for html in resources.values():
-                if getattr(html.representation, "value", html.representation) != "html":
-                    continue
-                canonical_id = html.derived_from_resource_id
-                if not canonical_id:
-                    canonical_id = next(
-                        (
-                            item.resource_id
-                            for item in resources.values()
-                            if getattr(item.representation, "value", item.representation) == "text"
-                            and item.resource_spec_id == html.resource_spec_id
-                        ),
-                        None,
-                    )
-                inherited_id = (review.get("review_ids") or {}).get(canonical_id)
-                if not inherited_id:
-                    continue
-                inherited = html.model_copy(update={
-                    "review_id": str(inherited_id),
-                    "review_status": status_by_decision.get(decision, "human_review"),
-                    "publication_status": "published" if decision == "approve" else "unpublished",
-                    "published_at": html.published_at if decision == "approve" else None,
-                })
-                self._save_resource(inherited, state, trace_item)
             self._persist_executions(state, run_id)
             return
 

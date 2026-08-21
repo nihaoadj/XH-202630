@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-SUPPORTED_RESOURCE_TYPES = ("讲义", "实操指南", "分阶测试题")
+SUPPORTED_RESOURCE_TYPES = ("讲义", "实操指南", "分阶测试题", "复习清单", "案例分析")
 RESOURCE_TYPE_ALIASES: dict[str, str] = {"定制讲义": "讲义"}
 
 

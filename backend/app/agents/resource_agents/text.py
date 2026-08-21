@@ -68,7 +68,7 @@ class TextResourceAgent(BaseResourceGenerationAgent):
             representation="text",
         )
         content = result.output.strip()
-        title = content.splitlines()[0][2:].strip() if content.startswith("# ") else spec.topic
+        title = content.splitlines()[0][2:].strip() if content.startswith("# ") else context.topic
         artifact = GeneratedArtifact(
             metadata=self.metadata(
                 spec=spec,

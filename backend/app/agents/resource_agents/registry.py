@@ -11,6 +11,8 @@ from app.models.resource_types import (
 
 from .assessment import AssessmentAgent
 from .base import ResourceGenerationAgent
+from .case_study import CaseStudyAgent
+from .checklist import ReviewChecklistAgent
 from .practice import PracticeGuideAgent
 from .text import TextResourceAgent
 
@@ -19,6 +21,8 @@ RESOURCE_AGENT_TYPES = {
     "讲义": TextResourceAgent,
     "实操指南": PracticeGuideAgent,
     "分阶测试题": AssessmentAgent,
+    "复习清单": ReviewChecklistAgent,
+    "案例分析": CaseStudyAgent,
 }
 
 

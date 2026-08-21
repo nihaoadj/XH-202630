@@ -133,8 +133,6 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         option_node = {
             ("TextResourceAgent", "text"): "text_resource_agent",
             ("AssessmentAgent", "text"): "assessment_agent",
-            ("HtmlPracticeGuideAgent", "text"): "html_practice_guide_text",
-            ("HtmlPracticeGuideAgent", "html"): "html_practice_guide_html",
         }.get((self.agent_name, representation), "generator")
         options = llm_gateway.options_for(option_node, temperature=self.temperature)
         requested_budget = max_output_tokens or representation_spec.max_output_tokens
@@ -176,8 +174,6 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         representation_spec = self._representation_spec(spec, representation)
         option_node = {
             ("TextResourceAgent", "text"): "text_resource_agent",
-            ("HtmlPracticeGuideAgent", "text"): "html_practice_guide_text",
-            ("HtmlPracticeGuideAgent", "html"): "html_practice_guide_html",
         }.get((self.agent_name, representation), "generator")
         options = llm_gateway.options_for(option_node, temperature=self.temperature)
         requested_budget = max_output_tokens or representation_spec.max_output_tokens
@@ -190,12 +186,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
                 run_id=context.run_id,
                 step_id=context.step_id,
                 node_name=self.agent_name,
-                # Plain-text output has no response schema, but the gateway
-                # still needs to know whether a compact recovery must ask for
-                # Markdown or an HTML fragment.  Reusing the Markdown retry
-                # instruction for HTML caused a length recovery to switch the
-                # required artifact format mid-call.
-                schema_name=("plain_html" if representation == "html" else "plain_markdown"),
+                schema_name="plain_markdown",
                 generation_attempt=context.generation_attempt,
                 workflow_deadline_at=context.workflow_deadline_at,
             ),
@@ -208,7 +199,6 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         spec: ResourceSpec,
         representation: ResourceRepresentation,
         source_evidence_ids: list[str],
-        canonical_text_hash: str | None = None,
         validation_status: str = "validated",
     ) -> ResourceArtifactMetadata:
         return ResourceArtifactMetadata(
@@ -221,7 +211,6 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
             artifact_format=self.artifact_format,
             validation_status=validation_status,
             source_evidence_ids=source_evidence_ids,
-            canonical_text_hash=canonical_text_hash,
         )
 
     @abstractmethod

@@ -37,7 +37,6 @@ def test_container_gives_resource_agents_their_dedicated_recovery_budget():
 
     assert gateway.options_for("text_resource_agent").max_attempts == 2
     assert gateway.options_for("assessment_agent").max_attempts == 2
-    assert gateway.options_for("html_practice_guide_html").max_attempts == 2
     assert gateway.options_for("reviewer").max_attempts == 2
 
 

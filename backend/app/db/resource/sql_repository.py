@@ -102,10 +102,6 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         resource_spec_id=orm.resource_spec_id,
         resource_family_id=orm.resource_family_id,
         representation=orm.representation or "text",
-        derived_from_resource_id=orm.derived_from_resource_id,
-        source_resource_version=orm.source_resource_version,
-        canonical_text_hash=orm.canonical_text_hash,
-        guide_manifest=orm.guide_manifest or {},
         claim_count=orm.claim_count,
         legacy_reviewer_score=orm.legacy_reviewer_score,
         claim_hallucination_rate=orm.claim_hallucination_rate,
@@ -138,10 +134,6 @@ def _pydantic_to_orm(
         representation=resource.representation.value
         if hasattr(resource.representation, "value")
         else resource.representation,
-        derived_from_resource_id=resource.derived_from_resource_id,
-        source_resource_version=resource.source_resource_version,
-        canonical_text_hash=resource.canonical_text_hash,
-        guide_manifest=resource.guide_manifest,
         generation_step_id=generation_step_id,
         learner_id=learner_id,
         topic=topic,
@@ -237,10 +229,6 @@ class SQLResourceRepository(BaseResourceRepository):
                         "resource_spec_id",
                         "resource_family_id",
                         "representation",
-                        "derived_from_resource_id",
-                        "source_resource_version",
-                        "canonical_text_hash",
-                        "guide_manifest",
                     )
                     if any(
                         getattr(existing, field) != getattr(normalized, field)

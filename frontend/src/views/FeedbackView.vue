@@ -130,6 +130,8 @@
             <el-checkbox label="讲义">讲义</el-checkbox>
             <el-checkbox label="实操指南">实操指南</el-checkbox>
             <el-checkbox label="分阶测试题">分阶测试题</el-checkbox>
+            <el-checkbox label="复习清单">复习清单</el-checkbox>
+            <el-checkbox label="案例分析">案例分析</el-checkbox>
           </el-checkbox-group>
           <el-select v-model="selectedDifficulty" class="difficulty-choice" aria-label="资源难度">
             <el-option label="初级" value="初级" />

@@ -401,7 +401,7 @@ const generatedTopic = computed(() => {
   return `${directionName}${levelSummary}学习资源${focusSummary}${typeSummary}`
 })
 
-const resourceTypeOptions = ['讲义', '实操指南', '分阶测试题']
+const resourceTypeOptions = ['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析']
 
 const steps = [
   {

@@ -244,7 +244,7 @@
   "topic": "RAG 基础概念与文档解析",
   "knowledge_base_id": "rag_engineering_training",
   "target_skill_nodes": ["rag_basics", "document_parsing"],
-  "resource_types": ["讲义", "实操指南", "分阶测试题"],
+  "resource_types": ["讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"],
   "difficulty_preference": "从基础开始",
   "generation_mode": "standard",
   "include_review": true,
@@ -265,9 +265,9 @@
 说明：
 
 - 此接口只返回任务信息，不直接返回资源正文。
-- 首期只支持 `讲义`、`实操指南`、`分阶测试题`；唯一兼容别名 `定制讲义` 会在请求校验时规范化为 `讲义`。
+- 当前支持 `讲义`、`实操指南`、`分阶测试题`、`复习清单`、`案例分析`；唯一兼容别名 `定制讲义` 会在请求校验时规范化为 `讲义`。
 - 未知资源类型在任务创建和任何模型调用前以 HTTP 422 拒绝，不创建失败任务占位。
-- 路由固定为 `讲义 -> TextResourceAgent`、`实操指南 -> HtmlPracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`。
+- 路由固定为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`。
 - 当前推荐前端流程：
   提交任务 -> 轮询任务状态 -> 完成后拉取资源列表。
 
@@ -372,10 +372,7 @@
 - `batch_id`
 - `resource_spec_id`
 - `resource_family_id`
-- `representation`：`text | html`
-- `derived_from_resource_id`
-- `source_resource_version`
-- `canonical_text_hash`
+- `representation`：`text`
 - `exercise_items`
 
 资源列表语义说明：
@@ -384,7 +381,7 @@
 - 它不是知识库原始文档列表，而是面向用户交付的学习资源列表。
 - 同一次生成任务产出的多个资源，会通过同一个 `run_id` 关联起来。
 - 默认资源列表只返回已经发布的资源；草稿、返工中、拒绝和人工审核资源不可预览。
-- 实操指南的文本和 HTML 使用相同 `resource_family_id`。HTML 必须指向已发布文本的 `resource_id`、版本与 `canonical_text_hash`，前端按 family 合并后显示“文本指南 / 互动实践”切换。
+- 实操指南以审核后的 Markdown 文本形式提供阅读。
 - `source_refs[].score` 是 0 到 1 的最终相关度；精排可用时为 CrossEncoder logits 经 sigmoid 映射后的分数，降级时为归一化 RRF 分数，数值越大排名越靠前。
 - `source_refs[].metadata.retrieval_method` 正常为 `hybrid_rrf_cross_encoder`，精排关闭或不可用时回退为 `hybrid_rrf`；`retrieval_channels` 标识片段来自 `vector`、`bm25` 或两路共同召回。
 - `source_refs[].metadata` 保留 `vector_rank`、`vector_score`、`lexical_rank`、`lexical_score`、`hybrid_rank`、`hybrid_score`、`rerank_rank`、`rerank_raw_score`、`rerank_score`、`reranker_model`、`rerank_latency_ms` 和 `rerank_candidate_count`，用于检索审计和消融评测。

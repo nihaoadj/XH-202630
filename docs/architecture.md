@@ -118,8 +118,10 @@
 - `resource_spec_builder.py`
 - `resource_agents/base.py`
 - `resource_agents/text.py`
-- `resource_agents/html_practice.py`
+- `resource_agents/practice.py`
 - `resource_agents/assessment.py`
+- `resource_agents/checklist.py`
+- `resource_agents/case_study.py`
 - `resource_agents/registry.py`
 
 当前代码含义：
@@ -130,7 +132,7 @@
 - `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 结构
 - `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
 - `generator.py` 保留历史文件名，但只负责资源 Spec 编排、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
-- 公共资源类型词汇由 `backend/app/models/resource_types.py` 唯一定义。首期路由为 `讲义 -> TextResourceAgent`、`实操指南 -> HtmlPracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`，唯一别名为 `定制讲义 -> 讲义`。
+- 公共资源类型词汇由 `backend/app/models/resource_types.py` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
 
 ## 4. 当前主流程调用链
 
@@ -206,7 +208,7 @@ diagnose -> retrieve -> plan -> generate
                                                                |- approve + include_claim_check=false -> finalize
                                                                |- revise 且有额度 -> prepare_revision -> generate
                                                                |- reject/额度耗尽 -> finalize
-finalize -> derive_html -> END
+finalize -> END
 ```
 
 资源生成内部链路：
@@ -217,14 +219,10 @@ GenerateRequest 请求校验与类型规范化
 -> Generator 为每个 Spec 分配独立 worker_step_id，并以最大并发 2 调用专用 Agent
 -> Reviewer 按文本资源独立审核；Claim 启用时也按资源调用
 -> 已批准资源立即发布，不等待同批其他资源
--> 已批准且已发布的实操指南文本进入 derive_html
--> HtmlPracticeGuideAgent 使用 canonical Markdown + guide_manifest + hash 派生 HTML
--> HTML 最小清洗与谱系校验通过后发布；失败只降级 HTML 表示，文本保持可用
+-> 已批准且已发布的资源可立即阅读
 ```
 
-实操指南是一个语义资源 family 的两种表示。`representation=text` 是 Reviewer/Claim 的唯一规范内容源，`representation=html` 不再参加通用内容审核；HTML 必须记录 `derived_from_resource_id`、`source_resource_version` 和 `canonical_text_hash`。数据库以 `(run_id, resource_spec_id, representation)` 唯一标识当前执行投影，以 `(run_id, resource_spec_id, representation, version)` 约束资源版本。
-
-第一期 HTML 门禁刻意保持简单：后端检查非空、大小、可清洗解析、危险标签/属性移除以及源 family/version/hash；章节覆盖、逐句一致性和互动完整性主要由转换 Prompt 约束。预览时再次清洗，前端使用 `iframe sandbox="allow-scripts"`，不授予 same-origin、表单、弹窗或顶层导航权限。
+每个资源仅保留 `representation=text`。数据库以 `(run_id, resource_spec_id, representation)` 唯一标识当前执行投影，以 `(run_id, resource_spec_id, representation, version)` 约束资源版本。
 
 ### 4.3 P0-07 反馈后真实闭环
 

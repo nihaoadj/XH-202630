@@ -82,13 +82,12 @@ const displayExecutions = computed(() => {
   }
   return [...groups.values()].map((items) => {
     const text = items.find((item) => item.representation === 'text') || items[0]
-    const html = items.find((item) => item.representation === 'html')
     return {
       ...text,
       key: text.resource_spec_id || text.key,
-      representation: html ? 'text_html' : text.representation,
+      representation: text.representation,
       resource_execution_state: logicalState(items),
-      agent_name: html ? `${text.agent_name || ''} · HTML` : text.agent_name,
+      agent_name: text.agent_name,
       validation_status: items.map((item) => item.validation_status).filter(Boolean).join(' / '),
       error_code: items.find((item) => item.error_code)?.error_code || text.error_code,
     }

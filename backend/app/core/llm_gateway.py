@@ -237,10 +237,6 @@ class LLMGateway:
         resource_generation_max_attempts: int | None = None,
         generator_max_output_tokens: int | None = None,
         resource_generator_max_output_tokens: int | None = None,
-        html_practice_guide_text_max_output_tokens: int | None = None,
-        html_practice_guide_max_output_tokens: int | None = None,
-        html_practice_guide_request_timeout_seconds: float | None = None,
-        html_practice_guide_html_request_timeout_seconds: float | None = None,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
@@ -261,22 +257,6 @@ class LLMGateway:
             resource_generator_max_output_tokens
             or self.generator_max_output_tokens
         )
-        self.html_practice_guide_max_output_tokens = (
-            html_practice_guide_max_output_tokens
-            or self.resource_generator_max_output_tokens
-        )
-        self.html_practice_guide_text_max_output_tokens = (
-            html_practice_guide_text_max_output_tokens
-            or self.resource_generator_max_output_tokens
-        )
-        self.html_practice_guide_request_timeout_seconds = (
-            html_practice_guide_request_timeout_seconds
-            or self.default_options.request_timeout_seconds
-        )
-        self.html_practice_guide_html_request_timeout_seconds = (
-            html_practice_guide_html_request_timeout_seconds
-            or self.html_practice_guide_request_timeout_seconds
-        )
         self.sleep = sleep
         self.monotonic = monotonic
         self.wall_clock = wall_clock
@@ -294,26 +274,7 @@ class LLMGateway:
             "text_resource_agent",
             "assessment_agent",
         }
-        html_practice_text_nodes = {
-            # The canonical Markdown phase is the source for the later HTML
-            # derivation and has the same long-output characteristics as the
-            # HTML phase itself.  It must use the practice-guide budget rather
-            # than the ordinary text-resource budget.
-            "html_practice_text",
-            "html_practice_guide_text",
-        }
-        html_generation_nodes = {
-            "html_practice_html",
-            "html_practice_guide_html",
-            "html_practice_guide_agent",
-        }
-        if node_name in html_practice_text_nodes:
-            max_tokens = self.html_practice_guide_text_max_output_tokens
-            request_timeout_seconds = self.html_practice_guide_request_timeout_seconds
-        elif node_name in html_generation_nodes:
-            max_tokens = self.html_practice_guide_max_output_tokens
-            request_timeout_seconds = self.html_practice_guide_html_request_timeout_seconds
-        elif node_name in resource_generation_nodes:
+        if node_name in resource_generation_nodes:
             max_tokens = self.resource_generator_max_output_tokens
             request_timeout_seconds = self.default_options.request_timeout_seconds
         elif node_name == "generator":
@@ -326,8 +287,6 @@ class LLMGateway:
             self.resource_generation_max_attempts
             if node_name in (
                 resource_generation_nodes
-                | html_practice_text_nodes
-                | html_generation_nodes
             )
             else self.default_options.max_attempts
         )
@@ -437,21 +396,12 @@ class LLMGateway:
     ) -> list[BaseMessage]:
         """Retry a length-limited plain-text artifact without changing its format."""
 
-        if content_kind == "html":
-            instruction = (
-                "上一轮互动 HTML fragment 在输出上限前被截断。请从头输出一份完整但更紧凑的"
-                "HTML fragment；不要续写上一轮，不要输出 Markdown、JSON、代码围栏或解释。"
-                "保留所有源 section/step/代码/清单/自测 ID 与必需的 data-practice-* 标记，"
-                "压缩展示包装，并在最后一个 HTML 元素闭合后立即停止。"
-                f"这是第 {recovery_attempt} 次紧凑恢复。"
-            )
-        else:
-            instruction = (
-                "上一轮 Markdown 在输出上限前被截断。请从头输出一份完整但更紧凑的 Markdown，"
-                "不要续写上一轮，不要输出 JSON、代码围栏或解释；保留所有要求的标题层级、知识点与"
-                "练习，压缩措辞后在总结结束处立即停止。"
-                f"这是第 {recovery_attempt} 次紧凑恢复。"
-            )
+        instruction = (
+            "上一轮 Markdown 在输出上限前被截断。请从头输出一份完整但更紧凑的 Markdown，"
+            "不要续写上一轮，不要输出 JSON、代码围栏或解释；保留所有要求的标题层级、知识点与"
+            "练习，压缩措辞后在总结结束处立即停止。"
+            f"这是第 {recovery_attempt} 次紧凑恢复。"
+        )
         return [SystemMessage(content=instruction), *messages]
 
     @staticmethod
@@ -830,7 +780,7 @@ class LLMGateway:
                 compact_retry_used = True
                 call_messages = self._compact_plain_text_recovery_messages(
                     original_messages,
-                    content_kind="html" if context.schema_name == "plain_html" else "markdown",
+                    content_kind="markdown",
                     recovery_attempt=attempt,
                 )
             delay = self._delay_for(attempt, failure.retry_after)
@@ -867,17 +817,5 @@ def default_llm_gateway() -> LLMGateway:
         generator_max_output_tokens=settings.llm_generator_max_output_tokens,
         resource_generator_max_output_tokens=(
             settings.llm_resource_generator_max_output_tokens
-        ),
-        html_practice_guide_max_output_tokens=(
-            settings.llm_html_practice_guide_max_output_tokens
-        ),
-        html_practice_guide_text_max_output_tokens=(
-            settings.llm_html_practice_guide_text_max_output_tokens
-        ),
-        html_practice_guide_request_timeout_seconds=(
-            settings.llm_html_practice_guide_request_timeout_seconds
-        ),
-        html_practice_guide_html_request_timeout_seconds=(
-            settings.llm_html_practice_guide_html_request_timeout_seconds
         ),
     )

@@ -67,7 +67,6 @@
 - 查看结果：`GET /api/resources/{learner_id}?run_id={run_id}`
 - 下载文件：`GET /api/resources/file/{resource_id}`
 - 读取单资源详情：`GET /api/resources/items/{resource_id}`
-- 读取互动指南：`GET /api/resources/items/{resource_id}/preview`
 
 同步生成接口 `POST /api/generate/` 已移除。
 
@@ -83,10 +82,12 @@
 | 类型 | 专用 Agent | 默认输出预算 | 表示 |
 |---|---|---:|---|
 | 讲义 | `TextResourceAgent` | 8192 | Markdown 文本 |
-| 实操指南 | `HtmlPracticeGuideAgent` | 文本 12288；HTML 32768 | canonical Markdown + 互动 HTML |
+| 实操指南 | `PracticeGuideAgent` | 32768 | Markdown 实操指南 |
 | 分阶测试题 | `AssessmentAgent` | 8192 | 结构化测试题文本投影 |
+| 复习清单 | `ReviewChecklistAgent` | 8192 | Markdown 复习清单 |
+| 案例分析 | `CaseStudyAgent` | 8192 | Markdown 案例分析 |
 
-`定制讲义` 是唯一兼容别名并会规范化为 `讲义`。未知类型在任务创建和模型调用前拒绝，前端只展示三种已注册类型。
+`定制讲义` 是唯一兼容别名并会规范化为 `讲义`。未知类型在任务创建和模型调用前拒绝，前端只展示五种已注册类型。
 
 ### 3.4 学习历史时间线
 
@@ -105,7 +106,7 @@
 | F03 | 初始画像生成 | 已完成基础版 | 根据问卷更新学习者画像 |
 | F04 | 能力诊断 | 已完成基础版 | 返回能力结果与推荐路径 |
 | F05 | 异步资源生成 | 已完成资源级版 | 按类型路由专用 Agent、受限并发并展示单资源进度 |
-| F06 | 资源列表与下载 | 已完成双表示版 | 支持分页、详情、文本/互动切换与发布态权限 |
+| F06 | 资源列表与下载 | 已完成基础版 | 支持分页、详情与发布态权限 |
 | F07 | 学习反馈 | 已完成 P0-07 闭环 | Attempt、知识状态、画像版本、路径 mutation 与后续生成均可持久化追溯 |
 | F08 | 学习历史时间线 | 已完成基础版 | 汇总学习全过程 |
 | F09 | 学习报告 | 已完成基础版 | 提供学习结果摘要 |
@@ -153,7 +154,7 @@
 
 这也是当前文档和接口设计默认支持的前端模式。
 
-实操指南阅读页默认显示经审核的文本指南；同一 `resource_family_id` 的 HTML 表示已发布且谱系校验通过时，显示“文本指南 / 互动实践”切换按钮。HTML 在隔离 iframe 内运行固定平台脚本，保持现有页面标题、卡片、间距和配色。草稿、返工、拒绝和人工审核资源均不可预览。
+各类文本资源阅读页均显示经审核的 Markdown 文本。草稿、返工、拒绝和人工审核资源均不可预览。
 
 ## 7. 当前数据库侧对应关系
 
@@ -174,7 +175,7 @@
 - `generation_jobs`
   存异步生成任务
 - `generated_resources`
-  存资源正文、发布状态、表示类型和文本/HTML谱系
+  存资源正文、发布状态和表示类型
 - `resource_specs`
   存一次 Run 中冻结的资源类型、证据、知识点、family 和表示预算
 - `resource_executions`
@@ -194,8 +195,7 @@
 - 学习历史时间线接口提供
 - 本地数据库已按当前结构重建并同步
 - WorkflowEvent SSE replay/live tail、断线续传和前端轮询降级
-- 三种专用资源 Agent 与精确路由
-- 实操指南 canonical 文本审核后派生互动 HTML
+- 五种专用资源 Agent 与精确路由
 - 已批准资源部分完成即发布，草稿不可预览
 
 尚未完成：

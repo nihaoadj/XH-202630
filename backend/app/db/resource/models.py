@@ -9,7 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-ResourceRepresentationValue = Literal["text", "html"]
+ResourceRepresentationValue = Literal["text"]
 ResourceExecutionStateValue = Literal[
     "queued",
     "generating",
@@ -47,8 +47,8 @@ class ResourceSpecRecord(BaseModel):
         seen: set[str] = set()
         for representation in self.representations:
             value = str(representation.get("representation") or "").strip()
-            if value not in {"text", "html"}:
-                raise ValueError("representation must be text or html")
+            if value != "text":
+                raise ValueError("representation must be text")
             if value in seen:
                 raise ValueError("representations must be unique within a resource spec")
             seen.add(value)

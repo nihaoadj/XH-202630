@@ -120,10 +120,6 @@ def _materialize(
                        else ResourceStatus.UNREVIEWED_DRAFT.value),
         version=(previous.version + 1) if previous else 1,
         parent_resource_id=previous.resource_id if previous else None,
-        canonical_text_hash=metadata.canonical_text_hash,
-        guide_manifest=data.get("guide_manifest") or {},
-        derived_from_resource_id=data.get("derived_from_resource_id"),
-        source_resource_version=data.get("source_resource_version"),
     )
 
 
@@ -162,8 +158,7 @@ def progress_summary(executions: list[dict[str, Any]]) -> dict[str, Any]:
     for item in executions:
         value = str(item["resource_execution_state"])
         counts[value] = counts.get(value, 0) + 1
-    # A practice guide's canonical text and HTML are two representations of
-    # one user-facing resource.  Keep the API summary resource-oriented too.
+    # Each resource spec has one user-facing text representation.
     logical: dict[str, list[str]] = {}
     for item in executions:
         logical.setdefault(str(item.get("resource_spec_id") or id(item)), []).append(
@@ -331,11 +326,9 @@ def generate_node(
         if executor is not None:
             executor.shutdown(wait=True)
     order = {item.resource_spec_id: item.display_order for item in specs}
-    resources.sort(key=lambda item: (order.get(item.resource_spec_id or "", 999),
-                                     0 if item.representation.value == "text" else 1))
+    resources.sort(key=lambda item: order.get(item.resource_spec_id or "", 999))
     executions.sort(key=lambda item: (
         order.get(str(item.get("resource_spec_id") or ""), 999),
-        0 if item.get("representation") == "text" else 1,
     ))
     status = StepStatus.DEGRADED if errors else StepStatus.SUCCESS
     trace_item = build_trace_item(
@@ -351,190 +344,3 @@ def generate_node(
             "generated_resources": resources, "current_node": "generator", "trace": [trace_item],
             "errors": errors, "generation_attempt": node_input.generation_attempt,
             "iteration": node_input.generation_attempt}
-
-
-def derive_html_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str, Any]:
-    """Derive HTML from the current validated canonical practice guide."""
-
-    step_context = start_step(state, attempt=state.get("generation_attempt", 1))
-    resources = list(state.get("generated_resources", []))
-    canonical = next((item for item in resources
-                       if item.resource_type == "实操指南"
-                       and item.representation.value == "text"
-                       and item.review_status in {
-                           ResourceStatus.PENDING_REVIEW.value,
-                           ResourceStatus.UNREVIEWED_DRAFT.value,
-                           ResourceStatus.APPROVED.value,
-                       }
-                       and item.content_text
-                       and item.canonical_text_hash
-                       and item.guide_manifest), None)
-    if canonical is None:
-        trace = build_trace_item(
-            state, agent_name="html_practice_deriver", action="派生互动 HTML",
-            status=StepStatus.SKIPPED, input_summary="未找到可派生的规范文本",
-            output_summary="跳过 HTML 派生", decision_reason="只有已通过文本技术校验、尚未进入返工或拒绝状态的规范指南可以派生 HTML。",
-            step_context=step_context)
-        return {"current_node": "html_practice_deriver", "trace": [trace], "errors": []}
-
-    specs = [ResourceSpec.model_validate(item) for item in state.get("resource_specs", [])]
-    spec = next((item for item in specs if item.resource_spec_id == canonical.resource_spec_id), None)
-    if spec is None or not canonical.canonical_text_hash or not canonical.guide_manifest:
-        raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
-    node_input = GeneratorInput.model_validate(state)
-    context = _context(
-        node_input,
-        state,
-        _worker_step_id(node_input, spec, "html"),
-    )
-    source = ApprovedPracticeGuideSource(
-        resource_id=canonical.resource_id,
-        resource_spec_id=spec.resource_spec_id,
-        resource_family_id=spec.resource_family_id,
-        resource_version=canonical.version,
-        review_status=canonical.review_status,
-        publication_status=canonical.publication_status,
-        difficulty=canonical.difficulty, markdown_content=canonical.content_text or "",
-        guide_manifest=canonical.guide_manifest,
-        canonical_text_hash=canonical.canonical_text_hash,
-        knowledge_points=canonical.knowledge_points,
-        source_evidence_ids=spec.evidence_ids,
-    )
-    agent = get_resource_agent("实操指南")
-    executions = [item for item in state.get("resource_executions", [])
-                  if not (item.get("resource_spec_id") == spec.resource_spec_id
-                          and item.get("representation") == "html")]
-    derivation_error = None
-    try:
-        artifact = agent.generate(spec, context, llm_gateway=llm_gateway,
-                                  stage="html", approved_text=source)
-        html_resource = _materialize(artifact, node_input, None).model_copy(update={
-            # HTML is generated immediately after the canonical text. It is
-            # never independently reviewed and therefore mirrors the source's
-            # provisional status until the text review supplies its review ID.
-            "review_id": canonical.review_id,
-            "review_status": canonical.review_status,
-            "publication_status": canonical.publication_status,
-            "published_at": canonical.published_at,
-        })
-        resources.append(html_resource)
-        executions.append(_execution(spec, html_resource, agent,
-                                     attempt=state.get("generation_attempt", 1),
-                                     worker_step_id=context.step_id,
-                                     state="generated",
-                                     validation_status=artifact.metadata.validation_status))
-        status = StepStatus.SUCCESS
-        errors: list[dict[str, Any]] = []
-        output_summary = "互动 HTML 已从规范文本派生并通过最小技术准入"
-        llm_metadata = artifact.llm_metadata
-        resource_ids = [html_resource.resource_id]
-    except LLMGatewayError as exc:
-        # Provider truncation must not turn a valid canonical guide into a
-        # failed resource. Render the same reviewed Markdown deterministically
-        # and keep the model failure only as trace metadata.
-        if exc.error.code == ErrorCode.LLM_OUTPUT_TRUNCATED.value:
-            fallback_html, warnings = sanitize_html_fragment(
-                _deterministic_html_from_markdown(
-                    source.markdown_content, source.guide_manifest
-                )
-            )
-            metadata = agent.metadata(
-                spec=spec,
-                representation="html",
-                source_evidence_ids=list(source.source_evidence_ids),
-                canonical_text_hash=source.canonical_text_hash,
-                validation_status="validated_with_repairs",
-            ).model_copy(update={
-                "prompt_version": agent.html_prompt_version,
-                "artifact_format": "html",
-            })
-            artifact = GeneratedArtifact(
-                metadata=metadata,
-                difficulty=source.difficulty,
-                content_text=fallback_html,
-                knowledge_points=list(source.knowledge_points),
-                artifact_data={
-                    "derived_from_resource_id": source.resource_id,
-                    "source_resource_version": source.resource_version,
-                    "source_section_ids": [item.section_id for item in source.guide_manifest.sections],
-                    "source_step_ids": [item.step_id for item in source.guide_manifest.steps],
-                    "source_code_ids": list(source.guide_manifest.code_ids),
-                    "source_checklist_ids": list(source.guide_manifest.checklist_ids),
-                    "source_quiz_ids": list(source.guide_manifest.quiz_ids),
-                    "interactive_component_counts": {
-                        "steps": fallback_html.count("data-practice-step"),
-                        "checklists": fallback_html.count("data-practice-checklist"),
-                        "quizzes": fallback_html.count("data-practice-quiz"),
-                    },
-                },
-                storage_type="file", mime_type="text/html",
-                sanitization_warnings=[*warnings, "deterministic_renderer_fallback"],
-                llm_metadata={"fallback": "deterministic_html_renderer", "fallback_reason": exc.error.code},
-            )
-            html_resource = _materialize(artifact, node_input, None).model_copy(update={
-                "review_id": canonical.review_id,
-                "review_status": canonical.review_status,
-                "publication_status": canonical.publication_status,
-                "published_at": canonical.published_at,
-            })
-            resources.append(html_resource)
-            executions.append(_execution(spec, html_resource, agent,
-                                         attempt=state.get("generation_attempt", 1),
-                                         worker_step_id=context.step_id,
-                                         state="generated",
-                                         validation_status=artifact.metadata.validation_status))
-            status = StepStatus.SUCCESS
-            errors = [exc.error.model_dump(mode="json")]
-            output_summary = "模型 HTML 截断，已使用规范文本确定性渲染并通过准入"
-            llm_metadata = artifact.llm_metadata
-            resource_ids = [html_resource.resource_id]
-        else:
-            derivation_error = exc.error
-            executions.append({
-                "resource_spec_id": spec.resource_spec_id, "resource_type": spec.resource_type,
-                "representation": "html", "resource_execution_state": "failed",
-                "worker_step_id": context.step_id,
-                "attempt": state.get("generation_attempt", 1), "resource_id": None,
-                "review_id": None, "error_code": _error_code_value(exc.error.code),
-                "agent_name": agent.agent_name, "prompt_version": agent.html_prompt_version,
-                "artifact_format": "html", "validation_status": "failed",
-            })
-            status = StepStatus.DEGRADED
-            errors = [exc.error.model_dump(mode="json")]
-            output_summary = "HTML 派生失败；规范文本指南保持可用"
-            llm_metadata = exc.trace_metadata()
-            resource_ids = []
-    except ApplicationError as exc:
-        derivation_error = make_error_info(
-            exc.code,
-            source="html_practice_deriver",
-            category="validation",
-        )
-        executions.append({
-            "resource_spec_id": spec.resource_spec_id, "resource_type": spec.resource_type,
-            "representation": "html", "resource_execution_state": "failed",
-            "worker_step_id": context.step_id,
-            "attempt": state.get("generation_attempt", 1), "resource_id": None,
-            "review_id": None, "error_code": _error_code_value(exc.code),
-            "agent_name": agent.agent_name, "prompt_version": agent.html_prompt_version,
-            "artifact_format": "html", "validation_status": "failed",
-        })
-        status = StepStatus.DEGRADED
-        errors = [derivation_error.model_dump(mode="json")]
-        output_summary = "HTML 派生结果未通过技术准入；规范文本指南保持可用"
-        llm_metadata = None
-        resource_ids = []
-    trace = build_trace_item(
-        state, agent_name="generator", action="派生互动 HTML", status=status,
-        input_summary=f"规范文本：{canonical.resource_id} v{canonical.version}",
-        output_summary=output_summary,
-        decision_reason="HTML 仅使用规范文本、manifest 与服务端 hash 作为内容来源，并在审核阶段继承文本结论。",
-        evidence_refs=spec.evidence_ids, resource_ids=resource_ids,
-        error=derivation_error,
-        step_context=step_context, llm_metadata=llm_metadata)
-    return {"generated_resources": resources, "resource_executions": executions,
-            "resource_progress_summary": progress_summary(executions),
-            "workflow_status": ("degraded" if status == StepStatus.DEGRADED
-                                and state.get("workflow_status") == "completed"
-                                else state.get("workflow_status")),
-            "current_node": "html_practice_deriver", "trace": [trace], "errors": errors}

@@ -7,11 +7,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import get_settings, is_placeholder_api_key
 from app.core.llm_gateway import default_llm_gateway
-from app.agents.resource_agents import AssessmentAgent, HtmlPracticeGuideAgent
+from app.agents.resource_agents import AssessmentAgent, PracticeGuideAgent
 from app.agents.resource_spec_builder import build_resource_specs
 from app.models.agent_contracts import GeneratedResourceBatch
-from app.models.agent_contracts import ApprovedPracticeGuideSource, PracticeGuideManifest, ResourceGenerationContext
-from app.agents.resource_agents.html_practice import canonical_text_hash
+from app.models.agent_contracts import ResourceGenerationContext
 from app.models.claims import (
     ClaimExtractionLLMOutput,
     ClaimJudgementLLMOutput,
@@ -175,63 +174,9 @@ def test_live_assessment_agent_generation():
     assert artifact.artifact_data["questions"]
 
 
-def test_live_practice_canonical_markdown_generation():
+def test_live_practice_guide_generation():
     if os.getenv("RUN_LIVE_LLM") != "1":
         pytest.skip("set RUN_LIVE_LLM=1 to enable live provider smoke")
     spec, context = _live_resource_context("实操指南")
-    artifact = HtmlPracticeGuideAgent().generate(spec, context, llm_gateway=default_llm_gateway())
+    artifact = PracticeGuideAgent().generate(spec, context, llm_gateway=default_llm_gateway())
     assert artifact.content_text.startswith("# ")
-    assert artifact.artifact_data["guide_manifest"]["steps"]
-
-
-def test_live_practice_html_generation():
-    if os.getenv("RUN_LIVE_LLM") != "1":
-        pytest.skip("set RUN_LIVE_LLM=1 to enable live provider smoke")
-    spec, context = _live_resource_context("实操指南")
-    markdown = """# RRF 融合实操指南
-
-<!-- section:overview -->
-## 概览
-使用排名倒数进行融合。
-
-<!-- section:prerequisites -->
-## 准备
-准备两个检索结果列表。
-
-<!-- section:practice -->
-## 实践
-<!-- step:step-01 -->
-### 执行融合
-操作：按排名倒数为结果加权。
-预期结果：获得融合排序。
-验证方法：检查排名靠前结果。
-失败排查：核对排名与参数 k。
-<!-- checklist:check-01 -->
-- [ ] 已核对排名
-<!-- quiz:quiz-01 -->
-自测：k 的作用是什么？
-"""
-    manifest = PracticeGuideManifest.model_validate({
-        "guide_version": "1.0",
-        "sections": [
-            {"section_id": "overview", "title": "概览", "order": 1, "knowledge_points": []},
-            {"section_id": "prerequisites", "title": "准备", "order": 2, "knowledge_points": []},
-            {"section_id": "practice", "title": "实践", "order": 3, "knowledge_points": spec.knowledge_points},
-        ],
-        "steps": [{"step_id": "step-01", "section_id": "practice", "title": "执行融合", "order": 1,
-                   "knowledge_points": spec.knowledge_points}],
-        "code_ids": [], "checklist_ids": ["check-01"], "quiz_ids": ["quiz-01"],
-    })
-    source = ApprovedPracticeGuideSource(
-        resource_id="live-practice-source", resource_spec_id=spec.resource_spec_id,
-        resource_family_id=spec.resource_family_id, resource_version=1,
-        review_status="approved", publication_status="published", difficulty=spec.difficulty,
-        markdown_content=markdown, guide_manifest=manifest,
-        canonical_text_hash=canonical_text_hash(markdown, manifest),
-        knowledge_points=spec.knowledge_points, source_evidence_ids=spec.evidence_ids,
-    )
-    artifact = HtmlPracticeGuideAgent().generate(
-        spec, context, llm_gateway=default_llm_gateway(), stage="html", approved_text=source,
-    )
-    assert "data-practice-step" in artifact.content_text
-    assert artifact.artifact_data["source_step_ids"] == ["step-01"]

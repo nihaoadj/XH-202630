@@ -5,8 +5,6 @@ from fastapi.responses import Response
 
 from app.api.dependencies import ensure_profile_access
 from app.config import get_settings
-from app.core.file_storage import load_resource_file
-from app.core.html_practice_sanitizer import sanitize_html_practice_fragment
 from app.core.health import build_health_report
 from app.models.schemas import (
     ContinueResourceBatchRequest,
@@ -14,7 +12,6 @@ from app.models.schemas import (
     GenerationJobCreateResponse,
     ResourceListResponse,
     ResourceDetailResponse,
-    HtmlResourcePreviewResponse,
 )
 from app.services.generation_job_service import GenerationJobService
 from app.services.profile_service import ProfileService
@@ -162,37 +159,6 @@ def get_resource_detail(resource_id: str, request: Request):
     if detail is None:
         raise HTTPException(status_code=404, detail="资源不存在")
     return {"resource": detail}
-
-
-@router.get("/items/{resource_id}/preview", response_model=HtmlResourcePreviewResponse)
-def preview_html_resource(resource_id: str, request: Request):
-    resource = _authorized_published_resource(resource_id, request)
-    if resource.representation.value != "html" or resource.mime_type != "text/html":
-        raise HTTPException(status_code=404, detail="互动预览不存在")
-    service: ResourceService = request.app.container.resource_service()
-    source = service.get(resource.derived_from_resource_id or "")
-    if (source is None or source.publication_status != "published"
-            or source.resource_family_id != resource.resource_family_id
-            or source.version != resource.source_resource_version
-            or source.canonical_text_hash != resource.canonical_text_hash):
-        raise HTTPException(status_code=409, detail="互动版本正在更新")
-    fragment = resource.content_text or ""
-    if resource.file_path:
-        try:
-            fragment = load_resource_file(resource.file_path).decode("utf-8")
-        except (OSError, UnicodeError, ValueError):
-            raise HTTPException(status_code=404, detail="互动预览文件不可用") from None
-    sanitized = sanitize_html_practice_fragment(fragment)
-    return {"preview": {
-        "resource_id": resource.resource_id, "resource_type": resource.resource_type,
-        "html_fragment": sanitized.html_fragment,
-        "resource_family_id": resource.resource_family_id,
-        "derived_from_resource_id": resource.derived_from_resource_id,
-        "source_resource_version": resource.source_resource_version,
-        "canonical_text_hash": resource.canonical_text_hash,
-        "metadata": {"validation_status": sanitized.validation_status,
-                     "warnings": sanitized.warnings, "runtime_version": "1.0"},
-    }}
 
 
 @router.get("/{learner_id}", response_model=ResourceListResponse)

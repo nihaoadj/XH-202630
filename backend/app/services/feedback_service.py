@@ -340,25 +340,25 @@ class FeedbackService:
             return [FeedbackResourceOption(
                 option_id="remediate-core", title="补救讲义与巩固测验",
                 description="以基础难度回顾薄弱知识点，再用短测验证掌握情况。",
-                resource_types=["讲义", "分阶测试题"], difficulty="初级",
+                resource_types=["讲义", "复习清单", "分阶测试题"], difficulty="初级",
                 target_knowledge_point_ids=targets,
             ), FeedbackResourceOption(
-                option_id="remediate-practice", title="补救实操训练",
-                description="通过一步一步的实操指南巩固薄弱环节。",
-                resource_types=["实操指南", "分阶测试题"], difficulty="初级",
+                option_id="remediate-practice", title="补救情境训练",
+                description="通过实操步骤和小型案例巩固薄弱环节。",
+                resource_types=["实操指南", "案例分析", "分阶测试题"], difficulty="初级",
                 target_knowledge_point_ids=targets,
             )]
         if action == "advance":
             return [FeedbackResourceOption(
-                option_id="advance-challenge", title="进阶讲义与挑战测验",
-                description="以更高难度扩展当前掌握良好的知识点。",
-                resource_types=["讲义", "分阶测试题"], difficulty="高级",
+                option_id="advance-challenge", title="进阶案例与挑战测验",
+                description="以更高难度的情境决策扩展当前掌握良好的知识点。",
+                resource_types=["案例分析", "分阶测试题"], difficulty="高级",
                 target_knowledge_point_ids=targets,
             )]
         return [FeedbackResourceOption(
             option_id="practice-targeted", title="针对性强化练习",
-            description="保持当前难度，通过实操与测验巩固本轮知识点。",
-            resource_types=["实操指南", "分阶测试题"], difficulty="中级",
+            description="保持当前难度，通过复习清单、实操与测验巩固本轮知识点。",
+            resource_types=["复习清单", "实操指南", "分阶测试题"], difficulty="中级",
             target_knowledge_point_ids=targets,
         )]
 

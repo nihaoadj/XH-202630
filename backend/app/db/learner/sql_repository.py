@@ -359,11 +359,9 @@ class SQLLearnerRepository(BaseLearnerRepository):
                     | _matches_ids(ResourceExecutionORM.resource_id, resource_ids)
                 ).delete(synchronize_session=False)
                 db.query(GeneratedResourceORM).filter(
-                    _matches_ids(GeneratedResourceORM.derived_from_resource_id, resource_ids)
-                    | _matches_ids(GeneratedResourceORM.parent_resource_id, resource_ids)
+                    _matches_ids(GeneratedResourceORM.parent_resource_id, resource_ids)
                 ).update(
                     {
-                        GeneratedResourceORM.derived_from_resource_id: None,
                         GeneratedResourceORM.parent_resource_id: None,
                     },
                     synchronize_session=False,

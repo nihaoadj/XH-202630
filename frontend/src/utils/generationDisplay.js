@@ -65,8 +65,7 @@ export function resourceExecutionStateMeta(state) {
 }
 
 export function resourceRepresentationLabel(representation) {
-  if (representation === 'text_html') return '文本 + 互动实践'
-  return representation === 'html' ? '互动实践' : '文本'
+  return representation === 'text' ? '文本' : '资源'
 }
 
 export function resourceExecutionKey(execution) {

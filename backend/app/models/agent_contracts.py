@@ -144,7 +144,7 @@ class StrictLLMOutput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
 
 
-ResourceRepresentation = Literal["text", "html"]
+ResourceRepresentation = Literal["text"]
 
 
 class ResourceRepresentationSpec(BaseModel):
@@ -154,16 +154,7 @@ class ResourceRepresentationSpec(BaseModel):
 
     representation: ResourceRepresentation
     max_output_tokens: int = Field(ge=256, le=65536)
-    derives_from_representation: Optional[ResourceRepresentation] = None
     display_order: int = Field(default=1, ge=1, le=100)
-
-    @model_validator(mode="after")
-    def validate_derivation(self) -> "ResourceRepresentationSpec":
-        if self.representation == "text" and self.derives_from_representation is not None:
-            raise ValueError("text representation cannot derive from another representation")
-        if self.representation == "html" and self.derives_from_representation != "text":
-            raise ValueError("html representation must derive from text")
-        return self
 
 
 class ResourceSpec(BaseModel):
@@ -179,7 +170,7 @@ class ResourceSpec(BaseModel):
     knowledge_points: List[str] = Field(min_length=1, max_length=50)
     evidence_ids: List[str] = Field(min_length=1, max_length=100)
     difficulty: str = Field(min_length=1, max_length=32)
-    representations: List[ResourceRepresentationSpec] = Field(min_length=1, max_length=2)
+    representations: List[ResourceRepresentationSpec] = Field(min_length=1, max_length=1)
     dependencies: List[str] = Field(default_factory=list, max_length=20)
     display_order: int = Field(ge=1, le=100)
 
@@ -210,11 +201,7 @@ class ResourceSpec(BaseModel):
             raise ValueError("representation must be unique within a resource spec")
         if self.resource_spec_id in self.dependencies:
             raise ValueError("resource spec cannot depend on itself")
-        # New generation runs are text-only.  Keep accepting the legacy
-        # text+HTML shape so historical records and read-only compatibility
-        # paths can still be deserialized safely.
-        expected = [["text"], ["text", "html"]] if self.resource_type == "实操指南" else [["text"]]
-        if representations not in expected:
+        if representations != ["text"]:
             raise ValueError(
                 f"{self.resource_type} requires a supported representation order"
             )
@@ -259,13 +246,9 @@ class ResourceArtifactMetadata(BaseModel):
     representation: ResourceRepresentation
     agent_name: str
     prompt_version: str
-    artifact_format: Literal["markdown", "json", "html"]
+    artifact_format: Literal["markdown", "json"]
     validation_status: Literal["validated", "validated_with_repairs"] = "validated"
     source_evidence_ids: List[str] = Field(default_factory=list)
-    canonical_text_hash: Optional[str] = Field(
-        default=None,
-        pattern=r"^[0-9a-f]{64}$",
-    )
 
 
 class GeneratedArtifact(BaseModel):
@@ -294,81 +277,6 @@ class GeneratedArtifact(BaseModel):
             "mime_type": self.mime_type,
             "knowledge_points": list(self.knowledge_points),
         }
-
-
-class PracticeGuideSection(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
-
-    section_id: str = Field(pattern=r"^[a-z][a-z0-9-]{1,63}$")
-    title: str = Field(min_length=1, max_length=256)
-    order: int = Field(ge=1, le=100)
-    knowledge_points: List[str] = Field(default_factory=list, max_length=50)
-
-
-class PracticeGuideStep(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
-
-    step_id: str = Field(pattern=r"^step-[0-9]{2,3}$")
-    section_id: str = Field(pattern=r"^[a-z][a-z0-9-]{1,63}$")
-    title: str = Field(min_length=1, max_length=256)
-    order: int = Field(ge=1, le=100)
-    knowledge_points: List[str] = Field(min_length=1, max_length=50)
-
-
-class PracticeGuideManifest(StrictLLMOutput):
-    guide_version: Literal["1.0"] = "1.0"
-    sections: List[PracticeGuideSection] = Field(min_length=3, max_length=20)
-    steps: List[PracticeGuideStep] = Field(min_length=1, max_length=100)
-    code_ids: List[str] = Field(default_factory=list, max_length=100)
-    checklist_ids: List[str] = Field(min_length=1, max_length=50)
-    quiz_ids: List[str] = Field(min_length=1, max_length=100)
-
-    @model_validator(mode="after")
-    def validate_manifest_identity(self) -> "PracticeGuideManifest":
-        section_ids = [item.section_id for item in self.sections]
-        section_orders = [item.order for item in self.sections]
-        step_ids = [item.step_id for item in self.steps]
-        step_orders = [item.order for item in self.steps]
-        for label, values in (
-            ("section_id", section_ids),
-            ("section order", section_orders),
-            ("step_id", step_ids),
-            ("step order", step_orders),
-            ("code_id", self.code_ids),
-            ("checklist_id", self.checklist_ids),
-            ("quiz_id", self.quiz_ids),
-        ):
-            if len(values) != len(set(values)):
-                raise ValueError(f"{label} must be unique")
-        if not {"overview", "prerequisites", "practice"} <= set(section_ids):
-            raise ValueError("guide manifest is missing required sections")
-        if any(step.section_id not in set(section_ids) for step in self.steps):
-            raise ValueError("guide step references an unknown section")
-        return self
-
-
-class ApprovedPracticeGuideSource(BaseModel):
-    """Canonical practice-guide source used for the deterministic HTML sibling.
-
-    The name is retained for API compatibility.  A guide may be transformed to
-    HTML while it is still pending review; publication is decided later from
-    this text source's review result.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
-
-    resource_id: str = Field(min_length=1, max_length=128)
-    resource_spec_id: str = Field(min_length=36, max_length=36)
-    resource_family_id: str = Field(min_length=36, max_length=36)
-    resource_version: int = Field(ge=1)
-    review_status: str = Field(min_length=1, max_length=32)
-    publication_status: str = Field(min_length=1, max_length=32)
-    difficulty: str = Field(min_length=1, max_length=32)
-    markdown_content: str = Field(min_length=1, max_length=300000)
-    guide_manifest: PracticeGuideManifest
-    canonical_text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    knowledge_points: List[str] = Field(min_length=1, max_length=50)
-    source_evidence_ids: List[str] = Field(min_length=1, max_length=100)
 
 
 class AssessmentOption(StrictLLMOutput):

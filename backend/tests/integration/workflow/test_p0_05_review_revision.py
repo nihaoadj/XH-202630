@@ -102,12 +102,9 @@ def test_generator_revision_only_creates_targeted_resource_version():
         resource_spec_id=specs[1].resource_spec_id,
         resource_family_id=specs[1].resource_family_id,
     )
-    gateway = ScriptedLLMGateway([{
-        "difficulty": "初级",
-        "title": "RAG 讲义",
-        "markdown_content": "# RAG 讲义\n\n## 学习目标\n\n讲义 v2，已补充边界",
-        "knowledge_points": ["检索"],
-    }])
+    gateway = ScriptedLLMGateway([
+        "# RAG 讲义\n\n## 学习目标\n\n讲义 v2，已补充边界"
+    ])
     result = generate_node(
         {
             "schema_version": "1.0",

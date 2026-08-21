@@ -773,19 +773,19 @@ async function appendResources() {
   let value = ''
   try {
     const result = await ElMessageBox.prompt(
-      '填写要追加的资源类型，可用中文逗号分隔：讲义、实操指南、分阶测试题。',
+      '填写要追加的资源类型，可用中文逗号分隔：讲义、实操指南、分阶测试题、复习清单、案例分析。',
       '追加学习资源',
       {
         inputValue: (payload.resource_types || []).join('、'),
-        inputPlaceholder: '例如：讲义、分阶测试题',
+        inputPlaceholder: '例如：复习清单、案例分析',
         confirmButtonText: '开始追加',
         cancelButtonText: '取消',
         inputValidator: (input) => {
           const values = String(input || '').split(/[、，,\s]+/).filter(Boolean)
-          const supported = new Set(['讲义', '实操指南', '分阶测试题'])
+          const supported = new Set(['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析'])
           return values.length && values.every((item) => supported.has(item))
             ? true
-            : '仅支持：讲义、实操指南、分阶测试题'
+            : '仅支持：讲义、实操指南、分阶测试题、复习清单、案例分析'
         },
       },
     )

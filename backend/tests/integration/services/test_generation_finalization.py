@@ -365,33 +365,6 @@ def test_sql_reconcile_preserves_recorder_owned_resource_review_id(tmp_path):
     _reconcile_reviews([persisted], review, run_id=run_id, audit_repo=audit)
 
 
-def test_reconcile_accepts_html_as_the_text_review_sibling():
-    audit = MemoryAuditRepository()
-    run_id = "run-html-review-sibling"
-    text_resource = _resource(
-        resource_id="practice-text",
-        resource_type="实操指南",
-        resource_spec_id="practice-spec",
-        representation="text",
-        review_id="review-practice-text",
-    )
-    html_resource = _resource(
-        resource_id="practice-html",
-        resource_type="实操指南",
-        resource_spec_id="practice-spec",
-        representation="html",
-        derived_from_resource_id=text_resource.resource_id,
-        review_id="review-practice-text",
-    )
-    review = {
-        "decision": "approve",
-        "review_ids": {text_resource.resource_id: "review-practice-text"},
-    }
-    audit.save_review(text_resource.resource_id, review, run_id)
-
-    _reconcile_reviews([text_resource, html_resource], review, run_id=run_id, audit_repo=audit)
-
-
 class _FinalizationWorkflow:
     def invoke(self, state):
         review_id = "review-finalization-failure"

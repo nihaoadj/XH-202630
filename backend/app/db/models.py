@@ -97,25 +97,15 @@ class GeneratedResourceORM(Base):
     run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
     batch_id = Column(String(128), nullable=True, index=True, comment="资源批次标识")
     resource_spec_id = Column(String(64), nullable=True, index=True, comment="Run 内资源规格 ID")
-    resource_family_id = Column(String(64), nullable=True, index=True, comment="同一语义资源的表示族 ID")
+    resource_family_id = Column(String(64), nullable=True, index=True, comment="同一语义资源族 ID")
     representation = Column(
         String(16), nullable=False, default="text", server_default="text",
-        index=True, comment="资源表示：text | html",
+        index=True, comment="资源表示：text",
     )
-    derived_from_resource_id = Column(
-        String(64),
-        ForeignKey("generated_resources.resource_id"),
-        nullable=True,
-        index=True,
-        comment="派生表示所依据的源资源 ID",
-    )
-    source_resource_version = Column(Integer, nullable=True, comment="派生表示的源资源版本")
-    canonical_text_hash = Column(String(64), nullable=True, index=True, comment="规范文本及 manifest 的 SHA-256")
-    guide_manifest = Column(JSON, default=dict, comment="实操指南规范结构清单")
     generation_step_id = Column(String(128), ForeignKey("agent_steps.step_id"), nullable=True, index=True)
     learner_id = Column(String(64), nullable=False, index=True, comment="学习者ID")
     topic = Column(String(256), nullable=False, comment="学习主题")
-    resource_type = Column(String(32), nullable=False, comment="资源类型：讲义/实操指南/分阶测试题/ppt/video/pdf/audio/image")
+    resource_type = Column(String(32), nullable=False, comment="资源类型：讲义/实操指南/分阶测试题/复习清单/案例分析")
     difficulty = Column(String(16), nullable=False, comment="难度等级")
     storage_type = Column(String(16), nullable=False, default="text", comment="存储方式：text | file")
     content_text = Column(String, nullable=True, comment="文本内容或文件摘要")

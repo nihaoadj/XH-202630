@@ -252,7 +252,7 @@ class FeedbackResourceOption(StrictFeedbackModel):
     option_id: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=120)
     description: str = Field(min_length=1, max_length=400)
-    resource_types: list[Literal["讲义", "实操指南", "分阶测试题"]] = Field(min_length=1, max_length=3)
+    resource_types: list[Literal["讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"]] = Field(min_length=1, max_length=3)
     difficulty: Literal["初级", "中级", "高级"]
     target_knowledge_point_ids: list[str] = Field(default_factory=list, max_length=20)
 
@@ -263,7 +263,7 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
     option_id: str = Field(min_length=1, max_length=64)
     # The recommendation is a starting point, not an automatic curriculum
     # decision.  Learners explicitly choose the artifacts they want next.
-    resource_types: list[Literal["讲义", "实操指南", "分阶测试题"]] | None = Field(
+    resource_types: list[Literal["讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"]] | None = Field(
         default=None, min_length=1, max_length=3,
     )
     difficulty: Literal["初级", "中级", "高级"] | None = None
