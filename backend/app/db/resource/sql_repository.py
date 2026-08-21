@@ -197,9 +197,26 @@ class SQLResourceRepository(BaseResourceRepository):
         with self.session_factory() as db:
             orms = db.query(GeneratedResourceORM).filter_by(
                 learner_id=learner_id,
-                publication_status="published",
+            ).filter(
+                GeneratedResourceORM.publication_status.in_(["published"]),
             ).all()
-        return [_orm_to_pydantic(orm) for orm in orms]
+            # Also include resources that have been through review (human_review status)
+            # but weren't auto-approved, so user can still see them
+            all_orms = db.query(GeneratedResourceORM).filter_by(
+                learner_id=learner_id,
+            ).filter(
+                GeneratedResourceORM.review_status.in_([
+                    "approved", "human_review", "revision_requested", "pending_review"
+                ]),
+            ).all()
+            # Merge and deduplicate
+            seen = set()
+            merged = []
+            for orm in orms + all_orms:
+                if orm.resource_id not in seen:
+                    seen.add(orm.resource_id)
+                    merged.append(orm)
+        return [_orm_to_pydantic(orm) for orm in merged]
 
     def list_by_run(self, run_id: str) -> List[LearningResource]:
         with self.session_factory() as db:
@@ -231,10 +248,18 @@ class SQLResourceRepository(BaseResourceRepository):
         difficulty: Optional[str] = None,
         run_id: Optional[str] = None,
     ) -> List[LearningResource]:
+        from sqlalchemy import or_
         with self.session_factory() as db:
             query = db.query(GeneratedResourceORM).filter_by(
                 learner_id=learner_id,
-                publication_status="published",
+            ).filter(
+                # Show resources that are published OR have been through review
+                or_(
+                    GeneratedResourceORM.publication_status == "published",
+                    GeneratedResourceORM.review_status.in_([
+                        "approved", "human_review", "revision_requested", "pending_review"
+                    ]),
+                ),
             )
             if resource_type:
                 query = query.filter_by(resource_type=resource_type)

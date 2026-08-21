@@ -6,6 +6,7 @@ __pycache__/
 **/.env
 venv/
 .venv/
+backend/.pylibs/
 
 # Database
 *.db
@@ -16,6 +17,7 @@ backend/data/generated_resources/*
 !backend/data/generated_resources/.gitkeep
 !backend/data/generated_resources/*/
 !backend/data/generated_resources/*/.gitkeep
+backend/models/
 backend/data/generated_resources/**/*
 !backend/data/generated_resources/**/.gitkeep
 backend/data/models/

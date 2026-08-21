@@ -3,9 +3,10 @@ import HomeView from '../views/HomeView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
-  { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true, authLayout: true } },
-  { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true, authLayout: true } },
-  { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
+  { path: '/', name: 'landing', component: () => import('../views/LandingView.vue'), meta: { publicLayout: true } },
+  { path: '/login', name: 'login', component: () => import('../views/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
+  { path: '/register', name: 'register', component: () => import('../views/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
+  { path: '/dashboard', name: 'dashboard', component: HomeView, meta: { requiresAuth: true } },
   { path: '/user/profile', name: 'user-profile', component: () => import('../views/UserProfileView.vue'), meta: { requiresAuth: true } },
   { path: '/learning/new', name: 'onboarding', component: () => import('../views/OnboardingView.vue'), meta: { requiresAuth: true } },
   { path: '/learning/history', name: 'history', component: () => import('../views/HistoryView.vue'), meta: { requiresAuth: true } },
@@ -25,10 +26,10 @@ router.beforeEach(async (to) => {
   await auth.initialize()
 
   if (to.meta.requiresAuth && !auth.currentUser) {
-    return { name: 'login', query: { redirect: to.fullPath } }
+    return { name: 'landing', query: { login: '1', redirect: to.fullPath } }
   }
   if (to.meta.guestOnly && auth.currentUser) {
-    return { name: 'home' }
+    return { name: 'dashboard' }
   }
   return true
 })

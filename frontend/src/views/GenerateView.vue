@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="generate-page">
     <section class="control-panel">
       <div class="panel-title">
@@ -741,7 +741,7 @@ onBeforeUnmount(() => {
 
 .eyebrow {
   display: block;
-  color: #2f6e5f;
+  color: #2058a7;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
@@ -962,11 +962,11 @@ onBeforeUnmount(() => {
 }
 
 .status-completed {
-  color: #2f6e5f;
+  color: #2058a7;
 }
 
 .status-completed::before {
-  background: #2f8f6a;
+  background: #4a90ff;
 }
 
 .status-running,
@@ -1005,8 +1005,8 @@ onBeforeUnmount(() => {
 }
 
 .primary-action {
-  border-color: #2f6e5f;
-  background: #2f6e5f;
+  border-color: #2058a7;
+  background: #2058a7;
   color: #fff;
 }
 
@@ -1095,16 +1095,16 @@ onBeforeUnmount(() => {
   gap: 7px;
   min-width: 148px;
   height: 38px;
-  border-color: #2f6e5f;
-  background: #2f6e5f;
+  border-color: #2058a7;
+  background: #2058a7;
   color: #fff;
   font-weight: 700;
 }
 
 .learning-mode-action:hover,
 .learning-mode-action:focus-visible {
-  border-color: #255a4e;
-  background: #255a4e;
+  border-color: #17447e;
+  background: #17447e;
   color: #fff;
 }
 
@@ -1197,3 +1197,4 @@ onBeforeUnmount(() => {
 
 }
 </style>
+

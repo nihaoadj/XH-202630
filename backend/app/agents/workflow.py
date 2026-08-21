@@ -53,8 +53,9 @@ def _resource_copies(
     resources: list[LearningResource],
     status: ResourceStatus,
 ) -> list[LearningResource]:
+    # Publish on APPROVED or HUMAN_REVIEW (resources should be visible to user even in degraded mode)
     publication_status = (
-        "published" if status == ResourceStatus.APPROVED else "unpublished"
+        "published" if status in (ResourceStatus.APPROVED, ResourceStatus.HUMAN_REVIEW) else "unpublished"
     )
     return [
         resource.model_copy(
