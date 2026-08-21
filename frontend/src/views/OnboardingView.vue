@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="onboarding-page">
     <section class="user-bar">
       <div>
@@ -8,6 +8,23 @@
       </div>
 
       <div class="user-actions">
+        <label v-if="existingProfiles.length" class="existing-direction-control">
+          <span>已有学习方向</span>
+          <el-select
+            v-model="selectedExistingLearnerId"
+            size="small"
+            filterable
+            placeholder="切换已有方向"
+            @change="activateExistingProfile"
+          >
+            <el-option
+              v-for="profile in existingProfiles"
+              :key="profile.learner_id"
+              :label="existingProfileLabel(profile)"
+              :value="profile.learner_id"
+            />
+          </el-select>
+        </label>
         <el-tag effect="plain">{{ currentUser?.username || currentUser?.display_name }}</el-tag>
         <el-button @click="$router.push('/user/profile')">维护用户资料</el-button>
       </div>
@@ -275,7 +292,7 @@
           <el-empty v-else description="当前没有需要作答的诊断题，提交问卷后系统会自动判断是否需要诊断。" />
         </el-card>
 
-        <el-card v-else class="work-card">
+        <el-card v-else class="work-card review-stage-card">
           <template #header>
             <div class="card-head">
               <div>
@@ -286,7 +303,7 @@
             </div>
           </template>
 
-          <el-card v-if="diagnosisResult" class="result-card">
+          <el-card v-if="diagnosisResult" class="result-card diagnosis-result-card">
             <template #header>
               <div class="card-head compact">
                 <div>
@@ -298,17 +315,38 @@
               </div>
             </template>
 
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="用户">{{ currentUser?.display_name }}</el-descriptions-item>
-              <el-descriptions-item label="学习方向">{{ selectedDirection?.name || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="薄弱点" :span="2">{{ (diagnosisResult.weak_points || []).join('、') || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="优势点" :span="2">{{ (diagnosisResult.strong_points || []).join('、') || '-' }}</el-descriptions-item>
-            </el-descriptions>
+            <div class="diagnosis-result-body">
+              <div class="diagnosis-summary-grid">
+                <div class="diagnosis-summary-item">
+                  <span>用户</span>
+                  <strong>{{ currentUser?.display_name || currentUser?.username || '-' }}</strong>
+                </div>
+                <div class="diagnosis-summary-item">
+                  <span>学习方向</span>
+                  <strong>{{ selectedDirection?.name || '-' }}</strong>
+                </div>
+                <div class="diagnosis-summary-item">
+                  <span>能力阶段</span>
+                  <strong>{{ diagnosisResult.ability_level || '-' }}</strong>
+                </div>
+              </div>
+
+              <div class="diagnosis-point-grid">
+                <section class="diagnosis-point-card">
+                  <span>薄弱点</span>
+                  <p>{{ (diagnosisResult.weak_points || []).join('、') || '暂无明显薄弱点' }}</p>
+                </section>
+                <section class="diagnosis-point-card">
+                  <span>优势点</span>
+                  <p>{{ (diagnosisResult.strong_points || []).join('、') || '暂无明确优势点' }}</p>
+                </section>
+              </div>
+            </div>
           </el-card>
 
-          <el-form label-position="top" class="questionnaire-form">
+          <el-form label-position="top" class="questionnaire-form resource-selection-form">
             <el-form-item label="本次要生成的资源类型" required>
-              <el-checkbox-group v-model="selectedResourceTypes">
+              <el-checkbox-group class="resource-type-grid" v-model="selectedResourceTypes">
                 <el-checkbox v-for="item in resourceTypeOptions" :key="item" :label="item" :value="item" />
               </el-checkbox-group>
             </el-form-item>
@@ -340,7 +378,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { diagnosisApi, generateApi, knowledgeApi, onboardingApi } from '../api'
+import { diagnosisApi, generateApi, knowledgeApi, onboardingApi, profileApi } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { useAppStore } from '../stores/app'
 
@@ -349,9 +387,11 @@ const auth = useAuthStore()
 const store = useAppStore()
 
 const domains = ref([])
+const existingProfiles = ref([])
 const questions = ref([])
 const selectedDomainId = ref('')
 const selectedDirectionId = ref('')
+const selectedExistingLearnerId = ref('')
 const stepStage = ref('domain')
 const submittingProfile = ref(false)
 const submittingDiagnosis = ref(false)
@@ -366,6 +406,7 @@ const currentUser = computed(() => auth.currentUser || store.currentUserProfile 
 const selectedDomain = computed(() => domains.value.find((item) => item.domain_id === selectedDomainId.value))
 const tracks = computed(() => selectedDomain.value?.tracks || [])
 const selectedDirection = computed(() => tracks.value.find((item) => item.track_id === selectedDirectionId.value))
+const allTracks = computed(() => domains.value.flatMap((domain) => domain.tracks || []))
 const totalTrackCount = computed(() => domains.value.reduce((sum, item) => sum + (item.tracks?.length || 0), 0))
 const selectedDomainDocumentCount = computed(() =>
   tracks.value.reduce((sum, item) => sum + (item.metadata?.document_count || 0), 0)
@@ -520,6 +561,14 @@ function isTrackAvailable(track) {
   return track.metadata?.available !== false
 }
 
+function resolveTrack(trackId) {
+  return allTracks.value.find((track) => track.track_id === trackId || track.knowledge_base_id === trackId)
+}
+
+function existingProfileLabel(profile) {
+  return `${resolveTrack(profile.knowledge_base_id)?.name || profile.knowledge_base_id || '未命名方向'} · ${profile.skill_level || '待诊断'}`
+}
+
 function selectDomain(item) {
   selectedDomainId.value = item.domain_id
   selectedDirectionId.value = ''
@@ -544,6 +593,33 @@ function selectDirection(item) {
 async function loadDomains() {
   const res = await knowledgeApi.listDomains()
   domains.value = res.data.domains || []
+}
+
+async function loadExistingProfiles() {
+  const res = await profileApi.list({ page: 1, page_size: 50 })
+  existingProfiles.value = res.data.items || res.data.profiles || []
+}
+
+function activateExistingProfile(learnerId) {
+  const profile = existingProfiles.value.find((item) => item.learner_id === learnerId)
+  const track = profile ? resolveTrack(profile.knowledge_base_id) : null
+  if (!profile || !track) return
+
+  const domain = domains.value.find((item) => item.tracks?.some((candidate) => candidate.track_id === track.track_id))
+  selectedDomainId.value = domain?.domain_id || ''
+  selectedDirectionId.value = track.track_id
+  questions.value = []
+  store.resumeProfile(profile, track.track_id, track.name)
+  store.setPendingDiagnosis([])
+  store.setDiagnosisResult({
+    ability_level: profile.skill_level || '待诊断',
+    weak_points: profile.weak_points || [],
+    strong_points: profile.strong_points || [],
+    knowledge_states: profile.knowledge_states || {},
+    diagnostic_result_id: '',
+  })
+  stepStage.value = 'review'
+  ElMessage.success(`已切换到${track.name}`)
 }
 
 async function loadQuestions() {
@@ -688,6 +764,7 @@ onMounted(async () => {
     store.setPendingDiagnosis([])
     store.setDiagnosisResult(null)
     await loadDomains()
+    await loadExistingProfiles()
   } catch (error) {
     console.error(error)
     ElMessage.error('初始化学习方向页面失败')
@@ -1204,7 +1281,7 @@ onMounted(async () => {
   border-radius: 18px;
   background:
     radial-gradient(circle at 85% 12%, rgba(45, 212, 191, 0.18), transparent 30%),
-    linear-gradient(112deg, #eff6ff 0%, #fcfdff 58%, #f0fbf8 100%);
+    linear-gradient(112deg, #eff6ff 0%, #fcfdff 58%, #edf4ff 100%);
   box-shadow: 0 14px 30px rgba(25, 61, 97, 0.06);
 }
 
@@ -1222,7 +1299,7 @@ onMounted(async () => {
 .page-kicker,
 .card-kicker {
   display: block;
-  color: #176f61;
+  color: #2058a7;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.09em;
@@ -1252,6 +1329,19 @@ onMounted(async () => {
   position: relative;
   z-index: 1;
   align-items: center;
+}
+
+.existing-direction-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #5f7893;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.existing-direction-control :deep(.el-select) {
+  width: 190px;
 }
 
 .user-actions :deep(.el-tag) {
@@ -1290,8 +1380,8 @@ onMounted(async () => {
 }
 
 .progress-card.active {
-  box-shadow: inset 4px 0 0 #36ad8b;
-  background: linear-gradient(90deg, #eaf5ff, #e7f8f1);
+  box-shadow: inset 4px 0 0 #4a90ff;
+  background: linear-gradient(90deg, #e8f1ff, #e8f1ff);
 }
 
 .progress-card.done {
@@ -1305,21 +1395,21 @@ onMounted(async () => {
 .progress-index {
   width: 38px;
   height: 38px;
-  border: 1px solid #c7ddf0;
+  border: 1px solid #cfe2ff;
   background: #f0f6ff;
   color: #356ea8;
   font-size: 14px;
 }
 
 .progress-card.done .progress-index {
-  border-color: #9ad9c8;
-  background: #e6f8f1;
-  color: #168369;
+  border-color: #9fc5ec;
+  background: #e8f1ff;
+  color: #2058a7;
 }
 
 .progress-card.active .progress-index {
-  border-color: #45b89b;
-  background: #35ac90;
+  border-color: #4a90ff;
+  background: #4a90ff;
   color: #fff;
   box-shadow: 0 0 0 5px rgba(53, 172, 144, 0.12);
 }
@@ -1337,18 +1427,18 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.domain-stage-card .domain-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
+.domain-stage-card .domain-grid,
 .track-stage-card .card-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
 }
 
 .compactWizard .track-stage-card :deep(.el-card__body) {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
 }
 
 .track-stage-card .overview-strip,
@@ -1357,21 +1447,15 @@ onMounted(async () => {
   margin: 0;
 }
 
-.track-stage-card .card-grid {
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  min-height: 0;
-  gap: 10px;
-}
-
 .compactWizard .track-stage-card .choice-card {
-  min-height: 0;
-  gap: 6px;
-  padding: 13px 14px;
+  min-height: 148px;
+  gap: 10px;
+  padding: 18px;
 }
 
-.track-stage-card .choice-title { font-size: 18px; }
-.track-stage-card .choice-description { font-size: 13px; line-height: 1.45; }
-.track-stage-card .choice-meta { font-size: 12px; }
+.track-stage-card .choice-title { font-size: 20px; line-height: 1.2; }
+.track-stage-card .choice-description { font-size: 14px; line-height: 1.6; }
+.track-stage-card .choice-meta { font-size: 13px; margin-top: auto; }
 
 .compactWizard .track-stage-card .insight-card { padding: 10px 14px; }
 .track-stage-card .insight-kicker { margin-bottom: 5px; }
@@ -1409,7 +1493,7 @@ onMounted(async () => {
   border-radius: 12px;
   background: linear-gradient(145deg, #f8fbff, #f0f6ff);
 }
-.overview-chip:nth-child(2n) { background: linear-gradient(145deg, #f7fcfa, #edf9f5); border-color: #d2ebe2; }
+.overview-chip:nth-child(2n) { background: linear-gradient(145deg, #f6f9ff, #edf4ff); border-color: #cfe2ff; }
 .overview-chip span { color: #70829a; font-size: 12px; }
 .overview-chip strong { margin-top: 6px; color: #1b3657; font-size: 18px; }
 
@@ -1439,15 +1523,15 @@ onMounted(async () => {
 .choice-description { color: #5d728d; font-size: 14px; line-height: 1.6; }
 .choice-meta { color: #49708e; font-size: 13px; font-weight: 600; }
 
-.selection-pill { border: 1px solid #d2e4f9; background: #f2f7ff; color: #3168ad; }
+.selection-pill { border: 1px solid #d2e4f9; background: #f2f7ff; color: #2058a7; }
 .questionnaire-form { max-width: 920px; }
 .questionnaire-form :deep(.el-form-item__label), .question-title { color: #1c3859; font-size: 15px; font-weight: 750; }
 .questionnaire-form :deep(.el-input__wrapper), .questionnaire-form :deep(.el-select__wrapper), .questionnaire-form :deep(.el-textarea__inner) { box-shadow: 0 0 0 1px #d6e2ef inset; }
 .questionnaire-form :deep(.el-input__wrapper:hover), .questionnaire-form :deep(.el-select__wrapper:hover), .questionnaire-form :deep(.el-textarea__inner:hover) { box-shadow: 0 0 0 1px #8eb9e8 inset; }
 
 .domain-footprint { margin-top: 16px; }
-.insight-card { border-color: #d5e5f1; border-radius: 14px; background: linear-gradient(105deg, #f8fbff, #f1faf7); }
-.insight-kicker { color: #187864; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+.insight-card { border-color: #d5e5f1; border-radius: 14px; background: linear-gradient(105deg, #f8fbff, #edf4ff); }
+.insight-kicker { color: #2058a7; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
 .insight-list { color: #536c87; font-size: 14px; }
 
 .result-card { overflow: hidden; border-color: #d6e7f1; border-radius: 14px; box-shadow: none; }
@@ -1455,6 +1539,103 @@ onMounted(async () => {
 .result-card :deep(.el-card__body) { padding: 0; }
 .result-card :deep(.el-descriptions__label) { background: #f7faff; color: #5d738e; }
 .result-card :deep(.el-descriptions__content) { color: #1b385a; }
+
+.review-stage-card :deep(.el-card__body) {
+  gap: 18px;
+}
+
+.diagnosis-result-card {
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.diagnosis-result-card :deep(.el-card__body) {
+  padding: 18px;
+  overflow: visible;
+}
+
+.diagnosis-result-body {
+  display: grid;
+  gap: 14px;
+}
+
+.diagnosis-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.diagnosis-summary-item,
+.diagnosis-point-card {
+  min-width: 0;
+  border: 1px solid #dbe7f4;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.diagnosis-summary-item {
+  padding: 12px 14px;
+}
+
+.diagnosis-summary-item span,
+.diagnosis-point-card span {
+  display: block;
+  color: #6b829b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.diagnosis-summary-item strong {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  color: #163353;
+  font-size: 16px;
+}
+
+.diagnosis-point-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.diagnosis-point-card {
+  padding: 13px 14px;
+}
+
+.diagnosis-point-card p {
+  margin: 8px 0 0;
+  color: #1b385a;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.resource-selection-form {
+  width: 100%;
+  max-width: none;
+}
+
+.resource-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.resource-type-grid :deep(.el-checkbox) {
+  height: auto;
+  min-height: 42px;
+  margin-right: 0;
+  padding: 9px 12px;
+  border: 1px solid #dbe7f4;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.resource-type-grid :deep(.el-checkbox.is-checked) {
+  border-color: #4a90ff;
+  background: #f0f6ff;
+}
 
 .action-row { padding-top: 20px; }
 .action-row :deep(.el-button) { min-width: 96px; height: 38px; border-radius: 9px; font-weight: 700; }
@@ -1464,7 +1645,7 @@ onMounted(async () => {
   .wizard-layout { grid-template-columns: 210px minmax(0, 1fr); }
   .card-title { font-size: 23px; }
   .choice-title { font-size: 18px; }
-  .track-stage-card .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .domain-stage-card .domain-grid, .track-stage-card .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 1024px) {
@@ -1472,7 +1653,7 @@ onMounted(async () => {
   .progress-panel { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   .progress-card { border: 1px solid #d9e5f0; border-radius: 12px; background: #fff; color: #183553; }
   .progress-card:hover:not(:disabled), .progress-card.done { background: #f5f9ff; }
-  .progress-card.active { box-shadow: inset 0 -3px 0 #3bb89c; background: #f1faf7; }
+  .progress-card.active { box-shadow: inset 0 -3px 0 #4a90ff; background: #edf4ff; }
   .progress-index { border-color: #cddff2; background: #eff6ff; color: #356ea8; }
   .progress-title { color: #183553; }
   .progress-desc { color: #6b8099; }
@@ -1486,5 +1667,8 @@ onMounted(async () => {
   .card-title { font-size: 22px; }
   .overview-strip { gap: 8px; }
   .domain-stage-card .domain-grid, .track-stage-card .card-grid { grid-template-columns: 1fr; }
+  .existing-direction-control { width: 100%; align-items: stretch; flex-direction: column; }
+  .existing-direction-control :deep(.el-select) { width: 100%; }
 }
 </style>
+

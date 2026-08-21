@@ -99,7 +99,8 @@ onMounted(() => fillForm(auth.currentUser))
 
 <style scoped>
 .user-profile-page {
-  max-width: 960px;
+  width: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -110,6 +111,7 @@ onMounted(() => fillForm(auth.currentUser))
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  width: 100%;
   padding: 22px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 8px;
@@ -126,7 +128,20 @@ onMounted(() => fillForm(auth.currentUser))
 }
 
 .profile-card {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
   border-radius: 8px;
+}
+
+.profile-card :deep(.el-card__body) {
+  height: 100%;
+}
+
+.profile-card :deep(.el-form) {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .card-head {
@@ -136,16 +151,30 @@ onMounted(() => fillForm(auth.currentUser))
   gap: 12px;
 }
 
+.profile-card :deep(.el-form-item) {
+  min-width: 0;
+}
+
+.profile-card :deep(.el-input),
+.profile-card :deep(.el-input-number) {
+  width: 100%;
+}
+
+.profile-card :deep(.el-input-number .el-input__wrapper) {
+  width: 100%;
+}
+
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 0 18px;
 }
 
 .action-row {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 18px;
 }
 
 @media (max-width: 720px) {
