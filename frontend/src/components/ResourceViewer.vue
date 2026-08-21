@@ -6,20 +6,25 @@
           <span v-if="progressLabel" class="learning-status"><i></i>正在学习</span>
           <span class="resource-kicker">{{ resourceKind(res.resource_type) }}</span>
         </div>
-        <div v-if="resourceChoices.length > 1" class="header-resource-switcher" role="group" aria-label="切换本次学习资源">
-          <button
-            v-for="(choice, index) in resourceChoices"
-            :key="choice.resource_id"
-            type="button"
-            class="header-resource-choice"
-            :class="{ 'is-active': choice.resource_id === selectedResourceId }"
-            :aria-pressed="choice.resource_id === selectedResourceId"
-            :aria-label="`切换到第 ${index + 1} 份：${choice.resource_type || '学习资源'}`"
-            @click="selectResource(choice.resource_id)"
-          >
-            <span>{{ String(index + 1).padStart(2, '0') }}</span>{{ choice.resource_type || '学习资源' }}
-          </button>
-        </div>
+      </div>
+      <div v-if="resourceChoices.length > 1" class="header-resource-switcher" role="group" aria-label="切换本次学习资源">
+        <button
+          v-for="(choice, index) in resourceChoices"
+          :key="choice.resource_id"
+          type="button"
+          class="header-resource-choice"
+          :class="{ 'is-active': choice.resource_id === selectedResourceId }"
+          :aria-pressed="choice.resource_id === selectedResourceId"
+          :aria-label="`切换到第 ${index + 1} 份：${choice.resource_type || '学习资源'}`"
+          @click="selectResource(choice.resource_id)"
+        >
+          <span class="header-choice-order">{{ String(index + 1).padStart(2, '0') }}</span>
+          <span class="header-choice-copy">
+            <strong>{{ choice.resource_type || '学习资源' }}</strong>
+            <small>{{ choice.difficulty || '待分级' }}</small>
+          </span>
+          <span class="header-choice-arrow">→</span>
+        </button>
       </div>
       <div class="reader-actions">
         <span v-if="progressLabel" class="learning-progress">{{ progressLabel }}</span>
@@ -196,6 +201,121 @@ function selectResource(resourceId) { if (resourceId && resourceId !== props.sel
 .reader-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 58px; padding: 12px 24px; background: #fbfdff; border-bottom: 1px solid #e4ebf3; }.reader-title-wrap { display: flex; min-width: 0; align-items: center; gap: 12px; }.learning-status { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; color: #2058a7; font-size: 13px; font-weight: 800; }.learning-status i { width: 7px; height: 7px; border-radius: 50%; background: #4a90ff; box-shadow: 0 0 0 3px rgba(53, 174, 148, .14); }.resource-kicker { overflow: hidden; padding-left: 12px; border-left: 1px solid #d9e7e5; color: #2058a7; font-size: 16px; font-weight: 800; letter-spacing: 0; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }.reader-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }.learning-progress { color: #52728a; font-size: 12px; font-weight: 650; white-space: nowrap; }.reader-actions :deep(.el-tag) { height: 28px; padding: 0 10px; font-weight: 650; }.download-button { height: 32px; padding: 0 12px; border-color: #9fc5ec; border-radius: 8px; background: #eff7ff; color: #2467b3; font-weight: 700; }.download-button:hover, .download-button:focus-visible { border-color: #2467b3; background: #2467b3; color: #fff; }
 .reader-content { padding: 32px 40px 18px; }.content-label { display: flex; align-items: center; gap: 8px; margin-bottom: 19px; color: #2058a7; font-size: 13px; font-weight: 800; }.content-label span { width: 4px; height: 16px; border-radius: 99px; background: #2058a7; }.resource-content { color: #34475e; font-size: 15px; line-height: 1.9; }.resource-content :deep(h1), .resource-content :deep(h2), .resource-content :deep(h3), .resource-content :deep(h4), .resource-content :deep(h5), .resource-content :deep(h6) { margin: 30px 0 12px; color: #172033; line-height: 1.35; }.resource-content :deep(h1) { font-size: 25px; }.resource-content :deep(h2) { font-size: 21px; }.resource-content :deep(h3) { font-size: 18px; }.resource-content :deep(p), .resource-content :deep(ul), .resource-content :deep(pre) { margin: 0 0 16px; }.resource-content :deep(ul) { padding-left: 22px; }.resource-content :deep(li + li) { margin-top: 6px; }.resource-content :deep(code) { padding: 2px 6px; border-radius: 5px; background: #ecf3f8; color: #185e7b; font-family: Consolas,'Courier New',monospace; font-size: .9em; }.resource-content :deep(pre) { padding: 16px 18px; border-radius: 10px; background: #10253e; color: #e8f2fb; overflow-x: auto; }.resource-content :deep(pre code) { padding: 0; background: transparent; color: inherit; }
 .reader-footer { padding: 20px 40px 25px; background: #fbfcfe; border-top: 1px solid #e8eef4; }.knowledge-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }.knowledge-tags > span { margin-right: 3px; color: #75849a; font-size: 12px; }.knowledge-tags em { padding: 5px 9px; border-radius: 99px; background: #eaf4ff; color: #2f659d; font-size: 11px; font-style: normal; }.source-collapse { margin-top: 13px; border-top: 0; border-bottom: 0; }.source-collapse :deep(.el-collapse-item__header) { height: 32px; border-bottom: 0; background: transparent; color: #60748d; font-size: 12px; }.source-collapse :deep(.el-collapse-item__wrap) { border-bottom: 0; background: transparent; }.source-collapse :deep(.el-collapse-item__content) { padding-bottom: 0; }.source-collapse ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }.source-collapse li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 8px 10px; border-radius: 7px; background: #f1f5f9; color: #53677e; font-size: 12px; }.source-collapse li strong { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }.source-collapse li span { flex: 0 0 auto; color: #8190a2; font-size: 11px; }
-@media (max-width: 1100px) { .reader-title-wrap { grid-template-columns: 310px minmax(0,1fr); column-gap: 12px; } } @media (max-width: 760px) { .reader-header { gap: 10px; min-height: 54px; padding: 11px 16px; }.reader-title-wrap { display: flex; gap: 8px; }.reader-context-title { gap: 8px; }.learning-status { font-size: 12px; }.resource-kicker { max-width: 148px; padding-left: 8px; font-size: 14px; }.header-resource-switcher { gap: 5px; }.header-resource-choice { height: 28px; padding-right: 7px; font-size: 11px; }.learning-progress, .reader-actions :deep(.el-tag) { display: none; }.reader-content, .reader-footer { padding-right: 23px; padding-left: 23px; } }
+.reader-header {
+  display: grid;
+  grid-template-columns: 440px minmax(0, 1fr) max-content;
+  justify-content: initial;
+}
+
+.reader-title-wrap {
+  min-width: 0;
+}
+
+.header-resource-switcher {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.header-resource-switcher::-webkit-scrollbar {
+  display: none;
+}
+
+.header-resource-choice {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 14px;
+  flex: 0 0 184px;
+  min-width: 0;
+  min-height: 50px;
+  gap: 9px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 1px solid #d9e1ec;
+  border-radius: 9px;
+  background: #fff;
+  color: #344963;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+
+.header-resource-choice:hover {
+  background: #f4f8fd;
+}
+
+.header-resource-choice.is-active {
+  border-color: #6da3ff;
+  background: linear-gradient(100deg, #eaf4ff, #f5f9ff);
+  box-shadow: 0 5px 12px rgba(53, 110, 157, .11);
+}
+
+.header-choice-order {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: #eff4fa;
+  color: #71839b;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.header-resource-choice.is-active .header-choice-order {
+  background: #1e6ed2;
+  color: #fff;
+}
+
+.header-choice-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.header-choice-copy strong,
+.header-choice-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-choice-copy strong {
+  color: #203853;
+  font-size: 13px;
+}
+
+.header-choice-copy small {
+  color: #77889d;
+  font-size: 10px;
+}
+
+.header-choice-arrow {
+  color: #91a1b6;
+  font-size: 14px;
+}
+
+.header-resource-choice.is-active .header-choice-arrow {
+  color: #2058a7;
+}
+
+@media (max-width: 1100px) {
+  .reader-header { grid-template-columns: minmax(0, 1fr) max-content; }
+  .header-resource-switcher { grid-column: 1 / -1; grid-row: 2; }
+}
+
+@media (max-width: 760px) {
+  .reader-header { gap: 10px; min-height: 54px; padding: 11px 16px; }
+  .reader-title-wrap { display: flex; gap: 8px; }
+  .reader-context-title { gap: 8px; }
+  .learning-status { font-size: 12px; }
+  .resource-kicker { max-width: 148px; padding-left: 8px; font-size: 14px; }
+  .header-resource-switcher { gap: 5px; }
+  .header-resource-choice { flex-basis: 158px; min-height: 46px; }
+  .learning-progress, .reader-actions :deep(.el-tag) { display: none; }
+  .reader-content, .reader-footer { padding-right: 23px; padding-left: 23px; }
+}
 </style>
 
