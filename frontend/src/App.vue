@@ -241,10 +241,9 @@ async function handleLogout() {
 
 .nav-list {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   flex-direction: column;
-  justify-content: space-evenly;
-  min-height: 320px;
+  justify-content: flex-start;
   gap: 8px;
 }
 
@@ -524,10 +523,6 @@ async function handleLogout() {
   padding-inline: 12px;
 }
 
-.is-sidebar-collapsed .nav-icon {
-  font-size: 18px;
-}
-
 .is-sidebar-collapsed .nav-text,
 .is-sidebar-collapsed .nav-hint,
 .is-sidebar-collapsed .sidebar-toggle-label,
@@ -553,12 +548,6 @@ async function handleLogout() {
     gap: 14px;
     max-height: 35dvh;
     min-height: 0;
-  }
-
-  .nav-list {
-    flex: 0 1 auto;
-    min-height: 0;
-    justify-content: flex-start;
   }
 
   .topbar {
