@@ -1419,9 +1419,7 @@ onMounted(async () => {
 
 .compactWizard .work-card :deep(.el-card__body) {
   overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow-y: hidden;
 }
 
 .compactWizard .action-row {
@@ -1508,6 +1506,45 @@ onMounted(async () => {
   background: linear-gradient(150deg, #ffffff, #fbfdff);
   box-shadow: 0 5px 14px rgba(30, 65, 104, 0.025);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+/* Keep the first two desktop steps fixed by reducing their density before
+   falling back to scrolling on genuinely short viewports. */
+.compactWizard .work-card :deep(.el-card__body) {
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+.compactWizard .choice-card {
+  min-height: 118px;
+  gap: 8px;
+  padding: 14px;
+}
+
+@media (min-width: 1025px) and (max-height: 900px) {
+  .onboarding-page { gap: 12px; }
+  .user-bar { min-height: 108px; padding: 18px 22px; }
+  .wizard-layout { gap: 12px; }
+  .progress-card { padding: 11px 14px; }
+  .work-card :deep(.el-card__header) { padding: 16px 22px 13px; }
+  .work-card :deep(.el-card__body) { padding: 14px 22px 16px; }
+  .compactWizard .overview-strip { gap: 8px; margin-bottom: 10px; }
+  .compactWizard .overview-chip { padding: 8px 10px; }
+  .compactWizard .overview-chip strong { margin-top: 4px; }
+  .compactWizard .card-grid { gap: 10px; }
+  .compactWizard .choice-card { min-height: 108px; padding: 12px; }
+  .compactWizard .domain-footprint { margin-top: 10px; }
+  .compactWizard .insight-card { padding: 10px 12px; }
+  .compactWizard .insight-list { margin-top: 6px; line-height: 1.4; }
+  .compactWizard .action-row { margin-top: 10px; padding-top: 0; }
+}
+
+@media (min-width: 1025px) and (max-height: 760px) {
+  .compactWizard .work-card :deep(.el-card__body) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
 }
 
 .choice-card:hover:not(:disabled) {
