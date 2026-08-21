@@ -174,6 +174,7 @@ async function handleLogout() {
 .sidebar {
   position: relative;
   z-index: 20;
+  min-width: 0;
   display: grid;
   grid-template-rows: 60px minmax(320px, 1fr) 246px 40px 40px;
   gap: 12px;
@@ -206,6 +207,7 @@ async function handleLogout() {
 
 .brand-block {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 12px;
   min-height: 60px;
@@ -241,6 +243,7 @@ async function handleLogout() {
 
 .nav-list {
   display: grid;
+  min-width: 0;
   grid-template-rows: repeat(5, minmax(62px, auto));
   align-content: space-evenly;
   min-height: 0;
@@ -306,6 +309,7 @@ async function handleLogout() {
 
 .context-panel {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 10px;
   height: 246px;
@@ -500,6 +504,8 @@ async function handleLogout() {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
