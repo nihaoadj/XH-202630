@@ -4,10 +4,10 @@
   <div v-else class="app-shell" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
     <aside class="sidebar">
       <div class="brand-block">
-        <img class="brand-logo" src="/rag-logo.png" alt="RAG匠学" />
+        <img class="brand-logo" src="/zhiyu-logo.png" alt="智域匠学" />
         <div class="brand-copy">
-          <div class="brand-name">RAG匠学</div>
-          <div class="brand-tag">领域知识个性化生成平台</div>
+          <div class="brand-name">智域匠学</div>
+          <div class="brand-tag">多智能体领域技能培训平台</div>
         </div>
       </div>
 
@@ -48,7 +48,7 @@
     <main class="main-area">
       <header class="topbar">
         <div class="topbar-copy">
-          <span class="topbar-kicker">RAG KNOWLEDGE WORKBENCH</span>
+          <span class="topbar-kicker">DOMAIN SKILL WORKBENCH</span>
           <h1>{{ currentTitle }}</h1>
           <p>{{ currentSubtitle }}</p>
         </div>
@@ -111,7 +111,7 @@ const currentTitle = computed(() => ({
   report: '学习报告',
   history: '学习历史',
   'user-profile': '用户资料',
-}[route.name] || 'RAG匠学'))
+}[route.name] || '智域匠学'))
 
 const currentSubtitle = computed(() => ({
   dashboard: '围绕当前学习画像和任务进度，快速进入下一步。',
@@ -122,7 +122,7 @@ const currentSubtitle = computed(() => ({
   report: '汇总诊断、反馈与资源，观察能力变化。',
   history: '回看学习路径、事件记录和关键节点。',
   'user-profile': '维护账号资料，让后续的学习方向复用更顺滑。',
-}[route.name] || 'RAG匠学的统一入口。'))
+}[route.name] || '智域匠学的统一入口。'))
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
@@ -241,9 +241,10 @@ async function handleLogout() {
 
 .nav-list {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-evenly;
+  min-height: 320px;
   gap: 8px;
 }
 
@@ -548,6 +549,12 @@ async function handleLogout() {
     gap: 14px;
     max-height: 35dvh;
     min-height: 0;
+  }
+
+  .nav-list {
+    flex: 0 0 auto;
+    min-height: 0;
+    justify-content: flex-start;
   }
 
   .topbar {
