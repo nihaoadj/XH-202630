@@ -2,6 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from app.db.resource.models import ResourceExecutionRecord, ResourceSpecRecord
 from app.models.schemas import LearningResource
 
 
@@ -49,5 +50,62 @@ class BaseResourceRepository(ABC):
         resource_type: Optional[str] = None,
         difficulty: Optional[str] = None,
         run_id: Optional[str] = None,
+        batch_id: Optional[str] = None,
     ) -> List[LearningResource]:
+        pass
+
+    def list_page_by_learner_with_filter(
+        self,
+        learner_id: str,
+        resource_type: Optional[str] = None,
+        difficulty: Optional[str] = None,
+        run_id: Optional[str] = None,
+        batch_id: Optional[str] = None,
+        *,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> tuple[List[LearningResource], int]:
+        """Return a deterministic published-resource page and total count."""
+        resources = self.list_by_learner_with_filter(
+            learner_id,
+            resource_type,
+            difficulty,
+            run_id,
+            batch_id,
+        )
+        return resources[offset : offset + limit], len(resources)
+
+    @abstractmethod
+    def save_spec(self, spec: ResourceSpecRecord) -> None:
+        """Persist an immutable resource specification idempotently."""
+        pass
+
+    @abstractmethod
+    def get_spec(self, resource_spec_id: str) -> Optional[ResourceSpecRecord]:
+        pass
+
+    @abstractmethod
+    def list_specs_by_run(self, run_id: str) -> List[ResourceSpecRecord]:
+        pass
+
+    @abstractmethod
+    def upsert_execution(self, execution: ResourceExecutionRecord) -> None:
+        """Insert or advance the latest execution projection."""
+        pass
+
+    @abstractmethod
+    def get_execution(
+        self,
+        run_id: str,
+        resource_spec_id: str,
+        representation: str,
+    ) -> Optional[ResourceExecutionRecord]:
+        pass
+
+    @abstractmethod
+    def get_execution_by_resource(self, resource_id: str) -> Optional[ResourceExecutionRecord]:
+        pass
+
+    @abstractmethod
+    def list_executions_by_run(self, run_id: str) -> List[ResourceExecutionRecord]:
         pass

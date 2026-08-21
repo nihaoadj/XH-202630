@@ -18,53 +18,53 @@ DEFAULT_OUTPUT = PROJECT_ROOT / "wzx" / "out" / "p0-09-acceptance-manifest.json"
 
 SCENARIOS = {
     "A": [
-        "backend/tests/test_evidence_workflow.py::test_available_valid_evidence_is_the_only_route_to_generation",
-        "backend/tests/test_claim_workflow.py::test_supported_claim_completes_and_approves",
-        "backend/tests/test_generation_finalization.py::test_sql_finalization_uses_recorder_owned_review_and_is_idempotent",
+        "backend/tests/integration/workflow/test_evidence_workflow.py::test_available_valid_evidence_is_the_only_route_to_generation",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_supported_claim_completes_and_approves",
+        "backend/tests/integration/services/test_generation_finalization.py::test_sql_finalization_uses_recorder_owned_review_and_is_idempotent",
     ],
     "B": [
-        "backend/tests/test_evidence_workflow.py::test_evidence_gate_prevents_all_fact_generation_paths",
+        "backend/tests/integration/workflow/test_evidence_workflow.py::test_evidence_gate_prevents_all_fact_generation_paths",
     ],
     "C": [
-        "backend/tests/test_p0_05_review_revision.py::test_generator_revision_only_creates_targeted_resource_version",
-        "backend/tests/test_p0_05_review_revision.py::test_artifact_recorder_persists_versions_reviews_and_timeline",
+        "backend/tests/integration/workflow/test_p0_05_review_revision.py::test_generator_revision_only_creates_targeted_resource_version",
+        "backend/tests/integration/workflow/test_p0_05_review_revision.py::test_artifact_recorder_persists_versions_reviews_and_timeline",
     ],
     "D": [
-        "backend/tests/test_p0_09_acceptance_contract.py::test_claim_revision_preserves_v1_and_v2_audits",
+        "backend/tests/integration/workflow/test_p0_09_acceptance_contract.py::test_claim_revision_preserves_v1_and_v2_audits",
     ],
     "E": [
-        "backend/tests/test_feedback_loop_service.py::test_low_attempt_atomically_updates_profile_path_and_queues_followup",
-        "backend/tests/test_feedback_events.py::test_feedback_facts_append_sanitized_events_to_source_run",
+        "backend/tests/integration/services/test_feedback_loop_service.py::test_low_attempt_atomically_updates_profile_path_and_queues_followup",
+        "backend/tests/integration/persistence/test_feedback_events.py::test_feedback_facts_append_sanitized_events_to_source_run",
     ],
     "F": [
-        "backend/tests/test_feedback_loop_service.py::test_practice_updates_state_without_unnecessary_generation",
-        "backend/tests/test_feedback_loop_service.py::test_same_idempotency_key_replays_without_second_profile_update_or_job",
+        "backend/tests/integration/services/test_feedback_loop_service.py::test_practice_updates_state_without_unnecessary_generation",
+        "backend/tests/integration/services/test_feedback_loop_service.py::test_same_idempotency_key_replays_without_second_profile_update_or_job",
     ],
     "G": [
-        "backend/tests/test_learning_path_policy.py::test_high_score_completes_current_and_unlocks_challenge",
-        "backend/tests/test_feedback_loop_contracts.py::test_weak_knowledge_point_blocks_high_overall_score",
+        "backend/tests/unit/policies/test_learning_path_policy.py::test_high_score_completes_current_and_unlocks_challenge",
+        "backend/tests/unit/models/test_feedback_loop_contracts.py::test_weak_knowledge_point_blocks_high_overall_score",
     ],
     "H": [
-        "backend/tests/test_run_event_stream.py::test_replay_order_after_sequence_reconnect_and_multiple_clients",
-        "backend/tests/test_run_event_stream.py::test_terminal_closes_after_backlog_and_disconnect_is_read_only",
+        "backend/tests/integration/services/test_run_event_stream.py::test_replay_order_after_sequence_reconnect_and_multiple_clients",
+        "backend/tests/integration/services/test_run_event_stream.py::test_terminal_closes_after_backlog_and_disconnect_is_read_only",
     ],
     "I": [
-        "backend/tests/test_run_replay.py::test_cross_process_replay_uses_database_snapshots_only",
-        "backend/tests/test_feedback_restart_e2e.py::test_sqlite_feedback_state_survives_repository_reconstruction",
-        "backend/tests/test_claim_repository.py::test_sql_claim_repository_persists_judgement_and_frozen_evidence_binding",
+        "backend/tests/e2e/test_run_replay.py::test_cross_process_replay_uses_database_snapshots_only",
+        "backend/tests/e2e/test_feedback_restart_e2e.py::test_sqlite_feedback_state_survives_repository_reconstruction",
+        "backend/tests/integration/persistence/test_claim_repository.py::test_sql_claim_repository_persists_judgement_and_frozen_evidence_binding",
     ],
     "J": [
-        "backend/tests/test_llm_gateway.py::test_gateway_retries_timeout_without_changing_call_identity",
-        "backend/tests/test_llm_gateway.py::test_gateway_schema_repair_uses_same_global_attempt_budget",
-        "backend/tests/test_llm_gateway.py::test_gateway_does_not_retry_auth_error",
-        "backend/tests/test_llm_failure_policy.py::test_reviewer_never_approves_gateway_failure",
-        "backend/tests/test_claim_workflow.py::test_forged_evidence_fails_closed_without_leaking_claim_text",
-        "backend/tests/test_evidence_failure_policy.py::test_no_hit_is_business_result_even_when_degraded_mode_is_forbidden",
-        "backend/tests/test_evidence_failure_policy.py::test_production_retrieval_error_fails_closed",
-        "backend/tests/test_run_failure_policy.py::test_create_run_failure_prevents_workflow_invocation",
-        "backend/tests/test_run_event_stream.py::test_terminal_closes_after_backlog_and_disconnect_is_read_only",
-        "backend/tests/test_feedback_loop_service.py::test_stale_profile_version_is_rejected_without_mutation",
-        "backend/tests/test_feedback_loop_service.py::test_same_key_with_different_payload_is_409_conflict",
+        "backend/tests/unit/core/test_llm_gateway.py::test_gateway_retries_timeout_without_changing_call_identity",
+        "backend/tests/unit/core/test_llm_gateway.py::test_gateway_schema_repair_uses_same_global_attempt_budget",
+        "backend/tests/unit/core/test_llm_gateway.py::test_gateway_does_not_retry_auth_error",
+        "backend/tests/unit/agents/test_llm_failure_policy.py::test_reviewer_never_approves_gateway_failure",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_forged_evidence_fails_closed_without_leaking_claim_text",
+        "backend/tests/unit/agents/test_evidence_failure_policy.py::test_no_hit_is_business_result_even_when_degraded_mode_is_forbidden",
+        "backend/tests/unit/agents/test_evidence_failure_policy.py::test_production_retrieval_error_fails_closed",
+        "backend/tests/integration/workflow/test_run_failure_policy.py::test_create_run_failure_prevents_workflow_invocation",
+        "backend/tests/integration/services/test_run_event_stream.py::test_terminal_closes_after_backlog_and_disconnect_is_read_only",
+        "backend/tests/integration/services/test_feedback_loop_service.py::test_stale_profile_version_is_rejected_without_mutation",
+        "backend/tests/integration/services/test_feedback_loop_service.py::test_same_key_with_different_payload_is_409_conflict",
     ],
 }
 
@@ -182,7 +182,7 @@ def _live() -> dict[str, Any]:
     enabled = os.getenv("RUN_LIVE_LLM") == "1" or os.getenv("RUN_LIVE_LLM_TESTS") == "1"
     if not enabled:
         return {"status": "SKIP", "reason": "live provider smoke requires explicit RUN_LIVE_LLM=1"}
-    status, evidence = _pytest(["backend/tests/test_live_llm.py"])
+    status, evidence = _pytest(["backend/tests/live/test_live_llm.py"])
     return {"status": status, "evidence": evidence}
 
 

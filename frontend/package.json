@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test:workflow-events": "node tests/workflowEvents.test.mjs",
+    "test:workflow-events": "node tests/unit/utils/workflowEvents.test.mjs",
+    "test:tutor": "node tests/tutorState.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

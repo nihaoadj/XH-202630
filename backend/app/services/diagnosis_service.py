@@ -88,9 +88,13 @@ class DiagnosisService:
         learner.theory_scores.update(
             {nodes[node_id].name: round(state.score * 100, 1) for node_id, state in states.items() if node_id in nodes}
         )
-        assessed_names = {nodes[node_id].name for node_id in states if node_id in nodes}
-        preserved_weak_points = [point for point in learner.weak_points if point not in assessed_names]
-        preserved_strong_points = [point for point in learner.strong_points if point not in assessed_names]
+        assessed_aliases = {
+            alias
+            for node_id in states if node_id in nodes
+            for alias in (node_id, nodes[node_id].name, f"{nodes[node_id].name}（{node_id}）")
+        }
+        preserved_weak_points = [point for point in learner.weak_points if point not in assessed_aliases]
+        preserved_strong_points = [point for point in learner.strong_points if point not in assessed_aliases]
         learner.weak_points = list(dict.fromkeys(
             preserved_weak_points
             + [nodes[node_id].name for node_id, state in states.items() if state.status == "weak" and node_id in nodes]

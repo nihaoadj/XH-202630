@@ -3,6 +3,7 @@
 from dependency_injector import containers, providers
 
 from app.agents.workflow import build_workflow
+from app.agents.tutor import TutorAgent, TutorContextBuilder
 from app.config import get_settings
 from app.core.evidence_retriever import EvidenceRetriever
 from app.core.llm import LangChainChatTransport
@@ -19,6 +20,7 @@ from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.learner.repository import create_learner_repository
 from app.db.questionnaire.repository import create_questionnaire_repository
 from app.db.resource.repository import create_resource_repository
+from app.db.tutor.repository import create_tutor_repository
 from app.db.user.repository import create_user_repository
 from app.models.llm import LLMCallOptions
 from app.services.diagnosis_service import DiagnosisService
@@ -38,6 +40,8 @@ from app.services.review_service import ReviewService
 from app.services.run_query_service import RunQueryService
 from app.services.run_event_stream_service import RunEventStreamService
 from app.services.user_service import UserService
+from app.services.workflow_artifact_recorder import WorkflowArtifactRecorder
+from app.services.tutor_service import TutorService
 
 
 class Container(containers.DeclarativeContainer):
@@ -60,8 +64,10 @@ class Container(containers.DeclarativeContainer):
         transport=llm_transport,
         retry_base_delay_seconds=config.llm_retry_base_delay_seconds,
         retry_max_delay_seconds=config.llm_retry_max_delay_seconds,
+        resource_generation_max_attempts=config.llm_resource_generation_max_attempts,
         default_options=llm_call_options,
         generator_max_output_tokens=config.llm_generator_max_output_tokens,
+        resource_generator_max_output_tokens=config.llm_resource_generator_max_output_tokens,
     )
 
     vector_store = providers.Singleton(get_vector_store)
@@ -113,6 +119,11 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
+    tutor_repository = providers.Singleton(
+        create_tutor_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+    )
     questionnaire_repository = providers.Singleton(
         create_questionnaire_repository,
         db_type=config.db_type,
@@ -147,6 +158,12 @@ class Container(containers.DeclarativeContainer):
         llm_gateway=llm_gateway,
         evidence_retriever=evidence_retriever,
         lifecycle_repository=audit_repository,
+        resource_progress_recorder=providers.Singleton(
+            WorkflowArtifactRecorder,
+            resource_repository=resource_repository,
+            audit_repository=audit_repository,
+            claim_repository=claim_repository,
+        ),
     )
 
     profile_service = providers.Singleton(ProfileService, repo=learner_repository)
@@ -173,14 +190,39 @@ class Container(containers.DeclarativeContainer):
         generation_job_service=generation_job_service,
         audit_repo=audit_repository,
         knowledge_catalog=knowledge_catalog,
+        llm_gateway=llm_gateway,
+        tutor_repo=tutor_repository,
     )
     report_service = providers.Singleton(
         ReportService,
         resource_repo=resource_repository,
         feedback_repo=feedback_repository,
         feedback_loop_repo=feedback_loop_repository,
+        generation_job_repo=generation_job_repository,
     )
     knowledge_service = providers.Singleton(KnowledgeService, catalog=knowledge_catalog)
+    tutor_context_builder = providers.Singleton(
+        TutorContextBuilder,
+        audit_repository=audit_repository,
+        evidence_retriever=evidence_retriever,
+        knowledge_index=knowledge_catalog,
+        settings=runtime_settings,
+    )
+    tutor_agent = providers.Singleton(
+        TutorAgent,
+        llm_gateway=llm_gateway,
+        settings=runtime_settings,
+    )
+    tutor_service = providers.Singleton(
+        TutorService,
+        tutor_repo=tutor_repository,
+        learner_repo=learner_repository,
+        resource_repo=resource_repository,
+        knowledge_service=knowledge_service,
+        context_builder=tutor_context_builder,
+        tutor_agent=tutor_agent,
+        settings=runtime_settings,
+    )
     diagnosis_service = providers.Singleton(
         DiagnosisService,
         knowledge_service=knowledge_service,

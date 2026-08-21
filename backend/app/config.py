@@ -24,23 +24,72 @@ class Settings(BaseSettings):
     allow_degraded_generation: bool = False
     llm_api_key: SecretStr = SecretStr("")
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    # Deliberately opt in to a proxy only when one is known to be usable.
+    # The transport otherwise ignores Windows/system proxy discovery.
+    llm_proxy_url: str | None = None
     llm_model: str = "qwen-max"
-    llm_request_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
-    llm_workflow_timeout_seconds: float = Field(default=105.0, gt=0, le=600)
+
+    @field_validator("llm_proxy_url", mode="before")
+    @classmethod
+    def normalize_optional_proxy_url(cls, value):
+        """Treat an empty environment variable as direct model access."""
+
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+    llm_request_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
+    # Resource-oriented runs include generation and review/claim evaluation.
+    llm_workflow_timeout_seconds: float = Field(default=1200.0, gt=0, le=1800)
     llm_max_attempts: int = Field(default=2, ge=1, le=3)
+    # Resource generation produces the user-facing artifact. It receives one
+    # additional bounded recovery attempt for empty provider responses, while
+    # supporting nodes (review/diagnosis/claim checks) retain the global limit.
+    llm_resource_generation_max_attempts: int = Field(default=2, ge=1, le=3)
     llm_retry_base_delay_seconds: float = Field(default=0.5, ge=0, le=30)
     llm_retry_max_delay_seconds: float = Field(default=3.0, ge=0, le=60)
     llm_max_output_tokens: int = Field(default=4096, ge=256, le=65536)
+    # Kept for compatibility with existing deployments.  New resource agents
+    # use the explicit per-resource settings below.
     llm_generator_max_output_tokens: int = Field(default=8192, ge=256, le=65536)
+    llm_resource_generator_max_input_tokens: int = Field(
+        default=32768,
+        ge=1024,
+        le=262144,
+    )
+    llm_resource_generator_max_output_tokens: int = Field(
+        # Lecture and assessment DTOs have compact, product-sized caps.  This
+        # budget is deliberately below the long HTML-guide budget so a model
+        # that ignores the requested format reaches compact recovery promptly.
+        default=32768,
+        ge=8192,
+        le=65536,
+    )
     llm_structured_output_mode: str = "auto"
+    tutor_llm_timeout_seconds: float = Field(default=25.0, gt=0, le=120)
+    tutor_max_output_tokens: int = Field(default=2048, ge=256, le=8192)
+    tutor_max_context_turns: int = Field(default=6, ge=1, le=12)
+    tutor_max_evidence_items: int = Field(default=4, ge=1, le=8)
+    tutor_max_hint_level: int = Field(default=3, ge=0, le=3)
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
+    # The embedding model is part of the local runtime contract.  Do not turn
+    # a generation request into a Hugging Face network dependency after a
+    # restart; model provisioning is an explicit deployment step.
+    embedding_local_files_only: bool = True
     retrieval_top_k_default: int = Field(default=3, ge=1, le=10)
     retrieval_max_queries: int = Field(default=6, ge=1, le=10)
     retrieval_max_evidence: int = Field(default=8, ge=1, le=20)
     retrieval_min_evidence: int = Field(default=1, ge=1, le=20)
     retrieval_min_normalized_score: float = Field(default=0.35, ge=0, le=1)
     evidence_max_excerpt_chars: int = Field(default=1200, ge=100, le=10000)
-    workflow_run_lease_seconds: int = Field(default=180, ge=30, le=3600)
+    workflow_run_lease_seconds: int = Field(default=1260, ge=30, le=3600)
+    resource_worker_max_concurrency: int = Field(default=2, ge=1, le=4)
+    resource_continuation_max_items: int = Field(default=12, ge=1, le=100)
+    resource_continuation_summary_max_chars: int = Field(
+        default=600,
+        ge=100,
+        le=4000,
+    )
     workflow_checkpoint_max_bytes: int = Field(default=65536, ge=4096, le=1048576)
     workflow_timeline_default_limit: int = Field(default=100, ge=1, le=500)
     workflow_timeline_max_limit: int = Field(default=500, ge=1, le=1000)
@@ -157,6 +206,7 @@ class Settings(BaseSettings):
     @field_validator(
         "llm_request_timeout_seconds",
         "llm_workflow_timeout_seconds",
+        "tutor_llm_timeout_seconds",
         mode="before",
     )
     @classmethod
@@ -165,13 +215,18 @@ class Settings(BaseSettings):
             normalized = float(value)
         except (TypeError, ValueError):
             raise ValueError("CFG_INVALID_LLM_TIMEOUT") from None
-        maximum = 300 if info.field_name == "llm_request_timeout_seconds" else 600
+        maximum = {
+            "llm_request_timeout_seconds": 300,
+            "llm_workflow_timeout_seconds": 1800,
+            "tutor_llm_timeout_seconds": 120,
+        }[info.field_name]
         if normalized <= 0 or normalized > maximum:
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         return value
 
     @field_validator(
         "llm_max_attempts",
+        "llm_resource_generation_max_attempts",
         "llm_retry_base_delay_seconds",
         "llm_retry_max_delay_seconds",
         mode="before",
@@ -182,7 +237,7 @@ class Settings(BaseSettings):
             normalized = float(value)
         except (TypeError, ValueError):
             raise ValueError("CFG_INVALID_LLM_RETRY_POLICY") from None
-        if info.field_name == "llm_max_attempts":
+        if info.field_name in {"llm_max_attempts", "llm_resource_generation_max_attempts"}:
             if not normalized.is_integer() or not 1 <= normalized <= 3:
                 raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
         else:
@@ -194,15 +249,32 @@ class Settings(BaseSettings):
     @field_validator(
         "llm_max_output_tokens",
         "llm_generator_max_output_tokens",
+        "llm_resource_generator_max_input_tokens",
+        "llm_resource_generator_max_output_tokens",
+        "tutor_max_output_tokens",
         mode="before",
     )
     @classmethod
-    def validate_llm_token_limit(cls, value):
+    def validate_llm_token_limit(cls, value, info):
         try:
             normalized = float(value)
         except (TypeError, ValueError):
             raise ValueError("CFG_INVALID_LLM_TOKEN_LIMIT") from None
-        if not normalized.is_integer() or not 256 <= normalized <= 65536:
+        upper_bound = (
+            262144
+            if info.field_name == "llm_resource_generator_max_input_tokens"
+            else 8192
+            if info.field_name == "tutor_max_output_tokens"
+            else 65536
+        )
+        lower_bound = (
+            1024
+            if info.field_name == "llm_resource_generator_max_input_tokens"
+            else 8192
+            if info.field_name == "llm_resource_generator_max_output_tokens"
+            else 256
+        )
+        if not normalized.is_integer() or not lower_bound <= normalized <= upper_bound:
             raise ValueError("CFG_INVALID_LLM_TOKEN_LIMIT")
         return value
 
@@ -215,6 +287,8 @@ class Settings(BaseSettings):
             self.chroma_collection_prefix = "kb"
 
         if self.llm_workflow_timeout_seconds <= self.llm_request_timeout_seconds:
+            raise ValueError("CFG_INVALID_LLM_TIMEOUT")
+        if self.workflow_run_lease_seconds < self.llm_workflow_timeout_seconds:
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         if self.llm_retry_max_delay_seconds < self.llm_retry_base_delay_seconds:
             raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
@@ -254,6 +328,8 @@ class Settings(BaseSettings):
             raise ValueError("CFG_LLM_API_KEY_PLACEHOLDER")
         if not is_valid_http_url(self.llm_base_url):
             raise ValueError("CFG_LLM_ENDPOINT_INVALID")
+        if self.llm_proxy_url and not is_valid_http_url(self.llm_proxy_url):
+            raise ValueError("CFG_LLM_PROXY_INVALID")
         if not self.llm_model.strip():
             raise ValueError("CFG_LLM_MODEL_MISSING")
         if not self.embedding_model.strip():

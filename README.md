@@ -10,6 +10,7 @@
 ## 项目亮点
 
 - 多智能体协同：基于 LangGraph 实现学情诊断、知识库检索、学习路径规划、个性化资源生成、审核纠偏、反馈决策等 Agent 的协同闭环。
+- 证据约束 Tutor：已发布资源与测评题支持多轮启发式导学；提示等级由服务端递进，回答按 Frozen Evidence、SourceRef、受控检索顺序取证，证据不足时安全拒答。
 - 反馈真实闭环：正式 Attempt 会原子更新知识点掌握度、画像版本和持久化学习路径；补救或进阶决策复用异步生成任务，并保留父子 Run 来源关系。
 - 实时 Agent 轨迹：生成页通过 SSE 只读持久化 WorkflowEvent，支持 queued snapshot、断线续传、事件去重、terminal close 与轮询降级。
 - 幻觉防控：引入冻结 Evidence、独立 Claim 抽取/判定、审核纠偏与可复核指标。
@@ -83,7 +84,7 @@ python scripts/check_database_integrity.py
 
 `LLM_STRUCTURED_OUTPUT_MODE=auto` 会先尝试 function calling。若所用 OpenAI-compatible 服务明确不支持该能力，请在本地 `.env` 显式设为 `text`，避免每个 Agent 固定产生一次 BAD_REQUEST 后再回退；不要提交真实 `.env` 或 API Key。
 
-四个生成 Agent 统一通过可注入的 `LLMGateway` 调用模型。默认单次请求预算为 30 秒、同步工作流预算为 105 秒、总尝试次数为 2；SDK 自带重试关闭，技术重试和资源返工分别计数。结构化输出会经过严格 Pydantic 校验，Reviewer 的异常或非法输出不会被自动批准。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
+生成 Agent 与独立交互式 Tutor 统一通过可注入的 `LLMGateway` 调用模型。Tutor 不进入资源生成 LangGraph，也不直接修改画像、掌握度、路径或资源。默认 Tutor 请求预算为 25 秒、最近上下文 6 轮、Evidence 4 条、最高提示等级 3。结构化输出和 Evidence ID 子集均会严格校验。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
 
 ## 后端目录说明
 
@@ -152,7 +153,14 @@ backend/
 │   ├── utils/                    # 通用工具函数层：项目内部复用工具
 │   ├── config.py                 # 应用配置（从 .env 加载）
 │   └── main.py                   # FastAPI 应用入口
-├── tests/                        # 单元测试与集成测试
+├── tests/                        # 分层测试套件
+│   ├── unit/                    # Agent、核心组件、模型契约与纯策略
+│   ├── integration/             # API、持久化、服务与工作流集成
+│   ├── migrations/              # 数据库迁移与历史兼容性
+│   ├── e2e/                     # 生命周期、重启、恢复与回放
+│   ├── live/                    # 显式启用的真实 Provider 冒烟测试
+│   ├── fakes/                   # 共享测试替身
+│   └── fixtures/                # 固定验收数据
 ├── data/                         # 运行时数据目录（自动生成，不进入版本控制）
 │   ├── domain_knowledge.db       # SQLite 数据库文件
 │   ├── generated_resources/      # 生成的资源文件
@@ -216,6 +224,31 @@ version1/
 | `backend/logs/` | 应用日志文件 | 否（保留目录结构） |
 | `examples/` | 示例学习者画像等静态示例数据 | 是 |
 | `knowledge_base/` | 领域知识库原文档 | 是 |
+
+## 测试运行
+
+后端测试按执行层级分类，并由 `backend/tests/conftest.py` 自动添加 pytest marker：
+
+```powershell
+python -m pytest
+python -m pytest -m unit
+python -m pytest -m integration
+python -m pytest -m migration
+python -m pytest -m e2e
+```
+
+真实 LLM 测试默认跳过，必须显式启用：
+
+```powershell
+$env:RUN_LIVE_LLM = "1"
+python -m pytest -m live_llm
+```
+
+前端工作流事件测试：
+
+```powershell
+npm --prefix frontend run test:workflow-events
+```
 
 ## 核心指标
 

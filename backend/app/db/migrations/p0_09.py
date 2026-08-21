@@ -18,7 +18,7 @@ RESOURCE_VERSION_UNIQUE_INDEX = "uq_generated_resources_run_type_version"
 SQLITE_TEMP_RESOURCE_TABLE = "_p0_09_generated_resources"
 
 
-def _rebuild_sqlite_resource_table(engine: Engine) -> None:
+def rebuild_sqlite_generated_resources_table(engine: Engine) -> None:
     """Rebuild one clean legacy table so declared resource FKs become real SQLite FKs."""
     current_columns = [
         item["name"] for item in inspect(engine).get_columns("generated_resources")
@@ -93,14 +93,28 @@ def apply_p0_09_migration(engine: Engine) -> None:
         engine.url.get_backend_name() == "sqlite"
         and report["missing_resource_foreign_keys"]
     ):
-        _rebuild_sqlite_resource_table(engine)
+        rebuild_sqlite_generated_resources_table(engine)
         report = inspect_database_integrity(engine)
         assert_integrity_migration_preconditions(report)
         if report["missing_resource_foreign_keys"]:
             raise RuntimeError("RESOURCE_FOREIGN_KEYS_NOT_CREATED")
 
+    resource_columns = {
+        item["name"] for item in inspect(engine).get_columns("generated_resources")
+    }
     with engine.begin() as connection:
-        if not report["resource_version_unique"]:
+        # P0-13 replaces this legacy type-level identity with the richer
+        # (resource_spec_id, representation, version) identity.  Recreating
+        # the old index after that migration makes a text guide and its HTML
+        # sibling collide as the same ``resource_type`` version.
+        if (
+            not report["resource_version_unique"]
+            and "resource_spec_id" not in resource_columns
+            # P0-13 will replace this legacy identity after inferring
+            # text/HTML from these columns. Creating the old index here would
+            # reject valid legacy text+HTML siblings before that migration runs.
+            and not {"mime_type", "storage_type"}.issubset(resource_columns)
+        ):
             connection.execute(text(
                 f"CREATE UNIQUE INDEX IF NOT EXISTS {RESOURCE_VERSION_UNIQUE_INDEX} "
                 "ON generated_resources (run_id, resource_type, version)"

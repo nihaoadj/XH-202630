@@ -60,6 +60,30 @@ def may_publish(*, decision: str, review_status: str | None, is_leaf: bool = Tru
     )
 
 
+def locked_human_review_resource_ids(
+    resources: Iterable[Any],
+    executions: Iterable[dict[str, Any]],
+) -> set[str]:
+    """Return resources whose generation failure must remain fail-closed."""
+
+    locked = {
+        str(resource.resource_id)
+        for resource in resources
+        if getattr(resource, "review_status", None) == ReviewDecision.HUMAN_REVIEW.value
+    }
+    locked.update(
+        str(item["resource_id"])
+        for item in executions
+        if isinstance(item, dict)
+        and item.get("resource_id")
+        and (
+            item.get("resource_execution_state") == ReviewDecision.HUMAN_REVIEW.value
+            or item.get("validation_status") == "failed"
+        )
+    )
+    return locked
+
+
 def target_resource_types(instructions: Iterable[dict[str, Any]]) -> set[str]:
     return {
         str(item["target_resource_type"])

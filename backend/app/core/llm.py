@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any, Callable
 
+import httpx
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 
@@ -25,6 +26,15 @@ def create_chat_model(
     """
 
     settings = settings or get_settings()
+    # ``trust_env=False`` is intentional.  On Windows, httpx otherwise picks
+    # up stale system proxy settings even after the process environment has
+    # been cleaned, routing model calls to dead localhost proxy ports.  A
+    # deployment that genuinely needs a proxy must set LLM_PROXY_URL, which is
+    # explicit, validated and observable configuration.
+    http_client = httpx.Client(
+        proxy=settings.llm_proxy_url or None,
+        trust_env=False,
+    )
     return ChatOpenAI(
         api_key=settings.llm_api_key.get_secret_value(),
         base_url=settings.llm_base_url,
@@ -33,6 +43,7 @@ def create_chat_model(
         timeout=timeout_seconds or getattr(settings, "llm_request_timeout_seconds", 30.0),
         max_retries=0,
         max_tokens=max_output_tokens,
+        http_client=http_client,
     )
 
 

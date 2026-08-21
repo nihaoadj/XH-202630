@@ -10,7 +10,7 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 
 from app.agents.diagnosis import diagnose_node
-from app.agents.generator import generate_node
+from app.agents.generator import generate_node, progress_summary
 from app.agents.planner import plan_node
 from app.agents.retriever import retrieve_node
 from app.agents.reviewer import review_node
@@ -34,7 +34,11 @@ from app.models.workflow import (
     StepStatus,
     WorkflowStatus,
 )
-from app.agents.policies import may_publish, target_resource_types
+from app.agents.policies import (
+    locked_human_review_resource_ids,
+    may_publish,
+    target_resource_types,
+)
 from app.models.knowledge import RetrievalStatus
 from app.services.recorded_node import recorded_node
 
@@ -227,8 +231,26 @@ def finalize_evidence_insufficient_node(state: AgentState) -> dict[str, Any]:
 
 def route_after_review(state: AgentState) -> str:
     decision = _review_decision(state)
+    retryable_generation_failure = any(
+        isinstance(item, dict)
+        and item.get("resource_id")
+        and (
+            item.get("validation_status") == "failed"
+            or item.get("error_code") in {
+                ErrorCode.LLM_OUTPUT_SCHEMA_INVALID.value,
+                ErrorCode.LLM_CONNECTION_FAILED.value,
+                ErrorCode.LLM_TIMEOUT.value,
+            }
+        )
+        for item in state.get("resource_executions", [])
+    )
+    if retryable_generation_failure and state.get("revision_count", 0) < state.get("max_iterations", 1):
+        # Generation/contract failures are transient and safe to retry. They
+        # previously went straight to human review, so one malformed test
+        # response could also prevent its sibling lecture from being retried.
+        return "prepare_revision"
     if decision == ReviewDecision.REVISE:
-        if state.get("revision_count", 0) < state.get("max_iterations", 2):
+        if state.get("revision_count", 0) < state.get("max_iterations", 1):
             return "prepare_revision"
         return "finalize"
     if decision == ReviewDecision.APPROVE and state.get("include_claim_check", False):
@@ -246,7 +268,7 @@ def route_after_claim_extract(state: AgentState) -> str:
 
 def route_after_claim_decide(state: AgentState) -> str:
     if _review_decision(state) == ReviewDecision.REVISE and (
-        state.get("revision_count", 0) < state.get("max_iterations", 2)
+        state.get("revision_count", 0) < state.get("max_iterations", 1)
     ):
         return "prepare_revision"
     return "finalize"
@@ -257,7 +279,7 @@ def decide_next(state: AgentState) -> str:
     if _review_decision(state) != ReviewDecision.REVISE:
         return "decide"
     revision_count = state.get("revision_count", state.get("iteration", 0))
-    return "generate" if revision_count < state.get("max_iterations", 2) else "decide"
+    return "generate" if revision_count < state.get("max_iterations", 1) else "decide"
 
 
 def prepare_revision_node(state: AgentState) -> dict[str, Any]:
@@ -266,6 +288,30 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
     step_context = start_step(state, attempt=generation_attempt)
     review = state.get("review_result", {})
     targets = target_resource_types(review.get("revision_instructions", []))
+    targets.update(
+        item.get("resource_type")
+        for item in state.get("resource_executions", [])
+        if isinstance(item, dict)
+        and item.get("validation_status") == "failed"
+        and item.get("resource_type")
+    )
+    # Carry actionable reviewer feedback into the next generation context.
+    # Previously only the target resource type was consumed.
+    review_feedback = {
+        "suggestion": review.get("suggestion") or "",
+        "issues": [
+            issue for issue in review.get("issues", [])
+            if isinstance(issue, dict)
+            and (not issue.get("resource_type") or issue.get("resource_type") in targets)
+        ],
+        "revision_instructions": [
+            instruction for instruction in review.get("revision_instructions", [])
+            if isinstance(instruction, dict)
+            and instruction.get("target_resource_type") in targets
+        ],
+    }
+    constraints = dict(state.get("constraints") or {})
+    constraints["revision_feedback"] = review_feedback
     resources = [
         resource.model_copy(
             update={"review_status": ResourceStatus.REVISION_REQUESTED.value}
@@ -297,6 +343,7 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
         "current_node": "prepare_revision",
         "trace": [trace_item],
         "errors": [],
+        "constraints": constraints,
     }
 
 
@@ -345,6 +392,17 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     step_context = start_step(state)
     review = dict(state.get("review_result", {}))
     decision = _review_decision(state)
+    locked_resource_ids = locked_human_review_resource_ids(
+        state.get("generated_resources", []),
+        state.get("resource_executions", []),
+    )
+    if locked_resource_ids:
+        decision = ReviewDecision.HUMAN_REVIEW
+        review.update({
+            "decision": decision.value,
+            "status": decision.value,
+            "passed": False,
+        })
     strict_with_degradation = state.get("generation_mode") == "strict" and _has_degradation(state)
 
     if decision == ReviewDecision.APPROVE and not strict_with_degradation:
@@ -373,14 +431,53 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     )
     review["claim_check_status"] = claim_status
     review["revision_count"] = state.get("revision_count", 0)
-    resources = _resource_copies(state.get("generated_resources", []), resource_status)
+    resource_reviews = state.get("resource_review_results", {})
+    claim_problem_ids = {
+        str(item.get("resource_id"))
+        for item in review.get("issues", [])
+        if isinstance(item, dict) and item.get("resource_id")
+    }
+    now = datetime.now(timezone.utc)
+
+    resources = []
+    for resource in state.get("generated_resources", []):
+        canonical_id = resource.resource_id
+        latest_result = resource_reviews.get(canonical_id) or {}
+        # Targeted revisions only return review results for regenerated items.
+        # Keep an already-approved untouched resource published instead of
+        # applying another resource's aggregate ``revise`` decision to it.
+        item_decision = str(latest_result.get("decision") or {
+            ResourceStatus.APPROVED.value: "approve",
+            ResourceStatus.REJECTED.value: "reject",
+            ResourceStatus.HUMAN_REVIEW.value: "human_review",
+            ResourceStatus.REVISION_REQUESTED.value: "revise",
+        }.get(resource.review_status, decision.value))
+        if resource.resource_id in locked_resource_ids:
+            item_status = ResourceStatus.HUMAN_REVIEW
+        elif strict_with_degradation:
+            item_status = ResourceStatus.HUMAN_REVIEW
+        elif canonical_id in claim_problem_ids:
+            item_status = ResourceStatus.HUMAN_REVIEW
+        else:
+            item_status = {
+                "approve": ResourceStatus.APPROVED,
+                "reject": ResourceStatus.REJECTED,
+                "human_review": ResourceStatus.HUMAN_REVIEW,
+                "revise": ResourceStatus.HUMAN_REVIEW,
+            }.get(item_decision, resource_status)
+        publish = item_status == ResourceStatus.APPROVED
+        resources.append(resource.model_copy(update={
+            "review_status": item_status.value,
+            "publication_status": "published" if publish else "unpublished",
+            "published_at": resource.published_at or now if publish else None,
+        }))
     review_ids = review.get("review_ids", {})
     metrics = state.get("claim_metrics", {})
     enriched_resources = []
     for resource in resources:
         metric = metrics.get(resource.resource_id, {})
         enriched_resources.append(resource.model_copy(update={
-            "review_id": review_ids.get(resource.resource_id),
+            "review_id": review_ids.get(resource.resource_id) or resource.review_id,
             "claim_count": metric.get("claim_total", review.get("claim_total")),
             "legacy_reviewer_score": review.get("hallucination_score"),
             "claim_hallucination_rate": metric.get("claim_hallucination_rate"),
@@ -389,12 +486,24 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             "difficulty_match": review.get("difficulty_match"),
         }))
     resources = enriched_resources
-    if may_publish(
-        decision=decision.value,
-        review_status=resource_status.value,
-    ):
-        now = datetime.now(timezone.utc)
-        resources = [resource.model_copy(update={"published_at": now}) for resource in resources]
+    executions = []
+    status_by_resource_id = {
+        resource.resource_id: resource.review_status
+        for resource in resources
+    }
+    for item in state.get("resource_executions", []):
+        updated = dict(item)
+        resource = next((value for value in resources
+                         if value.resource_id == updated.get("resource_id")), None)
+        if resource is not None:
+            item_status = status_by_resource_id.get(resource.resource_id)
+            updated["resource_execution_state"] = {
+                ResourceStatus.APPROVED.value: "approved",
+                ResourceStatus.HUMAN_REVIEW.value: "human_review",
+                ResourceStatus.REJECTED.value: "failed",
+            }.get(item_status, updated.get("resource_execution_state", "generated"))
+            updated["review_id"] = resource.review_id
+        executions.append(updated)
     trace_status = (
         StepStatus.HUMAN_REVIEW
         if workflow_status == WorkflowStatus.HUMAN_REVIEW
@@ -409,7 +518,7 @@ def decide_node(state: AgentState) -> dict[str, Any]:
         agent_name="supervisor",
         action="协同决策",
         status=trace_status,
-        input_summary=f"审核决策：{decision.value}；返工次数：{state.get('revision_count', 0)}/{state.get('max_iterations', 2)}",
+        input_summary=f"审核决策：{decision.value}；返工次数：{state.get('revision_count', 0)}/{state.get('max_iterations', 1)}",
         output_summary=f"最终决策：{final_decision}",
         decision_reason="综合审核结论、降级状态和业务返工额度确定资源终态。",
         resource_ids=[resource.resource_id for resource in resources],
@@ -418,6 +527,8 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     )
     return {
         "generated_resources": resources,
+        "resource_executions": executions,
+        "resource_progress_summary": progress_summary(executions),
         "review_result": review,
         "claim_check_status": claim_status,
         "workflow_status": workflow_status.value,
@@ -436,6 +547,12 @@ def _bind_llm_gateway(node, gateway: LLMGateway):
     return partial(node, llm_gateway=gateway)
 
 
+def _bind_resource_progress_recorder(node, recorder: Any | None):
+    if recorder is None or "resource_progress_recorder" not in signature(node).parameters:
+        return node
+    return partial(node, resource_progress_recorder=recorder)
+
+
 def _bind_evidence_retriever(node, retriever: EvidenceRetriever):
     if "evidence_retriever" not in signature(node).parameters:
         return node
@@ -446,6 +563,7 @@ def build_workflow(
     llm_gateway: LLMGateway | None = None,
     evidence_retriever: EvidenceRetriever | None = None,
     lifecycle_repository: BaseAuditRepository | None = None,
+    resource_progress_recorder: Any | None = None,
 ):
     """Build the synchronous workflow with the P0-03 evidence boundary."""
     gateway = llm_gateway or default_llm_gateway()
@@ -459,7 +577,13 @@ def build_workflow(
     add_recorded("retrieve", _bind_evidence_retriever(retrieve_node, retriever))
     add_recorded("evidence_gate", evidence_gate_node)
     add_recorded("plan", _bind_llm_gateway(plan_node, gateway))
-    add_recorded("generate", _bind_llm_gateway(generate_node, gateway))
+    add_recorded(
+        "generate",
+        _bind_resource_progress_recorder(
+            _bind_llm_gateway(generate_node, gateway),
+            resource_progress_recorder,
+        ),
+    )
     add_recorded("review", _bind_llm_gateway(review_node, gateway))
     add_recorded("prepare_revision", prepare_revision_node)
     add_recorded("finalize_draft", finalize_draft_node)

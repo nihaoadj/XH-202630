@@ -872,7 +872,11 @@ class SQLAuditRepository(BaseAuditRepository):
     def save_review(self, resource_id: str, review: dict[str, Any], run_id: Optional[str]) -> str:
         requested_id = review.get("review_ids", {}).get(resource_id)
         legacy_batch_id = review.get("review_id")
-        review_id = requested_id or (f"{legacy_batch_id}:{resource_id}" if legacy_batch_id else str(uuid.uuid4()))
+        # ``WorkflowArtifactRecorder`` passes one resource-level review payload
+        # whose ``review_id`` is already the durable identifier announced in
+        # the workflow state.  Do not rewrite it with the resource ID: doing so
+        # makes finalization compare two different IDs for the same review.
+        review_id = requested_id or legacy_batch_id or str(uuid.uuid4())
         status = review.get("status") or ("passed" if review.get("passed") else "needs_review")
         claims = [_as_dict(claim) for claim in review.get("claims", [])]
         claim_total = review.get("claim_total", len(claims))

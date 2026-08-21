@@ -113,6 +113,7 @@ class LearningAttemptSubmit(StrictFeedbackModel):
             "question_trace",
             "point_trace",
             "learning_reflection",
+            "llm_analysis",
         }
         if set(value) - allowed:
             raise ValueError("metadata contains unsupported keys")
@@ -236,6 +237,45 @@ class ProfileVersionRecord(StrictFeedbackModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class FeedbackAnalysis(StrictFeedbackModel):
+    """LLM interpretation of a scored attempt; it never changes scores directly."""
+
+    summary: str = Field(min_length=1, max_length=1200)
+    reflection_insight: str = Field(min_length=1, max_length=1000)
+    profile_update_suggestions: list[str] = Field(default_factory=list, max_length=8)
+    learner_suggestions: list[str] = Field(min_length=1, max_length=6)
+    report_highlights: list[str] = Field(default_factory=list, max_length=6)
+    analysis_status: Literal["llm", "fallback"] = "llm"
+
+
+class FeedbackResourceOption(StrictFeedbackModel):
+    option_id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=120)
+    description: str = Field(min_length=1, max_length=400)
+    resource_types: list[Literal["讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"]] = Field(min_length=1, max_length=3)
+    difficulty: Literal["初级", "中级", "高级"]
+    target_knowledge_point_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
+class FeedbackFollowupSelection(StrictFeedbackModel):
+    learner_id: str = Field(min_length=1, max_length=64)
+    attempt_id: str = Field(min_length=1, max_length=128)
+    option_id: str = Field(min_length=1, max_length=64)
+    # The recommendation is a starting point, not an automatic curriculum
+    # decision.  Learners explicitly choose the artifacts they want next.
+    resource_types: list[Literal["讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"]] | None = Field(
+        default=None, min_length=1, max_length=3,
+    )
+    difficulty: Literal["初级", "中级", "高级"] | None = None
+
+    @field_validator("resource_types")
+    @classmethod
+    def validate_resource_types(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(value) != len(set(value)):
+            raise ValueError("resource_types must be unique")
+        return value
+
+
 class FeedbackLoopResult(StrictFeedbackModel):
     attempt: LearningAttempt
     decision: FeedbackDecision
@@ -248,6 +288,8 @@ class FeedbackLoopResult(StrictFeedbackModel):
     followup_run_id: str | None = None
     followup_job_id: str | None = None
     followup_error_code: str | None = None
+    analysis: FeedbackAnalysis | None = None
+    resource_options: list[FeedbackResourceOption] = Field(default_factory=list)
     idempotent_replay: bool = False
 
 

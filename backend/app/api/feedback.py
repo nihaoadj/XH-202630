@@ -1,7 +1,11 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 
 from app.api.dependencies import ensure_profile_access
-from app.models.feedback_loop import FeedbackLoopResult, LearningAttempt, LearningAttemptSubmit, LearningPath
+from app.core.errors import ApplicationError
+from app.models.feedback_loop import (
+    FeedbackFollowupSelection, FeedbackLoopResult, LearningAttempt,
+    LearningAttemptSubmit, LearningPath,
+)
 from app.models.schemas import (
     BatchAttemptSubmitRequest,
     BatchEvaluationSessionResponse,
@@ -155,10 +159,34 @@ def submit_batch_attempt(
             resources,
             run_payload,
             knowledge_service,
+            tutor_batch_id=payload.batch_id,
             schedule_followup=schedule,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/followups/select", response_model=FeedbackLoopResult)
+def select_feedback_followup(
+    payload: FeedbackFollowupSelection,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """Create the next generation job only after the learner selects an option."""
+    container = request.app.container
+    profile = ensure_profile_access(request, container.profile_service().get(payload.learner_id))
+    if profile is None:
+        raise HTTPException(status_code=404, detail="学习画像不存在")
+    service: FeedbackService = container.feedback_service()
+
+    def schedule(learner, generate_request, run_id):
+        if service.generation_job_service is not None:
+            background_tasks.add_task(service.generation_job_service.run_job, learner, generate_request, run_id)
+
+    try:
+        return service.choose_followup(profile, payload, schedule_followup=schedule)
+    except ApplicationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code.value) from exc
 
 
 @router.get("/attempts/{learner_id}", response_model=list[LearningAttempt])
@@ -171,6 +199,18 @@ def list_learning_attempts(
     if profile is None:
         raise HTTPException(status_code=404, detail="学习画像不存在")
     return request.app.container.feedback_service().list_attempts(learner_id, limit)
+
+
+@router.get("/results/{learner_id}", response_model=list[FeedbackLoopResult])
+def list_feedback_results(
+    learner_id: str,
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    profile = ensure_profile_access(request, request.app.container.profile_service().get(learner_id))
+    if profile is None:
+        raise HTTPException(status_code=404, detail="学习画像不存在")
+    return request.app.container.feedback_service().list_results(learner_id, limit)
 
 
 @router.get("/path/{learner_id}", response_model=LearningPath)

@@ -1,7 +1,7 @@
 from typing import List
 
 from app.db.resource.base import BaseResourceRepository
-from app.models.schemas import LearningResource
+from app.models.schemas import LearningResource, ResourceDetail, ResourceExecutionProgress
 
 
 class ResourceService:
@@ -23,5 +23,40 @@ class ResourceService:
         resource_type: str | None = None,
         difficulty: str | None = None,
         run_id: str | None = None,
+        batch_id: str | None = None,
     ) -> List[LearningResource]:
-        return self.repo.list_by_learner_with_filter(learner_id, resource_type, difficulty, run_id)
+        return self.repo.list_by_learner_with_filter(
+            learner_id, resource_type, difficulty, run_id, batch_id)
+
+    def list_page_by_learner_with_filter(
+        self, learner_id: str, resource_type: str | None = None,
+        difficulty: str | None = None, run_id: str | None = None, batch_id: str | None = None,
+        *, page: int = 1, page_size: int = 20,
+    ) -> tuple[List[LearningResource], int]:
+        return self.repo.list_page_by_learner_with_filter(
+            learner_id, resource_type, difficulty, run_id, batch_id,
+            offset=(page - 1) * page_size, limit=page_size)
+
+    def get_published_detail(self, resource_id: str) -> ResourceDetail | None:
+        resource = self.repo.get(resource_id)
+        if resource is None or resource.publication_status != "published":
+            return None
+        execution = self.repo.get_execution_by_resource(resource_id)
+        progress = None
+        if execution is not None:
+            payload = execution.model_dump(mode="python")
+            payload["resource_execution_state"] = payload.pop("state")
+            progress = ResourceExecutionProgress.model_validate(payload)
+        return ResourceDetail(
+            **resource.model_dump(mode="python"), status="published", is_published=True,
+            execution=progress,
+            metadata={
+                "agent_name": execution.agent_name if execution else None,
+                "prompt_version": execution.prompt_version if execution else None,
+                "artifact_format": execution.artifact_format if execution else None,
+                "validation_status": execution.validation_status if execution else None,
+            },
+            review_summary={"review_id": resource.review_id,
+                            "review_status": resource.review_status,
+                            "claim_count": resource.claim_count},
+        )

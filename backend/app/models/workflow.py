@@ -66,6 +66,27 @@ class PublicationStatus(str, Enum):
     PUBLISHED = "published"
 
 
+class ResourceExecutionState(str, Enum):
+    QUEUED = "queued"
+    GENERATING = "generating"
+    GENERATED = "generated"
+    REVIEWING = "reviewing"
+    REVISION_REQUESTED = "revision_requested"
+    CLAIM_CHECKING = "claim_checking"
+    APPROVED = "approved"
+    HUMAN_REVIEW = "human_review"
+    FAILED = "failed"
+
+
+class RunResourceAggregateState(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    PARTIALLY_COMPLETED = "partially_completed"
+    COMPLETED = "completed"
+    HUMAN_REVIEW = "human_review"
+    FAILED = "failed"
+
+
 class WorkflowConstraints(BaseModel):
     """Known generation constraints while preserving additive client extensions."""
 
@@ -116,11 +137,16 @@ class WorkflowState(TypedDict, total=False):
     # as factual evidence by the P0-03 generation path.
     retrieved_chunks: List[Dict[str, Any]]
     learning_plan: Dict[str, Any]
+    resource_specs: List[Dict[str, Any]]
+    resource_executions: List[Dict[str, Any]]
+    resource_progress_summary: Dict[str, Any]
     generated_resources: List[LearningResource]
     review_result: Dict[str, Any]
+    resource_review_results: Dict[str, Dict[str, Any]]
     extracted_claims: List[Dict[str, Any]]
     claim_judgements: List[Dict[str, Any]]
     claim_metrics: Dict[str, Dict[str, Any]]
+    claim_failed_resource_ids: List[str]
     final_decision: str
 
     trace: Annotated[List[Dict[str, Any]], operator.add]
@@ -147,7 +173,7 @@ class WorkflowStateSnapshot(BaseModel):
     generation_mode: Literal["draft", "standard", "strict"] = "standard"
     include_review: bool = True
     include_claim_check: bool = False
-    max_iterations: int = Field(default=2, ge=0, le=3)
+    max_iterations: int = Field(default=1, ge=0, le=3)
     constraints: Dict[str, Any] = Field(default_factory=dict)
 
     workflow_status: WorkflowStatus = WorkflowStatus.RUNNING
@@ -168,11 +194,16 @@ class WorkflowStateSnapshot(BaseModel):
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
     retrieved_chunks: List[Dict[str, Any]] = Field(default_factory=list)
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
+    resource_specs: List[Dict[str, Any]] = Field(default_factory=list)
+    resource_executions: List[Dict[str, Any]] = Field(default_factory=list)
+    resource_progress_summary: Dict[str, Any] = Field(default_factory=dict)
     generated_resources: List[LearningResource] = Field(default_factory=list)
     review_result: Dict[str, Any] = Field(default_factory=dict)
+    resource_review_results: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     extracted_claims: List[Dict[str, Any]] = Field(default_factory=list)
     claim_judgements: List[Dict[str, Any]] = Field(default_factory=list)
     claim_metrics: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    claim_failed_resource_ids: List[str] = Field(default_factory=list)
     final_decision: str = ""
     trace: List[Dict[str, Any]] = Field(default_factory=list)
     errors: List[ErrorInfo] = Field(default_factory=list)

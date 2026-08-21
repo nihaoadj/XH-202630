@@ -10,6 +10,27 @@ const MARKER_EVENTS = new Set([
   'followup_generation_failed',
 ])
 
+const RESOURCE_EVENT_STATES = Object.freeze({
+  resource_execution_queued: 'queued',
+  resource_generation_started: 'generating',
+  resource_generated: 'generated',
+  resource_version_created: 'generated',
+  resource_review_started: 'reviewing',
+  resource_revision_requested: 'revision_requested',
+  revision_requested: 'revision_requested',
+  resource_claim_check_started: 'claim_checking',
+  resource_claim_checking: 'claim_checking',
+  claim_extraction_started: 'claim_checking',
+  claim_extraction_completed: 'claim_checking',
+  resource_approved: 'approved',
+  resource_published: 'approved',
+  resource_execution_failed: 'failed',
+  resource_human_review_requested: 'human_review',
+  html_derivation_started: 'generating',
+  html_derivation_completed: 'approved',
+  html_derivation_failed: 'failed',
+})
+
 const EVENT_LABELS = {
   run_created: '任务已创建',
   run_started: '工作流开始',
@@ -42,6 +63,8 @@ export function createInitialTimelineState() {
     steps: [],
     markers: [],
     childRuns: [],
+    resourceExecutions: [],
+    resourceProgressSummary: null,
     lastSequence: 0,
     seenEventIds: [],
     replayCompleteness: 'complete',
@@ -50,12 +73,13 @@ export function createInitialTimelineState() {
 }
 
 export function applyRunSnapshot(state, snapshot) {
-  return {
+  const next = {
     ...state,
     runSummary: { ...(state.runSummary || {}), ...snapshot },
     replayCompleteness: snapshot.replay_completeness || state.replayCompleteness,
     terminal: Boolean(snapshot.is_terminal || TERMINAL_STATUSES.has(snapshot.run_status)),
   }
+  return applyResourceProgressSnapshot(next, snapshot)
 }
 
 function normalizeEvent(event) {
@@ -77,6 +101,133 @@ function stepStatus(event) {
   if (event.event_type === 'step_degraded') return 'degraded'
   if (event.event_type === 'step_failed') return 'failed'
   return event.status || 'success'
+}
+
+function resourceEventValue(event, name, fallback = undefined) {
+  return event[name] ?? event.payload?.[name] ?? fallback
+}
+
+export function isResourceWorkflowEvent(event) {
+  return Boolean(
+    resourceEventValue(event, 'resource_spec_id')
+      && (resourceEventValue(event, 'representation') || resourceEventValue(event, 'resource_execution_state')),
+  )
+}
+
+function resourceExecutionState(event) {
+  return resourceEventValue(event, 'resource_execution_state')
+    || resourceEventValue(event, 'execution_state')
+    || RESOURCE_EVENT_STATES[event.event_type]
+    || null
+}
+
+export function normalizeResourceExecution(source, fallbackSequence = 0) {
+  if (!source) return null
+  const payload = source.payload || {}
+  const resourceSpecId = source.resource_spec_id || payload.resource_spec_id
+  if (!resourceSpecId) return null
+  const representation = source.representation || payload.representation || 'text'
+  const state = source.resource_execution_state
+    || source.execution_state
+    || source.state
+    || payload.resource_execution_state
+    || payload.execution_state
+    || RESOURCE_EVENT_STATES[source.event_type]
+    || 'queued'
+  return {
+    resource_spec_id: resourceSpecId,
+    representation,
+    key: `${resourceSpecId}:${representation}`,
+    resource_id: source.resource_id ?? payload.resource_id ?? null,
+    review_id: source.review_id ?? payload.review_id ?? null,
+    resource_type: source.resource_type ?? payload.resource_type ?? '学习资源',
+    learning_objective: source.learning_objective ?? payload.learning_objective ?? '',
+    resource_execution_state: state,
+    attempt: Number(source.attempt ?? payload.attempt ?? 0) || 0,
+    error_code: source.error_code ?? payload.error_code ?? null,
+    error_message: source.error_message ?? payload.error_message ?? '',
+    agent_name: source.agent_name ?? payload.agent_name ?? source.node_name ?? null,
+    prompt_version: source.prompt_version ?? payload.prompt_version ?? null,
+    artifact_format: source.artifact_format ?? payload.artifact_format ?? null,
+    validation_status: source.validation_status ?? payload.validation_status ?? null,
+    publication_status: source.publication_status ?? payload.publication_status ?? null,
+    display_order: Number(source.display_order ?? payload.display_order ?? 0) || 0,
+    updated_at: source.updated_at ?? payload.updated_at ?? source.occurred_at ?? null,
+    last_sequence: Number(source.last_sequence ?? source.sequence ?? fallbackSequence) || 0,
+  }
+}
+
+function mergeResourceExecution(current, incoming) {
+  if (!current) return incoming
+  const newerAttempt = incoming.attempt > current.attempt
+  const sameAttempt = incoming.attempt === current.attempt
+  const newerEvent = incoming.last_sequence >= current.last_sequence
+  if (newerAttempt || (sameAttempt && newerEvent)) {
+    return {
+      ...current,
+      ...incoming,
+      resource_id: incoming.resource_id || current.resource_id,
+      review_id: incoming.review_id || current.review_id,
+      error_code: incoming.error_code || null,
+      error_message: incoming.error_message || '',
+    }
+  }
+  // A delayed/backfilled event may carry metadata omitted from the newer
+  // event, but it must never regress the execution state or attempt.
+  const next = { ...current }
+  for (const [key, value] of Object.entries(incoming)) {
+    if ((next[key] == null || next[key] === '') && value != null && value !== '') next[key] = value
+  }
+  return next
+}
+
+function upsertResourceExecution(executions, source, fallbackSequence = 0) {
+  const incoming = normalizeResourceExecution(source, fallbackSequence)
+  if (!incoming) return executions
+  const index = executions.findIndex((item) => item.key === incoming.key)
+  const next = [...executions]
+  if (index < 0) next.push(incoming)
+  else next[index] = mergeResourceExecution(next[index], incoming)
+  return next.sort((left, right) => (
+    Number(left.display_order || 0) - Number(right.display_order || 0)
+      || String(left.resource_type || '').localeCompare(String(right.resource_type || ''), 'zh-CN')
+      || (left.representation === 'text' ? -1 : 1)
+  ))
+}
+
+function progressItems(source) {
+  const summary = source?.resource_progress_summary || source?.progress_summary || null
+  return source?.resource_executions
+    || source?.executions
+    || summary?.resource_executions
+    || summary?.executions
+    || summary?.items
+    || []
+}
+
+export function applyResourceProgressSnapshot(state, source, { authoritative = false } = {}) {
+  if (!source) return state
+  let resourceExecutions = state.resourceExecutions || []
+  for (const item of progressItems(source)) {
+    // A persisted snapshot represents the latest durable state, even when a
+    // backfilled historical event has a larger sequence number.
+    const snapshotItem = authoritative
+      ? { ...item, last_sequence: Number.MAX_SAFE_INTEGER }
+      : item
+    resourceExecutions = upsertResourceExecution(
+      resourceExecutions,
+      snapshotItem,
+      snapshotItem.last_sequence || 0,
+    )
+  }
+  const summary = source.resource_progress_summary || source.progress_summary
+  return {
+    ...state,
+    resourceExecutions,
+    resourceProgressSummary: summary
+      ? { ...(state.resourceProgressSummary || {}), ...summary }
+      : state.resourceProgressSummary,
+  }
 }
 
 function upsertStep(steps, event) {
@@ -121,12 +272,19 @@ function updateStepMetrics(steps, event) {
 
 export function reduceWorkflowEvent(state, rawEvent) {
   const event = normalizeEvent(rawEvent)
-  if (!Number.isInteger(event.sequence) || event.sequence <= state.lastSequence) return state
+  if (!Number.isInteger(event.sequence) || event.sequence <= 0) return state
   if (event.event_id && state.seenEventIds.includes(event.event_id)) return state
+  const isResourceEvent = isResourceWorkflowEvent(event)
+  // Durable SSE events normally arrive in sequence. Resource events are also
+  // accepted as delayed backfill, then merged by attempt + per-resource
+  // sequence so they can fill a missing card without regressing its state.
+  if (event.sequence <= state.lastSequence && !isResourceEvent) return state
 
   let steps = state.steps
   let markers = state.markers
   let childRuns = state.childRuns
+  let resourceExecutions = state.resourceExecutions || []
+  if (isResourceEvent) resourceExecutions = upsertResourceExecution(resourceExecutions, event, event.sequence)
   if (event.event_type.startsWith('step_')) {
     steps = upsertStep(steps, event)
   } else {
@@ -160,7 +318,8 @@ export function reduceWorkflowEvent(state, rawEvent) {
     steps,
     markers,
     childRuns,
-    lastSequence: event.sequence,
+    resourceExecutions,
+    lastSequence: Math.max(state.lastSequence, event.sequence),
     seenEventIds: event.event_id ? [...state.seenEventIds, event.event_id].slice(-1000) : state.seenEventIds,
     terminal: state.terminal || ['run_completed', 'run_failed', 'run_interrupted'].includes(event.event_type),
   }
@@ -175,6 +334,7 @@ export function hydrateWorkflowTimeline(timeline) {
     replay_completeness: timeline.replay_completeness,
     is_terminal: TERMINAL_STATUSES.has(timeline.run?.status),
   })
+  state = applyResourceProgressSnapshot(state, timeline, { authoritative: true })
   for (const step of timeline.steps || []) {
     state.steps.push({
       key: step.step_id,
@@ -191,6 +351,12 @@ export function hydrateWorkflowTimeline(timeline) {
     })
   }
   state.steps.sort((a, b) => a.sequence - b.sequence)
-  for (const event of timeline.events || []) state = reduceWorkflowEvent(state, event)
+  const events = [...(timeline.events || [])]
+    .sort((left, right) => Number(left.sequence || left.event_sequence || 0) - Number(right.sequence || right.event_sequence || 0))
+  for (const event of events) state = reduceWorkflowEvent(state, event)
+  // The execution snapshot is the durable, current source of truth. Events
+  // are historical and may describe an earlier attempt or an old status before
+  // a targeted retry, so never let replay overwrite current visibility.
+  state = applyResourceProgressSnapshot(state, timeline)
   return state
 }

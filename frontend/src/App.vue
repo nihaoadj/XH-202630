@@ -1,59 +1,75 @@
-<template>
-  <router-view v-if="isAuthRoute || isResourceFocusMode" />
+﻿<template>
+  <router-view v-if="isAuthRoute || isPublicRoute || isResourceFocusMode" />
 
-  <div v-else id="app" class="shell" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
+  <div v-else class="app-shell" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">TP</div>
+      <div class="brand-block">
+        <img class="brand-logo" src="/zhiyu-logo.png" alt="智域匠学" />
         <div class="brand-copy">
-          <div class="brand-title">个性化学习工坊</div>
+          <div class="brand-name">智域匠学</div>
+          <div class="brand-tag">多智能体领域技能培训平台</div>
         </div>
       </div>
 
-      <nav class="nav">
-        <router-link
-          v-for="item in navigation"
-          :key="item.to"
-          :to="item.to"
-          class="nav-link"
-          active-class="is-active"
-        >
+      <nav class="nav-list">
+        <router-link v-for="item in navigation" :key="item.to" :to="item.to" class="nav-item" active-class="is-active">
           <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-          <span class="nav-label">{{ item.label }}</span>
-          <span class="nav-hint">{{ item.hint }}</span>
+          <span class="nav-text">{{ item.label }}</span>
+          <small class="nav-hint">{{ item.hint }}</small>
         </router-link>
       </nav>
 
-      <div class="context-card">
-        <div class="context-title">当前上下文</div>
-        <div class="context-item">
-          <div class="context-head">
-            <span>用户</span>
-            <router-link to="/user/profile" class="context-action">编辑</router-link>
-          </div>
-          <strong>{{ auth.currentUser?.username || store.currentUserProfile?.display_name || '未设置' }}</strong>
-        </div>
-        <div class="context-item">
-          <span>学习方向</span>
+      <section class="context-panel">
+        <div class="context-title">当前学习</div>
+        <div class="context-row">
+          <span>方向</span>
           <strong>{{ store.currentLearningDirectionName || '未选择' }}</strong>
         </div>
-      </div>
-      <div class="sidebar-control">
-        <el-tooltip :content="sidebarCollapsed ? '展开导航栏' : '收起导航栏'" placement="right">
-          <el-button
-            class="sidebar-toggle"
-            :icon="sidebarCollapsed ? Expand : Fold"
-            circle
-            :aria-label="sidebarCollapsed ? '展开导航栏' : '收起导航栏'"
-            @click="toggleSidebar"
-          />
-        </el-tooltip>
-      </div>
-      <el-button class="logout-button" plain @click="handleLogout">退出登录</el-button>
+        <div class="context-row">
+          <span>画像</span>
+          <strong>{{ store.currentProfile?.skill_level || '待诊断' }}</strong>
+        </div>
+        <router-link class="context-link" to="/learning/new">
+          {{ store.currentLearningDirectionName ? '修改学习方向' : '去新建方向' }}
+        </router-link>
+      </section>
+
+      <button class="sidebar-toggle" type="button" @click="toggleSidebar">
+        <el-icon class="sidebar-toggle-icon"><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
+        <span class="sidebar-toggle-label">{{ sidebarCollapsed ? '展开侧栏' : '收起侧栏' }}</span>
+      </button>
+
+      <el-button class="logout-button" @click="handleLogout">
+        <el-icon class="logout-icon"><SwitchButton /></el-icon>
+        <span class="logout-label">退出登录</span>
+      </el-button>
     </aside>
 
-    <main class="main">
-      <section class="content" :class="{ 'is-contained-scroll': containedScroll }">
+    <main class="main-area">
+      <header class="topbar">
+        <div class="topbar-copy">
+          <span class="topbar-kicker">DOMAIN SKILL WORKBENCH</span>
+          <h1>{{ currentTitle }}</h1>
+          <p>{{ currentSubtitle }}</p>
+        </div>
+        <div class="topbar-actions">
+          <el-button class="app-secondary-button topbar-action" :icon="Clock" @click="$router.push('/learning/history')">学习历史</el-button>
+          <el-button class="app-secondary-button topbar-action" :icon="DataAnalysis" @click="$router.push('/report')">学习报告</el-button>
+          <el-button class="app-secondary-button topbar-action" :icon="Collection" @click="$router.push('/user/profile')">用户资料</el-button>
+        </div>
+        <div class="topbar-meta">
+          <div>
+            <span>当前用户</span>
+            <strong>{{ auth.currentUser?.username || '未登录' }}</strong>
+          </div>
+          <div>
+            <span>当前方向</span>
+            <strong>{{ store.currentLearningDirectionName || '未选择' }}</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="content-area" :class="{ 'is-contained-scroll': containedScroll }">
         <router-view />
       </section>
     </main>
@@ -63,7 +79,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Clock, Collection, DataAnalysis, Document, Expand, Fold, Plus, Reading, ChatDotRound } from '@element-plus/icons-vue'
+import { Clock, Collection, DataAnalysis, Document, Expand, Fold, Plus, Reading, ChatDotRound, HomeFilled, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from './stores/auth'
 import { useAppStore } from './stores/app'
 
@@ -74,18 +90,39 @@ const store = useAppStore()
 const sidebarCollapsed = ref(localStorage.getItem('app_sidebar_collapsed') === 'true')
 
 const navigation = [
-  { to: '/', label: '总览', hint: '查看当前进度与主入口', icon: Collection },
-  { to: '/learning/new', label: '新建学习方向', hint: '5 步完成问卷、诊断与生成', icon: Plus },
-  { to: '/generate', label: '资源生成', hint: '查看生成任务状态', icon: Document },
-  { to: '/resources', label: '学习资源', hint: '查看资源并专注学习', icon: Reading },
+  { to: '/dashboard', label: '工作台', hint: '总览学习进度', icon: HomeFilled },
+  { to: '/learning/new', label: '新建方向', hint: '5 步完成诊断', icon: Plus },
+  { to: '/generate', label: '资源生成', hint: '查看生成任务', icon: Document },
+  { to: '/resources', label: '学习资源', hint: '阅读和专注学习', icon: Reading },
   { to: '/feedback', label: '学习反馈', hint: '记录练习结果', icon: ChatDotRound },
-  { to: '/report', label: '学习报告', hint: '查看诊断与进展', icon: DataAnalysis },
-  { to: '/learning/history', label: '学习历史', hint: '按时间线查看学习过程', icon: Clock },
 ]
 
-const containedScroll = computed(() => ['home', 'onboarding', 'history'].includes(route.name))
+const containedScroll = computed(() => false)
 const isAuthRoute = computed(() => Boolean(route.meta.authLayout))
+const isPublicRoute = computed(() => Boolean(route.meta.publicLayout))
 const isResourceFocusMode = computed(() => route.name === 'resources' && route.query.focus === '1')
+
+const currentTitle = computed(() => ({
+  dashboard: '工作台',
+  onboarding: '创建学习方向',
+  generate: '资源生成',
+  resources: '学习资源',
+  feedback: '学习反馈',
+  report: '学习报告',
+  history: '学习历史',
+  'user-profile': '用户资料',
+}[route.name] || '智域匠学'))
+
+const currentSubtitle = computed(() => ({
+  dashboard: '围绕当前学习画像和任务进度，快速进入下一步。',
+  onboarding: '先完成方向、问卷和诊断，再进入资源生成。',
+  generate: '管理生成任务，查看资源批次和运行状态。',
+  resources: '查看已生成内容，并进入专注学习模式。',
+  feedback: '记录练习表现，驱动下一轮资源生成。',
+  report: '汇总诊断、反馈与资源，观察能力变化。',
+  history: '回看学习路径、事件记录和关键节点。',
+  'user-profile': '维护账号资料，让后续的学习方向复用更顺滑。',
+}[route.name] || '智域匠学的统一入口。'))
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
@@ -104,255 +141,278 @@ async function handleLogout() {
 :global(#app) {
   width: 100%;
   height: 100%;
+  min-height: 100%;
   margin: 0;
   overflow: hidden;
+  background: #eef5ff;
+  color: #0f2340;
 }
 
 :global(*) {
   box-sizing: border-box;
 }
 
-.shell {
+.app-shell {
+  --sidebar-width: 248px;
+  height: 100vh;
   height: 100dvh;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr);
-  overflow: hidden;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 26%),
-    linear-gradient(180deg, #f4f7fb 0%, #eef3f8 100%);
-  color: #132238;
-  transition: grid-template-columns 0.22s ease;
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 26%),
+    linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
+  color: #10233f;
+  overflow: hidden;
+  transition: grid-template-columns 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.shell.is-sidebar-collapsed {
-  grid-template-columns: 88px minmax(0, 1fr);
+.app-shell.is-sidebar-collapsed {
+  --sidebar-width: 76px;
 }
 
 .sidebar {
   position: relative;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 24px 18px;
-  overflow-y: auto;
-  background: rgba(10, 23, 44, 0.96);
-  color: #f8fbff;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-}
-
-.sidebar-control {
-  display: flex;
-  position: absolute;
-  right: 0;
-  bottom: 20px;
-  left: 0;
-  justify-content: center;
-}
-
-.sidebar-toggle {
-  width: 30px;
-  height: 30px;
-  border-color: #cbd9e8;
-  background: #ffffff;
-  color: #355a87;
-  box-shadow: 0 4px 12px rgba(5, 22, 46, 0.18);
-}
-
-.brand-mark {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  border-radius: 10px;
+  z-index: 20;
+  min-width: 0;
   display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, #60a5fa, #34d399);
-  color: #0f172a;
-  font-weight: 800;
+  grid-template-rows: 60px minmax(320px, 1fr) 184px 40px 40px;
+  gap: 12px;
+  padding: 20px 12px 16px;
+  background: linear-gradient(180deg, #0f2a50 0%, #173d72 100%);
+  color: #f6fbff;
+  overflow-y: auto;
+  scrollbar-color: rgba(191, 219, 254, 0.72) rgba(219, 234, 254, 0.2);
+  scrollbar-width: thin;
 }
 
-.brand-title {
-  font-size: 17px;
-  font-weight: 700;
-  white-space: nowrap;
+.sidebar::-webkit-scrollbar {
+  width: 10px;
 }
 
-.brand-subtitle {
-  margin-top: 4px;
-  color: rgba(226, 236, 248, 0.78);
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(219, 234, 254, 0.18);
+  border-radius: 999px;
 }
 
-.nav {
+.sidebar::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(16, 42, 80, 0.45);
+  border-radius: 999px;
+  background: rgba(191, 219, 254, 0.82);
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(219, 234, 254, 0.96);
+}
+
+.brand-block {
   display: flex;
-  flex-direction: column;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+}
+
+.brand-logo {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  object-fit: contain;
+}
+
+.brand-copy {
+  min-width: 0;
+  max-width: 168px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transition: max-width 220ms ease, opacity 140ms ease, transform 220ms ease;
+}
+
+.brand-name {
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.brand-tag {
+  margin-top: 4px;
+  color: rgba(226, 236, 248, 0.82);
+  font-size: 12px;
+}
+
+.nav-list {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: repeat(5, minmax(62px, auto));
+  align-content: space-evenly;
+  min-height: 0;
   gap: 8px;
 }
 
-.nav-link {
+.nav-item {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
-  grid-template-areas: 'icon label' 'icon hint';
+  grid-template-areas: 'icon text' 'icon hint';
   column-gap: 10px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  color: rgba(241, 245, 249, 0.92);
+  padding: 12px;
+  min-height: 62px;
+  border-radius: 12px;
+  color: rgba(241, 246, 255, 0.95);
   text-decoration: none;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+  transition: background-color 180ms ease, transform 180ms ease, padding 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.nav-link:hover {
-  background: rgba(96, 165, 250, 0.14);
+.nav-item:hover {
+  background: rgba(125, 181, 255, 0.16);
   transform: translateX(2px);
 }
 
-.nav-link.is-active {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.34), rgba(52, 211, 153, 0.22));
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.22);
-}
-
-.nav-label {
-  grid-area: label;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.nav-item.is-active {
+  background: linear-gradient(135deg, rgba(67, 138, 255, 0.38), rgba(82, 201, 255, 0.18));
+  box-shadow: inset 0 0 0 1px rgba(180, 217, 255, 0.28);
 }
 
 .nav-icon {
   grid-area: icon;
   align-self: center;
+  width: 20px;
+  min-width: 20px;
   font-size: 17px;
+  line-height: 1;
+  transition: transform 220ms ease, font-size 220ms ease;
+}
+
+.nav-text {
+  grid-area: text;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 120ms ease, transform 220ms ease;
 }
 
 .nav-hint {
   grid-area: hint;
-  color: rgba(203, 213, 225, 0.78);
+  color: rgba(210, 225, 242, 0.82);
   font-size: 12px;
+  font-style: normal;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 120ms ease, transform 220ms ease;
 }
 
-.is-sidebar-collapsed .sidebar {
-  align-items: center;
-  padding: 24px 10px;
-  overflow: visible;
-}
-
-.is-sidebar-collapsed .brand-title,
-.is-sidebar-collapsed .brand-copy,
-.is-sidebar-collapsed .context-card,
-.is-sidebar-collapsed .logout-button { display: none; }
-
-.is-sidebar-collapsed .brand { justify-content: center; gap: 0; }
-.is-sidebar-collapsed .nav { width: 100%; }
-
-.is-sidebar-collapsed .nav-link {
-  grid-template-columns: 1fr;
-  grid-template-areas: 'icon';
-  height: 68px;
-  place-items: center;
-  padding: 10px;
-}
-
-.is-sidebar-collapsed .nav-icon { font-size: 17px; }
-.is-sidebar-collapsed .nav-label,
-.is-sidebar-collapsed .nav-hint { display: none; }
-
-.context-card {
-  margin-top: 6px;
-  padding: 16px;
-  border-radius: 14px;
-  background: rgba(148, 163, 184, 0.14);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.logout-button {
-  width: 100%;
-  margin-top: auto;
-  margin-bottom: 46px;
-  border-color: rgba(203, 213, 225, 0.26);
-  background: transparent;
-  color: #f8fafc;
-}
-
-.logout-button:hover {
-  border-color: rgba(125, 211, 252, 0.58);
-  background: rgba(14, 165, 233, 0.12);
-  color: #ffffff;
+.context-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  height: 184px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  max-height: 260px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 240ms ease, padding 240ms ease, margin 240ms ease, border-width 240ms ease, opacity 120ms ease, transform 240ms ease;
 }
 
 .context-title {
-  margin-bottom: 12px;
-  font-size: 13px;
   color: rgba(226, 236, 248, 0.84);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.context-item {
+.context-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
-.context-item + .context-item {
-  margin-top: 12px;
-}
-
-.context-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.context-item span {
-  color: rgba(203, 213, 225, 0.72);
+.context-row span {
+  color: rgba(203, 213, 225, 0.74);
   font-size: 12px;
 }
 
-.context-item strong {
-  font-size: 14px;
+.context-row strong {
+  font-size: 13px;
+  line-height: 1.35;
 }
 
-.context-action {
-  padding: 6px 12px;
-  border: 1px solid rgba(125, 211, 252, 0.28);
-  border-radius: 999px;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(56, 189, 248, 0.1));
-  color: #e0f2fe;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1;
+.context-link {
+  color: #bfe0ff;
+  font-size: 12px;
+  font-weight: 700;
   text-decoration: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease;
 }
 
-.context-action:hover {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.32), rgba(59, 130, 246, 0.18));
-  border-color: rgba(186, 230, 253, 0.5);
+.context-link:hover,
+.context-link:focus-visible {
   color: #ffffff;
-  transform: translateY(-1px);
+  text-decoration: underline;
 }
 
-.main {
-  position: relative;
-  z-index: 1;
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 40px;
+  flex: 0 0 40px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid rgba(196, 219, 248, 0.22);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #edf6ff;
+  cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease, padding 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar-toggle-icon,
+.logout-icon {
+  width: 20px;
+  min-width: 20px;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.sidebar-toggle-label,
+.logout-label {
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 120ms ease, transform 220ms ease;
+}
+
+.logout-button {
+  justify-content: flex-start;
+  height: 40px;
+  flex: 0 0 40px;
+  margin-top: 0;
+  padding-inline: 12px;
+  overflow: hidden;
+  border-color: rgba(196, 219, 248, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f7fbff;
+}
+
+.logout-button:hover {
+  border-color: rgba(193, 225, 255, 0.48);
+  background: rgba(79, 144, 255, 0.14);
+  color: #ffffff;
+}
+
+.main-area {
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -360,119 +420,194 @@ async function handleLogout() {
   overflow: hidden;
 }
 
-.content {
+.topbar {
   position: relative;
-  z-index: 1;
-  box-sizing: border-box;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 30px 40px 36px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, max-content);
+  align-items: flex-start;
+  gap: 18px;
+  padding: 22px 28px 18px;
 }
 
-.content.is-contained-scroll {
+.topbar-copy {
+  min-width: 0;
+}
+
+.topbar-actions {
+  display: flex;
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  transform: translateX(-50%);
+}
+
+.topbar-action {
+  min-height: 36px;
+  padding-inline: 14px;
+}
+
+.topbar-kicker {
+  display: block;
+  color: #2b66cf;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.topbar h1 {
+  margin: 8px 0 0;
+  color: #10233f;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.topbar p {
+  margin: 8px 0 0;
+  color: #5e728d;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.topbar-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 320px;
+}
+
+.topbar-meta > div {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #dbe7f4;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.topbar-meta span {
+  display: block;
+  color: #6d8196;
+  font-size: 12px;
+}
+
+.topbar-meta strong {
+  display: block;
+  margin-top: 5px;
+  color: #163353;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.content-area {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0 28px 28px;
+}
+
+.content-area.is-contained-scroll {
   overflow: hidden;
 }
 
+.is-sidebar-collapsed .brand-copy {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+
+.is-sidebar-collapsed .nav-text,
+.is-sidebar-collapsed .nav-hint,
+.is-sidebar-collapsed .sidebar-toggle-label,
+.is-sidebar-collapsed .logout-label {
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+
+.is-sidebar-collapsed .context-panel {
+  opacity: 0;
+  transform: translateY(0);
+  pointer-events: none;
+}
+
 @media (max-width: 1080px) {
-  .shell {
-    height: 100dvh;
+  .app-shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
-    overflow: hidden;
   }
 
   .sidebar {
-    gap: 18px;
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    max-height: 34dvh;
-    overflow-y: auto;
-  }
-
-  .is-sidebar-collapsed .sidebar {
-    align-items: stretch;
-    padding: 24px 18px;
-    overflow-y: auto;
-  }
-
-  .sidebar-control { display: none; }
-
-  .is-sidebar-collapsed .brand-title,
-  .is-sidebar-collapsed .brand-copy,
-  .is-sidebar-collapsed .context-card,
-  .is-sidebar-collapsed .logout-button { display: block; }
-
-  .is-sidebar-collapsed .brand { width: auto; }
-  .is-sidebar-collapsed .nav-link {
-    grid-template-columns: 20px minmax(0, 1fr);
-    grid-template-areas: 'icon label' 'icon hint';
-    min-height: 78px;
-    place-items: unset;
-    padding: 12px 14px;
-  }
-
-  .is-sidebar-collapsed .nav-label,
-  .is-sidebar-collapsed .nav-hint { display: block; }
-
-  .nav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .nav-link {
-    min-height: 78px;
-  }
-
-  .main {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 35dvh;
     min-height: 0;
   }
 
-  .context-card {
-    margin-top: 0;
+  .nav-list {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    min-height: 0;
+    justify-content: flex-start;
+  }
+
+  .topbar {
+    position: static;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar-actions {
+    position: static;
+    transform: none;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .topbar-meta {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .content-area {
+    padding-inline: 20px;
   }
 }
 
 @media (max-width: 720px) {
   .sidebar {
-    padding: 16px 18px;
-    max-height: 26dvh;
+    padding: 18px 14px;
+    max-height: 28dvh;
   }
 
-  .brand {
-    align-items: flex-start;
+  .topbar {
+    padding: 18px 18px 14px;
   }
 
-  .nav {
-    display: flex;
-    flex-direction: row;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    scrollbar-width: thin;
+  .topbar h1 {
+    font-size: 24px;
   }
 
-  .nav-link {
-    flex: 0 0 auto;
-    min-height: 40px;
-    padding: 10px 12px;
-    justify-content: center;
+  .topbar-meta {
+    grid-template-columns: 1fr;
   }
 
-  .brand-subtitle,
-  .nav-hint {
-    display: none;
-  }
-
-  .context-card {
-    display: none;
-  }
-
-  .content {
-    padding-top: 18px;
-    padding-left: 18px;
-    padding-right: 18px;
+  .content-area {
+    padding: 0 16px 16px;
   }
 }
 </style>

@@ -78,7 +78,8 @@ def inspect_database_integrity(engine: Engine) -> dict[str, Any]:
                     for row in connection.execute(text(
                         "SELECT run_id, resource_type, version, COUNT(*) "
                         "FROM generated_resources WHERE run_id IS NOT NULL "
-                        "GROUP BY run_id, resource_type, version HAVING COUNT(*) > 1"
+                        "GROUP BY run_id, resource_type, version "
+                        "HAVING COUNT(*) > 1"
                     )).fetchall()
                 ]
                 report["resource_version_null_count"] = int(connection.execute(text(

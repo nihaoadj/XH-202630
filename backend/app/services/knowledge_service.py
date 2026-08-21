@@ -15,6 +15,12 @@ from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.models.schemas import DiagnosticQuestion, SkillNode
 
 
+# Retain deprecated catalog records for existing learner histories, but do not
+# offer them as choices when creating a new learning direction.
+HIDDEN_LEARNING_DOMAIN_IDS = {"industrial_internet"}
+HIDDEN_LEARNING_TRACK_IDS = {"model_evaluation_safety"}
+
+
 class KnowledgeService:
     """从版本管理的知识库目录读取可公开的目录信息。
 
@@ -82,8 +88,17 @@ class KnowledgeService:
         if self.catalog is None:
             return []
         default_id = self._manifest()["knowledge_base_id"]
-        domains = self.catalog.list_learning_domains()
+        domains = [
+            domain
+            for domain in self.catalog.list_learning_domains()
+            if domain["domain_id"] not in HIDDEN_LEARNING_DOMAIN_IDS
+        ]
         for domain in domains:
+            domain["tracks"] = [
+                track
+                for track in domain["tracks"]
+                if track["track_id"] not in HIDDEN_LEARNING_TRACK_IDS
+            ]
             for track in domain["tracks"]:
                 track["is_default"] = track.get("knowledge_base_id") == default_id
         return domains

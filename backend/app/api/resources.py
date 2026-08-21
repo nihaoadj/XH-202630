@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.api.dependencies import ensure_profile_access
@@ -12,6 +12,7 @@ from app.models.schemas import (
     GenerateRequest,
     GenerationJobCreateResponse,
     ResourceListResponse,
+    ResourceDetailResponse,
 )
 from app.services.generation_job_service import GenerationJobService
 from app.services.profile_service import ProfileService
@@ -43,7 +44,11 @@ def continue_resource_batch(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
-    """Create a new auditable Run that appends resources to one existing batch."""
+    """Create a new auditable Run in an existing batch.
+
+    A full-batch retry supersedes its source run. A single-resource retry only
+    replaces that resource's visible version inside the batch.
+    """
     report = build_health_report(get_settings())
     if report.status == "not_ready":
         detail = "生成依赖未就绪"
@@ -86,6 +91,10 @@ def continue_resource_batch(
     constraints["continuation_context"] = _resource_context(batch_resources)
     if payload.instructions and payload.instructions.strip():
         constraints["continuation_instructions"] = payload.instructions.strip()
+    if payload.replace_existing_types:
+        # Keep prior artifacts auditable, while allowing the learner-facing
+        # batch projection to use this run as the latest version of each type.
+        constraints["replacement_resource_types"] = list(payload.resource_types)
     generation_request = source_request.model_copy(
         update={"resource_types": payload.resource_types, "constraints": constraints}
     )
@@ -94,7 +103,7 @@ def continue_resource_batch(
         generation_request,
         batch_id=batch_id,
     )
-    if payload.source_run_id:
+    if payload.source_run_id and payload.replace_source_run:
         generation_job_service.mark_superseded(payload.source_run_id, job.run_id)
     background_tasks.add_task(
         generation_job_service.run_job,
@@ -132,6 +141,27 @@ def download_resource(resource_id: str, request: Request):
     )
 
 
+def _authorized_published_resource(resource_id: str, request: Request):
+    service: ResourceService = request.app.container.resource_service()
+    resource = service.get(resource_id)
+    if resource is None or resource.publication_status != "published":
+        raise HTTPException(status_code=404, detail="资源不存在")
+    profile = request.app.container.profile_service().get(resource.learner_id or "")
+    if ensure_profile_access(request, profile) is None:
+        raise HTTPException(status_code=404, detail="资源不存在")
+    return resource
+
+
+@router.get("/items/{resource_id}", response_model=ResourceDetailResponse)
+def get_resource_detail(resource_id: str, request: Request):
+    _authorized_published_resource(resource_id, request)
+    service: ResourceService = request.app.container.resource_service()
+    detail = service.get_published_detail(resource_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="资源不存在")
+    return {"resource": detail}
+
+
 @router.get("/{learner_id}", response_model=ResourceListResponse)
 def list_resources(
     learner_id: str,
@@ -139,6 +169,10 @@ def list_resources(
     resource_type: str | None = None,
     difficulty: str | None = None,
     run_id: str | None = None,
+    batch_id: str | None = None,
+    page: int | None = Query(default=None, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    summary_only: bool = False,
 ):
     """查询学习者生成资源历史"""
     container = request.app.container
@@ -149,9 +183,23 @@ def list_resources(
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 
     resource_service: ResourceService = container.resource_service()
-    resources = resource_service.list_by_learner_with_filter(learner_id, resource_type, difficulty, run_id)
+    if page is None:
+        resources = resource_service.list_by_learner_with_filter(
+            learner_id, resource_type, difficulty, run_id, batch_id)
+        total = len(resources)
+    else:
+        resources, total = resource_service.list_page_by_learner_with_filter(
+            learner_id, resource_type, difficulty, run_id, batch_id,
+            page=page, page_size=page_size)
+    if summary_only:
+        resources = [item.model_copy(update={"content_text": None, "file_path": None})
+                     for item in resources]
     return {
         "learner_id": learner_id,
-        "total": len(resources),
+        "total": total,
         "resources": resources,
+        "page": page,
+        "page_size": page_size if page is not None else None,
+        "has_next": bool(page is not None and page * page_size < total),
+        "summary_only": summary_only,
     }

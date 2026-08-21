@@ -140,6 +140,195 @@ class GeneratorOutput(BaseModel):
     revision_count: int = Field(ge=0)
 
 
+class StrictLLMOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+
+ResourceRepresentation = Literal["text"]
+
+
+class ResourceRepresentationSpec(BaseModel):
+    """Frozen execution definition for one representation of a resource spec."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    representation: ResourceRepresentation
+    max_output_tokens: int = Field(ge=256, le=65536)
+    display_order: int = Field(default=1, ge=1, le=100)
+
+
+class ResourceSpec(BaseModel):
+    """Immutable, evidence-scoped semantic resource work item."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    schema_version: Literal["1.0"] = WORKFLOW_SCHEMA_VERSION
+    resource_spec_id: str = Field(min_length=36, max_length=36)
+    resource_family_id: str = Field(min_length=36, max_length=36)
+    resource_type: str = Field(min_length=1, max_length=64)
+    learning_objective: str = Field(min_length=1, max_length=4000)
+    knowledge_points: List[str] = Field(min_length=1, max_length=50)
+    evidence_ids: List[str] = Field(min_length=1, max_length=100)
+    difficulty: str = Field(min_length=1, max_length=32)
+    representations: List[ResourceRepresentationSpec] = Field(min_length=1, max_length=1)
+    dependencies: List[str] = Field(default_factory=list, max_length=20)
+    display_order: int = Field(ge=1, le=100)
+
+    @field_validator("resource_spec_id", "resource_family_id")
+    @classmethod
+    def validate_uuid(cls, value: str) -> str:
+        try:
+            parsed = uuid.UUID(value)
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError("resource identity must be a UUID") from None
+        if str(parsed) != value.lower():
+            raise ValueError("resource identity must use canonical UUID form")
+        return value.lower()
+
+    @field_validator("knowledge_points", "evidence_ids", "dependencies")
+    @classmethod
+    def validate_unique_values(cls, values: List[str]) -> List[str]:
+        if any(not value.strip() for value in values):
+            raise ValueError("resource spec lists cannot contain blank values")
+        if len(values) != len(set(values)):
+            raise ValueError("resource spec lists must contain unique values")
+        return values
+
+    @model_validator(mode="after")
+    def validate_representations(self) -> "ResourceSpec":
+        representations = [item.representation for item in self.representations]
+        if len(representations) != len(set(representations)):
+            raise ValueError("representation must be unique within a resource spec")
+        if self.resource_spec_id in self.dependencies:
+            raise ValueError("resource spec cannot depend on itself")
+        if representations != ["text"]:
+            raise ValueError(
+                f"{self.resource_type} requires a supported representation order"
+            )
+        return self
+
+
+class ResourceGenerationContext(BaseModel):
+    """Bounded context visible to one resource Agent invocation."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    schema_version: Literal["1.0"] = WORKFLOW_SCHEMA_VERSION
+    run_id: str = Field(min_length=1, max_length=128)
+    batch_id: str = Field(min_length=1, max_length=128)
+    step_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    topic: str = Field(min_length=1, max_length=512)
+    learner_profile_summary: Dict[str, Any] = Field(default_factory=dict)
+    learning_path: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
+    evidence: List[EvidenceItem] = Field(min_length=1, max_length=100)
+    continuation_context: List[Dict[str, Any]] = Field(default_factory=list, max_length=20)
+    constraints: Dict[str, Any] = Field(default_factory=dict)
+    generation_attempt: int = Field(default=1, ge=1)
+    workflow_deadline_at: Optional[datetime] = None
+
+    @field_validator("evidence")
+    @classmethod
+    def validate_unique_evidence(cls, values: List[EvidenceItem]) -> List[EvidenceItem]:
+        evidence_ids = [item.evidence_id for item in values]
+        if len(evidence_ids) != len(set(evidence_ids)):
+            raise ValueError("generation context evidence_id must be unique")
+        return values
+
+
+class ResourceArtifactMetadata(BaseModel):
+    """Server-owned routing and lineage metadata attached after LLM validation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    resource_spec_id: str
+    resource_family_id: str
+    resource_type: str
+    representation: ResourceRepresentation
+    agent_name: str
+    prompt_version: str
+    artifact_format: Literal["markdown", "json"]
+    validation_status: Literal["validated", "validated_with_repairs"] = "validated"
+    source_evidence_ids: List[str] = Field(default_factory=list)
+
+
+class GeneratedArtifact(BaseModel):
+    """Uniform output consumed by the resource worker and persistence layer."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    metadata: ResourceArtifactMetadata
+    difficulty: str = Field(min_length=1, max_length=32)
+    content_text: str = Field(min_length=1, max_length=500000)
+    knowledge_points: List[str] = Field(min_length=1, max_length=50)
+    artifact_data: Dict[str, Any] = Field(default_factory=dict)
+    storage_type: Literal["text", "file"] = "text"
+    mime_type: Optional[str] = None
+    sanitization_warnings: List[str] = Field(default_factory=list, max_length=100)
+    llm_metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def to_learning_resource_fields(self) -> Dict[str, Any]:
+        """Return the common fields used to materialize a LearningResource."""
+
+        return {
+            "resource_type": self.metadata.resource_type,
+            "difficulty": self.difficulty,
+            "storage_type": self.storage_type,
+            "content_text": self.content_text,
+            "mime_type": self.mime_type,
+            "knowledge_points": list(self.knowledge_points),
+        }
+
+
+class AssessmentOption(StrictLLMOutput):
+    option_id: str = Field(pattern=r"^[A-Z][A-Z0-9]{0,3}$")
+    text: str = Field(min_length=1, max_length=400)
+
+
+class AssessmentQuestion(StrictLLMOutput):
+    question_id: str = Field(pattern=r"^q-[0-9]{2,3}$")
+    level: Literal["基础", "进阶", "挑战"]
+    question_type: Literal["single_choice", "multiple_choice", "true_false", "short_answer"]
+    stem: str = Field(min_length=1, max_length=600)
+    options: List[AssessmentOption] = Field(default_factory=list, max_length=4)
+    answer: List[str] = Field(min_length=1, max_length=3)
+    explanation: str = Field(min_length=1, max_length=600)
+    ability_node: str = Field(min_length=1, max_length=120)
+    knowledge_points: List[str] = Field(min_length=1, max_length=5)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_answer(self) -> "AssessmentQuestion":
+        option_ids = [item.option_id for item in self.options]
+        if len(option_ids) != len(set(option_ids)):
+            raise ValueError("assessment option_id must be unique")
+        choice_types = {"single_choice", "multiple_choice"}
+        if self.question_type in choice_types:
+            if len(option_ids) < 2 or not set(self.answer) <= set(option_ids):
+                raise ValueError("choice answers must reference declared options")
+            if self.question_type == "single_choice" and len(self.answer) != 1:
+                raise ValueError("single choice question requires one answer")
+        elif self.options:
+            raise ValueError("non-choice questions cannot declare options")
+        return self
+
+
+class AssessmentLLMOutput(StrictLLMOutput):
+    title: str = Field(min_length=1, max_length=120)
+    instructions: str = Field(min_length=1, max_length=600)
+    difficulty: str = Field(min_length=1, max_length=32)
+    questions: List[AssessmentQuestion] = Field(min_length=3, max_length=8)
+    knowledge_points: List[str] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_levels_and_ids(self) -> "AssessmentLLMOutput":
+        question_ids = [item.question_id for item in self.questions]
+        if len(question_ids) != len(set(question_ids)):
+            raise ValueError("assessment question_id must be unique")
+        if {item.level for item in self.questions} != {"基础", "进阶", "挑战"}:
+            raise ValueError("assessment must cover 基础, 进阶 and 挑战 levels")
+        return self
+
+
 class ReviewerInput(AgentInput):
     generated_resources: List[LearningResource] = Field(default_factory=list)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
@@ -152,10 +341,6 @@ class ReviewerInput(AgentInput):
 
 class ReviewerOutput(BaseModel):
     review_result: Dict[str, Any]
-
-
-class StrictLLMOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
 
 
 class DiagnosisLLMOutput(StrictLLMOutput):
@@ -233,18 +418,18 @@ class RevisionInstruction(StrictLLMOutput):
     issue_codes: List[str] = Field(min_length=1, max_length=20)
     target_resource_type: str = Field(min_length=1, max_length=64)
     target_claim_ids: List[str] = Field(default_factory=list, max_length=100)
-    action: str = Field(min_length=1, max_length=4000)
+    action: str = Field(min_length=1, max_length=600)
     priority: int = Field(default=1, ge=1, le=100)
 
 
 class ReviewLLMOutput(StrictLLMOutput):
     decision: Literal["approve", "revise", "reject", "human_review"]
     hallucination_score: float = Field(ge=0.0, le=1.0)
-    issues: List[ReviewIssue] = Field(default_factory=list, max_length=100)
+    issues: List[ReviewIssue] = Field(default_factory=list, max_length=3)
     difficulty_match: bool
     coverage_rate: float = Field(ge=0.0, le=1.0)
-    suggestion: str = Field(min_length=1, max_length=4000)
-    revision_instructions: List[RevisionInstruction] = Field(default_factory=list, max_length=100)
+    suggestion: str = Field(min_length=1, max_length=500)
+    revision_instructions: List[RevisionInstruction] = Field(default_factory=list, max_length=1)
 
     @model_validator(mode="after")
     def validate_decision_payload(self) -> "ReviewLLMOutput":

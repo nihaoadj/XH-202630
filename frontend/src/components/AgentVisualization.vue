@@ -2,7 +2,7 @@
   <el-card class="workflow-timeline">
     <template #header>
       <div class="timeline-header">
-        <span>Agent 实时协同轨迹</span>
+        <span>Agent 协同轨迹</span>
         <el-tag :type="connectionTagType" effect="plain">{{ connectionLabel }}</el-tag>
       </div>
     </template>
@@ -14,7 +14,43 @@
       show-icon
       class="timeline-alert"
     />
-    <el-empty v-if="!trace.length && !markers.length" description="等待持久化工作流事件" />
+    <el-collapse v-if="resourceExecutions.length" v-model="expandedResourceSections" class="resource-progress-tree">
+      <el-collapse-item name="generation">
+        <template #title>
+          <div class="resource-tree-title">
+            <span>资源生成</span>
+            <el-tag size="small" effect="plain">{{ progressLabel }}</el-tag>
+          </div>
+        </template>
+        <ResourceExecutionProgressList
+          :executions="resourceExecutions"
+          phase="generation"
+          :retrying-key="retryingResourceKey"
+          :retry-enabled="retryEnabled"
+          @open-resource="$emit('open-resource', $event)"
+          @retry-resource="$emit('retry-resource', $event)"
+        />
+      </el-collapse-item>
+      <el-collapse-item name="review">
+        <template #title>
+          <div class="resource-tree-title">
+            <span>审核与发布</span>
+            <el-tag :type="progressSummary.failed ? 'warning' : 'success'" size="small" effect="plain">
+              已批准 {{ progressSummary.approved }}/{{ progressSummary.total }}
+            </el-tag>
+          </div>
+        </template>
+        <ResourceExecutionProgressList
+          :executions="resourceExecutions"
+          phase="review"
+          :retrying-key="retryingResourceKey"
+          :retry-enabled="retryEnabled"
+          @open-resource="$emit('open-resource', $event)"
+          @retry-resource="$emit('retry-resource', $event)"
+        />
+      </el-collapse-item>
+    </el-collapse>
+    <el-empty v-if="!trace.length && !markers.length && !resourceExecutions.length" description="等待持久化工作流事件" />
     <el-timeline>
       <el-timeline-item
         v-for="(item, index) in displayTrace"
@@ -58,7 +94,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import ResourceExecutionProgressList from './ResourceExecutionProgressList.vue'
+import { normalizeResourceProgressSummary } from '../utils/generationDisplay'
 
 const props = defineProps({
   trace: {
@@ -74,13 +112,33 @@ const props = defineProps({
     default: 'idle',
   },
   legacyPartial: Boolean,
+  resourceExecutions: {
+    type: Array,
+    default: () => [],
+  },
+  resourceProgressSummary: {
+    type: Object,
+    default: null,
+  },
+  retryingResourceKey: {
+    type: String,
+    default: '',
+  },
+  retryEnabled: Boolean,
 })
 
-defineEmits(['open-child-run'])
+defineEmits(['open-child-run', 'open-resource', 'retry-resource'])
+
+const expandedResourceSections = ref(['generation', 'review'])
+const progressSummary = computed(() => normalizeResourceProgressSummary(
+  props.resourceProgressSummary,
+  props.resourceExecutions,
+))
+const progressLabel = computed(() => `${progressSummary.value.completed}/${progressSummary.value.total} 项已终结`)
 
 const connectionLabel = computed(() => ({
   connecting: '正在连接',
-  live: '实时',
+  live: '节点级同步',
   fallback: '轮询降级',
   terminal: '已结束',
   error: '连接异常',
@@ -136,6 +194,41 @@ function statusType(status) {
 
 .timeline-alert {
   margin-bottom: 16px;
+}
+
+.resource-progress-tree {
+  margin-bottom: 18px;
+  border: 1px solid #dce6ef;
+  border-radius: 9px;
+  background: #fbfdff;
+}
+
+.resource-progress-tree :deep(.el-collapse-item__header) {
+  height: 43px;
+  padding: 0 12px;
+  border-bottom-color: #e7edf3;
+  background: transparent;
+}
+
+.resource-progress-tree :deep(.el-collapse-item__wrap) {
+  border-bottom-color: #e7edf3;
+  background: transparent;
+}
+
+.resource-progress-tree :deep(.el-collapse-item__content) {
+  padding: 10px 12px 13px;
+}
+
+.resource-tree-title {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-right: 8px;
+  color: #2a3f58;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .workflow-timeline {

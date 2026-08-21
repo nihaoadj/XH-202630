@@ -52,10 +52,10 @@ def update_profile(learner_id: str, payload: LearnerProfileUpdate, request: Requ
 
 @router.delete("/{learner_id}", response_model=StatusResponse)
 def delete_profile(learner_id: str, request: Request):
-    """删除学习者画像及其诊断依赖记录，保留匿名化 Agent 审计轨迹。"""
+    """永久删除学习者画像及其全部学习、资源、审核与运行记录。"""
     service: ProfileService = request.app.container.profile_service()
     if ensure_profile_access(request, service.get(learner_id)) is None:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
     if not service.delete(learner_id):
         raise HTTPException(status_code=404, detail="学习者画像不存在")
-    return {"status": "success", "message": "学习者画像已删除"}
+    return {"status": "success", "message": "学习者画像及其相关内容已永久删除"}

@@ -10,6 +10,8 @@ from app.models.schemas import (
     GenerationJobListResponse,
     GenerationJobStatusResponse,
     LearnerProfile,
+    ResourceExecutionProgress,
+    RunResourceProgressSummary,
 )
 from app.services.generation_service import GenerationService
 
@@ -74,13 +76,42 @@ class GenerationJobService:
         )
 
     def get_job(self, run_id: str) -> GenerationJobStatusResponse | None:
-        return self.job_repo.get(run_id)
+        job = self.job_repo.get(run_id)
+        return self._with_resource_progress(job) if job else None
+
+    def _with_resource_progress(
+        self, job: GenerationJobStatusResponse,
+    ) -> GenerationJobStatusResponse:
+        resource_repo = getattr(self.generation_service, "resource_repo", None)
+        records = (
+            resource_repo.list_executions_by_run(job.run_id)
+            if resource_repo is not None
+            else []
+        )
+        executions = []
+        counts: dict[str, int] = {}
+        for record in records:
+            payload = record.model_dump(mode="python")
+            payload["resource_execution_state"] = payload.pop("state")
+            executions.append(ResourceExecutionProgress.model_validate(payload))
+            counts[record.state] = counts.get(record.state, 0) + 1
+        total = len(executions)
+        terminal = sum(counts.get(item, 0) for item in ("approved", "human_review", "failed"))
+        summary = RunResourceProgressSummary(
+            total=total, counts=counts, approved=counts.get("approved", 0),
+            human_review=counts.get("human_review", 0), failed=counts.get("failed", 0),
+            # Approved execution rows are the public projection of resources
+            # that passed the publication gate.
+            published=counts.get("approved", 0),
+            can_finalize=bool(total and terminal == total), items=executions)
+        return job.model_copy(update={"resource_progress_summary": summary})
 
     def mark_superseded(self, run_id: str, replacement_run_id: str) -> GenerationJobStatusResponse | None:
         return self.job_repo.mark_superseded(run_id, replacement_run_id)
 
     def list_jobs(self, learner_id: str) -> GenerationJobListResponse:
-        items = self.job_repo.list_by_learner(learner_id)
+        items = [self._with_resource_progress(item)
+                 for item in self.job_repo.list_by_learner(learner_id)]
         return GenerationJobListResponse(
             learner_id=learner_id,
             total=len(items),

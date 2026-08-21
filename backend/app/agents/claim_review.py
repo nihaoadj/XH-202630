@@ -91,7 +91,12 @@ def _failure(
 
 
 def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str, Any]:
-    resources = state.get("generated_resources", [])
+    # HTML is a presentation derived from the canonical practice-guide text;
+    # claim review, like normal review, assesses only canonical text.
+    resources = [
+        item for item in state.get("generated_resources", [])
+        if item.representation.value == "text"
+    ]
     evidence = state.get("retrieved_evidence", [])
     review_ids = state.get("review_result", {}).get("review_ids", {})
     step_context = start_step(state)
@@ -109,48 +114,46 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
             code=ErrorCode.CLAIM_EXTRACTION_INVALID,
             detail="review/resource boundary mismatch",
         )
-    payload = {
-        "allowed_evidence": [
-            {"evidence_id": item.evidence_id, "excerpt": item.excerpt}
-            for item in evidence
-        ],
-        "allowed_knowledge_point_ids": state.get("target_skill_nodes", []),
-        "resources": [
-            {
-                "resource_id": item.resource_id,
-                "resource_version": item.version,
-                "content_text": item.content_text,
+    claims: list[ClaimRecord] = []
+    allowed_evidence = {item.evidence_id for item in evidence}
+    allowed_nodes = set(state.get("target_skill_nodes", []))
+    failed_resource_ids: list[str] = []
+    errors: list[dict[str, Any]] = []
+    last_result = None
+    for resource in resources:
+        try:
+            payload = {
+                "allowed_evidence": [
+                    {"evidence_id": item.evidence_id, "excerpt": item.excerpt}
+                    for item in evidence
+                ],
+                "allowed_knowledge_point_ids": state.get("target_skill_nodes", []),
+                "resources": [{
+                    "resource_id": resource.resource_id,
+                    "resource_version": resource.version,
+                    "content_text": resource.content_text,
+                }],
             }
-            for item in resources
-        ],
-    }
-    try:
-        result = llm_gateway.invoke_structured(
-            messages=[SystemMessage(content=EXTRACTOR_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))],
-            output_schema=ClaimExtractionLLMOutput,
-            context=LLMCallContext(
-                run_id=state.get("run_id", "direct-node-call"),
-                step_id=step_context["step_id"],
-                node_name="claim_extractor",
-                schema_name=ClaimExtractionLLMOutput.__name__,
-                generation_attempt=state.get("generation_attempt", 1),
-                workflow_deadline_at=state.get("workflow_deadline_at"),
-            ),
-            options=llm_gateway.options_for("claim_extractor", temperature=0.0),
-        )
-        batches = result.output.resources
-        batch_ids = [item.resource_id for item in batches]
-        if len(batch_ids) != len(set(batch_ids)) or set(batch_ids) != set(review_ids):
-            raise ValueError("extractor resource set mismatch")
-        by_resource = {item.resource_id: item.claims for item in batches}
-        if any(not by_resource[item.resource_id] for item in resources):
-            raise ValueError("each non-empty resource requires at least one claim")
-        claims: list[ClaimRecord] = []
-        allowed_evidence = {item.evidence_id for item in evidence}
-        allowed_nodes = set(state.get("target_skill_nodes", []))
-        for resource in resources:
+            result = llm_gateway.invoke_structured(
+                messages=[SystemMessage(content=EXTRACTOR_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))],
+                output_schema=ClaimExtractionLLMOutput,
+                context=LLMCallContext(
+                    run_id=state.get("run_id", "direct-node-call"),
+                    step_id=step_context["step_id"],
+                    node_name="claim_extractor",
+                    schema_name=ClaimExtractionLLMOutput.__name__,
+                    generation_attempt=state.get("generation_attempt", 1),
+                    workflow_deadline_at=state.get("workflow_deadline_at"),
+                ),
+                options=llm_gateway.options_for("claim_extractor", temperature=0.0),
+            )
+            batches = result.output.resources
+            if len(batches) != 1 or batches[0].resource_id != resource.resource_id:
+                raise ValueError("extractor resource boundary mismatch")
+            if not batches[0].claims:
+                raise ValueError("each non-empty resource requires at least one claim")
             claims.extend(materialize_claims(
-                candidates=by_resource[resource.resource_id],
+                candidates=batches[0].claims,
                 resource_content=resource.content_text or "",
                 resource_id=resource.resource_id,
                 resource_version=resource.version,
@@ -161,41 +164,48 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
                 extractor_prompt_version=EXTRACTOR_PROMPT_VERSION,
                 extractor_model=result.model_name,
             ))
-    except LLMGatewayError as exc:
+            last_result = result
+        except LLMGatewayError as exc:
+            failed_resource_ids.append(resource.resource_id)
+            errors.append(exc.error.model_dump(mode="json"))
+        except (ValueError, KeyError) as exc:
+            failed_resource_ids.append(resource.resource_id)
+            errors.append(make_error_info(
+                ErrorCode.CLAIM_EXTRACTION_INVALID,
+                source="claim_extractor",
+                attempt=state.get("generation_attempt", 1),
+                category="claim_audit",
+                safe_detail=str(exc)[:256],
+            ).model_dump(mode="json"))
+    if not claims:
         return _failure(
             state,
             node_name="claim_extractor",
             code=ErrorCode.CLAIM_EXTRACTION_INVALID,
-            detail="llm gateway failure",
-            llm_error=exc,
-        )
-    except (ValueError, KeyError) as exc:
-        return _failure(
-            state,
-            node_name="claim_extractor",
-            code=ErrorCode.CLAIM_EXTRACTION_INVALID,
-            detail=str(exc),
+            detail="all resource claim extractions failed",
         )
     trace = build_trace_item(
         state,
         agent_name="claim_extractor",
         action="独立 Claim 抽取",
-        status=StepStatus.SUCCESS,
+        status=StepStatus.DEGRADED if failed_resource_ids else StepStatus.SUCCESS,
         input_summary=f"资源数：{len(resources)}；冻结证据数：{len(evidence)}",
-        output_summary=f"已抽取 {len(claims)} 条 Claim",
-        decision_reason="抽取结果的资源、原文跨度、知识点和 Evidence ID 已通过白名单校验。",
+        output_summary=(f"已抽取 {len(claims)} 条 Claim；"
+                        f"失败资源 {len(failed_resource_ids)} 个"),
+        decision_reason="成功资源通过白名单校验；失败资源被隔离并转人工复核。",
         evidence_refs=[item.evidence_id for item in evidence],
         resource_ids=[item.resource_id for item in resources],
         review_ids=list(review_ids.values()),
         step_context=step_context,
-        llm_metadata=result.trace_metadata(),
+        llm_metadata=last_result.trace_metadata() if last_result else None,
     )
     return {
         "extracted_claims": [item.model_dump(mode="json") for item in claims],
+        "claim_failed_resource_ids": failed_resource_ids,
         "claim_check_status": ClaimCheckStatus.PENDING.value,
         "current_node": "claim_extractor",
         "trace": [trace],
-        "errors": [],
+        "errors": errors,
     }
 
 
@@ -203,97 +213,124 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
     step_context = start_step(state)
     try:
         claims = [ClaimRecord.model_validate(item) for item in state.get("extracted_claims", [])]
-        if not claims:
-            raise ValueError("no validated claims")
-        evidence = state.get("retrieved_evidence", [])
-        payload = {
-            "allowed_evidence": [
-                {"evidence_id": item.evidence_id, "excerpt": item.excerpt}
-                for item in evidence
-            ],
-            "claims": [
-                {
-                    "claim_id": item.claim_id,
-                    "claim_type": item.claim_type.value,
-                    "claim_text": item.claim_text,
-                    "resource_id": item.resource_id,
-                    "resource_version": item.resource_version,
-                }
-                for item in claims
-            ],
-        }
-        result = llm_gateway.invoke_structured(
-            messages=[SystemMessage(content=JUDGE_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))],
-            output_schema=ClaimJudgementLLMOutput,
-            context=LLMCallContext(
-                run_id=state.get("run_id", "direct-node-call"),
-                step_id=step_context["step_id"],
-                node_name="claim_judge",
-                schema_name=ClaimJudgementLLMOutput.__name__,
-                generation_attempt=state.get("generation_attempt", 1),
-                workflow_deadline_at=state.get("workflow_deadline_at"),
-            ),
-            options=llm_gateway.options_for("claim_judge", temperature=0.0),
-        )
-        judgements = materialize_judgements(
-            claims=claims,
-            candidates=result.output.judgements,
-            allowed_evidence_ids={item.evidence_id for item in evidence},
-            judge_prompt_version=JUDGE_PROMPT_VERSION,
-            judge_model=result.model_name,
-        )
-        claims_by_resource: dict[str, list[ClaimRecord]] = defaultdict(list)
-        judgements_by_resource: dict[str, list] = defaultdict(list)
-        for item in claims:
-            claims_by_resource[item.resource_id].append(item)
-        for item in judgements:
-            judgements_by_resource[item.resource_id].append(item)
-        metrics = {
-            resource_id: compute_claim_metric(items, judgements_by_resource[resource_id])
-            for resource_id, items in claims_by_resource.items()
-        }
-    except LLMGatewayError as exc:
-        return _failure(
-            state,
-            node_name="claim_judge",
-            code=ErrorCode.CLAIM_JUDGEMENT_INVALID,
-            detail="llm gateway failure",
-            llm_error=exc,
-        )
-    except (ValueError, KeyError) as exc:
-        return _failure(
-            state,
-            node_name="claim_judge",
-            code=ErrorCode.CLAIM_JUDGEMENT_INVALID,
-            detail=str(exc),
-        )
+    except ValueError as exc:
+        return _failure(state, node_name="claim_judge",
+                        code=ErrorCode.CLAIM_JUDGEMENT_INVALID, detail=str(exc))
+    if not claims:
+        return _failure(state, node_name="claim_judge",
+                        code=ErrorCode.CLAIM_JUDGEMENT_INVALID, detail="no validated claims")
+    evidence = state.get("retrieved_evidence", [])
+    claims_by_resource: dict[str, list[ClaimRecord]] = defaultdict(list)
+    for item in claims:
+        claims_by_resource[item.resource_id].append(item)
+    judgements = []
+    failed_resource_ids = set(state.get("claim_failed_resource_ids", []))
+    errors: list[dict[str, Any]] = []
+    last_result = None
+    for resource_id, resource_claims in claims_by_resource.items():
+        try:
+            payload = {
+                "allowed_evidence": [
+                    {"evidence_id": item.evidence_id, "excerpt": item.excerpt}
+                    for item in evidence
+                ],
+                "claims": [
+                    {
+                        "claim_id": item.claim_id,
+                        "claim_type": item.claim_type.value,
+                        "claim_text": item.claim_text,
+                        "resource_id": item.resource_id,
+                        "resource_version": item.resource_version,
+                    }
+                    for item in resource_claims
+                ],
+            }
+            result = llm_gateway.invoke_structured(
+                messages=[SystemMessage(content=JUDGE_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))],
+                output_schema=ClaimJudgementLLMOutput,
+                context=LLMCallContext(
+                    run_id=state.get("run_id", "direct-node-call"),
+                    step_id=step_context["step_id"],
+                    node_name="claim_judge",
+                    schema_name=ClaimJudgementLLMOutput.__name__,
+                    generation_attempt=state.get("generation_attempt", 1),
+                    workflow_deadline_at=state.get("workflow_deadline_at"),
+                ),
+                options=llm_gateway.options_for("claim_judge", temperature=0.0),
+            )
+            judgements.extend(materialize_judgements(
+                claims=resource_claims,
+                candidates=result.output.judgements,
+                allowed_evidence_ids={item.evidence_id for item in evidence},
+                judge_prompt_version=JUDGE_PROMPT_VERSION,
+                judge_model=result.model_name,
+            ))
+            last_result = result
+        except LLMGatewayError as exc:
+            failed_resource_ids.add(resource_id)
+            errors.append(exc.error.model_dump(mode="json"))
+        except (ValueError, KeyError) as exc:
+            failed_resource_ids.add(resource_id)
+            errors.append(make_error_info(
+                ErrorCode.CLAIM_JUDGEMENT_INVALID,
+                source="claim_judge",
+                attempt=state.get("generation_attempt", 1),
+                category="claim_audit",
+                safe_detail=str(exc)[:256],
+            ).model_dump(mode="json"))
+    judgements_by_resource: dict[str, list] = defaultdict(list)
+    for item in judgements:
+        judgements_by_resource[item.resource_id].append(item)
+    metrics = {
+        resource_id: compute_claim_metric(items, judgements_by_resource[resource_id])
+        for resource_id, items in claims_by_resource.items()
+    }
+    for resource_id in failed_resource_ids:
+        if resource_id not in metrics:
+            metrics[resource_id] = {
+                "metric_status": ClaimMetricStatus.INCOMPLETE.value,
+                "claim_hallucination_rate": None,
+                "claim_total": 0,
+                "factual_claim_total": 0,
+                "supported_claim_total": 0,
+                "contradicted_claim_total": 0,
+                "not_in_evidence_claim_total": 0,
+                "non_factual_claim_total": 0,
+                "incomplete_claim_total": 1,
+            }
     trace = build_trace_item(
         state,
         agent_name="claim_judge",
         action="冻结证据 Claim 判定",
-        status=StepStatus.SUCCESS,
+        status=StepStatus.DEGRADED if failed_resource_ids else StepStatus.SUCCESS,
         input_summary=f"Claim 数：{len(claims)}；冻结证据数：{len(evidence)}",
-        output_summary=f"完成 {len(judgements)} 条独立判定",
-        decision_reason="每条 Claim 恰有一个判定，Evidence ID 与当前 Run 冻结快照一致。",
+        output_summary=(f"完成 {len(judgements)} 条独立判定；"
+                        f"失败资源 {len(failed_resource_ids)} 个"),
+        decision_reason="成功资源完成冻结证据判定；失败资源被隔离并转人工复核。",
         evidence_refs=[item.evidence_id for item in evidence],
         resource_ids=sorted(claims_by_resource),
         review_ids=sorted({item.review_id for item in claims}),
         step_context=step_context,
-        llm_metadata=result.trace_metadata(),
+        llm_metadata=last_result.trace_metadata() if last_result else None,
     )
     return {
         "claim_judgements": [item.model_dump(mode="json") for item in judgements],
-        "claim_metrics": {key: value.model_dump(mode="json") for key, value in metrics.items()},
+        "claim_metrics": {
+            key: (value.model_dump(mode="json") if hasattr(value, "model_dump") else value)
+            for key, value in metrics.items()
+        },
+        "claim_failed_resource_ids": sorted(failed_resource_ids),
         "claim_check_status": ClaimCheckStatus.COMPLETED.value,
         "current_node": "claim_judge",
         "trace": [trace],
-        "errors": [],
+        "errors": errors,
     }
 
 
 def claim_decide_node(state: AgentState) -> dict[str, Any]:
     step_context = start_step(state)
     review = dict(state.get("review_result", {}))
+    failed_resource_ids = set(state.get("claim_failed_resource_ids", []))
     if state.get("claim_check_status") != ClaimCheckStatus.COMPLETED.value:
         review.update({
             "decision": ReviewDecision.HUMAN_REVIEW.value,
@@ -312,7 +349,10 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
             if item.get("verdict") in {ClaimVerdict.CONTRADICTED.value, ClaimVerdict.NOT_IN_EVIDENCE.value}
         ]
         metrics = state.get("claim_metrics", {})
-        incomplete = any(item.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value for item in metrics.values())
+        incomplete = bool(failed_resource_ids) or any(
+            item.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value
+            for item in metrics.values()
+        )
         total_factual = sum(item.get("factual_claim_total", 0) for item in metrics.values())
         total_bad = sum(
             item.get("contradicted_claim_total", 0) + item.get("not_in_evidence_claim_total", 0)
@@ -331,11 +371,34 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
             "claim_hallucination_rate": None if incomplete else micro_rate,
             "legacy_reviewer_score": review.get("hallucination_score"),
         })
+        resources = {item.resource_id: item for item in state.get("generated_resources", [])}
+        existing_issue_resources = {
+            str(item.get("resource_id"))
+            for item in review.get("issues", [])
+            if isinstance(item, dict) and item.get("resource_id")
+        }
+        for resource_id in sorted(failed_resource_ids - existing_issue_resources):
+            resource = resources.get(resource_id)
+            if resource is None:
+                continue
+            review.setdefault("issues", []).append({
+                "issue_id": str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{state.get('run_id')}:claim-audit-failed:{resource_id}",
+                )),
+                "code": "evidence_gap",
+                "severity": "high",
+                "resource_type": resource.resource_type,
+                "resource_id": resource.resource_id,
+                "resource_version": resource.version,
+                "claim_ids": [],
+                "knowledge_point": None,
+                "description": "该资源的 Claim 审核未完成，需要人工复核。",
+            })
         if incomplete:
             decision = ReviewDecision.HUMAN_REVIEW
         elif bad:
             decision = ReviewDecision.REVISE
-            resources = {item.resource_id: item for item in state.get("generated_resources", [])}
             for index, judgement in enumerate(bad, start=1):
                 claim = claims[judgement["claim_id"]]
                 resource = resources[claim["resource_id"]]
@@ -361,7 +424,16 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
                 })
         else:
             decision = ReviewDecision.APPROVE
-        review.update({"decision": decision.value, "status": decision.value, "passed": decision == ReviewDecision.APPROVE})
+        review.update({
+            "decision": decision.value,
+            "status": decision.value,
+            "passed": decision == ReviewDecision.APPROVE,
+            "claim_check_status": (
+                ClaimCheckStatus.FAILED.value
+                if failed_resource_ids
+                else ClaimCheckStatus.COMPLETED.value
+            ),
+        })
     trace = build_trace_item(
         state,
         agent_name="claim_supervisor",
@@ -376,6 +448,9 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
     )
     return {
         "review_result": review,
+        "claim_check_status": review.get(
+            "claim_check_status", state.get("claim_check_status")
+        ),
         "current_node": "claim_supervisor",
         "trace": [trace],
         "errors": [],

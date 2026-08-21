@@ -2,8 +2,8 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：2.1
-> 文档更新时间：2026-08-16
+> 文档版本：2.2
+> 文档更新时间：2026-08-20
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 1. 架构目标
@@ -115,6 +115,14 @@
 - `generator.py`
 - `reviewer.py`
 - `feedback.py`
+- `resource_spec_builder.py`
+- `resource_agents/base.py`
+- `resource_agents/text.py`
+- `resource_agents/practice.py`
+- `resource_agents/assessment.py`
+- `resource_agents/checklist.py`
+- `resource_agents/case_study.py`
+- `resource_agents/registry.py`
 
 当前代码含义：
 
@@ -123,6 +131,8 @@
 - `backend/app/models/workflow.py` 定义版本化 `WorkflowState`、状态枚举和脱敏 `ErrorInfo`
 - `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 结构
 - `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
+- `generator.py` 保留历史文件名，但只负责资源 Spec 编排、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
+- 公共资源类型词汇由 `backend/app/models/resource_types.py` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
 
 ## 4. 当前主流程调用链
 
@@ -162,7 +172,8 @@ backend/app/agents
   |- diagnosis: 学情诊断 Agent
   |- retriever: 知识库检索 Agent（BM25 + Chroma 向量召回 + RRF 融合 + CrossEncoder 精排）
   |- planner: 学习路径规划 Agent
-  |- generator: 个性化资源生成 Agent
+  |- generator: ResourceSpec 编排与受限并发，不持有通用正文 Prompt
+  |- resource_agents: 按 resource_type 精确路由的专用生成 Agent
   |- reviewer: 审核纠偏 Agent
   |- feedback: 反馈决策 Agent
   |- claim_review: 独立 Claim 抽取、冻结 Evidence 判定与确定性指标
@@ -197,7 +208,21 @@ diagnose -> retrieve -> plan -> generate
                                                                |- approve + include_claim_check=false -> finalize
                                                                |- revise 且有额度 -> prepare_revision -> generate
                                                                |- reject/额度耗尽 -> finalize
+finalize -> END
 ```
+
+资源生成内部链路：
+
+```text
+GenerateRequest 请求校验与类型规范化
+-> ResourceSpec Builder 冻结 type/family/evidence/knowledge points/budget
+-> Generator 为每个 Spec 分配独立 worker_step_id，并以最大并发 2 调用专用 Agent
+-> Reviewer 按文本资源独立审核；Claim 启用时也按资源调用
+-> 已批准资源立即发布，不等待同批其他资源
+-> 已批准且已发布的资源可立即阅读
+```
+
+每个资源仅保留 `representation=text`。数据库以 `(run_id, resource_spec_id, representation)` 唯一标识当前执行投影，以 `(run_id, resource_spec_id, representation, version)` 约束资源版本。
 
 ### 4.3 P0-07 反馈后真实闭环
 
@@ -247,6 +272,8 @@ WorkflowEvent Ledger 是唯一事件事实源，SSE 只是只读 transport，不
 连接先发 snapshot，再补发 durable event backlog，最后 live tail。浏览器断线只停止观看，不取消 BackgroundTasks/Workflow；重连使用原 EventSource 的 `Last-Event-ID`，或页面刷新后以 timeline 最后 sequence 作为 `after_sequence`。heartbeat 不进入 Event Ledger。两个客户端独立读取同一 append-only ledger，不存在 delivered/ack 或破坏性消费。
 
 GenerationJob/AgentRun 的 queued 竞态保持现有 ownership：Job 可先存在，SSE snapshot 此时 run_status 为空并等待 AgentRun。P0-08 没有引入 Redis、消息队列、WebSocket、自动 resume/cancel 或 token streaming。
+
+资源事件 payload 只公开 `resource_spec_id`、`resource_family_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`resource_id`、`review_id`、`agent_name`、`prompt_version`、`artifact_format`、`validation_status` 和安全错误码等白名单字段；不下发正文、Prompt 或模型原始响应。前端高层 Agent 流程保持不变，仅在生成/审核节点下展开资源级卡片。
 
 P0-06 的 Claim 抽取器与 Generator 相互独立。模型只能从资源、目标技能节点和当前
 Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、
@@ -438,3 +465,27 @@ versioned fixture
 固定 fixture loader 只验证稳定 ID 和场景集合；acceptance runner 复用现有业务测试，不创建第二套工作流。安全证据导出采用 allowlist，只允许 Run/Resource/Review/Claim/Evidence/Feedback 的稳定 ID、计数和状态，不输出 Prompt、模型原文或完整画像。
 
 系统 health 与比赛 Gate 分层：`/health/ready` 只表达默认 KB 和核心依赖的服务 readiness；P0-09 runtime 还要求迁移完整性、SQLite FK、资源版本唯一约束和前端正式闭环。前者 ready 时后者仍可 FAIL。
+
+## 11. 交互式 Tutor 子系统
+
+Tutor 是资源发布后的独立用户交互子系统，不进入一次性 Generation LangGraph：
+
+```mermaid
+flowchart TD
+    R[Published Resource / Evaluation Question] --> API[Tutor API]
+    API --> S[TutorService]
+    S --> C[TutorContextBuilder]
+    C --> P[Learner Profile projection]
+    C --> E[Frozen Evidence / SourceRef / Fresh Retrieval]
+    C --> H[Recent Tutor Turns]
+    S --> TP[Deterministic TutorPolicy]
+    C --> A[TutorAgent]
+    TP --> A
+    A --> G[LLMGateway]
+    G --> V[Schema + citation subset validation]
+    V --> DB[(TutorSession / TutorTurn)]
+```
+
+`TutorPolicy` 在服务端控制 0~3 级提示，客户端不能提交 `hint_level`。`TutorContextBuilder` 只投影教学必要画像字段、相关资源片段、后端解析的题目字段、有限历史和有限 Evidence；题目答案、原始 Prompt、模型原文和 Chain-of-Thought 不进入公开契约。Evidence 顺序固定为当前 Run 的 Frozen Evidence、资源 SourceRef、Ready 知识库上的受控 Fresh Retrieval，全部不可用时返回 `evidence_insufficient` 且不调用模型自由回答。
+
+Tutor 持久化仅记录会话、轮次、教学动作、引用与脱敏调用遥测。会话源兼容单 Resource、旧 Run 和当前 Resource Batch；Batch 会话保留真实 `source_run_id` 用于证据定位，并以独立 `source_batch_id` 保证跨 Run 的批次恢复与统计不会混淆。正式状态迁移仍由 `Formal Attempt -> Feedback Policy -> ProfileVersion / Mastery / LearningPath` 完成。测评提交时，`FeedbackService` 从 Tutor Repository 统计该 Batch（旧接口为 Run）的真实 `question_help` 轮次写入现有 `hint_count`，但不改变掌握度公式或 0.60/0.85 阈值。

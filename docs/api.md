@@ -1,8 +1,8 @@
 # API 文档
 
 > 项目编号：XH-202630
-> 文档版本：2.1
-> 文档更新时间：2026-08-16
+> 文档版本：2.2
+> 文档更新时间：2026-08-20
 > 说明：本文档以当前代码实现为准，覆盖 `backend/app/api` 中已经启用的核心接口。
 
 ## 1. 基本信息
@@ -63,7 +63,7 @@
 | 画像 | `GET` | `/api/profiles/` | 查询画像列表 |
 | 画像 | `GET` | `/api/profiles/{learner_id}` | 查询单个画像 |
 | 画像 | `PATCH` | `/api/profiles/{learner_id}` | 更新画像 |
-| 画像 | `DELETE` | `/api/profiles/{learner_id}` | 删除画像 |
+| 画像 | `DELETE` | `/api/profiles/{learner_id}` | 永久删除画像及其问卷、诊断、资源、反馈、审核和运行记录 |
 | 诊断 | `GET` | `/api/diagnosis/questions` | 获取诊断题 |
 | 诊断 | `POST` | `/api/diagnosis/submit` | 提交诊断结果 |
 | 资源生成 | `POST` | `/api/generate/jobs` | 创建异步资源生成任务 |
@@ -244,7 +244,7 @@
   "topic": "RAG 基础概念与文档解析",
   "knowledge_base_id": "rag_engineering_training",
   "target_skill_nodes": ["rag_basics", "document_parsing"],
-  "resource_types": ["讲义", "实操指南", "分阶段测试题"],
+  "resource_types": ["讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"],
   "difficulty_preference": "从基础开始",
   "generation_mode": "standard",
   "include_review": true,
@@ -265,6 +265,9 @@
 说明：
 
 - 此接口只返回任务信息，不直接返回资源正文。
+- 当前支持 `讲义`、`实操指南`、`分阶测试题`、`复习清单`、`案例分析`；唯一兼容别名 `定制讲义` 会在请求校验时规范化为 `讲义`。
+- 未知资源类型在任务创建和任何模型调用前以 HTTP 422 拒绝，不创建失败任务占位。
+- 路由固定为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`。
 - 当前推荐前端流程：
   提交任务 -> 轮询任务状态 -> 完成后拉取资源列表。
 
@@ -286,11 +289,15 @@
 - `created_at`
 - `started_at`
 - `finished_at`
+- `resource_progress_summary`
+
+`resource_progress_summary` 包含 `total`、`counts`、`approved`、`human_review`、`failed`、`published`、`can_finalize` 和 `items`。每个 `items[]` 是一个资源表示的公开执行投影，包含 `resource_spec_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`attempt`、`resource_id`、`review_id`、`error_code`、`agent_name`、`prompt_version`、`artifact_format` 与 `validation_status`。
 
 说明：
 
 - 当 `job_status=completed` 时，前端应展示“查看资源”按钮，或跳转到资源页。
 - 当 `job_status=failed` 时，前端应展示失败原因并允许用户重试。
+- 任务尚未完成时，`published > 0` 表示已有审核通过资源可立即通过资源接口读取；不必等待整批结束。
 
 ### 8.3 `GET /api/generate/jobs`
 
@@ -338,6 +345,9 @@
 - `run_id`：可选，仅查看某一次生成任务的结果
 - `resource_type`：可选
 - `difficulty`：可选
+- `page`：可选，传入后启用分页，从 1 开始
+- `page_size`：分页大小，默认 20，最大 100
+- `summary_only`：为 `true` 时省略 `content_text` 和 `file_path`，用于资源目录与轮询
 
 返回字段：
 
@@ -357,7 +367,12 @@
 - `knowledge_points`
 - `source_refs`
 - `review_status`
+- `publication_status`
 - `run_id`
+- `batch_id`
+- `resource_spec_id`
+- `resource_family_id`
+- `representation`：`text`
 - `exercise_items`
 
 资源列表语义说明：
@@ -365,6 +380,8 @@
 - `resources` 表示“该学习者已经生成并入库的资源记录”。
 - 它不是知识库原始文档列表，而是面向用户交付的学习资源列表。
 - 同一次生成任务产出的多个资源，会通过同一个 `run_id` 关联起来。
+- 默认资源列表只返回已经发布的资源；草稿、返工中、拒绝和人工审核资源不可预览。
+- 实操指南以审核后的 Markdown 文本形式提供阅读。
 - `source_refs[].score` 是 0 到 1 的最终相关度；精排可用时为 CrossEncoder logits 经 sigmoid 映射后的分数，降级时为归一化 RRF 分数，数值越大排名越靠前。
 - `source_refs[].metadata.retrieval_method` 正常为 `hybrid_rrf_cross_encoder`，精排关闭或不可用时回退为 `hybrid_rrf`；`retrieval_channels` 标识片段来自 `vector`、`bm25` 或两路共同召回。
 - `source_refs[].metadata` 保留 `vector_rank`、`vector_score`、`lexical_rank`、`lexical_score`、`hybrid_rank`、`hybrid_score`、`rerank_rank`、`rerank_raw_score`、`rerank_score`、`reranker_model`、`rerank_latency_ms` 和 `rerank_candidate_count`，用于检索审计和消融评测。
@@ -379,6 +396,14 @@
 
 - 只有文件型资源才能下载。
 - 如果资源只有 `content_text`、没有 `file_path`，则该接口会返回 404。
+
+### 9.3 `GET /api/resources/items/{resource_id}`
+
+用途：读取一个已发布资源的完整正文、执行信息与审核摘要。未发布资源统一返回 404，避免草稿被预览。
+
+### 9.4 `GET /api/resources/items/{resource_id}/preview`
+
+用途：读取已发布实操指南的安全 HTML 片段。后端会重新执行最小清洗，并验证 HTML 与规范文本的 family、源资源 ID、源版本和 hash；不一致时返回 409“互动版本正在更新”。非 HTML 或未发布资源返回 404。
 
 ## 10. 学习历史接口
 
@@ -553,6 +578,8 @@ Job 已 queued 但 AgentRun 尚未创建时仍返回 HTTP 200 snapshot：`job_st
 
 SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模型响应、完整 Evidence/Claim、资源正文、画像、查询、密钥、DSN、绝对路径或 Provider 原始异常。详情继续使用 `/timeline`、`/evidence`、`/claims` 和资源 API。
 
+资源级事件可额外包含以下公开字段：`resource_spec_id`、`resource_family_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`resource_id`、`review_id`、`agent_name`、`prompt_version`、`artifact_format`、`validation_status`。客户端必须忽略未知新增字段，并按 `sequence`/`event_id` 去重。
+
 ## 12. 前端调用约定
 
 - 用户资料页：
@@ -571,6 +598,12 @@ SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模�
   `GET /api/generate/jobs/{run_id}`
 - 任务完成后查看资源：
   `GET /api/resources/{learner_id}?run_id={run_id}`
+- 运行中读取已发布资源摘要：
+  `GET /api/resources/{learner_id}?run_id={run_id}&page=1&page_size=100&summary_only=true`
+- 单资源正文：
+  `GET /api/resources/items/{resource_id}`
+- 互动实操预览：
+  `GET /api/resources/items/{resource_id}/preview`
 - 任务级测评加载：
   `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
 - 任务级测评提交：
@@ -706,5 +739,30 @@ Invoke-RestMethod -Method Post `
 ## 15. P0-09 接口验收口径
 
 P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py` 组合现有 Generate Job、Run/Timeline/Evidence/Claims、Formal Feedback Attempt、Report 与 SSE 契约，输出脱敏 machine-readable manifest。`--offline` 使用 FakeGateway/固定 fixture；`--runtime` 只读验证真实 FastAPI、默认 KB、数据库与前端契约；`--live` 只有显式环境开关时才调用 Provider。
+
+## 16. Tutor API
+
+Tutor 路由均位于私有 `/api/tutor` 前缀下，复用当前登录用户到 learner 的访问校验。跨用户资源、Run、Batch 或会话统一按现有防枚举语义返回 404。
+
+| Method | Path | 用途 | 成功状态 |
+|---|---|---|---|
+| `POST` | `/api/tutor/sessions` | 创建或恢复匹配的活动会话 | 201 |
+| `GET` | `/api/tutor/sessions` | 按 learner/source/context 查询安全会话摘要 | 200 |
+| `GET` | `/api/tutor/sessions/{session_id}` | 恢复会话与安全轮次 | 200 |
+| `POST` | `/api/tutor/sessions/{session_id}/turns` | 提交一轮用户求助 | 200 |
+| `POST` | `/api/tutor/sessions/{session_id}/close` | 幂等关闭会话 | 200 |
+
+创建请求只接受 `learner_id`、`source_type`、`resource_id/run_id/batch_id`、`context_type` 和可选 `question_id`。资源页使用 `source_type=resource`；旧任务级调用继续使用 `source_type=run`；批次测评使用 `source_type=batch`，服务端从该批次内解析题目对应资源和真实 Run。`question_help` 的题干、知识点和难度由后端按 `question_id` 解析，客户端不能提交 expected answer 或 hint level。会话列表可用 `resource_id`、`run_id` 或 `batch_id` 过滤。
+
+Turn 请求为：
+
+```json
+{
+  "client_message_id": "web-stable-message-id",
+  "message": "我理解召回，但不懂为什么还需要 rerank"
+}
+```
+
+响应包含 `turn_id`、`sequence`、`hint_level`、`pedagogy_action`、`message`、`follow_up_question`、`grounding_status`、`grounding_source`、`source_refs` 和脱敏的模型调用摘要。相同 `client_message_id` 与相同 payload 返回已持久化结果；不同 payload 返回 409 `TUTOR_IDEMPOTENCY_CONFLICT`。Evidence 不足返回 HTTP 200 和 `grounding_status=evidence_insufficient`；会话不存在为 404，关闭会话继续提交为 409，模型超时/认证/请求或结构化输出失败沿用 LLMGateway 的脱敏 503 语义。响应不包含 raw prompt、raw provider response、Chain-of-Thought、密钥或异常堆栈。
 
 当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。

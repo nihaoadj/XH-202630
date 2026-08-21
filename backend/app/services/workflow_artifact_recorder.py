@@ -13,6 +13,7 @@ from app.models.persistence import WorkflowEventType, canonical_hash
 from app.models.schemas import LearningResource
 from app.agents.validators import validate_resource_lineage
 from app.db.audit.base import PersistenceConflict
+from app.db.resource.models import ResourceExecutionRecord, ResourceSpecRecord
 
 
 def _event_id(run_id: str, event_type: str, subject_id: str) -> str:
@@ -38,10 +39,14 @@ class WorkflowArtifactRecorder:
 
     def record(self, state: dict[str, Any], trace_item: dict[str, Any]) -> None:
         run_id = str(state["run_id"])
+        for raw_spec in state.get("resource_specs", []):
+            payload = dict(raw_spec)
+            payload["run_id"] = run_id
+            self.resource_repository.save_spec(ResourceSpecRecord.model_validate(payload))
         node_name = str(
-            trace_item.get("agent_name")
+            trace_item.get("node_name")
             or state.get("current_node")
-            or trace_item.get("node_name")
+            or trace_item.get("agent_name")
             or "unknown"
         )
         resources = {
@@ -50,6 +55,14 @@ class WorkflowArtifactRecorder:
             if isinstance(resource, LearningResource)
         }
         if node_name == "generator":
+            immediate_resource_events = {
+                event.event_id
+                for event in self.audit_repository.list_events(run_id, limit=10_000)
+                if event.event_type in {
+                    WorkflowEventType.RESOURCE_GENERATED,
+                    WorkflowEventType.RESOURCE_HUMAN_REVIEW_REQUESTED,
+                }
+            }
             for resource_id in trace_item.get("resource_ids", []):
                 resource = resources.get(str(resource_id))
                 if resource is None:
@@ -63,11 +76,34 @@ class WorkflowArtifactRecorder:
                 for stored in self.resource_repository.list_by_run(run_id):
                     if (
                         stored.resource_id != resource.resource_id
-                        and stored.resource_type == resource.resource_type
+                        and (
+                            stored.resource_spec_id == resource.resource_spec_id
+                            and stored.representation == resource.representation
+                            if resource.resource_spec_id
+                            else stored.resource_spec_id is None
+                            and stored.resource_type == resource.resource_type
+                        )
                         and stored.version == resource.version
-                    ):
+                ):
                         raise PersistenceConflict("duplicate resource version in run")
                 self._save_resource(resource, state, trace_item)
+                # Resource workers may have already persisted and announced this
+                # exact resource while their peers were still running.  Keep the
+                # merge-boundary write idempotent, but do not publish a second
+                # "generated" event when that happened.
+                already_announced = any(
+                    event_id in immediate_resource_events
+                    for event_id in (
+                        _event_id(run_id, WorkflowEventType.RESOURCE_GENERATED.value, resource.resource_id),
+                        _event_id(
+                            run_id,
+                            WorkflowEventType.RESOURCE_HUMAN_REVIEW_REQUESTED.value,
+                            resource.resource_id,
+                        ),
+                    )
+                )
+                if already_announced:
+                    continue
                 self._append(
                     run_id,
                     WorkflowEventType.RESOURCE_VERSION_CREATED,
@@ -76,15 +112,20 @@ class WorkflowArtifactRecorder:
                     status=resource.review_status,
                     payload={
                         "resource_ids": [str(resource_id)],
-                        "resource_type": resource.resource_type,
                         "version": resource.version,
                         "parent_resource_id": resource.parent_resource_id,
+                        **self._resource_event_payload(resource, state, "generated"),
                     },
                 )
+            self._persist_executions(state, run_id)
             return
 
-        if node_name == "reviewer":
+        # LangGraph's topology uses ``review`` while older trace records used
+        # ``reviewer``. Both identify the same reviewer Agent and must persist
+        # the authoritative text review before finalization reconciles it.
+        if node_name in {"review", "reviewer"}:
             review = state.get("review_result") or {}
+            resource_reviews = state.get("resource_review_results") or {}
             decision = str(review.get("decision") or "human_review")
             status_by_decision = {
                 "approve": "approved",
@@ -101,34 +142,60 @@ class WorkflowArtifactRecorder:
                 resource = resources.get(str(resource_id))
                 if resource is None:
                     continue
-                review_id = self.audit_repository.save_review(str(resource_id), review, run_id)
+                item_review = dict(resource_reviews.get(str(resource_id)) or review)
+                item_decision = str(item_review.get("decision") or decision)
+                # Keep the review id allocated by the reviewer.  The per-resource
+                # result normally does not carry the aggregate ``review_ids`` map,
+                # so passing it as-is makes SQLAuditRepository generate a second,
+                # random id and finalization cannot reconcile the recorder-owned
+                # review.  Supplying the single-resource map makes persistence
+                # idempotent.
+                item_review["review_ids"] = {str(resource_id): str(review_id)}
+                persisted_review_id = self.audit_repository.save_review(
+                    str(resource_id), item_review, run_id
+                )
                 updated = resource.model_copy(
                     update={
-                        "review_id": review_id,
+                        "review_id": persisted_review_id,
                         "review_status": (
-                            "revision_requested"
-                            if decision == "revise" and resource.resource_type in revision_targets
-                            else "pending_review"
-                            if decision == "revise"
-                            else status_by_decision.get(decision, "human_review")
+                            status_by_decision.get(item_decision, "human_review")
                         ),
-                        "hallucination_rate": review.get("hallucination_score"),
-                        "difficulty_match": review.get("difficulty_match"),
+                        "hallucination_rate": item_review.get("hallucination_score"),
+                        "difficulty_match": item_review.get("difficulty_match"),
                     }
                 )
                 self._save_resource(updated, state, trace_item)
                 self._append(
                     run_id,
                     WorkflowEventType.REVIEW_PERSISTED,
-                    str(review_id),
+                    str(persisted_review_id),
                     trace_item,
-                    status=decision,
+                    status=item_decision,
                     payload={
                         "resource_ids": [str(resource_id)],
-                        "review_ids": [str(review_id)],
+                        "review_ids": [str(persisted_review_id)],
                         "revision_count": int(review.get("revision_count", 0)),
+                        **self._resource_event_payload(
+                            updated,
+                            state,
+                            status_by_decision.get(item_decision, "human_review"),
+                        ),
                     },
                 )
+                if updated.publication_status == "published":
+                    self._append(
+                        run_id,
+                        WorkflowEventType.RESOURCE_PUBLISHED,
+                        updated.resource_id,
+                        trace_item,
+                        status="published",
+                        payload={
+                            "resource_ids": [updated.resource_id],
+                            "version": updated.version,
+                            **self._resource_event_payload(updated, state, "approved"),
+                        },
+                    )
+            self._persist_executions(state, run_id)
             return
 
         if node_name == "claim_extractor":
@@ -158,6 +225,7 @@ class WorkflowArtifactRecorder:
                 status=str(state.get("claim_check_status")),
                 payload={"claim_ids": claim_ids, "claim_count": len(claim_ids)},
             )
+            self._persist_executions(state, run_id)
             return
 
         if node_name == "claim_judge":
@@ -170,6 +238,7 @@ class WorkflowArtifactRecorder:
                     status=str(state.get("claim_check_status")),
                     payload={"claim_count": len(state.get("extracted_claims", []))},
                 )
+                self._persist_executions(state, run_id)
                 return
             claims = [ClaimRecord.model_validate(item) for item in state.get("extracted_claims", [])]
             judgements = [ClaimJudgement.model_validate(item) for item in state.get("claim_judgements", [])]
@@ -200,6 +269,7 @@ class WorkflowArtifactRecorder:
                 status="completed",
                 payload={"resource_metrics": state.get("claim_metrics", {})},
             )
+            self._persist_executions(state, run_id)
             return
 
         if node_name == "prepare_revision":
@@ -214,9 +284,12 @@ class WorkflowArtifactRecorder:
                     "revision_count": int(state.get("revision_count", 0)),
                 },
             )
+            self._persist_executions(state, run_id)
             return
 
         if node_name in {
+            "decide",
+            "finalize",
             "supervisor",
             "claim_supervisor",
             "finalize_draft",
@@ -224,15 +297,134 @@ class WorkflowArtifactRecorder:
         }:
             for resource in resources.values():
                 self._save_resource(resource, state, trace_item)
-                if resource.publication_status == "published":
+                already_published = any(
+                    event.event_type == WorkflowEventType.RESOURCE_PUBLISHED
+                    and resource.resource_id in event.payload.get("resource_ids", [])
+                    for event in self.audit_repository.list_events(run_id, limit=10000)
+                )
+                if resource.publication_status == "published" and not already_published:
                     self._append(
                         run_id,
                         WorkflowEventType.RESOURCE_PUBLISHED,
                         resource.resource_id,
                         trace_item,
                         status="published",
-                        payload={"resource_ids": [resource.resource_id], "version": resource.version},
+                        payload={
+                            "resource_ids": [resource.resource_id],
+                            "version": resource.version,
+                            **self._resource_event_payload(resource, state, "approved"),
+                        },
                     )
+            self._persist_executions(state, run_id)
+
+    def record_resource_queued(
+        self,
+        state: dict[str, Any],
+        *,
+        spec: ResourceSpecRecord,
+        execution: dict[str, Any],
+        trace_item: dict[str, Any],
+    ) -> None:
+        """Publish a durable queued event before an individual Worker runs."""
+
+        run_id = str(state["run_id"])
+        self.resource_repository.save_spec(spec)
+        subject = f"{spec.resource_spec_id}:{execution.get('representation', 'text')}:{execution.get('attempt', 1)}"
+        self._append(run_id, WorkflowEventType.RESOURCE_EXECUTION_QUEUED, subject, trace_item,
+                     status="queued", payload={
+                         "resource_spec_id": spec.resource_spec_id,
+                         "resource_family_id": spec.resource_family_id,
+                         "resource_type": spec.resource_type,
+                         "representation": execution.get("representation", "text"),
+                         "resource_execution_state": "queued",
+                         "attempt": execution.get("attempt", 1),
+                         "agent_name": execution.get("agent_name"),
+                         "prompt_version": execution.get("prompt_version"),
+                         "artifact_format": execution.get("artifact_format"),
+                     })
+
+    def record_resource_generated(
+        self,
+        state: dict[str, Any],
+        *,
+        resource: LearningResource,
+        execution: dict[str, Any],
+        trace_item: dict[str, Any],
+    ) -> None:
+        """Persist one completed resource and event before its peers finish."""
+
+        run_id = str(state["run_id"])
+        self._save_resource(resource, state, trace_item)
+        self._upsert_execution(execution, run_id)
+        execution_state = str(execution.get("resource_execution_state") or "generated")
+        event_type = (WorkflowEventType.RESOURCE_HUMAN_REVIEW_REQUESTED
+                      if execution_state == "human_review"
+                      else WorkflowEventType.RESOURCE_GENERATED)
+        event_state = "human_review" if execution_state == "human_review" else "generated"
+        self._append(run_id, event_type, resource.resource_id, trace_item,
+                     status=event_state,
+                     payload=self._resource_event_payload(
+                         resource, {**state, "resource_executions": [execution]}, event_state))
+
+    def _persist_executions(self, state: dict[str, Any], run_id: str) -> None:
+        """Persist execution projections only after their resource FK targets exist.
+
+        ``resource_executions.resource_id`` references ``generated_resources``.
+        A resource worker may return a degraded fallback, but that fallback is
+        still a durable resource and must be saved before its execution record.
+        Keeping this ordering at the workflow merge boundary makes SQLite's FK
+        enforcement compatible with both successful and degraded generation.
+        """
+
+        for raw_execution in state.get("resource_executions", []):
+            self._upsert_execution(raw_execution, run_id)
+
+    def _upsert_execution(self, raw_execution: dict[str, Any], run_id: str) -> None:
+        payload = dict(raw_execution)
+        payload["run_id"] = run_id
+        payload["state"] = payload.pop(
+            "resource_execution_state",
+            payload.get("state", "queued"),
+        )
+        self.resource_repository.upsert_execution(
+            ResourceExecutionRecord.model_validate(payload)
+        )
+
+    @staticmethod
+    def _resource_event_payload(
+        resource: LearningResource,
+        state: dict[str, Any],
+        execution_state: str,
+    ) -> dict[str, Any]:
+        resource_representation = getattr(
+            resource.representation,
+            "value",
+            resource.representation,
+        )
+        execution = next(
+            (
+                item
+                for item in state.get("resource_executions", [])
+                if str(item.get("resource_spec_id") or "") == str(resource.resource_spec_id or "")
+                and str(item.get("representation") or "text") == str(resource_representation or "text")
+            ),
+            {},
+        )
+        return {
+            "resource_id": resource.resource_id,
+            "resource_spec_id": resource.resource_spec_id,
+            "resource_family_id": resource.resource_family_id,
+            "resource_type": resource.resource_type,
+            "representation": resource_representation,
+            "resource_execution_state": execution_state,
+            "attempt": execution.get("attempt", 0),
+            "agent_name": execution.get("agent_name"),
+            "prompt_version": execution.get("prompt_version"),
+            "artifact_format": execution.get("artifact_format"),
+            "validation_status": execution.get("validation_status"),
+            "publication_status": resource.publication_status,
+            "review_id": resource.review_id,
+        }
 
     def _save_resource(
         self,

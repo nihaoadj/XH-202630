@@ -43,3 +43,73 @@ export function formatDateTime(value) {
     minute: '2-digit',
   }).format(date)
 }
+
+export const RESOURCE_EXECUTION_STATE_META = Object.freeze({
+  queued: { label: '等待生成', type: 'info', order: 10 },
+  generating: { label: '生成中', type: 'warning', order: 20 },
+  generated: { label: '已生成', type: 'primary', order: 30 },
+  reviewing: { label: '审核中', type: 'warning', order: 40 },
+  revision_requested: { label: '返工中', type: 'warning', order: 45 },
+  claim_checking: { label: 'Claim 审核中', type: 'warning', order: 50 },
+  approved: { label: '已批准', type: 'success', order: 60 },
+  human_review: { label: '待人工复核', type: 'warning', order: 70 },
+  failed: { label: '失败', type: 'danger', order: 80 },
+})
+
+export function resourceExecutionStateMeta(state) {
+  return RESOURCE_EXECUTION_STATE_META[state] || {
+    label: state || '等待处理',
+    type: 'info',
+    order: 0,
+  }
+}
+
+export function resourceRepresentationLabel(representation) {
+  return representation === 'text' ? '文本' : '资源'
+}
+
+export function resourceExecutionKey(execution) {
+  return `${execution?.resource_spec_id || 'unknown'}:${execution?.representation || 'text'}`
+}
+
+export function normalizeResourceProgressSummary(summary, executions = []) {
+  const counts = summary?.state_counts || summary?.counts || {}
+  const count = (name) => Number(counts[name] ?? summary?.[`${name}_count`] ?? 0) || 0
+  const reportedTotal = Number(
+    summary?.total
+      ?? summary?.total_count
+      ?? summary?.total_resources
+      ?? summary?.total_executions
+      ?? executions.length,
+  ) || 0
+  // A queued snapshot can carry an initial total=0 while its first execution
+  // has already arrived over SSE. Prefer the concrete execution list in that
+  // transient state so the UI never shows the misleading "0/0" badge.
+  const logicalExecutions = new Map()
+  for (const execution of executions) {
+    const key = execution?.resource_spec_id || `${execution?.resource_type || 'resource'}:${execution?.representation || 'text'}`
+    const values = logicalExecutions.get(key) || []
+    values.push(execution?.resource_execution_state || 'queued')
+    logicalExecutions.set(key, values)
+  }
+  // A practical guide's canonical text remains a single resource artifact.
+  // for user-facing progress. Prefer that logical count whenever events exist.
+  const total = logicalExecutions.size || (reportedTotal > 0 ? reportedTotal : executions.length)
+  const approved = count('approved')
+  const failed = count('failed')
+  const humanReview = count('human_review')
+  const completed = logicalExecutions.size
+    ? [...logicalExecutions.values()].filter((states) => states.every((state) => (
+      ['approved', 'failed', 'human_review'].includes(state)
+    ))).length
+    : Number(summary?.completed_count ?? summary?.completed ?? approved + failed + humanReview) || 0
+  return {
+    total,
+    approved,
+    failed,
+    human_review: humanReview,
+    completed: Math.min(total || completed, completed),
+    state_counts: { ...counts },
+    can_finalize: Boolean(summary?.can_finalize),
+  }
+}

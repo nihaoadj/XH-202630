@@ -5,12 +5,14 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import declarative_base
 
@@ -70,21 +72,40 @@ class GeneratedResourceORM(Base):
     """
     __tablename__ = "generated_resources"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_generated_resources_spec_representation_version",
+            "run_id",
+            "resource_spec_id",
+            "representation",
+            "version",
+            unique=True,
+            sqlite_where=text("resource_spec_id IS NOT NULL"),
+            postgresql_where=text("resource_spec_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_generated_resources_legacy_run_type_version",
             "run_id",
             "resource_type",
             "version",
-            name="uq_generated_resources_run_type_version",
+            unique=True,
+            sqlite_where=text("resource_spec_id IS NULL"),
+            postgresql_where=text("resource_spec_id IS NULL"),
         ),
     )
 
     resource_id = Column(String(64), primary_key=True, index=True, comment="资源唯一标识")
     run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
     batch_id = Column(String(128), nullable=True, index=True, comment="资源批次标识")
+    resource_spec_id = Column(String(64), nullable=True, index=True, comment="Run 内资源规格 ID")
+    resource_family_id = Column(String(64), nullable=True, index=True, comment="同一语义资源族 ID")
+    representation = Column(
+        String(16), nullable=False, default="text", server_default="text",
+        index=True, comment="资源表示：text",
+    )
     generation_step_id = Column(String(128), ForeignKey("agent_steps.step_id"), nullable=True, index=True)
     learner_id = Column(String(64), nullable=False, index=True, comment="学习者ID")
     topic = Column(String(256), nullable=False, comment="学习主题")
-    resource_type = Column(String(32), nullable=False, comment="资源类型：讲义/实操指南/分阶测试题/ppt/video/pdf/audio/image")
+    resource_type = Column(String(32), nullable=False, comment="资源类型：讲义/实操指南/分阶测试题/复习清单/案例分析")
     difficulty = Column(String(16), nullable=False, comment="难度等级")
     storage_type = Column(String(16), nullable=False, default="text", comment="存储方式：text | file")
     content_text = Column(String, nullable=True, comment="文本内容或文件摘要")
@@ -113,6 +134,93 @@ class GeneratedResourceORM(Base):
     )
     exercise_items = Column(JSON, default=list, comment="练习项")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+
+
+class TutorSessionORM(Base):
+    """Interactive Tutor session state; isolated from formal learner mutations."""
+
+    __tablename__ = "tutor_sessions"
+
+    session_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    learner_id = Column(
+        String(64),
+        ForeignKey("learner_profiles.learner_id"),
+        nullable=False,
+        index=True,
+    )
+    source_type = Column(String(32), nullable=False)
+    source_resource_id = Column(
+        String(128),
+        ForeignKey("generated_resources.resource_id"),
+        nullable=True,
+        index=True,
+    )
+    source_run_id = Column(
+        String(128),
+        ForeignKey("agent_runs.run_id"),
+        nullable=True,
+        index=True,
+    )
+    source_batch_id = Column(String(128), nullable=True, index=True)
+    knowledge_base_id = Column(String(128), nullable=True, index=True)
+    context_type = Column(String(32), nullable=False, index=True)
+    question_id = Column(String(128), nullable=True, index=True)
+    skill_node_id = Column(String(128), nullable=True)
+    path_node_id = Column(String(128), nullable=True)
+    knowledge_point = Column(String(256), nullable=True)
+    status = Column(String(32), nullable=False, default="active", index=True)
+    current_hint_level = Column(Integer, nullable=False, default=0)
+    turn_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class TutorTurnORM(Base):
+    """Auditable, idempotent Tutor interaction without raw prompts/model bodies."""
+
+    __tablename__ = "tutor_turns"
+    __table_args__ = (
+        UniqueConstraint("session_id", "sequence", name="uq_tutor_turn_sequence"),
+        UniqueConstraint(
+            "session_id",
+            "client_message_id",
+            name="uq_tutor_turn_client_message",
+        ),
+    )
+
+    turn_id = Column(String(128), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    session_id = Column(
+        String(128),
+        ForeignKey("tutor_sessions.session_id"),
+        nullable=False,
+        index=True,
+    )
+    sequence = Column(Integer, nullable=False)
+    client_message_id = Column(String(128), nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    user_message = Column(Text, nullable=False)
+    assistant_message = Column(Text, nullable=False)
+    pedagogy_action = Column(String(32), nullable=False)
+    hint_level = Column(Integer, nullable=False)
+    follow_up_question = Column(Text, nullable=True)
+    target_knowledge_points = Column(JSON, nullable=False, default=list)
+    grounding_status = Column(String(32), nullable=False)
+    grounding_source = Column(String(32), nullable=False)
+    evidence_refs = Column(JSON, nullable=False, default=list)
+    retrieval_query_hash = Column(String(64), nullable=True)
+    retrieval_status = Column(String(64), nullable=True)
+    llm_call_id = Column(String(128), nullable=True, index=True)
+    model_name = Column(String(128), nullable=True)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    llm_duration_ms = Column(Integer, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0)
+    error_code = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
 
 
 class FeedbackRecordORM(Base):
@@ -153,6 +261,71 @@ class GenerationJobORM(Base):
     error_message = Column(String(512), nullable=True, comment="错误信息")
     superseded_by_run_id = Column(String(128), nullable=True, index=True, comment="替代该失败任务的新任务ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    started_at = Column(DateTime(timezone=True), nullable=True, comment="开始时间")
+    finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
+
+
+class ResourceSpecORM(Base):
+    """一次 Run 中冻结的语义资源工作单元。"""
+
+    __tablename__ = "resource_specs"
+    __table_args__ = (
+        UniqueConstraint("run_id", "resource_spec_id", name="uq_resource_specs_run_spec"),
+        UniqueConstraint("run_id", "resource_type", name="uq_resource_specs_run_type"),
+    )
+
+    resource_spec_id = Column(String(64), primary_key=True)
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
+    resource_family_id = Column(String(64), nullable=False, index=True)
+    resource_type = Column(String(32), nullable=False)
+    learning_objective = Column(Text, nullable=False)
+    knowledge_points = Column(JSON, default=list)
+    evidence_ids = Column(JSON, default=list)
+    difficulty = Column(String(16), nullable=False)
+    representations = Column(JSON, default=list)
+    dependencies = Column(JSON, default=list)
+    display_order = Column(Integer, nullable=False, default=0)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ResourceExecutionORM(Base):
+    """资源表示执行单元的最新状态；历史变化由工作流事件保存。"""
+
+    __tablename__ = "resource_executions"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "resource_spec_id",
+            "representation",
+            name="uq_resource_executions_run_spec_representation",
+        ),
+    )
+
+    execution_id = Column(String(128), primary_key=True)
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=False, index=True)
+    resource_spec_id = Column(
+        String(64),
+        ForeignKey("resource_specs.resource_spec_id"),
+        nullable=False,
+        index=True,
+    )
+    resource_type = Column(String(32), nullable=False)
+    representation = Column(String(16), nullable=False, default="text")
+    worker_step_id = Column(String(64), nullable=True, index=True)
+    state = Column(String(32), nullable=False, default="queued", index=True)
+    attempt = Column(Integer, nullable=False, default=0)
+    resource_id = Column(String(64), ForeignKey("generated_resources.resource_id"), nullable=True, index=True)
+    review_id = Column(String(128), nullable=True, index=True)
+    error_code = Column(String(128), nullable=True)
+    agent_name = Column(String(128), nullable=False)
+    prompt_version = Column(String(64), nullable=False)
+    artifact_format = Column(String(64), nullable=False)
+    validation_status = Column(String(32), nullable=False, default="pending")
+    renderer_version = Column(String(64), nullable=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     started_at = Column(DateTime(timezone=True), nullable=True, comment="开始执行时间")
     finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
 

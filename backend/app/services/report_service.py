@@ -1,4 +1,5 @@
 from app.db.feedback.base import BaseFeedbackRepository
+from app.db.generation_job.base import BaseGenerationJobRepository
 from app.db.resource.base import BaseResourceRepository
 from app.models.schemas import LearnerProfile
 from app.db.feedback_loop.base import BaseFeedbackLoopRepository
@@ -15,16 +16,18 @@ class ReportService:
         resource_repo: BaseResourceRepository,
         feedback_repo: BaseFeedbackRepository,
         feedback_loop_repo: BaseFeedbackLoopRepository | None = None,
+        generation_job_repo: BaseGenerationJobRepository | None = None,
     ):
         self.resource_repo = resource_repo
         self.feedback_repo = feedback_repo
         self.feedback_loop_repo = feedback_loop_repo
+        self.generation_job_repo = generation_job_repo
 
     def build_report(self, profile: LearnerProfile) -> dict:
         """构建学情报告"""
         topics = list(profile.theory_scores.keys())
         scores = list(profile.theory_scores.values())
-        resources = self.resource_repo.list_by_learner(profile.learner_id)
+        resources = self._visible_resources(profile.learner_id)
         feedback = self.feedback_repo.list_by_learner(profile.learner_id)
         weak_points = list(dict.fromkeys(profile.weak_points))
         strong_points = list(dict.fromkeys(profile.strong_points))
@@ -35,6 +38,25 @@ class ReportService:
         )
         attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10) if self.feedback_loop_repo else []
         loop_results = self.feedback_loop_repo.list_results(profile.learner_id, 10) if self.feedback_loop_repo else []
+        formal_feedback = [
+            {
+                "feedback_id": item.attempt.attempt_id,
+                "learner_id": item.attempt.learner_id,
+                "resource_id": item.attempt.source_resource_id,
+                "correct_rate": item.attempt.overall_score,
+                "decision": item.decision.action.value,
+                "decision_reason": item.decision.decision_reason,
+                "next_action": item.decision.action.value,
+                "recommended_topics": item.decision.target_knowledge_point_ids,
+                "created_at": item.attempt.created_at,
+            }
+            for item in loop_results
+        ]
+        report_feedback = formal_feedback or feedback
+        report_average = (
+            sum(item["correct_rate"] for item in formal_feedback) / len(formal_feedback)
+            if formal_feedback else avg_feedback
+        )
         path = self.feedback_loop_repo.get_current_path(profile.learner_id) if self.feedback_loop_repo else None
         versions = self.feedback_loop_repo.list_profile_versions(profile.learner_id, 10) if self.feedback_loop_repo else []
 
@@ -121,28 +143,39 @@ class ReportService:
             },
             "feedback_trend": [
                 {
-                    "resource_id": item.resource_id,
-                    "correct_rate": item.correct_rate,
-                    "decision": item.decision,
-                    "created_at": item.created_at.isoformat() if item.created_at else None,
+                    "resource_id": item["resource_id"] if isinstance(item, dict) else item.resource_id,
+                    "correct_rate": item["correct_rate"] if isinstance(item, dict) else item.correct_rate,
+                    "decision": item["decision"] if isinstance(item, dict) else item.decision,
+                    "created_at": (
+                        item.get("created_at").isoformat() if isinstance(item, dict) and item.get("created_at")
+                        else item.created_at.isoformat() if not isinstance(item, dict) and item.created_at else None
+                    ),
                 }
-                for item in feedback[:10]
+                for item in report_feedback[:10]
             ],
             "metric_summary": {
                 "resource_count": len(resources),
-                "feedback_count": len(feedback),
-                "average_correct_rate": avg_feedback,
+                "feedback_count": len(report_feedback),
+                "average_correct_rate": report_average,
                 "weak_point_count": len(weak_points),
             },
-            "next_suggestions": weak_points[:3] or profile.last_feedback_summary.get("recommended_topics", []),
+            "next_suggestions": self._latest_feedback_suggestions(attempts, weak_points, profile),
             "recent_resources": resources[-5:],
-            "recent_feedback": feedback[:5],
+            "recent_feedback": report_feedback[:5],
             "profile_version": profile.profile_version,
             "knowledge_mastery": {
                 key: value.model_dump(mode="json") for key, value in profile.knowledge_states.items()
             },
             "current_learning_path": path.model_dump(mode="json") if path else None,
             "recent_attempts": [item.model_dump(mode="json") for item in attempts],
+            "feedback_analysis": [
+                {
+                    "attempt_id": item.attempt_id,
+                    **item.metadata["llm_analysis"],
+                }
+                for item in attempts
+                if isinstance(item.metadata.get("llm_analysis"), dict)
+            ],
             "recent_feedback_decisions": [
                 item.decision.model_dump(mode="json") for item in loop_results
             ],
@@ -179,3 +212,60 @@ class ReportService:
         if not values:
             return 0.0
         return sum(values) / len(values)
+
+    def _visible_resources(self, learner_id: str):
+        """Return the learner-facing projection, excluding superseded versions."""
+        resources = self.resource_repo.list_by_learner(learner_id)
+        if self.generation_job_repo is None:
+            return resources
+
+        jobs = self.generation_job_repo.list_by_learner(learner_id)
+        superseded_run_ids = {
+            job.run_id for job in jobs if job.superseded_by_run_id
+        }
+        published_types_by_run: dict[str, set[str]] = {}
+        for resource in resources:
+            published_types_by_run.setdefault(resource.run_id or "", set()).add(
+                resource.resource_type
+            )
+        latest_replacement_by_type = {}
+        for job in jobs:
+            if job.superseded_by_run_id:
+                continue
+            types = (job.request_payload.get("constraints") or {}).get(
+                "replacement_resource_types", [],
+            )
+            batch_id = job.batch_id or job.run_id
+            for resource_type in types:
+                # Replacement metadata is declarative. It becomes effective
+                # only when this Run actually published that resource type;
+                # an appended checklist or failed retry must never hide an
+                # earlier published assessment or lecture.
+                if resource_type not in published_types_by_run.get(job.run_id, set()):
+                    continue
+                key = (batch_id, resource_type)
+                current = latest_replacement_by_type.get(key)
+                if current is None or str(job.created_at or "") > str(current.created_at or ""):
+                    latest_replacement_by_type[key] = job
+
+        return [
+            resource
+            for resource in resources
+            if resource.run_id not in superseded_run_ids
+            and (
+                (replacement := latest_replacement_by_type.get(
+                    (resource.batch_id or resource.run_id, resource.resource_type),
+                )) is None
+                or resource.run_id == replacement.run_id
+            )
+        ]
+
+    @staticmethod
+    def _latest_feedback_suggestions(attempts, weak_points, profile) -> list[str]:
+        """Prefer bounded learner-facing analysis, while retaining a deterministic fallback."""
+        for attempt in attempts:
+            analysis = attempt.metadata.get("llm_analysis") if isinstance(attempt.metadata, dict) else None
+            suggestions = analysis.get("learner_suggestions") if isinstance(analysis, dict) else None
+            if isinstance(suggestions, list) and suggestions:
+                return [str(item) for item in suggestions[:6] if str(item).strip()]
+        return weak_points[:3] or profile.last_feedback_summary.get("recommended_topics", [])

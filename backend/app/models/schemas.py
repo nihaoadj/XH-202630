@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -15,6 +16,61 @@ class ErrorResponse(BaseModel):
     status: str = Field(default="error", description="响应状态")
     message: str = Field(..., description="错误描述")
     detail: Optional[Any] = Field(default=None, description="错误详情")
+
+
+class ResourceRepresentation(str, Enum):
+    """A published resource's concrete presentation format."""
+
+    TEXT = "text"
+
+
+class ResourceExecutionState(str, Enum):
+    """Latest worker state for one resource representation."""
+
+    QUEUED = "queued"
+    GENERATING = "generating"
+    GENERATED = "generated"
+    REVIEWING = "reviewing"
+    REVISION_REQUESTED = "revision_requested"
+    CLAIM_CHECKING = "claim_checking"
+    APPROVED = "approved"
+    HUMAN_REVIEW = "human_review"
+    FAILED = "failed"
+
+
+class ResourceExecutionProgress(BaseModel):
+    """Public, redacted execution projection for one resource representation."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    resource_spec_id: str
+    resource_type: str
+    representation: ResourceRepresentation = ResourceRepresentation.TEXT
+    resource_execution_state: ResourceExecutionState = ResourceExecutionState.QUEUED
+    worker_step_id: Optional[str] = None
+    attempt: int = Field(default=0, ge=0)
+    resource_id: Optional[str] = None
+    review_id: Optional[str] = None
+    error_code: Optional[str] = None
+    agent_name: Optional[str] = None
+    prompt_version: Optional[str] = None
+    artifact_format: Optional[str] = None
+    validation_status: Optional[str] = None
+    renderer_version: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+class RunResourceProgressSummary(BaseModel):
+    """Aggregate resource execution status for one Run."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    total: int = Field(default=0, ge=0)
+    counts: Dict[str, int] = Field(default_factory=dict)
+    approved: int = Field(default=0, ge=0)
+    human_review: int = Field(default=0, ge=0)
+    failed: int = Field(default=0, ge=0)
+    published: int = Field(default=0, ge=0)
+    can_finalize: bool = False
+    items: List[ResourceExecutionProgress] = Field(default_factory=list)
 
 
 class ProfileStatusResponse(StatusResponse):
@@ -74,6 +130,8 @@ class LearnerProfile(BaseModel):
     learning_preferences: Optional[LearningPreferences] = Field(default=None, description="学习偏好")
     last_feedback_summary: Dict[str, Any] = Field(default_factory=dict, description="最近反馈摘要")
     profile_version: int = Field(default=1, ge=1, description="画像乐观并发版本")
+    created_at: Optional[datetime] = Field(default=None, description="画像创建时间")
+    updated_at: Optional[datetime] = Field(default=None, description="画像最近更新时间")
 
 
 class InitialProfileQuestionnaire(BaseModel):
@@ -189,7 +247,8 @@ class GenerateRequest(BaseModel):
     )
     include_review: bool = Field(default=True, description="是否进入审核")
     include_claim_check: bool = Field(default=False, description="是否进行 Claim 级审核")
-    max_iterations: int = Field(default=2, ge=0, le=3, description="最大业务返工次数")
+    # Initial generation plus one revision means at most two visible attempts.
+    max_iterations: int = Field(default=1, ge=0, le=3, description="最大业务返工次数")
     constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
 
     @field_validator("topic")
@@ -209,7 +268,13 @@ class GenerateRequest(BaseModel):
     @field_validator("resource_types")
     @classmethod
     def normalize_resource_types(cls, values: List[str]) -> List[str]:
-        normalized = [value.strip() for value in values if value and value.strip()]
+        from app.models.resource_types import canonical_resource_type
+
+        normalized = [
+            canonical_resource_type(value)
+            for value in values
+            if value and value.strip()
+        ]
         normalized = list(dict.fromkeys(normalized))
         if not normalized:
             raise ValueError("resource_types cannot be empty")
@@ -243,6 +308,9 @@ class GenerationJobStatusResponse(BaseModel):
     resource_ids: List[str] = Field(default_factory=list)
     error_message: Optional[str] = None
     superseded_by_run_id: Optional[str] = None
+    resource_progress_summary: RunResourceProgressSummary = Field(
+        default_factory=RunResourceProgressSummary
+    )
     request_payload: Dict[str, Any] = Field(default_factory=dict)
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
@@ -257,14 +325,22 @@ class GenerationJobListResponse(BaseModel):
 
 
 class ContinueResourceBatchRequest(BaseModel):
-    """在既有资源批次内继续补充资源。"""
+    """在既有资源批次内追加或替换指定资源。"""
 
     learner_id: str = Field(min_length=1)
     resource_types: List[str] = Field(min_length=1)
     instructions: Optional[str] = Field(default=None, max_length=2000)
     source_run_id: Optional[str] = Field(
         default=None,
-        description="可选：明确复用该生成任务的原始请求，用于失败任务重试",
+        description="可选：明确复用该生成任务的原始请求",
+    )
+    replace_source_run: bool = Field(
+        default=False,
+        description="完整批次重生成时替代源运行；单项重生成保持同一批次而不替代其他资源",
+    )
+    replace_existing_types: bool = Field(
+        default=False,
+        description="在当前批次中用本次产物替换相同资源类型的已发布版本",
     )
 
     @field_validator("resource_types")
@@ -352,6 +428,9 @@ class LearningResource(BaseModel):
     published_at: Optional[datetime] = None
     run_id: Optional[str] = None
     batch_id: Optional[str] = None
+    resource_spec_id: Optional[str] = None
+    resource_family_id: Optional[str] = None
+    representation: ResourceRepresentation = ResourceRepresentation.TEXT
     claim_count: Optional[int] = None
     legacy_reviewer_score: Optional[float] = None
     claim_hallucination_rate: Optional[float] = None
@@ -628,6 +707,7 @@ class ReportResponse(BaseModel):
     knowledge_mastery: Dict[str, Any] = Field(default_factory=dict)
     current_learning_path: Optional[Dict[str, Any]] = None
     recent_attempts: List[Dict[str, Any]] = Field(default_factory=list)
+    feedback_analysis: List[Dict[str, Any]] = Field(default_factory=list)
     recent_feedback_decisions: List[Dict[str, Any]] = Field(default_factory=list)
     recent_knowledge_state_mutations: List[Dict[str, Any]] = Field(default_factory=list)
     recent_followup_runs: List[Dict[str, Any]] = Field(default_factory=list)
@@ -666,9 +746,31 @@ class RunEvaluationSubmitResponse(BaseModel):
 
 class ResourceListResponse(BaseModel):
     """生成资源列表响应"""
+    schema_version: Literal["1.0"] = "1.0"
     learner_id: str
     total: int
     resources: List[LearningResource]
+    page: Optional[int] = Field(default=None, ge=1)
+    page_size: Optional[int] = Field(default=None, ge=1)
+    has_next: bool = False
+    summary_only: bool = False
+
+
+class ResourceDetail(LearningResource):
+    """Authorized resource detail with route and review metadata."""
+
+    status: str = "unpublished"
+    is_published: bool = False
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    execution: Optional[ResourceExecutionProgress] = None
+    review_summary: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ResourceDetailResponse(BaseModel):
+    """Envelope for a single authorized published resource."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    resource: ResourceDetail
 
 
 class EvaluationSummary(BaseModel):
