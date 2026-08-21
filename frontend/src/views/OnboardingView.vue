@@ -1710,5 +1710,13 @@ onMounted(async () => {
   .existing-direction-control { width: 100%; align-items: stretch; flex-direction: column; }
   .existing-direction-control :deep(.el-select) { width: 100%; }
 }
+
+/* Use the available desktop width before adding a second row of domains.
+   This keeps the compact first step inside its fixed-height workspace. */
+@media (min-width: 1181px) {
+  .domain-stage-card .domain-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
 </style>
 
