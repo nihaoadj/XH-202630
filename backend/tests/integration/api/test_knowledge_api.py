@@ -91,6 +91,7 @@ def test_knowledge_and_diagnosis_endpoints_keep_answers_on_server():
     direction_ids = {item["learning_direction_id"] for item in directions_response.json()["directions"]}
     assert "rag_engineering_training" in direction_ids
     assert "demo_industrial_internet" not in direction_ids
+    assert "model_evaluation_safety" not in direction_ids
     domains_response = client.get("/api/knowledge/domains")
     assert domains_response.status_code == 200
     domains = domains_response.json()["domains"]
