@@ -168,7 +168,8 @@ async function handleLogout() {
 }
 
 .app-shell.is-sidebar-collapsed {
-  --sidebar-width: 76px;
+  /* 精简模式只隐藏文字，不改变侧栏、卡片或图标的几何位置。 */
+  --sidebar-width: 248px;
 }
 
 .sidebar {
@@ -509,19 +510,11 @@ async function handleLogout() {
   overflow: hidden;
 }
 
-.is-sidebar-collapsed .brand-block {
-  gap: 0;
-}
-
 .is-sidebar-collapsed .brand-copy {
   max-width: 0;
   opacity: 0;
   transform: translateX(-8px);
   pointer-events: none;
-}
-
-.is-sidebar-collapsed .nav-item {
-  padding-inline: 12px;
 }
 
 .is-sidebar-collapsed .nav-text,
