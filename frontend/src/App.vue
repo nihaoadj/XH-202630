@@ -35,11 +35,14 @@
       </section>
 
       <button class="sidebar-toggle" type="button" @click="toggleSidebar">
-        <el-icon><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
-        <span>{{ sidebarCollapsed ? '展开侧栏' : '收起侧栏' }}</span>
+        <el-icon class="sidebar-toggle-icon"><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
+        <span class="sidebar-toggle-label">{{ sidebarCollapsed ? '展开侧栏' : '收起侧栏' }}</span>
       </button>
 
-      <el-button class="logout-button" @click="handleLogout">退出登录</el-button>
+      <el-button class="logout-button" @click="handleLogout">
+        <el-icon class="logout-icon"><SwitchButton /></el-icon>
+        <span class="logout-label">退出登录</span>
+      </el-button>
     </aside>
 
     <main class="main-area">
@@ -76,7 +79,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Clock, Collection, DataAnalysis, Document, Expand, Fold, Plus, Reading, ChatDotRound, HomeFilled } from '@element-plus/icons-vue'
+import { Clock, Collection, DataAnalysis, Document, Expand, Fold, Plus, Reading, ChatDotRound, HomeFilled, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from './stores/auth'
 import { useAppStore } from './stores/app'
 
@@ -150,21 +153,22 @@ async function handleLogout() {
 }
 
 .app-shell {
+  --sidebar-width: 248px;
   height: 100vh;
   height: 100dvh;
   min-height: 0;
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   background:
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 26%),
     linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
   color: #10233f;
   overflow: hidden;
-  transition: grid-template-columns 0.2s ease;
+  transition: grid-template-columns 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .app-shell.is-sidebar-collapsed {
-  grid-template-columns: 92px minmax(0, 1fr);
+  --sidebar-width: 76px;
 }
 
 .sidebar {
@@ -172,8 +176,8 @@ async function handleLogout() {
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 22px 16px;
+  gap: 12px;
+  padding: 20px 12px 16px;
   background: linear-gradient(180deg, #0f2a50 0%, #173d72 100%);
   color: #f6fbff;
   overflow-y: auto;
@@ -204,6 +208,7 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-height: 60px;
 }
 
 .brand-logo {
@@ -215,6 +220,11 @@ async function handleLogout() {
 
 .brand-copy {
   min-width: 0;
+  max-width: 168px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transition: max-width 220ms ease, opacity 140ms ease, transform 220ms ease;
 }
 
 .brand-name {
@@ -231,7 +241,10 @@ async function handleLogout() {
 
 .nav-list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  justify-content: space-evenly;
+  min-height: 320px;
   gap: 8px;
 }
 
@@ -240,11 +253,12 @@ async function handleLogout() {
   grid-template-columns: 20px minmax(0, 1fr);
   grid-template-areas: 'icon text' 'icon hint';
   column-gap: 10px;
-  padding: 12px 13px;
+  padding: 12px;
   border-radius: 12px;
   color: rgba(241, 246, 255, 0.95);
   text-decoration: none;
-  transition: background-color 0.18s ease, transform 0.18s ease;
+  overflow: hidden;
+  transition: background-color 180ms ease, transform 180ms ease, padding 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .nav-item:hover {
@@ -260,13 +274,21 @@ async function handleLogout() {
 .nav-icon {
   grid-area: icon;
   align-self: center;
+  width: 20px;
+  min-width: 20px;
   font-size: 17px;
+  line-height: 1;
+  transition: transform 220ms ease, font-size 220ms ease;
 }
 
 .nav-text {
   grid-area: text;
   font-size: 14px;
   font-weight: 700;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 120ms ease, transform 220ms ease;
 }
 
 .nav-hint {
@@ -277,6 +299,9 @@ async function handleLogout() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 120ms ease, transform 220ms ease;
 }
 
 .context-panel {
@@ -287,6 +312,11 @@ async function handleLogout() {
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
+  max-height: 260px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 240ms ease, padding 240ms ease, margin 240ms ease, border-width 240ms ease, opacity 120ms ease, transform 240ms ease;
 }
 
 .context-title {
@@ -329,18 +359,43 @@ async function handleLogout() {
 .sidebar-toggle {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   height: 40px;
+  flex: 0 0 40px;
+  padding: 0 12px;
+  overflow: hidden;
   border: 1px solid rgba(196, 219, 248, 0.22);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.08);
   color: #edf6ff;
   cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease, padding 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar-toggle-icon,
+.logout-icon {
+  width: 20px;
+  min-width: 20px;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.sidebar-toggle-label,
+.logout-label {
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 120ms ease, transform 220ms ease;
 }
 
 .logout-button {
-  margin-top: auto;
+  justify-content: flex-start;
+  height: 40px;
+  flex: 0 0 40px;
+  margin-top: 0;
+  padding-inline: 12px;
+  overflow: hidden;
   border-color: rgba(196, 219, 248, 0.18);
   background: rgba(255, 255, 255, 0.05);
   color: #f7fbff;
@@ -444,6 +499,7 @@ async function handleLogout() {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: 0 28px 28px;
@@ -453,24 +509,44 @@ async function handleLogout() {
   overflow: hidden;
 }
 
-.is-sidebar-collapsed .brand-copy,
-.is-sidebar-collapsed .context-panel,
-.is-sidebar-collapsed .logout-button,
-.is-sidebar-collapsed .sidebar-toggle span,
-.is-sidebar-collapsed .nav-text,
-.is-sidebar-collapsed .nav-hint {
-  display: none;
+.is-sidebar-collapsed .brand-block {
+  gap: 0;
+}
+
+.is-sidebar-collapsed .brand-copy {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
 }
 
 .is-sidebar-collapsed .nav-item {
-  grid-template-columns: 1fr;
-  grid-template-areas: 'icon';
-  place-items: center;
-  min-height: 62px;
+  padding-inline: 12px;
 }
 
 .is-sidebar-collapsed .nav-icon {
   font-size: 18px;
+}
+
+.is-sidebar-collapsed .nav-text,
+.is-sidebar-collapsed .nav-hint,
+.is-sidebar-collapsed .sidebar-toggle-label,
+.is-sidebar-collapsed .logout-label {
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+
+.is-sidebar-collapsed .context-panel {
+  max-height: 0;
+  margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
 }
 
 @media (max-width: 1080px) {
@@ -483,6 +559,12 @@ async function handleLogout() {
     gap: 14px;
     max-height: 35dvh;
     min-height: 0;
+  }
+
+  .nav-list {
+    flex: 0 1 auto;
+    min-height: 0;
+    justify-content: flex-start;
   }
 
   .topbar {
