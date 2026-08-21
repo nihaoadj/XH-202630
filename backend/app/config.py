@@ -66,6 +66,11 @@ class Settings(BaseSettings):
         le=65536,
     )
     llm_structured_output_mode: str = "auto"
+    tutor_llm_timeout_seconds: float = Field(default=25.0, gt=0, le=120)
+    tutor_max_output_tokens: int = Field(default=2048, ge=256, le=8192)
+    tutor_max_context_turns: int = Field(default=6, ge=1, le=12)
+    tutor_max_evidence_items: int = Field(default=4, ge=1, le=8)
+    tutor_max_hint_level: int = Field(default=3, ge=0, le=3)
     embedding_model: str = "BAAI/bge-large-zh-v1.5"
     # The embedding model is part of the local runtime contract.  Do not turn
     # a generation request into a Hugging Face network dependency after a
@@ -201,6 +206,7 @@ class Settings(BaseSettings):
     @field_validator(
         "llm_request_timeout_seconds",
         "llm_workflow_timeout_seconds",
+        "tutor_llm_timeout_seconds",
         mode="before",
     )
     @classmethod
@@ -209,11 +215,11 @@ class Settings(BaseSettings):
             normalized = float(value)
         except (TypeError, ValueError):
             raise ValueError("CFG_INVALID_LLM_TIMEOUT") from None
-        maximum = (
-            1800
-            if info.field_name == "llm_workflow_timeout_seconds"
-            else 300
-        )
+        maximum = {
+            "llm_request_timeout_seconds": 300,
+            "llm_workflow_timeout_seconds": 1800,
+            "tutor_llm_timeout_seconds": 120,
+        }[info.field_name]
         if normalized <= 0 or normalized > maximum:
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         return value
@@ -245,6 +251,7 @@ class Settings(BaseSettings):
         "llm_generator_max_output_tokens",
         "llm_resource_generator_max_input_tokens",
         "llm_resource_generator_max_output_tokens",
+        "tutor_max_output_tokens",
         mode="before",
     )
     @classmethod
@@ -256,6 +263,8 @@ class Settings(BaseSettings):
         upper_bound = (
             262144
             if info.field_name == "llm_resource_generator_max_input_tokens"
+            else 8192
+            if info.field_name == "tutor_max_output_tokens"
             else 65536
         )
         lower_bound = (

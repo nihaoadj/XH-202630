@@ -275,3 +275,11 @@
 - 比赛方案数值阈值为幻觉率 `<5%`、难度适配准确率 `>=85%`、核心知识点覆盖率 `>=90%`；正式口径不用 Reviewer 自评分。
 - 当前 fixture 只有 3 个 learner，未达到比赛高分测试计划所要求的至少 50 组用例，因此三项 fixture 实际值只作管线校验，正式结论为 `NOT_MEASURABLE`。
 - SQLite 外键 hook、资源版本唯一约束和迁移演练脚本已同步；当前 runtime Gate 仍会因前端 Claim/Evidence、SourceRef V2 和画像/路径报告缺口而 `FAIL`。公共 health ready 不能替代比赛 Gate。
+
+## 15. 证据约束 Tutor 导学
+
+- 已发布资源页提供“向 Tutor 提问”，测评页每题提供“需要提示”；抽屉支持活动会话恢复、多轮求助、loading/error 状态和引用展示。
+- 提示阶段由服务端确定性策略控制：首次求助为方向提示，明确继续困惑时升级为结构化拆解，第三轮及以后才允许完整的 grounded explanation。
+- Tutor 只使用题目对应真实 Run 的 Frozen Evidence、兼容 SourceRef 或 Ready 知识库上的受控检索；无证据时 fail closed，不使用模型常识兜底。
+- Tutor 不修改画像、Mastery、LearningPath 或 Resource。批次测评提交时，服务端按 `batch_id` 汇总持久化的题目求助轮次并映射到现有 Attempt `hint_count` 审计字段；旧 Run 调用保持兼容。
+- 会话与轮次具备访问控制、唯一序列、`client_message_id` 幂等、引用子集校验和脱敏 LLM 遥测。

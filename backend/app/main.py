@@ -24,6 +24,7 @@ from app.api import (
     reviews,
     runs,
     skills,
+    tutor,
     users,
 )
 from app.api.dependencies import get_current_user
@@ -224,6 +225,7 @@ app.include_router(users.router, prefix="/api/users", tags=["users"], dependenci
 app.include_router(generate.router, prefix="/api/generate", tags=["generate"], dependencies=private_api)
 app.include_router(resources.router, prefix="/api/resources", tags=["resources"], dependencies=private_api)
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"], dependencies=private_api)
+app.include_router(tutor.router, prefix="/api/tutor", tags=["tutor"], dependencies=private_api)
 app.include_router(report.router, prefix="/api/report", tags=["report"], dependencies=private_api)
 app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
 app.include_router(diagnosis.router, prefix="/api/diagnosis", tags=["diagnosis"], dependencies=private_api)

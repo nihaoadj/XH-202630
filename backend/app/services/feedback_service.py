@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from app.agents.feedback import apply_feedback_decision, decide_feedback
 from app.db.feedback.base import BaseFeedbackRepository
+from app.db.tutor.base import BaseTutorRepository
 from app.db.feedback_loop.base import (
     BaseFeedbackLoopRepository,
     FeedbackIdempotencyConflict,
@@ -70,6 +71,7 @@ class FeedbackService:
         audit_repo: BaseAuditRepository | None = None,
         knowledge_catalog: KnowledgeCatalogRepository | None = None,
         llm_gateway: LLMGateway | None = None,
+        tutor_repo: BaseTutorRepository | None = None,
     ):
         self.feedback_repo = feedback_repo
         self.feedback_loop_repo = feedback_loop_repo
@@ -77,6 +79,7 @@ class FeedbackService:
         self.audit_repo = audit_repo
         self.knowledge_catalog = knowledge_catalog
         self.llm_gateway = llm_gateway
+        self.tutor_repo = tutor_repo
 
     def process_learning_attempt(
         self,
@@ -584,6 +587,7 @@ class FeedbackService:
         payload: RunAttemptSubmitRequest,
         knowledge_service: KnowledgeService,
         *,
+        tutor_batch_id: str | None = None,
         schedule_followup: Callable[[LearnerProfile, GenerateRequest, str], None] | None = None,
     ) -> FeedbackLoopResult:
         questions, answer_key = self._build_run_question_specs(profile, resources, knowledge_service)
@@ -593,6 +597,40 @@ class FeedbackService:
         selected_resource = self._select_attempt_resource(resources, payload.source_resource_id)
         submitted_answers = {item.question_id: item.answer for item in payload.answers}
         point_results: dict[str, dict[str, object]] = {}
+        tutor_hint_count = payload.hint_count
+        tutor_hints_by_question: dict[str, int] = {}
+        if self.tutor_repo is not None:
+            try:
+                tutor_scope = (
+                    {"source_batch_id": tutor_batch_id}
+                    if tutor_batch_id is not None
+                    else {"source_run_id": run_id}
+                )
+                tutor_hint_count = self.tutor_repo.count_turns(
+                    payload.learner_id,
+                    **tutor_scope,
+                    context_type="question_help",
+                    created_before=payload.submitted_at,
+                )
+                tutor_hints_by_question = {
+                    question.question_id: self.tutor_repo.count_turns(
+                        payload.learner_id,
+                        **tutor_scope,
+                        context_type="question_help",
+                        question_id=question.question_id,
+                        created_before=payload.submitted_at,
+                    )
+                    for question in questions
+                }
+            except Exception:
+                logger.exception(
+                    "Tutor hint telemetry lookup failed learner_id=%s run_id=%s batch_id=%s",
+                    payload.learner_id,
+                    run_id,
+                    tutor_batch_id,
+                )
+                tutor_hint_count = payload.hint_count
+                tutor_hints_by_question = {}
 
         for question in questions:
             knowledge_point_id = self._question_result_key(question)
@@ -654,13 +692,17 @@ class FeedbackService:
             started_at=payload.started_at,
             submitted_at=payload.submitted_at,
             duration_ms=payload.duration_ms,
-            hint_count=payload.hint_count,
+            hint_count=tutor_hint_count,
             knowledge_point_results=[
                 {
                     "knowledge_point_id": knowledge_point_id,
                     "question_ids": values["question_ids"],
                     "correct_count": values["correct_count"],
                     "total_count": values["total_count"],
+                    "hint_count": sum(
+                        tutor_hints_by_question.get(question_id, 0)
+                        for question_id in values["question_ids"]
+                    ),
                 }
                 for knowledge_point_id, values in point_results.items()
             ],

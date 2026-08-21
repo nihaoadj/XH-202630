@@ -59,7 +59,7 @@ class _KnowledgeService:
         return questions[:limit] if limit is not None else questions
 
 
-def _app(*, include_resource_exercises=True):
+def _app(*, include_resource_exercises=True, tutor_repo=None):
     learner_repo = MemoryLearnerRepository()
     learner_repo.save(
         LearnerProfile(
@@ -111,6 +111,7 @@ def _app(*, include_resource_exercises=True):
     feedback_service = FeedbackService(
         MemoryFeedbackRepository(),
         feedback_loop_repo=MemoryFeedbackLoopRepository(learner_repo),
+        tutor_repo=tutor_repo,
     )
     app = FastAPI()
     app.container = SimpleNamespace(
@@ -121,6 +122,27 @@ def _app(*, include_resource_exercises=True):
     )
     app.include_router(feedback.router, prefix="/api/feedback")
     return TestClient(app), learner_repo
+
+
+class _TutorHintCounter:
+    def count_turns(
+        self,
+        learner_id,
+        *,
+        source_run_id=None,
+        source_batch_id=None,
+        context_type=None,
+        question_id=None,
+        created_before=None,
+    ):
+        assert learner_id == "feedback_001"
+        assert source_run_id is None
+        assert source_batch_id == "batch_feedback_001"
+        assert context_type == "question_help"
+        assert created_before == datetime(2026, 8, 13, tzinfo=timezone.utc)
+        if question_id is None:
+            return 3
+        return {"bank_q1": 2, "bank_q2": 1}.get(question_id, 0)
 
 
 def test_feedback_evaluation_session_and_run_attempt_submit():
@@ -229,6 +251,40 @@ def test_batch_evaluation_uses_resource_batch_and_stably_shuffles_options():
     assert submit_response.status_code == 200
     assert submit_response.json()["attempt"]["overall_score"] == 1.0
     assert submit_response.json()["attempt"]["metadata"]["session_id"] == "batch_feedback_001"
+
+
+def test_batch_attempt_uses_server_side_tutor_hint_counts_without_changing_score():
+    client, _ = _app(
+        include_resource_exercises=False,
+        tutor_repo=_TutorHintCounter(),
+    )
+
+    response = client.post(
+        "/api/feedback/attempts/batch/submit",
+        json={
+            "learner_id": "feedback_001",
+            "batch_id": "batch_feedback_001",
+            "source_resource_id": "res_feedback_001",
+            "idempotency_key": "server-tutor-hints",
+            "expected_profile_version": 1,
+            "submitted_at": datetime(2026, 8, 13, tzinfo=timezone.utc).isoformat(),
+            "hint_count": 99,
+            "answers": [
+                {"question_id": "bank_q1", "answer": "Retrieval"},
+                {"question_id": "bank_q2", "answer": ["Grounding", "Generation"]},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    attempt = response.json()["attempt"]
+    assert attempt["hint_count"] == 3
+    assert attempt["overall_score"] == 1.0
+    hints = {
+        item["knowledge_point_id"]: item["hint_count"]
+        for item in attempt["knowledge_point_results"]
+    }
+    assert hints == {"skill_retrieval": 2, "skill_generation": 1}
 
 
 def test_run_evaluation_prefers_generated_questions_from_any_resource_before_bank_fallback():

@@ -92,7 +92,7 @@ export function normalizeResourceProgressSummary(summary, executions = []) {
     values.push(execution?.resource_execution_state || 'queued')
     logicalExecutions.set(key, values)
   }
-  // A practical guide's canonical text and interactive HTML are one resource
+  // A practical guide's canonical text remains a single resource artifact.
   // for user-facing progress. Prefer that logical count whenever events exist.
   const total = logicalExecutions.size || (reportedTotal > 0 ? reportedTotal : executions.length)
   const approved = count('approved')

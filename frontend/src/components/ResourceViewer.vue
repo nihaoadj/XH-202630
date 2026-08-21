@@ -41,11 +41,7 @@
       <el-collapse v-if="(res.source_refs || []).length" class="source-collapse">
         <el-collapse-item name="sources">
           <template #title><span>参考来源（{{ res.source_refs.length }}）</span></template>
-          <ul>
-            <li v-for="ref in res.source_refs" :key="`${res.resource_id}-${ref.doc_id}-${ref.chunk_id || ''}`">
-              <strong>{{ ref.title || '知识库资料' }}</strong><span>相关度 {{ Number(ref.score || 0).toFixed(2) }}</span>
-            </li>
-          </ul>
+          <SourceRefList :refs="res.source_refs" />
         </el-collapse-item>
       </el-collapse>
     </footer>
@@ -55,6 +51,7 @@
 <script setup>
 import { Download } from '@element-plus/icons-vue'
 import { resourceApi } from '../api'
+import SourceRefList from './SourceRefList.vue'
 
 const props = defineProps({
   resources: { type: Array, default: () => [] },
