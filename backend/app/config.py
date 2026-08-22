@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     """应用配置，自动从 .env 文件加载"""
     app_mode: str = "development"
     allow_degraded_generation: bool = False
+    courseware_ai_enabled: bool = False
     llm_api_key: SecretStr = SecretStr("")
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     # Deliberately opt in to a proxy only when one is known to be usable.

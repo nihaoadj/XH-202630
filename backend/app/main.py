@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api import (
     admin,
     auth,
+    courseware,
     diagnosis,
     evaluation,
     feedback,
@@ -21,6 +22,7 @@ from app.api import (
     profiles,
     report,
     resources,
+    resource_library,
     reviews,
     runs,
     skills,
@@ -224,6 +226,8 @@ app.include_router(profiles.router, prefix="/api/profiles", tags=["profiles"], d
 app.include_router(users.router, prefix="/api/users", tags=["users"], dependencies=private_api)
 app.include_router(generate.router, prefix="/api/generate", tags=["generate"], dependencies=private_api)
 app.include_router(resources.router, prefix="/api/resources", tags=["resources"], dependencies=private_api)
+app.include_router(courseware.router, prefix="/api/resources", tags=["courseware"], dependencies=private_api)
+app.include_router(resource_library.router, prefix="/api/resource-library", tags=["resource-library"], dependencies=private_api)
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"], dependencies=private_api)
 app.include_router(tutor.router, prefix="/api/tutor", tags=["tutor"], dependencies=private_api)
 app.include_router(report.router, prefix="/api/report", tags=["report"], dependencies=private_api)

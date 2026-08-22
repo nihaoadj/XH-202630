@@ -20,6 +20,7 @@ from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.learner.repository import create_learner_repository
 from app.db.questionnaire.repository import create_questionnaire_repository
 from app.db.resource.repository import create_resource_repository
+from app.db.courseware.repository import create_courseware_repository
 from app.db.tutor.repository import create_tutor_repository
 from app.db.user.repository import create_user_repository
 from app.models.llm import LLMCallOptions
@@ -36,6 +37,7 @@ from app.services.onboarding_service import OnboardingService
 from app.services.profile_service import ProfileService
 from app.services.report_service import ReportService
 from app.services.resource_service import ResourceService
+from app.services.courseware import CoursewareService
 from app.services.review_service import ReviewService
 from app.services.run_query_service import RunQueryService
 from app.services.run_event_stream_service import RunEventStreamService
@@ -85,6 +87,11 @@ class Container(containers.DeclarativeContainer):
     )
     resource_repository = providers.Singleton(
         create_resource_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+    )
+    courseware_repository = providers.Singleton(
+        create_courseware_repository,
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
@@ -183,6 +190,13 @@ class Container(containers.DeclarativeContainer):
         generation_service=generation_service,
     )
     resource_service = providers.Singleton(ResourceService, repo=resource_repository)
+    courseware_service = providers.Singleton(
+        CoursewareService,
+        repo=courseware_repository,
+        resource_service=resource_service,
+        audit_repo=audit_repository,
+        llm_gateway=llm_gateway,
+    )
     feedback_service = providers.Singleton(
         FeedbackService,
         feedback_repo=feedback_repository,

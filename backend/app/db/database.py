@@ -8,6 +8,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings, resolve_backend_path
 from app.db import extended_models  # noqa: F401
+from app.db.courseware import models as courseware_models  # noqa: F401
+from app.db.courseware.migrations import migrate_sqlite_courseware
 from app.db.models import Base
 from app.db.migrations import (
     apply_p0_04_migration,
@@ -111,6 +113,7 @@ def init_database():
         _migrate_sqlite_questionnaire_submissions(engine)
         _migrate_sqlite_generated_resources(engine)
         _migrate_sqlite_generation_jobs(engine)
+        migrate_sqlite_courseware(engine)
         _migrate_sqlite_feedback_records(engine)
     apply_p0_09_migration(engine)
     apply_p0_10_migration(engine)

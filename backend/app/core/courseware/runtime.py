@@ -1,0 +1,13 @@
+"""Versioned, platform-owned browser runtime and theme."""
+
+RENDERER_VERSION = "1.1"
+RUNTIME_VERSION = "1.1"
+ALLOWED_SCENE_KINDS = {"intro", "explain", "practice", "quiz", "recap"}
+
+STYLE = """
+:root{color-scheme:light;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#172033;background:#f4f8fc}*{box-sizing:border-box}body{margin:0;line-height:1.65}.course{max-width:960px;margin:auto;padding:24px}.course-header{background:#123b68;color:#fff;padding:24px;border-radius:14px}.course-header h1{margin:0}.course-header p{margin:6px 0 0}.progress{margin:16px 0;color:#36516e}.scene{display:none;background:#fff;padding:26px;border-radius:14px;box-shadow:0 4px 18px #17324b16}.scene.active{display:block}.scene h2{margin-top:0}.block{white-space:pre-wrap}.steps{padding-left:1.25rem}.steps li{margin:10px 0}.quiz-option{display:block;padding:10px;margin:8px 0;border:1px solid #bfd0e2;border-radius:8px;cursor:pointer}.feedback{padding:10px;border-radius:8px;background:#eef6ff}.nav{display:flex;gap:10px;justify-content:space-between;margin-top:20px}.nav button,.check{font:inherit;padding:9px 14px;border-radius:8px;border:1px solid #1d5b97;background:#fff;color:#123b68;cursor:pointer}.nav button:focus-visible,.check:focus-visible,input:focus-visible{outline:3px solid #e69b26;outline-offset:3px}@media(max-width:640px){.course{padding:12px}.scene{padding:18px}.nav button{min-height:44px}}
+""".strip()
+
+SCRIPT = """
+(()=>{let i=0,nonce='';const scenes=[...document.querySelectorAll('.scene')],progress=document.querySelector('.progress');const send=(type,extra={})=>parent.postMessage({type,nonce,...extra},'*');const show=n=>{i=Math.max(0,Math.min(n,scenes.length-1));scenes.forEach((s,x)=>s.classList.toggle('active',x===i));progress.textContent=`第 ${i+1} / ${scenes.length} 节`;send('progress',{scene_index:i});window.scrollTo({top:0,behavior:'smooth'})};document.addEventListener('click',e=>{const n=e.target.closest('[data-nav]');if(n)show(i+Number(n.dataset.nav));const check=e.target.closest('[data-check]');if(check){const target=document.getElementById(check.dataset.check);if(target)target.checked=!target.checked}const quiz=e.target.closest('[data-quiz]');if(quiz){const selected=[...quiz.querySelectorAll('input:checked')].map(x=>x.value).sort().join('|');const answer=quiz.dataset.answer;const feedback=quiz.querySelector('.feedback');feedback.hidden=false;feedback.textContent=selected===answer?'回答正确。':(quiz.dataset.feedback||'请再回顾相关内容后重试。');send('quiz_result',{correct:selected===answer})}});window.addEventListener('message',e=>{if(e.data?.type==='courseware-init'&&typeof e.data.nonce==='string'){nonce=e.data.nonce;send('ready')}});show(0)})();
+""".strip()
