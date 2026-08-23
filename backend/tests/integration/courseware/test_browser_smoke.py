@@ -7,6 +7,16 @@ import subprocess
 import pytest
 
 from app.core.courseware.renderer import render_courseware
+from app.core.courseware.runtime import SCRIPT
+
+
+def test_runtime_binds_messages_to_the_initializing_parent_origin():
+    assert "e.source!==parent" in SCRIPT
+    assert "parentOrigin=e.origin" in SCRIPT
+    assert "postMessage({type,nonce,...extra},parentOrigin)" in SCRIPT
+    assert "e.data?.nonce===nonce" in SCRIPT
+    assert "event_type:'answer_submitted'" in SCRIPT
+    assert "send('progress'" in SCRIPT
 
 
 def _edge() -> str | None:
@@ -35,6 +45,7 @@ def test_generated_courseware_boots_in_real_headless_browser(tmp_path):
     result = subprocess.run(
         [edge, "--headless=new", "--disable-gpu", "--no-first-run", "--virtual-time-budget=1000",
          f"--user-data-dir={profile}", "--dump-dom", target.as_uri()],
-        capture_output=True, text=True, timeout=30, check=False,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, check=False,
     )
     assert result.returncode == 0, result.stderr[-1000:]
+    assert "第 1 /" in result.stdout

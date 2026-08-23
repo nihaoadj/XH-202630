@@ -1,277 +1,398 @@
-# 下一次互动 HTML 课件更新计划
+# AI 互动课件整体更新计划
 
-> 用途：本文件只定义下一次迭代的工作范围、验收标准和文件边界。已完成能力仅作简短基线说明，不重复记录实施过程。
+> 文档用途：交付给后续执行者连续实施。本文只保留已实现基础的简要说明和后续更新路线，不再重复历史任务卡与执行流水。
+>
+> 当前阶段：开发更新与本地真实可用。不要求生产级完整部署、GitHub Actions 证据、真实发布周期或多 Worker 扩容。
+>
+> 执行原则：用户当前请求优先于本文。执行者必须先阅读仓库根目录 AGENTS.md、README.md、git-workflow.md 和当前代码，保护已有 dirty worktree。
 
-## 1. 当前基线（不在本轮重做）
+## 0. 已实现基础简述
 
-已具备独立课件资源链路：已发布资源准入与冻结、确定性多场景课件、受控 LLM `CoursewareSpec` / `CoursewareSceneSpec`、固定 HTML renderer、安全预览与离线下载、来源规则审核、资源库展示、任务事件和基础重试。
+当前仓库已经具备独立互动课件领域、来源快照与 ProvenanceGraph、AI-first planner/scene/reviewer 主链、版本化结构化契约、受控组件注册表、确定性 renderer/runtime、安全检查、HTML/ZIP 产物、SQLite Durable Worker、任务进度、课件播放器、学习事件、3 套主题、8 类基础组件及 flashcard、matching、ordering 3 类新增组件，并具备本地专项测试基础。
 
-课件 LLM 调用已集中在 `backend/app/agents/resource_workflows/interactive_courseware/`；但课件状态机仍在服务层，且 `backend/app/agents/workflow.py` 的名称容易被误解为全局工作流。下一轮先完成 Agent/工作流目录重构，再迁移课件编排；不改变五类学习文档的业务语义、API 或发布结果。
+上一轮审计整改已经完成主要实现入口，这些基础不再逐项重做。后续直接解决当前最重要的质量收口项：
 
-当前缺口：真实模型验收不足、评测集不足、场景重试仍会回到总任务、浏览器自动化覆盖不足、互动组件偏少、缺少审核修订工作台。
+- AI-first 已成为默认配置，下一阶段需补齐可查询的 AI full-course、fallback 与 artifact 成功汇总，继续防止确定性兜底被计入 AI 成功。
+- 资源选择已按产品要求限定在同一反馈批次并支持多选；下一阶段继续完善批次内的跨资源融合、覆盖解释和冲突处理，不放开跨批次来源。
+- 后端已接受学习目标、预计时长、互动强度和视觉风格，但前端尚未把这些选项接入真实创建请求。
+- 学习事件和 progress API 已存在，但 Viewer 尚未把服务端进度恢复到当前场景及受控组件状态。
+- 11 类组件已经注册和渲染，但新增三类组件仍需逐组件严格 payload、完整反馈、恢复和来源约束。
+- 当前“用户旅程”主要由长轮询测试和多个独立检查聚合而成，尚需一条真实状态驱动的完整本地旅程。
+- 浏览器测试已有三主题和组件矩阵，仍需真实 200% 缩放、forced-colors 生效断言及 Viewer 组合门。
 
-## 2. 本轮目标与边界
+## 1. 产品目标
 
-目标：把当前“能安全生成”的课件链路升级为“可评测、可局部返工、可审核发布”的稳定生产链路。
+后续课件能力只围绕三个核心价值方向展开。
 
-不在本轮范围：多人课堂、实时语音、白板、3D、在线代码执行、外部学习平台对接。不得让模型输出 HTML、CSS、JavaScript、URL 或未注册互动组件。
+### 1.1 现有资源的整合学习
 
-成熟项目借鉴：采用 OpenMAIC 的生成、编辑、持久化和端到端测试分层，以及 H5P 的内容参数、组件库和固定运行时分层；不复制其多人课堂或媒体能力。[OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) [H5P 技术概览](https://h5p.org/technical-overview)
+用户从自己已有的讲义、实操指南、测试题、案例分析和复习清单中选择一到多份资源，AI 不是简单拼接，而是：
 
-## 3. P0：发布可信度（必须完成）
+- 所有来源必须属于同一反馈批次；跨反馈批次资源在前端不可选，后端准入再次拒绝；
+- 理解每份资源的角色、版本、知识点和来源块；
+- 结合学习者水平和学习目标形成统一课程主线；
+- 把概念、案例、步骤、练习、测验和复习组织成前后连贯的学习过程；
+- 对重复内容合并，对互补内容建立关联，对冲突内容显式标记而不是擅自裁决；
+- 每个可见事实、题目、反馈和关键互动都能追溯到冻结来源；
+- 向用户说明本课件整合了哪些资源、覆盖了哪些目标、哪些资源未被使用以及原因。
 
-### 3.1 P0-0：Agent 与工作流目录重构（先做）
+资源整合的完成标准不是“传入了多个 resource ID”，而是用户能明显感受到这些资源被组织成了一门连贯课程。
 
-目标是在**保持现有顶层目录不变**的前提下完成分层内重构：让 `agents/` 明确承担模型调用、Agent 节点和工作流编排；在 `api/`、`services/`、`db/`、`core/` 等现有层级内部按领域聚合。不要再让 `agents/workflow.py` 看起来像所有领域的唯一总工作流，也不要让同一领域在同一层内的文件无规则散落。
+### 1.2 可互动学习模式
 
-**不可突破的前提：重构期间与完成后，现有五类学习文档的生成、审核、Claim、发布、API 响应和 Markdown 阅读行为必须保持一致。** 这是路径重构，不是学习文档能力重写；课件工作流新增或迁移失败时，也不得影响学习文档链路。
+课件不是把 Markdown 换成网页，而是让用户通过操作完成学习。互动必须服务于具体学习目标：
 
-目标目录：
+- 概念理解：翻卡、重点揭示、对比、示例判断；
+- 程序性知识：步骤排序、流程演练、分阶段展开；
+- 记忆巩固：快速回忆、配对、复习检查；
+- 应用练习：单选、多选、情境决策和即时反馈；
+- 反思总结：知识回顾、错题提示、完成度与下一步建议。
 
-```text
-backend/app/agents/
-├── shared/                              # 跨工作流可复用的纯能力
-│   ├── policies.py
-│   ├── validators.py
-│   └── retrieval.py
-├── resource_workflows/
-│   ├── learning_documents/              # 现有五类文本学习文档的独立工作流
-│   │   ├── workflow.py                  # 原 agents/workflow.py 的正式归属
-│   │   ├── state.py
-│   │   ├── planner_agent.py
-│   │   ├── generator_agent.py
-│   │   ├── reviewer_agent.py
-│   │   └── claim_review_agent.py
-│   └── interactive_courseware/          # 互动课件的独立工作流
-│       ├── workflow.py                  # 准入→快照→规格→场景→审核→渲染→发布
-│       ├── state.py                     # CoursewareWorkflowState
-│       ├── planner_agent.py
-│       ├── scene_composer_agent.py
-│       ├── quality_reviewer_agent.py
-│       ├── validators.py
-│       └── contracts.py
-├── learning_agents/                     # 不属于资源生产工作流的学习闭环 Agent
-│   ├── diagnosis_agent.py
-│   ├── feedback_agent.py
-│   ├── feedback_policy_agent.py
-│   └── tutor_agent.py
-```
+互动必须具备键盘、触控、移动端、无障碍、状态恢复和学习事件。没有可靠答案来源时不得凭空生成可判分题。
 
-`learning_agents/` 与 `resource_workflows/` 并列：前者服务诊断、反馈与答疑，后者服务可持久化的资源生成工作流。不要为了目录整齐而把反馈、Tutor 或报告硬塞进学习文档/课件工作流。
+### 1.3 美观和趣味性
 
-“学习文档 / 课件”只属于**资源生成域**，不是整个系统的全部功能。保留现有后端顶层，只在层内按完整业务域收敛子目录（内部文件可以逐步迁移，外部只依赖各子包公开入口）：
+课件应当具有统一视觉叙事，而不是组件堆叠：
 
-```text
-backend/app/
-├── api/
-│   ├── auth/                            # 登录、用户身份与访问控制
-│   ├── users/                           # 用户账户与管理
-│   ├── onboarding/                      # 初始建档与问卷流程
-│   ├── learners/                        # 学习画像、问卷、学习历史、诊断
-│   ├── knowledge/                       # 知识库、检索与素材管理
-│   ├── generation/                      # 学习文档生成任务与进度
-│   ├── learning_documents/              # 学习文档详情、阅读、下载
-│   ├── courseware/                      # 课件创建、SSE、重试、预览、下载
-│   ├── feedback/                        # 生成后反馈、反馈闭环与再生成
-│   ├── tutor/                           # Tutor 会话与资源答疑
-│   ├── reports/                         # 学习报告与评估结果
-│   ├── reviews/                         # 人工审核与审核查询
-│   ├── runs/                            # 工作流运行记录与事件查询
-│   ├── resource_library/                # 跨资源领域的只读聚合
-│   └── admin/                           # 仅管理员能力
-├── services/
-│   ├── auth/                            # 身份与权限门面
-│   ├── users/                           # 用户门面
-│   ├── onboarding/                      # 初始建档门面
-│   ├── learners/                        # 画像、问卷、历史、诊断门面
-│   ├── knowledge/                       # 知识库与入库门面
-│   ├── generation/                      # 学习文档任务与工作流调用
-│   ├── learning_documents/              # 学习文档发布与读取
-│   ├── courseware/                      # 调用课件 workflow、持久化协调、发布门面
-│   ├── feedback/                        # 反馈及再生成闭环
-│   ├── tutor/                           # 答疑会话门面
-│   ├── reports/                         # 报告与评估门面
-│   ├── reviews/                         # 审核门面
-│   ├── runs/                            # 运行状态/事件查询门面
-│   └── resource_library/                # 跨资源只读投影
-├── db/
-│   ├── users/                           # 用户仓储
-│   ├── learners/                        # 画像、问卷、诊断、历史仓储
-│   ├── knowledge/                       # 知识与向量目录仓储
-│   ├── generation/                      # 生成任务仓储
-│   ├── learning_documents/              # 学习文档仓储
-│   ├── courseware/                      # jobs/specs/scenes/reviews/artifacts
-│   ├── feedback/                        # 反馈及闭环仓储
-│   ├── tutor/                           # 会话仓储
-│   ├── audit/                           # 工作流运行、审核事件与 Claim 审计
-│   └── shared/                          # 数据库会话、通用基类与迁移基础设施
-├── core/
-│   ├── llm/                             # 模型传输、网关、结构化输出
-│   ├── retrieval/                       # 检索、证据与向量检索能力
-│   ├── security/                        # 通用安全与授权支撑
-│   ├── storage/                         # 文件与对象存储能力
-│   ├── events/                          # 事件、幂等与可观测性
-│   └── courseware/                      # 课件 renderer/runtime/security/packaging
-└── models/
-    ├── auth/                            # 身份与访问 DTO
-    ├── users/                           # 用户 DTO
-    ├── learners/                        # 画像、问卷、诊断、历史 DTO
-    ├── knowledge/                       # 知识库和检索 DTO
-    ├── generation/                      # 生成任务 DTO
-    ├── learning_documents/              # 学习文档 DTO
-    ├── courseware/                      # 课件公开 DTO/契约
-    ├── feedback/                        # 反馈及闭环 DTO
-    ├── tutor/                           # 答疑 DTO
-    ├── reports/                         # 报告与评估 DTO
-    ├── reviews/                         # 审核 DTO
-    └── shared/                          # 跨领域基础契约
+- 清晰的封面、章节节奏、视觉层级、进度感和完成反馈；
+- 与主题和学习内容匹配的受控配色、版式、图标、装饰和动效；
+- 互动状态有明确、友好且不过度的反馈；
+- 桌面、平板和手机均可读可操作；
+- 动效尊重 reduced-motion，颜色尊重对比度和 forced-colors；
+- 趣味性来自节奏、探索、反馈和成就感，不依赖夸张动画或无关装饰。
 
-frontend/src/features/
-├── auth/                                # 登录、注册与会话界面
-├── onboarding/                          # 初始建档界面
-├── learners/                            # 画像、问卷、诊断、历史界面
-├── knowledge/                           # 知识库界面
-├── generation/                          # 学习文档生成与进度界面
-├── learning-documents/                  # 学习文档阅读界面
-├── courseware/                          # SourceSelector、任务进度、Viewer、API client
-├── feedback/                            # 反馈与再生成界面
-├── tutor/                               # Tutor 界面
-├── reports/                             # 报告与评估界面
-└── resource-library/                    # 跨资源列表与路由选择
-```
+AI 只能选择平台注册的主题、布局、动效和组件 ID，不得自由生成 HTML、CSS、JavaScript、URL 或任意组件。
 
-资源生成域的边界是：`generation` 负责学习文档生成任务，`learning_documents` 负责五类文本学习文档的读取，`courseware` 负责互动课件独立工作流；课件同样是学习资源，但不是学习文档。`feedback`、`tutor`、`reports` 是生成后的学习闭环，不应被放进资源生成或课件目录。认证、学习者和知识库也保持独立。
+## 2. AI-first 与平台边界
 
-结构本身不保证功能不受影响；以下兼容约束才是迁移的安全边界：公开 HTTP 路径、请求/响应 DTO、状态码、认证依赖、容器 provider 名称、数据库表名、存储路径和事件 payload 默认保持不变。仅改变内部 Python/Vue 导入路径；任何确需变更的公开契约必须另行版本化，不能夹带在目录迁移中。以上是层内目标边界，不要求首个提交一次性移动所有物理文件。迁移期间由现有层级内的旧路径保留兼容转发；禁止复制两份会逐渐分叉的业务实现，也不得新增新的顶层领域目录。
+### 2.1 正常生成链
 
-迁移规则：
+正常用户任务必须执行：
 
-1. **先固化基线，不先移动文件**：建立全功能域清单（认证、学习者、知识库、生成、资源、课件、反馈、Tutor、报告、资源库），并为受影响域记录公开导入、API 响应 fixture、错误码和关键 artifact 哈希；资源工作流额外记录节点顺序与路由。补齐端到端回归后才允许开始迁移。
-2. 先建立新包与明确导出，再逐步迁移实现；第一阶段 `agents/workflow.py` 必须保留为兼容转发，所有旧导入和原容器注册均继续可用，不能要求其他模块同步修改。
-3. 学习文档节点必须原样迁移并保持输入/输出契约、路由顺序、错误码、Prompt 版本和 API 不变；每个迁移提交只做一个节点或一个入口的路径调整，禁止同时修改 Prompt、依赖注入或业务逻辑。
-4. 每迁移一个节点/入口，必须先运行学习文档单元、工作流、API、Claim 与 Markdown 阅读回归；任一差异立即停止后续迁移，恢复到兼容转发路径，定位后以独立提交修复。
-5. 新建 `interactive_courseware/workflow.py`：工作流节点调用课件专用 Agents 和 `core/courseware` 的确定性能力；`CoursewareService` 只创建/恢复任务、注入仓储与工作流依赖、执行工作流、提供查询/发布接口。课件依赖注入不得改写学习文档容器实例或工作流注册。
-6. 在每个既有层级内按领域迁移 API、Service、模型、仓储、渲染/安全能力与前端功能模块：先创建层内子包的公开入口和适配层，再移动一个职责组；同一职责在任一时刻只能有一个真实实现。
-7. `courseware` service 不得再定义工作流节点、Prompt 或模型调用；课件 presentation 不得访问数据库或模型；跨领域的资源库只读聚合不得反向拥有生成逻辑；共享模块不依赖具体资源领域。
-8. 所有旧导入先改为公开包入口，再删除兼容转发；兼容层至少跨越一次完整发布验证周期。删除前使用静态导入扫描阻止新代码重新导入旧路径，并重新运行全量学习文档与课件回归。
+    冻结所选资源与学习者上下文
+    → AI 规划课程目标和资源融合策略
+    → AI 生成 storyboard
+    → AI 生成各场景和互动
+    → 来源与组件硬门
+    → AI 教学质量审核
+    → AI 定向修订
+    → 平台确定性渲染与安全检查
+    → 本地自动生成可学习课件
+    → 用户直接打开学习
 
-迁移闸门：
+AI 负责教学内容、组织、互动设计、反馈文本和修订。平台确定性代码负责 schema、来源、组件、渲染、安全、打包、状态和幂等。
 
-```text
-全域行为基线通过
-  → 各层内子包公开入口 + 兼容转发
-  → 认证/学习者/知识库等基础域按层归类 + 回归
-  → 学习文档 workflow/节点单元迁移 + 主链回归
-  → 课件 workflow/节点迁移 + 双链回归
-  → 反馈/Tutor/报告等学习闭环按层归类 + 回归
-  → 资源库聚合与前端 feature 模块迁移
-  → 完整发布验证周期
-  → 删除旧路径兼容层
-```
+### 2.2 fallback 语义
 
-验收：学习文档和课件各自有唯一、可发现的 `workflow.py` 与各层内子包公开入口；在兼容期内旧入口与新入口对学习文档和课件结果等价；迁移期间学习文档回归零失败、课件回归通过、导入兼容测试通过。只有在完整发布验证周期无差异后，才允许删除 `agents/workflow.py` 及旧层级兼容入口。
+确定性内容生成不是正常选项，也不能由普通用户选择。只有以下 AI 恢复链全部失败后才允许兜底：
 
-### 3.2 真实模型生产就绪检查与可观测性
+    primary model
+    → structured-output repair
+    → 同阶段受控 retry
+    → AI 定向修订
+    → 已配置 secondary model
+    → 最终 deterministic emergency fallback 或 quarantine
 
-- 在部署前使用脱敏冻结快照执行课程设计、两个场景生成和教学审核，确认模型、密钥、超时和结构化输出可用。
-- 记录模型、prompt 版本、输入/输出哈希、耗时、token、重试、fallback 原因；不得记录源正文或密钥。
-- 指标：规格成功率、场景成功率、schema 修复率、来源拒绝率、fallback 率、时延、成本。
-- 部署完成后全局开启 `courseware_ai_enabled`：所有通过现有权限校验、能够创建课件的用户均直接使用 AI 课件生成。
-- 监控仅用于故障定位和全局回退决策；单次模型失败继续使用该场景的确定性 fallback，不因用户身份限制功能。
+fallback 课件必须：
 
-验收：可从任务详情回答每个场景是否调用模型、为何 fallback、来源是否完整、耗时与成本。
+- 标记 degraded 或 published_with_warnings；
+- 展示简明用户提示；
+- 记录触发阶段和失败链；
+- 通过全部来源、安全和组件硬门；
+- 不计入 AI 生成成功率。
 
-### 3.3 固定评测集与质量门
+当前配置已将 `COURSEWARE_AI_ENABLED=true` 和 `COURSEWARE_GENERATION_MODE=ai_first` 设为默认值。后续仍必须通过测试和汇总指标保证 deterministic-v1 只出现在显式紧急降级或离线评测语义中，不能重新成为普通用户的正常生成路径。
 
-- 新增 `backend/tests/fixtures/courseware/evals/`；首批 30 组脱敏 fixture，逐步扩展至 50 组。
-- 覆盖短/长讲义、多资源、缺少测验、重复/冲突/空来源、超长内容、模型超时/限流/空输出/截断、未知组件/来源块、单场景失败、重启恢复与重复幂等请求。
-- 硬门：零未知来源块、零危险输出、零未知组件、必需场景不可缺失。
-- 趋势指标：schema 成功率、无 fallback 成功率、人工抽检来源正确率、成本、时延；阈值版本化保存。
+### 2.3 成功率指标
 
-验收：任一硬门失败不得发布；评测结果在 CI 可重复比较。
+本地 fake provider 套件中：
 
-### 3.4 真正场景级工作器与局部返工
+- 所有正常 fixture 的 AI 主路径尝试率必须为 100%；
+- 所有正常 fixture 的 AI full-course success 必须为 100%；
+- 正常 fixture 的 deterministic content fallback 必须为 0；
+- 可恢复错误必须由 repair、retry、revision 或 secondary route 恢复；
+- 最终 HTML 成功和 AI 生成成功必须分开统计。
 
-每个场景必须成为独立持久化任务：
+以后获准运行真实模型验收时，初始目标为：
 
-```text
-scene_id + input_snapshot_hash + attempt
-  → compose Agent
-  → schema/source rule gate
-  → advisory quality Agent
-  → approved | revision_required | failed
-```
+- 至少 30 个多样化脱敏资源组合；
+- 整课 AI 完成率不低于 90%；
+- 场景经受控恢复后的 AI 成功率不低于 95%；
+- 最终确定性内容 fallback 率不高于 5%；
+- 来源硬门错误发布率为 0。
 
-- 为场景持久化 `input_snapshot_hash`、`agent_version`、`review_instruction`、`approved_at`，并提供数据库迁移。
-- `retry_scene` 仅重跑目标场景，复用其他输入未变化且已批准场景；不重新请求整课模型内容。
-- 必需场景失败进入 `human_review` / `revision_requested`；可选场景可跳过，但 UI、artifact 和事件必须解释原因。
-- fan-in 只合并同一规格、顺序完整、输入哈希一致且已批准的必需场景。
-- 使用租约/outbox 或等价机制，避免重启、重复消费者和并发重试造成双发布。
+真实模型验收不自动执行，但为了最终证明用户使用的确实是 AI 课件，所有无计费开发完成后应保留小规模本地 live smoke。只有用户明确授权并提供预期凭据时才能运行；未获授权时标记 LIVE_MODEL_AUTHORIZATION_PENDING，不能把 fake provider 结果描述为真实模型质量。
 
-验收：故障注入后，只重试一页时其他场景的内容哈希、attempt 和模型调用次数不变。
+## 3. 当前阶段范围
 
-### 3.5 浏览器自动化与无障碍回归
+### 3.1 本轮需要完成
 
-- 引入 Playwright 或同等浏览器驱动；保留现有 Edge 启动冒烟。
-- 同时验证 sandbox 预览和离线 artifact：无外联、无 CSP 违规、导航、步骤、答题反馈、进度消息。
-- 覆盖 Tab / Enter / Space、焦点、标题层级、控件标签、阅读顺序、错误反馈、320px 和桌面宽度。
-- 验证伪造 `postMessage` 不能改变宿主 UI 状态。
+- 打通本地真实用户链路：选择现有资源 → AI 生成 → 查看进度 → 自动打开 → 互动学习 → 保存进度 → 继续学习。
+- 修正 AI-first 运行语义和 fallback 顺序。
+- 提升多资源融合质量和来源可解释性。
+- 扩展高价值互动模式并完善反馈与恢复。
+- 提升视觉完整度、趣味性和响应式体验。
+- 修复直接影响本地用户生成成功的 Worker 租约问题。
+- 完成本地后端、前端、浏览器和用户旅程回归。
 
-验收：浏览器失败阻断发布候选；CI 输出截图、控制台错误和失败组件名。
+### 3.2 暂不处理
 
-## 4. P1：互动与审核体验
+- GitHub Actions 实跑和 CI artifact 证明；
+- 生产环境部署、扩缩容、生产监控和完整发布周期；
+- 多 Durable Worker 横向扩容；
+- PostgreSQL、Redis、Celery 或新队列基础设施；
+- 管理员审核台、人工发布流程；
+- SCORM/xAPI 完整标准兼容认证；
+- 任意模型生成 HTML/CSS/JavaScript；
+- 与三个核心价值无关的大规模架构迁移。
 
-### 4.1 ComponentCatalog v1
+内部 candidate、release pointer 和 artifact 仍可作为本地原子可用机制保留，但用户界面不强调“发布”，而应呈现“生成完成，可以学习”。
 
-每个组件必须同步拥有：Pydantic schema、renderer、runtime 行为、来源映射规则、fixture、无障碍断言和版本迁移。新增组件不能只靠修改 Prompt。
+## 4. 目标用户链路
 
-| 批次 | 组件 | 本轮策略 |
-| --- | --- | --- |
-| 1 | `callout`、`key_point`、`compare`、`ordered_steps`、`recap` | 实现并完成来源粒度与浏览器测试 |
-| 2 | `single_choice`、`multiple_choice`、`ordering`、`matching` | 在评测集稳定后逐项开放 |
-| 3 | `timeline`、`process_flow`、`decision_tree`、`scenario_branch` | 仅立接口和 fixture 需求，不在本轮全部实现 |
+1. 用户进入学习资源页，选择学习画像。
+2. 用户点击“生成 AI 互动课件”。
+3. 选择器只展示当前反馈批次内该用户可用的已发布资源；支持按主题和资源类型筛选，不允许跨反馈批次混选。
+4. 系统推荐一个资源组合，并说明讲义、实操、案例、测验和复习清单各自作用。
+5. 用户可填写可选学习目标、期望时长和互动偏好；不要求理解模型或技术参数。
+6. 创建任务前检查 AI 服务是否可用；不可用时给出明确说明，不静默生成模板课件。
+7. 生成窗口持续展示“整合资源、设计课程、生成互动、教学审核、优化页面、完成”等用户可理解阶段。
+8. 任务完成后自动刷新资源库、选中新课件并打开播放器。
+9. 用户在课件中导航、答题、获得反馈、查看来源和完成进度。
+10. 关闭后再次打开能够恢复到上次位置和互动状态。
+11. 某场景失败时提供“优化这个场景”或“重新生成课件”，不要求用户理解 checkpoint、revision 或 release。
+12. 如果最终使用紧急 fallback，用户看到简洁降级提示，系统内部保留完整原因。
 
-题干、选项、答案、解析以及流程/分支节点均须单独映射来源块。图片、音频、视频仅在平台资产注册、审核和离线打包准备好后再评估；模型不可提供媒体 URL。
+## 5. 后续更新路线
 
-### 4.2 审核与修订工作台
+执行顺序固定为 U0 → U1 → U2 → U3 → U4 → U5。完成一阶段后继续下一阶段，不等待用户逐项发送“继续”。
 
-- 展示课程目标、场景顺序、来源块、审核问题、浏览器结果和成本摘要。
-- 支持单场景：接受 fallback、请求模型按指令修订、改用模板、标记为可选跳过。
-- 每次修改创建 `scene_revision`，记录操作者、时间、原因、前后哈希；普通学习者不能读取 Prompt、原始输出或内部备注。
+### U0：AI-first 与本地链路修正
 
-验收：审核者不编辑 HTML 即可定位来源问题、修订一个场景并发布新版，且全程可审计。
+目标：确保正常任务真正由 AI 生成，并修复阻塞本地真实使用的直接缺陷。
 
-## 5. P2：受控体验增强
+主要工作：
 
-在 P0/P1 通过后增加主题 token、封面/章节过渡、受控 SVG 图示、进度本地保存、断点恢复、打印版和低动效模式。
+- 将正常生成模式改为 AI-first；兼容旧 COURSEWARE_AI_ENABLED 配置，但 false 不再代表一个正常确定性生成选项。
+- AI 不可用时返回明确状态，或在 resilient 策略完整耗尽 AI 恢复链后进入紧急 fallback。
+- planner、scene composer、quality reviewer 和 revision 成为正常任务的必经 AI 节点。
+- 将确定性 scaffold 限制为来源、目标、槽位、组件和安全约束；AI 成功时 learner-visible 内容必须来自 AI 结构化输出。
+- 分离 AI 成功、artifact 成功和 degraded fallback 指标。
+- 修复 Executor heartbeat 与 lease 精度问题，确保一个本地 Worker 能稳定完成长任务。
+- 移除新任务界面的人工“发布”语义；保持旧 API 兼容，但新任务自动变成可学习资源。
 
-预算：单文件 HTML 默认 ≤ 1.5 MB；基准设备首屏 ≤ 2 秒；单场景文本遵守既定阅读负荷。超过预算时压缩或拆分组件，不降低安全策略。
+完成条件：
 
-## 6. 实施顺序与文件边界
+- fake provider 驱动完整公开 workflow；
+- 正常 fixture AI path attempted=100%，AI full-course success=100%，deterministic fallback=0；
+- AI 不可用不会被静默记成正常 AI 课件；
+- 已复现租约反例通过；
+- 用户创建任务后可以等待到终态并自动打开课件。
 
-```text
-1. 全功能域清单、行为基线、各层子包公开入口与兼容层
-2. 认证/学习者/知识库等基础域归类 + 回归
-3. 学习文档与课件 `workflow.py` 分域迁移 + 双链回归
-4. 反馈/Tutor/报告/资源库与前端 feature 分域迁移 + 回归
-5. 课件 scene worker、评测集、生产就绪检查与浏览器质量门
-6. ComponentCatalog v1、审核工作台、主题与断点恢复
-```
+### U1：多资源整合学习
 
-- `agents/resource_workflows/learning_documents/`：现有五类文本学习文档的工作流和节点。
-- `agents/resource_workflows/interactive_courseware/`：课件工作流、Prompt、LLM 调用、Agent 契约与 AI 审核。
-- `agents/learning_agents/`：诊断、反馈策略、反馈处理和 Tutor 等非资源生产 Agent。
-- `api/<domain>/`、`services/<domain>/`、`db/<domain>/`、`core/<domain>/`、`models/<domain>/`：保持现有分层，在层内以领域子包作为唯一公开入口；迁移完成前由该层旧路径转发到新子包。
-- `services/courseware/`：调用课件工作流、持久化、规则审核、发布和谱系；不编排节点。
-- `core/courseware/`：renderer、runtime、安全、离线打包；不访问数据库或模型。
-- `frontend/src/features/<domain>/`：按领域组织 API client、composable、组件和页面协作代码；跨领域资源列表仅保留在 `resource-library` feature。
-- 现有学习文档工作流、Claim 审核和 Markdown 阅读链不得改动；任何跨域修改先补回归测试。
+目标：让课件体现多份现有资源的整合价值。
 
-## 7. 本轮最终验收
+主要工作：
 
-1. 所有功能域均已在既有层级内拥有明确归属；学习文档与课件工作流均迁移至各自专用目录，兼容层删除前的导入检查和全量回归均通过。
-2. 部署前生产就绪检查通过后，全局启用 LLM 课件生成；所有具备现有课件创建权限的用户均可直接使用。
-3. 一页失败只能影响该页；必需页未批准不能发布，可选页跳过有明确提示。
-4. 每个发布块和互动参数均可追溯到冻结来源块。
-5. 生成产物在预览和离线环境均通过安全、交互、键盘和无障碍回归。
-6. 现有五类学习文档的生成、审核、API 和阅读回归全部通过。
+- 资源选择器只读取当前反馈批次内该学习者可用的已发布资源，提供主题、类型、批次和版本信息；互动课件及其他反馈批次资源不可选。
+- 保持 1 到 8 个来源限制；默认推荐同主题且角色互补的组合，避免无关资源混合。
+- ResourceBundleSnapshot 保留每个资源的角色、版本、hash、知识点和来源块。
+- 建立 SourceConceptGraph 或等价结构，记录概念、资源覆盖、重复、互补和冲突。
+- AI planner 输出课程主线、目标、每个目标的来源集合、资源使用计划和未使用原因。
+- Storyboard 每个场景绑定 objective、source resources、source blocks 和 interaction purpose。
+- recap 不只是摘要单篇资源，而是帮助用户建立资源之间的联系。
+- 前端在生成前显示“将如何整合”，生成后显示“本课件使用了哪些资源和目标”。
+
+完成条件：
+
+- lecture-only、lecture+practice、lecture+assessment、五类齐全、重复来源、冲突来源和同批次同主题组合均有测试；跨反馈批次混选有前后端拒绝测试；
+- 所有被采用的资源至少绑定一个目标或场景；
+- 未采用资源有机器原因；
+- learner-visible 字段来源覆盖率 100%；
+- 无来源内容和跨 snapshot 引用无法进入最终课件。
+
+### U2：互动学习模式
+
+目标：让互动与学习目标匹配，而不是随机插入控件。
+
+保留并完善现有 8 类组件，同时优先增加受控高价值组件：
+
+- flashcard：概念回忆与翻转；
+- matching：术语、概念或案例配对；
+- ordering：步骤和流程排序；
+- branching_scenario：基于来源的轻量情境决策。
+
+每个新增组件必须同时具备：
+
+- 版本化 payload schema；
+- ComponentCatalog 注册；
+- renderer 和 runtime；
+- keyboard、touch、a11y；
+- source mapping；
+- 即时反馈、解释和可选提示；
+- learning event；
+- progress/resume；
+- 手机端和 reduced-motion；
+- 浏览器测试和迁移适配。
+
+AI 根据 objective、资源类型和 learner context 选择互动。缺少可验证答案时只使用探索或反思型互动，不生成可判分答案。
+
+完成条件：
+
+- 资源充分时，每份完整课件至少包含两种不同互动模式；
+- 每个判分互动的答案和解释都有来源；
+- 重复提交幂等；
+- 刷新、离线后重开和跨场景导航不丢进度；
+- 互动失败不破坏整个课件。
+
+### U3：美观与趣味性
+
+目标：让生成结果达到完整课件而非技术演示页面的观感。
+
+主要工作：
+
+- 为 editorial、midnight、paper 主题建立完整视觉 recipe：封面、章节页、内容页、互动页、反馈页和完成页。
+- AI 只能选择注册的 theme/layout/motion/icon/decoration ID。
+- 增加平台维护的图标和轻量装饰注册表；不允许模型输出任意远程 URL。
+- 优化排版、留白、卡片层级、色彩、按钮、反馈、进度条、场景切换和完成动画。
+- 同一课件保持主题一致，同时允许不同 scene kind 使用适合的注册布局。
+- 趣味性使用即时反馈、进度、轻量成就提示和探索节奏，不使用干扰学习的随机动画。
+- 320、768、1280 像素与 200% 内容缩放均无内容丢失。
+
+完成条件：
+
+- 三主题覆盖所有基础与新增组件；
+- 主题切换不改变正文、答案和来源；
+- 浏览器无 console error、横向内容丢失和不可见焦点；
+- forced-colors、reduced-motion、键盘和触控通过；
+- 截图矩阵能明显区分主题并保持统一品质。
+
+### U4：真实用户体验闭环
+
+目标：用户不需要理解内部工作流即可完成一次学习。
+
+主要工作：
+
+- 改造资源选择弹窗为信息清晰的资源组合选择器。
+- 增加可选学习目标、期望学习时长、互动强度和视觉风格；默认值必须可直接使用。
+- 生成前显示 AI 可用状态和预计处理阶段，不承诺无法保证的精确时间。
+- useCoursewareJob 支持持续 SSE、断线轮询、页面关闭后恢复和长任务等待，不以固定 10 秒作为完成边界。
+- 生成进度使用用户语言，隐藏 run、checkpoint、release 等内部术语。
+- 完成后自动选中新课件并打开；不要求用户点击人工发布。
+- Viewer 增加全屏、继续学习、重新开始、来源查看、进度和降级提示。
+- 错误提示提供可执行动作：重试场景、重试整课、修改资源组合。
+- Tutor 可读取当前课件、scene、objective 和来源上下文，但不改变课件状态。
+
+完成条件：
+
+- 从资源页到完成第一项互动的本地浏览器用户旅程通过；
+- 生成中关闭弹窗或刷新页面后能恢复任务；
+- 完成后无需手动刷新或查找新课件；
+- 用户界面不出现必须理解的内部状态名；
+- 手机端可完成同一旅程。
+
+### U5：本地质量门与优化
+
+目标：用本地证据证明三个核心方向和用户链路，而不是证明生产部署。
+
+建立本地评测集，至少覆盖：
+
+- 单讲义；
+- 讲义+实操；
+- 讲义+测试；
+- 五类完整资源；
+- 同批次同主题多资源；
+- 跨反馈批次混选拒绝；
+- 重复内容；
+- 来源冲突；
+- 缺少 assessment；
+- AI schema repair；
+- scene retry；
+- AI revision；
+- emergency fallback；
+- 320px 与桌面用户旅程。
+
+自动化评测使用 fake provider 驱动真实 AI workflow。全部本地门完成后，如果用户明确授权真实模型调用，再选取 lecture-only、lecture+practice+assessment、五类完整资源和可恢复 schema 错误等少量脱敏组合执行本地 live smoke，检查真实 AI 内容、互动、来源、时延、token 和 fallback。该 smoke 不涉及生产部署。
+
+报告必须分离：
+
+- 资源融合：来源覆盖、目标覆盖、跨资源关联、冲突处理、未使用原因；
+- AI：主路径尝试、spec/scene/review/revision 成功、整课 AI 成功、fallback；
+- 互动：模式数、完成率、答案来源、事件和恢复；
+- 视觉：主题、布局、响应式、a11y、console、截图；
+- UX：创建成功、终态耗时、自动打开、继续学习和错误恢复。
+
+完成条件：
+
+- 本地后端、课件专项、迁移、前端专项、浏览器和 build 全绿；
+- 用户旅程测试通过；
+- 三个核心方向均有可复验证据；
+- 不以 CI、部署或真实发布周期是否完成阻塞本轮开发验收。
+
+## 6. 关键技术边界
+
+- 模型只输出结构化契约，不直接输出 HTML、CSS、JavaScript、URL 或 CSP。
+- 组件只能来自版本化注册表；未知组件或版本硬拒绝。
+- 每个 learner-visible 字段和判分答案必须来源可追溯。
+- AI prompt、模型调用和路由留在 interactive_courseware Agent 工作流。
+- CoursewareService 只协调任务、仓储和公开用例。
+- core/courseware 保持确定性，不访问数据库或模型。
+- Web 不执行长任务；本地仍使用一个 Web 加一个 Durable Worker。
+- 新字段优先向后兼容；旧 HTTP 路径、认证和五类学习文档行为不回归。
+- 用户界面不提供 deterministic generation、人工审核或人工发布选项。
+
+## 7. 本地验证命令
+
+执行者按改动范围先跑专项，再跑本地完整门：
+
+    python -m pytest backend/tests/unit/agents/test_courseware_worker.py backend/tests/unit/core -q -p no:cacheprovider
+
+    python -m pytest backend/tests/integration/courseware backend/tests/e2e/courseware backend/tests/migrations -q -p no:cacheprovider
+
+    python backend/scripts/courseware_live_model_eval.py --fake --output backend/.pytest-tmp/courseware-ai-fake.json
+
+    python backend/scripts/courseware_eval.py --manifest backend/tests/fixtures/courseware/evals/manifest.json --baseline backend/tests/fixtures/courseware/evals/baseline.json --output backend/.pytest-tmp/courseware-eval.json
+
+    npm --prefix frontend run test:courseware-source-policy
+    npm --prefix frontend run test:courseware-events
+    npm --prefix frontend run test:courseware-journey
+    $env:COURSEWARE_BROWSER_REQUIRED='1'
+    npm --prefix frontend run test:courseware-browser
+    Remove-Item Env:COURSEWARE_BROWSER_REQUIRED
+    npm --prefix frontend run test:workflow-events
+    npm --prefix frontend run test:tutor
+    npm --prefix frontend run build
+
+    python -m pytest backend/tests -q -p no:cacheprovider
+
+    git diff --check
+    git status --short
+
+真实模型测试只有用户另行明确授权并提供预期凭据时才运行。不得把 fake provider 结果描述为真实模型质量；未授权时使用 LIVE_MODEL_AUTHORIZATION_PENDING，而不是 passed 或 failed。
+
+## 8. 执行与交付规则
+
+1. 依次执行 U0-U5，不在每阶段结束后等待用户发送“继续”。
+2. 每阶段先加失败反例，再修改真实实现，再跑专项与上层回归。
+3. 不删除或放宽测试来制造成功。
+4. 不覆盖用户已有修改，不提交临时报告、数据库、截图目录、构建产物或凭据。
+5. 不提交、推送、合并或触发外部系统。
+6. 每阶段完成后在本文末尾追加一条简短执行记录：阶段、文件、命令、结果、剩余本地缺口。
+7. 已延期的 CI、部署和真实周期不写成失败，也不能写成已经完成。
+8. 最终交付必须分别说明资源整合、互动、美观趣味和用户链路改善了什么，并给出准确测试计数。
+
+## 9. 本地开发完成定义
+
+只有同时满足以下条件，才可以写“当前课件链路本地真实可用”：
+
+- [ ] 正常任务由 AI 完成 spec、scene、review 和必要 revision。
+- [ ] emergency deterministic fallback 不是正常选项，且与 AI 成功率分开。
+- [ ] 用户可从已有资源中选择合理组合并看到整合结果和来源。
+- [ ] 完整课件至少具备符合资源条件的多种互动模式。
+- [ ] 课件在桌面和手机上美观、清晰、可操作并能恢复进度。
+- [ ] 用户从点击生成到打开课件并完成互动的本地旅程通过。
+- [ ] 已知 Worker lease 问题修复。
+- [ ] 后端全量、前端专项、浏览器和 build 无非预期回归。
+
+达到这些条件只代表开发阶段本地真实可用，不代表生产部署完成。

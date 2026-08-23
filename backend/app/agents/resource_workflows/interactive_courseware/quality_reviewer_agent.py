@@ -9,15 +9,17 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareReviewDecision
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
-from app.core.llm_gateway import LLMGateway, LLMGatewayError
-from app.models.llm import LLMCallContext
+from app.core.llm.gateway import LLMGateway, LLMGatewayError
+from app.models.shared.llm import LLMCallContext
+from app.models.shared.llm import LLMCallOptions
 
 
-def review_courseware_quality(
-    llm_gateway: LLMGateway | None, run_id: str, document: dict[str, Any]
-) -> tuple[list[dict[str, Any]], dict[str, str] | None]:
+def review_courseware_quality_decision(
+    llm_gateway: LLMGateway | None, run_id: str, document: dict[str, Any],
+    *, allowance: LLMCallOptions | None = None,
+) -> tuple[CoursewareReviewDecision, dict[str, Any] | None]:
     if not courseware_ai_available(llm_gateway):
-        return [], None
+        return _unavailable("AI_QUALITY_REVIEW_UNAVAILABLE", "AI 教学质量审核不可用")
     safe_document = {
         "title": document.get("title"),
         "scenes": [
@@ -40,8 +42,33 @@ def review_courseware_quality(
                 run_id=run_id, step_id=f"{run_id}:quality-review", node_name="courseware_quality_reviewer",
                 schema_name="CoursewareReviewDecision",
             ),
-            options=llm_gateway.options_for("generator", temperature=0.0),
+            options=allowance or llm_gateway.options_for("generator", temperature=0.0),
         )
-        return [issue.model_dump(mode="json") for issue in result.output.issues], None
+        trace_method = getattr(result, "trace_metadata", None)
+        trace = trace_method() if callable(trace_method) else {}
+        if hasattr(result.output, "model_copy"):
+            output = result.output.model_copy(update={"trace_metadata": trace})
+        else:
+            output = result.output
+        return output, None
     except LLMGatewayError:
-        return [], {"code": "AI_QUALITY_REVIEW_SKIPPED", "message": "AI 教学质量审核不可用，已完成规则审核"}
+        return _unavailable("AI_QUALITY_REVIEW_GATEWAY_ERROR", "AI 教学质量审核调用失败")
+    except Exception:
+        # Timeouts, empty responses and schema failures are unavailable review
+        # evidence; none of them can be represented as an approval.
+        return _unavailable("AI_QUALITY_REVIEW_INVALID_OUTPUT", "AI 教学质量审核未返回有效结构化结论")
+
+
+def _unavailable(code: str, message: str) -> tuple[CoursewareReviewDecision, dict[str, Any]]:
+    return (
+        CoursewareReviewDecision(decision="unavailable", confidence=0.0),
+        {"code": code, "message": message, "fallback_version": "deterministic-v1"},
+    )
+
+
+def review_courseware_quality(
+    llm_gateway: LLMGateway | None, run_id: str, document: dict[str, Any]
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Compatibility adapter for callers that only need serializable issues."""
+    decision, warning = review_courseware_quality_decision(llm_gateway, run_id, document)
+    return [issue.model_dump(mode="json") for issue in decision.issues], warning

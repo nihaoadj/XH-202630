@@ -10,8 +10,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareSceneSpec
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
-from app.core.llm_gateway import LLMGateway, LLMGatewayError
-from app.models.llm import LLMCallContext
+from app.core.llm.gateway import LLMGateway, LLMGatewayError
+from app.models.shared.llm import LLMCallContext
+from app.models.shared.llm import LLMCallOptions
 
 
 def compose_courseware_scene(
@@ -20,7 +21,8 @@ def compose_courseware_scene(
     scene_id: str,
     deterministic_scene: dict[str, Any],
     source: dict[str, Any],
-) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    *, allowance: LLMCallOptions | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Return None for a failed model call so the service can retain its fallback."""
     if not courseware_ai_available(llm_gateway):
         return None, None
@@ -28,6 +30,7 @@ def compose_courseware_scene(
         {"block_id": item["block_id"], "text": str(item.get("text") or "")[:1600]}
         for item in source.get("blocks", [])[:12]
     ]
+    review_instruction = str(deterministic_scene.get("_review_instruction") or "").strip()
     try:
         result = llm_gateway.invoke_structured(
             messages=[
@@ -40,7 +43,8 @@ def compose_courseware_scene(
                     "scene_id": scene_id, "required_kind": deterministic_scene["kind"],
                     "fallback_title": deterministic_scene["title"], "source_resource_id": source["resource_id"],
                     "source_blocks": source_blocks,
-                    "supported_components": ["callout", "key_point", "steps", "single_choice", "multiple_choice", "recap"],
+                    "supported_components": ["callout", "key_point", "steps", "single_choice", "multiple_choice", "recap", "flashcard", "matching", "ordering"],
+                    "review_instruction": review_instruction or None,
                 }, ensure_ascii=False)),
             ],
             output_schema=CoursewareSceneSpec,
@@ -48,7 +52,7 @@ def compose_courseware_scene(
                 run_id=run_id, step_id=f"{run_id}:{scene_id}", node_name="courseware_scene_composer",
                 schema_name="CoursewareSceneSpec",
             ),
-            options=llm_gateway.options_for("generator", temperature=0.0),
+            options=allowance or llm_gateway.options_for("generator", temperature=0.0),
         )
         spec = result.output
         allowed_blocks = {item["block_id"] for item in source_blocks}
@@ -59,6 +63,20 @@ def compose_courseware_scene(
         values = [spec.title, *(block.text for block in spec.blocks), *spec.steps, *spec.options, spec.feedback]
         if any(re.search(r"<[^>]+>|https?://|javascript:\s*", str(value or ""), flags=re.IGNORECASE) for value in values):
             raise ValueError("AI 场景包含不安全的学习者内容")
-        return spec.to_renderer_scene(), None
-    except (LLMGatewayError, ValueError):
-        return None, {"code": "AI_SCENE_FALLBACK", "message": f"场景 {scene_id} 的 AI 内容不可用，已保留可追溯的确定性版本"}
+        trace_method = getattr(result, "trace_metadata", None)
+        trace = trace_method() if callable(trace_method) else {}
+        if not trace:
+            return spec.to_renderer_scene(), None
+        return spec.to_renderer_scene(), {
+            "code": "LLM_TRACE",
+            "node_name": "courseware_scene_composer",
+            "trace": trace,
+        }
+    except (LLMGatewayError, ValueError) as exc:
+        detail = str(exc)
+        code = "AI_SCENE_FALLBACK"
+        if "未注册" in detail or "component" in detail.lower():
+            code = "AI_SCENE_UNKNOWN_COMPONENT"
+        elif "来源块" in detail or "source" in detail.lower():
+            code = "AI_SCENE_UNKNOWN_SOURCE_BLOCK"
+        return None, {"code": code, "message": f"场景 {scene_id} 的 AI 内容不可用，已保留可追溯的确定性版本"}

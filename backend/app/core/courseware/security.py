@@ -12,9 +12,9 @@ def _sha256_csp(value: str) -> str:
     return "sha256-" + base64.b64encode(digest).decode("ascii")
 
 
-def security_policy(*, include_frame_ancestors: bool = False) -> str:
+def security_policy(*, include_frame_ancestors: bool = False, style_content: str = STYLE) -> str:
     directives = [
-        "default-src 'none'", f"style-src '{_sha256_csp(STYLE)}'",
+        "default-src 'none'", f"style-src '{_sha256_csp(style_content)}'",
         f"script-src '{_sha256_csp(SCRIPT)}'", "img-src data:", "connect-src 'none'",
         "font-src 'none'", "media-src 'none'", "object-src 'none'", "base-uri 'none'",
         "form-action 'none'", "frame-src 'none'",

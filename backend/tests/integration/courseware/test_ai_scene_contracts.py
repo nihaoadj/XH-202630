@@ -2,8 +2,11 @@
 
 from types import SimpleNamespace
 
+import pytest
 from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareSceneSpec
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import compose_courseware_scene
+from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import review_courseware_quality_decision
+from app.core.courseware.renderer import render_courseware
 from app.services.courseware.review import source_trace_review
 
 
@@ -73,3 +76,57 @@ def test_unsafe_ai_scene_is_blocked_before_renderer(monkeypatch):
     # Unsafe prose is isolated to this scene and the caller retains its deterministic fallback.
     assert rendered is None
     assert warning and warning["code"] == "AI_SCENE_FALLBACK"
+
+
+def test_renderer_rejects_unregistered_component_before_artifact_creation():
+    with pytest.raises(ValueError, match="未注册互动组件"):
+        render_courseware({
+            "title": "组件边界", "scenes": [{
+                "kind": "intro", "title": "开始", "blocks": ["安全内容"],
+                "source_refs": ["lecture"], "source_block_ids": ["b1"],
+                "component_blocks": [{"component": "arbitrary_html", "text": "不应渲染"}],
+            }],
+        })
+
+
+def test_renderer_dispatches_registered_component_through_catalog_owned_markup():
+    artifact = render_courseware({
+        "title": "组件边界", "scenes": [{
+            "kind": "intro", "title": "开始", "blocks": ["安全内容"],
+            "source_refs": ["lecture"], "source_block_ids": ["b1"],
+            "component_blocks": [{"component": "key_point", "text": "只渲染受控文本。"}],
+        }],
+    })
+    assert b'aria-label="' in artifact
+    assert b"component-key-point" in artifact
+
+
+def test_unavailable_quality_reviewer_is_never_recorded_as_approved(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent as reviewer
+
+    monkeypatch.setattr(reviewer, "courseware_ai_available", lambda _gateway: False)
+    decision, warning = review_courseware_quality_decision(None, "run-1", {"title": "课件", "scenes": []})
+
+    assert decision.decision == "unavailable"
+    assert warning == {
+        "code": "AI_QUALITY_REVIEW_UNAVAILABLE",
+        "message": "AI 教学质量审核不可用",
+        "fallback_version": "deterministic-v1",
+    }
+
+
+def test_invalid_quality_reviewer_output_is_unavailable(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent as reviewer
+
+    monkeypatch.setattr(reviewer, "courseware_ai_available", lambda _gateway: True)
+
+    class Gateway:
+        def options_for(self, *_args, **_kwargs):
+            return object()
+
+        def invoke_structured(self, **_kwargs):
+            raise RuntimeError("malformed response")
+
+    decision, warning = review_courseware_quality_decision(Gateway(), "run-1", {"title": "课件", "scenes": []})
+    assert decision.decision == "unavailable"
+    assert warning and warning["code"] == "AI_QUALITY_REVIEW_INVALID_OUTPUT"

@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from app.services.resource_service import ResourceService
+from app.services.learning_documents.resources import ResourceService
 
 
 def reconcile_stale_resources(

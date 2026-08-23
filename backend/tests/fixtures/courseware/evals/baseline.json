@@ -1,0 +1,455 @@
+{
+  "schema_version": "1.0",
+  "case_count": 12,
+  "passed": true,
+  "reports": [
+    {
+      "fixture": "single-lecture",
+      "passed": true,
+      "failed_gates": [],
+      "scene_orders": [
+        0,
+        1
+      ],
+      "components": [
+        "callout"
+      ],
+      "allowed_components": [
+        "callout",
+        "key_point",
+        "recap"
+      ],
+      "unexpected_components": [],
+      "source_block_ids": [
+        "block-1"
+      ],
+      "artifact_hash": "6d0e7218bb74437432636ac740b217fad7ec86807b3484824a592eee07914603",
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "publish",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 2,
+        "max_seconds": 30
+      },
+      "trace_issues": [],
+      "quality_issues": []
+    },
+    {
+      "fixture": "lecture-practice-quiz",
+      "passed": true,
+      "failed_gates": [],
+      "scene_orders": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "components": [
+        "callout"
+      ],
+      "allowed_components": [
+        "callout",
+        "recap",
+        "single_choice",
+        "steps"
+      ],
+      "unexpected_components": [],
+      "source_block_ids": [
+        "block-1"
+      ],
+      "artifact_hash": "36e2ca35783e92aa41f7d14ba0ca4059d943614d4c0640d3c0a6f2a9cabe81aa",
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "publish",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 2,
+        "max_seconds": 45
+      },
+      "trace_issues": [],
+      "quality_issues": []
+    },
+    {
+      "fixture": "missing-quiz",
+      "passed": true,
+      "failed_gates": [],
+      "scene_orders": [
+        0,
+        1,
+        2
+      ],
+      "components": [
+        "callout"
+      ],
+      "allowed_components": [
+        "callout",
+        "recap",
+        "steps"
+      ],
+      "unexpected_components": [],
+      "source_block_ids": [
+        "block-1"
+      ],
+      "artifact_hash": "7d2e53e09a7a76236f5dc0f38f443746df3774062e938791bffe06a930fac188",
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "publish_with_warning",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 2,
+        "max_seconds": 30
+      },
+      "trace_issues": [],
+      "quality_issues": []
+    },
+    {
+      "fixture": "duplicate-source",
+      "passed": false,
+      "failed_gates": [
+        "artifact_security"
+      ],
+      "scene_orders": [],
+      "components": [],
+      "allowed_components": [],
+      "unexpected_components": [],
+      "source_block_ids": [],
+      "artifact_hash": null,
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "admission_reject",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 1,
+        "max_seconds": 10
+      },
+      "trace_issues": [],
+      "quality_issues": [
+        {
+          "code": "MISSING_INTRO"
+        },
+        {
+          "code": "MISSING_RECAP"
+        },
+        {
+          "code": "ARTIFACT_GATE_FAILED",
+          "error_type": "ValueError"
+        }
+      ]
+    },
+    {
+      "fixture": "empty-source",
+      "passed": false,
+      "failed_gates": [
+        "artifact_security"
+      ],
+      "scene_orders": [],
+      "components": [],
+      "allowed_components": [],
+      "unexpected_components": [],
+      "source_block_ids": [],
+      "artifact_hash": null,
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "admission_reject",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 1,
+        "max_seconds": 10
+      },
+      "trace_issues": [],
+      "quality_issues": [
+        {
+          "code": "MISSING_INTRO"
+        },
+        {
+          "code": "MISSING_RECAP"
+        },
+        {
+          "code": "ARTIFACT_GATE_FAILED",
+          "error_type": "ValueError"
+        }
+      ]
+    },
+    {
+      "fixture": "unknown-source",
+      "passed": false,
+      "failed_gates": [
+        "artifact_security"
+      ],
+      "scene_orders": [],
+      "components": [],
+      "allowed_components": [],
+      "unexpected_components": [],
+      "source_block_ids": [],
+      "artifact_hash": null,
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "admission_reject",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 1,
+        "max_seconds": 10
+      },
+      "trace_issues": [],
+      "quality_issues": [
+        {
+          "code": "MISSING_INTRO"
+        },
+        {
+          "code": "MISSING_RECAP"
+        },
+        {
+          "code": "ARTIFACT_GATE_FAILED",
+          "error_type": "ValueError"
+        }
+      ]
+    },
+    {
+      "fixture": "unsafe-model-content",
+      "passed": true,
+      "failed_gates": [],
+      "scene_orders": [
+        0,
+        1
+      ],
+      "components": [
+        "callout"
+      ],
+      "allowed_components": [
+        "callout",
+        "recap"
+      ],
+      "unexpected_components": [],
+      "source_block_ids": [
+        "block-1"
+      ],
+      "artifact_hash": "f0ca146ec0ee86b0d12c96e56140ff108feefc00249a14ffd5cefade7769376e",
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "scene_fallback",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 2,
+        "max_seconds": 30
+      },
+      "trace_issues": [],
+      "quality_issues": []
+    },
+    {
+      "fixture": "unknown-component",
+      "passed": false,
+      "failed_gates": [
+        "allowed_components",
+        "artifact_security",
+        "zero_unknown_components"
+      ],
+      "scene_orders": [
+        0,
+        1
+      ],
+      "components": [
+        "arbitrary_html"
+      ],
+      "allowed_components": [
+        "callout",
+        "recap"
+      ],
+      "unexpected_components": [
+        "arbitrary_html"
+      ],
+      "source_block_ids": [
+        "block-1"
+      ],
+      "artifact_hash": null,
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "release_reject",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 1,
+        "max_seconds": 20
+      },
+      "trace_issues": [
+        {
+          "code": "UNKNOWN_COMPONENT",
+          "scene_order": 0
+        },
+        {
+          "code": "UNKNOWN_COMPONENT",
+          "scene_order": 1
+        }
+      ],
+      "quality_issues": [
+        {
+          "code": "ARTIFACT_GATE_FAILED",
+          "error_type": "ValueError"
+        }
+      ]
+    },
+    {
+      "fixture": "unknown-source-block",
+      "passed": false,
+      "failed_gates": [
+        "zero_unknown_source_blocks"
+      ],
+      "scene_orders": [
+        0,
+        1
+      ],
+      "components": [
+        "callout"
+      ],
+      "allowed_components": [
+        "callout",
+        "recap"
+      ],
+      "unexpected_components": [],
+      "source_block_ids": [
+        "missing-block"
+      ],
+      "artifact_hash": "ae4ed0bf0e7b7bcfc221d3960da5c32436cd6fd580b42facaf681aec82581028",
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "release_reject",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 1,
+        "max_seconds": 20
+      },
+      "trace_issues": [
+        {
+          "code": "UNKNOWN_SOURCE_BLOCK_REF",
+          "scene_order": 0
+        },
+        {
+          "code": "INVALID_BLOCK_SOURCE_MAP",
+          "scene_order": 0
+        },
+        {
+          "code": "UNKNOWN_BLOCK_SOURCE_BLOCK_REF",
+          "scene_order": 0
+        },
+        {
+          "code": "UNKNOWN_SOURCE_BLOCK_REF",
+          "scene_order": 1
+        },
+        {
+          "code": "INVALID_BLOCK_SOURCE_MAP",
+          "scene_order": 1
+        },
+        {
+          "code": "UNKNOWN_BLOCK_SOURCE_BLOCK_REF",
+          "scene_order": 1
+        }
+      ],
+      "quality_issues": []
+    },
+    {
+      "fixture": "scene-retry-idempotent",
+      "passed": true,
+      "failed_gates": [],
+      "scene_orders": [
+        0,
+        1,
+        2
+      ],
+      "components": [
+        "callout"
+      ],
+      "allowed_components": [
+        "callout",
+        "recap",
+        "steps"
+      ],
+      "unexpected_components": [],
+      "source_block_ids": [
+        "block-1"
+      ],
+      "artifact_hash": "ed7a435c2d2c4965f21887e22168b79ace21d2c11d90b8f56c325cef1575e826",
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "single_revision",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 2,
+        "max_seconds": 45
+      },
+      "trace_issues": [],
+      "quality_issues": []
+    },
+    {
+      "fixture": "ai-review-revision",
+      "passed": true,
+      "failed_gates": [],
+      "scene_orders": [
+        0,
+        1
+      ],
+      "components": [
+        "key_point"
+      ],
+      "allowed_components": [
+        "key_point",
+        "recap"
+      ],
+      "unexpected_components": [],
+      "source_block_ids": [
+        "block-1"
+      ],
+      "artifact_hash": "985ca75901816b93a6e274a0cf62962cf7841dfe491102e17544e024f8e55b29",
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "auto_revision",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 2,
+        "max_seconds": 60
+      },
+      "trace_issues": [],
+      "quality_issues": []
+    },
+    {
+      "fixture": "ai-review-unresolved",
+      "passed": false,
+      "failed_gates": [
+        "field_level_source_map"
+      ],
+      "scene_orders": [
+        0,
+        1
+      ],
+      "components": [
+        "callout"
+      ],
+      "allowed_components": [
+        "callout",
+        "recap"
+      ],
+      "unexpected_components": [],
+      "source_block_ids": [
+        "block-1"
+      ],
+      "artifact_hash": "118d3eb2303a81545e6667493284b27bd791da83b43ac73c2088605ef96f4455",
+      "expected_artifact_hash": null,
+      "baseline_diff": null,
+      "expected_hard_gate_result": "quarantine",
+      "outcome_matches_manifest": true,
+      "budget": {
+        "max_attempts": 2,
+        "max_seconds": 60
+      },
+      "trace_issues": [
+        {
+          "code": "INVALID_BLOCK_SOURCE_MAP",
+          "scene_order": 0
+        },
+        {
+          "code": "INVALID_BLOCK_SOURCE_MAP",
+          "scene_order": 1
+        }
+      ],
+      "quality_issues": []
+    }
+  ]
+}

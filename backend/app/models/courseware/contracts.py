@@ -8,10 +8,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+
 CoursewareJobState = Literal[
     "queued", "admitting", "snapshotting", "design_reviewing", "composing",
-    "trace_reviewing", "quality_reviewing", "rendering", "validating", "publishing",
+    "trace_reviewing", "quality_reviewing", "auto_revising", "rendering", "validating", "publishing",
     "approved_pending_publish", "published", "published_with_warnings", "rejected_admission", "failed",
+    "quarantined", "release_blocked", "cancelled", "timed_out",
 ]
 
 
@@ -19,7 +21,13 @@ class CoursewareJobCreateRequest(BaseModel):
     learner_id: str = Field(min_length=1, max_length=64)
     source_resource_ids: list[str] = Field(min_length=1, max_length=8)
     title: str | None = Field(default=None, max_length=160)
-    publish_mode: Literal["manual", "automatic"] = "manual"
+    learning_goal: str | None = Field(default=None, max_length=240)
+    expected_duration_minutes: int | None = Field(default=None, ge=5, le=240)
+    interaction_intensity: Literal["low", "medium", "high"] = "medium"
+    visual_style_id: Literal["editorial", "midnight", "paper"] | None = None
+    # ``manual`` remains accepted only for requests persisted before the
+    # automation rollout. New work is always released by the quality gates.
+    publish_mode: Literal["manual", "automatic"] = "automatic"
     idempotency_key: str | None = Field(default=None, max_length=128)
 
     @field_validator("source_resource_ids")
@@ -36,9 +44,12 @@ class CoursewareJobResponse(BaseModel):
     learner_id: str
     status: CoursewareJobState
     title: str | None = None
-    publish_mode: Literal["manual", "automatic"] = "manual"
+    publish_mode: Literal["manual", "automatic"] = "automatic"
     resource_id: str | None = None
-    warnings: list[dict[str, str]] = Field(default_factory=list)
+    request_options: dict[str, Any] = Field(default_factory=dict)
+    # Warning payloads may carry machine-readable flags (for example
+    # ``discarded_candidate``) in addition to human-readable strings.
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
     created_at: datetime | None = None
@@ -52,6 +63,10 @@ class CoursewareSceneStatus(BaseModel):
     title: str | None = None
     status: str
     attempt: int = 0
+    input_snapshot_hash: str | None = None
+    agent_version: str | None = None
+    prompt_version: str | None = None
+    review_instruction: str | None = None
     error_code: str | None = None
     error_message: str | None = None
 
@@ -60,6 +75,7 @@ class CoursewareJobDetail(CoursewareJobResponse):
     scenes: list[CoursewareSceneStatus] = Field(default_factory=list)
     reviews: list[dict[str, Any]] = Field(default_factory=list)
     artifacts: list[dict[str, Any]] = Field(default_factory=list)
+    scene_revisions: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
 
 
 class CoursewareEvent(BaseModel):
@@ -85,6 +101,6 @@ class CoursewareResourceDetail(BaseModel):
     artifact_sha256: str
     artifact_size: int
     source_summary: list[dict[str, Any]] = Field(default_factory=list)
-    warnings: list[dict[str, str]] = Field(default_factory=list)
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
     created_at: datetime | None = None
     published_at: datetime | None = None

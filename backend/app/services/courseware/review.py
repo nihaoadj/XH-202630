@@ -3,6 +3,8 @@
 import re
 from typing import Any
 
+from app.core.courseware.components import is_registered_component
+
 
 def source_trace_review(
     document: dict[str, Any], snapshots: list[dict[str, Any]]
@@ -35,6 +37,10 @@ def source_trace_review(
         component_blocks = scene.get("component_blocks") or []
         for block in component_blocks:
             block_refs = block.get("source_refs") if isinstance(block, dict) else None
+            if not isinstance(block, dict) or not is_registered_component(
+                    block.get("component"), str(block.get("schema_version") or "1.0")):
+                issues.append({"code": "UNKNOWN_COMPONENT", "scene_order": index})
+                continue
             if not block_refs:
                 issues.append({"code": "MISSING_BLOCK_SOURCE_REF", "scene_order": index})
                 continue

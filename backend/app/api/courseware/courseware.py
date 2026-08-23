@@ -3,7 +3,7 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from app.api.dependencies import ensure_profile_access
@@ -11,6 +11,7 @@ from app.core.courseware.security import security_policy
 from app.models.courseware import (
     CoursewareJobCreateRequest, CoursewareJobDetail, CoursewareJobResponse, CoursewareResourceDetail,
 )
+from app.models.courseware.events import CoursewareLearningEventBatch
 
 
 router = APIRouter()
@@ -41,13 +42,11 @@ def _authorized_resource(resource_id: str, request: Request) -> CoursewareResour
 
 
 @router.post("/courseware/jobs", response_model=CoursewareJobResponse)
-def create_courseware_job(payload: CoursewareJobCreateRequest, request: Request, background_tasks: BackgroundTasks):
+def create_courseware_job(payload: CoursewareJobCreateRequest, request: Request):
     profile = request.app.container.profile_service().get(payload.learner_id)
     if ensure_profile_access(request, profile) is None:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
     job = _service(request).create_job(payload)
-    if job.status == "queued":
-        background_tasks.add_task(_service(request).run_job, job.run_id)
     return job
 
 
@@ -65,7 +64,11 @@ def get_courseware_job_detail(run_id: str, request: Request):
 @router.get("/courseware/jobs/{run_id}/events")
 def stream_courseware_events(run_id: str, request: Request, after_sequence: int = 0):
     _authorized_job(run_id, request)
-    terminal = {"approved_pending_publish", "published", "published_with_warnings", "rejected_admission", "failed"}
+    terminal = {
+        "approved_pending_publish", "published", "published_with_warnings",
+        "rejected_admission", "failed", "quarantined", "release_blocked",
+        "cancelled", "timed_out",
+    }
 
     async def stream():
         sequence = max(0, after_sequence)
@@ -90,23 +93,54 @@ def stream_courseware_events(run_id: str, request: Request, after_sequence: int 
 
 
 @router.post("/courseware/jobs/{run_id}/retry", response_model=CoursewareJobResponse)
-def retry_courseware_job(run_id: str, request: Request, background_tasks: BackgroundTasks):
+def retry_courseware_job(run_id: str, request: Request):
     job = _authorized_job(run_id, request)
     if job.status in {"published", "published_with_warnings"}:
         return job
-    background_tasks.add_task(_service(request).retry, run_id)
-    return _service(request).get_job(run_id) or job
+    return _service(request).retry(run_id) or job
+
+
+@router.post("/courseware/jobs/{run_id}/cancel", response_model=CoursewareJobResponse)
+def cancel_courseware_job(run_id: str, request: Request):
+    job = _authorized_job(run_id, request)
+    return _service(request).cancel(run_id) or job
 
 
 @router.post("/courseware/jobs/{run_id}/scenes/{scene_id}/retry", response_model=CoursewareJobResponse)
-def retry_courseware_scene(run_id: str, scene_id: str, request: Request, background_tasks: BackgroundTasks):
+def retry_courseware_scene(run_id: str, scene_id: str, request: Request):
     job = _authorized_job(run_id, request)
     detail = _service(request).get_job_detail(run_id)
     if detail is None or all(scene.scene_id != scene_id for scene in detail.scenes):
         raise HTTPException(status_code=404, detail="课件场景不存在")
-    if job.status not in {"approved_pending_publish", "published", "published_with_warnings"}:
-        background_tasks.add_task(_service(request).retry_scene, run_id, scene_id)
+    # Scene retry is intentionally available after publication: it creates a
+    # new scene revision without replaying the whole course workflow.
+    _service(request).retry_scene(run_id, scene_id, enqueue_only=True)
     return _service(request).get_job(run_id) or job
+
+
+@router.get("/courseware/jobs/{run_id}/scenes/{scene_id}/review")
+def get_courseware_scene_review(run_id: str, scene_id: str, request: Request):
+    """Return review-safe scene diagnostics without exposing prompts or raw model output."""
+    _authorized_job(run_id, request)
+    detail = _service(request).get_job_detail(run_id)
+    if detail is None or all(scene.scene_id != scene_id for scene in detail.scenes):
+        raise HTTPException(status_code=404, detail="课件场景不存在")
+    service = _service(request)
+    spec = service.repo.get_spec_by_run(run_id)
+    stored = service.repo.get_scene(scene_id)
+    if spec is None or stored is None:
+        raise HTTPException(status_code=404, detail="课件场景不存在")
+    return {
+        "scene_id": scene_id,
+        "scene": stored["scene_json"],
+        "status": stored["status"],
+        "attempt": stored["attempt"],
+        "input_snapshot_hash": stored.get("input_snapshot_hash"),
+        "agent_version": stored.get("agent_version"),
+        "prompt_version": stored.get("prompt_version"),
+        "reviews": [review for review in detail.reviews if review.get("scene_id") in {None, scene_id}],
+        "revisions": service.repo.list_scene_revisions(scene_id),
+    }
 
 
 @router.post("/courseware/jobs/{run_id}/publish", response_model=CoursewareJobResponse)
@@ -120,6 +154,22 @@ def publish_courseware_job(run_id: str, request: Request):
 @router.get("/courseware/items/{resource_id}", response_model=CoursewareResourceDetail)
 def get_courseware_resource(resource_id: str, request: Request):
     return _authorized_resource(resource_id, request)
+
+
+@router.post("/courseware/items/{resource_id}/learning-events")
+def ingest_courseware_learning_events(resource_id: str, payload: CoursewareLearningEventBatch, request: Request):
+    resource = _authorized_resource(resource_id, request)
+    events = [item.model_dump(mode="json") for item in payload.events]
+    if any(item.get("resource_id") != resource_id for item in events):
+        raise HTTPException(status_code=400, detail="事件资源与当前课件不匹配")
+    acknowledged = _service(request).ingest_learning_events(events)
+    return {"acknowledged_event_ids": [item["event_id"] for item in acknowledged]}
+
+
+@router.get("/courseware/items/{resource_id}/learning-progress")
+def get_courseware_learning_progress(resource_id: str, release_id: str, request: Request):
+    _authorized_resource(resource_id, request)
+    return _service(request).learning_progress(resource_id, release_id)
 
 
 @router.get("/courseware/items/{resource_id}/preview")

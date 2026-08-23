@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "components": [
+    "callout",
+    "key_point",
+    "compare",
+    "steps",
+    "ordered_steps",
+    "single_choice",
+    "multiple_choice",
+    "recap"
+  ],
+  "required_evidence": [
+    "renderer",
+    "runtime",
+    "source_mapping",
+    "keyboard",
+    "touch_target",
+    "a11y"
+  ]
+}

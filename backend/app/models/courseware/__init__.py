@@ -9,6 +9,9 @@ from app.models.courseware.contracts import (
     CoursewareResourceDetail,
     CoursewareSceneStatus,
 )
+from app.models.courseware.provenance import ProvenanceEdge, ProvenanceGraph, ProvenanceNode
+from app.models.courseware.design import CoursewareDesign, LayoutSpec, MotionSpec, ThemeSpec
+from app.models.courseware.events import CoursewareEventType, CoursewareLearningEvent
 
 __all__ = [
     "CoursewareEvent",
@@ -18,4 +21,13 @@ __all__ = [
     "CoursewareJobState",
     "CoursewareResourceDetail",
     "CoursewareSceneStatus",
+    "ProvenanceEdge",
+    "ProvenanceGraph",
+    "ProvenanceNode",
+    "CoursewareDesign",
+    "ThemeSpec",
+    "LayoutSpec",
+    "MotionSpec",
+    "CoursewareEventType",
+    "CoursewareLearningEvent",
 ]
