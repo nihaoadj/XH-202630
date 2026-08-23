@@ -25,4 +25,5 @@ def test_replay_deduplicates_and_projects_completion_without_mutating_profile():
     assert projector.progress(resource_id="r", release_id="a") == {
         "resource_id": "r", "release_id": "a", "viewed_scene_ids": ["s1"],
         "completed_scene_ids": ["s1"], "courseware_completed": True, "answer_count": 0,
+        "current_scene_id": "s1", "current_scene_index": 0, "component_state": {},
     }

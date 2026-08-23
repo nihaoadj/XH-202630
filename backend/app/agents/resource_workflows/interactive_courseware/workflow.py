@@ -20,6 +20,7 @@ from app.core.courseware.runtime import RENDERER_VERSION, RUNTIME_VERSION
 from app.core.courseware.security import browser_smoke_check
 from app.core.courseware.evaluation import quality_gate_report
 from app.core.courseware.learning_design import build_learning_design
+from app.core.courseware.quality_summary import build_quality_summary
 from app.core.courseware.storage import save_courseware_artifact, save_courseware_html
 from app.core.storage.file_storage import load_resource_file
 from app.core.storage import file_storage
@@ -1024,6 +1025,7 @@ class InteractiveCoursewareWorkflow:
         return CoursewareResourceDetail(
             resource_id=row["resource_id"], learner_id=row["learner_id"], run_id=row["run_id"],
             title=row["title"], topic=row["topic"], status=row["status"], version=row["version"],
+            released_release_id=row.get("released_release_id"),
             artifact_sha256=row["artifact_sha256"], artifact_size=row["file_size"],
             source_summary=row["source_summary"], warnings=row["warnings"],
             created_at=row.get("created_at"), published_at=row.get("published_at"),
@@ -1333,14 +1335,21 @@ class InteractiveCoursewareWorkflow:
         })
         self._event(run_id, kind, decision, {"issue_count": len(issues)}, scene_id)
 
-    @staticmethod
-    def _job_response(row: dict[str, Any] | None) -> CoursewareJobResponse | None:
+    def _job_response(self, row: dict[str, Any] | None) -> CoursewareJobResponse | None:
         if row is None:
             return None
+        spec = self.repo.get_spec_by_run(row["run_id"])
+        artifacts = self.repo.list_artifacts(row.get("resource_id")) if row.get("resource_id") else []
+        quality_summary = build_quality_summary(
+            self.repo.list_events(row["run_id"]), status=row["status"], warnings=row.get("warnings") or [],
+            artifact_success=bool(artifacts and row.get("status") in {"published", "published_with_warnings"}),
+            spec_prompt_version=spec.get("prompt_version") if spec else None,
+        )
         return CoursewareJobResponse(
             run_id=row["run_id"], learner_id=row["learner_id"], status=row["status"], title=row.get("title"),
             publish_mode=row.get("publish_mode") or "automatic",
             resource_id=row.get("resource_id"), warnings=row.get("warnings") or [], error_code=row.get("error_code"),
             request_options=row.get("request_options") or {},
+            quality_summary=quality_summary,
             error_message=row.get("error_message"), created_at=row.get("created_at"), updated_at=row.get("updated_at"),
         )

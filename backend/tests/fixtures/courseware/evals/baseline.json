@@ -23,7 +23,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "6d0e7218bb74437432636ac740b217fad7ec86807b3484824a592eee07914603",
+      "artifact_hash": "5b3eb9dca08f22a0fc8cf411b304769d02d18c08b9237fdd9b0305bede446c62",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish",
@@ -58,7 +58,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "36e2ca35783e92aa41f7d14ba0ca4059d943614d4c0640d3c0a6f2a9cabe81aa",
+      "artifact_hash": "39f6c20651c2ec3176eb1d4f86f24bd95521fbab8bbdeb98df68d7054c8d2a7a",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish",
@@ -91,7 +91,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "7d2e53e09a7a76236f5dc0f38f443746df3774062e938791bffe06a930fac188",
+      "artifact_hash": "31701921806a8f49f5b7277a13a90706935dce79addd14ac297cb5185708b673",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish_with_warning",
@@ -224,7 +224,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "f0ca146ec0ee86b0d12c96e56140ff108feefc00249a14ffd5cefade7769376e",
+      "artifact_hash": "bdaf58c5af393cab52adf7294a959d5e28043ce93a5e6131e10c92263ffd1a4a",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "scene_fallback",
@@ -366,7 +366,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "ed7a435c2d2c4965f21887e22168b79ace21d2c11d90b8f56c325cef1575e826",
+      "artifact_hash": "3ed60e33509afca4dba5985caa9bb52ef220574484b45264b74f9223e8be7714",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "single_revision",
@@ -397,7 +397,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "985ca75901816b93a6e274a0cf62962cf7841dfe491102e17544e024f8e55b29",
+      "artifact_hash": "c09bb978161501540ea7d53480b1d374325c36b84eadea9fe8f0aa18fa03c936",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "auto_revision",

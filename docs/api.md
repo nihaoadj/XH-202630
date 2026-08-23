@@ -766,3 +766,10 @@ Turn 请求为：
 响应包含 `turn_id`、`sequence`、`hint_level`、`pedagogy_action`、`message`、`follow_up_question`、`grounding_status`、`grounding_source`、`source_refs` 和脱敏的模型调用摘要。相同 `client_message_id` 与相同 payload 返回已持久化结果；不同 payload 返回 409 `TUTOR_IDEMPOTENCY_CONFLICT`。Evidence 不足返回 HTTP 200 和 `grounding_status=evidence_insufficient`；会话不存在为 404，关闭会话继续提交为 409，模型超时/认证/请求或结构化输出失败沿用 LLMGateway 的脱敏 503 语义。响应不包含 raw prompt、raw provider response、Chain-of-Thought、密钥或异常堆栈。
 
 当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。
+## 互动课件学习事件（向前兼容）
+
+`POST /api/resources/courseware/items/{resource_id}/learning-events` 接收最多 100 个版本化、脱敏事件，返回 `acknowledged_event_ids`。服务端按 `occurrence_id` 幂等写入 SQLite，并按 `resource_id` 与 `release_id` 隔离投影。
+
+资源详情同时返回 `released_release_id` 当前发布指针。`GET /api/resources/courseware/items/{resource_id}/learning-progress?release_id={release_id}` 返回当前发布版本的只读进度投影，包含 `current_scene_id`、`current_scene_index`、已查看/已完成场景、完成状态、答题计数和脱敏的 `component_state`。`component_state` 只允许 flashcard 的状态、matching 的配对 ID 集合和 ordering 的受控项目 ID 顺序；自由文本答案和未知字段会被丢弃。旧 `release_id` 不会推进新版本。
+
+课件任务响应中的 `quality_summary` 是版本化的稳定质量汇总，分开表示 `ai_full_course_success` 与 `artifact_success`，并记录 AI 场景/审核、fallback、重试、token、时延和估算成本；它不包含 Prompt、原始模型响应或凭据。

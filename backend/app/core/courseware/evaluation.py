@@ -181,6 +181,7 @@ def execute_workflow_case(case: dict[str, Any]) -> dict[str, Any]:
                 "artifact_present": bool(artifact and artifact.get("released_release_id")),
                 "released_release_id": (artifact or {}).get("released_release_id"),
                 "warning_codes": [item.get("code") for item in (actual.get("warnings") or [])],
+                "quality_summary": actual.get("quality_summary") or {},
                 "checkpoint_stage": (repo.latest_checkpoint(job.run_id) or {}).get("stage"),
                 "execution": "workflow",
             }

@@ -6,7 +6,7 @@ import html
 from typing import Any
 
 from app.core.courseware.runtime import ALLOWED_SCENE_KINDS, SCRIPT, STYLE
-from app.core.courseware.components import component_definition, is_registered_component
+from app.core.courseware.components import component_definition, is_registered_component, validate_component_payload
 from app.core.courseware.security import security_policy
 from app.core.courseware.design_system import THEMES, TOKENS, resolve_layout, resolve_motion, resolve_recipe, resolve_theme
 from app.models.courseware.design import CoursewareDesign
@@ -36,11 +36,12 @@ def _render_component_block(block: dict[str, Any]) -> str:
         return f'<section class="{css}" data-flashcard tabindex="0" role="button" aria-label="翻转卡片"><p class="flash-front">{front}</p><p class="flash-back" hidden>{back}</p><button type="button" data-flashcard-action="review">再复习</button><button type="button" data-flashcard-action="known">已记住</button></section>'
     if definition.name == "matching":
         pairs = block.get("pairs") or []
-        choices = "".join(f'<button type="button" data-match="{index}" aria-label="选择配对">{_text(pair.get("term") or pair.get("left") or "术语")}</button>' for index, pair in enumerate(pairs))
-        return f'<section class="{css}" data-matching aria-label="配对练习"><p>{text}</p>{choices}<p class="feedback" aria-live="polite" hidden></p></section>'
+        left = "".join(f'<button type="button" data-match="left" data-pair-id="{index}" aria-label="选择左项">{_text(pair.get("left"))}</button>' for index, pair in enumerate(pairs))
+        right = "".join(f'<button type="button" data-match="right" data-pair-id="{index}" aria-label="选择右项">{_text(pair.get("right"))}</button>' for index, pair in enumerate(pairs))
+        return f'<section class="{css}" data-matching data-pair-count="{len(pairs)}" aria-label="配对练习"><p>{text}</p><div class="matching-left" aria-label="左侧项目">{left}</div><div class="matching-right" aria-label="右侧项目">{right}</div><p class="feedback" aria-live="polite" hidden></p></section>'
     if definition.name == "ordering":
         items = block.get("ordering_items") or []
-        controls = "".join(f'<li><button type="button" data-order-move="up" aria-label="上移">↑</button>{_text(item)}<button type="button" data-order-move="down" aria-label="下移">↓</button></li>' for item in items)
+        controls = "".join(f'<li data-item-id="{_text(item)}"><button type="button" data-order-move="up" aria-label="上移">↑</button><span>{_text(item)}</span><button type="button" data-order-move="down" aria-label="下移">↓</button></li>' for item in items)
         answer = "|".join(_text(item) for item in (block.get("correct_order") or items))
         return f'<section class="{css}" data-ordering data-correct-order="{answer}" aria-label="排序练习"><p>{text}</p><ol>{controls}</ol><button type="button" data-order-submit>提交排序</button><p class="feedback" aria-live="polite" hidden></p></section>'
     if definition.renderer in {"steps", "ordered-steps"}:
@@ -129,6 +130,8 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
                     block.get("component"), str(block.get("schema_version") or "1.0"))
                    for block in component_blocks):
                 raise ValueError("课件包含未注册互动组件")
+            if any(not validate_component_payload(block["component"], block) for block in component_blocks):
+                raise ValueError("课件互动组件字段或来源不完整")
             blocks = "".join(_render_component_block(block) for block in component_blocks)
         else:
             blocks = "".join(f'<p class="block">{_text(block)}</p>' for block in scene.get("blocks", []))

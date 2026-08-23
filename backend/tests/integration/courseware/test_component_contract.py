@@ -1,5 +1,7 @@
 import pytest
 from pydantic import ValidationError
+import json
+from pathlib import Path
 
 from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareSceneSpec
 
@@ -27,3 +29,25 @@ def test_component_spec_uses_discriminator_and_preserves_source_mapping():
 def test_component_spec_rejects_unknown_component_before_renderer():
     with pytest.raises(ValidationError):
         CoursewareSceneSpec.model_validate({"kind": "intro", "title": "开始", "blocks": [_block("arbitrary_html")]})
+
+
+@pytest.mark.parametrize(
+    ("component", "extra"),
+    [
+        ("flashcard", {"front": "问题"}),
+        ("matching", {"pairs": [{"left": "A"}]}),
+        ("ordering", {"ordering_items": ["A", "B"], "correct_order": ["A"]}),
+    ],
+)
+def test_interactive_components_require_complete_versioned_payloads(component, extra):
+    with pytest.raises(ValidationError):
+        CoursewareSceneSpec.model_validate({
+            "kind": "intro", "title": "互动", "blocks": [{**_block(component), **extra}],
+        })
+
+
+def test_component_fixture_matches_platform_catalog():
+    from app.core.courseware.components.catalog import CATALOG_V1
+
+    fixture = json.loads(Path("backend/tests/fixtures/courseware/components/catalog_v1.json").read_text(encoding="utf-8"))
+    assert fixture["components"] == sorted(CATALOG_V1)

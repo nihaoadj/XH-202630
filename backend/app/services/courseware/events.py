@@ -7,10 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.events import event_id
-from app.models.courseware.events import CoursewareLearningEvent
-
-
-_SAFE_STATE_KEYS = {"scene_index", "scene_count", "correct", "completed", "attempt", "duration_ms"}
+from app.models.courseware.events import CoursewareLearningEvent, sanitize_event_state
 
 
 class CoursewareEventProjector:
@@ -26,7 +23,7 @@ class CoursewareEventProjector:
 
     def record(self, event: CoursewareLearningEvent | Mapping[str, Any]) -> CoursewareLearningEvent:
         value = event if isinstance(event, CoursewareLearningEvent) else CoursewareLearningEvent.model_validate(event)
-        safe_state = {key: value.state[key] for key in _SAFE_STATE_KEYS if key in value.state}
+        safe_state = sanitize_event_state(value.state)
         value = value.model_copy(update={"state": safe_state, "occurrence_id": value.occurrence_id or value.event_id})
         existing = self._events.get(value.event_id)
         if existing is not None:
@@ -41,7 +38,7 @@ class CoursewareEventProjector:
         payload = {
             "event_type": event_type, "resource_id": resource_id, "release_id": release_id,
             "scene_id": scene_id, "component_id": component_id, "component_version": component_version,
-            "state": {key: value for key, value in (state or {}).items() if key in _SAFE_STATE_KEYS},
+            "state": sanitize_event_state(state),
         }
         occurrence_id = f"occ_{uuid4().hex}"
         return self.record(CoursewareLearningEvent(
@@ -64,11 +61,23 @@ class CoursewareEventProjector:
         values = self.events(resource_id=resource_id, release_id=release_id)
         viewed = {item.scene_id for item in values if item.event_type == "scene_viewed" and item.scene_id}
         completed = {item.scene_id for item in values if item.event_type == "scene_completed" and item.scene_id}
+        current_scene_id = next((item.scene_id for item in reversed(values) if item.scene_id and item.event_type == "scene_viewed"), None)
+        current_scene_index = next(
+            (item.state.get("scene_index") for item in reversed(values)
+             if item.event_type == "scene_viewed" and isinstance(item.state.get("scene_index"), int)),
+            None,
+        )
+        component_state: dict[str, Any] = {}
+        for item in values:
+            if item.state.get("component_state"):
+                component_state.update(item.state["component_state"])
         return {
             "resource_id": resource_id, "release_id": release_id,
             "viewed_scene_ids": sorted(viewed), "completed_scene_ids": sorted(completed),
             "courseware_completed": any(item.event_type == "courseware_completed" for item in values),
             "answer_count": sum(item.event_type == "answer_submitted" for item in values),
+            "current_scene_id": current_scene_id, "current_scene_index": current_scene_index,
+            "component_state": component_state,
         }
 
 

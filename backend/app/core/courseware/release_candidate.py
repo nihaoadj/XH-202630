@@ -87,7 +87,7 @@ def build_release_candidate_report(
     component_names = {str(item.get("component") or "") for item in matrix_components}
     theme_names = {str(item.get("theme") or "") for item in matrix_components}
     component_theme_pairs = {(item.get("component"), item.get("theme")) for item in matrix_components}
-    browser_ok = bool(browser and browser.get("schema_version") == "1.1" and browser.get("consoleErrors") == []
+    browser_ok = bool(browser and browser.get("schema_version") in {"1.1", "1.2"} and browser.get("consoleErrors") == []
                       and len(matrix_components) >= 24 and len(component_names) >= 8 and len(theme_names) >= 3
                       and len(component_theme_pairs) == len(matrix_components)
                       and all(item.get("screenshot_sha256") and item.get("computed_checks") for item in matrix_components)

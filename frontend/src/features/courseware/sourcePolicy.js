@@ -11,3 +11,15 @@ export function sameFeedbackBatchSources(resources, batchId) {
     && String(resource?.batch_id || '').trim() === expectedBatchId
   ))
 }
+
+export function buildCoursewareRequest({ learnerId, sourceIds, preferences = {} }) {
+  return {
+    learner_id: learnerId,
+    source_resource_ids: [...sourceIds],
+    publish_mode: 'automatic',
+    learning_goal: preferences.learning_goal || null,
+    expected_duration_minutes: preferences.expected_duration_minutes ?? null,
+    interaction_intensity: preferences.interaction_intensity || 'medium',
+    visual_style_id: preferences.visual_style_id || null,
+  }
+}

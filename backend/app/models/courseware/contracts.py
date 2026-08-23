@@ -47,6 +47,7 @@ class CoursewareJobResponse(BaseModel):
     publish_mode: Literal["manual", "automatic"] = "automatic"
     resource_id: str | None = None
     request_options: dict[str, Any] = Field(default_factory=dict)
+    quality_summary: dict[str, Any] = Field(default_factory=dict)
     # Warning payloads may carry machine-readable flags (for example
     # ``discarded_candidate``) in addition to human-readable strings.
     warnings: list[dict[str, Any]] = Field(default_factory=list)
@@ -97,6 +98,7 @@ class CoursewareResourceDetail(BaseModel):
     topic: str
     status: Literal["approved_pending_publish", "published", "stale"]
     version: int = 1
+    released_release_id: str | None = None
     mime_type: str = "text/html"
     artifact_sha256: str
     artifact_size: int

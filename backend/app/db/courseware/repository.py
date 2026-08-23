@@ -28,6 +28,7 @@ from app.db.courseware.models import (
     CoursewareSpecORM,
     CoursewareLearningEventORM,
 )
+from app.models.courseware.events import sanitize_event_state
 
 
 def _now() -> datetime:
@@ -38,6 +39,15 @@ def _error_parts(error: dict[str, Any] | Exception) -> tuple[str, str]:
     if isinstance(error, dict):
         return str(error.get("code") or "TASK_FAILED"), str(error.get("message") or "课件任务失败")
     return type(error).__name__, str(error)[:512] or "课件任务失败"
+
+
+def _project_component_state(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    projected: dict[str, Any] = {}
+    for row in rows:
+        state = row.get("state") or {}
+        if isinstance(state.get("component_state"), dict):
+            projected.update(deepcopy(state["component_state"]))
+    return projected
 
 
 def _retry_at(attempt: int, salt: str = "") -> datetime:
@@ -429,7 +439,7 @@ class MemoryCoursewareRepository:
             if event_id in self.learning_events:
                 accepted.append(deepcopy(self.learning_events[event_id])); continue
             self._learning_sequence += 1
-            state = {key: raw.get("state", {}).get(key) for key in {"scene_index", "scene_count", "correct", "completed", "attempt", "duration_ms"} if key in (raw.get("state") or {})}
+            state = sanitize_event_state(raw.get("state"))
             stored = deepcopy({**raw, "event_id": event_id, "occurrence_id": raw.get("occurrence_id") or event_id, "state": state, "sequence": self._learning_sequence, "created_at": _now()})
             self.learning_events[event_id] = stored; accepted.append(deepcopy(stored))
         return accepted
@@ -443,7 +453,10 @@ class MemoryCoursewareRepository:
                 "viewed_scene_ids": sorted({r.get("scene_id") for r in rows if r.get("event_type") == "scene_viewed" and r.get("scene_id")}),
                 "completed_scene_ids": sorted({r.get("scene_id") for r in rows if r.get("event_type") == "scene_completed" and r.get("scene_id")}),
                 "courseware_completed": any(r.get("event_type") == "courseware_completed" for r in rows),
-                "answer_count": sum(r.get("event_type") == "answer_submitted" for r in rows)}
+                "answer_count": sum(r.get("event_type") == "answer_submitted" for r in rows),
+                "current_scene_id": next((r.get("scene_id") for r in reversed(rows) if r.get("scene_id")), None),
+                "current_scene_index": next(((r.get("state") or {}).get("scene_index") for r in reversed(rows) if r.get("event_type") == "scene_viewed" and isinstance((r.get("state") or {}).get("scene_index"), int)), None),
+                "component_state": _project_component_state(rows)}
 
     def save_artifact(self, row: dict[str, Any]) -> dict[str, Any]:
         stored = deepcopy({**row, "created_at": _now()})
@@ -1022,7 +1035,6 @@ class SQLCoursewareRepository:
             } for row in rows]
 
     def ingest_learning_events(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        safe_keys = {"scene_index", "scene_count", "correct", "completed", "attempt", "duration_ms"}
         with self.session_factory() as db:
             result = []
             for raw in rows:
@@ -1035,7 +1047,7 @@ class SQLCoursewareRepository:
                 if duplicate is not None:
                     result.append(self._learning_event_row(duplicate)); continue
                 sequence = int(db.query(CoursewareLearningEventORM.sequence).order_by(CoursewareLearningEventORM.sequence.desc()).first()[0] or 0) + 1 if db.query(CoursewareLearningEventORM.sequence).first() else 1
-                state = {k: (raw.get("state") or {}).get(k) for k in safe_keys if k in (raw.get("state") or {})}
+                state = sanitize_event_state(raw.get("state"))
                 values = {**raw, "event_id": event_id, "occurrence_id": occurrence, "state": state, "sequence": sequence}
                 values.pop("created_at", None)
                 row = CoursewareLearningEventORM(**values); db.add(row); db.flush(); result.append(self._learning_event_row(row))
@@ -1056,7 +1068,10 @@ class SQLCoursewareRepository:
                 "viewed_scene_ids": sorted({r.get("scene_id") for r in rows if r.get("event_type") == "scene_viewed" and r.get("scene_id")}),
                 "completed_scene_ids": sorted({r.get("scene_id") for r in rows if r.get("event_type") == "scene_completed" and r.get("scene_id")}),
                 "courseware_completed": any(r.get("event_type") == "courseware_completed" for r in rows),
-                "answer_count": sum(r.get("event_type") == "answer_submitted" for r in rows)}
+                "answer_count": sum(r.get("event_type") == "answer_submitted" for r in rows),
+                "current_scene_id": next((r.get("scene_id") for r in reversed(rows) if r.get("scene_id")), None),
+                "current_scene_index": next(((r.get("state") or {}).get("scene_index") for r in reversed(rows) if r.get("event_type") == "scene_viewed" and isinstance((r.get("state") or {}).get("scene_index"), int)), None),
+                "component_state": _project_component_state(rows)}
 
     @staticmethod
     def _event_row(stored: CoursewareEventORM) -> dict[str, Any]:

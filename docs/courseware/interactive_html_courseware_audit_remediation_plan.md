@@ -18,7 +18,7 @@
 - 请求契约已支持 `learning_goal`、`expected_duration_minutes`、`interaction_intensity` 和 `visual_style_id`；
 - 注册组件已从 8 类扩展到 11 类，包含 `flashcard`、`matching` 和 `ordering`；
 - 已有三套主题、确定性 renderer/runtime、安全门、HTML/ZIP、学习事件、来源摘要、Viewer 工具栏、任务恢复入口和单 Durable Worker；
-- 当前课件专项后端测试基线为 `214 passed, 16 warnings`，但这只证明所运行的确定性测试，不等于完整真实用户旅程、真实模型质量或生产就绪。
+- 本轮 Q0-Q5 本地收口后，课件专项 unit/core 与 integration/e2e/migration 分别为 `126 passed` 与 `89 passed`；后端全量为 `545 passed, 5 skipped`。这些结果证明本地确定性链路，不等于 CI、外部部署或完整真实发布周期。
 
 下一步重点不是继续增加表面功能，而是把已存在的能力连接成真实、可恢复、可度量的本地用户链路，并收紧互动组件和浏览器质量门。
 
@@ -352,19 +352,33 @@ git status --short
 9. 不修改五类学习文档工作流来迁就课件，不顺手重构无关目录。
 10. 不提交、推送、合并、部署或触发外部系统。
 
-## 12. 退出条件
+## 12. 本轮执行记录（2026-08-23）
+
+本轮按 Q0 → Q5 连续执行，状态为 `LOCAL_DONE`；发布候选聚合为 `LOCAL_READY`。已建立失败反例后再修改真实实现，未通过删除场景、放宽 hard gate、无限重试或把 fake provider 写成真实模型通过来变绿。
+
+- Q0：反例覆盖偏好 payload、跨反馈批次、progress/release 隔离、三类组件严格字段、AI/artifact 分离和浏览器 200%/forced-colors；红测先得到 `5 failed, 2 passed`，修复后专项通过。
+- Q1：资源页提交四个偏好、readiness 检查、冻结 request options 回显、active run 恢复入口；前端 source-policy、journey 和后端 API/AI-first 测试通过。
+- Q2：progress DTO 增加 `current_scene_id/current_scene_index/component_state`，服务端按 `resource_id + release_id` 隔离并脱敏；Viewer 通过 nonce 初始化消息恢复 iframe；旧 release 污染反例通过拒绝。
+- Q3：注册表/fixture 对齐 11 类组件，flashcard/matching/ordering 具备严格契约、受控 runtime 状态和来源硬门；三主题 × 11 组件浏览器矩阵通过。
+- Q4：任务响应提供稳定 `quality_summary`，AI 主链成功与 artifact 成功分开；重复 event 不重复累计，冻结评测 12 cases 与 self-test 通过。
+- Q5：真实状态驱动本地旅程覆盖公开 API、独立 Worker、SSE 排空、发布指针、进度恢复和跨批次拒绝；新增 HTTP-origin iframe Viewer + artifact 恢复门，浏览器必需模式通过。
+- 独立进程/SQLite：Web 与 Worker 真实分进程、同一文件型 SQLite、Worker 并发上限为 1；15 项 fault matrix、停止写入后的 integrity/backup 通过。当前仍不支持有意横向扩容。
+- C3 周期：运行的是既有 `SMOKE_ONLY` fixture，报告明确为 `observation_status=EXTERNAL_PENDING`；没有把短 smoke 写成完整发布周期。
+- 外部未执行：GitHub Actions、真实目标部署、持续发布观察期和后续无界真实模型调用均保留 `EXTERNAL_PENDING`。
+
+## 13. 退出条件
 
 以下全部满足后，才可以结束本轮：
 
-- [ ] 四个学习偏好字段从 UI 到 planner 全链可证；
-- [ ] 来源始终限定同一反馈批次，跨批次前后端均拒绝；
-- [ ] Viewer 能从服务端恢复当前 release 的场景和受控组件状态；
-- [ ] 11 类组件 fixture 与注册表一致；
-- [ ] flashcard、matching、ordering 的严格契约和完整行为通过；
-- [ ] AI full-course、fallback 和 artifact 成功拥有稳定汇总；
-- [ ] 完整本地用户旅程不是长轮询单测或测试聚合；
-- [ ] 真实 200%、forced-colors、三主题 × 11 组件和 Viewer 组合浏览器门通过；
-- [ ] 课件专项、迁移、前端专项、浏览器、build 和后端全量通过；
-- [ ] 实际命令、准确计数、跳过项和外部待验证事项已报告。
+- [x] 四个学习偏好字段从 UI 到 planner 全链可证；
+- [x] 来源始终限定同一反馈批次，跨批次前后端均拒绝；
+- [x] Viewer 能从服务端恢复当前 release 的场景和受控组件状态；
+- [x] 11 类组件 fixture 与注册表一致；
+- [x] flashcard、matching、ordering 的严格契约和完整行为通过；
+- [x] AI full-course、fallback 和 artifact 成功拥有稳定汇总；
+- [x] 完整本地用户旅程不是长轮询单测或测试聚合；
+- [x] 真实 200%、forced-colors、三主题 × 11 组件和 Viewer 组合浏览器门通过；
+- [x] 课件专项、迁移、前端专项、浏览器、build 和后端全量通过；
+- [x] 实际命令、准确计数、跳过项和外部待验证事项已报告。
 
 达到以上条件只代表互动课件链路在本地开发环境中可供真实用户验证，不代表真实模型质量、CI、外部部署、完整发布周期或生产级多 Worker 已完成。

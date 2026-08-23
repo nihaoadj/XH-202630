@@ -94,7 +94,7 @@ def test_renderer_dispatches_registered_component_through_catalog_owned_markup()
         "title": "组件边界", "scenes": [{
             "kind": "intro", "title": "开始", "blocks": ["安全内容"],
             "source_refs": ["lecture"], "source_block_ids": ["b1"],
-            "component_blocks": [{"component": "key_point", "text": "只渲染受控文本。"}],
+                "component_blocks": [{"component": "key_point", "text": "只渲染受控文本。", "source_refs": [{"source_resource_id": "lecture", "source_block_ids": ["b1"]}]}],
         }],
     })
     assert b'aria-label="' in artifact

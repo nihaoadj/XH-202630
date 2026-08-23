@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { coursewareApi } from './api'
 import { acknowledgeCoursewareEvents, enqueueCoursewareEvent, pendingCoursewareEvents } from './offlineEvents.js'
 
@@ -38,11 +38,35 @@ const frame = ref(null)
 const fullscreen = ref(false)
 const sceneIndex = ref(1)
 const sceneCount = ref(1)
+const restoredProgress = ref(null)
+let frameLoaded = false
 const progressLabel = computed(() => `${sceneIndex.value} / ${sceneCount.value}`)
 const nonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`)
 
 function initializeFrame() {
-  frame.value?.contentWindow?.postMessage({ type: 'courseware-init', nonce }, '*')
+  frameLoaded = true
+  postInit()
+}
+
+function postInit() {
+  if (!frameLoaded || !frame.value?.contentWindow) return
+  frame.value.contentWindow.postMessage({ type: 'courseware-init', nonce, restore: restoredProgress.value }, '*')
+}
+
+async function loadLearningProgress() {
+  const releaseId = props.resource?.released_release_id || props.resource?.release_id
+  if (!releaseId || !props.resource?.resource_id) return
+  try {
+    const response = await coursewareApi.learningProgress(props.resource.resource_id, releaseId)
+    restoredProgress.value = response.data || null
+    if (Number.isInteger(restoredProgress.value?.current_scene_index)) {
+      sceneIndex.value = restoredProgress.value.current_scene_index + 1
+    }
+  } catch (_) {
+    restoredProgress.value = null
+  } finally {
+    postInit()
+  }
 }
 
 async function flushLearningEvents() {
@@ -81,6 +105,11 @@ function restartLearning() {
 
 window.addEventListener('message', receiveMessage)
 window.addEventListener('online', flushLearningEvents)
+onMounted(async () => {
+  await loadLearningProgress()
+  await flushLearningEvents()
+  postInit()
+})
 onBeforeUnmount(() => window.removeEventListener('message', receiveMessage))
 onBeforeUnmount(() => window.removeEventListener('online', flushLearningEvents))
 </script>

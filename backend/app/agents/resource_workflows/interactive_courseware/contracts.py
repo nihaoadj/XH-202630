@@ -84,6 +84,28 @@ class CoursewareBlock(BaseModel):
     ordering_items: list[str] = Field(default_factory=list, max_length=8)
     correct_order: list[str] = Field(default_factory=list, max_length=8)
 
+    @model_validator(mode="after")
+    def validate_component_payload(self):
+        if self.component == "flashcard":
+            if not self.front or not self.back:
+                raise ValueError("flashcard 必须包含 front 和 back")
+        elif self.component == "matching":
+            if len(self.pairs) < 2:
+                raise ValueError("matching 至少需要两组 pairs")
+            normalized = []
+            for pair in self.pairs:
+                if not isinstance(pair, dict) or not str(pair.get("left") or "").strip() or not str(pair.get("right") or "").strip():
+                    raise ValueError("matching 的每组 pair 必须包含 left 和 right")
+                normalized.append((str(pair["left"]).strip(), str(pair["right"]).strip()))
+            if len(normalized) != len(set(normalized)):
+                raise ValueError("matching 的 pairs 不得重复")
+        elif self.component == "ordering":
+            if len(self.ordering_items) < 2 or len(self.correct_order) != len(self.ordering_items):
+                raise ValueError("ordering 必须同时包含完整 ordering_items 和 correct_order")
+            if len(set(self.ordering_items)) != len(self.ordering_items) or set(self.ordering_items) != set(self.correct_order):
+                raise ValueError("ordering 的正确顺序必须覆盖全部 ordering_items")
+        return self
+
 
 class TextComponentSpec(CoursewareBlock):
     component: Literal["callout", "key_point", "compare", "recap", "flashcard", "matching", "ordering"] = "callout"

@@ -17,6 +17,10 @@ def test_runtime_binds_messages_to_the_initializing_parent_origin():
     assert "e.data?.nonce===nonce" in SCRIPT
     assert "event_type:'answer_submitted'" in SCRIPT
     assert "send('progress'" in SCRIPT
+    assert "applyRestore(e.data.restore)" in SCRIPT
+    assert "component_state" in SCRIPT
+    assert "matched_pair_ids" in SCRIPT
+    assert "current_scene_id" in SCRIPT
 
 
 def _edge() -> str | None:
