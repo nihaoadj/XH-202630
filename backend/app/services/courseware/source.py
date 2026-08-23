@@ -121,3 +121,15 @@ def admit_and_snapshot(
     if not any(item["role"] == "lecture" and item["content"] for item in snapshots):
         raise CoursewareAdmissionError("讲义正文不可读取，无法生成课件")
     return snapshots, next(iter(knowledge_base_ids))
+
+
+def frozen_source_batch_id(resource_service: ResourceService, source_resource_ids: list[str]) -> str | None:
+    """Return a batch only when every requested source proves one same batch."""
+    values: list[str] = []
+    for resource_id in source_resource_ids:
+        source = resource_service.get(resource_id)
+        batch_id = str(source.batch_id).strip() if source and source.batch_id else ""
+        if not batch_id:
+            return None
+        values.append(batch_id)
+    return values[0] if values and len(set(values)) == 1 else None

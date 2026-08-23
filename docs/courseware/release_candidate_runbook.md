@@ -57,10 +57,13 @@ python backend/scripts/courseware_release_candidate.py `
   --evaluator backend/.pytest-tmp/courseware-c-round-eval.json `
   --artifacts backend/.pytest-tmp/courseware-ci-artifacts/artifact-summary.json `
   --fault-matrix backend/.pytest-tmp/courseware-fault-matrix.json `
+  --journey backend/.pytest-tmp/courseware-r-journey-2.json `
   --browser frontend/tests/test-results/courseware-browser/summary.json `
   --live-model backend/.pytest-tmp/live-real-or-config.json `
   --output backend/.pytest-tmp/courseware-release-candidate.json
 ```
+
+候选命令要求 evaluator、artifact、真实进程故障矩阵、`journey` schema `1.1` 和 browser schema `1.3`；browser 必须是 11 个组件 × 3 个主题的精确矩阵，并证明 HTTP-origin iframe、nonce、artifact restore、forced-colors 与 200% zoom。输出 schema 为 `1.1`。缺少任一 required evidence 不得标记 `LOCAL_READY`。
 
 `LOCAL_READY` 不表示 CI、目标部署或完整发布周期完成；未运行真实模型时也继续保持 `EXTERNAL_PENDING`。SCORM/xAPI 是基础导出包。
 

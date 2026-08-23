@@ -24,6 +24,7 @@ def build_release_candidate_report(
     evaluator_path: Path,
     artifact_summary_path: Path,
     fault_matrix_path: Path,
+    journey_summary_path: Path,
     browser_summary_path: Path,
     live_model_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -36,6 +37,7 @@ def build_release_candidate_report(
     evaluator, evaluator_file = _json_evidence(evaluator_path)
     artifacts, artifacts_file = _json_evidence(artifact_summary_path)
     matrix, matrix_file = _json_evidence(fault_matrix_path)
+    journey, journey_file = _json_evidence(journey_summary_path)
     browser, browser_file = _json_evidence(browser_summary_path)
     live, live_file = _json_evidence(live_model_path)
 
@@ -83,15 +85,27 @@ def build_release_candidate_report(
                      and len(matrix_categories) == 18 and all(
                          item.get("required") is True and item.get("evidence_type") == "process" and item.get("evidence")
                          for item in matrix_categories.values()))
+    required_journey_cases = set((journey or {}).get("required_case_ids") or [])
+    journey_cases = {str(item.get("case_id")): item for item in (journey or {}).get("cases") or []}
+    journey_ok = bool(
+        journey and journey.get("schema_version") == "1.1"
+        and journey.get("external_services") == "not_called"
+        and journey.get("status") == "LOCAL_READY"
+        and required_journey_cases <= set(journey_cases)
+        and journey_cases.get("q5_local_user_journey", {}).get("status") == "passed"
+        and all(journey_cases[case].get("status") == "passed" for case in required_journey_cases)
+    )
     matrix_components = (browser or {}).get("component_theme_matrix") or []
     component_names = {str(item.get("component") or "") for item in matrix_components}
     theme_names = {str(item.get("theme") or "") for item in matrix_components}
     component_theme_pairs = {(item.get("component"), item.get("theme")) for item in matrix_components}
-    browser_ok = bool(browser and browser.get("schema_version") in {"1.1", "1.2"} and browser.get("consoleErrors") == []
-                      and len(matrix_components) >= 24 and len(component_names) >= 8 and len(theme_names) >= 3
+    browser_ok = bool(browser and browser.get("schema_version") == "1.3" and browser.get("consoleErrors") == []
+                      and len(matrix_components) == 33 and len(component_names) == 11 and len(theme_names) == 3
                       and len(component_theme_pairs) == len(matrix_components)
+                      and component_theme_pairs == {(component, theme) for component in component_names for theme in theme_names}
                       and all(item.get("screenshot_sha256") and item.get("computed_checks") for item in matrix_components)
                       and {"320x640", "desktop", "200%", "forced-colors"} <= set(browser.get("viewports") or [])
+                      and all(browser.get(name) is True for name in ("http_origin_iframe", "nonce_guard", "artifact_restore", "forced_colors_active", "zoom_200_active"))
                       and all(browser.get(name) for name in ("keyboard", "focusEvidence", "touch", "reducedMotion", "contrast", "a11y")))
     live_status = str((live or {}).get("status") or "NOT_RUN")
 
@@ -99,15 +113,16 @@ def build_release_candidate_report(
         "evaluator": {**evaluator_file, "status": "passed" if evaluator_ok else "failed"},
         "artifact_manifest": {**artifacts_file, "status": "passed" if artifacts_ok else "failed"},
         "fault_matrix": {**matrix_file, "status": "passed" if matrix_ok else "failed"},
+        "journey": {**journey_file, "status": "passed" if journey_ok else "failed"},
         "browser": {**browser_file, "status": "passed" if browser_ok else "failed"},
         "live_model": {**live_file, "status": "passed" if live_status == "DONE" else "external_pending"},
     }
-    local_ready = evaluator_ok and artifacts_ok and matrix_ok and browser_ok
+    local_ready = evaluator_ok and artifacts_ok and matrix_ok and journey_ok and browser_ok
     external_pending = ["CI_REQUIRED", "DEPLOYMENT_REQUIRED", "RELEASE_CYCLE_REQUIRED"]
     if live_status != "DONE":
         external_pending.insert(0, "LIVE_MODEL_REQUIRED")
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "status": "LOCAL_READY" if local_ready else "PARTIAL",
         "evidence": evidence,
         "external_pending": external_pending,

@@ -23,7 +23,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "5b3eb9dca08f22a0fc8cf411b304769d02d18c08b9237fdd9b0305bede446c62",
+ "artifact_hash": "73f704489ef00af62d24f910cdd241c1ff9c45cbc656e99fc79f502a80476bf3",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish",
@@ -58,7 +58,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "39f6c20651c2ec3176eb1d4f86f24bd95521fbab8bbdeb98df68d7054c8d2a7a",
+ "artifact_hash": "b4289a29e839d3702b1d7b9a5d7d01b582dc3c86f00d52f6f6a78462d7d4bba7",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish",
@@ -91,7 +91,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "31701921806a8f49f5b7277a13a90706935dce79addd14ac297cb5185708b673",
+ "artifact_hash": "d1f7d9fd6af654cdc446dbf761653b2f4617a9599041b799e4f7c362484809f6",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish_with_warning",
@@ -224,7 +224,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "bdaf58c5af393cab52adf7294a959d5e28043ce93a5e6131e10c92263ffd1a4a",
+ "artifact_hash": "aabcd8cb845d50062dfaf13d477a0c48a2de501ec162092a6aeefd5a94950e83",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "scene_fallback",
@@ -308,7 +308,7 @@
       "source_block_ids": [
         "missing-block"
       ],
-      "artifact_hash": "ae4ed0bf0e7b7bcfc221d3960da5c32436cd6fd580b42facaf681aec82581028",
+ "artifact_hash": null,
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "release_reject",
@@ -366,7 +366,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "3ed60e33509afca4dba5985caa9bb52ef220574484b45264b74f9223e8be7714",
+ "artifact_hash": "76ff26ecef7a3476ed7698a9b9d8213abeecdc9ae16abe46847cb2cabb4feb1f",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "single_revision",
@@ -397,7 +397,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "c09bb978161501540ea7d53480b1d374325c36b84eadea9fe8f0aa18fa03c936",
+ "artifact_hash": "c3d25bc90322427bc0c9361acd7b41807788c7ba4b8b01d9b631e98ad9ffbba6",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "auto_revision",
@@ -430,7 +430,7 @@
       "source_block_ids": [
         "block-1"
       ],
-      "artifact_hash": "118d3eb2303a81545e6667493284b27bd791da83b43ac73c2088605ef96f4455",
+ "artifact_hash": null,
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "quarantine",

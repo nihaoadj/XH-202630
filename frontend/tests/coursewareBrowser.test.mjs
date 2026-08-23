@@ -151,8 +151,8 @@ try {
     }
     window.addEventListener('message', handler)
     iframe.contentWindow.postMessage({
-      type: 'courseware-init', nonce: 'browser-viewer-nonce',
-      restore: { current_scene_index: 0, component_state: { flashcard: { status: 'back' } } },
+      type: 'courseware-init', nonce: 'browser-viewer-nonce', resource_id: 'unknown-resource', release_id: 'unknown-release',
+      restore: { current_scene_id: 'scene-0', current_scene_index: 0, component_state: { 'scene-0': { 'block-1': { component_version: '1.0', value: { flashcard: { status: 'back' } } } } } },
     }, origin)
   }))
   assert.equal(restoreProgress.scene_index, 0)
@@ -162,9 +162,13 @@ try {
     status: frame.contentDocument.querySelector('[data-flashcard]')?.dataset.reviewStatus,
   }))
   assert.deepEqual(restoredFlashcard, { frontHidden: true, backHidden: false, status: 'back' })
+  await viewer.locator('iframe').evaluate(frame => frame.contentWindow.postMessage({ type: 'courseware-command', command: 'restart', nonce: 'wrong-nonce' }, window.location.origin))
+  const nonceGuard = await viewer.locator('iframe').evaluate(frame => frame.contentDocument.querySelector('[data-flashcard]')?.dataset.reviewStatus === 'back')
+  const httpOriginIframe = await viewer.evaluate(() => window.location.origin.startsWith('http://') && document.querySelector('iframe')?.src.startsWith('http://'))
+  const artifactRestore = restoredFlashcard.frontHidden === true && restoredFlashcard.backHidden === false
   await viewer.close()
   assert.deepEqual(consoleErrors, [])
-  writeFileSync(path.join(reportDir, 'summary.json'), JSON.stringify({ schema_version: '1.2', viewports: ['320x640', 'desktop', '200%', 'forced-colors'], consoleErrors, keyboard: ['Tab', 'Enter', 'Space'], csp: true, touch: true, reducedMotion, forcedColors, zoom, focusEvidence, contrast: true, a11y: { unlabeled: focusEvidence.unlabeled }, component_theme_matrix: componentThemeMatrix }, null, 2))
+  writeFileSync(path.join(reportDir, 'summary.json'), JSON.stringify({ schema_version: '1.3', viewports: ['320x640', 'desktop', '200%', 'forced-colors'], consoleErrors, keyboard: ['Tab', 'Enter', 'Space'], csp: true, touch: true, reducedMotion, forcedColors, forced_colors_active: forcedColors.active, zoom, zoom_200_active: zoom === '2', http_origin_iframe: httpOriginIframe, nonce_guard: nonceGuard, artifact_restore: artifactRestore, focusEvidence, contrast: true, a11y: { unlabeled: focusEvidence.unlabeled }, component_theme_matrix: componentThemeMatrix }, null, 2))
 } finally {
   if (viewerServer) await new Promise(resolve => viewerServer.close(resolve))
   await browser.close()

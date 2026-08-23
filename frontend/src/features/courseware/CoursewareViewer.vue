@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { coursewareApi } from './api'
 import { acknowledgeCoursewareEvents, enqueueCoursewareEvent, pendingCoursewareEvents } from './offlineEvents.js'
 
@@ -41,7 +41,24 @@ const sceneCount = ref(1)
 const restoredProgress = ref(null)
 let frameLoaded = false
 const progressLabel = computed(() => `${sceneIndex.value} / ${sceneCount.value}`)
-const nonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`)
+let nonce = ''
+let lifecycleToken = 0
+let lifecycleKey = ''
+const lifecycle = computed(() => `${props.resource?.resource_id || ''}:${props.resource?.released_release_id || props.resource?.release_id || ''}`)
+
+function newNonce() {
+  nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
+}
+
+function resetLifecycle() {
+  lifecycleToken += 1
+  lifecycleKey = lifecycle.value
+  frameLoaded = false
+  restoredProgress.value = null
+  sceneIndex.value = 1
+  sceneCount.value = 1
+  newNonce()
+}
 
 function initializeFrame() {
   frameLoaded = true
@@ -50,19 +67,23 @@ function initializeFrame() {
 
 function postInit() {
   if (!frameLoaded || !frame.value?.contentWindow) return
-  frame.value.contentWindow.postMessage({ type: 'courseware-init', nonce, restore: restoredProgress.value }, '*')
+  frame.value.contentWindow.postMessage({ type: 'courseware-init', nonce, resource_id: props.resource.resource_id, release_id: props.resource.released_release_id || props.resource.release_id, restore: restoredProgress.value }, '*')
 }
 
 async function loadLearningProgress() {
+  const token = lifecycleToken
+  const requestKey = lifecycleKey
   const releaseId = props.resource?.released_release_id || props.resource?.release_id
   if (!releaseId || !props.resource?.resource_id) return
   try {
     const response = await coursewareApi.learningProgress(props.resource.resource_id, releaseId)
+    if (token !== lifecycleToken || requestKey !== lifecycleKey) return
     restoredProgress.value = response.data || null
     if (Number.isInteger(restoredProgress.value?.current_scene_index)) {
       sceneIndex.value = restoredProgress.value.current_scene_index + 1
     }
   } catch (_) {
+    if (token !== lifecycleToken || requestKey !== lifecycleKey) return
     restoredProgress.value = null
   } finally {
     postInit()
@@ -70,7 +91,7 @@ async function loadLearningProgress() {
 }
 
 async function flushLearningEvents() {
-  const pending = pendingCoursewareEvents()
+  const pending = pendingCoursewareEvents().filter((item) => item.resource_id === props.resource?.resource_id && item.release_id === (props.resource?.released_release_id || props.resource?.release_id))
   if (!pending.length || !props.resource?.resource_id) return
   try {
     const result = await coursewareApi.ingestLearningEvents(props.resource.resource_id, pending)
@@ -80,8 +101,11 @@ async function flushLearningEvents() {
 
 function receiveMessage(event) {
   if (event.source !== frame.value?.contentWindow) return
+  if (event.origin !== 'null' && event.origin !== window.location.origin) return
   const data = event.data || {}
   if (data.nonce !== nonce || !['ready', 'height', 'progress', 'quiz_result', 'completed', 'learning_event'].includes(data.type)) return
+  if (data.resource_id && data.resource_id !== props.resource.resource_id) return
+  if (data.release_id && data.release_id !== (props.resource.released_release_id || props.resource.release_id)) return
   if (data.type === 'height' && Number.isFinite(data.height)) frame.value.style.height = `${Math.max(480, Math.min(1600, data.height))}px`
   if (data.type === 'progress') { sceneIndex.value = Number(data.scene_index || 0) + 1; sceneCount.value = Number(data.scene_count || sceneCount.value) }
   if (data.type === 'learning_event' && data.event) {
@@ -106,10 +130,16 @@ function restartLearning() {
 window.addEventListener('message', receiveMessage)
 window.addEventListener('online', flushLearningEvents)
 onMounted(async () => {
+  resetLifecycle()
   await loadLearningProgress()
   await flushLearningEvents()
   postInit()
 })
+watch(lifecycle, async () => {
+  resetLifecycle()
+  await loadLearningProgress()
+  postInit()
+}, { flush: 'post' })
 onBeforeUnmount(() => window.removeEventListener('message', receiveMessage))
 onBeforeUnmount(() => window.removeEventListener('online', flushLearningEvents))
 </script>

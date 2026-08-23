@@ -17,13 +17,14 @@ def main() -> int:
     parser.add_argument("--evaluator", type=Path, required=True)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--fault-matrix", type=Path, required=True)
+    parser.add_argument("--journey", type=Path, required=True)
     parser.add_argument("--browser", type=Path, required=True)
     parser.add_argument("--live-model", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     report = build_release_candidate_report(
         evaluator_path=args.evaluator, artifact_summary_path=args.artifacts,
-        fault_matrix_path=args.fault_matrix, browser_summary_path=args.browser,
+        fault_matrix_path=args.fault_matrix, journey_summary_path=args.journey, browser_summary_path=args.browser,
         live_model_path=args.live_model,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)

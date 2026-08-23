@@ -159,16 +159,25 @@ def get_courseware_resource(resource_id: str, request: Request):
 @router.post("/courseware/items/{resource_id}/learning-events")
 def ingest_courseware_learning_events(resource_id: str, payload: CoursewareLearningEventBatch, request: Request):
     resource = _authorized_resource(resource_id, request)
+    current_release = resource.released_release_id
+    if not current_release:
+        raise HTTPException(status_code=409, detail={"code": "COURSEWARE_RELEASE_UNAVAILABLE", "message": "课件当前没有可学习 release"})
     events = [item.model_dump(mode="json") for item in payload.events]
     if any(item.get("resource_id") != resource_id for item in events):
         raise HTTPException(status_code=400, detail="事件资源与当前课件不匹配")
+    if any(item.get("release_id") != current_release for item in events):
+        raise HTTPException(status_code=409, detail={"code": "COURSEWARE_RELEASE_NOT_CURRENT", "message": "学习事件必须写入当前 release"})
     acknowledged = _service(request).ingest_learning_events(events)
     return {"acknowledged_event_ids": [item["event_id"] for item in acknowledged]}
 
 
 @router.get("/courseware/items/{resource_id}/learning-progress")
 def get_courseware_learning_progress(resource_id: str, release_id: str, request: Request):
-    _authorized_resource(resource_id, request)
+    resource = _authorized_resource(resource_id, request)
+    if not resource.released_release_id:
+        raise HTTPException(status_code=409, detail={"code": "COURSEWARE_RELEASE_UNAVAILABLE", "message": "课件当前没有可学习 release"})
+    if release_id != resource.released_release_id:
+        raise HTTPException(status_code=409, detail={"code": "COURSEWARE_RELEASE_NOT_CURRENT", "message": "只能读取当前 release 的学习进度"})
     return _service(request).learning_progress(resource_id, release_id)
 
 

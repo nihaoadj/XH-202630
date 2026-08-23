@@ -10,5 +10,6 @@ def test_learning_events_persist_redacted_occurrences_and_isolate_release():
     assert len(rows) == 2 and "answer_text" not in rows[0]["state"]
     progress = repo.learning_progress(resource_id="r", release_id="rel-1")
     assert progress["current_scene_id"] == "s"
-    assert progress["component_state"] == {"ordering": {"order": ["a", "b"]}}
+    assert progress["component_state_schema_version"] == "2.0"
+    assert progress["component_state"] == {"s": {"q": {"component_version": "1.0", "value": {"ordering": {"order": ["a", "b"]}}}}}
     assert repo.learning_progress(resource_id="r", release_id="rel-2")["answer_count"] == 0

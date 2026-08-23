@@ -46,6 +46,7 @@ class CoursewareJobResponse(BaseModel):
     title: str | None = None
     publish_mode: Literal["manual", "automatic"] = "automatic"
     resource_id: str | None = None
+    source_batch_id: str | None = None
     request_options: dict[str, Any] = Field(default_factory=dict)
     quality_summary: dict[str, Any] = Field(default_factory=dict)
     # Warning payloads may carry machine-readable flags (for example
@@ -94,6 +95,7 @@ class CoursewareResourceDetail(BaseModel):
     resource_id: str
     learner_id: str
     run_id: str
+    batch_id: str | None = None
     title: str
     topic: str
     status: Literal["approved_pending_publish", "published", "stale"]

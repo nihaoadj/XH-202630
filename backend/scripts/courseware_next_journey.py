@@ -23,16 +23,18 @@ def main() -> int:
     root = Path(__file__).resolve().parents[2]
     args.basetemp.mkdir(parents=True, exist_ok=True)
     commands = [
-        ["backend/tests/integration/courseware/test_api.py", "backend/tests/integration/courseware/test_ai_first_generation.py"],
-        ["backend/tests/integration/courseware/test_browser_smoke.py"],
-        ["backend/tests/e2e/courseware/test_c1_process_fault_matrix.py"],
+        ("api_and_ai_first_generation", ["backend/tests/integration/courseware/test_api.py", "backend/tests/integration/courseware/test_ai_first_generation.py"]),
+        ("browser_smoke", ["backend/tests/integration/courseware/test_browser_smoke.py"]),
+        ("c1_process_fault_matrix", ["backend/tests/e2e/courseware/test_c1_process_fault_matrix.py"]),
+        ("q5_local_user_journey", ["backend/tests/e2e/courseware/test_q5_local_user_journey.py"]),
     ]
     cases = []
-    for index, paths in enumerate(commands):
+    for index, (case_id, paths) in enumerate(commands):
         command = [sys.executable, "-m", "pytest", *paths, "-q", "-p", "no:cacheprovider",
                    f"--basetemp={args.basetemp / str(index)}"]
         result = subprocess.run(command, cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
         cases.append({
+            "case_id": case_id,
             "command": " ".join(command[3:]),
             "status": "passed" if result.returncode == 0 else "failed",
             "returncode": result.returncode,
@@ -40,7 +42,8 @@ def main() -> int:
             "stderr_tail": result.stderr[-2000:],
         })
     report = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
+        "required_case_ids": [item[0] for item in commands],
         "status": "LOCAL_READY" if all(item["status"] == "passed" for item in cases) else "PARTIAL",
         "external_services": "not_called",
         "topology": {"web": "courseware API test boundary", "worker": "independent process suite", "database": "file-backed SQLite in process suite"},

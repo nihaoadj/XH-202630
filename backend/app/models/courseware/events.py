@@ -80,14 +80,19 @@ def sanitize_component_state(value: Any) -> dict[str, Any]:
     return result
 
 
-def sanitize_event_state(value: Any) -> dict[str, Any]:
+def sanitize_event_state(
+    value: Any, *, scene_id: str | None = None, component_id: str | None = None,
+    component_version: str = "1.0",
+) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
     safe_keys = {"scene_index", "scene_count", "correct", "completed", "attempt", "duration_ms"}
     result = {key: value[key] for key in safe_keys if key in value and isinstance(value[key], (bool, int, float))}
     component_state = sanitize_component_state(value.get("component_state"))
-    if component_state:
-        result["component_state"] = component_state
+    if component_state and scene_id and component_id:
+        result["component_state"] = {
+            scene_id: {component_id: {"component_version": component_version, "value": component_state}}
+        }
     return result
 
 

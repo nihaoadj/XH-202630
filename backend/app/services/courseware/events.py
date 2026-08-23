@@ -23,7 +23,7 @@ class CoursewareEventProjector:
 
     def record(self, event: CoursewareLearningEvent | Mapping[str, Any]) -> CoursewareLearningEvent:
         value = event if isinstance(event, CoursewareLearningEvent) else CoursewareLearningEvent.model_validate(event)
-        safe_state = sanitize_event_state(value.state)
+        safe_state = sanitize_event_state(value.state, scene_id=value.scene_id, component_id=value.component_id, component_version=value.component_version)
         value = value.model_copy(update={"state": safe_state, "occurrence_id": value.occurrence_id or value.event_id})
         existing = self._events.get(value.event_id)
         if existing is not None:
@@ -69,15 +69,17 @@ class CoursewareEventProjector:
         )
         component_state: dict[str, Any] = {}
         for item in values:
-            if item.state.get("component_state"):
-                component_state.update(item.state["component_state"])
+            nested = item.state.get("component_state") or {}
+            for scene_id, instances in nested.items():
+                if isinstance(instances, dict):
+                    component_state.setdefault(scene_id, {}).update(instances)
         return {
             "resource_id": resource_id, "release_id": release_id,
             "viewed_scene_ids": sorted(viewed), "completed_scene_ids": sorted(completed),
             "courseware_completed": any(item.event_type == "courseware_completed" for item in values),
             "answer_count": sum(item.event_type == "answer_submitted" for item in values),
             "current_scene_id": current_scene_id, "current_scene_index": current_scene_index,
-            "component_state": component_state,
+            "component_state_schema_version": "2.0", "component_state": component_state,
         }
 
 

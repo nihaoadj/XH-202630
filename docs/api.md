@@ -768,8 +768,23 @@ Turn 请求为：
 当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。
 ## 互动课件学习事件（向前兼容）
 
-`POST /api/resources/courseware/items/{resource_id}/learning-events` 接收最多 100 个版本化、脱敏事件，返回 `acknowledged_event_ids`。服务端按 `occurrence_id` 幂等写入 SQLite，并按 `resource_id` 与 `release_id` 隔离投影。
+`POST /api/resources/courseware/items/{resource_id}/learning-events` 接收最多 100 个版本化、脱敏事件，返回 `acknowledged_event_ids`。服务端按 `occurrence_id` 幂等写入 SQLite，并按 `resource_id` 与 `release_id` 隔离投影。资源没有 `released_release_id`、事件引用旧/未知 release，或同一批次包含混合 release 时，返回 HTTP 409；错误码分别为 `COURSEWARE_RELEASE_UNAVAILABLE`、`COURSEWARE_RELEASE_NOT_CURRENT` 和 `COURSEWARE_RELEASE_BATCH_MISMATCH`，并且整批事件不写入。
 
-资源详情同时返回 `released_release_id` 当前发布指针。`GET /api/resources/courseware/items/{resource_id}/learning-progress?release_id={release_id}` 返回当前发布版本的只读进度投影，包含 `current_scene_id`、`current_scene_index`、已查看/已完成场景、完成状态、答题计数和脱敏的 `component_state`。`component_state` 只允许 flashcard 的状态、matching 的配对 ID 集合和 ordering 的受控项目 ID 顺序；自由文本答案和未知字段会被丢弃。旧 `release_id` 不会推进新版本。
+资源详情同时返回 `released_release_id` 当前发布指针，并在生成课件资源上返回来源批次 `batch_id`；任务响应返回冻结的 `source_batch_id`。`GET /api/resources/courseware/items/{resource_id}/learning-progress?release_id={release_id}` 只接受当前发布版本，否则同样返回上述 409，不以 `200 + 空状态` 冒充拒绝。
+
+当前进度投影的 `component_state_schema_version` 为 `2.0`，状态按 `scene_id -> component_id` 嵌套，实例值包含 `component_version` 和受控 `value`。例如：
+
+```json
+{
+  "component_state_schema_version": "2.0",
+  "component_state": {
+    "scene-1": {
+      "flashcard-1": {"component_version": "1.0", "value": {"revealed": true}}
+    }
+  }
+}
+```
+
+`component_state` 只允许 flashcard 的状态、matching 的配对 ID 集合和 ordering 的受控项目 ID 顺序；自由文本答案和未知字段会被丢弃。没有组件实例 ID 的旧事件可计入历史完成统计，但不会注入新的组件实例。
 
 课件任务响应中的 `quality_summary` 是版本化的稳定质量汇总，分开表示 `ai_full_course_success` 与 `artifact_success`，并记录 AI 场景/审核、fallback、重试、token、时延和估算成本；它不包含 Prompt、原始模型响应或凭据。

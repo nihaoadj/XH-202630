@@ -46,7 +46,7 @@ from app.agents.resource_workflows.interactive_courseware.budget import Coursewa
 from app.services.courseware.composition import compose_scenes, default_title, source_summary, topic
 from app.services.courseware.lineage import reconcile_stale_resources
 from app.services.courseware.review import quality_review, source_trace_review
-from app.services.courseware.source import CoursewareAdmissionError, admit_and_snapshot, content_hash
+from app.services.courseware.source import CoursewareAdmissionError, admit_and_snapshot, content_hash, frozen_source_batch_id
 from app.services.courseware.release import CandidateReleaseCoordinator
 
 
@@ -164,6 +164,7 @@ class InteractiveCoursewareWorkflow:
             "knowledge_base_id": None, "title": request.title,
             "publish_mode": request.publish_mode,
             "source_resource_ids": request.source_resource_ids, "source_snapshots": [],
+            "source_batch_id": frozen_source_batch_id(self.resource_service, request.source_resource_ids),
             "request_options": request.model_dump(include={"learning_goal", "expected_duration_minutes", "interaction_intensity", "visual_style_id"}, exclude_none=True),
             "request_hash": request_hash, "idempotency_key": request.idempotency_key,
             "status": "queued", "warnings": [], "attempt": 0,
@@ -260,7 +261,13 @@ class InteractiveCoursewareWorkflow:
             try:
                 self._stage(run_id, "snapshotting")
                 snapshots, knowledge_base_id = admit_and_snapshot(self.resource_service, self.audit_repo, job)
-                self.repo.update_job(run_id, source_snapshots=snapshots, knowledge_base_id=knowledge_base_id)
+                frozen_batch_id = job.get("source_batch_id") or next(
+                    (str(item.get("batch_id")).strip() for item in snapshots if item.get("batch_id")), None
+                )
+                if not frozen_batch_id or any(item.get("batch_id") != frozen_batch_id for item in snapshots):
+                    raise CoursewareAdmissionError("互动课件源资源必须来自同一反馈批次")
+                self.repo.update_job(run_id, source_snapshots=snapshots, knowledge_base_id=knowledge_base_id,
+                                     source_batch_id=frozen_batch_id)
                 self._checkpoint_completed(run_id, "snapshot", state_json={"knowledge_base_id": knowledge_base_id})
             except CoursewareAdmissionError as exc:
                 row = self.repo.update_job(run_id, status="rejected_admission", error_code=exc.code,
@@ -634,6 +641,7 @@ class InteractiveCoursewareWorkflow:
             }
             self.repo.save_resource({
                 "resource_id": resource_id, "resource_family_id": resource_id, "run_id": run_id,
+                "batch_id": job.get("source_batch_id"),
                 "learner_id": job["learner_id"], "knowledge_base_id": knowledge_base_id,
                 "title": title, "topic": resource_topic,
                 "status": "building", "version": 1,
@@ -649,6 +657,7 @@ class InteractiveCoursewareWorkflow:
                 "required": 1, "artifact_status": "ready",
                 "manifest": {
                     "entrypoint": "index.html", "security_check": "passed",
+                    "source_batch_id": job.get("source_batch_id"),
                     "provenance": provenance_graph.as_manifest(),
                 },
             })
@@ -702,6 +711,7 @@ class InteractiveCoursewareWorkflow:
                 "schema_version": "1.0", "renderer_version": RENDERER_VERSION,
                 "runtime_version": RUNTIME_VERSION, "scene_set_hash": candidate["scene_set_hash"],
                 "snapshot_set_hash": candidate["snapshot_set_hash"],
+                "source_batch_id": job.get("source_batch_id"),
                 "provenance": provenance_graph.as_manifest(),
                 "artifacts": [
                     {"format": item.get("artifact_format"), "path": item.get("file_path"),
@@ -1024,6 +1034,7 @@ class InteractiveCoursewareWorkflow:
             return None
         return CoursewareResourceDetail(
             resource_id=row["resource_id"], learner_id=row["learner_id"], run_id=row["run_id"],
+            batch_id=row.get("batch_id"),
             title=row["title"], topic=row["topic"], status=row["status"], version=row["version"],
             released_release_id=row.get("released_release_id"),
             artifact_sha256=row["artifact_sha256"], artifact_size=row["file_size"],
@@ -1079,7 +1090,7 @@ class InteractiveCoursewareWorkflow:
                 topic=row["topic"], learner_id=row["learner_id"], created_at=row.get("created_at"),
                 published_at=row.get("published_at"), version=row["version"], status=row["status"],
                 preview_capability=True, download_capability=True, source_summary=row["source_summary"],
-                run_id=row["run_id"], resource_type="互动HTML课件", difficulty="互动学习",
+                run_id=row["run_id"], batch_id=row.get("batch_id"), resource_type="互动HTML课件", difficulty="互动学习",
             )
             for row in self.repo.list_resources(learner_id)
             if row["status"] in {"published", "stale"}
@@ -1344,11 +1355,13 @@ class InteractiveCoursewareWorkflow:
             self.repo.list_events(row["run_id"]), status=row["status"], warnings=row.get("warnings") or [],
             artifact_success=bool(artifacts and row.get("status") in {"published", "published_with_warnings"}),
             spec_prompt_version=spec.get("prompt_version") if spec else None,
+            required_scene_ids=[item["scene_id"] for item in self.repo.list_scenes(spec["spec_id"])
+                                if item.get("kind") != "recap"] if spec else None,
         )
         return CoursewareJobResponse(
             run_id=row["run_id"], learner_id=row["learner_id"], status=row["status"], title=row.get("title"),
             publish_mode=row.get("publish_mode") or "automatic",
-            resource_id=row.get("resource_id"), warnings=row.get("warnings") or [], error_code=row.get("error_code"),
+            resource_id=row.get("resource_id"), source_batch_id=row.get("source_batch_id"), warnings=row.get("warnings") or [], error_code=row.get("error_code"),
             request_options=row.get("request_options") or {},
             quality_summary=quality_summary,
             error_message=row.get("error_message"), created_at=row.get("created_at"), updated_at=row.get("updated_at"),

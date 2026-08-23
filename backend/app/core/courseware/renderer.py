@@ -16,48 +16,50 @@ def _text(value: Any) -> str:
     return html.escape(str(value or ""), quote=True)
 
 
-def _render_component_block(block: dict[str, Any]) -> str:
+def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int) -> str:
     """Render only catalog-owned component shapes, never model-supplied markup."""
     definition = component_definition(block.get("component"), str(block.get("schema_version") or "1.0"))
     if definition is None:
         raise ValueError("课件包含未注册互动组件")
     text = _text(block.get("text"))
     css = f"block component-{definition.renderer}"
+    component_id = _text(block.get("component_id") or block.get("block_id") or f"{definition.name}-{index}")
+    attributes = f'class="{css}" data-component-id="{component_id}" data-scene-id="{_text(scene_id)}"'
     if definition.renderer == "key-point":
-        return f'<aside class="{css}" aria-label="关键点">{text}</aside>'
+        return f'<aside {attributes} aria-label="关键点">{text}</aside>'
     if definition.renderer == "compare":
-        return f'<section class="{css}" aria-label="对比说明">{text}</section>'
+        return f'<section {attributes} aria-label="对比说明">{text}</section>'
     if definition.renderer == "recap":
-        return f'<section class="{css}" aria-label="复盘"><h3>复盘</h3><p>{text}</p></section>'
+        return f'<section {attributes} aria-label="复盘"><h3>复盘</h3><p>{text}</p></section>'
     if definition.renderer == "callout":
-        return f'<aside class="{css}" role="note" aria-label="提示"><strong>提示</strong><p>{text}</p></aside>'
+        return f'<aside {attributes} role="note" aria-label="提示"><strong>提示</strong><p>{text}</p></aside>'
     if definition.name == "flashcard":
         front, back = _text(block.get("front") or text), _text(block.get("back") or text)
-        return f'<section class="{css}" data-flashcard tabindex="0" role="button" aria-label="翻转卡片"><p class="flash-front">{front}</p><p class="flash-back" hidden>{back}</p><button type="button" data-flashcard-action="review">再复习</button><button type="button" data-flashcard-action="known">已记住</button></section>'
+        return f'<section {attributes} data-flashcard tabindex="0" role="button" aria-label="翻转卡片"><p class="flash-front">{front}</p><p class="flash-back" hidden>{back}</p><button type="button" data-flashcard-action="review">再复习</button><button type="button" data-flashcard-action="known">已记住</button></section>'
     if definition.name == "matching":
         pairs = block.get("pairs") or []
         left = "".join(f'<button type="button" data-match="left" data-pair-id="{index}" aria-label="选择左项">{_text(pair.get("left"))}</button>' for index, pair in enumerate(pairs))
         right = "".join(f'<button type="button" data-match="right" data-pair-id="{index}" aria-label="选择右项">{_text(pair.get("right"))}</button>' for index, pair in enumerate(pairs))
-        return f'<section class="{css}" data-matching data-pair-count="{len(pairs)}" aria-label="配对练习"><p>{text}</p><div class="matching-left" aria-label="左侧项目">{left}</div><div class="matching-right" aria-label="右侧项目">{right}</div><p class="feedback" aria-live="polite" hidden></p></section>'
+        return f'<section {attributes} data-matching data-pair-count="{len(pairs)}" aria-label="配对练习"><p>{text}</p><div class="matching-left" aria-label="左侧项目">{left}</div><div class="matching-right" aria-label="右侧项目">{right}</div><p class="feedback" aria-live="polite" hidden></p></section>'
     if definition.name == "ordering":
         items = block.get("ordering_items") or []
         controls = "".join(f'<li data-item-id="{_text(item)}"><button type="button" data-order-move="up" aria-label="上移">↑</button><span>{_text(item)}</span><button type="button" data-order-move="down" aria-label="下移">↓</button></li>' for item in items)
         answer = "|".join(_text(item) for item in (block.get("correct_order") or items))
-        return f'<section class="{css}" data-ordering data-correct-order="{answer}" aria-label="排序练习"><p>{text}</p><ol>{controls}</ol><button type="button" data-order-submit>提交排序</button><p class="feedback" aria-live="polite" hidden></p></section>'
+        return f'<section {attributes} data-ordering data-correct-order="{answer}" aria-label="排序练习"><p>{text}</p><ol>{controls}</ol><button type="button" data-order-submit>提交排序</button><p class="feedback" aria-live="polite" hidden></p></section>'
     if definition.renderer in {"steps", "ordered-steps"}:
         values = block.get("steps") or [block.get("text") or "完成本步骤"]
         tag = "ol" if definition.renderer == "ordered-steps" else "ul"
         items = "".join(f'<li><label><input type="checkbox" id="component-step-{i}" data-check="component-step-{i}"><span>{_text(value)}</span></label></li>' for i, value in enumerate(values))
-        return f'<section class="{css}" aria-label="步骤"><{tag} class="component-steps">{items}</{tag}></section>'
+        return f'<section {attributes} aria-label="步骤"><{tag} class="component-steps">{items}</{tag}></section>'
     if definition.name == "single_choice":
         options = block.get("options") or ["是", "否"]
         controls = "".join(f'<label><input type="radio" name="choice-{_text(block.get("block_id") or "1")}" value="{_text(value)}"><span>{_text(value)}</span></label>' for value in options)
-        return f'<fieldset class="{css}" aria-label="单选题"><legend>{text}</legend>{controls}<button type="button" class="check">提交</button><p class="feedback" aria-live="polite" hidden></p></fieldset>'
+        return f'<fieldset {attributes} aria-label="单选题"><legend>{text}</legend>{controls}<button type="button" class="check">提交</button><p class="feedback" aria-live="polite" hidden></p></fieldset>'
     if definition.name == "multiple_choice":
         options = block.get("options") or ["选项 A", "选项 B"]
         controls = "".join(f'<label><input type="checkbox" value="{_text(value)}"><span>{_text(value)}</span></label>' for value in options)
-        return f'<fieldset class="{css}" aria-label="多选题"><legend>{text}</legend>{controls}<button type="button" class="check">提交</button><p class="feedback" aria-live="polite" hidden></p></fieldset>'
-    return f'<section class="{css}" aria-label="{_text(definition.name)}"><h3>{text}</h3></section>'
+        return f'<fieldset {attributes} aria-label="多选题"><legend>{text}</legend>{controls}<button type="button" class="check">提交</button><p class="feedback" aria-live="polite" hidden></p></fieldset>'
+    return f'<section {attributes} aria-label="{_text(definition.name)}"><h3>{text}</h3></section>'
 
 
 def _design_for(document: dict[str, Any], design: CoursewareDesign | dict[str, Any] | None) -> CoursewareDesign:
@@ -132,7 +134,14 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
                 raise ValueError("课件包含未注册互动组件")
             if any(not validate_component_payload(block["component"], block) for block in component_blocks):
                 raise ValueError("课件互动组件字段或来源不完整")
-            blocks = "".join(_render_component_block(block) for block in component_blocks)
+            blocks = "".join(
+                _render_component_block(
+                    block,
+                    scene_id=str(scene.get("scene_id") or f"scene-{index}"),
+                    index=block_index,
+                )
+                for block_index, block in enumerate(component_blocks)
+            )
         else:
             blocks = "".join(f'<p class="block">{_text(block)}</p>' for block in scene.get("blocks", []))
         interaction = ""

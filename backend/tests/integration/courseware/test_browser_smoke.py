@@ -13,7 +13,7 @@ from app.core.courseware.runtime import SCRIPT
 def test_runtime_binds_messages_to_the_initializing_parent_origin():
     assert "e.source!==parent" in SCRIPT
     assert "parentOrigin=e.origin" in SCRIPT
-    assert "postMessage({type,nonce,...extra},parentOrigin)" in SCRIPT
+    assert "postMessage({type,nonce,...context,...extra},parentOrigin)" in SCRIPT
     assert "e.data?.nonce===nonce" in SCRIPT
     assert "event_type:'answer_submitted'" in SCRIPT
     assert "send('progress'" in SCRIPT
@@ -21,6 +21,13 @@ def test_runtime_binds_messages_to_the_initializing_parent_origin():
     assert "component_state" in SCRIPT
     assert "matched_pair_ids" in SCRIPT
     assert "current_scene_id" in SCRIPT
+    assert "data-component-id" in render_courseware({
+        "title": "实例",
+        "scenes": [{"scene_id": "scene-1", "kind": "intro", "source_refs": ["source"], "component_blocks": [{
+            "component": "flashcard", "block_id": "flash-1", "text": "卡片", "front": "正面", "back": "背面",
+            "source_refs": [{"source_resource_id": "source", "source_block_ids": ["block-1"]}],
+        }]}],
+    }).decode("utf-8")
 
 
 def _edge() -> str | None:

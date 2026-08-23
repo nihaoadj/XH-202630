@@ -39,7 +39,7 @@ def test_local_user_journey_preferences_progress_refresh_and_release_isolation(t
     event = {
         "event_id": "journey-scene-1", "occurrence_id": "journey-scene-1", "event_schema_version": "1.0",
         "event_type": "scene_viewed", "resource_id": resource_id, "resource_version": resource["version"],
-        "release_id": release_id, "release_version": 1, "scene_id": "cws_scene_1", "scene_version": "1.0",
+        "release_id": release_id, "release_version": 1, "scene_id": "cws_scene_1", "scene_version": "1.0", "component_id": "ordering-journey", "component_version": "1.0",
         "state": {"scene_index": 1, "scene_count": 3, "component_state": {"ordering": {"order": ["a", "b"], "free_text": "drop"}}},
     }
     first = client.post(f"/api/resources/courseware/items/{resource_id}/learning-events", json={"events": [event]})
@@ -48,8 +48,11 @@ def test_local_user_journey_preferences_progress_refresh_and_release_isolation(t
     progress = client.get(f"/api/resources/courseware/items/{resource_id}/learning-progress?release_id={release_id}").json()
     assert progress["current_scene_id"] == "cws_scene_1"
     assert progress["current_scene_index"] == 1
-    assert progress["component_state"] == {"ordering": {"order": ["a", "b"]}}
-    assert client.get(f"/api/resources/courseware/items/{resource_id}/learning-progress?release_id=old-release").json()["answer_count"] == 0
+    assert progress["component_state_schema_version"] == "2.0"
+    assert progress["component_state"] == {"cws_scene_1": {"ordering-journey": {"component_version": "1.0", "value": {"ordering": {"order": ["a", "b"]}}}}}
+    old_release = client.get(f"/api/resources/courseware/items/{resource_id}/learning-progress?release_id=old-release")
+    assert old_release.status_code == 409
+    assert old_release.json()["detail"]["code"] == "COURSEWARE_RELEASE_NOT_CURRENT"
 
 
 def test_local_journey_keeps_cross_feedback_batch_request_rejected(tmp_path, monkeypatch):

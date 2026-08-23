@@ -10,6 +10,7 @@ def test_release_candidate_requires_evidence_and_never_upgrades_external_work(tm
     evaluator = tmp_path / "evaluator.json"
     artifacts = tmp_path / "artifacts.json"
     fault_matrix = tmp_path / "fault-matrix.json"
+    journey = tmp_path / "journey.json"
     browser = tmp_path / "browser.json"
     live = tmp_path / "live.json"
     evaluator.write_text(json.dumps({"case_count": 12, "passed": True}), encoding="utf-8")
@@ -18,12 +19,13 @@ def test_release_candidate_requires_evidence_and_never_upgrades_external_work(tm
         "artifacts": [{"status": "produced", "sha256": "a" * 64}],
     }), encoding="utf-8")
     fault_matrix.write_text(json.dumps({"passed": True, "categories": {"backup_restore": {"status": "passed"}}}), encoding="utf-8")
+    journey.write_text(json.dumps({"schema_version": "1.0", "status": "LOCAL_READY"}), encoding="utf-8")
     browser.write_text(json.dumps({"consoleErrors": [], "keyboard": ["Tab"], "reducedMotion": True}), encoding="utf-8")
     live.write_text(json.dumps({"status": "CONFIG_MISSING"}), encoding="utf-8")
 
     report = build_release_candidate_report(
         evaluator_path=evaluator, artifact_summary_path=artifacts,
-        fault_matrix_path=fault_matrix, browser_summary_path=browser,
+        fault_matrix_path=fault_matrix, journey_summary_path=journey, browser_summary_path=browser,
         live_model_path=live,
     )
 
