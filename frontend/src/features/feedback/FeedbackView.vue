@@ -105,6 +105,7 @@
         <div v-if="weakKnowledgePoints.length" class="weak-points"><span>优先巩固</span><b v-for="item in weakKnowledgePoints" :key="item">{{ item }}</b></div>
         </div>
         <div class="result-metrics">
+        <div><span>测评得分</span><strong>{{ Number(feedbackReport.total_score || 0).toFixed(2) }} / {{ feedbackReport.max_score || 100 }}</strong></div>
         <div><span>测评正确率</span><strong>{{ Math.round(result.attempt.overall_score * 100) }}%</strong></div>
         <div><span>答对题数</span><strong>{{ attemptCorrectSummary }}</strong></div>
         <div><span>当前建议</span><strong>{{ feedbackActionLabel(result.decision.action) }}</strong></div>
@@ -116,6 +117,14 @@
         <p>{{ friendlyText(result.analysis.summary) }}</p>
         <p v-if="result.analysis.reflection_insight" class="reflection-insight">{{ friendlyText(result.analysis.reflection_insight) }}</p>
         <ul v-if="result.analysis.learner_suggestions?.length"><li v-for="item in result.analysis.learner_suggestions" :key="item">{{ friendlyText(item) }}</li></ul>
+      </article>
+      <article v-if="feedbackReport.question_results?.length" class="capability-result-panel">
+        <div class="analysis-heading"><strong>逐题结果</strong><span>选择题由系统判分，问答题按参考答案评分</span></div>
+        <div class="capability-result-list">
+          <div v-for="item in feedbackReport.question_results" :key="item.question_id">
+            <strong>{{ item.question_id }} · {{ item.correct ? '正确' : '待加强' }}</strong><span>{{ Number(item.score || 0).toFixed(2) }} / {{ Number(item.max_score || 0).toFixed(2) }} 分 · {{ item.knowledge_point || item.skill_node_id }}</span>
+          </div>
+        </div>
       </article>
       <article v-if="feedbackReport.capability_results?.length" class="capability-result-panel">
         <div class="analysis-heading"><strong>能力节点结果</strong><span>仅基于服务端正式判分</span></div>

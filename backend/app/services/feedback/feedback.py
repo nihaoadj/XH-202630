@@ -3,6 +3,7 @@ import uuid
 import hashlib
 import logging
 import random
+import re
 from dataclasses import replace
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -31,6 +32,7 @@ from app.models.feedback.feedback_loop import (
     ProfileVersionRecord,
 )
 from app.models.shared.persistence import WorkflowEventType, canonical_hash
+from app.models.shared.agent_contracts import AssessmentShortAnswerGradeV1
 from app.models.learning_documents.schemas import (
     FeedbackAnswer,
     FeedbackRecord,
@@ -447,8 +449,11 @@ class FeedbackService:
         generation_options = None
         if profile is not None and self.mastery_service is not None and profile.knowledge_base_id:
             generation_options = self.mastery_service.next_generation_options(profile)
-        total = sum(item.total_count for item in result.attempt.knowledge_point_results)
-        correct = sum(item.correct_count for item in result.attempt.knowledge_point_results)
+        question_results = list(result.attempt.metadata.get("question_results") or [])
+        total = len(question_results) or sum(item.total_count for item in result.attempt.knowledge_point_results)
+        correct = sum(1 for item in question_results if item.get("correct")) if question_results else sum(item.correct_count for item in result.attempt.knowledge_point_results)
+        total_score = float(result.attempt.metadata.get("total_score", result.attempt.overall_score * 100))
+        max_score = float(result.attempt.metadata.get("max_score", 100))
         correction_option = self._correction_package_option(generation_options, profile)
         feedback_report = {
             "schema_version": "1.0",
@@ -459,6 +464,9 @@ class FeedbackService:
                 "accuracy": result.attempt.overall_score,
                 "evidence_status": "server_scored",
             },
+            "total_score": total_score,
+            "max_score": max_score,
+            "question_results": question_results,
             "capability_results": [
                 {
                     "skill_node_id": item.knowledge_point_id,
@@ -833,6 +841,7 @@ class FeedbackService:
         selected_resource = self._select_attempt_resource(resources, payload.source_resource_id)
         submitted_answers = {item.question_id: item.answer for item in payload.answers}
         point_results: dict[str, dict[str, object]] = {}
+        question_results: list[dict[str, object]] = []
         tutor_hint_count = payload.hint_count
         tutor_hints_by_question: dict[str, int] = {}
         if self.tutor_repo is not None:
@@ -889,12 +898,22 @@ class FeedbackService:
                 result["knowledge_points"].append(question.knowledge_point)
             if question.diagnostic_dimension and question.diagnostic_dimension not in result["diagnostic_dimensions"]:
                 result["diagnostic_dimensions"].append(question.diagnostic_dimension)
-            if self._answer_score(
+            score_ratio = self._answer_score(
                 question.question_type,
                 answer_key.get(question.question_id),
                 submitted_answers.get(question.question_id),
-            ) >= 1.0:
+            )
+            expected = answer_key.get(question.question_id)
+            maximum = float(expected.get("max_score", 1.0)) if isinstance(expected, dict) else 1.0
+            correct_threshold = 0.6 if question.question_type == "short_answer" else 1.0
+            if score_ratio >= correct_threshold:
                 result["correct_count"] += 1
+            question_results.append({
+                "question_id": question.question_id, "question_type": question.question_type,
+                "skill_node_id": question.skill_node_id, "knowledge_point": question.knowledge_point,
+                "correct": score_ratio >= correct_threshold, "score": round(score_ratio * maximum, 2),
+                "max_score": maximum, "grading_method": "llm" if question.question_type == "short_answer" else "deterministic",
+            })
 
         metadata = dict(payload.metadata)
         evaluation_sources = list(dict.fromkeys(question.source for question in questions))
@@ -914,6 +933,9 @@ class FeedbackService:
                     }
                     for knowledge_point_id, values in point_results.items()
                 },
+                "question_results": question_results,
+                "total_score": round(sum(float(item["score"]) for item in question_results), 2),
+                "max_score": round(sum(float(item["max_score"]) for item in question_results), 2),
             }
         )
 
@@ -1103,6 +1125,20 @@ class FeedbackService:
         questions: list[ResourceEvaluationQuestion] = []
         answer_key: dict[str, object] = {}
 
+        structured = self._structured_assessment_questions(resource)
+        if structured is not None:
+            for item in structured[:limit]:
+                question_id = str(item["question_id"])
+                options = [f"{choice['option_id']}. {choice['text']}" for choice in item.get("options", [])]
+                questions.append(ResourceEvaluationQuestion(
+                    question_id=question_id, question_type=item["question_type"], question=item["stem"],
+                    options=options, skill_node_id=item.get("skill_node_id"), path_node_id=resource.learning_path_node,
+                    knowledge_point=(item.get("knowledge_point_tags") or [None])[0], difficulty=resource.difficulty,
+                    source="resource",
+                ))
+                answer_key[question_id] = item
+            return questions, answer_key
+
         generated_items = self._usable_resource_exercises(resource)
         if generated_items:
             for item in generated_items[:limit]:
@@ -1215,6 +1251,21 @@ class FeedbackService:
         ]
 
     @staticmethod
+    def _structured_assessment_questions(resource: LearningResource) -> list[dict] | None:
+        payload = resource.assessment_payload
+        if payload is None:
+            return None
+        expected_hash = resource.assessment_payload_hash or payload.get("payload_hash")
+        actual_payload = {key: value for key, value in payload.items() if key != "payload_hash"}
+        actual_hash = hashlib.sha256(json.dumps(actual_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if not expected_hash or expected_hash != actual_hash:
+            raise ValueError("结构化测试题资源校验失败")
+        rows = [question for block in payload.get("node_blocks", []) for question in block.get("questions", [])]
+        if not rows or round(sum(float(item.get("max_score", 0)) for item in rows), 2) != 100:
+            raise ValueError("结构化测试题资源内容不完整")
+        return rows
+
+    @staticmethod
     def _order_questions_for_coverage(questions: list) -> list:
         dimensions = ("concept", "scenario", "misconception")
         ordered = []
@@ -1270,13 +1321,40 @@ class FeedbackService:
 
     def _answer_score(self, question_type: str | None, expected: object, actual: object) -> float:
         normalized_type = (question_type or "").lower()
+        if isinstance(expected, dict) and normalized_type == "short_answer":
+            return self._short_answer_score(expected, actual)
+        if isinstance(expected, dict) and "answer_option_ids" in expected:
+            expected = expected["answer_option_ids"]
+        if normalized_type == "single_choice":
+            return 1.0 if self._normalize_answer_set(expected) == self._normalize_answer_set(actual) else 0.0
         if normalized_type in {"multiple_choice", "multi_choice", "multiple_select", "checkbox"}:
             expected_values = self._normalize_answer_set(expected)
             actual_values = self._normalize_answer_set(actual)
             if not expected_values:
                 return 1.0 if not actual_values else 0.0
-            return 1.0 if expected_values == actual_values else 0.0
+            if actual_values == expected_values:
+                return 1.0
+            return 0.5 if actual_values and actual_values < expected_values else 0.0
         return 1.0 if self._answers_match(expected, actual) else 0.0
+
+    def _short_answer_score(self, question: dict, actual: object) -> float:
+        if self.llm_gateway is None:
+            raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=503)
+        maximum = float(question.get("max_score") or 0)
+        if maximum <= 0:
+            raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+        prompt = {"question": question.get("stem"), "learner_answer": str(actual or ""),
+                  "reference_answer": question.get("reference_answer"), "rubric": question.get("rubric"), "max_score": maximum}
+        try:
+            result = self.llm_gateway.invoke_structured(
+                messages=[SystemMessage(content="按参考答案和 rubric 给问答题评分，只返回结构化得分和简短反馈。"), HumanMessage(content=json.dumps(prompt, ensure_ascii=False))],
+                output_schema=AssessmentShortAnswerGradeV1,
+                context=LLMCallContext(run_id="feedback-grading", step_id=str(question.get("question_id")), node_name="short_answer_grader", schema_name="AssessmentShortAnswerGradeV1"),
+                options=self.llm_gateway.options_for("feedback_agent", temperature=0.0),
+            )
+        except Exception as exc:
+            raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=503) from exc
+        return max(0.0, min(maximum, result.output.score)) / maximum
 
     @staticmethod
     def _normalize_answer_set(value: object) -> set[str]:
@@ -1286,7 +1364,12 @@ class FeedbackService:
             raw_values = value
         else:
             raw_values = [value]
-        return {str(item).strip().casefold() for item in raw_values if str(item).strip()}
+        values = set()
+        for item in raw_values:
+            text = str(item).strip()
+            match = re.match(r"^([A-D])(?:[.、\s]|$)", text, re.I)
+            values.add((match.group(1) if match else text).casefold()) if text else None
+        return values
 
     @staticmethod
     def _normalize_answer_value(value: object) -> object:
@@ -1325,6 +1408,20 @@ class FeedbackService:
         candidates: list[ResourceEvaluationQuestion] = []
         answer_key: dict[str, object] = {}
         seen_question_ids: set[str] = set()
+        structured_resources = [resource for resource in resources if resource.assessment_payload is not None]
+        # A published v2 assessment is authoritative for its batch.  Do not
+        # silently mix it with bank items or truncate its fixed 5-question
+        # node blocks; a corrupt payload is rejected by _build_question_specs.
+        if structured_resources:
+            for resource in structured_resources:
+                questions, keys = self._build_question_specs(profile, resource, knowledge_service, limit=1000)
+                for question in questions:
+                    if question.question_id in seen_question_ids:
+                        raise ValueError("结构化测试题中存在重复题号")
+                    candidates.append(question)
+                    answer_key[question.question_id] = keys[question.question_id]
+                    seen_question_ids.add(question.question_id)
+            return candidates, answer_key
         skill_nodes = list(dict.fromkeys(
             resource.learning_path_node for resource in resources if resource.learning_path_node
         ))

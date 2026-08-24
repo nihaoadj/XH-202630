@@ -115,6 +115,9 @@ class LearningAttemptSubmit(StrictFeedbackModel):
             "point_trace",
             "learning_reflection",
             "llm_analysis",
+            "question_results",
+            "total_score",
+            "max_score",
         }
         if set(value) - allowed:
             raise ValueError("metadata contains unsupported keys")

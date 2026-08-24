@@ -112,6 +112,8 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         parent_resource_id=orm.parent_resource_id,
         created_at=orm.created_at,
         exercise_items=[ExerciseItem(**item) for item in (orm.exercise_items or [])],
+        assessment_payload=orm.assessment_payload,
+        assessment_payload_hash=orm.assessment_payload_hash,
     )
 
 
@@ -160,6 +162,8 @@ def _pydantic_to_orm(
         version=resource.version,
         parent_resource_id=resource.parent_resource_id,
         exercise_items=[item.model_dump() for item in resource.exercise_items],
+        assessment_payload=resource.assessment_payload,
+        assessment_payload_hash=resource.assessment_payload_hash,
     )
 
 

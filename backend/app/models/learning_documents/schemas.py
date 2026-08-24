@@ -403,6 +403,11 @@ class LearningResource(BaseModel):
     parent_resource_id: Optional[str] = None
     created_at: Optional[datetime] = None
     exercise_items: List[ExerciseItem] = Field(default_factory=list)
+    # Internal canonical payload for generated assessment resources.  It is
+    # deliberately excluded from generic API serialization because it carries
+    # answer keys and short-answer rubrics.
+    assessment_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
+    assessment_payload_hash: Optional[str] = Field(default=None, exclude=True)
 
 
 class ResourceClaim(BaseModel):

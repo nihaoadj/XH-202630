@@ -249,6 +249,8 @@ def _migrate_sqlite_generated_resources(engine) -> None:
         "version": "INTEGER NOT NULL DEFAULT 1",
         "parent_resource_id": "VARCHAR(64)",
         "exercise_items": "JSON DEFAULT '[]'",
+        "assessment_payload": "JSON",
+        "assessment_payload_hash": "VARCHAR(64)",
     }
     with engine.begin() as conn:
         if "generated_resources" not in _sqlite_tables(conn):

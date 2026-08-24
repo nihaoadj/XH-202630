@@ -128,6 +128,9 @@ def _materialize(
                        else ResourceStatus.UNREVIEWED_DRAFT.value),
         version=(previous.version + 1) if previous else 1,
         parent_resource_id=previous.resource_id if previous else None,
+        exercise_items=list(data.get("exercise_items") or []),
+        assessment_payload=data.get("assessment_package"),
+        assessment_payload_hash=(data.get("assessment_package") or {}).get("payload_hash"),
     )
 
 

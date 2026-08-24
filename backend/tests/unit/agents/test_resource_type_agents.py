@@ -269,27 +269,30 @@ def test_practice_guide_review_does_not_block_generated_secret_like_examples():
     assert _deterministic_practice_guide_review(real_secret)["decision"] == "approve"
 
 
-def test_assessment_agent_retries_plain_text_structure_before_failing():
+def test_assessment_agent_retries_node_json_structure_before_failing():
     spec, context, evidence = _inputs("分阶测试题")
-
-    def output(prefix):
-        questions = "\n\n".join(
-            f"## q-{index:02d} · {level}\n{prefix}：说明受控检索中的关键做法。"
-            for index, level in enumerate(["基础"] * 4 + ["进阶"] * 4 + ["挑战"] * 4, 1)
-        )
-        return f"# 受控检索测试\n\n## 一、题目\n\n{questions}\n\n## 二、参考答案与解析\n\n" + "\n".join(
-            f"q-{index:02d}：依据证据回答。解析：答案应受证据约束。"
-            for index in range(1, 13)
-        )
-
-    malformed = "# 受控检索测试\n\n## 一、题目\n\n只有一题。"
-    gateway = ScriptedLLMGateway([malformed, output("正确")])
+    choice = lambda local_id, question_type, answers: {
+        "local_id": local_id, "question_type": question_type, "stem": "受控检索应如何使用冻结证据？",
+        "options": [{"option_id": key, "text": f"选项 {key}"} for key in "ABCD"],
+        "answer_option_ids": answers, "knowledge_point_tags": ["skill-search"], "evidence_ids": [evidence.evidence_id],
+    }
+    valid = {
+        "schema_version": "2.0", "skill_node_id": "skill-search", "skill_node_name": "检索能力",
+        "single_choice_questions": [choice("single-1", "single_choice", ["A"]), choice("single-2", "single_choice", ["B"])],
+        "multiple_choice_questions": [choice("multiple-1", "multiple_choice", ["A", "B"])],
+        "short_answer_questions": [
+            {"local_id": "short-1", "question_type": "short_answer", "stem": "说明依据。", "reference_answer": "依据冻结证据。", "rubric": [{"criterion": "引用证据", "points": 1}, {"criterion": "说明边界", "points": 1}], "knowledge_point_tags": ["skill-search"], "evidence_ids": [evidence.evidence_id]},
+            {"local_id": "short-2", "question_type": "short_answer", "stem": "说明边界。", "reference_answer": "不引入证据外事实。", "rubric": [{"criterion": "识别边界", "points": 1}, {"criterion": "解释原因", "points": 1}], "knowledge_point_tags": ["skill-search"], "evidence_ids": [evidence.evidence_id]},
+        ],
+    }
+    gateway = ScriptedLLMGateway([{}, valid])
     artifact = AssessmentAgent().generate(spec, context, llm_gateway=gateway)
 
     assert artifact.metadata.validation_status == "validated"
     assert len(gateway.calls) == 2
     assert artifact.mime_type == "text/markdown"
-    assert artifact.artifact_data == {}
+    assert len(artifact.artifact_data["assessment_package"]["node_blocks"]) == 1
+    assert "参考答案" not in artifact.content_text
 
 
 def test_new_resource_types_have_a_deterministic_review_structure_gate():

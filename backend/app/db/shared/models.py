@@ -133,6 +133,8 @@ class GeneratedResourceORM(Base):
         comment="父资源 ID",
     )
     exercise_items = Column(JSON, default=list, comment="练习项")
+    assessment_payload = Column(JSON, nullable=True, comment="结构化测试题内部 payload（含答案）")
+    assessment_payload_hash = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
 
 

@@ -83,5 +83,7 @@ def immutable_resource_payload(resource: LearningResource) -> dict[str, Any]:
             "version",
             "parent_resource_id",
             "exercise_items",
+            "assessment_payload",
+            "assessment_payload_hash",
         },
     )

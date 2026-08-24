@@ -329,6 +329,79 @@ class AssessmentLLMOutput(StrictLLMOutput):
         return self
 
 
+# V2 is deliberately node-scoped.  The model never receives a whole batch,
+# which keeps a single malformed node from invalidating an otherwise usable
+# response and lets the workflow checkpoint completed node blocks.
+class AssessmentChoiceQuestionV2(StrictLLMOutput):
+    local_id: str = Field(pattern=r"^(single|multiple)-[12]$")
+    question_type: Literal["single_choice", "multiple_choice"]
+    stem: str = Field(min_length=1, max_length=600)
+    options: List[AssessmentOption] = Field(min_length=4, max_length=4)
+    answer_option_ids: List[str] = Field(min_length=1, max_length=3)
+    knowledge_point_tags: List[str] = Field(min_length=1, max_length=3)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_choice(self) -> "AssessmentChoiceQuestionV2":
+        ids = [item.option_id for item in self.options]
+        if ids != ["A", "B", "C", "D"]:
+            raise ValueError("assessment choices must use exactly A/B/C/D")
+        if not set(self.answer_option_ids) <= set(ids):
+            raise ValueError("choice answers must reference declared options")
+        if self.question_type == "single_choice" and len(self.answer_option_ids) != 1:
+            raise ValueError("single choice requires exactly one answer")
+        if self.question_type == "multiple_choice" and not 2 <= len(self.answer_option_ids) < 4:
+            raise ValueError("multiple choice requires two or three answers")
+        return self
+
+
+class AssessmentRubricItemV2(StrictLLMOutput):
+    criterion: str = Field(min_length=1, max_length=300)
+    points: int = Field(ge=1, le=10)
+
+
+class AssessmentShortAnswerQuestionV2(StrictLLMOutput):
+    local_id: str = Field(pattern=r"^short-[12]$")
+    question_type: Literal["short_answer"] = "short_answer"
+    stem: str = Field(min_length=1, max_length=600)
+    reference_answer: str = Field(min_length=1, max_length=1200)
+    rubric: List[AssessmentRubricItemV2] = Field(min_length=2, max_length=6)
+    knowledge_point_tags: List[str] = Field(min_length=1, max_length=3)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+
+
+class AssessmentNodeBlockV2(StrictLLMOutput):
+    schema_version: Literal["2.0"] = "2.0"
+    skill_node_id: str = Field(min_length=1, max_length=128)
+    skill_node_name: str = Field(min_length=1, max_length=160)
+    single_choice_questions: List[AssessmentChoiceQuestionV2] = Field(min_length=2, max_length=2)
+    multiple_choice_questions: List[AssessmentChoiceQuestionV2] = Field(min_length=1, max_length=1)
+    short_answer_questions: List[AssessmentShortAnswerQuestionV2] = Field(min_length=2, max_length=2)
+
+    @model_validator(mode="after")
+    def validate_fixed_quota(self) -> "AssessmentNodeBlockV2":
+        if any(item.question_type != "single_choice" for item in self.single_choice_questions):
+            raise ValueError("single_choice_questions must contain only single_choice")
+        if self.multiple_choice_questions[0].question_type != "multiple_choice":
+            raise ValueError("multiple_choice_questions must contain one multiple_choice")
+        local_ids = [item.local_id for item in self.single_choice_questions + self.multiple_choice_questions + self.short_answer_questions]
+        if len(local_ids) != len(set(local_ids)):
+            raise ValueError("node-local question IDs must be unique")
+        return self
+
+
+class AssessmentPackageV2(StrictLLMOutput):
+    schema_version: Literal["2.0"] = "2.0"
+    title: str = Field(min_length=1, max_length=120)
+    instructions: str = Field(min_length=1, max_length=600)
+    node_blocks: List[AssessmentNodeBlockV2] = Field(min_length=1, max_length=50)
+
+
+class AssessmentShortAnswerGradeV1(StrictLLMOutput):
+    score: float = Field(ge=0.0)
+    feedback: str = Field(min_length=1, max_length=600)
+
+
 class ReviewerInput(AgentInput):
     generated_resources: List[LearningResource] = Field(default_factory=list)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)

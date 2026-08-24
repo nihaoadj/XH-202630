@@ -171,7 +171,7 @@ def test_live_assessment_agent_generation():
     spec, context = _live_resource_context("分阶测试题")
     artifact = AssessmentAgent().generate(spec, context, llm_gateway=default_llm_gateway())
     assert artifact.content_text.startswith("# ")
-    assert artifact.artifact_data["questions"]
+    assert artifact.artifact_data["assessment_package"]["node_blocks"]
 
 
 def test_live_practice_guide_generation():
