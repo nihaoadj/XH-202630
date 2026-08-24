@@ -1,11 +1,11 @@
 import pytest
 
-from app.agents.retriever import retrieve_node
+from app.agents.shared.retrieval import retrieve_node
 from app.config import Settings
-from app.core import errors as errors_module
-from app.core.errors import ApplicationError, ErrorCode
-from app.models.common import ErrorInfo
-from app.models.knowledge import EvidenceBatch, RetrievalStatus
+from app.core.security import errors as errors_module
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.models.shared.common import ErrorInfo
+from app.models.knowledge.knowledge import EvidenceBatch, RetrievalStatus
 from tests.fakes.evidence import (
     ScriptedEvidenceRetriever,
     make_available_batch,

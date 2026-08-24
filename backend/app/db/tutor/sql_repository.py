@@ -8,13 +8,13 @@ from typing import Callable
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models import TutorSessionORM, TutorTurnORM
+from app.db.shared.models import TutorSessionORM, TutorTurnORM
 from app.db.tutor.base import (
     BaseTutorRepository,
     TutorIdempotencyConflict,
     TutorPersistenceConflict,
 )
-from app.models.tutor import TutorEvidenceRef, TutorSession, TutorTurn
+from app.models.tutor.tutor import TutorEvidenceRef, TutorSession, TutorTurn
 
 
 def _utc(value: datetime | None) -> datetime | None:

@@ -4,9 +4,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
-from app.models.agent_contracts import DiagnosisOutput, NodeResult, build_trace_item, make_error_info
-from app.models.schemas import AgentTrace
-from app.models.workflow import StepStatus
+from app.models.shared.agent_contracts import DiagnosisOutput, NodeResult, build_trace_item, make_error_info
+from app.models.learning_documents.schemas import AgentTrace
+from app.models.shared.workflow import StepStatus
 
 
 def test_node_result_requires_explicit_success_and_error_semantics():

@@ -2,48 +2,53 @@
 
 from dependency_injector import containers, providers
 
-from app.agents.workflow import build_workflow
-from app.agents.tutor import TutorAgent, TutorContextBuilder
+from app.agents.resource_workflows.learning_documents.workflow import build_workflow
+from app.agents.learning_agents.tutor_agent import TutorAgent, TutorContextBuilder
 from app.config import get_settings
-from app.core.evidence_retriever import EvidenceRetriever
-from app.core.llm import LangChainChatTransport
-from app.core.llm_gateway import LLMGateway
-from app.core.vector_store import ChromaVectorSearchBackend, get_vector_store
+from app.core.retrieval.retriever import EvidenceRetriever
+from app.core.llm.transport import LangChainChatTransport
+from app.core.llm.gateway import LLMGateway
+from app.core.retrieval.vector_store import ChromaVectorSearchBackend, get_vector_store
 from app.db.audit.repository import create_audit_repository
-from app.db.database import get_session_factory
+from app.db.shared.database import get_session_factory
 from app.db.claim.repository import create_claim_repository
 from app.db.diagnosis.repository import create_diagnosis_repository
 from app.db.feedback.repository import create_feedback_repository
-from app.db.feedback_loop.repository import create_feedback_loop_repository
-from app.db.generation_job.repository import create_generation_job_repository
+from app.db.feedback.feedback_loop_repository import create_feedback_loop_repository
+from app.db.generation.repository import create_generation_job_repository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
-from app.db.learner.repository import create_learner_repository
+from app.db.learners.repository import create_learner_repository
+from app.db.learners.mastery import create_mastery_repository
 from app.db.questionnaire.repository import create_questionnaire_repository
-from app.db.resource.repository import create_resource_repository
+from app.db.learning_documents.repository import create_resource_repository
 from app.db.courseware.repository import create_courseware_repository
 from app.db.tutor.repository import create_tutor_repository
-from app.db.user.repository import create_user_repository
-from app.models.llm import LLMCallOptions
-from app.services.diagnosis_service import DiagnosisService
-from app.services.auth_service import AuthService
-from app.services.evaluation_service import EvaluationService
-from app.services.feedback_service import FeedbackService
-from app.services.generation_job_service import GenerationJobService
-from app.services.generation_service import GenerationService
-from app.services.ingestion_service import ChromaKnowledgeVectorIndex, IngestionService
-from app.services.knowledge_service import KnowledgeService
-from app.services.learning_history_service import LearningHistoryService
-from app.services.onboarding_service import OnboardingService
-from app.services.profile_service import ProfileService
-from app.services.report_service import ReportService
-from app.services.resource_service import ResourceService
+from app.db.users.repository import create_user_repository
+from app.models.shared.llm import LLMCallOptions
+from app.services.learners.diagnosis import DiagnosisService
+from app.services.auth.authentication import AuthService
+from app.services.reports.evaluation import EvaluationService
+from app.services.feedback.feedback import FeedbackService
+from app.services.generation.jobs import GenerationJobService
+from app.services.generation.generation import GenerationService
+from app.services.knowledge.ingestion import ChromaKnowledgeVectorIndex, IngestionService
+from app.services.knowledge.knowledge import KnowledgeService
+from app.services.learners.history import LearningHistoryService
+from app.services.learners.mastery import MasteryService
+from app.services.onboarding.onboarding import OnboardingService
+from app.services.learners.profiles import ProfileService
+from app.services.reports.reports import ReportService
+from app.services.learning_documents.resources import ResourceService
 from app.services.courseware import CoursewareService
-from app.services.review_service import ReviewService
-from app.services.run_query_service import RunQueryService
-from app.services.run_event_stream_service import RunEventStreamService
-from app.services.user_service import UserService
-from app.services.workflow_artifact_recorder import WorkflowArtifactRecorder
-from app.services.tutor_service import TutorService
+from app.agents.resource_workflows.interactive_courseware.worker import CoursewareSceneWorker
+from app.services.courseware.executor import CoursewareExecutor
+from app.services.resource_library import ResourceLibraryService
+from app.services.reviews.reviews import ReviewService
+from app.services.runs.queries import RunQueryService
+from app.services.runs.events import RunEventStreamService
+from app.services.users.users import UserService
+from app.services.runs.workflow_artifact_recorder import WorkflowArtifactRecorder
+from app.services.tutor.tutor import TutorService
 
 
 class Container(containers.DeclarativeContainer):
@@ -80,6 +85,12 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
+    mastery_repository = providers.Singleton(
+        create_mastery_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+        learner_repository=learner_repository,
+    )
     user_repository = providers.Singleton(
         create_user_repository,
         db_type=config.db_type,
@@ -110,6 +121,7 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
         learner_repository=learner_repository,
+        mastery_repository=mastery_repository,
     )
     claim_repository = providers.Singleton(
         create_claim_repository,
@@ -139,6 +151,12 @@ class Container(containers.DeclarativeContainer):
     knowledge_catalog = providers.Singleton(
         KnowledgeCatalogRepository,
         session_factory=db_session_factory,
+    )
+    knowledge_service = providers.Singleton(KnowledgeService, catalog=knowledge_catalog)
+    mastery_service = providers.Singleton(
+        MasteryService,
+        repository=mastery_repository,
+        knowledge_service=knowledge_service,
     )
 
     vector_search_backend = providers.Singleton(
@@ -188,6 +206,7 @@ class Container(containers.DeclarativeContainer):
         GenerationJobService,
         job_repo=generation_job_repository,
         generation_service=generation_service,
+        mastery_service=mastery_service,
     )
     resource_service = providers.Singleton(ResourceService, repo=resource_repository)
     courseware_service = providers.Singleton(
@@ -196,6 +215,24 @@ class Container(containers.DeclarativeContainer):
         resource_service=resource_service,
         audit_repo=audit_repository,
         llm_gateway=llm_gateway,
+    )
+    courseware_scene_worker = providers.Singleton(
+        CoursewareSceneWorker,
+        workflow=courseware_service.provided.workflow,
+        poll_interval_seconds=config.courseware_worker_poll_seconds,
+        batch_size=config.courseware_worker_batch_size,
+    )
+    courseware_executor = providers.Singleton(
+        CoursewareExecutor,
+        repo=courseware_repository,
+        workflow=courseware_service.provided.workflow,
+        poll_interval_seconds=config.courseware_worker_poll_seconds,
+        batch_size=config.courseware_worker_batch_size,
+    )
+    resource_library_service = providers.Singleton(
+        ResourceLibraryService,
+        resource_service=resource_service,
+        courseware_service=courseware_service,
     )
     feedback_service = providers.Singleton(
         FeedbackService,
@@ -213,8 +250,8 @@ class Container(containers.DeclarativeContainer):
         feedback_repo=feedback_repository,
         feedback_loop_repo=feedback_loop_repository,
         generation_job_repo=generation_job_repository,
+        mastery_service=mastery_service,
     )
-    knowledge_service = providers.Singleton(KnowledgeService, catalog=knowledge_catalog)
     tutor_context_builder = providers.Singleton(
         TutorContextBuilder,
         audit_repository=audit_repository,
@@ -242,6 +279,7 @@ class Container(containers.DeclarativeContainer):
         knowledge_service=knowledge_service,
         learner_repo=learner_repository,
         diagnosis_repo=diagnosis_repository,
+        mastery_service=mastery_service,
     )
     review_service = providers.Singleton(ReviewService, audit_repo=audit_repository)
     run_query_service = providers.Singleton(
@@ -268,6 +306,7 @@ class Container(containers.DeclarativeContainer):
         knowledge_service=knowledge_service,
         questionnaire_repo=questionnaire_repository,
         user_repo=user_repository,
+        mastery_service=mastery_service,
     )
     learning_history_service = providers.Singleton(
         LearningHistoryService,

@@ -3,15 +3,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.agents.tutor import (
+from app.agents.learning_agents.tutor_agent import (
     TutorAgent,
     TutorContextBuilder,
     TutorGroundingValidationError,
 )
 from app.config import Settings
-from app.models.persistence import PersistedEvidenceSnapshot
-from app.models.schemas import LearnerProfile, LearningResource, SourceRef
-from app.models.tutor import TutorQuestionContext, TutorSession
+from app.models.shared.persistence import PersistedEvidenceSnapshot
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource, SourceRef
+from app.models.tutor.tutor import TutorQuestionContext, TutorSession
 from backend.tests.fakes.evidence import (
     ScriptedEvidenceRetriever,
     make_available_batch,

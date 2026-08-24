@@ -1,19 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import HomeView from '../features/home/HomeView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
-  { path: '/', name: 'landing', component: () => import('../views/LandingView.vue'), meta: { publicLayout: true } },
-  { path: '/login', name: 'login', component: () => import('../views/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
-  { path: '/register', name: 'register', component: () => import('../views/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
+{ path: '/', name: 'landing', component: () => import('../features/auth/LandingView.vue'), meta: { publicLayout: true } },
+{ path: '/login', name: 'login', component: () => import('../features/auth/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
+{ path: '/register', name: 'register', component: () => import('../features/auth/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
   { path: '/dashboard', name: 'dashboard', component: HomeView, meta: { requiresAuth: true } },
-  { path: '/user/profile', name: 'user-profile', component: () => import('../views/UserProfileView.vue'), meta: { requiresAuth: true } },
-  { path: '/learning/new', name: 'onboarding', component: () => import('../views/OnboardingView.vue'), meta: { requiresAuth: true } },
-  { path: '/learning/history', name: 'history', component: () => import('../views/HistoryView.vue'), meta: { requiresAuth: true } },
-  { path: '/resources', name: 'resources', component: () => import('../views/ResourcesView.vue'), meta: { requiresAuth: true } },
-  { path: '/generate', name: 'generate', component: () => import('../views/GenerateView.vue'), meta: { requiresAuth: true } },
-  { path: '/report', name: 'report', component: () => import('../views/ReportView.vue'), meta: { requiresAuth: true } },
-  { path: '/feedback', name: 'feedback', component: () => import('../views/FeedbackView.vue'), meta: { requiresAuth: true } },
+{ path: '/user/profile', name: 'user-profile', component: () => import('../features/learners/UserProfileView.vue'), meta: { requiresAuth: true } },
+{ path: '/learning/new', name: 'onboarding', component: () => import('../features/onboarding/OnboardingView.vue'), meta: { requiresAuth: true } },
+{ path: '/learning/history', name: 'history', component: () => import('../features/learners/HistoryView.vue'), meta: { requiresAuth: true } },
+{ path: '/resources', name: 'resources', component: () => import('../features/learning-documents/ResourcesView.vue'), meta: { requiresAuth: true } },
+{ path: '/generate', name: 'generate', component: () => import('../features/generation/GenerateView.vue'), meta: { requiresAuth: true } },
+{ path: '/report', name: 'report', component: () => import('../features/reports/ReportView.vue'), meta: { requiresAuth: true } },
+{ path: '/feedback', name: 'feedback', component: () => import('../features/feedback/FeedbackView.vue'), meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({

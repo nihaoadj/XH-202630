@@ -1,0 +1,36 @@
+{
+  "config_version": 2,
+  "provider": "deepseek",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-v4-flash",
+  "structured_output_mode": "json_mode",
+  "thinking_mode": "disabled",
+  "timeout_seconds": 120,
+  "max_attempts": 2,
+  "retry_base_delay_seconds": 0.5,
+  "retry_max_delay_seconds": 1.0,
+  "input_price_per_1k_tokens": 0.00044,
+  "output_price_per_1k_tokens": 0.00132,
+  "input_price_per_1m_tokens_peak": 0.44,
+  "input_price_per_1m_tokens_off_peak": 0.22,
+  "output_price_per_1m_tokens_peak": 1.32,
+  "output_price_per_1m_tokens_off_peak": 0.66,
+  "price_currency": "USD",
+  "price_unit": "USD_per_1M_tokens",
+  "pricing_window": "peak",
+  "model_version": "DeepSeek-V4-Flash-0731",
+  "price_version": "deepseek-v4-flash-public-pricing-2026-08-24",
+  "price_effective_date": "2026-08-24",
+  "price_source_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+  "acceptance_budget": {
+    "version": "2.0",
+    "max_provider_calls": 140,
+    "max_total_tokens": 600000,
+    "max_duration_seconds": 1200,
+    "stages": {
+      "spec": {"max_provider_calls": 20, "max_tokens": 80000},
+      "scene": {"max_provider_calls": 90, "max_tokens": 400000},
+      "quality_review": {"max_provider_calls": 30, "max_tokens": 120000}
+    }
+  }
+}

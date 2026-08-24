@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.agent_contracts import (
+from app.models.shared.agent_contracts import (
     DiagnosisLLMOutput,
     GeneratedResourceBatch,
     PlannerLLMOutput,

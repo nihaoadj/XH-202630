@@ -1,7 +1,7 @@
 from app.db.audit.base import PersistenceConflict
 from app.db.claim.memory import MemoryClaimRepository
 from app.db.claim.sql_repository import SQLClaimRepository
-from app.db.models import (
+from app.db.shared.models import (
     AgentRunORM,
     AgentStepORM,
     Base,
@@ -9,7 +9,7 @@ from app.db.models import (
     ResourceReviewORM,
     RetrievalEvidenceSnapshotORM,
 )
-from app.models.claims import (
+from app.models.reviews.claims import (
     ClaimCandidate,
     ClaimJudgementCandidate,
     ClaimType,

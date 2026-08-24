@@ -6,20 +6,20 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.audit.sql_repository import SQLAuditRepository
 from app.db.audit.base import PersistenceConflict
-from app.core.errors import ApplicationError, ErrorCode
-from app.db.database import configure_sqlite_foreign_keys
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.db.shared.database import configure_sqlite_foreign_keys
 from app.db.audit.memory import MemoryAuditRepository
-from app.db.models import Base, KnowledgeBaseORM, LearnerProfileORM
-from app.db.resource.memory import MemoryResourceRepository
-from app.db.resource.models import ResourceSpecRecord
-from app.db.resource.sql_repository import SQLResourceRepository
-from app.models.persistence import BeginStepCommand, CreateRunCommand, RunStatus, canonical_hash
-from app.models.schemas import LearningResource
-from app.models.schemas import GenerateRequest, LearnerProfile
-from app.services import generation_service as generation_module
-from app.services.generation_service import GenerationService
-from app.services.generation_service import _materialize_resources, _reconcile_reviews
-from app.services.workflow_artifact_recorder import WorkflowArtifactRecorder
+from app.db.shared.models import Base, KnowledgeBaseORM, LearnerProfileORM
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.db.learning_documents.models import ResourceSpecRecord
+from app.db.learning_documents.sql_repository import SQLResourceRepository
+from app.models.shared.persistence import BeginStepCommand, CreateRunCommand, RunStatus, canonical_hash
+from app.models.learning_documents.schemas import LearningResource
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
+from app.services.generation import generation as generation_module
+from app.services.generation.generation import GenerationService
+from app.services.generation.generation import _materialize_resources, _reconcile_reviews
+from app.services.runs.workflow_artifact_recorder import WorkflowArtifactRecorder
 
 
 NOW = datetime(2026, 8, 10, tzinfo=timezone.utc)

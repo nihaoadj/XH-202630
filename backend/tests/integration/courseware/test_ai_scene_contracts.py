@@ -53,6 +53,30 @@ def test_ai_scene_is_flattened_only_after_source_validation(monkeypatch):
     assert not source_trace_review({"scenes": [rendered]}, [_source()])
 
 
+def test_scene_prompt_prefers_first_attempt_safe_component_contract(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.scene_composer_agent as composition
+
+    monkeypatch.setattr(composition, "courseware_ai_available", lambda _gateway: True)
+    spec = CoursewareSceneSpec.model_validate({
+        "kind": "explain", "title": "RAG 原理",
+        "blocks": [{"block_id": "block-1", "component": "callout", "text": "先检索可信上下文。",
+                    "source_refs": [{"source_resource_id": "lecture", "source_block_ids": ["b1"]}]}],
+    })
+
+    class Gateway:
+        def options_for(self, *_args, **_kwargs): return object()
+        def invoke_structured(self, **kwargs):
+            self.messages = kwargs["messages"]
+            return SimpleNamespace(output=spec)
+
+    gateway = Gateway()
+    compose_courseware_scene(gateway, "run-1", "scene-1", _scene(), _source())
+    assert "pedagogical_role（仅 explain/example/warning/recap）" in gateway.messages[0].content
+    request = gateway.messages[1].content
+    assert "flashcard" not in request
+    assert '"supported_components": ["callout", "key_point", "steps", "single_choice", "multiple_choice", "recap"]' in request
+
+
 def test_unsafe_ai_scene_is_blocked_before_renderer(monkeypatch):
     import app.agents.resource_workflows.interactive_courseware.scene_composer_agent as composition
 
@@ -130,3 +154,23 @@ def test_invalid_quality_reviewer_output_is_unavailable(monkeypatch):
     decision, warning = review_courseware_quality_decision(Gateway(), "run-1", {"title": "课件", "scenes": []})
     assert decision.decision == "unavailable"
     assert warning and warning["code"] == "AI_QUALITY_REVIEW_INVALID_OUTPUT"
+
+
+def test_quality_review_prompt_enumerates_required_status_and_severity(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent as reviewer
+
+    monkeypatch.setattr(reviewer, "courseware_ai_available", lambda _gateway: True)
+
+    class Gateway:
+        def options_for(self, *_args, **_kwargs): return object()
+        def invoke_structured(self, **kwargs):
+            self.messages = kwargs["messages"]
+            self.output_schema = kwargs["output_schema"]
+            return SimpleNamespace(output=reviewer.CoursewareReviewDecision(status="pass", schema_version="2.0"))
+
+    gateway = Gateway()
+    review_courseware_quality_decision(gateway, "run-1", {"title": "课件", "scenes": []})
+    assert gateway.output_schema.__name__ == "CoursewareReviewDecisionV2Draft"
+    assert "severity 只能是 info、warning 或 error" in gateway.messages[0].content
+    assert "status=pass" in gateway.messages[0].content
+    assert '"schema_version":"2.0","status":"pass","issues":[]' in gateway.messages[0].content

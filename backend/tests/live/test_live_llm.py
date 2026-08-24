@@ -6,17 +6,17 @@ import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import get_settings, is_placeholder_api_key
-from app.core.llm_gateway import default_llm_gateway
+from app.core.llm.gateway import default_llm_gateway
 from app.agents.resource_agents import AssessmentAgent, PracticeGuideAgent
-from app.agents.resource_spec_builder import build_resource_specs
-from app.models.agent_contracts import GeneratedResourceBatch
-from app.models.agent_contracts import ResourceGenerationContext
-from app.models.claims import (
+from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
+from app.models.shared.agent_contracts import GeneratedResourceBatch
+from app.models.shared.agent_contracts import ResourceGenerationContext
+from app.models.reviews.claims import (
     ClaimExtractionLLMOutput,
     ClaimJudgementLLMOutput,
     materialize_claims,
 )
-from app.models.llm import LLMCallContext
+from app.models.shared.llm import LLMCallContext
 from tests.fakes.evidence import make_evidence
 
 

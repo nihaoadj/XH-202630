@@ -14,7 +14,7 @@ const pythonCandidates = [process.env.PYTHON, process.platform === 'win32' ? 'D:
 const python = pythonCandidates.find(candidate => candidate.includes('\\') || candidate.includes('/') ? existsSync(candidate) : true)
 const tempDir = mkdtempSync(path.join(tmpdir(), 'courseware-browser-'))
 const reportDir = path.resolve(frontendDir, 'test-results', 'courseware-browser')
-const components = ['callout', 'key_point', 'compare', 'steps', 'ordered_steps', 'single_choice', 'multiple_choice', 'recap', 'flashcard', 'matching', 'ordering']
+const components = ['callout', 'key_point', 'compare', 'steps', 'ordered_steps', 'single_choice', 'multiple_choice', 'recap', 'flashcard', 'matching', 'ordering', 'branching_scenario', 'categorization', 'word_bank_cloze', 'timeline_explorer']
 // Catalog keys intentionally differ from their renderer class names for the
 // choice and key-point components.  Keep this mapping explicit so the browser
 // gate verifies the element produced by the real server renderer.
@@ -22,7 +22,10 @@ const rendererNames = {
   key_point: 'key-point',
   ordered_steps: 'ordered-steps',
   single_choice: 'choice',
-  multiple_choice: 'choice'
+  multiple_choice: 'choice',
+  branching_scenario: 'branching-scenario',
+  word_bank_cloze: 'word-bank-cloze',
+  timeline_explorer: 'timeline-explorer'
 }
 const themes = ['editorial', 'midnight', 'paper']
 const renderScript = String.raw`
@@ -36,6 +39,14 @@ if component in {"single_choice", "multiple_choice"}: block["options"] = ["正�
 if component == "flashcard": block.update({"front": "问题", "back": "答案"})
 if component == "matching": block["pairs"] = [{"left": "术语 A", "right": "定义 A"}, {"left": "术语 B", "right": "定义 B"}]
 if component == "ordering": block.update({"ordering_items": ["第一步", "第二步"], "correct_order": ["第一步", "第二步"]})
+if component == "branching_scenario":
+    block.update({"schema_version": "2.0", "start_node_id": "n1", "nodes": [{"node_id": "n1", "node_type": "decision", "source_refs": block["source_refs"], "options": [{"option_id": "o1", "label": "路径 A", "next_node_id": "n2", "source_refs": block["source_refs"]}, {"option_id": "o2", "label": "路径 B", "next_node_id": "n2", "source_refs": block["source_refs"]}]}, {"node_id": "n2", "node_type": "terminal", "source_refs": block["source_refs"], "options": []}]})
+if component == "categorization":
+    block.update({"schema_version": "2.0", "categories": [{"category_id": "c1", "label": "类别 1", "source_refs": block["source_refs"]}, {"category_id": "c2", "label": "类别 2", "source_refs": block["source_refs"]}], "items": [{"item_id": "i1", "label": "项目 1", "correct_category_id": "c1", "source_refs": block["source_refs"]}, {"item_id": "i2", "label": "项目 2", "correct_category_id": "c2", "source_refs": block["source_refs"]}, {"item_id": "i3", "label": "项目 3", "correct_category_id": "c1", "source_refs": block["source_refs"]}]})
+if component == "word_bank_cloze":
+    block.update({"schema_version": "2.0", "prompt_segments": ["先 ", " 再"], "blanks": [{"blank_id": "b1", "correct_token_id": "t1", "source_refs": block["source_refs"]}], "tokens": [{"token_id": "t1", "label": "检索", "source_refs": block["source_refs"]}, {"token_id": "t2", "label": "生成", "source_refs": block["source_refs"]}]})
+if component == "timeline_explorer":
+    block.update({"schema_version": "2.0", "events": [{"event_id": "e1", "sequence": 1, "label": "第一步", "source_refs": block["source_refs"]}, {"event_id": "e2", "sequence": 2, "label": "第二步", "source_refs": block["source_refs"]}]})
 document = {"schema_version": "1.0", "title": "浏览器质量门", "scenes": [{"kind": "intro", "title": component, "blocks": [block["text"]], "source_refs": ["fixture"], "source_block_ids": ["block-1"], "source_map": {"blocks": [["block-1"]]}, "component_blocks": [block]}]}
 Path(sys.argv[1]).write_bytes(render_courseware(document, {"theme_id": theme, "layout_id": "focus"}))
 `
@@ -168,7 +179,7 @@ try {
   const artifactRestore = restoredFlashcard.frontHidden === true && restoredFlashcard.backHidden === false
   await viewer.close()
   assert.deepEqual(consoleErrors, [])
-  writeFileSync(path.join(reportDir, 'summary.json'), JSON.stringify({ schema_version: '1.3', viewports: ['320x640', 'desktop', '200%', 'forced-colors'], consoleErrors, keyboard: ['Tab', 'Enter', 'Space'], csp: true, touch: true, reducedMotion, forcedColors, forced_colors_active: forcedColors.active, zoom, zoom_200_active: zoom === '2', http_origin_iframe: httpOriginIframe, nonce_guard: nonceGuard, artifact_restore: artifactRestore, focusEvidence, contrast: true, a11y: { unlabeled: focusEvidence.unlabeled }, component_theme_matrix: componentThemeMatrix }, null, 2))
+  writeFileSync(path.join(reportDir, 'summary.json'), JSON.stringify({ schema_version: '1.4', viewports: ['320x640', 'desktop', '200%', 'forced-colors'], consoleErrors, keyboard: ['Tab', 'Enter', 'Space'], csp: true, touch: true, reducedMotion, forcedColors, forced_colors_active: forcedColors.active, zoom, zoom_200_active: zoom === '2', http_origin_iframe: httpOriginIframe, nonce_guard: nonceGuard, artifact_restore: artifactRestore, focusEvidence, contrast: true, a11y: { unlabeled: focusEvidence.unlabeled }, component_theme_matrix: componentThemeMatrix }, null, 2))
 } finally {
   if (viewerServer) await new Promise(resolve => viewerServer.close(resolve))
   await browser.close()

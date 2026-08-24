@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
-from app.db.models import (
+from app.db.shared.models import (
     FeedbackDecisionORM,
     FeedbackFollowUpRunORM,
     KnowledgeStateMutationORM,

@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.feedback_loop.memory import MemoryFeedbackLoopRepository
-from app.db.generation_job.memory import MemoryGenerationJobRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.feedback_loop import KnowledgePointAttemptResult, LearningAttemptSubmit
-from app.models.schemas import LearnerProfile, LearningResource
-from app.services.feedback_service import FeedbackService
-from app.services.report_service import ReportService
+from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
+from app.db.generation.memory import MemoryGenerationJobRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.feedback.feedback_loop import KnowledgePointAttemptResult, LearningAttemptSubmit
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.services.feedback.feedback import FeedbackService
+from app.services.reports.reports import ReportService
 
 
 def test_report_reads_persisted_profile_path_attempt_and_version_history():

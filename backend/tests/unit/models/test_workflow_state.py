@@ -4,10 +4,10 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.agents.workflow import build_workflow
-from app.models.schemas import GenerateRequest, LearnerProfile
-from app.models.workflow import WorkflowStateSnapshot
-from app.services.generation_service import build_workflow_state
+from app.agents.resource_workflows.learning_documents.workflow import build_workflow
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
+from app.models.shared.workflow import WorkflowStateSnapshot
+from app.services.generation.generation import build_workflow_state
 
 
 def _learner() -> LearnerProfile:

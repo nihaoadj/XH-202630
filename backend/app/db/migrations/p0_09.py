@@ -6,11 +6,11 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.schema import CreateTable
 
-from app.db.integrity import (
+from app.db.shared.integrity import (
     assert_integrity_migration_preconditions,
     inspect_database_integrity,
 )
-from app.db.models import GeneratedResourceORM
+from app.db.shared.models import GeneratedResourceORM
 
 
 MIGRATION_ID = "20260815_p0_09_database_integrity"

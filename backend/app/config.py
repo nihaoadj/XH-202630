@@ -22,13 +22,59 @@ class Settings(BaseSettings):
     """应用配置，自动从 .env 文件加载"""
     app_mode: str = "development"
     allow_degraded_generation: bool = False
-    courseware_ai_enabled: bool = False
+    # AI is the normal courseware authoring path.  ``courseware_ai_enabled``
+    # remains as a deployment-owned emergency switch for older environments;
+    # it no longer makes deterministic generation the default product mode.
+    courseware_ai_enabled: bool = True
+    courseware_generation_mode: str = "ai_first"
+    # Deployment-owned: callers cannot downgrade a strict release gate.
+    courseware_release_policy: str = "resilient"
+    courseware_auto_revision_max_attempts: int = Field(default=2, ge=0, le=5)
+    courseware_scene_lease_seconds: int = Field(default=120, ge=30, le=900)
+    courseware_auto_review_max_seconds: int = Field(default=180, ge=10, le=900)
+    courseware_total_llm_token_budget: int = Field(default=49152, ge=256, le=262144)
+    courseware_total_run_timeout_seconds: int = Field(default=1050, ge=30, le=3600)
+    courseware_planner_token_budget: int = Field(default=4096, ge=0, le=262144)
+    courseware_scene_composition_token_budget: int = Field(default=30720, ge=0, le=262144)
+    courseware_scene_call_max_tokens: int = Field(default=4096, ge=256, le=65536)
+    courseware_quality_review_token_budget: int = Field(default=4096, ge=0, le=262144)
+    courseware_revision_token_budget: int = Field(default=10240, ge=0, le=262144)
+    courseware_quality_review_reserved_tokens: int = Field(default=4096, ge=0, le=262144)
+    courseware_revision_reserved_tokens: int = Field(default=10240, ge=0, le=262144)
+    courseware_planner_max_seconds: float = Field(default=90.0, ge=0, le=3600)
+    courseware_scene_composition_max_seconds: float = Field(default=600.0, ge=0, le=3600)
+    courseware_quality_review_max_seconds: float = Field(default=120.0, ge=0, le=3600)
+    courseware_revision_max_seconds: float = Field(default=180.0, ge=0, le=3600)
+    courseware_quality_review_reserved_seconds: float = Field(default=120.0, ge=0, le=3600)
+    courseware_revision_reserved_seconds: float = Field(default=180.0, ge=0, le=3600)
+    courseware_worker_enabled: bool = False
+    courseware_worker_poll_seconds: float = Field(default=2.0, gt=0.1, le=60)
+    courseware_worker_batch_size: int = Field(default=1, ge=1, le=100)
+    courseware_input_cost_per_1k_tokens: float = Field(default=0.0, ge=0.0, le=1000.0)
+    courseware_output_cost_per_1k_tokens: float = Field(default=0.0, ge=0.0, le=1000.0)
+    # Live acceptance is opt-in and has its own explicit, versioned contract.
+    # Empty defaults intentionally make an incomplete live job non-runnable.
+    courseware_live_model_config_version: int = Field(default=1, ge=1, le=10)
+    courseware_live_model_provider: str = ""
+    courseware_live_model_base_url: str = ""
+    courseware_live_model: str = ""
+    courseware_live_structured_output_mode: str = ""
+    courseware_live_timeout_seconds: float | None = Field(default=None, gt=0, le=300)
+    courseware_live_max_attempts: int | None = Field(default=None, ge=1, le=3)
+    courseware_live_retry_base_delay_seconds: float | None = Field(default=None, ge=0, le=30)
+    courseware_live_retry_max_delay_seconds: float | None = Field(default=None, ge=0, le=60)
+    courseware_live_input_price_per_1k_tokens: float | None = Field(default=None, ge=0, le=1000)
+    courseware_live_output_price_per_1k_tokens: float | None = Field(default=None, ge=0, le=1000)
+    courseware_live_price_currency: str = ""
+    courseware_live_price_version: str = ""
+    courseware_live_price_effective_date: str = ""
     llm_api_key: SecretStr = SecretStr("")
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     # Deliberately opt in to a proxy only when one is known to be usable.
     # The transport otherwise ignores Windows/system proxy discovery.
     llm_proxy_url: str | None = None
     llm_model: str = "qwen-max"
+    llm_thinking_mode: str = "auto"
 
     @field_validator("llm_proxy_url", mode="before")
     @classmethod
@@ -143,6 +189,22 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_APP_MODE")
         return normalized
 
+    @field_validator("courseware_release_policy")
+    @classmethod
+    def validate_courseware_release_policy(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"strict", "resilient"}:
+            raise ValueError("CFG_INVALID_COURSEWARE_RELEASE_POLICY")
+        return normalized
+
+    @field_validator("courseware_generation_mode")
+    @classmethod
+    def validate_courseware_generation_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"ai_first", "offline_eval", "emergency_degraded"}:
+            raise ValueError("CFG_INVALID_COURSEWARE_GENERATION_MODE")
+        return normalized
+
     @field_validator("db_type")
     @classmethod
     def validate_db_type(cls, value: str) -> str:
@@ -157,6 +219,14 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         if normalized not in {"auto", "json_schema", "function_calling", "json_mode", "text"}:
             raise ValueError("CFG_INVALID_LLM_STRUCTURED_OUTPUT_MODE")
+        return normalized
+
+    @field_validator("llm_thinking_mode")
+    @classmethod
+    def validate_llm_thinking_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"auto", "enabled", "disabled"}:
+            raise ValueError("CFG_INVALID_LLM_THINKING_MODE")
         return normalized
 
     @field_validator("vector_distance_metric")
@@ -306,6 +376,33 @@ class Settings(BaseSettings):
                 raise ValueError("CFG_RERANK_RUNTIME_INVALID")
             if self.rerank_max_chunks_per_document <= 0:
                 raise ValueError("CFG_RERANK_DIVERSITY_INVALID")
+
+        stage_token_budgets = (
+            self.courseware_planner_token_budget,
+            self.courseware_scene_composition_token_budget,
+            self.courseware_quality_review_token_budget,
+            self.courseware_revision_token_budget,
+        )
+        if sum(stage_token_budgets) > self.courseware_total_llm_token_budget:
+            raise ValueError("CFG_INVALID_COURSEWARE_STAGE_TOKEN_BUDGET")
+        if self.courseware_quality_review_reserved_tokens > self.courseware_quality_review_token_budget:
+            raise ValueError("CFG_INVALID_COURSEWARE_REVIEW_RESERVE")
+        if self.courseware_revision_reserved_tokens > self.courseware_revision_token_budget:
+            raise ValueError("CFG_INVALID_COURSEWARE_REVISION_RESERVE")
+        if self.courseware_scene_call_max_tokens > 4096 or (self.courseware_scene_composition_token_budget and self.courseware_scene_call_max_tokens > self.courseware_scene_composition_token_budget):
+            raise ValueError("CFG_INVALID_COURSEWARE_SCENE_CALL_LIMIT")
+        stage_seconds = (
+            self.courseware_planner_max_seconds,
+            self.courseware_scene_composition_max_seconds,
+            self.courseware_quality_review_max_seconds,
+            self.courseware_revision_max_seconds,
+        )
+        if sum(stage_seconds) + 60 > self.courseware_total_run_timeout_seconds:
+            raise ValueError("CFG_INVALID_COURSEWARE_STAGE_TIMEOUT_BUDGET")
+        if self.courseware_quality_review_reserved_seconds > self.courseware_quality_review_max_seconds:
+            raise ValueError("CFG_INVALID_COURSEWARE_REVIEW_TIME_RESERVE")
+        if self.courseware_revision_reserved_seconds > self.courseware_revision_max_seconds:
+            raise ValueError("CFG_INVALID_COURSEWARE_REVISION_TIME_RESERVE")
 
         if self.db_type == "sqlite" and not self.database_url.startswith("sqlite:///"):
             raise ValueError("CFG_DATABASE_URL_MISMATCH")

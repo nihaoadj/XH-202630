@@ -8,24 +8,25 @@ from langchain.schema import Document
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.agents import retriever
+from app.agents.shared import retrieval as retriever
 from app.config import Settings
-from app.core import vector_store
-from app.core.evidence_retriever import EvidenceRetriever
-from app.core.knowledge_base import (
+from app.core.retrieval import vector_store
+from app.core.retrieval.retriever import EvidenceRetriever
+from app.core.retrieval.knowledge_base import (
     chunk_documents,
     load_documents,
     load_knowledge_base_manifest,
 )
-from app.core.vector_store import _restore_retrieved_metadata, _to_chroma_document
+from app.core.retrieval.vector_store import _restore_retrieved_metadata, _to_chroma_document
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.knowledge.memory import MemoryKnowledgeChunkRepository
 from app.db.audit.sql_repository import SQLAuditRepository
 from app.db.diagnosis.memory import MemoryDiagnosisRepository
 from app.db.diagnosis.sql_repository import SQLDiagnosisRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.learner.sql_repository import SQLLearnerRepository
-from app.db.models import (
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learners.mastery import MemoryMasteryRepository, SQLMasteryRepository
+from app.db.learners.sql_repository import SQLLearnerRepository
+from app.db.shared.models import (
     AgentRunORM,
     AgentStepORM,
     AssessmentQuestionORM,
@@ -40,7 +41,7 @@ from app.db.models import (
     ResourceClaimORM,
     ResourceReviewORM,
 )
-from app.models.schemas import (
+from app.models.learning_documents.schemas import (
     DiagnosticAnswerSubmission,
     DiagnosticQuestion,
     DiagnosticSubmitRequest,
@@ -52,8 +53,9 @@ from tests.fakes.evidence import (
     make_vector_candidate,
 )
 from tests.paths import KNOWLEDGE_BASE_ROOT
-from app.services.diagnosis_service import DiagnosisService
-from app.services.knowledge_service import KnowledgeService
+from app.services.learners.diagnosis import DiagnosisService
+from app.services.learners.mastery import MasteryService
+from app.services.knowledge.knowledge import KnowledgeService
 
 
 def test_default_chunking_configuration_uses_100_character_overlap():
@@ -238,7 +240,8 @@ def test_catalog_sync_is_idempotent_and_preserves_graph(tmp_path):
         assert db.query(AssessmentQuestionORM).count() == 130
     nodes = repository.list_skill_nodes(manifest["knowledge_base_id"])
     assert len(nodes) == 13
-    assert next(node for node in nodes if node.name == "Chunk 切分").prerequisites == ["文档解析"]
+    assert next(node for node in nodes if node.name == "Chunk 切分").prerequisites == ["document_parsing"]
+    assert next(node for node in nodes if node.name == "文档解析").children == ["chunking"]
     assert len(KnowledgeService(catalog=repository).load_assessment_questions(manifest["knowledge_base_id"])) == 130
 
 
@@ -405,10 +408,12 @@ def test_diagnosis_submission_scores_on_server_and_updates_profile():
     assert "answer" not in public_question
     assert "explanation" not in public_question
 
+    mastery_service = MasteryService(MemoryMasteryRepository(learner_repo), knowledge_service)
     result = DiagnosisService(
         knowledge_service=knowledge_service,
         learner_repo=learner_repo,
         diagnosis_repo=MemoryDiagnosisRepository(),
+        mastery_service=mastery_service,
     ).submit(
         DiagnosticSubmitRequest(
             learner_id=learner.learner_id,
@@ -420,11 +425,11 @@ def test_diagnosis_submission_scores_on_server_and_updates_profile():
         )
     )
 
-    assert result.knowledge_states["RAG 基础概念"].score == 2 / 3
-    assert result.knowledge_states["RAG 基础概念"].status == "learning"
+    assert result.knowledge_states["rag_basics"].score == round(2 / 3, 6)
+    assert result.knowledge_states["rag_basics"].status == "learning"
     updated = learner_repo.get(learner.learner_id)
     assert updated is not None
-    assert updated.theory_scores["RAG 基础概念"] == round(200 / 3, 1)
+    assert updated.theory_scores["rag_basics"] == round(200 / 3, 1)
 
 
 def test_assessment_question_bank_has_ten_layered_questions_per_skill_node():
@@ -503,6 +508,7 @@ def test_diagnosis_submission_persists_answers_and_states_in_sqlite(tmp_path):
         knowledge_service=knowledge_service,
         learner_repo=learner_repo,
         diagnosis_repo=SQLDiagnosisRepository(factory),
+        mastery_service=MasteryService(SQLMasteryRepository(factory), knowledge_service),
     )
     service.submit(
         DiagnosticSubmitRequest(
@@ -516,4 +522,9 @@ def test_diagnosis_submission_persists_answers_and_states_in_sqlite(tmp_path):
 
     with factory() as db:
         assert db.query(DiagnosticAnswerORM).count() == 3
-        assert db.query(KnowledgeStateORM).count() == 3
+        assert db.query(KnowledgeStateORM).count() == len(
+            knowledge_service.list_skill_nodes("rag_engineering_training")
+        )
+        assert db.query(KnowledgeStateORM).filter(
+            KnowledgeStateORM.objective_evidence_count > 0
+        ).count() == 3

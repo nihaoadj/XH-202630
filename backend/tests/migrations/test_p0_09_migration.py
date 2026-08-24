@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
-from app.db.integrity import DatabaseIntegrityError, inspect_database_integrity
+from app.db.shared.integrity import DatabaseIntegrityError, inspect_database_integrity
 from app.db.migrations.p0_09 import MIGRATION_ID, apply_p0_09_migration
 
 

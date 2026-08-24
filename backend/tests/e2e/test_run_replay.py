@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 
-from app.core.knowledge_ids import normalize_text, query_hash, sha256_hex
-from app.models.knowledge import EvidenceItem, ScoreKind, SourceLocator, SourceType
-from app.models.persistence import (
+from app.core.retrieval.knowledge_ids import normalize_text, query_hash, sha256_hex
+from app.models.knowledge.knowledge import EvidenceItem, ScoreKind, SourceLocator, SourceType
+from app.models.shared.persistence import (
     BeginStepCommand,
     CompleteStepCommand,
     PersistedEvidenceSnapshot,
     canonical_hash,
 )
-from app.services.run_query_service import RunQueryService
+from app.services.runs.queries import RunQueryService
 from backend.tests.fakes.persistence import create_command, sqlite_repository
 
 

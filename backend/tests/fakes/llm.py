@@ -1,8 +1,8 @@
 from collections.abc import Callable
 from typing import Any
 
-from app.core.structured_output import parse_structured_output
-from app.models.llm import (
+from app.core.llm.structured_output import parse_structured_output
+from app.models.shared.llm import (
     LLMAttemptSummary,
     LLMCallOptions,
     LLMCallResult,

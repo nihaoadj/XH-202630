@@ -15,6 +15,7 @@ from app.db.migrations.p0_15_courseware_execution import apply_p0_15_courseware_
 from app.db.migrations.p0_16_courseware_learning_events import apply_p0_16_courseware_learning_events_migration
 from app.db.migrations.p0_17_courseware_request_options import apply_p0_17_courseware_request_options_migration
 from app.db.migrations.p0_18_courseware_batch_integrity import apply_p0_18_courseware_batch_integrity_migration
+from app.db.migrations.p0_19_learner_mastery import apply_p0_19_learner_mastery_migration
 from app.db.migrations.tutor import apply_tutor_migration
 
 __all__ = [
@@ -33,5 +34,6 @@ __all__ = [
     "apply_p0_16_courseware_learning_events_migration",
     "apply_p0_17_courseware_request_options_migration",
     "apply_p0_18_courseware_batch_integrity_migration",
+    "apply_p0_19_learner_mastery_migration",
     "apply_tutor_migration",
 ]

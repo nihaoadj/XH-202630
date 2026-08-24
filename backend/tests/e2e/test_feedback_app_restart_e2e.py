@@ -8,11 +8,12 @@ from fastapi.testclient import TestClient
 from app import config as config_module
 from app import main as main_module
 from app.api.dependencies import get_current_user
-from app.db import database as database_module
-from app.db.models import KnowledgeBaseORM, RagSkillNodeORM
-from app.models.schemas import LearnerProfile, LearningResource
-from app.models.user_schemas import UserProfile
-from app.services.generation_job_service import GenerationJobService
+from app.db.shared import database as database_module
+from app.db.shared.models import KnowledgeBaseORM, RagSkillNodeORM
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.models.feedback.feedback_loop import LearningAttemptSubmit
+from app.models.users.users import UserProfile
+from app.services.generation.jobs import GenerationJobService
 
 
 class _NoopGenerationService:
@@ -132,13 +133,16 @@ def test_feedback_survives_full_fastapi_lifespan_restart(monkeypatch, tmp_path):
             publication_status="published",
         ), "restart-learner", "检索")
 
-        submitted = first_client.post("/api/feedback/attempts", json=payload)
-        assert submitted.status_code == 200
-        first = submitted.json()
+        first_result = container.feedback_service().process_learning_attempt(
+            container.learner_repository().get("restart-learner"),
+            container.resource_repository().get("restart-resource"),
+            LearningAttemptSubmit.model_validate(payload),
+            verified_evidence=True,
+        )
+        first = first_result.model_dump(mode="json")
         assert first["profile_version"] == 2
-        assert first["followup_generation_status"] == "queued"
-        child_run_id = first["followup_run_id"]
-        assert child_run_id
+        assert first["followup_generation_status"] == "not_requested"
+        assert first["followup_run_id"] is None
 
     # A new lifespan creates a fresh dependency container. Its startup recovery
     # must reconcile the BackgroundTask that could not survive process shutdown.
@@ -168,21 +172,33 @@ def test_feedback_survives_full_fastapi_lifespan_restart(monkeypatch, tmp_path):
         assert history.status_code == 200
         assert history.json()["learner_id"] == "restart-learner"
 
-        job = restarted_client.get(f"/api/generate/jobs/{child_run_id}")
-        assert job.status_code == 200
-        assert job.json()["job_status"] == "failed"
-        assert job.json()["error_message"] == "GENERATION_JOB_INTERRUPTED"
-
         persisted = container.feedback_loop_repository().get_by_idempotency_key(
             "restart-learner",
             "app-restart-idempotency",
         )
-        assert persisted.followup_generation_status.value == "failed"
-        assert persisted.followup_error_code == "GENERATION_JOB_INTERRUPTED"
+        assert persisted.followup_generation_status.value == "not_requested"
+        assert persisted.followup_error_code is None
 
-        replayed = restarted_client.post("/api/feedback/attempts", json=payload)
-        assert replayed.status_code == 200
-        replay = replayed.json()
+        selected = restarted_client.post(
+            "/api/feedback/followups/select",
+            json={
+                "learner_id": "restart-learner",
+                "attempt_id": first["attempt"]["attempt_id"],
+                "option_id": "remediate-core",
+            },
+        )
+        assert selected.status_code == 200
+        selected_body = selected.json()
+        assert selected_body["followup_generation_status"] == "queued"
+        child_run_id = selected_body["followup_run_id"]
+        assert child_run_id
+
+        replay = container.feedback_service().process_learning_attempt(
+            container.learner_repository().get("restart-learner"),
+            container.resource_repository().get("restart-resource"),
+            LearningAttemptSubmit.model_validate(payload),
+            verified_evidence=True,
+        ).model_dump(mode="json")
         assert replay["idempotent_replay"] is True
         assert replay["followup_run_id"] == child_run_id
         assert replay["followup_generation_status"] == "queued"

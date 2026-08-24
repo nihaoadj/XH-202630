@@ -4,11 +4,11 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.db.models import Base
+from app.db.shared.models import Base
 from app.db.tutor.base import TutorIdempotencyConflict
 from app.db.tutor.memory import MemoryTutorRepository
 from app.db.tutor.sql_repository import SQLTutorRepository
-from app.models.tutor import TutorEvidenceRef, TutorSession, TutorTurn
+from app.models.tutor.tutor import TutorEvidenceRef, TutorSession, TutorTurn
 
 
 def _session() -> TutorSession:

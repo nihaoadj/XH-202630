@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from app.agents.feedback_policy import decide_attempt
-from app.models.feedback_loop import (
+from app.agents.learning_agents.feedback_policy_agent import decide_attempt
+from app.models.feedback.feedback_loop import (
     FeedbackAction,
     FeedbackContext,
     KnowledgePointAttemptResult,

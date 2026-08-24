@@ -9,16 +9,16 @@ from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
-from app.core.errors import ApplicationError, ErrorCode
-from app.core.llm_gateway import LLMGateway
-from app.models.agent_contracts import (
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.core.llm.gateway import LLMGateway
+from app.models.shared.agent_contracts import (
     GeneratedArtifact,
     ResourceArtifactMetadata,
     ResourceGenerationContext,
     ResourceRepresentation,
     ResourceSpec,
 )
-from app.models.llm import LLMCallContext, LLMCallResult
+from app.models.shared.llm import LLMCallContext, LLMCallResult
 
 
 ArtifactOutputT = TypeVar("ArtifactOutputT", bound=BaseModel)

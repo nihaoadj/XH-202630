@@ -12,9 +12,9 @@ from openai import (
 )
 from pydantic import BaseModel, ConfigDict
 
-from app.core.errors import ErrorCode
-from app.core.llm_gateway import LLMGateway, LLMGatewayError
-from app.models.llm import (
+from app.core.security.errors import ErrorCode
+from app.core.llm.gateway import LLMGateway, LLMGatewayError
+from app.models.shared.llm import (
     LLMCallContext,
     LLMCallOptions,
     LLMUsage,
@@ -416,7 +416,7 @@ def test_explicit_text_mode_never_probes_function_calling():
     assert [call["mode"] for call in transport.calls] == [StructuredOutputMode.TEXT]
 
 
-def test_json_mode_adds_provider_required_json_instruction():
+def test_json_mode_adds_provider_required_schema_on_first_attempt():
     transport = ScriptedLLMTransport([raw({"value": "json"})])
 
     result = LLMGateway(transport).invoke_structured(
@@ -428,9 +428,10 @@ def test_json_mode_adds_provider_required_json_instruction():
 
     assert result.output.value == "json"
     assert [call["mode"] for call in transport.calls] == [StructuredOutputMode.JSON_MODE]
-    assert transport.calls[0]["messages"][0].content == (
-        "Return exactly one valid json object and no surrounding text."
-    )
+    instruction = transport.calls[0]["messages"][0].content
+    assert "valid json object" in instruction
+    assert '"value"' in instruction
+    assert '"required"' in instruction
 
 
 def test_explicit_structured_mode_does_not_fall_back_to_text():

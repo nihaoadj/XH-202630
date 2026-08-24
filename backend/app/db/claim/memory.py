@@ -1,6 +1,6 @@
 from app.db.audit.base import PersistenceConflict
 from app.db.claim.base import BaseClaimRepository
-from app.models.claims import ClaimJudgement, ClaimRecord
+from app.models.reviews.claims import ClaimJudgement, ClaimRecord
 
 
 class MemoryClaimRepository(BaseClaimRepository):

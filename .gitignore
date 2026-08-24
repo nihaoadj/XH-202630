@@ -33,6 +33,11 @@ backend/logs/*.log
 .pytest_cache/
 **/.pytest_cache/
 .tmp_pytest/
+.tmp-pytest/
+backend/.pytest-tmp*/
+.pytest-tmp*/
+.tmp-pytest-*/
+frontend/tests/test-results/
 
 # Codex / local agent workspace
 .agents/

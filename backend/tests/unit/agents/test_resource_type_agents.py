@@ -4,19 +4,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.agents.generator import generate_node
+from app.agents.resource_workflows.learning_documents.generator_agent import generate_node
 from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, ReviewChecklistAgent
 from app.agents.resource_agents.practice import PRACTICE_GUIDE_PROMPT
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
-from app.agents.resource_spec_builder import build_resource_specs
-from app.agents.reviewer import (
+from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
+from app.agents.resource_workflows.learning_documents.reviewer_agent import (
     _deterministic_practice_guide_review,
     _deterministic_resource_structure_review,
     review_node,
 )
-from app.core.errors import ApplicationError, ErrorCode
-from app.models.agent_contracts import ResourceGenerationContext
-from app.models.schemas import GenerateRequest, LearnerProfile
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.models.shared.agent_contracts import ResourceGenerationContext
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
 from tests.fakes.evidence import make_evidence
 from tests.fakes.llm import ScriptedLLMGateway
 
@@ -199,7 +199,7 @@ def test_new_resource_types_have_a_deterministic_review_structure_gate():
 
 def test_new_resource_types_flow_through_generation_and_independent_review(monkeypatch):
     monkeypatch.setattr(
-        "app.agents.generator.get_settings",
+        "app.agents.resource_workflows.learning_documents.generator_agent.get_settings",
         lambda: SimpleNamespace(resource_worker_max_concurrency=1),
     )
     learner = LearnerProfile(

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from app.models.persistence import (
+from app.models.shared.persistence import (
     RunStatus,
     WorkflowEvent,
     WorkflowEventType,

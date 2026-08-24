@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-import { createRunEventClient } from '../../../src/api/runEvents.js'
+import { createRunEventClient } from '../../../src/features/runs/api.js'
 import {
   applyRunSnapshot,
   createInitialTimelineState,

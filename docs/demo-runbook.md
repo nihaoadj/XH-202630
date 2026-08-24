@@ -123,6 +123,23 @@ Invoke-RestMethod http://127.0.0.1:8000/health/ready
 
 P0-04 的 Replay 是“重建后查询历史事实”，不是服务重启后自动从中断点 Resume。
 
+### 5.1 互动课件 Worker 故障演示
+
+互动课件使用独立 Durable Worker；SQLite 演示环境只启动一个 Worker。可在 checkpoint 前后停止进程，
+再重新启动 Worker，核对同一 `run_id` 的 checkpoint、scene `content_hash/attempt`、candidate
+`release_id` 和发布事件没有重复。重复投递只会完成已处理 outbox，不会产生第二个 released release。
+若候选包或 release commit 失败，应看到 `release_blocked`，而旧 release 仍可预览和下载。
+
+本地复现实验：
+
+```powershell
+python -m pytest backend/tests/integration/courseware/test_executor_recovery.py `
+  backend/tests/integration/courseware/test_durable_repository.py -q
+```
+
+这组测试证明 SQLite 文件锁、独立进程 claim、租约接管和 checkpoint 后恢复；它不等同于生产部署的
+kill/restart、备份恢复或 CI artifact 证据。
+
 ## 6. 浏览器人工 E2E Checklist
 
 - [ ] health ready

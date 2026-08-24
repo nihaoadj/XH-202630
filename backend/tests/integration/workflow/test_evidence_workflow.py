@@ -1,10 +1,10 @@
 import pytest
 
-from app.agents import workflow as workflow_module
-from app.models.agent_contracts import build_trace_item
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.models.workflow import StepStatus
-from app.services.generation_service import build_workflow_state
+from app.agents.resource_workflows.learning_documents import workflow as workflow_module
+from app.models.shared.agent_contracts import build_trace_item
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.models.shared.workflow import StepStatus
+from app.services.generation.generation import build_workflow_state
 from tests.fakes.evidence import make_evidence
 
 

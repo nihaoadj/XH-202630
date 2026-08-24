@@ -55,6 +55,16 @@ class LiveModelConfig:
     price_version: str
     price_effective_date: str
     api_key_present: bool
+    price_unit: str = "legacy_per_1K_tokens"
+    pricing_window: str = "unspecified"
+    model_version: str = ""
+    price_source_url: str = ""
+    input_price_per_1m_tokens_peak: float | None = None
+    input_price_per_1m_tokens_off_peak: float | None = None
+    output_price_per_1m_tokens_peak: float | None = None
+    output_price_per_1m_tokens_off_peak: float | None = None
+    thinking_mode: str = "auto"
+    acceptance_budget: dict[str, Any] | None = None
 
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> "LiveModelConfig":
@@ -76,6 +86,8 @@ class LiveModelConfig:
             price_version=settings.courseware_live_price_version.strip(),
             price_effective_date=settings.courseware_live_price_effective_date.strip(),
             api_key_present=bool(key and not is_placeholder_api_key(key)),
+            thinking_mode=settings.llm_thinking_mode,
+            acceptance_budget=None,
         )
 
     def missing_fields(self) -> list[str]:
@@ -97,6 +109,8 @@ class LiveModelConfig:
         except ValueError:
             if "structured_output_mode" not in missing:
                 missing.append("structured_output_mode")
+        if self.thinking_mode not in {"auto", "enabled", "disabled"}:
+            missing.append("thinking_mode")
         if self.retry_max_delay_seconds is not None and self.retry_base_delay_seconds is not None and self.retry_max_delay_seconds < self.retry_base_delay_seconds:
             missing.append("retry_policy")
         return sorted(set(missing))
@@ -117,6 +131,16 @@ class LiveModelConfig:
             "price_currency": self.price_currency,
             "price_version": self.price_version,
             "price_effective_date": self.price_effective_date,
+            "price_unit": self.price_unit,
+            "pricing_window": self.pricing_window,
+            "model_version": self.model_version,
+            "price_source_url": self.price_source_url,
+            "input_price_per_1m_tokens_peak": self.input_price_per_1m_tokens_peak,
+            "input_price_per_1m_tokens_off_peak": self.input_price_per_1m_tokens_off_peak,
+            "output_price_per_1m_tokens_peak": self.output_price_per_1m_tokens_peak,
+            "output_price_per_1m_tokens_off_peak": self.output_price_per_1m_tokens_off_peak,
+            "thinking_mode": self.thinking_mode,
+            "acceptance_budget": self.acceptance_budget or {},
             "api_key_present": self.api_key_present,
         }
 
@@ -128,6 +152,13 @@ def live_model_config_from_file(path: Path, settings: Settings | None = None) ->
         raise ValueError("live model config must be a JSON object")
     settings = settings or get_settings()
     key = settings.llm_api_key.get_secret_value().strip()
+    def price_per_1k(name: str, per_million_name: str) -> float | None:
+        value = payload.get(name)
+        if value is not None:
+            return value
+        per_million = payload.get(per_million_name)
+        return (float(per_million) / 1000.0) if per_million is not None else None
+
     return LiveModelConfig(
         config_version=payload.get("config_version"),
         provider=str(payload.get("provider") or "").strip(),
@@ -138,12 +169,22 @@ def live_model_config_from_file(path: Path, settings: Settings | None = None) ->
         max_attempts=payload.get("max_attempts"),
         retry_base_delay_seconds=payload.get("retry_base_delay_seconds"),
         retry_max_delay_seconds=payload.get("retry_max_delay_seconds"),
-        input_price_per_1k_tokens=payload.get("input_price_per_1k_tokens"),
-        output_price_per_1k_tokens=payload.get("output_price_per_1k_tokens"),
+        input_price_per_1k_tokens=price_per_1k("input_price_per_1k_tokens", "input_price_per_1m_tokens"),
+        output_price_per_1k_tokens=price_per_1k("output_price_per_1k_tokens", "output_price_per_1m_tokens"),
         price_currency=str(payload.get("price_currency") or "").strip().upper(),
         price_version=str(payload.get("price_version") or "").strip(),
         price_effective_date=str(payload.get("price_effective_date") or "").strip(),
         api_key_present=bool(key and not is_placeholder_api_key(key)),
+        price_unit=str(payload.get("price_unit") or "legacy_per_1K_tokens").strip(),
+        pricing_window=str(payload.get("pricing_window") or "unspecified").strip(),
+        model_version=str(payload.get("model_version") or "").strip(),
+        price_source_url=str(payload.get("price_source_url") or "").strip(),
+        input_price_per_1m_tokens_peak=payload.get("input_price_per_1m_tokens_peak"),
+        input_price_per_1m_tokens_off_peak=payload.get("input_price_per_1m_tokens_off_peak"),
+        output_price_per_1m_tokens_peak=payload.get("output_price_per_1m_tokens_peak"),
+        output_price_per_1m_tokens_off_peak=payload.get("output_price_per_1m_tokens_off_peak"),
+        thinking_mode=str(payload.get("thinking_mode") or "auto").strip().lower(),
+        acceptance_budget=payload.get("acceptance_budget") if isinstance(payload.get("acceptance_budget"), dict) else None,
     )
 
 
@@ -303,7 +344,7 @@ def run_live_model_acceptance(*, config_path: Path | None = None, enabled: bool 
         return {**base, "status": "NOT_RUN", "reason": "COURSEWARE_LIVE_EVAL_not_enabled"}
     if not config.api_key_present:
         return {**base, "status": "EXTERNAL_PENDING", "reason": "real_provider_credential_missing"}
-    live_settings = settings.model_copy(update={"llm_base_url": config.base_url, "llm_model": config.model, "llm_structured_output_mode": config.structured_output_mode, "llm_request_timeout_seconds": config.timeout_seconds})
+    live_settings = settings.model_copy(update={"llm_base_url": config.base_url, "llm_model": config.model, "llm_structured_output_mode": config.structured_output_mode, "llm_request_timeout_seconds": config.timeout_seconds, "llm_thinking_mode": config.thinking_mode})
     gateway = LLMGateway(LangChainChatTransport(settings=live_settings), retry_base_delay_seconds=config.retry_base_delay_seconds or 0, retry_max_delay_seconds=config.retry_max_delay_seconds or 0, default_options=LLMCallOptions(max_attempts=config.max_attempts or 1, request_timeout_seconds=config.timeout_seconds or 60, structured_output_mode=StructuredOutputMode(config.structured_output_mode)))
     records: list[dict[str, Any]] = []
     options = gateway.options_for("generator")

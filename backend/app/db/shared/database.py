@@ -27,6 +27,7 @@ from app.db.migrations import (
     apply_p0_16_courseware_learning_events_migration,
     apply_p0_17_courseware_request_options_migration,
     apply_p0_18_courseware_batch_integrity_migration,
+    apply_p0_19_learner_mastery_migration,
     apply_tutor_migration,
 )
 
@@ -129,6 +130,7 @@ def init_database():
     apply_p0_16_courseware_learning_events_migration(engine)
     apply_p0_17_courseware_request_options_migration(engine)
     apply_p0_18_courseware_batch_integrity_migration(engine)
+    apply_p0_19_learner_mastery_migration(engine)
     apply_tutor_migration(engine)
 
 

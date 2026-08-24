@@ -7,14 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.db.audit.base import PersistenceConflict
 from app.db.claim.base import BaseClaimRepository
-from app.db.models import (
+from app.db.shared.models import (
     ClaimEvidenceORM,
     ClaimJudgementORM,
     ResourceClaimORM,
     ResourceReviewORM,
     RetrievalEvidenceSnapshotORM,
 )
-from app.models.claims import ClaimJudgement, ClaimRecord
+from app.models.reviews.claims import ClaimJudgement, ClaimRecord
 
 
 class SQLClaimRepository(BaseClaimRepository):

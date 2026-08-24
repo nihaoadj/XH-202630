@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.models.claims import (
+from app.models.reviews.claims import (
     ClaimCandidate,
     ClaimJudgementCandidate,
     ClaimMetricStatus,

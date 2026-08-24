@@ -43,9 +43,9 @@ def build_release_candidate_report(
 
     reports = (evaluator or {}).get("reports") or []
     evaluator_ok = bool(
-        evaluator and evaluator.get("schema_version") == "1.0" and evaluator.get("passed") is True
-        and evaluator.get("case_count") == 12 and len(reports) == 12
-        and len({item.get("fixture") for item in reports}) == 12
+        evaluator and evaluator.get("schema_version") == "2.0" and evaluator.get("passed") is True
+        and evaluator.get("case_count") == 20 and len(reports) == 20
+        and len({item.get("fixture") for item in reports}) == 20
         and all(
             item.get("outcome_matches_manifest") is True
             and item.get("workflow_actual_match") is True
@@ -72,8 +72,8 @@ def build_release_candidate_report(
         for case, report in by_case.items()
     )
     artifacts_ok = bool(
-        artifacts and artifacts.get("schema_version") == "1.0" and artifacts.get("case_count") == 12
-        and len(set(covered_cases)) == 12 and set(covered_cases) == set(by_case)
+        artifacts and artifacts.get("schema_version") in {"1.0", "1.1"} and artifacts.get("case_count") == 20
+        and len(set(covered_cases)) == 20 and set(covered_cases) == set(by_case)
         and produced and artifact_policy_ok
         # A renderer-blocked fixture is valid negative evidence when the
         # evaluator expects release rejection; it must remain explicitly
@@ -99,8 +99,8 @@ def build_release_candidate_report(
     component_names = {str(item.get("component") or "") for item in matrix_components}
     theme_names = {str(item.get("theme") or "") for item in matrix_components}
     component_theme_pairs = {(item.get("component"), item.get("theme")) for item in matrix_components}
-    browser_ok = bool(browser and browser.get("schema_version") == "1.3" and browser.get("consoleErrors") == []
-                      and len(matrix_components) == 33 and len(component_names) == 11 and len(theme_names) == 3
+    browser_ok = bool(browser and browser.get("schema_version") == "1.4" and browser.get("consoleErrors") == []
+                      and len(matrix_components) == 45 and len(component_names) == 15 and len(theme_names) == 3
                       and len(component_theme_pairs) == len(matrix_components)
                       and component_theme_pairs == {(component, theme) for component in component_names for theme in theme_names}
                       and all(item.get("screenshot_sha256") and item.get("computed_checks") for item in matrix_components)
@@ -108,22 +108,37 @@ def build_release_candidate_report(
                       and all(browser.get(name) is True for name in ("http_origin_iframe", "nonce_guard", "artifact_restore", "forced_colors_active", "zoom_200_active"))
                       and all(browser.get(name) for name in ("keyboard", "focusEvidence", "touch", "reducedMotion", "contrast", "a11y")))
     live_status = str((live or {}).get("status") or "NOT_RUN")
+    live_quality_gate = ((live or {}).get("metrics") or {}).get("quality", {}).get("gate") or {}
+    quality_ready = live_status == "DONE" and live_quality_gate.get("passed") is True
+    quality_status = "LOCAL_QUALITY_READY" if quality_ready else (
+        "QUALITY_PARTIAL" if live_status in {"DONE", "LOCAL_READY"} else "LIVE_MODEL_PENDING"
+    )
 
+    live_evidence_status = (
+        "passed" if quality_ready
+        else "quality_partial" if live_status in {"DONE", "LOCAL_READY"}
+        else "external_pending"
+    )
     evidence = {
         "evaluator": {**evaluator_file, "status": "passed" if evaluator_ok else "failed"},
         "artifact_manifest": {**artifacts_file, "status": "passed" if artifacts_ok else "failed"},
         "fault_matrix": {**matrix_file, "status": "passed" if matrix_ok else "failed"},
         "journey": {**journey_file, "status": "passed" if journey_ok else "failed"},
         "browser": {**browser_file, "status": "passed" if browser_ok else "failed"},
-        "live_model": {**live_file, "status": "passed" if live_status == "DONE" else "external_pending"},
+        "live_model": {**live_file, "status": live_evidence_status},
     }
     local_ready = evaluator_ok and artifacts_ok and matrix_ok and journey_ok and browser_ok
     external_pending = ["CI_REQUIRED", "DEPLOYMENT_REQUIRED", "RELEASE_CYCLE_REQUIRED"]
-    if live_status != "DONE":
+    if live_status not in {"DONE", "LOCAL_READY"}:
         external_pending.insert(0, "LIVE_MODEL_REQUIRED")
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "status": "LOCAL_READY" if local_ready else "PARTIAL",
+        "quality_status": quality_status,
+        "quality_gate": {
+            "status": "passed" if quality_ready else "not_met",
+            "source": "live_model.metrics.quality.gate",
+        },
         "evidence": evidence,
         "external_pending": external_pending,
         "limits": {

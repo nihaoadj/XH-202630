@@ -3,16 +3,16 @@ from types import SimpleNamespace
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from app.agents.tutor import TutorAgent, TutorContextBuilder
-from app.api import tutor
+from app.agents.learning_agents.tutor_agent import TutorAgent, TutorContextBuilder
+from app.api.tutor import tutoring as tutor
 from app.config import Settings
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.resource.memory import MemoryResourceRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learning_documents.memory import MemoryResourceRepository
 from app.db.tutor.memory import MemoryTutorRepository
-from app.models.persistence import PersistedEvidenceSnapshot
-from app.models.schemas import DiagnosticQuestion, LearnerProfile, LearningResource
-from app.services.profile_service import ProfileService
-from app.services.tutor_service import TutorService
+from app.models.shared.persistence import PersistedEvidenceSnapshot
+from app.models.learning_documents.schemas import DiagnosticQuestion, LearnerProfile, LearningResource
+from app.services.learners.profiles import ProfileService
+from app.services.tutor.tutor import TutorService
 from tests.fakes.evidence import make_evidence
 from tests.fakes.llm import ScriptedLLMGateway
 

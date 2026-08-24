@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
-from app.db.models import AssessmentQuestionORM
+from app.db.shared.models import AssessmentQuestionORM
 
 
 MIGRATION_ID = "20260819_p0_10_assessment_question_catalog"

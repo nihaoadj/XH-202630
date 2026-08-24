@@ -53,7 +53,7 @@ def main() -> int:
             package_path.write_bytes(package)
             artifacts.append({"case": case_id, "format": package_format, "status": "produced", "path": package_path.name, "sha256": hashlib.sha256(package).hexdigest(), "manifest": package_manifest})
     (args.output / "artifact-summary.json").write_text(
-        json.dumps({"schema_version": "1.0", "case_count": len(covered_cases), "covered_cases": covered_cases, "artifacts": artifacts}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps({"schema_version": "1.1", "case_count": len(covered_cases), "covered_cases": covered_cases, "artifacts": artifacts}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     return 0

@@ -1,7 +1,7 @@
-from app.agents import generator as generator_module
-from app.core.llm_gateway import LLMGateway
-from app.models.llm import RawLLMResponse
-from app.models.schemas import LearnerProfile
+from app.agents.resource_workflows.learning_documents import generator_agent as generator_module
+from app.core.llm.gateway import LLMGateway
+from app.models.shared.llm import RawLLMResponse
+from app.models.learning_documents.schemas import LearnerProfile
 from tests.fakes.evidence import make_evidence
 from tests.fakes.llm import ScriptedLLMTransport
 

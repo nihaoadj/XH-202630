@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Iterable, Optional
 
-from app.models.persistence import (
+from app.models.shared.persistence import (
     AgentRunRecord,
     AgentStepRecord,
     BeginStepCommand,
@@ -14,7 +14,7 @@ from app.models.persistence import (
     WorkflowEvent,
     WorkflowEventType,
 )
-from app.models.schemas import ReviewSummary
+from app.models.learning_documents.schemas import ReviewSummary
 
 
 class PersistenceError(RuntimeError):

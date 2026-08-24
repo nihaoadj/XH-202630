@@ -38,7 +38,7 @@ from app.models.courseware.snapshots import LearnerContextSnapshot, ResourceBund
 from app.models.shared.resource_library import ResourceLibraryItem
 from app.services.learning_documents.resources import ResourceService
 from app.agents.resource_workflows.interactive_courseware.planner_agent import build_courseware_spec
-from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import review_courseware_quality_decision
+from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import review_courseware_quality_decision, resolve_review_targets
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import compose_courseware_scene
 from app.agents.resource_workflows.interactive_courseware.validators import validate_scene_shape, validate_storyboard_bindings
@@ -284,7 +284,7 @@ class InteractiveCoursewareWorkflow:
                     knowledge_base_id=knowledge_base_id)
         self._control_guard(run_id)
         learner_context = self._learner_context(job.get("learner_id"))
-        learning_design = build_learning_design(snapshots, learner_context)
+        learning_design = build_learning_design(snapshots, learner_context, job.get("request_options") or {})
         for usage in learning_design.resource_usage_plan:
             if usage.get("adopted") is False:
                 warnings.append({
@@ -1269,22 +1269,17 @@ class InteractiveCoursewareWorkflow:
     def _review_targets(self, spec_id: str, issues: list[dict[str, Any]]) -> list[tuple[str, str]]:
         """Map field-level review issues to the smallest possible scene set."""
         scenes = self.repo.list_scenes(spec_id)
-        by_block = {
-            str(block.get("block_id")): row["scene_id"]
-            for row in scenes for block in (row.get("scene_json", {}).get("component_blocks") or [])
-            if isinstance(block, dict) and block.get("block_id")
-        }
-        instructions: dict[str, list[str]] = {}
-        for issue in issues:
-            scene_id = by_block.get(str(issue.get("block_id") or ""))
-            # A document-level issue cannot safely be repaired by choosing an
-            # arbitrary scene; quarantine it instead of widening model scope.
-            if scene_id is None:
-                continue
-            instructions.setdefault(scene_id, []).append(
-                str(issue.get("instruction") or issue.get("code") or "修订教学表达")
-            )
-        return [(scene_id, "；".join(values)[:800]) for scene_id, values in instructions.items()]
+        return resolve_review_targets(
+            [
+                {
+                    **(row.get("scene_json") or {}),
+                    "scene_id": row.get("scene_id"),
+                    "scene_json": row.get("scene_json") or {},
+                }
+                for row in scenes
+            ],
+            issues,
+        )
 
     def _stage(self, run_id: str, status: str, **changes: Any) -> dict[str, Any] | None:
         row = self.repo.update_job(run_id, status=status, **changes)
@@ -1357,6 +1352,8 @@ class InteractiveCoursewareWorkflow:
             spec_prompt_version=spec.get("prompt_version") if spec else None,
             required_scene_ids=[item["scene_id"] for item in self.repo.list_scenes(spec["spec_id"])
                                 if item.get("kind") != "recap"] if spec else None,
+            learning_design=(spec or {}).get("spec_json", {}).get("learning_design") if spec else None,
+            scenes=[item.get("scene_json") or {} for item in self.repo.list_scenes(spec["spec_id"])] if spec else None,
         )
         return CoursewareJobResponse(
             run_id=row["run_id"], learner_id=row["learner_id"], status=row["status"], title=row.get("title"),

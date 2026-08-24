@@ -1,8 +1,8 @@
 import pytest
 from pydantic import BaseModel, ConfigDict, RootModel
 
-from app.core.errors import ErrorCode
-from app.core.structured_output import StructuredOutputError, parse_structured_output
+from app.core.security.errors import ErrorCode
+from app.core.llm.structured_output import StructuredOutputError, parse_structured_output
 
 
 class Payload(BaseModel):

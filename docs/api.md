@@ -25,7 +25,7 @@
 -> GET /api/resources/{learner_id}?run_id={run_id}
 -> GET /api/resources/file/{resource_id}
 -> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
--> POST /api/feedback/attemptsattempts/run/submit
+-> POST /api/feedback/attempts/run/submit
 -> POST /api/feedback/attempts
 -> GET /api/feedback/attempts/{learner_id}
 -> GET /api/learning-history/{learner_id}/timeline
@@ -62,6 +62,7 @@
 | Onboarding | `POST` | `/api/onboarding/initial-profile` | 创建初始画像并返回诊断题 |
 | 画像 | `GET` | `/api/profiles/` | 查询画像列表 |
 | 画像 | `GET` | `/api/profiles/{learner_id}` | 查询单个画像 |
+| 画像 | `GET` | `/api/profiles/{learner_id}/ability-nodes` | 查询规范能力节点投影 |
 | 画像 | `PATCH` | `/api/profiles/{learner_id}` | 更新画像 |
 | 画像 | `DELETE` | `/api/profiles/{learner_id}` | 永久删除画像及其问卷、诊断、资源、反馈、审核和运行记录 |
 | 诊断 | `GET` | `/api/diagnosis/questions` | 获取诊断题 |
@@ -74,6 +75,7 @@
 | 审核 | `GET` | `/api/reviews/{resource_id}` | 查询资源审核摘要 |
 | 反馈 | `GET` | `/api/feedback/evaluation/run/{learner_id}/{run_id}` | 获取任务级测评题 |
 | 反馈 | `POST` | `/api/feedback/attempts/run/submit` | 提交任务级测评与反馈 |
+| 反馈 | `POST` | `/api/feedback/attempts/batch/submit` | 提交资源批次级测评与反馈 |
 | 反馈 | `POST` | `/api/feedback/` | 提交学习反馈 |
 | 反馈 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询反馈历史 |
 | 反馈闭环 | `POST` | `/api/feedback/attempts` | 提交幂等、版本化的正式学习 Attempt |
@@ -479,60 +481,7 @@
 
 ### 11.3 `POST /api/feedback/attempts`
 
-用途：提交 P0-07 正式学习事实，并在一个本地事务中写入 Attempt、知识点结果、反馈决策、掌握度变更、画像版本和学习路径变更。补救或进阶所需的新资源在事务提交后通过现有异步生成任务入口创建。
-
-请求体核心字段：
-
-```json
-{
-  "learner_id": "learner-id",
-  "source_resource_id": "resource-id",
-  "source_resource_version": 1,
-  "source_run_id": "source-run-id",
-  "path_node_id": null,
-  "idempotency_key": "feedback-20260811-0001",
-  "expected_profile_version": 1,
-  "started_at": "2026-08-11T09:59:00+08:00",
-  "submitted_at": "2026-08-11T10:00:00+08:00",
-  "duration_ms": 60000,
-  "hint_count": 1,
-  "knowledge_point_results": [
-    {
-      "knowledge_point_id": "stable-skill-node-id",
-      "question_ids": ["q-1", "q-2"],
-      "correct_count": 1,
-      "total_count": 2,
-      "duration_ms": 60000,
-      "hint_count": 1
-    }
-  ],
-  "metadata": {"source": "web", "client_version": "1.0"}
-}
-```
-
-约束：
-
-- 服务端按所有知识点的 `sum(correct_count) / sum(total_count)` 重算 `overall_score`；客户端如传汇总分，必须完全一致。
-- `knowledge_point_id` 在正式容器中必须是当前知识库的稳定技能节点；自由文本不作为知识点 ID。
-- `(learner_id, idempotency_key)` 唯一。相同 key、相同 canonical payload 返回原结果且 `idempotent_replay=true`；相同 key、不同 payload 返回 `409 FEEDBACK_IDEMPOTENCY_CONFLICT`。
-- `expected_profile_version` 是乐观并发条件；过期版本返回 `409 LEARNER_PROFILE_VERSION_CONFLICT`。
-- `metadata` 只接受 `source`、`client_version`、`session_id` 三个标量字段；不得上传 Prompt、模型原文或自由文本答案。
-
-响应重点字段：
-
-- `attempt`、`decision.action`、`decision.reason_codes`
-- `profile_version`、`knowledge_state_updates`
-- `learning_path`、`path_mutation`
-- `feedback_status=applied`
-- `followup_generation_status=not_requested|queued|failed`
-- `followup_run_id` / `followup_job_id`
-- `idempotent_replay`
-
-`feedback_status` 与 `followup_generation_status` 必须分开解释：后续生成失败不会撤销已经成功提交的 Attempt。
-
-SQLite 服务重启发现遗留的 queued/running Job 时，Job 返回 `job_status=failed`、
-`error_message=GENERATION_JOB_INTERRUPTED`，对应 Follow-up 返回
-`followup_generation_status=failed` 和同名 `followup_error_code`。原幂等请求可安全重放并复用原 `followup_run_id`。
+该路径仅为旧客户端保留请求契约，不再是正式掌握度写入口。它接受客户端已经聚合的正确数/分数，无法证明题目来自冻结的服务端测评 session，因此稳定返回 HTTP 422 `FEEDBACK_EVIDENCE_UNVERIFIED`，不写入 Attempt、状态、事件、路径或画像版本。正式客户端必须改用 11.2 的 run 入口或 `/api/feedback/attempts/batch/submit`；幂等、CAS 和 after-commit follow-up 语义均在这两个权威入口生效。
 
 ### 11.4 P0-07 查询接口
 
@@ -541,7 +490,7 @@ SQLite 服务重启发现遗留的 queued/running Job 时，Job 返回 `job_stat
 - `GET /api/report/{learner_id}`：新增 `profile_version`、`knowledge_mastery`、`current_learning_path`、`recent_attempts`、`recent_feedback_decisions`、`recent_knowledge_state_mutations`、`recent_followup_runs`、`profile_versions`；`agent_flow` 同时聚合持久化反馈决策。
 - `GET /api/runs/{child_run_id}/timeline`：`trigger_relation` 可反查触发它的 Attempt、Decision、父 Run 和触发类型。
 
-旧 `/api/feedback/` 与 evaluation submit 写入接口已移除；新前端闭环统一使用 `/api/feedback/attempts` 或 `/api/feedback/attempts/run/submit`。
+旧 `/api/feedback/` 与 evaluation submit 写入接口已移除；新前端闭环统一使用 `/api/feedback/attempts/run/submit` 或 `/api/feedback/attempts/batch/submit`。
 
 ## 11.5 Run WorkflowEvent SSE（P0-08）
 
@@ -607,9 +556,9 @@ SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模�
 - 任务级测评加载：
   `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
 - 任务级测评提交：
-  `POST /api/feedback/attemptsattempts/run/submit`
+  `POST /api/feedback/attempts/run/submit`
 - 正式反馈闭环提交：
-  `POST /api/feedback/attemptsattempts`
+  `POST /api/feedback/attempts`
 - 当前学习路径：
   `GET /api/feedback/path/{learner_id}`
 - 反馈历史：
@@ -788,3 +737,36 @@ Turn 请求为：
 `component_state` 只允许 flashcard 的状态、matching 的配对 ID 集合和 ordering 的受控项目 ID 顺序；自由文本答案和未知字段会被丢弃。没有组件实例 ID 的旧事件可计入历史完成统计，但不会注入新的组件实例。
 
 课件任务响应中的 `quality_summary` 是版本化的稳定质量汇总，分开表示 `ai_full_course_success` 与 `artifact_success`，并记录 AI 场景/审核、fallback、重试、token、时延和估算成本；它不包含 Prompt、原始模型响应或凭据。
+
+## 17. Learner Mastery 2.0 API
+
+### 17.1 `GET /api/profiles/{learner_id}/ability-nodes`
+
+返回当前知识库的规范能力投影。响应 `schema_version="1.0"`，包含 `as_of_profile_version`、汇总计数、`nodes`、ID 形式的 `prerequisites/children`、`edges`、稳定排序的 `weakness_priorities` 和 `data_warnings`。每个节点的 `mastery` 使用 `AbilityMasteryStateV2`：分数为 0–1 或 `null`，状态为 `unassessed/self_reported/weak/learning/mastered`，置信度为 `none/low/medium/high`。没有知识库时返回空节点和 `KNOWLEDGE_BASE_UNAVAILABLE`；访问控制与画像详情一致。
+
+### 17.2 画像 PATCH 白名单
+
+`PATCH /api/profiles/{learner_id}` 只接受 `learner_type`、`education`、`major`、`target_domain`、`learning_goal` 和 `learning_preferences`。请求包含 `knowledge_states`、`theory_scores`、`weak_points`、`strong_points`、`skill_level`、`last_feedback_summary`、`profile_version` 或 `knowledge_base_id` 时整单返回 HTTP 422：
+
+```json
+{
+  "detail": {
+    "code": "PROFILE_SYSTEM_FIELD_READ_ONLY",
+    "illegal_fields": ["theory_scores"]
+  }
+}
+```
+
+### 17.3 正式反馈证据入口
+
+只有 `POST /api/feedback/attempts/run/submit` 与 `POST /api/feedback/attempts/batch/submit` 的服务端判分结果能更新掌握度。它们校验已发布且属于学习者的资源、冻结题目集合、当前知识库节点、幂等键和 `expected_profile_version`。相同 payload 重放返回 `idempotent_replay=true`；幂等键 payload 冲突返回 409 `FEEDBACK_IDEMPOTENCY_CONFLICT`；旧画像版本返回 409 `LEARNER_PROFILE_VERSION_CONFLICT`。
+
+旧的聚合分数入口 `POST /api/feedback/attempts` 仍保留路径兼容，但因不能证明服务端题目证据而返回 HTTP 422 `FEEDBACK_EVIDENCE_UNVERIFIED`，不会写 Attempt、能力事件或画像版本。
+
+### 17.4 生成焦点快照
+
+`POST /api/generate/jobs` 新增可选 `profile_focus_mode: "auto" | "off"`，默认 `auto`。显式 `target_skill_nodes` 的优先级最高并形成 `focus_mode="explicit"`；`off` 不采用画像弱项；`auto` 采用稳定排序的前三个 eligible 节点。创建响应、任务状态和列表项新增 `focus_snapshot`，包括 `profile_version`、`mastery_snapshot_hash`、排序依据、`adopted_node_ids` 和带原因码的 `skipped`。任务创建后该快照冻结，重试不按新画像重算。
+
+### 17.5 报告 2.0 additive 字段
+
+`GET /api/report/{learner_id}` 保持原路径与旧字段，并新增 `report_schema_version="2.0"`、`as_of_profile_version`、`generated_at`、`ability_nodes`、`mastery_summary`、`mastery_trend`、`evidence_coverage`、`weakness_priorities`、`next_resource_focus` 和 `data_warnings`。雷达图、弱强项、新字段和下一批建议均来自同一规范 `knowledge_states` 投影；自评事件会显示在趋势中但不计为客观覆盖率。

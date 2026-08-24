@@ -46,6 +46,48 @@ def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int)
         controls = "".join(f'<li data-item-id="{_text(item)}"><button type="button" data-order-move="up" aria-label="上移">↑</button><span>{_text(item)}</span><button type="button" data-order-move="down" aria-label="下移">↓</button></li>' for item in items)
         answer = "|".join(_text(item) for item in (block.get("correct_order") or items))
         return f'<section {attributes} data-ordering data-correct-order="{answer}" aria-label="排序练习"><p>{text}</p><ol>{controls}</ol><button type="button" data-order-submit>提交排序</button><p class="feedback" aria-live="polite" hidden></p></section>'
+    if definition.name == "branching_scenario":
+        nodes = block.get("nodes") or []
+        rendered_nodes = []
+        for node in nodes:
+            options = "".join(
+                f'<button type="button" data-branch-option data-option-id="{_text(option.get("option_id"))}" data-next-node="{_text(option.get("next_node_id"))}">{_text(option.get("label") or option.get("option_id"))}</button>'
+                for option in (node.get("options") or [])
+            )
+            rendered_nodes.append(
+                f'<div data-branch-node="{_text(node.get("node_id"))}" hidden><p>{_text(node.get("label") or node.get("node_id"))}</p>{options}</div>'
+            )
+        return f'<section {attributes} data-branching data-current-node="{_text(block.get("start_node_id"))}" aria-label="分支情境"><p>{text}</p>{"".join(rendered_nodes)}<p class="feedback" aria-live="polite" hidden></p></section>'
+    if definition.name == "categorization":
+        categories = "".join(
+            f'<button type="button" data-category-id="{_text(item.get("category_id"))}">{_text(item.get("label") or item.get("category_id"))}</button>'
+            for item in (block.get("categories") or [])
+        )
+        items = "".join(
+            f'<button type="button" data-category-item data-item-id="{_text(item.get("item_id"))}" data-correct-category="{_text(item.get("correct_category_id"))}">{_text(item.get("label") or item.get("item_id"))}</button>'
+            for item in (block.get("items") or [])
+        )
+        return f'<section {attributes} data-categorization aria-label="分类练习"><p>{text}</p><div class="category-controls" role="group" aria-label="类别">{categories}</div><div class="category-items" role="group" aria-label="待分类项目">{items}</div><p class="feedback" aria-live="polite" hidden></p></section>'
+    if definition.name == "word_bank_cloze":
+        segments = block.get("prompt_segments") or []
+        blanks = {str(item.get("blank_id")): item for item in (block.get("blanks") or [])}
+        prompt = []
+        for index, segment in enumerate(segments):
+            prompt.append(f'<span>{_text(segment)}</span>')
+            if index < len(blanks):
+                blank_id, blank = list(blanks.items())[index]
+                prompt.append(f'<button type="button" data-cloze-blank="{_text(blank_id)}" aria-label="填空">______</button>')
+        tokens = "".join(
+            f'<button type="button" data-cloze-token="{_text(item.get("token_id"))}">{_text(item.get("label") or item.get("token_id"))}</button>'
+            for item in (block.get("tokens") or [])
+        )
+        return f'<section {attributes} data-word-bank-cloze aria-label="词库填空"><p>{"".join(prompt)}</p><div class="cloze-tokens" role="group" aria-label="词库">{tokens}</div><p class="feedback" aria-live="polite" hidden></p></section>'
+    if definition.name == "timeline_explorer":
+        events = "".join(
+            f'<button type="button" data-timeline-event="{_text(item.get("event_id"))}" aria-label="时间线事件 {_text(item.get("sequence"))}">{_text(item.get("label") or item.get("event_id"))}</button>'
+            for item in (block.get("events") or [])
+        )
+        return f'<section {attributes} data-timeline-explorer aria-label="时间线"><p>{text}</p><div class="timeline-events" role="list">{events}</div><p data-timeline-detail aria-live="polite"></p></section>'
     if definition.renderer in {"steps", "ordered-steps"}:
         values = block.get("steps") or [block.get("text") or "完成本步骤"]
         tag = "ol" if definition.renderer == "ordered-steps" else "ul"
@@ -97,6 +139,9 @@ def _design_style(design: CoursewareDesign) -> str:
 SCENE_RECIPE_BY_KIND = {
     "intro": "cover",
     "explain": "concept",
+    "example": "concept",
+    "compare": "concept",
+    "scenario": "practice",
     "practice": "practice",
     "quiz": "quiz",
     "recap": "recap",

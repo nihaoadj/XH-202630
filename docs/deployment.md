@@ -43,6 +43,8 @@ LLM_STRUCTURED_OUTPUT_MODE=auto
 
 LLM 预算约束：workflow timeout 必须大于单次 request timeout，并建议小于前端当前 120 秒 Axios timeout；attempts 允许 `1..3`，delay 不得为负且 max delay 不得小于 base delay。`auto` 优先使用结构化调用，Provider 不支持时受控切到 text + 严格 parser。对于已知不支持 function calling 的 OpenAI-compatible 服务，应显式设置 `LLM_STRUCTURED_OUTPUT_MODE=text`，这样每个 Agent 不会先付出一次固定的 BAD_REQUEST 探测开销。SDK retry 固定关闭，所有重试都计入 Gateway 总预算。
 
+互动课件另外使用分阶段预算协调器：planner 默认 4096、场景合成 30720、质量审核 4096、定向修订 10240 tokens，总计 49152；质量审核和修订各自的预留额度不会被前序阶段借用，阶段时间预算默认为 90/600/120/180 秒，并额外保留 60 秒收尾窗口，总时限 1050 秒。可通过 `COURSEWARE_*_TOKEN_BUDGET`、`COURSEWARE_*_MAX_SECONDS` 和 `COURSEWARE_*_RESERVED_*` 调整，但总和必须不超过总预算。预算不足会记录明确 warning，并按 release policy 走确定性降级或隔离。
+
 填入真实 `LLM_API_KEY` 后执行只读环境检查：
 
 ```powershell
@@ -66,6 +68,45 @@ Set-Location backend
 ..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+互动课件任务由独立 Durable Worker 消费；Web 进程不会在 lifespan 中启动 Worker。另开终端执行：
+
+```powershell
+Set-Location <repo-root>
+.venv\Scripts\python.exe backend\scripts\courseware_worker.py
+```
+
+Worker 监听 `COURSEWARE_WORKER_HEALTH_HOST`/`COURSEWARE_WORKER_HEALTH_PORT`（默认
+`127.0.0.1:8081`）。`GET /health/live` 只证明进程存活，`GET /health/ready` 仅在至少完成一次
+持久 outbox 轮询后返回 200，`GET /metrics` 返回脱敏的 claim、processed、failed 与 lease-lost
+以及 retry、fallback、quarantine、release 计数。Worker 顺序处理一个已 claim 任务；`COURSEWARE_WORKER_BATCH_SIZE` 大于 `1` 会归一为 `1`，不能作为批量 claim 或并发许可；
+同一 SQLite 文件只允许编排一个 Worker，不能将重复消费者保护描述为横向扩容支持。
+
+编排器应发送 `SIGINT`/`SIGTERM` 请求 graceful shutdown；在 Windows 本地编排或验收中也可显式传入
+`--shutdown-file <local-sentinel>`，创建该本地文件会请求同一有序停止路径。不要使用强制终止来代替
+正常停机；强制终止只用于验证租约过期后的接管。
+
+互动课件的 SQLite 部署只启动一个上述 Worker；Web 进程不消费
+`courseware.run`。Worker 进程可安全重启：任务租约过期后由下一次轮询接管，已写入的
+checkpoint、candidate 和 released 指针不会被回退。发布文件位于带 `release_id` 的不可变目录，
+下载只读取 `released_release_id`，因此重试不会覆盖旧版本。若任务进入 `release_blocked`，先保留旧
+release，再检查 job 的 `error_code` 和候选 manifest；不要手工把候选文件改名为当前资源。
+
+本地故障矩阵与发布证据：
+
+```powershell
+python -m pytest backend/tests/migrations backend/tests/integration/courseware backend/tests/unit/db/courseware -q
+python backend/scripts/courseware_ci_artifacts.py `
+  --manifest backend/tests/fixtures/courseware/evals/manifest.json `
+  --output backend/courseware-ci-artifacts
+```
+
+发布候选汇总和完整发布周期观察见 `docs/courseware/release_candidate_runbook.md`。SCORM/xAPI
+目前仍是基础导出包，不能描述为完整规范兼容。
+
+CI 还必须运行后端全量测试、required Playwright（`COURSEWARE_BROWSER_REQUIRED=1`）和 evaluator，
+并上传 evaluator JSON、HTML/ZIP、浏览器截图/控制台/a11y 及 JUnit 摘要。没有这些外部证据时，状态只能
+写为“代码完成，验收待部署环境”。
+
 ## 3. Linux/macOS
 
 ```bash
@@ -77,6 +118,12 @@ cp backend/.env.example backend/.env
 .venv/bin/python scripts/init_db.py
 cd backend
 ../.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+另开终端启动互动课件 Worker（当前 SQLite 部署只启动一个）：
+
+```bash
+../.venv/bin/python backend/scripts/courseware_worker.py
 ```
 
 ## 4. 多 KB collection 与兼容期
@@ -167,16 +214,17 @@ WORKFLOW_TIMELINE_MAX_LIMIT=500
 
 应用启动时先执行版本化 additive migration，再仅将 lease 已过期的
 `running/finalizing` Run 标记为 `interrupted`。该扫描不会自动 resume，也不会调用
-LLM。SQLite migration 已包含幂等回归；PostgreSQL 上线前仍需数据库负责人对 DDL、
-索引和锁行为执行受控验证。
+LLM。当前部署使用 SQLite，migration 已包含幂等回归；部署前仍需对实际 SQLite
+文件执行备份、完整性预检和两次 migration rehearsal。
 
 SQLite 单进程重启时还会将上一进程遗留的 `queued/running` GenerationJob 标记为
 `failed`，错误码为 `GENERATION_JOB_INTERRUPTED`；对应的 `feedback_followup_runs`
 同步转为 `failed`。如果 Feedback 已提交、但进程在创建 Follow-up 关系前退出，启动
 扫描会补一条 `failed` 关系，不会伪造 child Run。相同幂等请求再次提交时复用稳定
 run_id，将失败 Job 安全重排队，不会再次增加 mastery、profile version 或 PathMutation。
-该自动扫描当前只对 SQLite 单进程模式启用；PostgreSQL 多 worker 部署必须先增加租约
-或 worker ownership 验证，不能直接套用单进程判定。
+该自动扫描只适用于当前 SQLite 单进程/单 Durable Worker 模式。Web 与 Worker 可以是
+两个进程，但同一 SQLite 文件只能配置一个任务 Worker；重复启动仍必须由 outbox 条件更新
+和幂等键阻止重复副作用。
 
 迁移或生命周期 Repository 不可用属于核心持久化故障；即使 demo 模式允许生成降级，
 也不得绕过 Run/Step/Event 写入继续调用模型。查询验证：
@@ -190,7 +238,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/claims
 
 ## 9. P0-07 反馈闭环迁移与验收
 
-应用初始化会幂等执行 `20260811_p0_07_feedback_profile_path_closed_loop`。该迁移只做 additive 列/表创建，不删除或重写 legacy feedback。生产 PostgreSQL 上线前需审核唯一约束、FK、索引、`SELECT FOR UPDATE` 和 profile CAS 的并发行为。
+应用初始化会幂等执行 `20260811_p0_07_feedback_profile_path_closed_loop`。该迁移只做 additive 列/表创建，不删除或重写 legacy feedback。当前 SQLite 部署需验证唯一约束、FK、索引和 profile CAS；如果以后另行迁移到其他数据库，再单独审核对应 DDL 和锁语义。
 
 最小验收：
 

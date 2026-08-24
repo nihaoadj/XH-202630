@@ -6,9 +6,9 @@ import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.core.errors import ApplicationError, ErrorCode
-from app.core.llm_gateway import LLMGateway
-from app.models.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.core.llm.gateway import LLMGateway
+from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
 
 from .base import BaseResourceGenerationAgent
 

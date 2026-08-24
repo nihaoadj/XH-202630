@@ -14,7 +14,7 @@ def create_diagnosis_repository(
     if db_type not in ("sqlite", "postgresql"):
         raise ValueError(f"Unsupported DB_TYPE for diagnosis repository: {db_type}")
     if session_factory is None:
-        from app.db.database import get_session_factory
+        from app.db.shared.database import get_session_factory
 
         session_factory = get_session_factory()
     return SQLDiagnosisRepository(session_factory)

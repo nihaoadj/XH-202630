@@ -13,6 +13,7 @@ import hashlib
 import os
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
 from typing import Any, Iterator
@@ -46,6 +47,12 @@ LIVE_COMBINATIONS: tuple[dict[str, Any], ...] = (
     {"id": "lecture_practice_assessment", "types": ("讲义", "实操指南", "分阶测试题")},
     {"id": "five_resource_types", "types": ("讲义", "实操指南", "分阶测试题", "复习清单", "案例分析")},
     {"id": "repair_revision_candidate", "types": ("讲义", "实操指南", "分阶测试题"), "learning_goal": "检查练习反馈并观察受预算约束的修订路径"},
+    {"id": "lecture_checklist", "types": ("讲义", "复习清单")},
+    {"id": "lecture_case", "types": ("讲义", "案例分析")},
+    {"id": "practice_case", "types": ("实操指南", "案例分析")},
+    {"id": "assessment_checklist", "types": ("分阶测试题", "复习清单")},
+    {"id": "all_sources_repair", "types": ("讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"), "learning_goal": "观察跨资源融合和高互动配额"},
+    {"id": "localized_feedback_repair", "types": ("讲义", "实操指南", "分阶测试题"), "learning_goal": "观察局部反馈修订和候选隔离"},
 )
 
 _TYPE_TO_ID = {
@@ -61,6 +68,66 @@ _STAGE_BY_SCHEMA = {
     "CoursewareReviewDecision": "quality_review",
 }
 
+MAX_LIVE_CALLS = 120
+MAX_LIVE_TOKENS = 400_000
+MAX_LIVE_DURATION_SECONDS = 3_600
+
+
+@dataclass(frozen=True)
+class LiveWorkflowBudget:
+    """Explicit, stage-isolated bounds for a paid live-model acceptance run."""
+
+    max_provider_calls: int
+    max_tokens: int
+    max_duration_seconds: int
+    stage_provider_calls: dict[str, int]
+    stage_tokens: dict[str, int]
+
+    def __post_init__(self) -> None:
+        stages = set(_STAGE_BY_SCHEMA.values())
+        if (
+            self.max_provider_calls < 1
+            or self.max_tokens < 1
+            or self.max_duration_seconds < 1
+            or set(self.stage_provider_calls) != stages
+            or set(self.stage_tokens) != stages
+            or any(value < 1 for value in self.stage_provider_calls.values())
+            or any(value < 1 for value in self.stage_tokens.values())
+        ):
+            raise ValueError("invalid_live_workflow_budget")
+
+
+DEFAULT_LIVE_WORKFLOW_BUDGET = LiveWorkflowBudget(
+    max_provider_calls=MAX_LIVE_CALLS,
+    max_tokens=MAX_LIVE_TOKENS,
+    max_duration_seconds=MAX_LIVE_DURATION_SECONDS,
+    stage_provider_calls={"spec": 24, "scene": 72, "quality_review": 24},
+    stage_tokens={"spec": 60_000, "scene": 280_000, "quality_review": 60_000},
+)
+
+
+def live_workflow_budget_from_config(payload: dict[str, Any] | None) -> LiveWorkflowBudget:
+    """Load a non-secret stage budget; old configs retain the strict default."""
+
+    if not payload:
+        return DEFAULT_LIVE_WORKFLOW_BUDGET
+    stages = payload.get("stages") or {}
+    return LiveWorkflowBudget(
+        max_provider_calls=int(payload["max_provider_calls"]),
+        max_tokens=int(payload["max_total_tokens"]),
+        max_duration_seconds=int(payload["max_duration_seconds"]),
+        stage_provider_calls={name: int((stages.get(name) or {})["max_provider_calls"]) for name in _STAGE_BY_SCHEMA.values()},
+        stage_tokens={name: int((stages.get(name) or {})["max_tokens"]) for name in _STAGE_BY_SCHEMA.values()},
+    )
+
+
+class LiveWorkflowBudgetExceeded(RuntimeError):
+    """Raised before a provider call would exceed a live-evaluation bound."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
 
 def _outcome_counts(statuses: list[str]) -> dict[str, int]:
     """Keep published-with-warning separate from clean publication."""
@@ -73,6 +140,12 @@ def _outcome_counts(statuses: list[str]) -> dict[str, int]:
     }
 
 
+def acceptance_report_status(*, usage_complete: bool, quality_gate_passed: bool) -> str:
+    """Reserve ``DONE`` for reports that also pass the live quality gate."""
+
+    return "DONE" if usage_complete and quality_gate_passed else "LOCAL_READY"
+
+
 def redact_workflow_record(record: dict[str, Any]) -> dict[str, Any]:
     """Project one run to fields safe for a committed/CI report."""
 
@@ -80,6 +153,7 @@ def redact_workflow_record(record: dict[str, Any]) -> dict[str, Any]:
         "combination", "status", "error_code", "warning_codes", "scene_count",
         "scene_statuses", "released", "artifact_sha256", "artifact_count",
         "checkpoint_stages", "outbox_statuses", "attempt", "release_outcome",
+        "quality_summary",
     )
     return {key: record[key] for key in allowed if key in record}
 
@@ -87,16 +161,79 @@ def redact_workflow_record(record: dict[str, Any]) -> dict[str, Any]:
 class _RecordingGateway:
     """Preserve only sanitized result metadata around the real gateway."""
 
-    def __init__(self, gateway: LLMGateway):
+    def __init__(
+        self,
+        gateway: LLMGateway,
+        *,
+        budget: LiveWorkflowBudget | None = None,
+        max_calls: int | None = None,
+        max_tokens: int | None = None,
+        max_duration_seconds: float | None = None,
+    ):
         self._gateway = gateway
         self.records: list[dict[str, Any]] = []
+        self.budget = budget or LiveWorkflowBudget(
+            max_provider_calls=max_calls or MAX_LIVE_CALLS,
+            max_tokens=max_tokens or MAX_LIVE_TOKENS,
+            max_duration_seconds=int(max_duration_seconds or MAX_LIVE_DURATION_SECONDS),
+            stage_provider_calls={"spec": max_calls or MAX_LIVE_CALLS, "scene": max_calls or MAX_LIVE_CALLS, "quality_review": max_calls or MAX_LIVE_CALLS},
+            stage_tokens={"spec": max_tokens or MAX_LIVE_TOKENS, "scene": max_tokens or MAX_LIVE_TOKENS, "quality_review": max_tokens or MAX_LIVE_TOKENS},
+        )
+        self.max_calls = self.budget.max_provider_calls
+        self.max_tokens = self.budget.max_tokens
+        self.max_duration_seconds = self.budget.max_duration_seconds
+        self.started_at = time.monotonic()
+        self.reserved_calls = 0
+        self.reserved_tokens = 0
+        self.reserved_calls_by_stage = {name: 0 for name in _STAGE_BY_SCHEMA.values()}
+        self.reserved_tokens_by_stage = {name: 0 for name in _STAGE_BY_SCHEMA.values()}
+        self.budget_exceeded_reason: str | None = None
+
+    @staticmethod
+    def _estimated_input_tokens(messages: list[Any]) -> int:
+        # This is intentionally very conservative for a preflight bound:
+        # provider tokenizers are not available in the acceptance runner, and
+        # treating every character as one token prevents under-reserving
+        # Chinese prompts.  It may stop early, but it must never silently
+        # spend beyond the declared acceptance budget.
+        content = "".join(str(getattr(message, "content", "")) for message in messages)
+        return max(1, len(content))
+
+    def _reserve_call(self, kwargs: dict[str, Any], stage: str) -> None:
+        if time.monotonic() - self.started_at >= self.max_duration_seconds:
+            self.budget_exceeded_reason = "duration_budget"
+            raise LiveWorkflowBudgetExceeded(self.budget_exceeded_reason)
+        if sum(int(item.get("total_tokens") or 0) for item in self.records) >= self.max_tokens:
+            self.budget_exceeded_reason = "token_budget"
+            raise LiveWorkflowBudgetExceeded(self.budget_exceeded_reason)
+        options = kwargs.get("options")
+        max_attempts = max(1, int(getattr(options, "max_attempts", 1)))
+        requested_output = max(1, int(getattr(options, "max_output_tokens", 1)))
+        estimated_tokens = self._estimated_input_tokens(kwargs.get("messages") or []) + requested_output
+        if self.reserved_calls + max_attempts > self.max_calls:
+            self.budget_exceeded_reason = "call_budget"
+            raise LiveWorkflowBudgetExceeded(self.budget_exceeded_reason)
+        if self.reserved_tokens + estimated_tokens > self.max_tokens:
+            self.budget_exceeded_reason = "token_budget"
+            raise LiveWorkflowBudgetExceeded(self.budget_exceeded_reason)
+        if self.reserved_calls_by_stage[stage] + max_attempts > self.budget.stage_provider_calls[stage]:
+            self.budget_exceeded_reason = f"stage_call_budget:{stage}"
+            raise LiveWorkflowBudgetExceeded(self.budget_exceeded_reason)
+        if self.reserved_tokens_by_stage[stage] + estimated_tokens > self.budget.stage_tokens[stage]:
+            self.budget_exceeded_reason = f"stage_token_budget:{stage}"
+            raise LiveWorkflowBudgetExceeded(self.budget_exceeded_reason)
+        self.reserved_calls += max_attempts
+        self.reserved_tokens += estimated_tokens
+        self.reserved_calls_by_stage[stage] += max_attempts
+        self.reserved_tokens_by_stage[stage] += estimated_tokens
 
     def options_for(self, *args, **kwargs):
         return self._gateway.options_for(*args, **kwargs)
 
     def invoke_structured(self, **kwargs):
-        context = kwargs["context"]
         stage = _STAGE_BY_SCHEMA.get(kwargs["output_schema"].__name__, "unknown")
+        self._reserve_call(kwargs, stage)
+        context = kwargs["context"]
         started = time.monotonic()
         try:
             result = self._gateway.invoke_structured(**kwargs)
@@ -108,6 +245,8 @@ class _RecordingGateway:
                 "input_tokens": trace.get("input_tokens"), "output_tokens": trace.get("output_tokens"),
                 "total_tokens": trace.get("total_tokens"),
             })
+            if sum(int(item.get("total_tokens") or 0) for item in self.records) >= self.max_tokens:
+                self.budget_exceeded_reason = "token_budget"
             return result
         except LLMGatewayError as exc:
             trace = exc.trace_metadata()
@@ -118,6 +257,8 @@ class _RecordingGateway:
                 "input_tokens": trace.get("input_tokens"), "output_tokens": trace.get("output_tokens"),
                 "total_tokens": trace.get("total_tokens"),
             })
+            if sum(int(item.get("total_tokens") or 0) for item in self.records) >= self.max_tokens:
+                self.budget_exceeded_reason = "token_budget"
             raise
         except Exception:
             self.records.append({
@@ -171,7 +312,7 @@ def _fixture_content(fixture: dict[str, Any], resource_type: str) -> str:
     return str(fixture.get("learner_context", {}).get("language") or "脱敏来源")
 
 
-def _make_gateway(config: LiveModelConfig) -> _RecordingGateway:
+def _make_gateway(config: LiveModelConfig, budget: LiveWorkflowBudget) -> _RecordingGateway:
     settings = get_settings()
     key = settings.llm_api_key.get_secret_value().strip()
     if not key:
@@ -180,6 +321,7 @@ def _make_gateway(config: LiveModelConfig) -> _RecordingGateway:
         "llm_api_key": SecretStr(key), "llm_base_url": config.base_url,
         "llm_model": config.model, "llm_structured_output_mode": config.structured_output_mode,
         "llm_request_timeout_seconds": config.timeout_seconds,
+        "llm_thinking_mode": config.thinking_mode,
     })
     gateway = LLMGateway(
         LangChainChatTransport(settings=live_settings),
@@ -191,7 +333,7 @@ def _make_gateway(config: LiveModelConfig) -> _RecordingGateway:
             structured_output_mode=StructuredOutputMode(config.structured_output_mode),
         ),
     )
-    return _RecordingGateway(gateway)
+    return _RecordingGateway(gateway, budget=budget)
 
 
 @contextmanager
@@ -233,6 +375,10 @@ def _run_one(combo: dict[str, Any], fixture: dict[str, Any], gateway: _Recording
     resource = courseware_repo.get_resource_by_run(created.run_id)
     artifact_sha = resource.get("artifact_sha256") if resource else None
     warnings = row.get("warnings") or []
+    quality_summary = detail.quality_summary if detail else None
+    if hasattr(quality_summary, "model_dump"):
+        quality_summary = quality_summary.model_dump(mode="json")
+    quality_summary = quality_summary if isinstance(quality_summary, dict) else {}
     checkpoints = [item for item in courseware_repo.checkpoints.values() if item.get("run_id") == created.run_id]
     outbox = courseware_repo.list_outbox(created.run_id, pending_only=False)
     record = {
@@ -247,6 +393,14 @@ def _run_one(combo: dict[str, Any], fixture: dict[str, Any], gateway: _Recording
         "outbox_statuses": sorted({str(item.get("status")) for item in outbox}),
         "attempt": int(row.get("attempt") or 0),
         "release_outcome": row.get("released_release_id") and "released" or "not_released",
+        "quality_summary": {
+            key: quality_summary.get(key)
+            for key in (
+                "ai_full_course_success", "required_scene_recovery_rate",
+                "deterministic_fallback_count", "rubric_passed", "interaction_quota_status",
+            )
+            if key in quality_summary
+        },
         "executor": executor_result,
     }
     return redact_workflow_record(record)
@@ -280,7 +434,7 @@ def run_bounded_live_workflow(*, config_path: Path, enabled: bool = False, artif
     fixture, fixture_manifest = load_fixture()
     config = live_model_config_from_file(config_path, settings)
     base = {
-        "schema_version": "1.0", "mode": "normal_create_job_worker_workflow",
+        "schema_version": "1.1", "mode": "normal_create_job_worker_workflow",
         "config": config.summary(), "fixture": fixture_manifest,
         "combination_count": len(LIVE_COMBINATIONS),
         "redaction": {"raw_prompt": False, "raw_response": False, "authorization_header": False, "api_key": False, "fixture_content": False},
@@ -288,6 +442,10 @@ def run_bounded_live_workflow(*, config_path: Path, enabled: bool = False, artif
     missing = config.missing_fields()
     if missing:
         return {**base, "status": "CONFIG_MISSING", "reason": "required_live_model_fields_missing", "missing_fields": missing}
+    try:
+        budget = live_workflow_budget_from_config(config.acceptance_budget)
+    except (KeyError, TypeError, ValueError):
+        return {**base, "status": "CONFIG_MISSING", "reason": "invalid_live_workflow_budget", "missing_fields": ["acceptance_budget"]}
     if not enabled:
         return {**base, "status": "NOT_RUN", "reason": "explicit_enable_required"}
     key = settings.llm_api_key.get_secret_value().strip() or (os.getenv("DEEPSEEK_API_KEY") or "").strip()
@@ -296,11 +454,13 @@ def run_bounded_live_workflow(*, config_path: Path, enabled: bool = False, artif
 
     fixture_root = artifact_root or (Path.cwd() / ".courseware-live-smoke")
     fixture_root.mkdir(parents=True, exist_ok=True)
-    gateway = _make_gateway(config)
+    gateway = _make_gateway(config, budget)
     runs: list[dict[str, Any]] = []
     with _artifact_root(fixture_root):
         for combo in LIVE_COMBINATIONS:
             runs.append(_run_one(combo, fixture, gateway, fixture_root))
+            if gateway.budget_exceeded_reason:
+                break
     stages = _stage_metrics(gateway.records, config)
     statuses = [str(item.get("status")) for item in runs]
     outcomes = _outcome_counts(statuses)
@@ -309,14 +469,64 @@ def run_bounded_live_workflow(*, config_path: Path, enabled: bool = False, artif
         not stage["calls"] or all(stage["tokens"].get(field) is not None for field in ("input_tokens", "output_tokens", "total_tokens"))
         for stage in stages.values()
     )
+    quality_rows = [item.get("quality_summary") or {} for item in runs]
+    recovery_values = [item.get("required_scene_recovery_rate") for item in quality_rows]
+    quota_values = [item.get("interaction_quota_status") for item in quality_rows]
+    rubric_pass_count = sum(item.get("rubric_passed") is True for item in quality_rows)
+    fallback_count = sum(int(item.get("deterministic_fallback_count") or 0) for item in quality_rows)
+    quality_gate = {
+        "publishable_count": outcomes["published"] + outcomes["warning"],
+        "publishable_target": 8,
+        "required_scene_recovery_rate": min(recovery_values) if recovery_values and all(value is not None for value in recovery_values) else None,
+        "required_scene_recovery_target": 0.85,
+        "full_course_success_count": sum(item.get("ai_full_course_success") is True for item in quality_rows),
+        "full_course_success_target": 7,
+        "deterministic_fallback_count": fallback_count,
+        "deterministic_fallback_target_max": 2,
+        "rubric_pass_count": rubric_pass_count,
+        "rubric_pass_target": 8,
+        "interaction_quota_measured_count": sum(value in {"met", "not_met"} for value in quota_values),
+        "interaction_quota_target_rate": 0.90,
+    }
+    quality_gate["passed"] = bool(
+        quality_gate["publishable_count"] >= quality_gate["publishable_target"]
+        and quality_gate["required_scene_recovery_rate"] is not None
+        and quality_gate["required_scene_recovery_rate"] >= quality_gate["required_scene_recovery_target"]
+        and quality_gate["full_course_success_count"] >= quality_gate["full_course_success_target"]
+        and quality_gate["deterministic_fallback_count"] <= quality_gate["deterministic_fallback_target_max"]
+        and quality_gate["rubric_pass_count"] >= quality_gate["rubric_pass_target"]
+        and quality_gate["interaction_quota_measured_count"] == len(quality_rows)
+        and sum(value == "met" for value in quota_values) / len(quality_rows) >= quality_gate["interaction_quota_target_rate"]
+    ) if quality_rows else False
+    actual_calls = sum(int(item.get("attempt_count") or 0) for item in gateway.records)
+    actual_tokens = sum(int(item.get("total_tokens") or 0) for item in gateway.records)
     return {
-        **base, "status": "DONE" if usage_complete else "LOCAL_READY", "runs": runs,
+        **base,
+        "status": acceptance_report_status(
+            usage_complete=usage_complete,
+            quality_gate_passed=bool(quality_gate["passed"]),
+        ),
+        "quality_status": "LOCAL_QUALITY_READY" if quality_gate["passed"] else "QUALITY_PARTIAL",
+        "runs": runs,
         "metrics": {
             "stages": stages,
-            "quality": {"workflow_success_rate": round((outcomes["published"] + outcomes["warning"]) / len(runs), 4), "spec_success_rate": stages["spec"]["success_rate"], "scene_success_rate": stages["scene"]["success_rate"], "quality_review_success_rate": stages["quality_review"]["success_rate"]},
+            "quality": {"workflow_success_rate": round((outcomes["published"] + outcomes["warning"]) / len(LIVE_COMBINATIONS), 4), "spec_success_rate": stages["spec"]["success_rate"], "scene_success_rate": stages["scene"]["success_rate"], "quality_review_success_rate": stages["quality_review"]["success_rate"], "gate": quality_gate},
             "reliability": {"retry_count": sum(item["retry_count"] for item in stages.values()), "fallback_rate": round(sum(1 for item in runs if any(code.endswith("FALLBACK") for code in item["warning_codes"])) / len(runs), 4), "p50_latency_ms": median([item["latency_ms"]["p50"] for item in stages.values() if item["latency_ms"]["p50"] is not None]) if any(item["latency_ms"]["p50"] is not None for item in stages.values()) else None},
             "cost": {"currency": config.price_currency, "total": total_cost, "complete": usage_complete},
         },
         "outcomes": outcomes,
-        "bounds": {"max_combinations": 4, "actual_combinations": len(runs), "max_attempts_per_call": config.max_attempts, "unbounded_retry": False},
+        "bounds": {
+            "max_combinations": len(LIVE_COMBINATIONS), "actual_combinations": len(runs),
+            "max_calls": budget.max_provider_calls, "actual_calls": actual_calls,
+            "max_tokens": budget.max_tokens, "actual_tokens": actual_tokens,
+            "reserved_tokens": gateway.reserved_tokens,
+            "reserved_calls_by_stage": gateway.reserved_calls_by_stage,
+            "reserved_tokens_by_stage": gateway.reserved_tokens_by_stage,
+            "stage_max_calls": budget.stage_provider_calls,
+            "stage_max_tokens": budget.stage_tokens,
+            "max_duration_seconds": budget.max_duration_seconds,
+            "max_attempts_per_call": config.max_attempts, "unbounded_retry": False,
+            "budget_exceeded": bool(gateway.budget_exceeded_reason),
+            "budget_stop_reason": gateway.budget_exceeded_reason,
+        },
     }

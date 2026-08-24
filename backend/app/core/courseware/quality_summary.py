@@ -9,9 +9,13 @@ from typing import Any
 
 
 def build_quality_summary(
-    events: Iterable[Mapping[str, Any]], *, status: str, warnings: list[Mapping[str, Any]] | None = None,
+    events: Iterable[Mapping[str, Any]], *, status: str = "not_measured", warnings: list[Mapping[str, Any]] | None = None,
     artifact_success: bool = False, spec_prompt_version: str | None = None,
     required_scene_ids: Iterable[str] | None = None,
+    learning_design: Mapping[str, Any] | Any | None = None,
+    scenes: Iterable[Mapping[str, Any]] | None = None,
+    rubric_scores: Mapping[str, float] | None = None,
+    interaction_quota: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Aggregate persisted facts once per event ID without exposing prompts."""
     unique = {str(event.get("event_id")): event for event in events if event.get("event_id")}
@@ -61,8 +65,37 @@ def build_quality_summary(
     if latencies:
         ordered = sorted(latencies)
         p95 = ordered[max(0, ceil(0.95 * len(ordered)) - 1)]
+    scene_rows = [item for item in (scenes or ()) if isinstance(item, Mapping)]
+    if not scene_rows and learning_design is not None:
+        storyboard = learning_design.get("storyboard") if isinstance(learning_design, Mapping) else getattr(learning_design, "storyboard", None)
+        if hasattr(storyboard, "model_dump"):
+            storyboard = storyboard.model_dump(mode="json")
+        scene_rows = [item for item in storyboard.get("scenes") or () if isinstance(item, Mapping)]
+    usage_plan = learning_design.get("resource_usage_plan") if isinstance(learning_design, Mapping) else getattr(learning_design, "resource_usage_plan", ())
+    usage_plan = [item for item in (usage_plan or ()) if isinstance(item, Mapping)]
+    adopted_sources = {str(item.get("resource_id")) for item in usage_plan if item.get("adopted") and item.get("resource_id")}
+    scene_sources = [set(str(value) for value in (item.get("source_refs") or item.get("source_resource_ids") or ()) if value) for item in scene_rows]
+    adopted_source_count = len(adopted_sources)
+    adopted_source_covered = len({value for refs in scene_sources for value in refs} & adopted_sources)
+    interactive_names = {"steps", "ordered_steps", "single_choice", "multiple_choice", "flashcard", "matching", "ordering", "branching_scenario", "categorization", "word_bank_cloze", "timeline_explorer"}
+    interaction_types = sorted({str(block.get("component")) for scene in scene_rows for block in (scene.get("component_blocks") or scene.get("blocks") or ()) if isinstance(block, Mapping) and block.get("component") in interactive_names})
+    interactive_scene_count = sum(1 for scene in scene_rows if any(isinstance(block, Mapping) and block.get("component") in interactive_names for block in (scene.get("component_blocks") or scene.get("blocks") or ())))
+    quota = interaction_quota or (learning_design.get("interaction_quota") if isinstance(learning_design, Mapping) else {}) or {}
+    quota_target = quota.get("target") if isinstance(quota, Mapping) else None
+    quota_actual = quota.get("actual", len(interaction_types)) if isinstance(quota, Mapping) else len(interaction_types)
+    quota_status = quota.get("status", "not_measured" if not quota else "met") if isinstance(quota, Mapping) else "not_measured"
+    scores = dict(rubric_scores or {})
+    if not scores:
+        for event in values:
+            payload = event.get("payload") or {}
+            candidate = payload.get("rubric_scores") or payload.get("review", {}).get("rubric_scores")
+            if isinstance(candidate, Mapping):
+                scores = {str(key): float(value) for key, value in candidate.items() if isinstance(value, (int, float))}
+                break
+    rubric_passed = bool(scores) and sum(scores.values()) / len(scores) >= 3.0 and all(value >= 2.0 for value in scores.values()) and all(scores.get(key, 0) >= 3.0 for key in ("objective_alignment", "feedback_quality", "interaction_purpose"))
+    required_recovery_rate = (ai_scene_success_count / len(ai_scene_ids)) if ai_scene_ids else None
     return {
-        "schema_version": "1.0", "ai_path_attempted": bool(observations or spec_success),
+        "schema_version": "2.0", "ai_path_attempted": bool(observations or spec_success),
         "ai_spec_success": spec_success, "ai_scene_success_count": ai_scene_success_count, "ai_scene_total": len(ai_scene_ids),
         "ai_review_success": review_success, "ai_revision_attempted": revision_attempted, "ai_revision_success": revision_success,
         "schema_repair_count": sum(int(trace.get("schema_repair_count") or 0) for trace in traces), "schema_repair_success": sum(int(trace.get("schema_repair_success") or 0) for trace in traces),
@@ -73,6 +106,23 @@ def build_quality_summary(
         "latency_sample_count": len(latencies), "latency_percentile_method": "nearest_rank",
         "latency_p50_ms": int(median(latencies)) if latencies else None, "latency_p95_ms": p95,
         "estimated_cost": round(sum(float(trace.get("estimated_cost_usd") or 0) for trace in traces), 8),
+        "publication_success": status in {"published", "published_with_warnings"},
+        "required_scene_recovery_rate": required_recovery_rate,
+        "adopted_source_coverage": (adopted_source_covered / adopted_source_count) if adopted_source_count else None,
+        "cross_source_scene_count": sum(1 for refs in scene_sources if len(refs) >= 2),
+        "scene_count": len(scene_rows) if scene_rows else len(ai_scene_ids),
+        "interactive_scene_count": interactive_scene_count,
+        "unique_interaction_types": interaction_types,
+        "interaction_quota_status": quota_status,
+        "interaction_quota_target": quota_target,
+        "interaction_quota_actual": quota_actual,
+        "rubric_scores": scores,
+        "rubric_passed": rubric_passed,
+        "metric_provenance": {
+            "required_scene_recovery_rate": {"numerator": ai_scene_success_count, "denominator": len(ai_scene_ids)},
+            "adopted_source_coverage": {"numerator": adopted_source_covered, "denominator": adopted_source_count},
+            "latency_p95": {"sample_count": len(latencies), "method": "nearest_rank"},
+        },
     }
 
 

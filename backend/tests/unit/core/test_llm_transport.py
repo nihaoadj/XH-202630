@@ -1,9 +1,9 @@
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.config import Settings
-from app.core import llm as llm_module
-from app.core.llm import LangChainChatTransport, create_chat_model
-from app.models.llm import StructuredOutputMode
+from app.core.llm import transport as llm_module
+from app.core.llm.transport import LangChainChatTransport, create_chat_model
+from app.models.shared.llm import StructuredOutputMode
 
 
 def _settings() -> Settings:

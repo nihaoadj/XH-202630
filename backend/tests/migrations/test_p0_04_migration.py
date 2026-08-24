@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, inspect, text
 
 from app.db.migrations.p0_04 import MIGRATION_ID, apply_p0_04_migration
-from app.db.models import Base
+from app.db.shared.models import Base
 
 
 def test_p0_04_sqlite_migration_is_additive_and_idempotent(tmp_path):

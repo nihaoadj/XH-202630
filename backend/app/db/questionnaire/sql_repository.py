@@ -6,7 +6,7 @@ from typing import Any, Callable, Mapping
 
 from sqlalchemy.orm import Session
 
-from app.db.models import (
+from app.db.shared.models import (
     QuestionnaireAnswerORM,
     QuestionnaireQuestionORM,
     QuestionnaireSubmissionORM,

@@ -9,7 +9,7 @@ from app.db.tutor.base import (
     TutorIdempotencyConflict,
     TutorPersistenceConflict,
 )
-from app.models.tutor import TutorSession, TutorTurn
+from app.models.tutor.tutor import TutorSession, TutorTurn
 
 
 class MemoryTutorRepository(BaseTutorRepository):

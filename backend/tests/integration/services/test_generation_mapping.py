@@ -2,12 +2,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.core.errors import ApplicationError, ErrorCode
+from app.core.security.errors import ApplicationError, ErrorCode
 from app.db.audit.memory import MemoryAuditRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.services import generation_service as generation_module
-from app.services.generation_service import GenerationService, build_workflow_state
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.services.generation import generation as generation_module
+from app.services.generation.generation import GenerationService, build_workflow_state
 
 
 def _learner(learner_id="mapping-001"):
@@ -70,8 +70,16 @@ def test_service_reuses_run_id_in_state_response_trace_and_audit(monkeypatch):
         lambda: SimpleNamespace(status="ready", error_codes=[]),
     )
     workflow = _RecordingWorkflow()
+    repo = MemoryResourceRepository()
+    repo.save(
+        LearningResource(
+            resource_id="resource-stable", learner_id="mapping-001", topic="测试",
+            resource_type="讲义", difficulty="中级", knowledge_points=["测试"], source_refs=[],
+        ),
+        "mapping-001", "测试",
+    )
     audit = MemoryAuditRepository()
-    service = GenerationService(MemoryResourceRepository(), workflow, audit)
+    service = GenerationService(repo, workflow, audit)
 
     response = service.generate(
         _learner(),
@@ -93,7 +101,15 @@ def test_service_reuses_run_id_in_state_response_trace_and_audit(monkeypatch):
 
 
 class _ReviewedWorkflow:
+    def __init__(self, audit):
+        self.audit = audit
+
     def invoke(self, state):
+        self.audit.save_review(
+            "reviewed-resource",
+            {"review_id": "review-stable", "status": "approved", "passed": True},
+            state["run_id"],
+        )
         resource = LearningResource(
             resource_id="reviewed-resource",
             resource_type="讲义",
@@ -135,7 +151,15 @@ def test_service_persists_preallocated_review_id(monkeypatch):
         lambda: SimpleNamespace(status="ready", error_codes=[]),
     )
     audit = MemoryAuditRepository()
-    service = GenerationService(MemoryResourceRepository(), _ReviewedWorkflow(), audit)
+    repo = MemoryResourceRepository()
+    repo.save(
+        LearningResource(
+            resource_id="reviewed-resource", learner_id="mapping-001", topic="测试",
+            resource_type="讲义", difficulty="中级", knowledge_points=["测试"], source_refs=[],
+        ),
+        "mapping-001", "测试",
+    )
+    service = GenerationService(repo, _ReviewedWorkflow(audit), audit)
 
     response = service.generate(
         _learner(),

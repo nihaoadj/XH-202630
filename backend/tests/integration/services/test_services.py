@@ -1,15 +1,15 @@
 import pytest
 
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.learner.repository import create_learner_repository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learners.repository import create_learner_repository
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.db.resource.repository import create_resource_repository
-from app.agents.feedback import decide_feedback
-from app.models.schemas import LearnerProfile
-from app.services.profile_service import ProfileService
-from app.services.feedback_service import FeedbackService
-from app.services.report_service import ReportService
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.db.learning_documents.repository import create_resource_repository
+from app.agents.learning_agents.feedback_agent import decide_feedback
+from app.models.learning_documents.schemas import LearnerProfile
+from app.services.learners.profiles import ProfileService
+from app.services.feedback.feedback import FeedbackService
+from app.services.reports.reports import ReportService
 
 
 def test_profile_service_only_saves_existing_profiles():
@@ -52,7 +52,7 @@ def test_feedback_service_downgrade():
 
     feedback_repo = MemoryFeedbackRepository()
     service = FeedbackService(feedback_repo)
-    from app.models.schemas import FeedbackRequest
+    from app.models.learning_documents.schemas import FeedbackRequest
     req = FeedbackRequest(learner_id="fb_001", resource_id="res_001", correct_rate=0.5, answers=[])
     result = service.process_feedback(profile, req)
 
@@ -62,7 +62,7 @@ def test_feedback_service_downgrade():
 
 
 def test_feedback_decision_agent_outputs_next_action():
-    from app.models.schemas import FeedbackAnswer, FeedbackRequest
+    from app.models.learning_documents.schemas import FeedbackAnswer, FeedbackRequest
 
     profile = LearnerProfile(
         learner_id="agent_fb_001",

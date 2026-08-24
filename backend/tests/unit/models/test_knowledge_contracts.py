@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from app.core.evidence import source_refs_are_scoped, source_refs_from_evidence
-from app.core.knowledge_ids import (
+from app.core.retrieval.evidence import source_refs_are_scoped, source_refs_from_evidence
+from app.core.retrieval.knowledge_ids import (
     chunk_id,
     chunking_config_hash,
     document_id,
@@ -16,8 +16,8 @@ from app.core.knowledge_ids import (
     retrieval_config_hash,
     sha256_hex,
 )
-from app.models.common import ErrorInfo
-from app.models.knowledge import (
+from app.models.shared.common import ErrorInfo
+from app.models.knowledge.knowledge import (
     EvidenceBatch,
     EvidenceItem,
     KnowledgeChunk,

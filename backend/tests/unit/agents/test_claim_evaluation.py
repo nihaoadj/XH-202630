@@ -1,4 +1,4 @@
-from app.models.claims import (
+from app.models.reviews.claims import (
     ClaimCandidate,
     ClaimJudgementCandidate,
     ClaimType,
@@ -6,8 +6,8 @@ from app.models.claims import (
     materialize_claims,
     materialize_judgements,
 )
-from app.models.schemas import LearningResource
-from app.services.claim_evaluation import (
+from app.models.learning_documents.schemas import LearningResource
+from app.services.reviews.claim_evaluation import (
     DifficultyFixtureResult,
     compute_competition_claim_metrics,
     evaluate_difficulty_fixtures,

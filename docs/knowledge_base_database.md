@@ -266,7 +266,7 @@ P0-07 正式接口还会原子读写 `learning_attempts`、`learning_attempt_poi
 - `knowledge_states` additive 增加 `attempt_count`、`last_attempt_id`、`row_version`，继续演进诊断阶段已有表，不另建竞争当前态。
 - 所有 mutation 记录 before/after、source attempt 和 reason；同一 Attempt 重放不会二次加权。
 - `20260811_p0_07_feedback_profile_path_closed_loop` 是幂等 additive migration；旧 `feedback_records` 不删除、不回填伪造 Attempt。
-- SQLite 开发环境通过单事务和版本条件控制并发；PostgreSQL 生产环境还使用行锁语义。上线前数据库负责人仍需核验 DDL、索引、FK 与真实并发行为。
+- 当前开发、演示和部署都使用 SQLite，通过短事务、唯一约束和版本条件控制并发；上线前仍需核验 SQLite DDL、索引、FK 与真实读写行为。
 
 ### 4.4 P0-08 WorkflowEvent tail query
 
@@ -278,7 +278,7 @@ ORDER BY event_sequence
 LIMIT :page_size
 ```
 
-长 SSE 连接不持有 Session、事务或锁，不增加 delivered/ack 字段；不同客户端只读同一 append-only Ledger。SQLite 用短连接轮询，PostgreSQL 上线时需结合 worker 数、SSE 客户端数和 0.5 秒默认间隔评估连接池。Event retention 尚未在 P0-08 自动清理，删除策略必须保留比赛回放与 `legacy_partial` 语义。
+长 SSE 连接不持有 Session、事务或锁，不增加 delivered/ack 字段；不同客户端只读同一 append-only Ledger。当前 SQLite 使用短连接轮询，并需结合一个 Durable Worker、SSE 客户端数和 0.5 秒默认间隔评估锁等待与连接数量。Event retention 尚未在 P0-08 自动清理，删除策略必须保留比赛回放与 `legacy_partial` 语义。
 
 ### 4.5 数据库完整性与 P0-09 migration
 
@@ -294,7 +294,7 @@ LIMIT :page_size
 python scripts/check_database_integrity.py
 ```
 
-预检输出包括 `foreign_keys_enabled`、`foreign_key_violations`、`resource_version_duplicates`、`resource_version_null_count`、`resource_version_unique`、`missing_resource_foreign_keys` 和 `resource_reference_orphans`。团队真实数据升级前必须先备份 SQLite/PostgreSQL、生成资源目录、Chroma collection 与知识库 manifest/hash，再对脱敏副本执行两次 migration 验证幂等。
+预检输出包括 `foreign_keys_enabled`、`foreign_key_violations`、`resource_version_duplicates`、`resource_version_null_count`、`resource_version_unique`、`missing_resource_foreign_keys` 和 `resource_reference_orphans`。团队真实数据升级前必须先备份当前 SQLite 文件、生成资源目录、Chroma collection 与知识库 manifest/hash，再对脱敏副本执行两次 migration 验证幂等。
 
 比赛阶段没有真实历史数据库时，可执行合成旧库演练：
 
@@ -589,4 +589,14 @@ python -m pytest backend/tests -q
 
 P0-09 preflight 会只读检查 migration 集合、正式 demo 数据库可达性、SQLite `PRAGMA foreign_keys`、`generated_resources(run_id, resource_type, version)` 数据库唯一约束，以及默认 KB 的本地 retrieval smoke。检查失败不会被公共 `/health/ready` 的 200 覆盖。
 
-截至 2026-08-16，SQLite 每连接外键 hook、资源版本数据库唯一约束、旧表重建 migration、完整性检查和合成迁移演练已经进入代码与自动测试。正式 demo 数据仍须先运行只读完整性检查和受控 migration rehearsal，不能仅凭模型层约束宣布放行；PostgreSQL migration 与并发行为也尚未完成正式验证。
+截至 2026-08-16，SQLite 每连接外键 hook、资源版本数据库唯一约束、旧表重建 migration、完整性检查和合成迁移演练已经进入代码与自动测试。正式 demo 数据仍须先运行只读完整性检查和受控 migration rehearsal，不能仅凭模型层约束宣布放行。代码中的其他数据库方言分支不属于当前部署承诺。
+
+## 12. P0-19 Learner Mastery 迁移
+
+`p0_19_learner_mastery` 对 `knowledge_states` 只做 additive 扩展：`state_schema_version`、`self_report_prior`、`confidence`、`objective_evidence_count`、`distinct_objective_source_count`、`last_evidence_type` 和 `last_evidence_id`。原有 `mastery_score`、`status`、`attempt_count` 与 `row_version` 不降级、不覆盖。
+
+新表 `ability_state_events` 保存版本化 before/after 事件，主键为 `event_id`，并以 `(learner_id, source_type, source_id, skill_node_id)` 唯一约束保证每个来源对每个节点只应用一次。`source_hash` 用于识别同一来源 ID 的 payload 冲突；`verified` 区分自评/旧导入与服务端诊断/正式学习反馈。事件按 `occurred_at, event_id` 稳定读取。
+
+旧画像 JSON 迁移只在当前知识库内按节点 ID或唯一名称映射。已有规范行优先；同名歧义、未知键或无效值不会被猜测。迁移结束后，画像兼容字段由规范行重新投影：`knowledge_states` 只用节点 ID，`theory_scores` 只包含客观节点，弱强项也只依据客观状态。`learner_mastery_migration_reports` 持久化 `mapped_count`、`canonical_preserved_count`、`unmapped_count` 和脱敏的 `unmapped_entries/reason`，供升级验收审计。
+
+已有正式 `learning_attempts + knowledge_state_mutations` 可回填为 verified `learning_attempt` 事件并重算客观证据计数与置信度；无法证明来源的旧画像分数最多形成 `legacy_import, verified=false`。迁移通过 `schema_migrations` 幂等登记；重复执行不增加状态、事件或报告行。当前部署验证口径仍是 SQLite 外键开启、旧库/空库升级和重启恢复；代码中的 PostgreSQL 方言分支不构成已验收的生产承诺。

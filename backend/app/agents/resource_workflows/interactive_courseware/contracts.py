@@ -14,11 +14,12 @@ from app.models.courseware.learning_design import CoursewareLearningDesign
 from app.models.courseware.design import CoursewareDesign
 
 
-SceneKind = Literal["intro", "explain", "practice", "quiz", "recap"]
+SceneKind = Literal["intro", "explain", "example", "compare", "practice", "scenario", "quiz", "recap"]
 ComponentKind = Literal[
     "callout", "key_point", "compare", "steps", "ordered_steps",
     "single_choice", "multiple_choice", "recap",
     "flashcard", "matching", "ordering",
+    "branching_scenario", "categorization", "word_bank_cloze", "timeline_explorer",
 ]
 PedagogicalRole = Literal["explain", "example", "warning", "recap"]
 
@@ -38,12 +39,42 @@ class CoursewareScenePlan(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     learning_objective: str = Field(default="理解本场景的核心内容。", min_length=1, max_length=240)
     source_block_ids: list[str] = Field(default_factory=list, max_length=12)
+    preferred_component_ids: list[str] = Field(default_factory=list, max_length=8)
     required: bool = True
 
     @field_validator("source_block_ids")
     @classmethod
     def clean_source_block_ids(cls, value: list[str]) -> list[str]:
         return _clean_ids(value) if value else value
+
+
+class CoursewareObjectiveEnrichment(BaseModel):
+    objective_id: str = Field(min_length=1, max_length=96)
+    title: str = Field(min_length=1, max_length=160)
+    teaching_intent: str = Field(min_length=1, max_length=240)
+
+
+class CoursewareSceneEnrichment(BaseModel):
+    scene_id: str = Field(min_length=1, max_length=96)
+    title: str = Field(min_length=1, max_length=160)
+    teaching_intent: str = Field(min_length=1, max_length=240)
+    preferred_component_ids: list[str] = Field(default_factory=list, max_length=8)
+
+
+class CoursewarePlanEnrichmentV2(BaseModel):
+    schema_version: Literal["2.0"] = "2.0"
+    course_title: str = Field(min_length=1, max_length=160)
+    course_summary: str = Field(min_length=1, max_length=500)
+    objectives: list[CoursewareObjectiveEnrichment] = Field(default_factory=list, max_length=8)
+    scenes: list[CoursewareSceneEnrichment] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode="after")
+    def unique_ids(self):
+        if len({item.objective_id for item in self.objectives}) != len(self.objectives):
+            raise ValueError("enrichment objective_id 重复")
+        if len({item.scene_id for item in self.scenes}) != len(self.scenes):
+            raise ValueError("enrichment scene_id 重复")
+        return self
 
 
 class CoursewareSpec(BaseModel):
@@ -56,6 +87,7 @@ class CoursewareSpec(BaseModel):
     # Deterministic platform-owned design produced before model scene prose.
     learning_design: CoursewareLearningDesign | None = None
     design: CoursewareDesign | None = None
+    enrichment: CoursewarePlanEnrichmentV2 | None = None
 
     @field_validator("learning_objectives")
     @classmethod
@@ -83,6 +115,15 @@ class CoursewareBlock(BaseModel):
     pairs: list[dict[str, str]] = Field(default_factory=list, max_length=8)
     ordering_items: list[str] = Field(default_factory=list, max_length=8)
     correct_order: list[str] = Field(default_factory=list, max_length=8)
+    component_id: str | None = Field(default=None, max_length=128)
+    start_node_id: str | None = Field(default=None, max_length=96)
+    nodes: list[dict[str, Any]] = Field(default_factory=list, max_length=8)
+    categories: list[dict[str, Any]] = Field(default_factory=list, max_length=5)
+    items: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
+    prompt_segments: list[str] = Field(default_factory=list, max_length=7)
+    blanks: list[dict[str, Any]] = Field(default_factory=list, max_length=6)
+    tokens: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
+    events: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def validate_component_payload(self):
@@ -104,6 +145,22 @@ class CoursewareBlock(BaseModel):
                 raise ValueError("ordering 必须同时包含完整 ordering_items 和 correct_order")
             if len(set(self.ordering_items)) != len(self.ordering_items) or set(self.ordering_items) != set(self.correct_order):
                 raise ValueError("ordering 的正确顺序必须覆盖全部 ordering_items")
+        elif self.component == "branching_scenario":
+            from app.core.courseware.components import validate_component_payload
+            if not validate_component_payload(self.component, self.model_dump(mode="json")):
+                raise ValueError("branching_scenario payload 不符合 v2 契约")
+        elif self.component == "categorization":
+            from app.core.courseware.components import validate_component_payload
+            if not validate_component_payload(self.component, self.model_dump(mode="json")):
+                raise ValueError("categorization payload 不符合 v2 契约")
+        elif self.component == "word_bank_cloze":
+            from app.core.courseware.components import validate_component_payload
+            if not validate_component_payload(self.component, self.model_dump(mode="json")):
+                raise ValueError("word_bank_cloze payload 不符合 v2 契约")
+        elif self.component == "timeline_explorer":
+            from app.core.courseware.components import validate_component_payload
+            if not validate_component_payload(self.component, self.model_dump(mode="json")):
+                raise ValueError("timeline_explorer payload 不符合 v2 契约")
         return self
 
 
@@ -119,10 +176,33 @@ class ChoiceComponentSpec(CoursewareBlock):
     component: Literal["single_choice", "multiple_choice"]
 
 
+class BranchingScenarioSpec(CoursewareBlock):
+    schema_version: Literal["2.0"] = "2.0"
+    component: Literal["branching_scenario"]
+
+
+class CategorizationSpec(CoursewareBlock):
+    schema_version: Literal["2.0"] = "2.0"
+    component: Literal["categorization"]
+
+
+class WordBankClozeSpec(CoursewareBlock):
+    schema_version: Literal["2.0"] = "2.0"
+    component: Literal["word_bank_cloze"]
+
+
+class TimelineExplorerSpec(CoursewareBlock):
+    schema_version: Literal["2.0"] = "2.0"
+    component: Literal["timeline_explorer"]
+
+
 # The discriminator is deliberately platform-owned. Unknown component names
 # fail structured parsing before they reach the renderer.
 ComponentSpec = Annotated[
-    Union[TextComponentSpec, StepsComponentSpec, ChoiceComponentSpec],
+    Union[
+        TextComponentSpec, StepsComponentSpec, ChoiceComponentSpec,
+        BranchingScenarioSpec, CategorizationSpec, WordBankClozeSpec, TimelineExplorerSpec,
+    ],
     Field(discriminator="component"),
 ]
 
@@ -210,8 +290,12 @@ class CoursewareSceneSpec(BaseModel):
 
 
 class CoursewareReviewIssue(BaseModel):
-    code: str = Field(min_length=1, max_length=64)
+    code: str = Field(default="QUALITY", min_length=1, max_length=64)
+    dimension: str | None = Field(default=None, max_length=64)
     severity: Literal["info", "warning", "error"] = "warning"
+    scope: Literal["course", "scenes", "scene", "block"] = "course"
+    scene_id: str | None = Field(default=None, max_length=96)
+    affected_scene_ids: list[str] = Field(default_factory=list, max_length=12)
     instruction: str = Field(min_length=1, max_length=400)
     block_id: str | None = Field(default=None, max_length=96)
 
@@ -219,7 +303,36 @@ class CoursewareReviewIssue(BaseModel):
 class CoursewareReviewDecision(BaseModel):
     """AI review signal; deterministic release gates remain final authority."""
 
-    decision: Literal["approved", "revision_required", "rejected", "unavailable"]
+    schema_version: Literal["1.0", "2.0"] = "1.0"
+    decision: Literal["approved", "revision_required", "rejected", "unavailable"] | None = None
+    status: Literal["pass", "revise", "reject", "unavailable"] | None = None
     issues: list[CoursewareReviewIssue] = Field(default_factory=list, max_length=12)
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    rubric_scores: dict[str, float] = Field(default_factory=dict)
+    summary: str | None = Field(default=None, max_length=1000)
     trace_metadata: dict[str, Any] = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_v2_status(cls, values):
+        if isinstance(values, dict) and not values.get("decision") and values.get("status"):
+            values = dict(values)
+            values["decision"] = {"pass": "approved", "revise": "revision_required", "reject": "rejected"}.get(values["status"], values["status"])
+        return values
+
+    @model_validator(mode="after")
+    def validate_review_scope(self):
+        if self.decision is None:
+            raise ValueError("review decision/status required")
+        if self.schema_version == "2.0":
+            known = {"objective_alignment", "coherence", "explanation_depth", "example_usefulness", "misconception_handling", "practice_gradient", "feedback_quality", "interaction_purpose", "cognitive_load"}
+            if set(self.rubric_scores) - known:
+                raise ValueError("unknown rubric dimension")
+            for issue in self.issues:
+                if issue.severity == "error" and issue.scope in {"scene", "block"} and not issue.scene_id:
+                    raise ValueError("localized error requires scene_id")
+                if issue.scope == "block" and not issue.block_id:
+                    raise ValueError("block issue requires block_id")
+                if issue.scope == "scenes" and not issue.affected_scene_ids:
+                    raise ValueError("multi-scene issue requires affected_scene_ids")
+        return self

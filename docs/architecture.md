@@ -505,3 +505,25 @@ Candidate 发布由 `services.courseware.release.CandidateReleaseCoordinator` �
 普通学习事件和 progress API 以 `released_release_id` 为边界。旧、未知、未发布或混合 release 请求在 API 层返回明确 409，批量事件在校验前不写入。组件状态以 `scene_id + component_id + component_version` 为实例边界，progress schema `2.0` 的嵌套投影和 renderer 的稳定 `data-component-id` 共同阻止同类组件互相覆盖；Viewer 切换资源/release 时更新 nonce 并丢弃迟到响应。
 
 R4 的本地候选证据必须同时包含 12-case evaluator、14 项真实进程故障矩阵、Q5 journey schema 1.1 和 browser schema 1.3 的 11×3 矩阵及 HTTP-origin/artifact restore 等检查。候选可达到 `LOCAL_READY`，但真实模型、CI、目标部署和完整发布周期仍是外部待验证项；SCORM/xAPI 仍仅为基础导出包。
+
+## 14. Learner Mastery 规范投影与闭环
+
+学习者掌握事实统一为 `knowledge_states`，稳定键为 `learner_id + knowledge_base_id + skill_node_id`。问卷答案、服务端诊断答案、正式 `LearningAttempt` 与 append-only `ability_state_events` 是证据事实；画像中的 `knowledge_states/theory_scores/weak_points/strong_points` 只是由规范表单向重建的兼容缓存，不能反向覆盖规范状态。节点关系在仓储和 API 中使用 ID，名称只用于展示。
+
+```text
+Onboarding self report (unverified, low confidence)
+  -> MasteryService / MasteryRepository
+  -> knowledge_states + ability_state_events + profile compatibility cache
+Diagnosis (server scored, verified)
+  -> same transition policy and one profile-version increment
+Run/Batch evaluation (server scored, verified)
+  -> Attempt + Decision + Ability Event + State Mutation + Learning Path + ProfileVersion
+  -> Report 2.0 + frozen LearnerFocusSnapshotV1
+  -> next text-resource GenerationJob
+```
+
+状态策略是确定性的：只有自评时保存 `self_report_prior` 并标记 `self_reported/low`；首次客观证据为 `0.2 × prior + 0.8 × observed`（无 prior 时直接使用 observed）；后续客观证据为 `0.7 × old + 0.3 × observed`。阈值为 `<0.60 weak`、`0.60–0.85 learning`、`>0.85 mastered`。至少一条客观证据为 medium；至少三条且来自至少两个不同客观 source 时为 high。
+
+SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范状态、能力事件、mutation、学习路径、画像缓存和画像版本，并由 `(learner_id, idempotency_key)`、source hash、row version 与 profile version 约束重放和并发。问卷和诊断走稳定 source ID；无状态变化的重放不增加证据或版本。客户端聚合分数不是可信入口。
+
+生成任务创建时由 `MasteryService` 按 `confirmed_weak -> regressing_learning -> low_self_report -> unassessed_prerequisite` 排序，冻结 `LearnerFocusSnapshotV1` 到请求快照。显式目标覆盖 auto，off 禁用注入；创建后的画像变化不会改变既有任务。报告、ability API、生成重点和兼容缓存因此读取同一个 profile version 的规范投影。

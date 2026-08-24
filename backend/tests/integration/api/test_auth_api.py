@@ -3,10 +3,10 @@ from types import SimpleNamespace
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import auth
+from app.api.auth import authentication as auth
 from app.api.dependencies import get_current_user
-from app.db.user.memory import MemoryUserRepository
-from app.services.auth_service import AuthService
+from app.db.users.memory import MemoryUserRepository
+from app.services.auth.authentication import AuthService
 
 
 def _client():

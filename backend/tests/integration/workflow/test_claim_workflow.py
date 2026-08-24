@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 
-from app.agents.claim_review import claim_decide_node, claim_extract_node, claim_judge_node
-from app.agents.workflow import decide_node
-from app.core.errors import ErrorCode
-from app.core.llm_gateway import LLMGatewayError
-from app.models.agent_contracts import make_error_info
-from app.models.claims import ClaimMetricStatus
-from app.models.schemas import LearningResource
+from app.agents.resource_workflows.learning_documents.claim_review_agent import claim_decide_node, claim_extract_node, claim_judge_node
+from app.agents.resource_workflows.learning_documents.workflow import decide_node
+from app.core.security.errors import ErrorCode
+from app.core.llm.gateway import LLMGatewayError
+from app.models.shared.agent_contracts import make_error_info
+from app.models.reviews.claims import ClaimMetricStatus
+from app.models.learning_documents.schemas import LearningResource
 from tests.fakes.evidence import make_evidence
 from tests.fakes.llm import ScriptedLLMGateway
 

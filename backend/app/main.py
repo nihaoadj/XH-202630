@@ -12,16 +12,11 @@ from app.api import (
     admin,
     auth,
     courseware,
-    diagnosis,
-    evaluation,
     feedback,
-    generate,
+    generation,
     knowledge,
-    learning_history,
     onboarding,
-    profiles,
-    report,
-    resources,
+    learning_documents,
     resource_library,
     reviews,
     runs,
@@ -29,12 +24,14 @@ from app.api import (
     tutor,
     users,
 )
+from app.api.learners import diagnosis, history as learning_history, profiles
+from app.api.reports import evaluation, report
 from app.api.dependencies import get_current_user
 from app.config import get_settings
 from app.containers import init_container
-from app.core.errors import ApplicationError, ErrorCode
+from app.core.security.errors import ApplicationError, ErrorCode
 from app.core.health import build_health_report
-from app.db.database import init_database
+from app.db.shared.database import init_database
 
 logging.basicConfig(
     level=logging.INFO,
@@ -132,6 +129,9 @@ async def lifespan(app: FastAPI):
     if settings.app_mode == "production" and report.status != "ready":
         raise ApplicationError(ErrorCode.GENERATION_DEPENDENCY_UNAVAILABLE)
 
+    # Courseware execution is deliberately owned by the standalone
+    # ``backend/scripts/courseware_worker.py`` process. The Web process only
+    # serves APIs/SSE and must not run long tasks in its lifespan.
     yield
 
 
@@ -224,8 +224,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(onboarding.router, prefix="/api/onboarding", tags=["onboarding"], dependencies=private_api)
 app.include_router(profiles.router, prefix="/api/profiles", tags=["profiles"], dependencies=private_api)
 app.include_router(users.router, prefix="/api/users", tags=["users"], dependencies=private_api)
-app.include_router(generate.router, prefix="/api/generate", tags=["generate"], dependencies=private_api)
-app.include_router(resources.router, prefix="/api/resources", tags=["resources"], dependencies=private_api)
+app.include_router(generation.router, prefix="/api/generate", tags=["generate"], dependencies=private_api)
+app.include_router(learning_documents.router, prefix="/api/resources", tags=["resources"], dependencies=private_api)
 app.include_router(courseware.router, prefix="/api/resources", tags=["courseware"], dependencies=private_api)
 app.include_router(resource_library.router, prefix="/api/resource-library", tags=["resource-library"], dependencies=private_api)
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"], dependencies=private_api)

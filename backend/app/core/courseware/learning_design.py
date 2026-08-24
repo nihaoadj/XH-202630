@@ -55,6 +55,7 @@ def _density(context: LearnerContextSnapshot) -> str:
 def build_learning_design(
     snapshots: list[dict[str, Any]],
     learner_context: LearnerContextSnapshot | dict[str, Any] | None = None,
+    request_options: dict[str, Any] | None = None,
 ) -> CoursewareLearningDesign:
     """Build objective graph and storyboard before any learner-facing scene.
 
@@ -63,6 +64,9 @@ def build_learning_design(
     created when the practice snapshot has no content.
     """
     context = learner_context if isinstance(learner_context, LearnerContextSnapshot) else LearnerContextSnapshot(**(learner_context or {}))
+    request_options = request_options or {}
+    duration = int(request_options.get("expected_duration_minutes") or 15)
+    intensity = str(request_options.get("interaction_intensity") or "medium")
     ordered = sorted(snapshots, key=lambda item: str(item.get("resource_id", "")))
     usage_by_resource: dict[str, dict[str, Any]] = {}
     seen_source_identity: dict[tuple[str, str], str] = {}
@@ -167,6 +171,50 @@ def build_learning_design(
                 ))
     if not any(item.get("role") == "assessment" for item in adopted_ordered):
         warnings.append({"code": "ASSESSMENT_SCENE_OPTIONAL", "message": "未提供测试题资源，已省略自测场景；未生成答案"})
+    if len(adopted_ordered) >= 2:
+        first, second = adopted_ordered[0], adopted_ordered[1]
+        relation_type = "conflict" if any(item.get("source_relation") == "conflict" for item in (first, second)) else "complementary"
+        scenes.append(StoryboardScene(
+            scene_id="scene:compare:cross-source", kind="compare", objective_ids=tuple(item.objective_id for item in objectives[:2]),
+            source_resource_ids=(str(first["resource_id"]), str(second["resource_id"])),
+            source_block_ids=tuple(str(block["block_id"]) for source in (first, second) for block in (source.get("blocks") or [])[:1] if block.get("block_id")),
+            difficulty=difficulty, information_density=density, interaction_purpose="compare",
+            allowed_components=("compare", "callout"), allowed_component_ids=("compare", "callout"),
+        ))
+    quota_table = {
+        "low": {"5-15": (4, 1), "16-30": (6, 2), "31-60": (8, 3), "61-240": (10, 3)},
+        "medium": {"5-15": (5, 2), "16-30": (7, 3), "31-60": (9, 4), "61-240": (11, 5)},
+        "high": {"5-15": (5, 3), "16-30": (8, 4), "31-60": (10, 5), "61-240": (12, 6)},
+    }
+    band = "5-15" if duration <= 15 else "16-30" if duration <= 30 else "31-60" if duration <= 60 else "61-240"
+    target_scenes, target_interactions = quota_table.get(intensity, quota_table["medium"])[band]
+    verifiable = any(source.get("has_verifiable_exercises") or source.get("exercise_items") for source in adopted_ordered)
+    quota_status = "met" if verifiable or intensity != "high" else "constrained"
+    if quota_status == "constrained":
+        warnings.append({"code": "INSUFFICIENT_SCORED_EVIDENCE", "message": "来源没有可验证练习，互动配额已受限"})
+    while len(scenes) < min(target_scenes - 1, 12):
+        source = adopted_ordered[len(scenes) % len(adopted_ordered)] if adopted_ordered else None
+        if not source:
+            break
+        rid = str(source["resource_id"])
+        block_ids = tuple(str(block["block_id"]) for block in (source.get("blocks") or [])[:1] if block.get("block_id"))
+        scenes.append(StoryboardScene(
+            scene_id=f"scene:example:{rid}:{len(scenes)}", kind="example", objective_ids=(f"objective:{rid}",),
+            source_resource_ids=(rid,), source_block_ids=block_ids, difficulty=difficulty,
+            information_density=density, interaction_purpose="example",
+            allowed_components=("callout", "key_point", "flashcard"), allowed_component_ids=("callout", "key_point", "flashcard"),
+        ))
+    concept_rows = []
+    for source in adopted_ordered:
+        rid = str(source["resource_id"])
+        for index, label in enumerate(source.get("knowledge_points") or [source.get("topic") or rid]):
+            concept_rows.append({"concept_id": f"concept:{rid}:{index}", "label": str(label), "source_refs": tuple(str(block.get("block_id")) for block in (source.get("blocks") or [])[:2] if block.get("block_id")), "adopted_source_ids": (rid,)})
+    relations = []
+    for index in range(1, len(adopted_ordered)):
+        left = str(adopted_ordered[index - 1]["resource_id"])
+        right = str(adopted_ordered[index]["resource_id"])
+        relation_type = "conflict" if any(item.get("source_relation") == "conflict" for item in (adopted_ordered[index - 1], adopted_ordered[index])) else "complementary"
+        relations.append({"relation_type": relation_type, "from_concept_id": f"concept:{left}:0", "to_concept_id": f"concept:{right}:0", "source_refs": ()})
     recap_sources = tuple(str(item["resource_id"]) for item in adopted_ordered)
     recap_blocks = tuple(str(block["block_id"]) for item in adopted_ordered for block in (item.get("blocks") or [])[:1] if block.get("block_id"))
     scenes.append(StoryboardScene(
@@ -187,6 +235,8 @@ def build_learning_design(
         resource_bundle_hash=_bundle_hash(snapshots), learner_context_hash=context.stable_hash(),
         objectives=graph, storyboard=storyboard,
         resource_usage_plan=tuple(usage_by_resource[str(item["resource_id"])] for item in ordered),
+        source_concept_index={"concepts": concept_rows, "relations": relations},
+        interaction_quota={"status": quota_status, "target": target_interactions, "actual": min(target_interactions, len(scenes)), "target_scene_count": target_scenes, "actual_scene_count": len(scenes), "reason": "INSUFFICIENT_SCORED_EVIDENCE" if quota_status == "constrained" else None},
         warnings=tuple(warnings),
     )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
-from app.db.models import ClaimEvidenceORM, ClaimJudgementORM
+from app.db.shared.models import ClaimEvidenceORM, ClaimJudgementORM
 
 
 MIGRATION_ID = "20260809_p0_06_claim_evidence_audit"

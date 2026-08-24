@@ -5,7 +5,7 @@ from app.config import get_settings
 from app.db.claim.base import BaseClaimRepository
 from app.db.claim.memory import MemoryClaimRepository
 from app.db.claim.sql_repository import SQLClaimRepository
-from app.db.database import get_session_factory
+from app.db.shared.database import get_session_factory
 
 
 def create_claim_repository(db_type: str, session_factory: Callable | None = None) -> BaseClaimRepository:

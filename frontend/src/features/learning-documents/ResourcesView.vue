@@ -102,6 +102,15 @@
         <div v-if="Object.keys(currentCoursewareJob.request_options || {}).length" class="courseware-frozen-options" aria-label="已冻结生成偏好">
           <span>已冻结偏好</span><el-tag v-for="(value, key) in currentCoursewareJob.request_options" :key="key" effect="plain">{{ key }}：{{ value }}</el-tag>
         </div>
+        <section v-if="currentCoursewareJob.quality_summary?.schema_version === '2.0'" class="courseware-quality-summary" aria-label="课件质量汇总">
+          <strong>质量汇总 2.0</strong>
+          <span>发布：{{ currentCoursewareJob.quality_summary.publication_success ? '成功' : '未发布' }}</span>
+          <span>场景恢复：{{ formatQualityRate(currentCoursewareJob.quality_summary.required_scene_recovery_rate) }}</span>
+          <span>来源覆盖：{{ formatQualityRate(currentCoursewareJob.quality_summary.adopted_source_coverage) }}</span>
+          <span>互动：{{ (currentCoursewareJob.quality_summary.unique_interaction_types || []).join('、') || '未测量' }}</span>
+          <span>配额：{{ currentCoursewareJob.quality_summary.interaction_quota_status || '未测量' }}（{{ currentCoursewareJob.quality_summary.interaction_quota_actual ?? 0 }}/{{ currentCoursewareJob.quality_summary.interaction_quota_target ?? '—' }}）</span>
+          <span>审核：{{ currentCoursewareJob.quality_summary.rubric_passed ? '通过' : '未通过或未测量' }}</span>
+        </section>
         <ol v-if="currentCoursewareJob.scenes?.length" class="courseware-scenes">
           <li v-for="scene in currentCoursewareJob.scenes" :key="scene.scene_id">
             <span>{{ scene.scene_order + 1 }}. {{ scene.title || scene.kind }}</span>
@@ -415,6 +424,10 @@ function coursewareStateType(status) {
   return 'primary'
 }
 
+function formatQualityRate(value) {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : '未测量'
+}
+
 function handleRunChange(value) {
   if (value && !value.startsWith('resource:')) localStorage.setItem('current_generation_run_id', value)
   syncSelectedResource()
@@ -663,6 +676,8 @@ onMounted(async () => {
 .courseware-scenes li { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #344963; }
 .courseware-scenes small { color: #71839b; white-space: nowrap; }
 .courseware-warnings { color: #9a5b13; font-size: 13px; }
+.courseware-quality-summary { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px; border:1px solid #cfe3f1; border-radius:9px; background:#f5fbff; color:#36516e; font-size:12px; }
+.courseware-quality-summary strong { color:#173654; }
 
 @media (max-width: 1160px) {
   .learning-toolbar { grid-template-columns: 1fr 84px; }

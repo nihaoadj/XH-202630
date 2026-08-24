@@ -3,7 +3,8 @@ from pydantic import ValidationError
 
 from app.config import Settings
 from app.containers import Container
-from app.db import database as database_module
+from app.db.shared import database as database_module
+from app.core.courseware.live_model import LiveModelConfig, live_model_config_from_file, live_fixture_input, run_fake_provider_acceptance
 
 
 def make_settings(**overrides):
@@ -17,11 +18,91 @@ def test_settings_safe_defaults():
 
     assert settings.app_mode == "development"
     assert settings.allow_degraded_generation is False
+    assert settings.courseware_auto_revision_max_attempts == 2
+    assert settings.courseware_scene_lease_seconds == 120
+    assert settings.courseware_auto_review_max_seconds == 180
+    assert settings.courseware_worker_enabled is False
+    assert settings.courseware_worker_poll_seconds == 2.0
+    assert settings.courseware_worker_batch_size == 1
     assert settings.db_type == "sqlite"
     assert settings.debug is False
     assert settings.sql_echo is False
     assert settings.llm_workflow_timeout_seconds == 1200
     assert settings.workflow_run_lease_seconds == 1260
+    assert settings.courseware_planner_token_budget == 4096
+    assert settings.courseware_total_llm_token_budget == 49152
+    assert settings.courseware_total_run_timeout_seconds == 1050
+    assert settings.courseware_scene_composition_token_budget == 30720
+    assert settings.courseware_scene_composition_max_seconds == 600.0
+    assert settings.courseware_quality_review_reserved_tokens == 4096
+    assert settings.courseware_revision_reserved_tokens == 10240
+
+
+def test_live_model_defaults_are_explicitly_non_runnable_without_metadata():
+    config = LiveModelConfig.from_settings(make_settings())
+
+    assert {"provider", "base_url", "model", "structured_output_mode"} <= set(config.missing_fields())
+    assert not config.api_key_present
+
+
+def test_live_model_file_config_is_versioned_and_keeps_the_key_out_of_metadata(tmp_path):
+    path = tmp_path / "deepseek.json"
+    path.write_text('{"config_version":1,"provider":"deepseek","base_url":"https://api.deepseek.com","model":"deepseek-v4-flash","structured_output_mode":"json_mode","timeout_seconds":120,"max_attempts":2,"retry_base_delay_seconds":0.5,"retry_max_delay_seconds":1,"input_price_per_1k_tokens":0.001,"output_price_per_1k_tokens":0.002,"price_currency":"CNY","price_version":"price-v1","price_effective_date":"2026-04-24"}', encoding="utf-8")
+
+    config = live_model_config_from_file(path, make_settings(llm_api_key="non-placeholder-key"))
+
+    assert config.missing_fields() == []
+    assert config.api_key_present is True
+    assert "key" not in config.summary()
+
+
+def test_fake_provider_report_separates_quality_reliability_cost_and_redacts_inputs():
+    report = run_fake_provider_acceptance()
+
+    assert report["status"] == "LOCAL_READY"
+    assert report["metrics"]["stages"]["spec"]["success_rate"] == 1.0
+    assert report["metrics"]["stages"]["scene"]["schema_repair_rate"] > 0
+    assert report["metrics"]["stages"]["scene"]["provenance_rejection_rate"] > 0
+    assert report["metrics"]["cost"]["total"] > 0
+    assert all(value is False for value in report["redaction"].values())
+
+
+def test_live_fixture_facts_change_the_redacted_model_input_without_leaking_metadata():
+    first = {"resources": [{"resource_id": "a", "resource_type": "text", "version": 1,
+                            "content_hash": "hash-a", "blocks": [{"block_id": "one", "text": "fact A"}]}]}
+    second = {"resources": [{"resource_id": "b", "resource_type": "text", "version": 2,
+                             "content_hash": "hash-b", "blocks": [{"block_id": "two", "text": "fact B"}]}]}
+
+    assert live_fixture_input(first) != live_fixture_input(second)
+    assert live_fixture_input(first)["sources"][0]["blocks"][0]["text"] == "fact A"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("courseware_auto_revision_max_attempts", 6),
+        ("courseware_scene_lease_seconds", 29),
+        ("courseware_auto_review_max_seconds", 901),
+    ],
+)
+def test_settings_reject_invalid_courseware_automation_budgets(field, value):
+    with pytest.raises(ValidationError):
+        make_settings(**{field: value})
+
+
+@pytest.mark.parametrize(
+    ("overrides", "code"),
+    [
+        ({"courseware_planner_token_budget": 20000}, "CFG_INVALID_COURSEWARE_STAGE_TOKEN_BUDGET"),
+        ({"courseware_quality_review_reserved_tokens": 5000}, "CFG_INVALID_COURSEWARE_REVIEW_RESERVE"),
+        ({"courseware_revision_reserved_tokens": 11000}, "CFG_INVALID_COURSEWARE_REVISION_RESERVE"),
+        ({"courseware_scene_call_max_tokens": 16000}, "CFG_INVALID_COURSEWARE_SCENE_CALL_LIMIT"),
+        ({"courseware_total_run_timeout_seconds": 899}, "CFG_INVALID_COURSEWARE_STAGE_TIMEOUT_BUDGET"),
+    ],
+)
+def test_settings_reject_unsafe_courseware_stage_budgets(overrides, code):
+    with pytest.raises(ValidationError, match=code):
+        make_settings(**overrides)
 
 
 def test_settings_treats_an_empty_optional_proxy_as_direct_access():

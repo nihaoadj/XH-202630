@@ -6,7 +6,7 @@ from functools import lru_cache
 from typing import Callable
 
 from app.config import get_settings
-from app.db.database import get_session_factory
+from app.db.shared.database import get_session_factory
 from app.db.tutor.base import BaseTutorRepository
 from app.db.tutor.memory import MemoryTutorRepository
 from app.db.tutor.sql_repository import SQLTutorRepository
@@ -26,4 +26,3 @@ def create_tutor_repository(
 @lru_cache()
 def get_tutor_repository() -> BaseTutorRepository:
     return create_tutor_repository(get_settings().db_type)
-

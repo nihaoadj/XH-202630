@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 
-from app.agents.feedback_policy import decide_attempt
-from app.models.feedback_loop import (
+from app.agents.learning_agents.feedback_policy_agent import decide_attempt
+from app.models.feedback.feedback_loop import (
     FeedbackContext,
     KnowledgePointAttemptResult,
     LearningAttempt,
     PathMutationType,
     PathNodeType,
 )
-from app.services.learning_path_policy import mutate_learning_path
+from app.services.feedback.learning_path_policy import mutate_learning_path
 
 
 def _attempt(score, attempt_id="attempt", path_node_id=None):

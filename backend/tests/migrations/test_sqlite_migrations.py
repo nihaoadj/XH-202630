@@ -2,7 +2,7 @@
 
 from sqlalchemy import create_engine, text
 
-from app.db.database import (
+from app.db.shared.database import (
     _migrate_sqlite_feedback_records,
     _migrate_sqlite_generated_resources,
     _migrate_sqlite_learner_profiles,

@@ -6,15 +6,18 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import diagnosis, onboarding
+from app.api.learners import diagnosis
+from app.api.onboarding import onboarding
 from app.db.diagnosis.memory import MemoryDiagnosisRepository
-from app.db.learner.memory import MemoryLearnerRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learners.mastery import MemoryMasteryRepository
 from app.db.questionnaire.memory import MemoryQuestionnaireRepository
-from app.db.user.memory import MemoryUserRepository
-from app.models.user_schemas import UserProfile
-from app.services.diagnosis_service import DiagnosisService
-from app.services.knowledge_service import KnowledgeService
-from app.services.onboarding_service import OnboardingService
+from app.db.users.memory import MemoryUserRepository
+from app.models.users.users import UserProfile
+from app.services.learners.diagnosis import DiagnosisService
+from app.services.learners.mastery import MasteryService
+from app.services.knowledge.knowledge import KnowledgeService
+from app.services.onboarding.onboarding import OnboardingService
 from tests.paths import KNOWLEDGE_BASE_ROOT
 
 
@@ -40,11 +43,15 @@ def _client():
         json.loads((KNOWLEDGE_BASE_ROOT / "rag_engineering_training" / "questionnaire.json").read_text(encoding="utf-8")),
         source_path="knowledge_base/rag_engineering_training/questionnaire.json",
     )
-    onboarding_service = OnboardingService(learner_repo, knowledge_service, questionnaire_repo, user_repo)
+    mastery_service = MasteryService(MemoryMasteryRepository(learner_repo), knowledge_service)
+    onboarding_service = OnboardingService(
+        learner_repo, knowledge_service, questionnaire_repo, user_repo, mastery_service
+    )
     diagnosis_service = DiagnosisService(
         knowledge_service=knowledge_service,
         learner_repo=learner_repo,
         diagnosis_repo=MemoryDiagnosisRepository(),
+        mastery_service=mastery_service,
     )
     app = FastAPI()
     app.container = SimpleNamespace(
@@ -90,8 +97,8 @@ def test_onboarding_creates_profile_and_only_returns_known_node_questions():
     assert "chunking" in body["not_started_node_ids"]
 
     profile = repository.get(learner_id)
-    assert profile.knowledge_states["Chunk 切分"].status == "not_started"
-    assert "Chunk 切分" in profile.weak_points
+    assert profile.knowledge_states["chunking"].status == "unassessed"
+    assert "Chunk 切分" not in profile.weak_points
     assert profile.learning_preferences.metadata["onboarding"]["weekly_time_budget"] == "2-4 小时"
     assert profile.education == "本科"
     assert profile.major == "软件工程"
@@ -112,7 +119,7 @@ def test_onboarding_creates_profile_and_only_returns_known_node_questions():
     assert focus_question["profile_mapping"]["target_path"] == "learning_preferences.focus_nodes"
 
 
-def test_diagnosis_keeps_not_started_nodes_after_adaptive_submission():
+def test_diagnosis_keeps_unassessed_nodes_out_of_confirmed_weaknesses():
     client, repository, knowledge_service = _client()
     onboarding_response = client.post("/api/onboarding/initial-profile", json=_questionnaire_payload())
     learner_id = onboarding_response.json()["learner_id"]
@@ -131,7 +138,8 @@ def test_diagnosis_keeps_not_started_nodes_after_adaptive_submission():
 
     assert response.status_code == 200
     profile = repository.get(learner_id)
-    assert "Chunk 切分" in profile.weak_points
+    assert profile.knowledge_states["chunking"].status == "unassessed"
+    assert "Chunk 切分" not in profile.weak_points
     assert "Embedding" in profile.strong_points
 
 

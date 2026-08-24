@@ -48,13 +48,29 @@ def quality_gate_report(
         "not_decorative": 1.0 if all(scene.get("kind") not in {"practice", "quiz"} or scene.get("source_refs") for scene in scenes) else 0.0,
     }
     dimensions = {"teaching": teaching, "visual": visual, "interaction": interaction}
-    failed = [f"{group}.{name}" for group, values in dimensions.items() for name, score in values.items()
-              if score != 1.0]
+    failed = [
+        f"{group}.{name}"
+        for group, values in dimensions.items()
+        for name, score in values.items()
+        if (isinstance(score, (int, float)) and score != 1.0)
+        or score in {"not_measured", "external_pending"}
+    ]
+    interaction_quota = document.get("interaction_quota") or {}
+    source_ids = {str(item) for scene in scenes for item in (scene.get("source_refs") or [])}
+    source_count = len(snapshots or [])
+    interaction_types = sorted({str(block.get("component")) for scene in scenes for block in (scene.get("component_blocks") or []) if isinstance(block, dict) and block.get("component")})
+    cross_source_scene_count = sum(1 for scene in scenes if len(set(str(item) for item in (scene.get("source_refs") or []))) >= 2)
     return {
         "dimensions": dimensions,
         "failed_dimensions": failed,
         "passed": not failed,
-        "component_asset_count": len(component_asset_matrix()),
+        "component_asset_count": len(component_asset_matrix("1.0")),
+        "component_asset_count_v2": len(component_asset_matrix("2.0")),
+        "interaction_types": interaction_types,
+        "interaction_quota": interaction_quota,
+        "source_coverage": (len(source_ids) / source_count) if source_count else None,
+        "cross_source_scene_count": cross_source_scene_count,
+        "adopted_source_coverage": (len(source_ids) / source_count) if source_count else None,
         "evidence": {
             "scene_count": len(scenes),
             "scene_ids": [scene.get("scene_id") for scene in scenes],
@@ -95,10 +111,10 @@ def execute_workflow_case(case: dict[str, Any]) -> dict[str, Any]:
 
     resources = {}
     for index, resource_id in enumerate(source_ids):
-        resource_type = "讲义" if index == 0 else ("实操指南" if index == 1 else "分阶测试题")
+        resource_type = "讲义" if "lecture" in resource_id else ("实操指南" if "practice" in resource_id else ("案例分析" if "case" in resource_id else "分阶测试题"))
         content = str(frozen.get("content") if "content" in frozen else "脱敏来源内容。")
         exercises = []
-        if resource_type == "分阶测试题" and case.get("id") == "lecture-practice-quiz":
+        if resource_type == "分阶测试题" and case.get("id") not in {"missing-quiz", "constrained-interaction-quota"}:
             exercises = [{"question_id": "eval-q", "question_type": "single_choice",
                           "question": "哪项正确？", "options": ["正确", "错误"],
                           "answer": "正确", "explanation": "来源复盘。"}]
@@ -220,21 +236,36 @@ def build_deterministic_fixture(case: dict[str, Any]) -> tuple[dict[str, Any], l
     if case.get("id") == "unknown-component":
         component = str(frozen.get("component") or "unknown")
     scenes: list[dict[str, Any]] = []
-    for index, kind in enumerate(requirements):
+    quality = case.get("quality_expectations") or {}
+    target_scene_count = (quality.get("scene_count") or [len(requirements), len(requirements)])[1] if isinstance(quality.get("scene_count"), list) else len(requirements)
+    kinds = list(requirements)
+    while len(kinds) < target_scene_count:
+        kinds.insert(-1 if "recap" in kinds else len(kinds), "example")
+    for index, kind in enumerate(kinds):
+        source_refs = unique_source_ids if kind == "compare" and len(unique_source_ids) >= 2 else [source_id]
         scene = {
+            "scene_id": f"scene:{kind}:{index}",
             "kind": kind,
             "title": f"{case.get('id', 'fixture')} {kind}",
             "blocks": ["脱敏来源内容。"],
-            "source_refs": [source_id],
+            "source_refs": source_refs,
             "source_block_ids": [block_id],
+            "objective_ids": [f"objective:{item}" for item in source_refs],
             "source_map": {"title": [[block_id]], "blocks": [[block_id]]},
             "component_blocks": [{
                 "block_id": f"{case.get('id', 'fixture')}-{index}",
                 "component": component,
                 "text": "脱敏来源内容。",
-                "source_refs": [{"source_resource_id": source_id, "source_block_ids": [block_id]}],
+                "source_refs": [{"source_resource_id": item, "source_block_ids": [block_id]} for item in source_refs],
             }],
         }
+        desired_types = int(quality.get("min_interaction_types") or 0)
+        if desired_types:
+            desired_names = [str(item) for item in allowed[:desired_types]]
+            scene["component_blocks"] = [{
+                "block_id": f"{case.get('id', 'fixture')}-{index}-{name}", "component": name,
+                "text": "脱敏来源内容。", "source_refs": [{"source_resource_id": item, "source_block_ids": [block_id]} for item in source_refs],
+            } for name in desired_names]
         if kind == "practice":
             scene["steps"] = ["完成脱敏步骤。"]
             scene["source_map"]["steps"] = [[block_id]]
@@ -249,7 +280,8 @@ def build_deterministic_fixture(case: dict[str, Any]) -> tuple[dict[str, Any], l
             # hard gate is exercised without calling a model.
             scene["source_map"] = {}
         scenes.append(scene)
-    return {"schema_version": "1.0", "title": str(case.get("id") or "fixture"), "scenes": scenes}, snapshots
+    return {"schema_version": "2.0", "title": str(case.get("id") or "fixture"), "scenes": scenes,
+            "interaction_quota": {"status": (quality.get("interaction_quota_status") or "met"), "target": quality.get("min_interaction_types"), "actual": len({block.get("component") for scene in scenes for block in scene.get("component_blocks") or []})}}, snapshots
 
 
 def evaluate_manifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -271,6 +303,7 @@ def evaluate_courseware_case(
     trace_issues = source_trace_review(document, snapshots)
     quality_issues = quality_review(document)
     quality = quality_gate_report(document, snapshots)
+    quality_expectations = case.get("quality_expectations") or {}
     scenes = document.get("scenes") or []
     components = sorted({str(block.get("component")) for scene in scenes
                          for block in (scene.get("component_blocks") or []) if isinstance(block, dict)})
@@ -303,6 +336,19 @@ def evaluate_courseware_case(
     versions = {item.get("version") for item in snapshots}
     if len(versions) > 1:
         failed_gates.append("single_snapshot_version")
+    quality_failures: list[str] = []
+    expected_scene_count = quality_expectations.get("scene_count")
+    if isinstance(expected_scene_count, list) and not (int(expected_scene_count[0]) <= len(scenes) <= int(expected_scene_count[1])):
+        quality_failures.append("scene_count")
+    if isinstance(quality_expectations.get("min_interaction_types"), int) and len(quality.get("interaction_types") or []) < quality_expectations["min_interaction_types"]:
+        quality_failures.append("interaction_diversity")
+    for key in ("cross_source_scene_count", "adopted_source_coverage"):
+        if key in quality_expectations and quality.get(key) != quality_expectations[key]:
+            quality_failures.append(key)
+    if quality_expectations.get("interaction_quota_status") and quality.get("interaction_quota", {}).get("status") != quality_expectations["interaction_quota_status"]:
+        quality_failures.append("interaction_quota")
+    if quality_failures:
+        failed_gates.append("quality_expectations")
     artifact_hash = None
     artifact_policy = str(case.get("artifact_policy") or "required")
     if artifact_policy == "required" and not failed_gates:
@@ -316,7 +362,7 @@ def evaluate_courseware_case(
     expected_outcome = str(case.get("hard_gate_result") or "publish")
     status_by_outcome = {
         "publish": "published", "publish_with_warning": "published_with_warnings",
-        "admission_reject": "request_rejected" if case.get("id") == "duplicate-source" else "rejected_admission",
+        "admission_reject": "request_rejected" if case.get("id") in {"duplicate-source", "duplicate-and-complementary-sources"} else "rejected_admission",
         "release_reject": "quarantined", "quarantine": "quarantined",
         "scene_fallback": "published_with_warnings", "single_revision": "published", "auto_revision": "published",
     }
@@ -343,6 +389,8 @@ def evaluate_courseware_case(
             "current_hash": artifact_hash,
             "changed": artifact_hash != expected_hash,
         }
+    contract_gates = {"unique_source_ids", "required_scenes_complete", "field_level_source_map", "single_snapshot_version", "allowed_components"}
+    safety_gates = {"zero_unknown_source_blocks", "zero_unsafe_output", "zero_unknown_components", "artifact_security"}
     return {
         "fixture": case.get("id"), "status": status, "passed": not failed_gates,
         "failed_gates": sorted(set(failed_gates)), "scene_orders": list(range(len(scenes))),
@@ -358,6 +406,11 @@ def evaluate_courseware_case(
         "artifact_policy": artifact_policy,
         "outcome_matches_manifest": exact_matches,
         "budget": case.get("budget") or {},
-        "trace_issues": trace_issues, "quality_issues": quality_issues,
+        "trace_issues": trace_issues, "quality_issues": quality_issues, "quality_failures": quality_failures,
+        "contract": {"status": "pass" if not (set(failed_gates) & contract_gates) else "fail", "failed_gates": sorted(set(failed_gates) & contract_gates)},
+        "safety": {"status": "pass" if not (set(failed_gates) & safety_gates) else "fail", "failed_gates": sorted(set(failed_gates) & safety_gates)},
+        "pedagogy": {"status": "pass" if quality.get("dimensions", {}).get("teaching") and not quality_failures else "not_measured" if not scenes else "fail", "dimensions": quality.get("dimensions", {}).get("teaching", {})},
+        "content_richness": {"status": "pass" if quality.get("scene_count", 0) else "not_measured", "scene_count": quality.get("scene_count", 0), "source_coverage": quality.get("source_coverage")},
+        "interaction_diversity": {"status": "pass" if not quality_failures and quality.get("interaction_types") else "not_measured" if not scenes else "fail", "types": quality.get("interaction_types", []), "quota": quality.get("interaction_quota", {})},
         "quality": quality,
     }

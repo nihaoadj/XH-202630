@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
-from app.db.models import TutorSessionORM, TutorTurnORM
+from app.db.shared.models import TutorSessionORM, TutorTurnORM
 
 
 MIGRATION_ID = "20260819_tutor_sessions_turns"

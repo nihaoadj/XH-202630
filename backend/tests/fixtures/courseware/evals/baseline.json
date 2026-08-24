@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.0",
-  "case_count": 12,
+  "schema_version": "2.0",
+  "case_count": 20,
   "passed": true,
   "reports": [
     {
@@ -23,7 +23,7 @@
       "source_block_ids": [
         "block-1"
       ],
- "artifact_hash": "73f704489ef00af62d24f910cdd241c1ff9c45cbc656e99fc79f502a80476bf3",
+ "artifact_hash": "3521cc96d0e4a1f8288148a0390ed79584f56633eb3d639a29d1d6ee95f717d3",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish",
@@ -58,7 +58,7 @@
       "source_block_ids": [
         "block-1"
       ],
- "artifact_hash": "b4289a29e839d3702b1d7b9a5d7d01b582dc3c86f00d52f6f6a78462d7d4bba7",
+ "artifact_hash": "3dda980356be49345be9e4bbd7257820795858c4889d073777d4f9ea2d46f29d",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish",
@@ -91,7 +91,7 @@
       "source_block_ids": [
         "block-1"
       ],
- "artifact_hash": "d1f7d9fd6af654cdc446dbf761653b2f4617a9599041b799e4f7c362484809f6",
+ "artifact_hash": "5bbd65906c284a01e36b54d4cb04f16e784cbb8c185fed6a70c1364cf3d23630",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "publish_with_warning",
@@ -224,7 +224,7 @@
       "source_block_ids": [
         "block-1"
       ],
- "artifact_hash": "aabcd8cb845d50062dfaf13d477a0c48a2de501ec162092a6aeefd5a94950e83",
+ "artifact_hash": "49c9c2fa18ebccc69ecfc501ee52c8e5bb5c3dbeff467fc4a502097a3bd45cba",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "scene_fallback",
@@ -366,7 +366,7 @@
       "source_block_ids": [
         "block-1"
       ],
- "artifact_hash": "76ff26ecef7a3476ed7698a9b9d8213abeecdc9ae16abe46847cb2cabb4feb1f",
+ "artifact_hash": "39861fbd4ed4fd49bc6428298905e2b7ea56590dde528eee5b30656f8bc65c83",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "single_revision",
@@ -397,7 +397,7 @@
       "source_block_ids": [
         "block-1"
       ],
- "artifact_hash": "c3d25bc90322427bc0c9361acd7b41807788c7ba4b8b01d9b631e98ad9ffbba6",
+ "artifact_hash": "1d420babc8f9e31cdd861243e1331d233225fb120457e1391049e81f197ee890",
       "expected_artifact_hash": null,
       "baseline_diff": null,
       "expected_hard_gate_result": "auto_revision",
@@ -450,6 +450,14 @@
         }
       ],
       "quality_issues": []
-    }
+    },
+ {"fixture": "short-low-interaction", "passed": true, "artifact_hash": "992b28fb93997eb80afc604eb533dc5feb446598861732b1c255d25ab96dbf50", "expected_artifact_hash": null},
+ {"fixture": "medium-interaction-30m", "passed": true, "artifact_hash": "bbda229b8d978d8f5091afdf38cc35b4a6858bdd71e3824f5daefd47fed508f8", "expected_artifact_hash": null},
+ {"fixture": "high-interaction-60m", "passed": true, "artifact_hash": "23e1104194fa1a831315b816d2eb7faa1362e6fc00ddfacc8fe95dc471e584f3", "expected_artifact_hash": null},
+ {"fixture": "multi-resource-concept-fusion", "passed": true, "artifact_hash": "32cc9a76ad81ac08c32047f45da631bc96e17c081201c3937f044465a1eb53c3", "expected_artifact_hash": null},
+    {"fixture": "duplicate-and-complementary-sources", "passed": true, "artifact_hash": null, "expected_artifact_hash": null},
+ {"fixture": "source-conflict-parallel", "passed": true, "artifact_hash": "0a0e54b06dc3be5ded31f6a4e53c70a7d0f46230e9e445c060ad0c407ceec1af", "expected_artifact_hash": null},
+ {"fixture": "constrained-interaction-quota", "passed": true, "artifact_hash": "02e7bdad9f19aaa54cccece75ee1d78ce91aafa0a4fc8b714682d04b8431cc2c", "expected_artifact_hash": null},
+ {"fixture": "localized-review-repair", "passed": true, "artifact_hash": "052db4d221803552558a1717a421ccb6b2d82907f4f6a9c61a497d40451daa1b", "expected_artifact_hash": null}
   ]
 }

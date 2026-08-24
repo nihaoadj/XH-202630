@@ -8,10 +8,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.diagnosis.base import BaseDiagnosisRepository
-from app.db.extended_models import DiagnosticRunORM
-from app.db.models import DiagnosticAnswerORM, KnowledgeStateORM
-from app.models.history_schemas import DiagnosticRunRecord
-from app.models.schemas import DiagnosticAnswerRecord, KnowledgeState
+from app.db.shared.extended_models import DiagnosticRunORM
+from app.db.shared.models import DiagnosticAnswerORM, KnowledgeStateORM
+from app.models.learners.history import DiagnosticRunRecord
+from app.models.learning_documents.schemas import DiagnosticAnswerRecord, KnowledgeState
 
 
 def _stable_id(prefix: str, *parts: object) -> str:
@@ -29,9 +29,16 @@ class SQLDiagnosisRepository(BaseDiagnosisRepository):
         knowledge_base_id: str,
         answers: Iterable[DiagnosticAnswerRecord],
         knowledge_states: dict[str, KnowledgeState],
+        source_id: str | None = None,
     ) -> None:
         with self.session_factory() as db:
             for answer in answers:
+                stable_answer_id = (
+                    _stable_id("diag_answer", learner_id, source_id, answer.question_id)
+                    if source_id else None
+                )
+                if stable_answer_id and db.get(DiagnosticAnswerORM, stable_answer_id) is not None:
+                    continue
                 previous_attempt = (
                     db.query(func.max(DiagnosticAnswerORM.attempt_no))
                     .filter_by(learner_id=learner_id, question_id=answer.question_id)
@@ -41,7 +48,7 @@ class SQLDiagnosisRepository(BaseDiagnosisRepository):
                 attempt_no = previous_attempt + 1
                 db.add(
                     DiagnosticAnswerORM(
-                        answer_id=_stable_id("diag_answer", learner_id, answer.question_id, attempt_no),
+                        answer_id=stable_answer_id or _stable_id("diag_answer", learner_id, answer.question_id, attempt_no),
                         learner_id=learner_id,
                         question_id=answer.question_id,
                         knowledge_base_id=knowledge_base_id,
@@ -84,6 +91,8 @@ class SQLDiagnosisRepository(BaseDiagnosisRepository):
 
     def save_run(self, run: DiagnosticRunRecord) -> None:
         with self.session_factory() as db:
+            if db.get(DiagnosticRunORM, run.diagnostic_result_id) is not None:
+                return
             db.add(
                 DiagnosticRunORM(
                     diagnostic_result_id=run.diagnostic_result_id,

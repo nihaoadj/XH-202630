@@ -4,15 +4,15 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import feedback
+from app.api.feedback import feedback
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.feedback_loop.memory import MemoryFeedbackLoopRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import DiagnosticQuestion, ExerciseItem, LearnerProfile, LearningResource
-from app.services.feedback_service import FeedbackService
-from app.services.profile_service import ProfileService
-from app.services.resource_service import ResourceService
+from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import DiagnosticQuestion, ExerciseItem, LearnerProfile, LearningResource
+from app.services.feedback.feedback import FeedbackService
+from app.services.learners.profiles import ProfileService
+from app.services.learning_documents.resources import ResourceService
 
 
 class _KnowledgeService:
@@ -151,11 +151,10 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     session_response = client.get("/api/feedback/evaluation/run/feedback_001/run_feedback_001")
     assert session_response.status_code == 200
     body = session_response.json()
-    assert body["total"] == 4
+    assert body["total"] == 2
     question_by_id = {question["question_id"]: question for question in body["questions"]}
-    assert set(question_by_id) == {"res_feedback_001:q1", "res_feedback_001:q2", "bank_q1", "bank_q2"}
+    assert set(question_by_id) == {"res_feedback_001:q1", "res_feedback_001:q2"}
     assert question_by_id["res_feedback_001:q1"]["source"] == "resource"
-    assert question_by_id["bank_q1"]["source"] == "assessment_bank"
     assert question_by_id["res_feedback_001:q1"]["skill_node_id"] == "skill_retrieval"
     assert question_by_id["res_feedback_001:q1"]["path_node_id"] == "skill_generation"
     assert "answer" not in question_by_id["res_feedback_001:q1"]
@@ -172,8 +171,6 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
             "answers": [
                 {"question_id": "res_feedback_001:q1", "answer": "Retrieval"},
                 {"question_id": "res_feedback_001:q2", "answer": "Generation"},
-                {"question_id": "bank_q1", "answer": "Retrieval"},
-                {"question_id": "bank_q2", "answer": ["Generation", "Grounding"]},
             ],
         },
     )
@@ -182,14 +179,13 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     result = submit_response.json()
     assert result["attempt"]["overall_score"] == 1.0
     assert result["attempt"]["path_node_id"] is None
-    assert result["attempt"]["metadata"]["evaluation_source"] == "mixed"
+    assert result["attempt"]["metadata"]["evaluation_source"] == "resource"
     trace_by_id = {
         question["question_id"]: question
         for question in result["attempt"]["metadata"]["question_trace"]
     }
     assert trace_by_id["res_feedback_001:q1"]["skill_node_id"] == "skill_retrieval"
     assert result["attempt"]["metadata"]["question_trace"][0]["path_node_id"] == "skill_generation"
-    assert result["attempt"]["metadata"]["point_trace"]["skill_retrieval"]["knowledge_points"] == ["retrieval"]
     assert result["decision"]["action"] == "advance"
     assert result["profile_version"] == 2
     assert {
@@ -331,9 +327,8 @@ def test_run_evaluation_prefers_generated_questions_from_any_resource_before_ban
 
     assert {question.question_id for question in questions} == {
         "bank_q1",
-        "bank_q2",
         "resource_with_questions:generated_q1",
     }
     assert [question.skill_node_id for question in questions].count("skill_retrieval") == 1
-    assert [question.skill_node_id for question in questions].count("skill_generation") == 2
+    assert [question.skill_node_id for question in questions].count("skill_generation") == 1
     assert answer_key["resource_with_questions:generated_q1"] == "A"

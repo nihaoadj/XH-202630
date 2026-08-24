@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from app.models.tutor import TutorSession, TutorTurn
+from app.models.tutor.tutor import TutorSession, TutorTurn
 
 
 class TutorPersistenceError(RuntimeError):

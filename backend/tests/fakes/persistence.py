@@ -7,8 +7,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.audit.memory import MemoryAuditRepository
 from app.db.audit.sql_repository import SQLAuditRepository
-from app.db.models import Base
-from app.models.persistence import CreateRunCommand, canonical_hash
+from app.db.shared.models import Base
+from app.models.shared.persistence import CreateRunCommand, canonical_hash
 
 
 def create_command(run_id: str = "run-001", knowledge_base_id: str | None = "kb-001"):

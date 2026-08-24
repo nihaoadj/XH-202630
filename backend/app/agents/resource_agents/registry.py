@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.core.errors import ApplicationError, ErrorCode
-from app.models.resource_types import (
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.models.learning_documents.types import (
     RESOURCE_TYPE_ALIASES,
     SUPPORTED_RESOURCE_TYPES,
     canonical_resource_type,

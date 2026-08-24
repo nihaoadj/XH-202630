@@ -6,9 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
-from app.db.database import configure_sqlite_foreign_keys
-from app.db.integrity import inspect_database_integrity
-from app.db.models import (
+from app.db.shared.database import configure_sqlite_foreign_keys
+from app.db.shared.integrity import inspect_database_integrity
+from app.db.shared.models import (
     AgentStepORM,
     Base,
     ClaimJudgementORM,

@@ -37,13 +37,17 @@ def compose_courseware_scene(
                 SystemMessage(content=(
                     "你是互动课件场景编写器。只输出符合 SceneSpec 的 JSON。只可使用给定来源块支持的内容；"
                     "每个 block 必须携带来源。禁止 HTML、CSS、JavaScript、URL、Markdown 链接和任何可执行内容。"
-                    "题目、选项、答案和反馈也必须可由来源支持。"
+                    "题目、选项、答案和反馈也必须可由来源支持。首次输出必须完整：每个 block 都要有 block_id、"
+                    "component、text、pedagogical_role（仅 explain/example/warning/recap）和非空 source_refs。"
+                    "优先使用 callout、key_point、steps、single_choice、multiple_choice 或 recap；除非任务明确要求，"
+                    "不要使用 flashcard、matching、ordering 等需要额外嵌套字段的组件。practice 必须有 steps；"
+                    "quiz 必须有至少两个 options、answer（只能取自 options）和 feedback。"
                 )),
                 HumanMessage(content=json.dumps({
                     "scene_id": scene_id, "required_kind": deterministic_scene["kind"],
                     "fallback_title": deterministic_scene["title"], "source_resource_id": source["resource_id"],
                     "source_blocks": source_blocks,
-                    "supported_components": ["callout", "key_point", "steps", "single_choice", "multiple_choice", "recap", "flashcard", "matching", "ordering"],
+                    "supported_components": ["callout", "key_point", "steps", "single_choice", "multiple_choice", "recap"],
                     "review_instruction": review_instruction or None,
                 }, ensure_ascii=False)),
             ],

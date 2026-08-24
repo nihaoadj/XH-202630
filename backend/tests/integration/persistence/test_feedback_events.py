@@ -2,14 +2,14 @@ from datetime import datetime, timezone
 
 from app.db.audit.memory import MemoryAuditRepository
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.feedback_loop.memory import MemoryFeedbackLoopRepository
-from app.db.generation_job.memory import MemoryGenerationJobRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.models.feedback_loop import KnowledgePointAttemptResult, LearningAttemptSubmit
-from app.models.persistence import CreateRunCommand, WorkflowEventType, canonical_hash
-from app.models.schemas import LearnerProfile, LearningResource
-from app.services.feedback_service import FeedbackService
-from app.services.generation_job_service import GenerationJobService
+from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
+from app.db.generation.memory import MemoryGenerationJobRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.models.feedback.feedback_loop import KnowledgePointAttemptResult, LearningAttemptSubmit
+from app.models.shared.persistence import CreateRunCommand, WorkflowEventType, canonical_hash
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.services.feedback.feedback import FeedbackService
+from app.services.generation.jobs import GenerationJobService
 
 
 class _NoopGenerationService:
@@ -85,9 +85,9 @@ def test_feedback_facts_append_sanitized_events_to_source_run():
         WorkflowEventType.KNOWLEDGE_STATE_UPDATED,
         WorkflowEventType.PROFILE_UPDATED,
         WorkflowEventType.PATH_MUTATED,
-        WorkflowEventType.FOLLOWUP_GENERATION_CREATED,
     ):
         assert expected in event_types
+    assert WorkflowEventType.FOLLOWUP_GENERATION_CREATED not in event_types
     payload_text = str([item.payload for item in events])
     assert "question_ids" not in payload_text
     assert "answer" not in payload_text.lower()

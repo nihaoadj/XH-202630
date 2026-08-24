@@ -20,9 +20,9 @@ from app.config import (
     is_valid_http_url,
     resolve_backend_path,
 )
-from app.core.errors import ApplicationError, ErrorCode
-from app.core.knowledge_base import list_knowledge_base_dirs, load_knowledge_base_manifest
-from app.core.vector_store import _collection_name
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.core.retrieval.knowledge_base import list_knowledge_base_dirs, load_knowledge_base_manifest
+from app.core.retrieval.vector_store import _collection_name
 
 
 class ComponentHealth(BaseModel):

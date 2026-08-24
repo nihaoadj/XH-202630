@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from langchain.schema import Document
 
-from app.core import reranker
+from app.core.retrieval import reranker
 
 
 def _settings(*, enabled: bool = True, max_per_document: int = 2):

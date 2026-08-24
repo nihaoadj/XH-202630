@@ -5,15 +5,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import resources
-from app.core.file_storage import load_resource_file
-from app.db.generation_job.memory import MemoryGenerationJobRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.services.generation_job_service import GenerationJobService
-from app.services.profile_service import ProfileService
-from app.services.resource_service import ResourceService
+from app.api.learning_documents import documents as resources
+from app.core.storage.file_storage import load_resource_file
+from app.db.generation.memory import MemoryGenerationJobRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.services.generation.jobs import GenerationJobService
+from app.services.learners.profiles import ProfileService
+from app.services.learning_documents.resources import ResourceService
 
 
 def test_resource_filter_and_resource_id_download(monkeypatch):
