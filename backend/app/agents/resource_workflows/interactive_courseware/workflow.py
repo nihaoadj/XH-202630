@@ -21,6 +21,7 @@ from app.core.courseware.security import browser_smoke_check
 from app.core.courseware.evaluation import quality_gate_report
 from app.core.courseware.learning_design import build_learning_design
 from app.core.courseware.quality_summary import build_quality_summary
+from app.core.courseware.page_quality import page_quality_issues
 from app.core.courseware.storage import save_courseware_artifact, save_courseware_html
 from app.core.storage.file_storage import load_resource_file
 from app.core.storage import file_storage
@@ -41,9 +42,10 @@ from app.agents.resource_workflows.interactive_courseware.planner_agent import b
 from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import review_courseware_quality_decision, resolve_review_targets
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import compose_courseware_scene
+from app.agents.resource_workflows.interactive_courseware.practice_structure_agent import extract_practice_step_structure
 from app.agents.resource_workflows.interactive_courseware.validators import validate_scene_shape, validate_storyboard_bindings
 from app.agents.resource_workflows.interactive_courseware.budget import CoursewareBudgetCoordinator
-from app.services.courseware.composition import compose_scenes, default_title, source_summary, topic
+from app.services.courseware.composition import compose_scenes, default_title, resource_courseware_title, source_summary, topic
 from app.services.courseware.lineage import reconcile_stale_resources
 from app.services.courseware.review import quality_review, source_trace_review
 from app.services.courseware.source import CoursewareAdmissionError, admit_and_snapshot, content_hash, frozen_source_batch_id
@@ -59,9 +61,10 @@ class CoursewareControlStop(RuntimeError):
 class CoursewareReleaseGateError(RuntimeError):
     """A required release artifact failed validation; no pointer may switch."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, *, failed_dimensions: list[str] | None = None):
         super().__init__(message)
         self.code = code
+        self.failed_dimensions = list(failed_dimensions or [])
 
 
 class InteractiveCoursewareWorkflow:
@@ -151,12 +154,17 @@ class InteractiveCoursewareWorkflow:
                 "version": source.version if source else None,
                 "content_hash": content_hash(source.content_text or "") if source else None,
             })
+        # A fresh user submission must create a fresh courseware version even
+        # when it selects the same unchanged source.  Only an explicit client
+        # idempotency key represents a transport retry and may reuse a run.
+        submission_scope = request.idempotency_key or f"new-submission:{uuid.uuid4().hex}"
         request_hash = content_hash(json.dumps({
             "learner_id": request.learner_id,
             "sources": source_fingerprints,
             "title": request.title or "",
             "request_options": request.model_dump(include={"learning_goal", "expected_duration_minutes", "interaction_intensity", "visual_style_id"}),
             "publish_mode": request.publish_mode,
+            "submission_scope": submission_scope,
             "workflow_version": "courseware-v1",
         }, ensure_ascii=False, separators=(",", ":")))
         job_row = {
@@ -250,6 +258,20 @@ class InteractiveCoursewareWorkflow:
         stage_order = {"snapshot": 1, "design": 2, "scenes": 3, "rule_review": 4,
                        "quality_review": 5, "candidate_artifact": 6, "release": 7}
         completed_rank = stage_order.get(completed_stage, 0)
+        # Older v3 plans could create more than the renderer/reviewer ceiling
+        # of 16 scenes. A retry of that deterministic planning failure must
+        # rebuild the storyboard, not repeatedly reuse the known-bad 23-page
+        # scene set.
+        force_replan = job.get("error_code") == "TOO_MANY_SCENES"
+        if force_replan:
+            stale_spec = self.repo.get_spec_by_run(run_id)
+            if stale_spec:
+                self.repo.purge_scenes(stale_spec["spec_id"])
+            completed_rank = 1
+            self._event(run_id, "design_reviewing", "replanning", {
+                "reason": "TOO_MANY_SCENES",
+                "strategy": "compact_rich_stages",
+            })
         self._stage(run_id, "admitting", attempt=int(job.get("attempt") or 0) + 1,
                     error_code=None, error_message=None)
         if job.get("source_snapshots") and job.get("knowledge_base_id"):
@@ -261,11 +283,12 @@ class InteractiveCoursewareWorkflow:
             try:
                 self._stage(run_id, "snapshotting")
                 snapshots, knowledge_base_id = admit_and_snapshot(self.resource_service, self.audit_repo, job)
+                # A resource-scoped job has one source.  Keep its batch as
+                # lineage metadata when present, but do not reject older or
+                # standalone resources that legitimately have no batch.
                 frozen_batch_id = job.get("source_batch_id") or next(
                     (str(item.get("batch_id")).strip() for item in snapshots if item.get("batch_id")), None
                 )
-                if not frozen_batch_id or any(item.get("batch_id") != frozen_batch_id for item in snapshots):
-                    raise CoursewareAdmissionError("互动课件源资源必须来自同一反馈批次")
                 self.repo.update_job(run_id, source_snapshots=snapshots, knowledge_base_id=knowledge_base_id,
                                      source_batch_id=frozen_batch_id)
                 self._checkpoint_completed(run_id, "snapshot", state_json={"knowledge_base_id": knowledge_base_id})
@@ -284,7 +307,44 @@ class InteractiveCoursewareWorkflow:
                     knowledge_base_id=knowledge_base_id)
         self._control_guard(run_id)
         learner_context = self._learner_context(job.get("learner_id"))
-        learning_design = build_learning_design(snapshots, learner_context, job.get("request_options") or {})
+        practice_step_structures: dict[str, list[dict[str, Any]]] = {}
+        for source in snapshots:
+            if source.get("role") != "practice":
+                continue
+            if not courseware_ai_available(self.llm_gateway):
+                extracted = None
+                warning = None
+            else:
+                structure_budget = self.budget.before_call(run_id, "planner", requested_output_tokens=2200)
+                if not structure_budget.allowed:
+                    extracted, warning = None, structure_budget.warning
+                else:
+                    structure_options = self.llm_gateway.options_for("generator", temperature=0.0).model_copy(update={
+                        "max_output_tokens": structure_budget.max_output_tokens,
+                        "request_timeout_seconds": structure_budget.timeout_seconds,
+                        "max_attempts": 3,
+                    })
+                    extracted, warning = extract_practice_step_structure(
+                        self.llm_gateway, run_id, source, allowance=structure_options,
+                    )
+                    self.budget.reconcile(run_id, structure_budget.call_id, actual_input=None, actual_output=None,
+                                          status="completed" if extracted is not None else "failed")
+            warning = self._record_agent_trace(
+                run_id, warning, "courseware_practice_structure_extractor", budget_stage="planner",
+            )
+            if warning and warning.pop("deterministic_anchor_fallback", False):
+                self._event(run_id, "practice_structure", "recovered", {
+                    "strategy": "explicit_heading_partition",
+                    "failure_type": warning.get("failure_type"),
+                })
+                warning = None
+            if extracted:
+                practice_step_structures[str(source["resource_id"])] = extracted
+            elif warning:
+                warnings.append(warning)
+        learning_design = build_learning_design(
+            snapshots, learner_context, job.get("request_options") or {}, practice_step_structures,
+        )
         for usage in learning_design.resource_usage_plan:
             if usage.get("adopted") is False:
                 warnings.append({
@@ -306,6 +366,7 @@ class InteractiveCoursewareWorkflow:
             spec_json.setdefault("design", CoursewareDesign().model_dump(mode="json"))
             spec_json.setdefault("storyboard", learning_design.storyboard.model_dump(mode="json"))
             title = job.get("title") or spec_json.get("title") or default_title(snapshots)
+            title = resource_courseware_title(title, snapshots)
             self._event(run_id, "design_reviewing", "reused", {"spec_id": spec_id})
         else:
             planner_budget = self.budget.before_call(run_id, "planner")
@@ -313,6 +374,7 @@ class InteractiveCoursewareWorkflow:
                 planner_options = self.llm_gateway.options_for("generator", temperature=0.0).model_copy(update={
                     "max_output_tokens": planner_budget.max_output_tokens,
                     "request_timeout_seconds": planner_budget.timeout_seconds,
+                    "max_attempts": 3,
                 }) if self.llm_gateway else None
                 plan, plan_warning = build_courseware_spec(
                     self.llm_gateway, run_id, snapshots, allowance=planner_options,
@@ -339,6 +401,7 @@ class InteractiveCoursewareWorkflow:
                 plan, plan_warning = None, planner_budget.warning
             plan_warning = self._record_agent_trace(run_id, plan_warning, "courseware_spec_builder")
             title = job.get("title") or (plan.title if plan else default_title(snapshots))
+            title = resource_courseware_title(title, snapshots)
             selected_design = plan.design if plan and plan.design else CoursewareDesign()
             spec_json = {
                 "schema_version": "1.0", "title": title,
@@ -415,6 +478,7 @@ class InteractiveCoursewareWorkflow:
                 scene_options = self.llm_gateway.options_for("generator", temperature=0.0).model_copy(update={
                     "max_output_tokens": scene_budget.max_output_tokens,
                     "request_timeout_seconds": scene_budget.timeout_seconds,
+                    "max_attempts": 3,
                 }) if self.llm_gateway else None
                 if self.llm_gateway:
                     enhanced, scene_warning = self.scene_composer(
@@ -447,13 +511,13 @@ class InteractiveCoursewareWorkflow:
         else:
             results = [compose_one(index, scene) for index, scene in enumerate(scenes)]
         for index, resolved_scene, scene_warning in results:
+            base_scene = scenes[index]
             scene_warning = self._record_agent_trace(run_id, scene_warning, "courseware_scene_composer",
                                                       f"{spec_id}_scene_{index + 1}")
             if scene_warning:
-                warnings.append(scene_warning)
+                warnings.append({**scene_warning, "scene_id": base_scene.get("scene_id")})
                 if scene_warning.get("code") in {"AI_SCENE_UNKNOWN_COMPONENT", "AI_SCENE_UNKNOWN_SOURCE_BLOCK"}:
                     scene_hard_gate_code = scene_warning["code"]
-            base_scene = scenes[index]
             slot = list(learning_design.storyboard.scenes)[index] if index < len(learning_design.storyboard.scenes) else None
             if resolved_scene is not None:
                 # Model prose may enrich a slot, but cannot mutate frozen
@@ -512,7 +576,7 @@ class InteractiveCoursewareWorkflow:
         try:
             spec_record = self.repo.get_spec_by_run(run_id) or {}
             document = {
-                "schema_version": "1.0", "title": title, "scenes": scenes,
+                "schema_version": "2.0", "title": title, "scenes": scenes,
                 "design": (spec_record.get("spec_json") or {}).get("design") or CoursewareDesign().model_dump(mode="json"),
             }
             self._stage(run_id, "trace_reviewing", warnings=warnings)
@@ -531,12 +595,34 @@ class InteractiveCoursewareWorkflow:
             self._save_review(run_id, "teaching_quality", "approved" if not quality_issues else "rejected", quality_issues)
             self._checkpoint_completed(run_id, "quality_review", state_json={"review": "teaching_quality"})
             if quality_issues:
-                row = self.repo.update_job(
-                    run_id, status="quarantined", error_code=str(quality_issues[0].get("code") or "COURSEWARE_QUALITY_GATE_FAILED"),
-                    error_message="课件教学质量审核未通过，candidate 未创建", warnings=warnings,
-                )
-                self._event(run_id, "quality_review", "quarantined", {"error_code": row.get("error_code")})
-                return self._job_response(row)
+                # A small class of presentation-shape failures can be
+                # repaired without another model call by composing the same
+                # frozen sources through the deterministic blueprint.  This
+                # is deliberately bounded to one attempt and never applies to
+                # unsafe/provenance failures, which remain hard stops.
+                recoverable_codes = {"EMPTY_SCENE", "INVALID_QUIZ"}
+                issue_codes = {str(item.get("code") or "") for item in quality_issues}
+                deterministic_document = self._deterministic_document(title, snapshots, learning_design)
+                retry_issues = source_trace_review(deterministic_document, snapshots) + quality_review(deterministic_document)
+                if issue_codes and issue_codes.issubset(recoverable_codes) and not retry_issues:
+                    document = deterministic_document
+                    self._persist_deterministic_scenes(run_id, document)
+                    retry_warning = {
+                        "code": "COURSEWARE_RULE_REVIEW_DETERMINISTIC_RETRY",
+                        "message": "页面形态审核首次未通过，已基于同一冻结来源自动重组并通过复检",
+                        "attempt": 1,
+                        "fallback_version": "deterministic-v1",
+                    }
+                    warnings.append(retry_warning)
+                    self._save_review(run_id, "teaching_quality_retry", "approved", [])
+                    self._event(run_id, "quality_review", "recovered", {"attempt": 1, "issue_codes": sorted(issue_codes)})
+                else:
+                    row = self.repo.update_job(
+                        run_id, status="quarantined", error_code=str(quality_issues[0].get("code") or "COURSEWARE_QUALITY_GATE_FAILED"),
+                        error_message="课件教学质量审核未通过，candidate 未创建", warnings=warnings,
+                    )
+                    self._event(run_id, "quality_review", "quarantined", {"error_code": row.get("error_code")})
+                    return self._job_response(row)
             deterministic_document = self._deterministic_document(title, snapshots, learning_design)
             self._control_guard(run_id)
             document, auto_review_warning = self._auto_review_and_revise(
@@ -593,6 +679,44 @@ class InteractiveCoursewareWorkflow:
                 })
                 return self._job_response(row)
             self._control_guard(run_id)
+            page_issues = page_quality_issues(document)
+            if page_issues:
+                self._save_review(run_id, "page_quality", "rejected", page_issues)
+                repairable_page_codes = {
+                    "EMPTY_PAGE", "THIN_PAGE", "UNDERFILLED_PAGE",
+                    "REPETITIVE_PAGE", "MISSING_PAGE_CONCLUSION",
+                }
+                page_codes = {str(item["code"]) for item in page_issues}
+                fallback_document = deterministic_document
+                fallback_page_issues = page_quality_issues(fallback_document)
+                fallback_gate_issues = (
+                    source_trace_review(fallback_document, snapshots)
+                    + quality_review(fallback_document)
+                    + fallback_page_issues
+                )
+                fallback_provenance = build_provenance_graph(fallback_document, snapshots)
+                fallback_gate_issues.extend(validate_provenance_graph(fallback_provenance))
+                if page_codes <= repairable_page_codes and not fallback_gate_issues:
+                    document = fallback_document
+                    provenance_graph = fallback_provenance
+                    self._persist_deterministic_scenes(run_id, document)
+                    warnings.append({
+                        "code": "PAGE_QUALITY_DETERMINISTIC_FALLBACK",
+                        "message": "复杂候选存在空页、薄页或重复风险，已切换到通过内容丰富度硬门的确定性课件",
+                        "discarded_candidate": True,
+                        "fallback_version": "deterministic-v3",
+                    })
+                    self._event(run_id, "page_quality_repair", "approved", {
+                        "repaired_codes": sorted(page_codes),
+                        "fallback_version": "deterministic-v3",
+                    })
+                else:
+                    raise CoursewareReleaseGateError(
+                        "COURSEWARE_PAGE_QUALITY_GATE_FAILED",
+                        ";".join(str(item["code"]) for item in page_issues),
+                        failed_dimensions=[str(item["code"]) for item in page_issues],
+                    )
+            self._save_review(run_id, "page_quality", "approved", [])
             self._stage(run_id, "rendering")
             artifact = render_courseware(document)
             self._stage(run_id, "validating")
@@ -601,7 +725,10 @@ class InteractiveCoursewareWorkflow:
             measured_failures = [item for item in quality.get("failed_dimensions", [])
                                  if not item.startswith("visual.")]
             if measured_failures:
-                raise CoursewareReleaseGateError("COURSEWARE_QUALITY_GATE_FAILED", ";".join(measured_failures))
+                raise CoursewareReleaseGateError(
+                    "COURSEWARE_QUALITY_GATE_FAILED", ";".join(measured_failures),
+                    failed_dimensions=measured_failures,
+                )
             self._control_guard(run_id)
             existing_resource = self.repo.get_resource_by_run(run_id)
             resource_id = existing_resource["resource_id"] if existing_resource else f"cwr_{uuid.uuid4().hex}"
@@ -617,11 +744,22 @@ class InteractiveCoursewareWorkflow:
             # immutable candidate is frozen; render once more so offline
             # events cannot be attributed to another release.
             document["event_context"] = {"resource_id": resource_id, "release_id": release_id}
+            page_issues = page_quality_issues(document)
+            if page_issues:
+                raise CoursewareReleaseGateError(
+                    "COURSEWARE_PAGE_QUALITY_GATE_FAILED", "重发布页面质量门失败",
+                    failed_dimensions=[str(item["code"]) for item in page_issues],
+                )
             artifact = render_courseware(document)
             browser_smoke_check(artifact)
             quality = quality_gate_report(document, snapshots)
-            if any(not item.startswith("visual.") for item in quality.get("failed_dimensions", [])):
-                raise CoursewareReleaseGateError("COURSEWARE_QUALITY_GATE_FAILED", "重发布质量门失败")
+            measured_failures = [item for item in quality.get("failed_dimensions", [])
+                                 if not item.startswith("visual.")]
+            if measured_failures:
+                raise CoursewareReleaseGateError(
+                    "COURSEWARE_QUALITY_GATE_FAILED", "重发布质量门失败",
+                    failed_dimensions=measured_failures,
+                )
             file_path, file_size, artifact_sha = save_courseware_html(
                 job["learner_id"], resource_id, artifact, release_id=release_id
             )
@@ -743,7 +881,13 @@ class InteractiveCoursewareWorkflow:
             row = self.repo.update_job(run_id, status="release_blocked" if release_blocked else "failed",
                                        error_code=getattr(exc, "code", "COURSEWARE_RENDER_FAILED"),
                                        error_message="课件渲染或发布失败，源快照已保留，可重试", warnings=warnings)
-            self._event(run_id, "release_gate", "failed", {"error_type": type(exc).__name__})
+            self._event(run_id, "release_gate", "failed", {
+                "error_type": type(exc).__name__,
+                "error_code": getattr(exc, "code", "COURSEWARE_RENDER_FAILED"),
+                "failed_dimensions": list(getattr(exc, "failed_dimensions", []) or []),
+                "candidate_id": (candidate or {}).get("candidate_id") if candidate else None,
+                "release_id": (candidate or {}).get("release_id") if candidate else None,
+            })
             return self._job_response(row)
         state = "published_with_warnings" if warnings else "published"
         row = self.repo.get_job(run_id)
@@ -766,7 +910,16 @@ class InteractiveCoursewareWorkflow:
         job = self.repo.get_job(run_id)
         if job is None or job["status"] in {"published", "published_with_warnings"}:
             return self._job_response(job) if job else None
-        self.repo.update_job(run_id, status="queued", error_code=None, error_message=None)
+        # Preserve this one deterministic planning code until the retry enters
+        # the workflow. It instructs the workflow to discard the old oversized
+        # storyboard and rebuild it under the current page budget.
+        preserve_replan_code = job.get("error_code") == "TOO_MANY_SCENES"
+        self.repo.update_job(
+            run_id,
+            status="queued",
+            error_code=job.get("error_code") if preserve_replan_code else None,
+            error_message="正在按可发布页数上限重新规划课件" if preserve_replan_code else None,
+        )
         self.repo.enqueue_task_once({
             "outbox_id": f"cwo_{run_id}_retry_{uuid.uuid4().hex}", "run_id": run_id,
             "event_type": "courseware.run", "task_kind": "courseware.run", "status": "queued",
@@ -855,6 +1008,7 @@ class InteractiveCoursewareWorkflow:
             revision_options = self.llm_gateway.options_for("generator", temperature=0.0).model_copy(update={
                 "max_output_tokens": revision_budget.max_output_tokens,
                 "request_timeout_seconds": revision_budget.timeout_seconds,
+                "max_attempts": 3,
             }) if self.llm_gateway else None
             if self.llm_gateway:
                 enhanced, warning = self.scene_composer(
@@ -945,8 +1099,10 @@ class InteractiveCoursewareWorkflow:
             return False
         snapshots = job.get("source_snapshots") or []
         document = {
-            "schema_version": "1.0",
-            "title": job.get("title") or spec.get("spec_json", {}).get("title") or "互动课件",
+            "schema_version": "2.0",
+            "title": resource_courseware_title(
+                job.get("title") or spec.get("spec_json", {}).get("title") or "互动课件", snapshots,
+            ),
             "scenes": [row["scene_json"] for row in self.repo.list_scenes(spec["spec_id"])],
         }
         issues = source_trace_review(document, snapshots) + quality_review(document)
@@ -1098,7 +1254,7 @@ class InteractiveCoursewareWorkflow:
 
     def _deterministic_document(self, title: str, snapshots: list[dict[str, Any]], learning_design=None) -> dict[str, Any]:
         deterministic_scenes, _ = compose_scenes(snapshots, None, learning_design=learning_design)
-        return {"schema_version": "1.0", "title": title, "scenes": deterministic_scenes,
+        return {"schema_version": "2.0", "title": title, "scenes": deterministic_scenes,
                 "design": CoursewareDesign().model_dump(mode="json")}
 
     def _persist_deterministic_scenes(self, run_id: str, document: dict[str, Any]) -> None:
@@ -1144,6 +1300,7 @@ class InteractiveCoursewareWorkflow:
         review_options = self.llm_gateway.options_for("generator", temperature=0.0).model_copy(update={
             "max_output_tokens": quality_budget.max_output_tokens,
             "request_timeout_seconds": quality_budget.timeout_seconds,
+            "max_attempts": 3,
         }) if self.llm_gateway else None
         if self.llm_gateway:
             decision, warning = review_courseware_quality_decision(
@@ -1159,7 +1316,10 @@ class InteractiveCoursewareWorkflow:
             run_id, "courseware_quality_reviewer", decision.trace_metadata,
             budget_stage="quality_review",
         )
-        self._save_review(run_id, "ai_teaching_quality", decision.decision, issues)
+        self._save_review(
+            run_id, "ai_teaching_quality", decision.decision, issues,
+            rubric_scores=decision.rubric_scores,
+        )
         if decision.decision == "unavailable":
             # Strict releases require live AI-review evidence. Resilient
             # releases use only the deterministic document already accepted by
@@ -1173,7 +1333,14 @@ class InteractiveCoursewareWorkflow:
         if decision.decision == "approved" and not issues:
             return document, warning
         if decision.decision == "rejected":
-            return None, warning
+            if get_settings().courseware_release_policy == "strict":
+                return None, warning
+            fallback = deterministic_document or document
+            self._persist_deterministic_scenes(run_id, fallback)
+            return fallback, self._fallback_warning({
+                "code": "AI_QUALITY_REJECTED_DETERMINISTIC_FALLBACK",
+                "message": "AI 质量审核拒绝复杂候选，已回退到通过确定性体验硬门的课件",
+            })
 
         settings = get_settings()
         started_at = monotonic()
@@ -1200,7 +1367,7 @@ class InteractiveCoursewareWorkflow:
             if any(row.get("status") != "approved" for row in scene_rows):
                 return None, warning
             revised = {
-                "schema_version": "1.0", "title": document["title"],
+                "schema_version": "2.0", "title": document["title"],
                 "scenes": [row["scene_json"] for row in scene_rows],
             }
             deterministic_issues = source_trace_review(revised, snapshots) + quality_review(revised)
@@ -1216,6 +1383,7 @@ class InteractiveCoursewareWorkflow:
             review_options = self.llm_gateway.options_for("generator", temperature=0.0).model_copy(update={
                 "max_output_tokens": review_budget.max_output_tokens,
                 "request_timeout_seconds": review_budget.timeout_seconds,
+                "max_attempts": 3,
             }) if self.llm_gateway else None
             if self.llm_gateway:
                 decision, next_warning = review_courseware_quality_decision(
@@ -1232,13 +1400,30 @@ class InteractiveCoursewareWorkflow:
                 run_id, "courseware_quality_reviewer", decision.trace_metadata,
                 budget_stage="revision",
             )
-            self._save_review(run_id, "ai_teaching_quality", decision.decision, issues)
+            self._save_review(
+                run_id, "ai_teaching_quality", decision.decision, issues,
+                rubric_scores=decision.rubric_scores,
+            )
             if decision.decision == "approved" and not issues:
                 self._event(run_id, "auto_revising", "approved", {"revision": revision_no})
                 return revised, warning
             if decision.decision == "rejected":
-                return None, warning
+                if settings.courseware_release_policy == "strict":
+                    return None, warning
+                fallback = deterministic_document or document
+                self._persist_deterministic_scenes(run_id, fallback)
+                return fallback, self._fallback_warning({
+                    "code": "AI_QUALITY_REJECTED_AFTER_REVISION_FALLBACK",
+                    "message": "复杂候选在定向修订后仍未通过 AI 审核，已回退到确定性课件",
+                })
             document = revised
+        if settings.courseware_release_policy != "strict":
+            fallback = deterministic_document or document
+            self._persist_deterministic_scenes(run_id, fallback)
+            return fallback, self._fallback_warning({
+                "code": "AI_REVISION_BUDGET_EXHAUSTED_FALLBACK",
+                "message": "复杂候选达到修订上限，已回退到确定性课件",
+            })
         return None, warning
 
     def _review_budget_warning(self, run_id: str, job: dict[str, Any]) -> dict[str, str] | None:
@@ -1334,12 +1519,20 @@ class InteractiveCoursewareWorkflow:
     def _save_review(
         self, run_id: str, kind: str, decision: str, issues: list[dict[str, Any]],
         scene_id: str | None = None,
+        rubric_scores: dict[str, float] | None = None,
     ) -> None:
         self.repo.save_review({
             "review_id": f"cwv_{uuid.uuid4().hex}", "run_id": run_id, "scene_id": scene_id,
             "kind": kind, "decision": decision, "issues": issues, "reviewer_version": "rules-v1",
         })
-        self._event(run_id, kind, decision, {"issue_count": len(issues)}, scene_id)
+        # The DB review row keeps the stable public issues contract.  Persist
+        # redacted numeric rubric evidence in the durable event stream so the
+        # release-quality summary can distinguish "not measured" from an
+        # actual failing score without retaining model prose.
+        self._event(run_id, kind, decision, {
+            "issue_count": len(issues),
+            "rubric_scores": dict(rubric_scores or {}),
+        }, scene_id)
 
     def _job_response(self, row: dict[str, Any] | None) -> CoursewareJobResponse | None:
         if row is None:

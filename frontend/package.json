@@ -9,6 +9,8 @@
     "test:workflow-events": "node tests/unit/utils/workflowEvents.test.mjs",
     "test:tutor": "node tests/tutorState.test.mjs",
     "test:learner-mastery": "node tests/learnerMastery.test.mjs",
+    "test:learning-report": "node tests/learningReport.test.mjs",
+    "test:learning-report-browser": "node tests/learningReportBrowser.test.mjs",
     "test:courseware-browser": "node tests/coursewareBrowser.test.mjs",
     "test:courseware-events": "node tests/coursewareEvents.test.mjs",
     "test:courseware-journey": "node tests/coursewareUserJourney.test.mjs",

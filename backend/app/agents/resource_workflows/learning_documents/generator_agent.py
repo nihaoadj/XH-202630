@@ -53,7 +53,11 @@ def _specs_for_state(state: AgentState, node_input: GeneratorInput) -> list[Reso
             difficulty=(node_input.difficulty_preference
                 or node_input.diagnosis.get("recommended_difficulty")
                 or node_input.learner.skill_level or "中级"),
-            learning_plan=node_input.learning_plan,
+            learning_plan={
+                **node_input.learning_plan,
+                **({"correction_focus_snapshot": node_input.constraints["correction_focus_snapshot"]}
+                   if node_input.constraints.get("correction_focus_snapshot") else {}),
+            },
             evidence=node_input.retrieved_evidence,
             target_skill_nodes=node_input.target_skill_nodes,
         )
@@ -103,6 +107,7 @@ def _materialize(
     artifact: GeneratedArtifact,
     node_input: GeneratorInput,
     previous: LearningResource | None,
+    spec: ResourceSpec,
 ) -> LearningResource:
     metadata = artifact.metadata
     data = artifact.artifact_data
@@ -114,7 +119,10 @@ def _materialize(
         representation=metadata.representation, resource_type=metadata.resource_type,
         difficulty=artifact.difficulty, storage_type=artifact.storage_type,
         content_text=artifact.content_text, mime_type=artifact.mime_type,
-        knowledge_points=artifact.knowledge_points,
+        # The frozen spec is the authoritative curriculum scope. Preserve any
+        # agent-added subpoints, but never allow an artifact to drop a selected
+        # target node before publication and curriculum accounting.
+        knowledge_points=list(dict.fromkeys([*spec.knowledge_points, *artifact.knowledge_points])),
         source_refs=source_refs_from_evidence(node_input.retrieved_evidence),
         review_status=(ResourceStatus.PENDING_REVIEW.value if node_input.include_review
                        else ResourceStatus.UNREVIEWED_DRAFT.value),
@@ -273,7 +281,7 @@ def generate_node(
                 raise worker_error
             if artifact is None:
                 artifact = agent.generate(spec, context, llm_gateway=llm_gateway)
-            resource = _materialize(artifact, node_input, old)
+            resource = _materialize(artifact, node_input, old, spec)
             llm_metadata = artifact.llm_metadata
             execution = _execution(spec, resource, agent, attempt=node_input.generation_attempt,
                                    worker_step_id=context.step_id,

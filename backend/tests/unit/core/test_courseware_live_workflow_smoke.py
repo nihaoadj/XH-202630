@@ -9,8 +9,10 @@ from app.core.courseware.live_workflow_smoke import (
     LIVE_COMBINATIONS,
     LiveWorkflowBudgetExceeded,
     LiveWorkflowBudget,
+    _STAGE_BY_SCHEMA,
     _RecordingGateway,
     _outcome_counts,
+    _quality_eligible_runs,
     acceptance_report_status,
     redact_workflow_record,
 )
@@ -19,32 +21,43 @@ from app.core.courseware.live_workflow_smoke import (
 def test_live_workflow_smoke_has_ten_fixed_combinations_and_redacts_payloads():
     assert len(LIVE_COMBINATIONS) == 10
     assert [item["id"] for item in LIVE_COMBINATIONS] == [
-        "lecture_only",
-        "lecture_practice_assessment",
-        "five_resource_types",
-        "repair_revision_candidate",
-        "lecture_checklist",
-        "lecture_case",
-        "practice_case",
-        "assessment_checklist",
-        "all_sources_repair",
-        "localized_feedback_repair",
+        "lecture_core", "lecture_recall", "practice_guided", "practice_mastery",
+        "assessment_answer", "assessment_explanation", "checklist_review", "checklist_self_check",
+        "case_diagnosis", "case_decision",
     ]
+    assert all(len(item["types"]) == 1 for item in LIVE_COMBINATIONS)
+    assert {item["types"][0] for item in LIVE_COMBINATIONS} == {"讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"}
     record = redact_workflow_record({
         "run_id": "cw_secret-run-id",
         "warnings": [{"message": "raw prompt should not survive"}],
         "artifact_sha256": "a" * 64,
+        "review_issue_codes": ["QUALITY"],
         "usage": {"input_tokens": 1, "output_tokens": 2},
     })
     assert "raw prompt" not in str(record)
     assert "cw_secret-run-id" not in str(record)
     assert record["artifact_sha256"] == "a" * 64
+    assert record["review_issue_codes"] == ["QUALITY"]
+    assert _STAGE_BY_SCHEMA["CoursewarePlanEnrichmentV2"] == "spec"
+    assert _STAGE_BY_SCHEMA["CoursewarePracticeEnrichment"] == "scene"
+    assert _STAGE_BY_SCHEMA["CoursewareNarrativeEnrichment"] == "scene"
+    assert _STAGE_BY_SCHEMA["CoursewareReviewDecisionV2Draft"] == "quality_review"
 
 
 def test_live_outcomes_do_not_count_warning_publication_twice():
     assert _outcome_counts(["published", "published_with_warnings", "quarantined", "rejected_admission"]) == {
         "published": 1, "warning": 1, "quarantined": 1, "rejected": 1,
     }
+
+
+def test_source_admission_rejection_is_not_a_course_quality_denominator():
+    runs = [
+        {"status": "published", "quality_summary": {"rubric_passed": True}},
+        {"status": "rejected_admission", "quality_summary": {}},
+        {"status": "release_blocked", "quality_summary": {"rubric_passed": False}},
+    ]
+
+    assert _quality_eligible_runs(runs) == [runs[0], runs[2]]
 
 
 def test_live_report_cannot_be_done_when_quality_gate_is_not_met():

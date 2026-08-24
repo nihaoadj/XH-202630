@@ -12,7 +12,8 @@ def test_compact_courseware_eval_manifest_is_complete_and_bounded():
     cases = manifest["cases"]
     assert manifest["schema_version"] == "2.0"
     assert manifest["budget"] == {"max_cases": 20, "network": False, "llm_calls": 0, "max_tokens": 0, "max_duration_seconds": 60}
-    assert len(manifest["hard_gates"]) == 6
+    assert len(manifest["hard_gates"]) == 7
+    assert "required_source_types" in manifest["hard_gates"]
     assert len(cases) == manifest["budget"]["max_cases"]
     assert len({case["id"] for case in cases}) == len(cases)
     required = {

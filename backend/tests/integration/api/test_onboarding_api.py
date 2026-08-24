@@ -119,6 +119,30 @@ def test_onboarding_creates_profile_and_only_returns_known_node_questions():
     assert focus_question["profile_mapping"]["target_path"] == "learning_preferences.focus_nodes"
 
 
+def test_rag_questionnaire_exposes_all_ability_nodes_with_direct_diagnostic_mapping():
+    client, _, knowledge_service = _client()
+
+    response = client.get(
+        "/api/onboarding/questions",
+        params={"learning_direction_id": "rag_engineering_training"},
+    )
+
+    assert response.status_code == 200
+    questions = {item["question_id"]: item for item in response.json()["questions"]}
+    known_nodes = questions["known_rag_nodes"]
+    focus_nodes = questions["learning_focus_rag_nodes"]
+    expected_node_ids = [node.node_id for node in knowledge_service.list_skill_nodes("rag_engineering_training")]
+    expected_node_names = [node.name for node in knowledge_service.list_skill_nodes("rag_engineering_training")]
+
+    assert [option["label"] for option in known_nodes["options"][:-1]] == expected_node_names
+    assert [option["diagnostic_scope_add"] for option in known_nodes["options"][:-1]] == [
+        [node_id] for node_id in expected_node_ids
+    ]
+    assert known_nodes["options"][-1]["value"] == "都不了解"
+    assert [option["label"] for option in focus_nodes["options"][:-1]] == expected_node_names
+    assert focus_nodes["options"][-1]["value"] == "无"
+
+
 def test_diagnosis_keeps_unassessed_nodes_out_of_confirmed_weaknesses():
     client, repository, knowledge_service = _client()
     onboarding_response = client.post("/api/onboarding/initial-profile", json=_questionnaire_payload())

@@ -10,6 +10,7 @@
         <span><i />当前学习方向</span>
         <strong>{{ directionName }}</strong>
         <b>能力等级 {{ report.skill_level || activeProfile?.skill_level || '待诊断' }}</b>
+        <small v-if="tierProgress.active_tier">当前学习第 {{ tierProgress.active_tier }} 阶 · 已解锁至第 {{ tierProgress.highest_unlocked_tier }} 阶</small>
       </div>
 
       <div class="profile-selector report-selector-row">
@@ -17,18 +18,49 @@
         <el-select v-model="selectedLearnerId" placeholder="选择学习画像" class="report-input" filterable @change="handleProfileChange">
           <el-option v-for="item in profileOptions" :key="item.learner_id" :label="item.label" :value="item.learner_id" />
         </el-select>
-        <el-button class="report-refresh-button" type="primary" :icon="Refresh" @click="loadReport" :disabled="!selectedLearnerId">更新报告</el-button>
+        <el-select v-model="windowDays" class="window-select" aria-label="报告时间窗口" @change="restartStream"><el-option :value="7" label="近 7 天" /><el-option :value="30" label="近 30 天" /><el-option :value="90" label="近 90 天" /></el-select>
+        <el-button class="report-refresh-button" type="primary" :icon="Refresh" @click="() => loadReport(true)" :disabled="!selectedLearnerId">更新报告</el-button>
       </div>
 
       <div class="summary-metrics report-summary-metrics">
         <article class="summary-metric mint"><span>学习资源</span><strong>{{ metricSummary.resource_count || 0 }}</strong><small>已生成资源批次</small></article>
         <article class="summary-metric blue"><span>练习反馈</span><strong>{{ metricSummary.feedback_count || 0 }}</strong><small>已记录练习结果</small></article>
-        <article class="summary-metric amber"><span>平均正确率</span><strong>{{ averageCorrectRate }}</strong><small>基于已提交反馈</small></article>
+        <article class="summary-metric amber"><span>客观正确率</span><strong>{{ averageCorrectRate }}</strong><small>{{ streamStatusLabel }}</small></article>
         <article class="summary-metric slate"><span>待巩固知识点</span><strong>{{ metricSummary.weak_point_count || 0 }}</strong><small>优先进入下一轮学习</small></article>
       </div>
     </section>
 
     <ReportChart :data="report" />
+
+    <section class="report-visual-grid" aria-label="学情与资源匹配可视化">
+      <KnowledgeBlindSpotHeatmap :data="report.knowledge_blind_spot_map" />
+      <ResourceDifficultyCurve :data="report.resource_difficulty_curve" />
+      <LearningPathGraph :data="report.learning_path_graph" />
+    </section>
+
+    <section class="report-detail-grid" aria-label="真实学习活动与薄弱点">
+      <article class="report-section">
+        <div class="section-heading"><div><span class="report-kicker">VERIFIED ACTIVITY</span><h3>真实学习活动</h3></div><span class="section-count">{{ report.window?.window_days || 30 }} 天</span></div>
+        <div class="summary-metrics">
+          <article class="summary-metric mint"><span>正式 Attempt</span><strong>{{ learningActivity.verified_attempt_count || 0 }}</strong></article>
+          <article class="summary-metric blue"><span>已答题目</span><strong>{{ learningActivity.answered_item_count || 0 }}</strong></article>
+          <article class="summary-metric amber"><span>加权正确率</span><strong>{{ formatPercent(learningActivity.verified_accuracy) }}</strong></article>
+          <article class="summary-metric slate"><span>前周期变化</span><strong>{{ formatPercent(learningActivity.accuracy_delta) }}</strong></article>
+        </div>
+        <p class="mastery-warning" v-if="learningActivity.status === 'not_measured'">当前窗口没有服务端验证题目；正确率保持未测量，不以 0 代替。</p>
+      </article>
+      <article class="report-section">
+        <div class="section-heading"><div><span class="report-kicker">WEAKNESS EVIDENCE</span><h3>薄弱点与待验证重点</h3></div></div>
+        <div class="suggestion-list">
+          <span v-for="item in generationOptions.reinforce_weakness || []" :key="`reinforce-${item.skill_node_id}`">已学习未掌握：{{ item.name }}</span>
+          <span v-for="item in generationOptions.learn_new_knowledge || []" :key="`new-${item.skill_node_id}`">尚未学习：{{ item.name }}</span>
+          <span v-for="item in weaknessGroups.verified_weak || []" :key="`weak-${item.skill_node_id}`">已验证薄弱：{{ item.name }}</span>
+          <span v-for="item in weaknessGroups.regressing_learning || []" :key="`regress-${item.skill_node_id}`">学习中退步：{{ item.name }}</span>
+          <span v-for="item in weaknessGroups.needs_evidence || []" :key="`evidence-${item.skill_node_id}`">待验证：{{ item.name }}</span>
+          <em v-if="!weaknessGroupCount && !generationOptionCount">暂无需要优先处理的节点。</em>
+        </div>
+      </article>
+    </section>
 
     <section class="mastery-panel" aria-labelledby="mastery-heading">
       <div class="section-heading">
@@ -47,9 +79,10 @@
         </article>
       </div>
       <div class="focus-explanation">
-        <h4>下一批文本资源预计重点</h4>
-        <p v-if="!weaknessPriorities.length">当前没有符合自动重点规则的节点，生成时会保留用户主题并安全使用空重点。</p>
-        <ol v-else><li v-for="item in weaknessPriorities.slice(0, 3)" :key="item.skill_node_id"><strong>{{ abilityName(item.skill_node_id) }}</strong><span>{{ (item.reason_codes || []).map(focusReason).join('；') }}</span></li></ol>
+        <h4>下一批学习方式</h4>
+        <p>反馈完成后可选择“强化薄弱点”或“学习新知识”。未学习节点不等同于薄弱点；已学习但待测的节点也不会被误标为未掌握。</p>
+        <ol v-if="generationOptions.reinforce_weakness?.length"><li v-for="item in generationOptions.reinforce_weakness.slice(0, 3)" :key="`focus-${item.skill_node_id}`"><strong>强化：{{ item.name }}</strong><span>{{ (item.reason_codes || []).join('；') }}</span></li></ol>
+        <ol v-else-if="weaknessPriorities.length"><li v-for="item in weaknessPriorities.slice(0, 3)" :key="item.skill_node_id"><strong>{{ abilityName(item.skill_node_id) }}</strong><span>{{ (item.reason_codes || []).map(focusReason).join('；') }}</span></li></ol>
       </div>
     </section>
 
@@ -84,6 +117,13 @@
       </article>
     </section>
 
+    <section class="report-section" aria-labelledby="credibility-heading">
+      <div class="section-heading"><div><span class="report-kicker">TEXT RESOURCE EVIDENCE</span><h3 id="credibility-heading">文本资源可信证据</h3></div><span class="section-count">可信 {{ resourceCredibility.trusted_count || 0 }} / {{ resourceCredibility.total_count || 0 }}</span></div>
+      <p class="mastery-warning">可信等级表示平台可验证的生成质量证据，不等价于来源机构权威性或绝对事实正确。</p>
+      <el-empty v-if="!recentResourceCredibility.length" description="尚无可核验的已发布文本资源" :image-size="52" />
+      <div v-else class="resource-list"><article v-for="item in recentResourceCredibility" :key="item.resource_id" class="resource-item"><span class="resource-type">{{ item.grade }}</span><div><strong>{{ item.topic || item.resource_type }}</strong><p>审核 {{ item.publication_review.status }} · Claim {{ item.claim_support.status }} · 溯源 {{ item.source_traceability.status }}</p></div><span class="difficulty-tag">{{ item.resource_type }}</span></article></div>
+    </section>
+
     <section class="next-round-panel">
       <div><span class="report-kicker">NEXT LEARNING CYCLE</span><h3>下一轮学习重点</h3><p>建议优先围绕以下知识点进行练习与资源生成，持续缩小当前学习盲区。</p></div>
       <div class="suggestion-list"><span v-for="item in nextSuggestions" :key="item">{{ item }}</span><em v-if="!nextSuggestions.length">完成一次能力诊断后，将在这里展示个性化学习重点。</em></div>
@@ -92,20 +132,27 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import { knowledgeApi, profileApi, reportApi } from '../../api'
+import { knowledgeApi, profileApi } from '../../api'
 import { useAppStore } from '../../stores/app'
 import ReportChart from './ReportChart.vue'
+import KnowledgeBlindSpotHeatmap from './KnowledgeBlindSpotHeatmap.vue'
+import ResourceDifficultyCurve from './ResourceDifficultyCurve.vue'
+import LearningPathGraph from './LearningPathGraph.vue'
 import { formatResourceLabel } from '../../utils/generationDisplay'
 import { focusReason, masteryPercent, relationshipLabels, statusLabel } from './masteryViewModel'
+import { learningReportApi } from './api'
+import { ReportStreamClient } from './reportStreamClient'
 
 const store = useAppStore()
 const selectedLearnerId = ref(localStorage.getItem('last_learner_id') || store.currentLearnerId || '')
 const profiles = ref([])
 const tracks = ref([])
 const report = reactive({})
+const windowDays = ref(30)
+const streamStatus = ref('closed')
 const recentResources = computed(() => report.recent_resources || [])
 const recentFeedback = computed(() => report.recent_feedback || [])
 const metricSummary = computed(() => report.metric_summary || {})
@@ -113,9 +160,18 @@ const nextSuggestions = computed(() => report.next_suggestions || report.weak_po
 const abilityNodes = computed(() => report.ability_nodes || [])
 const masterySummary = computed(() => report.mastery_summary || {})
 const weaknessPriorities = computed(() => report.weakness_priorities || [])
+const learningActivity = computed(() => report.learning_activity || {})
+const weaknessGroups = computed(() => report.weakness_groups || {})
+const weaknessGroupCount = computed(() => Object.values(weaknessGroups.value).reduce((sum, items) => sum + (items?.length || 0), 0))
+const generationOptions = computed(() => report.generation_options || {})
+const tierProgress = computed(() => report.tier_progress || generationOptions.value.tier_progress || {})
+const generationOptionCount = computed(() => (generationOptions.value.reinforce_weakness?.length || 0) + (generationOptions.value.learn_new_knowledge?.length || 0))
+const resourceCredibility = computed(() => report.resource_credibility_summary || {})
+const recentResourceCredibility = computed(() => report.recent_resource_credibility || [])
 const activeProfile = computed(() => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null)
 const directionName = computed(() => resolveTrackName(activeProfile.value?.knowledge_base_id))
-const averageCorrectRate = computed(() => formatPercent(metricSummary.value.average_correct_rate))
+const averageCorrectRate = computed(() => formatPercent(report.learning_activity?.verified_accuracy ?? metricSummary.value.average_correct_rate))
+const streamStatusLabel = computed(() => ({ connecting: '正在连接自动更新', live: '自动更新已开启', reconnecting: '正在重连自动更新', polling: '已降级为定时刷新', offline: '当前离线', closed: '自动更新已停止' })[streamStatus.value] || '自动更新')
 const profileOptions = computed(() => profiles.value.map((profile) => ({ ...profile, label: `${profileDisplayName(profile)} / ${resolveTrackName(profile.knowledge_base_id)} / ${profile.skill_level || '未分级'}` })))
 
 function resolveTrackName(trackId) {
@@ -141,19 +197,49 @@ async function loadProfiles() {
   if (!profiles.value.length) { selectedLearnerId.value = ''; return }
   if (!profiles.value.some((item) => item.learner_id === selectedLearnerId.value)) selectedLearnerId.value = store.currentLearnerId || profiles.value[0].learner_id
 }
-async function loadReport() {
+const stream = new ReportStreamClient({
+  onStatus: (status) => { streamStatus.value = status },
+  onReport: (data) => Object.assign(report, data),
+  fetchReport: async ({ learnerId, windowDays: days, etag }) => {
+    const res = await learningReportApi.get(learnerId, days, etag)
+    if (res.status === 304) return null
+    return { data: res.data, revision: res.data.report_revision }
+  },
+})
+
+async function loadReport(force = false) {
   if (!selectedLearnerId.value) { ElMessage.warning('请先选择学习画像'); return }
   try {
-    const res = await reportApi.get(selectedLearnerId.value)
+    const res = await learningReportApi.get(selectedLearnerId.value, windowDays.value, force ? null : report.report_revision)
+    if (res.status === 304) return
     Object.assign(report, res.data)
     localStorage.setItem('last_learner_id', selectedLearnerId.value)
+    stream.start({ learnerId: selectedLearnerId.value, windowDays: windowDays.value, revision: report.report_revision })
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.response?.data?.message || '报告查询失败')
   }
 }
-async function handleProfileChange() { await loadReport() }
-onMounted(async () => { await loadProfiles(); if (selectedLearnerId.value) await loadReport() })
+async function handleProfileChange() {
+  stream.stop()
+  Object.keys(report).forEach((key) => delete report[key])
+  await loadReport(true)
+}
+function restartStream() { if (selectedLearnerId.value) loadReport() }
+function handleOffline() { stream.stop(); streamStatus.value = 'offline' }
+function handleVisibility() {
+  if (document.visibilityState === 'visible') restartStream()
+  else if (streamStatus.value === 'polling') stream.stop()
+}
+onMounted(async () => {
+  await loadProfiles(); if (selectedLearnerId.value) await loadReport()
+  window.addEventListener('online', restartStream); window.addEventListener('offline', handleOffline)
+  document.addEventListener('visibilitychange', handleVisibility)
+})
+onBeforeUnmount(() => {
+  stream.stop(); window.removeEventListener('online', restartStream); window.removeEventListener('offline', handleOffline)
+  document.removeEventListener('visibilitychange', handleVisibility)
+})
 </script>
 
 <style scoped>
@@ -171,6 +257,8 @@ onMounted(async () => { await loadProfiles(); if (selectedLearnerId.value) await
 
 /* Report context is compact so charts and actionable details remain above the fold. */
 .report-page { gap: 12px; }
+.report-visual-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.report-visual-grid > :last-child { grid-column:1 / -1; }
 .report-hero {
   grid-template-columns: minmax(0, 1fr) minmax(260px, .38fr);
   gap: 11px 22px;
@@ -196,9 +284,10 @@ onMounted(async () => { await loadProfiles(); if (selectedLearnerId.value) await
 .report-focus i { width: 8px; height: 8px; border-radius: 50%; background: #4a90ff; box-shadow: 0 0 0 5px rgb(27 182 149 / 12%); }
 .report-focus strong { overflow: hidden; color: #18354d; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
 .report-focus b { color: #52708a; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.report-selector-row { grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; max-width: none; padding: 0; border: 0; background: transparent; }
+.report-selector-row { grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr) auto max-content; align-items: center; max-width: none; padding: 0; border: 0; background: transparent; }
 .report-selector-row > span { grid-column: auto; color: #47637e; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .report-selector-row :deep(.el-select__wrapper) { min-height: 34px; }
+.window-select { width: 112px; }
 .report-refresh-button {
   min-width: 108px;
   border-color: #2058a7 !important;
@@ -221,9 +310,11 @@ onMounted(async () => { await loadProfiles(); if (selectedLearnerId.value) await
 @media (max-width: 860px) {
   .report-hero { grid-template-columns: 1fr; }
   .report-focus { display: none; }
+  .report-visual-grid { grid-template-columns:1fr; }
+  .report-visual-grid > :last-child { grid-column:auto; }
 }
 @media (max-width: 560px) {
-  .report-selector-row { grid-template-columns: 1fr auto; }
+  .report-selector-row { grid-template-columns: minmax(0, 1fr) auto max-content; }
   .report-selector-row > span { grid-column: 1 / -1; }
   .report-refresh-button { width: auto !important; min-width: 42px; padding: 0 11px; }
   .report-summary-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }

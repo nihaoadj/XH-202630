@@ -19,7 +19,10 @@ CoursewareJobState = Literal[
 
 class CoursewareJobCreateRequest(BaseModel):
     learner_id: str = Field(min_length=1, max_length=64)
-    source_resource_ids: list[str] = Field(min_length=1, max_length=8)
+    # A courseware resource is an interactive representation of exactly one
+    # published learning resource.  Multi-select is modelled as a batch of
+    # these requests, never as a merged course.
+    source_resource_ids: list[str] = Field(min_length=1, max_length=1)
     title: str | None = Field(default=None, max_length=160)
     learning_goal: str | None = Field(default=None, max_length=240)
     expected_duration_minutes: int | None = Field(default=None, ge=5, le=240)
@@ -36,6 +39,26 @@ class CoursewareJobCreateRequest(BaseModel):
         cleaned = [item.strip() for item in value if item and item.strip()]
         if not cleaned or len(cleaned) != len(value) or len(cleaned) != len(set(cleaned)):
             raise ValueError("source_resource_ids 必须是非空且不重复的资源 ID")
+        return cleaned
+
+
+class CoursewareBatchCreateRequest(BaseModel):
+    """Create one independent interactive courseware job per selected resource."""
+
+    learner_id: str = Field(min_length=1, max_length=64)
+    resource_ids: list[str] = Field(min_length=1, max_length=8)
+    learning_goal: str | None = Field(default=None, max_length=240)
+    expected_duration_minutes: int | None = Field(default=None, ge=5, le=240)
+    interaction_intensity: Literal["low", "medium", "high"] = "medium"
+    visual_style_id: Literal["editorial", "midnight", "paper"] | None = None
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+    @field_validator("resource_ids")
+    @classmethod
+    def unique_resource_ids(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item and item.strip()]
+        if not cleaned or len(cleaned) != len(value) or len(cleaned) != len(set(cleaned)):
+            raise ValueError("resource_ids 必须是非空且不重复的资源 ID")
         return cleaned
 
 
@@ -56,6 +79,18 @@ class CoursewareJobResponse(BaseModel):
     error_message: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class CoursewareJobListResponse(BaseModel):
+    """Courseware runs visible in the generation workspace for one learner."""
+
+    items: list[CoursewareJobResponse] = Field(default_factory=list)
+
+
+class CoursewareBatchJobResponse(BaseModel):
+    """The jobs created from one user multi-selection, in selection order."""
+
+    jobs: list[CoursewareJobResponse] = Field(default_factory=list)
 
 
 class CoursewareSceneStatus(BaseModel):

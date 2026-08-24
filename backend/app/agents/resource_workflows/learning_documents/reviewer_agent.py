@@ -61,6 +61,7 @@ revise 必须包含至少一条 revision_instructions；approve 不得包含 rev
 STRUCTURED_MARKDOWN_SECTIONS = {
     "复习清单": ("复习目标", "必会清单", "易错点", "自测清单", "复习节奏"),
     "案例分析": ("案例背景", "任务目标", "分析过程", "参考方案", "复盘要点"),
+    "个性化纠错训练包": ("本次强化目标", "薄弱模式概览", "参考答案与分层反馈", "达标标准", "后续复习动作", "总结"),
 }
 
 
@@ -75,13 +76,18 @@ def _deterministic_resource_structure_review(resource) -> dict | None:
         section for section in required_sections if f"## {section}" not in content
     ]
     has_script = "<script" in content.lower()
-    if content.startswith("# ") and not missing_sections and not has_script:
+    correction_sections = ("错误模式", "核心概念补救", "正误对照", "完整示例", "引导式练习", "同构练习", "迁移练习")
+    correction_missing = (
+        [section for section in correction_sections if f"### {section}" not in content]
+        if resource.resource_type == "个性化纠错训练包" else []
+    )
+    if content.startswith("# ") and not missing_sections and not correction_missing and not has_script:
         return None
     description = (
         "缺少唯一一级标题。"
         if not content.startswith("# ")
-        else f"缺少必要章节：{'、'.join(missing_sections)}。"
-        if missing_sections
+        else f"缺少必要章节：{'、'.join([*missing_sections, *correction_missing])}。"
+        if missing_sections or correction_missing
         else "检测到脚本标记，资源只能包含 Markdown 文本。"
     )
     return {
@@ -267,7 +273,20 @@ def review_node(
     for resource in resources:
         invalid_source_refs = not source_refs_are_scoped(resource.source_refs, evidence)
         error = None
-        if resource.resource_id in locked_resource_ids:
+        tier_contract = node_input.constraints.get("target_tier")
+        expected_difficulty = node_input.difficulty_preference
+        if tier_contract is not None and resource.difficulty != expected_difficulty:
+            raw = {
+                "decision": "revise", "hallucination_score": 0.0,
+                "issues": [{"code": "other", "severity": "high", "resource_type": resource.resource_type,
+                            "resource_id": resource.resource_id, "knowledge_point": None,
+                            "description": "资源难度与冻结的能力节点阶级不一致。"}],
+                "difficulty_match": False, "coverage_rate": 1.0,
+                "suggestion": "按冻结阶级重建资源规格。",
+                "revision_instructions": [{"target_resource_type": resource.resource_type,
+                                           "instruction": "将资源难度调整为冻结目标阶级。"}],
+            }
+        elif resource.resource_id in locked_resource_ids:
             raw = {
                 "decision": "human_review",
                 "hallucination_score": 1.0,

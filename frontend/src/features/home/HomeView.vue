@@ -10,6 +10,15 @@
           <el-button class="app-secondary-button" :icon="Clock" @click="$router.push('/learning/history')">查看学习历史</el-button>
         </div>
       </div>
+      <aside class="hero-status" aria-label="当前学习状态">
+        <span class="status-kicker">TODAY'S FOCUS</span>
+        <strong>{{ currentDirection?.name || '创建你的第一个学习方向' }}</strong>
+        <p>{{ generatedResourceCount ? `已准备 ${generatedResourceCount} 份学习资源，完成练习后可获得下一轮建议。` : '从学习方向和初始诊断开始，系统会为你建立个性化学习路径。' }}</p>
+        <div class="status-tags">
+          <span>阶段：{{ profileStage }}</span>
+          <span>资源：{{ generatedResourceCount }} 份</span>
+        </div>
+      </aside>
     </section>
 
     <section class="learning-summary" :aria-busy="loadingSummary">
@@ -22,6 +31,30 @@
         <strong>{{ item.value }}</strong>
       </article>
     </section>
+
+    <section class="dashboard-grid">
+      <article class="next-action-panel">
+        <div>
+          <span class="page-kicker">RECOMMENDED NEXT STEP</span>
+          <h3>{{ nextAction.title }}</h3>
+          <p>{{ nextAction.description }}</p>
+        </div>
+        <el-button class="app-primary-button" type="primary" @click="$router.push(nextAction.to)">{{ nextAction.button }}</el-button>
+      </article>
+      <article class="learning-route-panel">
+        <div class="route-heading"><span class="page-kicker">LEARNING LOOP</span><strong>你的学习闭环</strong></div>
+        <ol class="route-list">
+          <li><b>01</b><span>阅读资源</span><small>学习当前批次内容</small></li>
+          <li><b>02</b><span>完成反馈</span><small>记录正式测评结果</small></li>
+          <li><b>03</b><span>选择下一步</span><small>强化薄弱点或学习新知识</small></li>
+        </ol>
+      </article>
+    </section>
+
+    <div class="quick-entry-heading">
+      <div><span class="page-kicker">QUICK ENTRY</span><h3>学习快捷入口</h3></div>
+      <span>按当前学习进度继续</span>
+    </div>
 
     <section class="tool-grid">
       <button v-for="tool in tools" :key="tool.title" type="button" class="tool-card" @click="$router.push(tool.to)">
@@ -76,6 +109,20 @@ const learningSummary = computed(() => [
   { label: '已生成资源数量', value: `${generatedResourceCount.value} 份` },
   { label: '最近一次学习时间', value: latestLearningTime.value },
 ])
+const nextAction = computed(() => {
+  if (!currentProfile.value) return {
+    title: '先建立学习方向', description: '选择学习目标并完成初始诊断，系统会据此生成第一批学习资源。',
+    button: '新建学习方向', to: '/learning/new',
+  }
+  if (!generatedResourceCount.value) return {
+    title: '生成第一批学习资源', description: '当前画像已就绪，选择资源类型后即可开始生成个性化学习材料。',
+    button: '去生成资源', to: '/generate',
+  }
+  return {
+    title: '继续阅读本轮学习资源', description: '完成资源学习后提交练习反馈，即可获得强化薄弱点或学习新知识的下一步选择。',
+    button: '进入学习资源', to: '/resources',
+  }
+})
 
 async function loadSummary() {
   loadingSummary.value = true
@@ -123,7 +170,8 @@ onMounted(loadSummary)
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+  padding-bottom: 16px;
 }
 
 .home-hero,
@@ -135,7 +183,12 @@ onMounted(loadSummary)
 }
 
 .home-hero {
-  padding: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+  gap: 28px;
+  align-items: center;
+  min-height: 238px;
+  padding: 28px 36px;
   background: linear-gradient(115deg, #ffffff 0%, #f6f9ff 58%, #eef5ff 100%);
 }
 
@@ -162,11 +215,35 @@ onMounted(loadSummary)
   flex-wrap: wrap;
 }
 
+.hero-status {
+  padding: 22px;
+  border: 1px solid #d5e4f8;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .78);
+}
+
+.status-kicker { display:block; color:#2c68c8; font-size:11px; font-weight:800; letter-spacing:.08em; }
+.hero-status > strong { display:block; margin-top:10px; color:var(--rag-ink); font-size:19px; line-height:1.35; }
+.hero-status p { margin:9px 0 0; color:var(--rag-muted); font-size:13px; line-height:1.6; }
+.status-tags { display:flex; flex-wrap:wrap; gap:8px; margin-top:15px; }
+.status-tags span { padding:6px 9px; border-radius:999px; background:#edf5ff; color:#2d609e; font-size:12px; font-weight:700; }
+
 .tool-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+  align-items: stretch;
 }
+
+.dashboard-grid { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:14px; }
+.next-action-panel,.learning-route-panel { min-width:0; padding:20px 22px; border:1px solid var(--rag-line); border-radius:12px; background:#fff; box-shadow:var(--rag-shadow-soft); }
+.next-action-panel { display:flex; align-items:center; justify-content:space-between; gap:20px; background:linear-gradient(125deg,#ffffff,#f1f7ff); }
+.next-action-panel h3,.quick-entry-heading h3 { margin:6px 0 0; color:var(--rag-ink); font-size:20px; }
+.next-action-panel p { max-width:580px; margin:8px 0 0; color:var(--rag-muted); font-size:13px; line-height:1.6; }
+.route-heading { display:flex; flex-direction:column; }.route-heading strong { margin-top:6px; color:var(--rag-ink); font-size:18px; }
+.route-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:16px 0 0; padding:0; list-style:none; }
+.route-list li { display:grid; gap:3px; min-width:0; padding-left:10px; border-left:2px solid #d7e7fb; }.route-list b { color:var(--rag-blue-700); font-size:11px; }.route-list span { color:#244563; font-size:13px; font-weight:800; }.route-list small { color:#74879b; font-size:11px; line-height:1.4; }
+.quick-entry-heading { display:flex; align-items:end; justify-content:space-between; gap:16px; }.quick-entry-heading > span { color:#74879b; font-size:12px; }
 
 .learning-summary {
   display: grid;
@@ -227,7 +304,7 @@ onMounted(loadSummary)
   grid-template-columns: 34px 42px minmax(0, 1fr) 18px;
   align-items: center;
   gap: 12px;
-  min-height: 118px;
+  min-height: clamp(118px, 14vh, 160px);
   padding: 18px;
   color: inherit;
   text-align: left;
@@ -289,6 +366,8 @@ onMounted(loadSummary)
 }
 
 @media (max-width: 1180px) {
+  .home-hero { grid-template-columns:1fr; }
+  .dashboard-grid { grid-template-columns:1fr; }
   .learning-summary {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -309,6 +388,17 @@ onMounted(loadSummary)
 }
 
 @media (max-width: 760px) {
+  .home-page {
+    gap: 16px;
+    padding-bottom: 0;
+  }
+
+  .home-hero { min-height:0; padding:22px; }
+  .dashboard-grid { gap:12px; }
+  .next-action-panel { align-items:flex-start; flex-direction:column; }
+  .route-list { grid-template-columns:1fr; }
+  .quick-entry-heading { align-items:flex-start; flex-direction:column; gap:6px; }
+
   .home-hero {
     padding: 20px;
   }

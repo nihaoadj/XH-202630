@@ -3,6 +3,7 @@ import uuid
 import hashlib
 import logging
 import random
+from dataclasses import replace
 from collections.abc import Callable
 from datetime import datetime, timezone
 
@@ -23,6 +24,7 @@ from app.models.feedback.feedback_loop import (
     FeedbackFollowupSelection,
     FeedbackLoopResult,
     FeedbackResourceOption,
+    CorrectionPackageOptionV1,
     FollowUpGenerationStatus,
     LearningAttempt,
     LearningAttemptSubmit,
@@ -51,10 +53,12 @@ from app.models.shared.llm import LLMCallContext
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.services.knowledge.knowledge import KnowledgeService
 from app.services.generation.jobs import GenerationJobService
+from app.services.learners.mastery import MasteryService
 from app.models.learning_documents.schemas import GenerateRequest
 from app.agents.learning_agents.feedback_policy_agent import build_mastery_mutations, decide_attempt
 from app.services.feedback.learning_path_policy import mutate_learning_path
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
+from app.core.learning_tiers import difficulty_for_tier
 
 
 logger = logging.getLogger(__name__)
@@ -72,6 +76,7 @@ class FeedbackService:
         knowledge_catalog: KnowledgeCatalogRepository | None = None,
         llm_gateway: LLMGateway | None = None,
         tutor_repo: BaseTutorRepository | None = None,
+        mastery_service: MasteryService | None = None,
     ):
         self.feedback_repo = feedback_repo
         self.feedback_loop_repo = feedback_loop_repo
@@ -80,6 +85,7 @@ class FeedbackService:
         self.knowledge_catalog = knowledge_catalog
         self.llm_gateway = llm_gateway
         self.tutor_repo = tutor_repo
+        self.mastery_service = mastery_service
 
     def process_learning_attempt(
         self,
@@ -136,7 +142,7 @@ class FeedbackService:
         if existing:
             if existing.attempt.request_hash != request_hash:
                 raise ApplicationError(ErrorCode.FEEDBACK_IDEMPOTENCY_CONFLICT, status_code=409)
-            return self._with_analysis_and_options(existing)
+            return self._with_analysis_and_options(existing, profile)
 
         attempt_id = self._stable_id("att", req.learner_id, req.idempotency_key)
         attempt = LearningAttempt(
@@ -147,6 +153,23 @@ class FeedbackService:
         point_ids = [item.knowledge_point_id for item in attempt.knowledge_point_results]
         context = self.feedback_loop_repo.get_context(req.learner_id, point_ids)
         policy = decide_attempt(attempt, context)
+        tier_target = None
+        remediation_return_tier = None
+        if self.mastery_service is not None and profile.knowledge_base_id:
+            targets, tier_target, remediation_return_tier = self.mastery_service.recommend_feedback_targets(
+                profile,
+                action=policy.action.value,
+                point_scores={item.knowledge_point_id: item.score for item in attempt.knowledge_point_results},
+            )
+            if targets:
+                policy = replace(
+                    policy,
+                    target_knowledge_point_ids=tuple(targets),
+                    reason_codes=(
+                        (*policy.reason_codes, "tier_prerequisite_remediation")
+                        if remediation_return_tier else policy.reason_codes
+                    ),
+                )
         decision_id = self._stable_id("fdc", attempt_id)
         decision_payload = {
             "decision_id": decision_id,
@@ -156,6 +179,12 @@ class FeedbackService:
             "reason_codes": list(policy.reason_codes),
             "decision_reason": policy.decision_reason,
             "target_knowledge_point_ids": list(policy.target_knowledge_point_ids),
+            "recommended_tier": tier_target,
+            "remediation_return_tier": remediation_return_tier,
+            "tier_transition": (
+                "downgrade" if policy.action.value == "remediate" and remediation_return_tier else
+                "reinforce" if policy.action.value == "practice" else "unlock" if policy.action.value == "advance" else None
+            ),
         }
         decision = FeedbackDecision(
             **decision_payload,
@@ -207,16 +236,33 @@ class FeedbackService:
             raise ApplicationError(ErrorCode.LEARNING_PATH_MUTATION_INVALID, status_code=409) from exc
 
         self._apply_profile_copy(profile, profile_patch, state_mutations, new_version)
+        if self.mastery_service is not None and profile.knowledge_base_id:
+            point_scores = {item.knowledge_point_id: item.score for item in attempt.knowledge_point_results}
+            self.mastery_service.apply_learning_attempt(
+                profile,
+                attempt_id=attempt.attempt_id,
+                point_scores=point_scores,
+                occurred_at=attempt.submitted_at,
+            )
+            self.mastery_service.record_curriculum_verification(
+                profile, attempt_id=attempt.attempt_id, point_scores=point_scores,
+                occurred_at=attempt.submitted_at,
+            )
+            self.mastery_service.apply_tier_feedback(
+                profile, point_scores=point_scores,
+            )
         self._record_feedback_events(result)
-        return self._with_analysis_and_options(result)
+        return self._with_analysis_and_options(result, profile)
 
     def list_attempts(self, learner_id: str, limit: int = 20) -> list[LearningAttempt]:
         return self.feedback_loop_repo.list_attempts(learner_id, limit) if self.feedback_loop_repo else []
 
-    def list_results(self, learner_id: str, limit: int = 20) -> list[FeedbackLoopResult]:
+    def list_results(
+        self, learner_id: str, limit: int = 20, profile: LearnerProfile | None = None,
+    ) -> list[FeedbackLoopResult]:
         if self.feedback_loop_repo is None:
             return []
-        return [self._with_analysis_and_options(item) for item in self.feedback_loop_repo.list_results(learner_id, limit)]
+        return [self._with_analysis_and_options(item, profile) for item in self.feedback_loop_repo.list_results(learner_id, limit)]
 
     def get_current_path(self, learner_id: str):
         return self.feedback_loop_repo.get_current_path(learner_id) if self.feedback_loop_repo else None
@@ -235,15 +281,13 @@ class FeedbackService:
         targets = self._display_skill_node_names(profile, decision.target_knowledge_point_ids)
         if decision.action.value == "remediate":
             weak = list(dict.fromkeys([*weak, *targets]))
-            skill_level = "初级"
         elif decision.action.value == "advance":
             weak = [item for item in weak if item not in targets]
             strong = list(dict.fromkeys([*strong, *targets]))
-            skill_level = "高级"
-        else:
-            skill_level = profile.skill_level
         return {
-            "skill_level": skill_level,
+            # Placement is stable profile information.  Active learning tier is
+            # persisted separately, so one score cannot overwrite it globally.
+            "skill_level": profile.skill_level,
             "weak_points": weak,
             "strong_points": strong,
             "last_feedback_summary": {
@@ -349,44 +393,121 @@ class FeedbackService:
             logger.warning("Feedback analysis LLM unavailable; using deterministic fallback")
             return fallback
 
-    def _resource_options(self, result: FeedbackLoopResult) -> list[FeedbackResourceOption]:
+    def _resource_options(
+        self, result: FeedbackLoopResult, profile: LearnerProfile | None = None,
+    ) -> list[FeedbackResourceOption]:
         targets = result.decision.target_knowledge_point_ids or [
             item.knowledge_point_id for item in result.attempt.knowledge_point_results
         ]
         action = result.decision.action.value
+        next_options = (
+            self.mastery_service.next_generation_options(profile)
+            if profile is not None and self.mastery_service is not None and profile.knowledge_base_id else None
+        )
+        if action == "advance" and next_options and next_options.recommended_node_ids:
+            targets = list(next_options.recommended_node_ids)
+            tier = next_options.tier_progress.active_tier if next_options.tier_progress else result.decision.recommended_tier
+        else:
+            tier = result.decision.recommended_tier
+        difficulty = difficulty_for_tier(tier or 2)
         if action == "remediate":
             return [FeedbackResourceOption(
                 option_id="remediate-core", title="补救讲义与巩固测验",
                 description="以基础难度回顾薄弱知识点，再用短测验证掌握情况。",
-                resource_types=["讲义", "复习清单", "分阶测试题"], difficulty="初级",
+                resource_types=["讲义", "复习清单", "分阶测试题"], difficulty=difficulty,
                 target_knowledge_point_ids=targets,
             ), FeedbackResourceOption(
                 option_id="remediate-practice", title="补救情境训练",
                 description="通过实操步骤和小型案例巩固薄弱环节。",
-                resource_types=["实操指南", "案例分析", "分阶测试题"], difficulty="初级",
+                resource_types=["实操指南", "案例分析", "分阶测试题"], difficulty=difficulty,
                 target_knowledge_point_ids=targets,
             )]
         if action == "advance":
             return [FeedbackResourceOption(
                 option_id="advance-challenge", title="进阶案例与挑战测验",
                 description="以更高难度的情境决策扩展当前掌握良好的知识点。",
-                resource_types=["案例分析", "分阶测试题"], difficulty="高级",
+                resource_types=["案例分析", "分阶测试题"], difficulty=difficulty,
                 target_knowledge_point_ids=targets,
             )]
         return [FeedbackResourceOption(
             option_id="practice-targeted", title="针对性强化练习",
             description="保持当前难度，通过复习清单、实操与测验巩固本轮知识点。",
-            resource_types=["复习清单", "实操指南", "分阶测试题"], difficulty="中级",
+            resource_types=["复习清单", "实操指南", "分阶测试题"], difficulty=difficulty,
             target_knowledge_point_ids=targets,
         )]
 
-    def _with_analysis_and_options(self, result: FeedbackLoopResult) -> FeedbackLoopResult:
+    def _with_analysis_and_options(
+        self, result: FeedbackLoopResult, profile: LearnerProfile | None = None,
+    ) -> FeedbackLoopResult:
         raw = result.attempt.metadata.get("llm_analysis")
         try:
             analysis = FeedbackAnalysis.model_validate(raw) if raw else None
         except ValueError:
             analysis = None
-        return result.model_copy(update={"analysis": analysis, "resource_options": self._resource_options(result)})
+        generation_options = None
+        if profile is not None and self.mastery_service is not None and profile.knowledge_base_id:
+            generation_options = self.mastery_service.next_generation_options(profile)
+        total = sum(item.total_count for item in result.attempt.knowledge_point_results)
+        correct = sum(item.correct_count for item in result.attempt.knowledge_point_results)
+        correction_option = self._correction_package_option(generation_options, profile)
+        feedback_report = {
+            "schema_version": "1.0",
+            "attempt_id": result.attempt.attempt_id,
+            "objective_summary": {
+                "answered_count": total,
+                "correct_count": correct,
+                "accuracy": result.attempt.overall_score,
+                "evidence_status": "server_scored",
+            },
+            "capability_results": [
+                {
+                    "skill_node_id": item.knowledge_point_id,
+                    "score": item.score,
+                    "correct_count": item.correct_count,
+                    "total_count": item.total_count,
+                    "mastery_status": next(
+                        (mutation.after.status for mutation in result.knowledge_state_updates
+                         if mutation.knowledge_point_id == item.knowledge_point_id),
+                        "unassessed",
+                    ),
+                    "evidence_label": "服务端正式测评",
+                }
+                for item in result.attempt.knowledge_point_results
+            ],
+            "reflection": result.attempt.metadata.get("learning_reflection", {}),
+            "reflection_insight": analysis.reflection_insight if analysis else None,
+            "reinforcement_targets": [
+                item.model_dump(mode="json") for item in (generation_options.reinforce_weakness if generation_options else [])
+            ],
+            "unlearned_candidates": [
+                item.model_dump(mode="json") for item in (generation_options.learn_new_knowledge if generation_options else [])
+            ],
+            "correction_package_option": correction_option.model_dump(mode="json") if correction_option else None,
+        }
+        return result.model_copy(update={
+            "analysis": analysis,
+            "resource_options": self._resource_options(result, profile),
+            "correction_package_option": correction_option,
+            "generation_options": generation_options,
+            "feedback_report": feedback_report,
+        })
+
+    @staticmethod
+    def _correction_package_option(generation_options, profile: LearnerProfile | None) -> CorrectionPackageOptionV1 | None:
+        if generation_options is None:
+            return None
+        candidates = list(generation_options.reinforce_weakness)
+        if not candidates:
+            return CorrectionPackageOptionV1(
+                eligible=False, disabled_reason_code="NO_LEARNED_NOT_MASTERED_TARGET",
+                snapshot_hash=generation_options.snapshot_hash,
+            )
+        difficulty = profile.skill_level if profile and profile.skill_level in {"初级", "中级", "高级"} else "中级"
+        return CorrectionPackageOptionV1(
+            eligible=True, selectable_targets=[item.model_dump(mode="json") for item in candidates],
+            recommended_target_ids=[item.skill_node_id for item in candidates[:3]],
+            recommended_difficulty=difficulty, snapshot_hash=generation_options.snapshot_hash,
+        )
 
     def choose_followup(
         self,
@@ -401,11 +522,69 @@ class FeedbackService:
                        if item.attempt.attempt_id == selection.attempt_id), None)
         if result is None:
             raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=404)
-        options = self._resource_options(result)
+        options = self._resource_options(result, profile)
+        intent_options = None
         option = next((item for item in options if item.option_id == selection.option_id), None)
+        is_correction_package = selection.option_id == "personalized-correction-package-v1"
+        correction_snapshot = None
         # Learners may submit an explicitly selected combination rather than
         # one of the recommendation presets.
-        if option is None and selection.option_id == "custom-selection" and selection.resource_types:
+        if is_correction_package:
+            if selection.resource_types is not None or selection.difficulty is not None or selection.learning_intent is None:
+                raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+            if self.mastery_service is None or not selection.next_generation_snapshot_hash:
+                raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+            try:
+                intent_options, target_points = self.mastery_service.confirm_next_generation_intent(
+                    profile, intent=selection.learning_intent, selected_node_ids=selection.selected_skill_node_ids,
+                    snapshot_hash=selection.next_generation_snapshot_hash,
+                )
+            except ValueError as exc:
+                raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422) from exc
+            if selection.learning_intent.value != "reinforce_weakness":
+                raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+            candidate_by_id = {item.skill_node_id: item for item in intent_options.reinforce_weakness}
+            selected = [candidate_by_id[node_id] for node_id in target_points]
+            difficulty = profile.skill_level if profile.skill_level in {"初级", "中级", "高级"} else "中级"
+            correction_snapshot = {
+                "schema_version": "1.0", "source_attempt_id": result.attempt.attempt_id,
+                "source_decision_id": result.decision.decision_id, "source_run_id": result.attempt.source_run_id,
+                "learner_id": profile.learner_id, "knowledge_base_id": profile.knowledge_base_id,
+                "profile_version": profile.profile_version, "focus_snapshot_hash": intent_options.snapshot_hash,
+                "difficulty": difficulty,
+                "scaffolding_level": "high" if any((item.mastery_score or 1.0) < 0.6 for item in selected) else "medium",
+                "ordered_target_nodes": [{"skill_node_id": item.skill_node_id, "name": item.name,
+                    "mastery_status": "weak" if (item.mastery_score or 1.0) < 0.6 else "learning",
+                    "score_band": "below_60" if (item.mastery_score or 1.0) < 0.6 else "60_to_85",
+                    "reason_codes": item.reason_codes, "failed_dimensions": [],
+                    "teaching_strategies": ["concept_repair", "worked_example", "guided_practice"],
+                    "success_criteria": "能够在相似情境中独立解释并应用该能力节点。"} for item in selected],
+                "source_resource_ids": [result.attempt.source_resource_id],
+            }
+            option = FeedbackResourceOption(option_id=selection.option_id, title="薄弱点强化包",
+                description="根据正式反馈生成的个性化强化材料。", resource_types=["讲义"],
+                difficulty=difficulty, target_knowledge_point_ids=target_points)
+        elif selection.learning_intent is not None:
+            if self.mastery_service is None or not selection.next_generation_snapshot_hash:
+                raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+            try:
+                intent_options, target_points = self.mastery_service.confirm_next_generation_intent(
+                    profile,
+                    intent=selection.learning_intent,
+                    selected_node_ids=selection.selected_skill_node_ids,
+                    snapshot_hash=selection.next_generation_snapshot_hash,
+                )
+            except ValueError as exc:
+                raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422) from exc
+            option = FeedbackResourceOption(
+                option_id=f"intent-{selection.learning_intent.value}",
+                title="强化薄弱点" if selection.learning_intent.value == "reinforce_weakness" else "学习新知识",
+                description="按你选择的学习目标生成下一批资源。",
+                resource_types=list(selection.resource_types or ["讲义", "实操指南", "分阶测试题"]),
+                difficulty=options[0].difficulty if options else "中级",
+                target_knowledge_point_ids=target_points,
+            )
+        elif option is None and selection.option_id == "custom-selection" and selection.resource_types:
             target_points = result.decision.target_knowledge_point_ids or [
                 item.knowledge_point_id for item in result.attempt.knowledge_point_results
             ]
@@ -421,8 +600,15 @@ class FeedbackService:
             raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
         if self.generation_job_service is None:
             raise ApplicationError(ErrorCode.FOLLOWUP_GENERATION_FAILED, status_code=503)
-        resource_types = selection.resource_types or option.resource_types
-        difficulty = selection.difficulty or option.difficulty
+        if selection.learning_intent is not None and selection.learning_intent.value == "reinforce_weakness" and not is_correction_package:
+            raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
+        resource_types = ["个性化纠错训练包"] if is_correction_package else (selection.resource_types or option.resource_types)
+        # A user may choose resource types, but may not override the server's
+        # node-tier difficulty contract.
+        if self.mastery_service is not None and selection.difficulty is not None and not correction_snapshot and selection.difficulty != option.difficulty:
+            raise ApplicationError(ErrorCode.LEARNING_TIER_INVALID, status_code=422)
+        difficulty = (correction_snapshot["difficulty"] if correction_snapshot else
+                      (option.difficulty if self.mastery_service is not None else (selection.difficulty or option.difficulty)))
         request = GenerateRequest(
             learner_id=profile.learner_id,
             topic=f"{option.target_knowledge_point_ids[0]} {option.title}",
@@ -430,15 +616,21 @@ class FeedbackService:
             target_skill_nodes=option.target_knowledge_point_ids,
             resource_types=resource_types,
             difficulty_preference=difficulty,
-            generation_mode="standard", include_review=True, include_claim_check=True,
+            profile_focus_mode="off", generation_mode="standard", include_review=True, include_claim_check=True,
             max_iterations=1,
             constraints={"must_include_citations": True, "feedback_attempt_id": result.attempt.attempt_id,
-                         "feedback_option_id": option.option_id,
-                         "feedback_resource_types": resource_types,
-                         "feedback_difficulty": difficulty},
+                         "source_attempt_id": result.attempt.attempt_id,
+                          "feedback_option_id": option.option_id,
+                          "feedback_resource_types": resource_types,
+                          "feedback_difficulty": difficulty,
+                          **({"correction_focus_snapshot": correction_snapshot} if correction_snapshot else {}),
+                          **({"learning_intent": selection.learning_intent.value,
+                              "next_generation_options": intent_options.model_dump(mode="json"),
+                              "next_generation_snapshot_hash": selection.next_generation_snapshot_hash}
+                             if intent_options is not None else {})},
         )
         run_id = self._stable_id(
-            "run", result.attempt.attempt_id, option.option_id, difficulty, *resource_types,
+            "run", result.attempt.attempt_id, option.option_id, difficulty, *(selection.selected_skill_node_ids if is_correction_package else resource_types),
         )
         try:
             job = self.generation_job_service.create_job(profile, request, run_id=run_id, retry_failed=True)
@@ -463,7 +655,7 @@ class FeedbackService:
             )
             if schedule_followup:
                 schedule_followup(profile.model_copy(deep=True), request, job.run_id)
-            return self._with_analysis_and_options(updated)
+            return self._with_analysis_and_options(updated, profile)
         except ApplicationError:
             raise
         except Exception as exc:

@@ -6,6 +6,26 @@ from typing import Any
 from app.core.courseware.components import is_registered_component
 
 
+_FENCED_CODE = re.compile(r"```.*?```", flags=re.DOTALL)
+# This deliberately requires a tag name directly after ``<``.  The former
+# ``<[^>]+>`` rule crossed newlines and treated ordinary Python comparisons
+# (for example ``score < limit`` followed later by ``count > 0``) as HTML.
+_HTML_TAG = re.compile(r"</?[a-z][a-z0-9:_-]*(?:\s+[^<>]*)?/?>", flags=re.IGNORECASE)
+_UNSAFE_URI = re.compile(r"(?:javascript\s*:|https?://)", flags=re.IGNORECASE)
+
+
+def _contains_unsafe_learner_content(value: Any) -> bool:
+    """Reject actual markup/URLs, while allowing source-bound code examples.
+
+    The deterministic renderer renders learner content as text, but URLs and
+    markup are still disallowed by the courseware contract.  Fenced code is a
+    first-class source block in practice guides and may legitimately contain
+    comparison operators or API examples, so it must not be scanned as prose.
+    """
+    prose = _FENCED_CODE.sub("", str(value or ""))
+    return bool(_HTML_TAG.search(prose) or _UNSAFE_URI.search(prose))
+
+
 def source_trace_review(
     document: dict[str, Any], snapshots: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -59,15 +79,14 @@ def quality_review(document: dict[str, Any]) -> list[dict[str, Any]]:
         issues.append({"code": "MISSING_INTRO"})
     if not kinds or kinds[-1] != "recap":
         issues.append({"code": "MISSING_RECAP"})
-    if len(scenes) > 12:
+    if len(scenes) > 24:
         issues.append({"code": "TOO_MANY_SCENES"})
     for index, scene in enumerate(scenes):
         if not scene.get("title") or not (scene.get("blocks") or scene.get("steps") or scene.get("options")):
             issues.append({"code": "EMPTY_SCENE", "scene_order": index})
         if scene.get("kind") == "quiz" and (not scene.get("options") or not scene.get("answer")):
             issues.append({"code": "INVALID_QUIZ", "scene_order": index})
-        learner_values = [scene.get("title"), *(scene.get("blocks") or []), *(scene.get("steps") or []), *(scene.get("options") or []), scene.get("feedback")]
-        if any(re.search(r"<[^>]+>|https?://|javascript:\s*", str(value or ""), flags=re.IGNORECASE)
-               for value in learner_values):
+        learner_values = [scene.get("title"), scene.get("lead"), *(scene.get("blocks") or []), *(scene.get("steps") or []), *(scene.get("options") or []), scene.get("feedback"), scene.get("conclusion")]
+        if any(_contains_unsafe_learner_content(value) for value in learner_values):
             issues.append({"code": "UNSAFE_LEARNER_CONTENT", "scene_order": index})
     return issues

@@ -10,7 +10,9 @@ from typing import Any, Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.models.courseware.learning_design import CoursewareLearningDesign
+from app.models.courseware.learning_design import (
+    ContentBudget, CoursewareLearningDesign, LayoutRecipeId, PageRole,
+)
 from app.models.courseware.design import CoursewareDesign
 
 
@@ -20,6 +22,8 @@ ComponentKind = Literal[
     "single_choice", "multiple_choice", "recap",
     "flashcard", "matching", "ordering",
     "branching_scenario", "categorization", "word_bank_cloze", "timeline_explorer",
+    "metric_strip", "process_flow", "concept_map", "evidence_card", "comparison_table",
+    "decision_path", "code_steps", "conclusion_bar",
 ]
 PedagogicalRole = Literal["explain", "example", "warning", "recap"]
 
@@ -41,6 +45,11 @@ class CoursewareScenePlan(BaseModel):
     source_block_ids: list[str] = Field(default_factory=list, max_length=12)
     preferred_component_ids: list[str] = Field(default_factory=list, max_length=8)
     required: bool = True
+    page_role: PageRole | None = None
+    layout_recipe_id: LayoutRecipeId | None = None
+    key_question: str = Field(default="", max_length=240)
+    required_zones: list[str] = Field(default_factory=list, max_length=4)
+    content_budget: ContentBudget = Field(default_factory=ContentBudget)
 
     @field_validator("source_block_ids")
     @classmethod
@@ -66,7 +75,7 @@ class CoursewarePlanEnrichmentV2(BaseModel):
     course_title: str = Field(min_length=1, max_length=160)
     course_summary: str = Field(min_length=1, max_length=500)
     objectives: list[CoursewareObjectiveEnrichment] = Field(default_factory=list, max_length=8)
-    scenes: list[CoursewareSceneEnrichment] = Field(default_factory=list, max_length=12)
+    scenes: list[CoursewareSceneEnrichment] = Field(default_factory=list, max_length=24)
 
     @model_validator(mode="after")
     def unique_ids(self):
@@ -83,7 +92,7 @@ class CoursewareSpec(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     title: str = Field(min_length=1, max_length=160)
     learning_objectives: list[str] = Field(default_factory=list, max_length=8)
-    scenes: list[CoursewareScenePlan] = Field(min_length=1, max_length=8)
+    scenes: list[CoursewareScenePlan] = Field(min_length=1, max_length=24)
     # Deterministic platform-owned design produced before model scene prose.
     learning_design: CoursewareLearningDesign | None = None
     design: CoursewareDesign | None = None
@@ -161,6 +170,10 @@ class CoursewareBlock(BaseModel):
             from app.core.courseware.components import validate_component_payload
             if not validate_component_payload(self.component, self.model_dump(mode="json")):
                 raise ValueError("timeline_explorer payload 不符合 v2 契约")
+        elif self.component in {"metric_strip", "process_flow", "concept_map", "evidence_card", "comparison_table", "decision_path", "code_steps", "conclusion_bar"}:
+            from app.core.courseware.components import validate_component_payload
+            if not validate_component_payload(self.component, self.model_dump(mode="json")):
+                raise ValueError("结构化视觉组件 payload 不符合 v3 契约")
         return self
 
 
@@ -196,12 +209,20 @@ class TimelineExplorerSpec(CoursewareBlock):
     component: Literal["timeline_explorer"]
 
 
+class VisualComponentSpec(CoursewareBlock):
+    schema_version: Literal["3.0"] = "3.0"
+    component: Literal[
+        "metric_strip", "process_flow", "concept_map", "evidence_card", "comparison_table",
+        "decision_path", "code_steps", "conclusion_bar",
+    ]
+
+
 # The discriminator is deliberately platform-owned. Unknown component names
 # fail structured parsing before they reach the renderer.
 ComponentSpec = Annotated[
     Union[
         TextComponentSpec, StepsComponentSpec, ChoiceComponentSpec,
-        BranchingScenarioSpec, CategorizationSpec, WordBankClozeSpec, TimelineExplorerSpec,
+        BranchingScenarioSpec, CategorizationSpec, WordBankClozeSpec, TimelineExplorerSpec, VisualComponentSpec,
     ],
     Field(discriminator="component"),
 ]
@@ -210,7 +231,7 @@ ComponentSpec = Annotated[
 class CoursewareSceneSpec(BaseModel):
     """A renderer-safe, source-traceable learner-facing scene."""
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "2.0"] = "2.0"
     kind: SceneKind
     title: str = Field(min_length=1, max_length=120)
     blocks: list[ComponentSpec] = Field(min_length=1, max_length=10)
@@ -218,6 +239,8 @@ class CoursewareSceneSpec(BaseModel):
     options: list[str] = Field(default_factory=list, max_length=8)
     answer: list[str] = Field(default_factory=list, max_length=8)
     feedback: str | None = Field(default=None, max_length=800)
+    lead: str | None = Field(default=None, max_length=500)
+    conclusion: str | None = Field(default=None, max_length=500)
     # Explicit mappings are accepted from the model, while the renderer-safe
     # fallback below derives them from the first cited block for legacy scenes.
     title_source_refs: list[SceneSourceRef] = Field(default_factory=list, max_length=4)
@@ -240,6 +263,10 @@ class CoursewareSceneSpec(BaseModel):
         if self.kind == "quiz":
             if len(self.options) < 2 or not self.answer or not set(self.answer).issubset(set(self.options)):
                 raise ValueError("测验必须包含可用选项与答案")
+            if self.steps:
+                raise ValueError("测验场景只能保留一个主要答题操作")
+            if not str(self.feedback or "").strip():
+                raise ValueError("测验必须包含来源支持的反馈")
         elif self.options or self.answer:
             raise ValueError("仅测验场景可包含选项和答案")
         return self
@@ -271,12 +298,17 @@ class CoursewareSceneSpec(BaseModel):
             "source_refs": self.source_refs, "source_block_ids": self.source_block_ids,
             "source_map": {"blocks": block_maps},
             "component_blocks": [block.model_dump(mode="json") for block in self.blocks],
+            "lead": self.lead, "conclusion": self.conclusion,
         }
         # Every learner-visible field gets a stable source-map entry. Explicit
         # refs win; deterministic fallback preserves old AI/fallback payloads.
         first_map = block_maps[0] if block_maps else []
         title_map = sorted({block_id for ref in self.title_source_refs for block_id in ref.source_block_ids}) or first_map
         result["source_map"]["title"] = [title_map]
+        if self.lead:
+            result["source_map"]["lead"] = [first_map]
+        if self.conclusion:
+            result["source_map"]["conclusion"] = [block_maps[-1] if block_maps else first_map]
         if self.feedback:
             result["source_map"]["feedback"] = [
                 sorted({block_id for ref in self.feedback_source_refs for block_id in ref.source_block_ids}) or first_map
@@ -287,6 +319,65 @@ class CoursewareSceneSpec(BaseModel):
             result["source_map"]["options"] = [block_maps[0] for _ in self.options]
             result["source_map"]["answer"] = [block_maps[0] for _ in self.answer]
         return result
+
+
+class CoursewarePracticeEnrichment(BaseModel):
+    """Small, source-bound model contract for a platform-owned steps page.
+
+    Practice pages keep component IDs and provenance in the deterministic
+    storyboard.  The model only supplies pedagogical wording and ordered
+    actions, avoiding a large discriminated-union response for the resource
+    type that most often needs reliable guided interaction.
+    """
+
+    title: str = Field(min_length=1, max_length=120)
+    lead: str = Field(min_length=1, max_length=500)
+    steps: list[str] = Field(min_length=1, max_length=1)
+    conclusion: str = Field(min_length=1, max_length=500)
+
+    @field_validator("steps")
+    @classmethod
+    def clean_steps(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item and item.strip()]
+        if len(cleaned) != 1:
+            raise ValueError("步骤页必须只包含一条当前操作")
+        return cleaned
+
+
+class CoursewarePracticeStepBoundary(BaseModel):
+    """A structural source-block grouping, never learner-facing prose."""
+
+    title: str = Field(min_length=1, max_length=160)
+    source_block_ids: list[str] = Field(min_length=1, max_length=32)
+
+    _clean_blocks = field_validator("source_block_ids")(_clean_ids)
+
+
+class CoursewarePracticeStepExtraction(BaseModel):
+    """LLM candidate for one guide's ordered, source-bound step structure.
+
+    Context blocks are deliberately outside the operation sequence: guide
+    introductions, code fences, appendices and checklists must not become fake
+    learner steps just because they have their own source block.
+    """
+
+    steps: list[CoursewarePracticeStepBoundary] = Field(min_length=1, max_length=16)
+    context_block_ids: list[str] = Field(default_factory=list, max_length=32)
+
+    @model_validator(mode="after")
+    def unique_partition_ids(self):
+        all_ids = [block_id for step in self.steps for block_id in step.source_block_ids] + self.context_block_ids
+        if len(all_ids) != len(set(all_ids)):
+            raise ValueError("实操步骤与上下文来源块不得重复")
+        return self
+
+
+class CoursewareNarrativeEnrichment(BaseModel):
+    """Minimal model contract for a platform-owned introduction or recap."""
+
+    title: str = Field(min_length=1, max_length=120)
+    lead: str = Field(min_length=1, max_length=500)
+    conclusion: str = Field(min_length=1, max_length=500)
 
 
 class CoursewareReviewIssue(BaseModel):

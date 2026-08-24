@@ -20,10 +20,15 @@ def test_duration_and_intensity_create_auditable_scene_and_interaction_quotas():
         [_source("r1"), _source("r2", role="practice", exercise_items=[{"question": "q", "answer": "a"}])],
         request_options={"expected_duration_minutes": 30, "interaction_intensity": "medium"},
     )
-    assert design.interaction_quota["target_scene_count"] == 7
+    assert design.interaction_quota["target_scene_count"] == 11
     assert design.interaction_quota["status"] == "met"
-    assert len(design.storyboard.scenes) == 7
-    assert {scene.kind for scene in design.storyboard.scenes} >= {"example", "compare", "recap"}
+    assert len(design.storyboard.scenes) < 9
+    assert {scene.page_role for scene in design.storyboard.scenes} >= {
+        "cover", "learning_map", "concept_explanation", "comparison_analysis",
+        "practice_workspace", "summary_action",
+    }
+    assert not any(scene.kind == "example" for scene in design.storyboard.scenes)
+    assert any(item["code"] == "SOURCE_DENSITY_REDUCED_PAGE_COUNT" for item in design.warnings)
 
 
 def test_conflict_is_explicitly_parallel_and_source_concepts_are_traceable():
@@ -47,4 +52,3 @@ def test_high_quota_is_constrained_without_verifiable_evidence_and_does_not_inve
     assert design.interaction_quota["reason"] == "INSUFFICIENT_SCORED_EVIDENCE"
     assert not any(scene.kind == "quiz" for scene in design.storyboard.scenes)
     assert any(item["code"] == "INSUFFICIENT_SCORED_EVIDENCE" for item in design.warnings)
-

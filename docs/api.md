@@ -267,8 +267,9 @@
 说明：
 
 - 此接口只返回任务信息，不直接返回资源正文。
-- 当前支持 `讲义`、`实操指南`、`分阶测试题`、`复习清单`、`案例分析`；唯一兼容别名 `定制讲义` 会在请求校验时规范化为 `讲义`。
+- 普通生成支持 `讲义`、`实操指南`、`分阶测试题`、`复习清单`、`案例分析`；唯一兼容别名 `定制讲义` 会在请求校验时规范化为 `讲义`。
 - 未知资源类型在任务创建和任何模型调用前以 HTTP 422 拒绝，不创建失败任务占位。
+- `个性化纠错训练包` 是反馈专属的第六类内部文本资源。普通生成请求它会以 HTTP 422 `FEEDBACK_ONLY_RESOURCE_TYPE` 拒绝。
 - 路由固定为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`。
 - 当前推荐前端流程：
   提交任务 -> 轮询任务状态 -> 完成后拉取资源列表。
@@ -717,6 +718,27 @@ Turn 请求为：
 当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。
 ## 互动课件学习事件（向前兼容）
 
+### 互动课件按资源独立生成
+
+互动课件是文本学习资源的 HTML 互动版本，而不是跨资源拼接的整套课程。用户多选资源时，系统为每个资源创建一个独立任务、独立来源快照和独立发布资源。实操指南对应可逐步完成的操作版；测试题对应答题、即时反馈和解析版。
+
+```http
+POST /api/resources/courseware/jobs/batch
+```
+
+```json
+{
+  "learner_id": "learner-1",
+  "resource_ids": ["guide-1", "assessment-1"],
+  "expected_duration_minutes": 20,
+  "interaction_intensity": "medium"
+}
+```
+
+返回 `202` 和 `{ "jobs": [CoursewareJobResponse] }`；数组顺序与 `resource_ids` 一致。每个返回任务的 `source_resource_ids` 在持久化层恰有一个 ID。原有单任务 `POST /api/resources/courseware/jobs` 继续存在，但只接受一个 `source_resource_ids` 项；多资源请求必须使用 batch 接口。
+
+`GET /api/resources/courseware/jobs?learner_id={learner_id}` 返回当前学习者可见的互动课件任务列表，响应为 `{ "items": [CoursewareJobResponse] }`，按最近更新时间倒序。它用于资源生成页恢复课件任务、切换历史任务；单任务详情、事件流、重试与发布接口保持原路径不变。访问校验失败仍按既有防枚举语义返回 404。
+
 `POST /api/resources/courseware/items/{resource_id}/learning-events` 接收最多 100 个版本化、脱敏事件，返回 `acknowledged_event_ids`。服务端按 `occurrence_id` 幂等写入 SQLite，并按 `resource_id` 与 `release_id` 隔离投影。资源没有 `released_release_id`、事件引用旧/未知 release，或同一批次包含混合 release 时，返回 HTTP 409；错误码分别为 `COURSEWARE_RELEASE_UNAVAILABLE`、`COURSEWARE_RELEASE_NOT_CURRENT` 和 `COURSEWARE_RELEASE_BATCH_MISMATCH`，并且整批事件不写入。
 
 资源详情同时返回 `released_release_id` 当前发布指针，并在生成课件资源上返回来源批次 `batch_id`；任务响应返回冻结的 `source_batch_id`。`GET /api/resources/courseware/items/{resource_id}/learning-progress?release_id={release_id}` 只接受当前发布版本，否则同样返回上述 409，不以 `200 + 空状态` 冒充拒绝。
@@ -765,8 +787,42 @@ Turn 请求为：
 
 ### 17.4 生成焦点快照
 
+#### 反馈后的用户学习意图
+
+服务端判分的 run/batch feedback 响应可追加 `generation_options`。其中的候选由已发布资源的 `knowledge_points` 和规范能力投影共同计算，并携带 `snapshot_hash`：
+
+- `reinforce_weakness`：仅包含已学习、已有客观证据且尚未掌握的节点；
+- `learn_new_knowledge`：仅包含尚未被已发布资源覆盖的节点；含未学习前置节点的候选会标出 `blocked_by_node_ids`。
+
+学习者通过既有 `POST /api/feedback/followups/select` 确认下一批资源时，可附加 `learning_intent`、`selected_skill_node_ids`（1–3 个）和 `next_generation_snapshot_hash`。服务端重新校验候选集合、快照、知识库和先修关系；意图与节点不匹配、快照过期或越过未学习先修节点均返回 422，不创建生成任务。确认后的 intent snapshot 写入 child generation job 的 `constraints`，重试复用该冻结请求。
+
+反馈结果若返回 `correction_package_option.eligible=true`，可用固定 `option_id=personalized-correction-package-v1`、`learning_intent=reinforce_weakness`、1–3 个目标节点和该选项 `snapshot_hash` 创建薄弱点强化包。请求必须省略 `resource_types` 和 `difficulty`；服务端冻结脱敏纠错快照，原题、答案、解析、原始作答、自由文本和 held-out 内容不会进入生成。
+
 `POST /api/generate/jobs` 新增可选 `profile_focus_mode: "auto" | "off"`，默认 `auto`。显式 `target_skill_nodes` 的优先级最高并形成 `focus_mode="explicit"`；`off` 不采用画像弱项；`auto` 采用稳定排序的前三个 eligible 节点。创建响应、任务状态和列表项新增 `focus_snapshot`，包括 `profile_version`、`mastery_snapshot_hash`、排序依据、`adopted_node_ids` 和带原因码的 `skipped`。任务创建后该快照冻结，重试不按新画像重算。
 
-### 17.5 报告 2.0 additive 字段
+#### 课程推进与覆盖欠债
 
-`GET /api/report/{learner_id}` 保持原路径与旧字段，并新增 `report_schema_version="2.0"`、`as_of_profile_version`、`generated_at`、`ability_nodes`、`mastery_summary`、`mastery_trend`、`evidence_coverage`、`weakness_priorities`、`next_resource_focus` 和 `data_warnings`。雷达图、弱强项、新字段和下一批建议均来自同一规范 `knowledge_states` 投影；自评事件会显示在趋势中但不计为客观覆盖率。
+能力节点响应可附加 `curriculum_nodes` 与 `curriculum_progress`。它们是独立于掌握度的课程流程投影：节点状态为 `unplanned/scheduled/exposed/verification_pending/completed/reinforcement_due`，并包含 `wait_rounds`、已发布资源数、正式验证次数和版本号。掌握度仍仅以服务端客观证据为准。
+
+反馈响应的 `generation_options` 可附加 `recommended_node_ids` 与 `curriculum_progress`。服务端只将前置满足的未覆盖节点计入等待轮数；节点连续等待会提高推荐优先级，但不会越过前置关系。创建新任务时，确认的 1–3 个节点会被锁定并写入冻结请求；反馈/测评后仅重算推荐，不会自动创建下一轮任务。
+
+### 17.5 报告 3.0 动态读取
+
+`GET /api/report/{learner_id}?window_days=7|30|90` 保持原路径、原字段和权限边界，并使用 `report_schema_version="3.0"`。新增 `report_revision`、`data_as_of`、`window`、`freshness`、`learning_activity`、`mastery_overview`、`mastery_trends`、`weakness_groups`、`resource_credibility_summary` 和 `recent_resource_credibility`。雷达图、弱强项、新字段和下一批建议均来自同一规范 `knowledge_states` 投影；自评事件可显示在趋势中但不计为客观覆盖率。
+
+报告 additive 返回三个版本化可视化投影：
+
+- `knowledge_blind_spot_map`：知识节点 × `concept/scenario/misconception/practice` 的证据定位。`unassessed` 和 `needs_evidence` 的 `score` 为 `null`，不以 0 分表示；只有可从正式 Attempt 的题目追踪精确归属的维度才会返回分数。
+- `resource_difficulty_curve`：每个已发布资源与稳定能力节点的 `learner_readiness_score`、`resource_difficulty_score`、`difficulty_gap` 与 `match_status`。首版 `strategy_version="declared-band/v1"` 仅标准化初级/中级/高级；未知难度或未测准备度返回 `not_measured`，不伪造分数。
+- `learning_path_graph`：知识图谱前置边与持久化学习路径/课程进度的只读图投影，节点返回角色、阻塞节点和资源建议。它不修改路径，也不替代正式反馈决策。
+
+响应始终带 `ETag: "rpt_<sha256>"` 和 `Cache-Control: private, no-cache`。匹配的 `If-None-Match` 返回无响应体的 `304`；认证与 learner 访问校验仍先执行。`generated_at` 不影响 ETag。
+
+`GET /api/report/{learner_id}/resource-credibility?limit=20&cursor=...` 返回按 `published_at DESC, resource_id ASC` 排序的文本资源可信证据分页；cursor 无效返回 `400 REPORT_CURSOR_INVALID`。互动课件不进入该统计。
+
+`GET /api/report/{learner_id}/events?window_days=30` 是当前快照 SSE，不是 durable event ledger。它先发送 `report_snapshot`，随后只在 revision 变化时发送 `report_changed`，空闲时发送 `ping`；使用 `Last-Event-ID` 或 `after_revision` 的非法 cursor 返回 `400 REPORT_STREAM_CURSOR_INVALID`。payload 只包含 learner、revision、时间窗口和变化域等白名单摘要。资源难度投影或路径投影变化时，`changed_domains` 可包含 `resource_match`、`path`。
+# 分阶学习接口增量字段
+
+`ability_nodes[].tier` 与 `tier_label` 提供节点所属阶级。`generation_options` 额外返回 `tier_progress`（起始阶、当前阶、最高解锁阶、补救返回阶）、`tier_completion` 和 `recommendation_type`；每个候选节点都带 `tier`、`tier_label` 与 `eligibility_status`。
+
+当生成请求包含 `target_skill_nodes` 时，服务端要求节点数量不超过3且属于同一当前阶；请求中的 `difficulty_preference` 必须等于该阶的固定难度，否则以 `LEARNING_TIER_INVALID` 拒绝。`POST /api/feedback/followups/select` 在分阶处方存在时同样锁定难度，不接受客户端改写。

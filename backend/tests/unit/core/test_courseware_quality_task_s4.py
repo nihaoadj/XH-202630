@@ -23,6 +23,15 @@ def test_review_v2_localizes_scene_block_and_multi_scene_issues_without_widening
     ]
 
 
+def test_course_scope_review_issue_is_repaired_across_current_scenes():
+    issues = [{"scope": "course", "instruction": "统一各场景的目标、练习和反馈衔接"}]
+
+    assert resolve_review_targets(_scenes(), issues) == [
+        ("scene-1", "统一各场景的目标、练习和反馈衔接"),
+        ("scene-2", "统一各场景的目标、练习和反馈衔接"),
+    ]
+
+
 def test_review_v2_rejects_unlocalized_error_and_unknown_rubric():
     with pytest.raises(ValueError, match="localized error"):
         CoursewareReviewDecision(schema_version="2.0", status="revise", issues=[{
@@ -30,4 +39,3 @@ def test_review_v2_rejects_unlocalized_error_and_unknown_rubric():
         }])
     with pytest.raises(ValueError, match="unknown rubric"):
         CoursewareReviewDecision(schema_version="2.0", status="pass", rubric_scores={"invented": 1.0})
-

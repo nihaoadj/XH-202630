@@ -43,3 +43,20 @@ def test_quality_summary_requires_declared_scene_set_and_deduplicates_fallbacks(
     assert summary["latency_sample_count"] == 2
     assert summary["latency_percentile_method"] == "nearest_rank"
     assert summary["latency_p95_ms"] == 20
+
+
+def test_quality_summary_uses_durable_reviewer_rubric_scores():
+    events = [
+        {"event_id": "review", "stage": "ai_teaching_quality", "status": "approved", "payload": {
+            "rubric_scores": {
+                "objective_alignment": 4, "coherence": 4, "explanation_depth": 3,
+                "example_usefulness": 3, "misconception_handling": 3, "practice_gradient": 3,
+                "feedback_quality": 4, "interaction_purpose": 4, "cognitive_load": 3,
+            },
+        }},
+    ]
+
+    summary = build_quality_summary(events)
+
+    assert summary["rubric_passed"] is True
+    assert summary["rubric_scores"]["feedback_quality"] == 4

@@ -10,6 +10,8 @@ from app.agents.resource_workflows.interactive_courseware.workflow import (
 from app.db.audit.base import BaseAuditRepository
 from app.core.storage.file_storage import load_resource_file
 from app.models.courseware import (
+    CoursewareBatchCreateRequest,
+    CoursewareBatchJobResponse,
     CoursewareJobCreateRequest,
     CoursewareJobDetail,
     CoursewareJobResponse,
@@ -61,8 +63,34 @@ class CoursewareService:
     def create_job(self, request: CoursewareJobCreateRequest) -> CoursewareJobResponse:
         return self.workflow.create_job(request)
 
+    def create_jobs_for_resources(self, request: CoursewareBatchCreateRequest) -> CoursewareBatchJobResponse:
+        """Fan out a user selection into isolated source-scoped jobs."""
+        jobs = []
+        for index, resource_id in enumerate(request.resource_ids):
+            jobs.append(self.create_job(CoursewareJobCreateRequest(
+                learner_id=request.learner_id,
+                source_resource_ids=[resource_id],
+                learning_goal=request.learning_goal,
+                expected_duration_minutes=request.expected_duration_minutes,
+                interaction_intensity=request.interaction_intensity,
+                visual_style_id=request.visual_style_id,
+                idempotency_key=(f"{request.idempotency_key}:{index}" if request.idempotency_key else None),
+            )))
+        return CoursewareBatchJobResponse(jobs=jobs)
+
     def get_job(self, run_id: str) -> CoursewareJobResponse | None:
         return self.workflow.get_job(run_id)
+
+    def list_jobs(self, learner_id: str) -> list[CoursewareJobResponse]:
+        jobs: list[CoursewareJobResponse] = []
+        for row in self.repo.list_jobs(learner_id):
+            run_id = row.get("run_id")
+            if not run_id:
+                continue
+            job = self.workflow.get_job(run_id)
+            if job is not None:
+                jobs.append(job)
+        return jobs
 
     def get_job_detail(self, run_id: str) -> CoursewareJobDetail | None:
         return self.workflow.get_job_detail(run_id)

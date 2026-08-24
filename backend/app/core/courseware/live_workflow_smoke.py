@@ -42,17 +42,21 @@ from app.services.courseware.executor import CoursewareExecutor
 from app.services.learning_documents.resources import ResourceService
 
 
+# Every live evaluation row is one resource → one interactive HTML version.
+# Two fixtures per resource kind keep the former 10-row bounded sample while
+# exercising all resource-specific learning flows without reintroducing a
+# hidden aggregation path.
 LIVE_COMBINATIONS: tuple[dict[str, Any], ...] = (
-    {"id": "lecture_only", "types": ("讲义",)},
-    {"id": "lecture_practice_assessment", "types": ("讲义", "实操指南", "分阶测试题")},
-    {"id": "five_resource_types", "types": ("讲义", "实操指南", "分阶测试题", "复习清单", "案例分析")},
-    {"id": "repair_revision_candidate", "types": ("讲义", "实操指南", "分阶测试题"), "learning_goal": "检查练习反馈并观察受预算约束的修订路径"},
-    {"id": "lecture_checklist", "types": ("讲义", "复习清单")},
-    {"id": "lecture_case", "types": ("讲义", "案例分析")},
-    {"id": "practice_case", "types": ("实操指南", "案例分析")},
-    {"id": "assessment_checklist", "types": ("分阶测试题", "复习清单")},
-    {"id": "all_sources_repair", "types": ("讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"), "learning_goal": "观察跨资源融合和高互动配额"},
-    {"id": "localized_feedback_repair", "types": ("讲义", "实操指南", "分阶测试题"), "learning_goal": "观察局部反馈修订和候选隔离"},
+    {"id": "lecture_core", "types": ("讲义",)},
+    {"id": "lecture_recall", "types": ("讲义",), "learning_goal": "理解并复述核心概念"},
+    {"id": "practice_guided", "types": ("实操指南",)},
+    {"id": "practice_mastery", "types": ("实操指南",), "learning_goal": "逐步完成操作并自检"},
+    {"id": "assessment_answer", "types": ("分阶测试题",)},
+    {"id": "assessment_explanation", "types": ("分阶测试题",), "learning_goal": "作答后理解解析依据"},
+    {"id": "checklist_review", "types": ("复习清单",)},
+    {"id": "checklist_self_check", "types": ("复习清单",), "learning_goal": "逐项完成复习检查"},
+    {"id": "case_diagnosis", "types": ("案例分析",)},
+    {"id": "case_decision", "types": ("案例分析",), "learning_goal": "根据案例证据完成判断"},
 )
 
 _TYPE_TO_ID = {
@@ -64,8 +68,13 @@ _TYPE_TO_ID = {
 }
 _STAGE_BY_SCHEMA = {
     "CoursewareSpec": "spec",
+    "CoursewarePlanEnrichmentV2": "spec",
     "CoursewareSceneSpec": "scene",
+    "CoursewarePracticeEnrichment": "scene",
+    "CoursewareNarrativeEnrichment": "scene",
+    "CoursewarePracticeStepExtraction": "spec",
     "CoursewareReviewDecision": "quality_review",
+    "CoursewareReviewDecisionV2Draft": "quality_review",
 }
 
 MAX_LIVE_CALLS = 120
@@ -140,6 +149,19 @@ def _outcome_counts(statuses: list[str]) -> dict[str, int]:
     }
 
 
+def _quality_eligible_runs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Exclude only deliberate source-admission rejects from quality denominators.
+
+    A source admission rejection is evidence that the provenance hard gate
+    worked before any course could be composed. It must remain in the outcome
+    and provenance-rejection metrics, but cannot have scene recovery, rubric
+    or interaction values. Other failed or release-blocked jobs deliberately
+    stay in this population and therefore make the quality gate fail.
+    """
+
+    return [run for run in runs if str(run.get("status")) != "rejected_admission"]
+
+
 def acceptance_report_status(*, usage_complete: bool, quality_gate_passed: bool) -> str:
     """Reserve ``DONE`` for reports that also pass the live quality gate."""
 
@@ -150,10 +172,10 @@ def redact_workflow_record(record: dict[str, Any]) -> dict[str, Any]:
     """Project one run to fields safe for a committed/CI report."""
 
     allowed = (
-        "combination", "status", "error_code", "warning_codes", "scene_count",
-        "scene_statuses", "released", "artifact_sha256", "artifact_count",
+        "combination", "status", "error_code", "warning_codes", "scene_warnings", "scene_count",
+        "scene_statuses", "scene_agent_versions", "page_quality_codes", "released", "artifact_sha256", "artifact_count",
         "checkpoint_stages", "outbox_statuses", "attempt", "release_outcome",
-        "quality_summary",
+        "quality_summary", "review_issue_codes",
     )
     return {key: record[key] for key in allowed if key in record}
 
@@ -302,7 +324,15 @@ def _fixture_content(fixture: dict[str, Any], resource_type: str) -> str:
     if resource_type == "讲义":
         return "输入经过确定规则映射到输出；课件只能依据冻结来源。"
     if resource_type == "实操指南":
-        return "先读取冻结来源，再按步骤验证结果，最后记录观察。"
+        return (
+            "# 冻结来源实操\n\n"
+            "### 步骤 1：读取冻结来源\n"
+            "确认只使用本次任务冻结的来源内容。\n\n"
+            "### 步骤 2：执行验证\n"
+            "按来源描述执行操作，并记录可复核的结果。\n\n"
+            "### 步骤 3：记录观察\n"
+            "对照预期结果，写下异常与下一步处理。"
+        )
     if resource_type == "分阶测试题":
         return "根据冻结来源判断步骤顺序并说明理由。"
     if resource_type == "复习清单":
@@ -375,18 +405,40 @@ def _run_one(combo: dict[str, Any], fixture: dict[str, Any], gateway: _Recording
     resource = courseware_repo.get_resource_by_run(created.run_id)
     artifact_sha = resource.get("artifact_sha256") if resource else None
     warnings = row.get("warnings") or []
+    scene_warnings = [
+        {"code": str(item.get("code")), "scene_id": str(item.get("scene_id"))}
+        for item in warnings if isinstance(item, dict) and item.get("scene_id")
+    ]
     quality_summary = detail.quality_summary if detail else None
     if hasattr(quality_summary, "model_dump"):
         quality_summary = quality_summary.model_dump(mode="json")
     quality_summary = quality_summary if isinstance(quality_summary, dict) else {}
     checkpoints = [item for item in courseware_repo.checkpoints.values() if item.get("run_id") == created.run_id]
     outbox = courseware_repo.list_outbox(created.run_id, pending_only=False)
+    review_issue_codes = sorted({
+        str(issue.get("code"))
+        for review in courseware_repo.list_reviews(created.run_id)
+        for issue in (review.get("issues") or [])
+        if isinstance(issue, dict) and issue.get("code")
+    })
+    page_quality_codes = sorted({
+        str(issue.get("code"))
+        for review in courseware_repo.list_reviews(created.run_id)
+        if review.get("kind") == "page_quality"
+        for issue in (review.get("issues") or [])
+        if isinstance(issue, dict) and issue.get("code")
+    })
     record = {
         "combination": combo["id"], "status": job.status if job else "missing",
         "error_code": job.error_code if job else "JOB_MISSING",
         "warning_codes": sorted({str(item.get("code")) for item in warnings if item.get("code")}),
+        "scene_warnings": scene_warnings,
         "scene_count": len(detail.scenes) if detail else 0,
         "scene_statuses": sorted({scene.status for scene in detail.scenes}) if detail else [],
+        "scene_agent_versions": [
+            {"kind": scene.kind, "agent_version": scene.agent_version}
+            for scene in (detail.scenes if detail else [])
+        ],
         "released": bool(row.get("released_release_id")), "artifact_sha256": artifact_sha,
         "artifact_count": len(courseware_repo.list_artifacts(resource["resource_id"])) if resource else 0,
         "checkpoint_stages": sorted({str(item.get("stage")) for item in checkpoints}),
@@ -401,6 +453,10 @@ def _run_one(combo: dict[str, Any], fixture: dict[str, Any], gateway: _Recording
             )
             if key in quality_summary
         },
+        # Codes are stable operational evidence; model prose, locators and
+        # source content remain excluded from the live-model artifact.
+        "review_issue_codes": review_issue_codes,
+        "page_quality_codes": page_quality_codes,
         "executor": executor_result,
     }
     return redact_workflow_record(record)
@@ -469,13 +525,17 @@ def run_bounded_live_workflow(*, config_path: Path, enabled: bool = False, artif
         not stage["calls"] or all(stage["tokens"].get(field) is not None for field in ("input_tokens", "output_tokens", "total_tokens"))
         for stage in stages.values()
     )
-    quality_rows = [item.get("quality_summary") or {} for item in runs]
+    quality_population = _quality_eligible_runs(runs)
+    quality_rows = [item.get("quality_summary") or {} for item in quality_population]
     recovery_values = [item.get("required_scene_recovery_rate") for item in quality_rows]
     quota_values = [item.get("interaction_quota_status") for item in quality_rows]
     rubric_pass_count = sum(item.get("rubric_passed") is True for item in quality_rows)
     fallback_count = sum(int(item.get("deterministic_fallback_count") or 0) for item in quality_rows)
     quality_gate = {
-        "publishable_count": outcomes["published"] + outcomes["warning"],
+        "eligible_combination_count": len(quality_population),
+        "source_admission_rejection_count": len(runs) - len(quality_population),
+        "source_admission_rejection_rate": round((len(runs) - len(quality_population)) / len(runs), 4) if runs else None,
+        "publishable_count": sum(str(item.get("status")) in {"published", "published_with_warnings"} for item in quality_population),
         "publishable_target": 8,
         "required_scene_recovery_rate": min(recovery_values) if recovery_values and all(value is not None for value in recovery_values) else None,
         "required_scene_recovery_target": 0.85,
@@ -510,7 +570,7 @@ def run_bounded_live_workflow(*, config_path: Path, enabled: bool = False, artif
         "runs": runs,
         "metrics": {
             "stages": stages,
-            "quality": {"workflow_success_rate": round((outcomes["published"] + outcomes["warning"]) / len(LIVE_COMBINATIONS), 4), "spec_success_rate": stages["spec"]["success_rate"], "scene_success_rate": stages["scene"]["success_rate"], "quality_review_success_rate": stages["quality_review"]["success_rate"], "gate": quality_gate},
+            "quality": {"workflow_success_rate": round(quality_gate["publishable_count"] / len(quality_population), 4) if quality_population else None, "spec_success_rate": stages["spec"]["success_rate"], "scene_success_rate": stages["scene"]["success_rate"], "quality_review_success_rate": stages["quality_review"]["success_rate"], "gate": quality_gate},
             "reliability": {"retry_count": sum(item["retry_count"] for item in stages.values()), "fallback_rate": round(sum(1 for item in runs if any(code.endswith("FALLBACK") for code in item["warning_codes"])) / len(runs), 4), "p50_latency_ms": median([item["latency_ms"]["p50"] for item in stages.values() if item["latency_ms"]["p50"] is not None]) if any(item["latency_ms"]["p50"] is not None for item in stages.values()) else None},
             "cost": {"currency": config.price_currency, "total": total_cost, "complete": usage_complete},
         },

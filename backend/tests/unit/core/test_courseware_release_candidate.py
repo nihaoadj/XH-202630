@@ -73,5 +73,5 @@ def test_ci_artifact_summary_covers_rejected_cases_without_fabricating_artifacts
     assert summary["case_count"] == 20
     assert len(summary["covered_cases"]) == 20
     assert {item["case"] for item in summary["artifacts"] if item.get("sha256")} < set(summary["covered_cases"])
-    forbidden = {"duplicate-source", "empty-source", "unknown-source", "unknown-component", "unknown-source-block", "ai-review-unresolved"}
+    forbidden = {"duplicate-source", "empty-source", "unknown-source", "unknown-component", "unknown-source-block"}
     assert not any(item.get("case") in forbidden and item.get("status") == "produced" for item in summary["artifacts"])

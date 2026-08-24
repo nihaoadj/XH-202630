@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -7,6 +8,7 @@ from app.db.feedback.memory import MemoryFeedbackRepository
 from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
 from app.db.generation.memory import MemoryGenerationJobRepository
 from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learners.mastery import MemoryMasteryRepository
 from app.models.feedback.feedback_loop import (
     FeedbackFollowupSelection,
     KnowledgePointAttemptResult,
@@ -15,6 +17,7 @@ from app.models.feedback.feedback_loop import (
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.services.feedback.feedback import FeedbackService
 from app.services.generation.jobs import GenerationJobService
+from app.services.learners.mastery import MasteryService
 
 
 class _NoopGenerationService:
@@ -211,3 +214,48 @@ def test_followup_is_only_created_after_user_selection():
     assert selected.followup_generation_status == "queued"
     assert selected.followup_run_id == repeated.followup_run_id
     assert len(jobs.list_by_learner("learner")) == 1
+
+
+def test_feedback_intent_only_accepts_server_returned_reinforcement_nodes():
+    service, learners, jobs, profile, resource = _setup()
+    nodes = [SimpleNamespace(
+        node_id="skill-a", name="A", description=None, level="L1",
+        prerequisites=[], children=["skill-b"],
+    ), SimpleNamespace(
+        node_id="skill-b", name="B", description=None, level="L2",
+        prerequisites=["skill-a"], children=[],
+    )]
+    service.mastery_service = MasteryService(
+        MemoryMasteryRepository(learners),
+        SimpleNamespace(list_skill_nodes=lambda _kb: nodes),
+        resource_repo=SimpleNamespace(list_by_learner=lambda _learner_id: [resource]),
+    )
+    result = service.process_learning_attempt(profile, resource, _request(0.4))
+    options = result.generation_options
+    assert [item.skill_node_id for item in options.reinforce_weakness] == ["skill-a"]
+    assert options.learn_new_knowledge == []
+
+    selected = service.choose_followup(
+        learners.get("learner"),
+        FeedbackFollowupSelection(
+            learner_id="learner", attempt_id=result.attempt.attempt_id,
+            option_id="personalized-correction-package-v1",
+            learning_intent="reinforce_weakness", selected_skill_node_ids=["skill-a"],
+            next_generation_snapshot_hash=options.snapshot_hash,
+        ),
+    )
+    assert jobs.get(selected.followup_run_id).request_payload["target_skill_nodes"] == ["skill-a"]
+    payload = jobs.get(selected.followup_run_id).request_payload
+    assert payload["resource_types"] == ["个性化纠错训练包"]
+    assert payload["constraints"]["correction_focus_snapshot"]["ordered_target_nodes"][0]["skill_node_id"] == "skill-a"
+
+    with pytest.raises(ApplicationError):
+        service.choose_followup(
+            learners.get("learner"),
+            FeedbackFollowupSelection(
+                learner_id="learner", attempt_id=result.attempt.attempt_id,
+                option_id="personalized-correction-package-v1",
+                learning_intent="reinforce_weakness", selected_skill_node_ids=["skill-b"],
+                next_generation_snapshot_hash=options.snapshot_hash,
+            ),
+        )

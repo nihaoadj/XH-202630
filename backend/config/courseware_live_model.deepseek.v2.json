@@ -29,8 +29,8 @@
     "max_duration_seconds": 1200,
     "stages": {
       "spec": {"max_provider_calls": 20, "max_tokens": 80000},
-      "scene": {"max_provider_calls": 90, "max_tokens": 400000},
-      "quality_review": {"max_provider_calls": 30, "max_tokens": 120000}
+      "scene": {"max_provider_calls": 90, "max_tokens": 360000},
+      "quality_review": {"max_provider_calls": 30, "max_tokens": 160000}
     }
   }
 }

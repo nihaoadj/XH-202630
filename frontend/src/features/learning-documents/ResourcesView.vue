@@ -2,10 +2,6 @@
   <div class="resources-layout" :class="{ 'has-tutor-panel': tutorOpen, 'is-focus-mode': isFocusMode }">
     <div class="resources-page" :class="{ 'is-focus-mode': isFocusMode }">
     <header class="learning-toolbar">
-      <div class="toolbar-title">
-        <span class="eyebrow">Learning Resources</span>
-        <h3>学习资源</h3>
-      </div>
       <div class="toolbar-fields">
         <label class="field-label">
           <span>学习画像</span>
@@ -21,7 +17,7 @@
         </label>
       </div>
       <div class="toolbar-actions">
-        <el-button class="courseware-button" :loading="coursewareBusy" :disabled="!canCreateCourseware" @click="createCourseware">生成互动课件</el-button>
+        <el-button class="courseware-button" @click="openCoursewareGeneration">前往资源生成</el-button>
         <el-tooltip content="刷新资源" placement="bottom">
           <el-button class="refresh-button" :icon="Refresh" circle :loading="loading" aria-label="刷新资源" @click="loadResources" />
         </el-tooltip>
@@ -47,17 +43,22 @@
         </aside>
 
         <main class="reading-stage">
+          <FocusResourceSwitcher
+            v-if="isFocusMode"
+            :resources="activeResources"
+            :selected-resource-id="selectedResourceId"
+            @select-resource="selectedResourceId = $event"
+          />
           <CoursewareViewer v-if="selectedResource?.resource_kind === 'interactive_courseware'" :resource="selectedResource" />
           <ResourceViewer
             v-else-if="selectedResource"
             :resources="[selectedResource]"
             :progress-label="resourceProgress"
-            :resource-choices="isFocusMode ? activeResources : []"
-            :selected-resource-id="selectedResourceId"
-            @select-resource="selectedResourceId = $event"
+            :resource-choices="[]"
+            @ask-tutor="askTutorAboutSelection"
           >
             <template #header-end-actions>
-              <el-button class="tutor-trigger" @click="tutorOpen = true">
+              <el-button class="tutor-trigger" @click="openTutor">
                 <el-icon><ChatDotRound /></el-icon>
                 <span>向 Tutor 提问</span>
               </el-button>
@@ -76,58 +77,6 @@
       <el-button class="focus-exit" :icon="Close" circle aria-label="退出专注学习模式" @click="exitFocusMode" />
     </el-tooltip>
 
-    <el-dialog v-model="coursewareSourceDialogVisible" title="选择互动课件来源" width="min(620px, 92vw)">
-      <p class="courseware-selector-hint">仅可选择当前反馈批次的已发布资源，不同反馈批次不可混用。课件会冻结所选版本。</p>
-      <div class="courseware-preferences">
-        <label><span>学习目标</span><el-input v-model="coursewarePreferences.learning_goal" maxlength="240" placeholder="例如：掌握本批次的核心检索流程" /></label>
-        <label><span>预计时长（分钟）</span><el-input-number v-model="coursewarePreferences.expected_duration_minutes" :min="5" :max="240" :step="5" /></label>
-        <label><span>互动强度</span><el-select v-model="coursewarePreferences.interaction_intensity"><el-option label="低" value="low" /><el-option label="中" value="medium" /><el-option label="高" value="high" /></el-select></label>
-        <label><span>视觉主题</span><el-select v-model="coursewarePreferences.visual_style_id"><el-option label="编辑风" value="editorial" /><el-option label="午夜" value="midnight" /><el-option label="纸张" value="paper" /></el-select></label>
-      </div>
-      <el-checkbox-group v-model="selectedCoursewareSourceIds" class="courseware-source-selector">
-        <el-checkbox v-for="resource in coursewareCandidates" :key="resource.resource_id" :label="resource.resource_id" :disabled="selectedCoursewareSourceIds.length >= 8 && !selectedCoursewareSourceIds.includes(resource.resource_id)">
-          <strong>{{ resource.resource_type }} · {{ resource.batch_id || resource.run_id || '独立资源' }}</strong><span>{{ resource.topic || resource.title || resource.resource_id }} · {{ knowledgePointSummary(resource) }}</span>
-        </el-checkbox>
-      </el-checkbox-group>
-      <template #footer>
-        <el-button @click="coursewareSourceDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="coursewareBusy" :disabled="!selectedCoursewareSourceIds.length" @click="startSelectedCourseware">开始生成</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="coursewareDialogVisible" title="互动课件生成进度" width="min(680px, 92vw)">
-      <div v-if="currentCoursewareJob" class="courseware-progress-panel">
-        <el-tag :type="coursewareStateType(currentCoursewareJob.status)">{{ coursewareStateLabel(currentCoursewareJob.status) }}</el-tag>
-        <p v-if="currentCoursewareJob.error_message" class="courseware-error">{{ currentCoursewareJob.error_message }}</p>
-        <div v-if="Object.keys(currentCoursewareJob.request_options || {}).length" class="courseware-frozen-options" aria-label="已冻结生成偏好">
-          <span>已冻结偏好</span><el-tag v-for="(value, key) in currentCoursewareJob.request_options" :key="key" effect="plain">{{ key }}：{{ value }}</el-tag>
-        </div>
-        <section v-if="currentCoursewareJob.quality_summary?.schema_version === '2.0'" class="courseware-quality-summary" aria-label="课件质量汇总">
-          <strong>质量汇总 2.0</strong>
-          <span>发布：{{ currentCoursewareJob.quality_summary.publication_success ? '成功' : '未发布' }}</span>
-          <span>场景恢复：{{ formatQualityRate(currentCoursewareJob.quality_summary.required_scene_recovery_rate) }}</span>
-          <span>来源覆盖：{{ formatQualityRate(currentCoursewareJob.quality_summary.adopted_source_coverage) }}</span>
-          <span>互动：{{ (currentCoursewareJob.quality_summary.unique_interaction_types || []).join('、') || '未测量' }}</span>
-          <span>配额：{{ currentCoursewareJob.quality_summary.interaction_quota_status || '未测量' }}（{{ currentCoursewareJob.quality_summary.interaction_quota_actual ?? 0 }}/{{ currentCoursewareJob.quality_summary.interaction_quota_target ?? '—' }}）</span>
-          <span>审核：{{ currentCoursewareJob.quality_summary.rubric_passed ? '通过' : '未通过或未测量' }}</span>
-        </section>
-        <ol v-if="currentCoursewareJob.scenes?.length" class="courseware-scenes">
-          <li v-for="scene in currentCoursewareJob.scenes" :key="scene.scene_id">
-            <span>{{ scene.scene_order + 1 }}. {{ scene.title || scene.kind }}</span>
-            <small>{{ scene.status }} · 尝试 {{ scene.attempt }}<template v-if="scene.input_snapshot_hash"> · 已冻结输入</template></small>
-            <el-button v-if="['failed', 'retry_queued', 'revision_required'].includes(scene.status)" link type="primary" :loading="coursewareBusy" @click="retryCoursewareScene(scene.scene_id)">仅重试此场景</el-button>
-          </li>
-        </ol>
-        <ul v-if="currentCoursewareJob.warnings?.length" class="courseware-warnings">
-          <li v-for="warning in currentCoursewareJob.warnings" :key="`${warning.code}:${warning.message}`">{{ warning.message }}</li>
-        </ul>
-      </div>
-      <template #footer>
-        <el-button v-if="currentCoursewareJob?.status === 'failed'" :loading="coursewareBusy" @click="retryCurrentCourseware">重试任务</el-button>
-        <el-button @click="coursewareDialogVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
     </div>
     <TutorDrawer
     v-model="tutorOpen"
@@ -137,8 +86,10 @@
     :resource="selectedResource"
     :batch-id="activeTask?.batchId || ''"
     :run-id="selectedResource?.run_id || ''"
+    :quoted-text="tutorQuotedText"
     context-type="resource_help"
     :title="selectedResource ? `${selectedResource.resource_type || '学习资源'} · Tutor` : '学习导引'"
+    @clear-quoted-text="tutorQuotedText = ''"
   />
   </div>
 </template>
@@ -150,13 +101,12 @@ import { ChatDotRound, Close, FullScreen, Refresh } from '@element-plus/icons-vu
 import { useRoute, useRouter } from 'vue-router'
 import { generateApi, knowledgeApi, profileApi, resourceApi } from '../../api'
 import { coursewareApi } from '../courseware/api'
-import { buildCoursewareRequest, sameFeedbackBatchSources } from '../courseware/sourcePolicy'
 import { resourceLibraryApi } from '../resource-library/api'
-import { useCoursewareJob } from '../courseware/useCoursewareJob'
 import { useAppStore } from '../../stores/app'
 import { formatDateTime } from '../../utils/generationDisplay'
 import ResourceViewer from './ResourceViewer.vue'
 import CoursewareViewer from '../courseware/CoursewareViewer.vue'
+import FocusResourceSwitcher from './FocusResourceSwitcher.vue'
 import TutorDrawer from '../tutor/TutorDrawer.vue'
 
 const route = useRoute()
@@ -164,7 +114,7 @@ const router = useRouter()
 const store = useAppStore()
 const selectedLearnerId = ref(route.query.learnerId || store.currentLearnerId || localStorage.getItem('last_learner_id') || '')
 const selectedRunId = ref(route.query.runId || localStorage.getItem('current_generation_run_id') || '')
-const selectedResourceId = ref('')
+const selectedResourceId = ref(route.query.resourceId || '')
 const resources = ref([])
 const loaded = ref(false)
 const loading = ref(false)
@@ -174,20 +124,7 @@ const generationJobs = ref([])
 const resourceDetails = ref({})
 let detailRequestGeneration = 0
 const tutorOpen = ref(false)
-const coursewareDialogVisible = ref(false)
-const coursewareSourceDialogVisible = ref(false)
-const selectedCoursewareSourceIds = ref([])
-const coursewarePreferences = ref({ learning_goal: '', expected_duration_minutes: 30, interaction_intensity: 'medium', visual_style_id: 'editorial' })
-const {
-  busy: coursewareBusy,
-  create: startCoursewareJob,
-  currentJob: currentCoursewareJob,
-  restoreActiveRun: restoreCoursewareActiveRun,
-  retry: retryCoursewareJob,
-  retryScene: retryCoursewareSceneJob,
-  streamProgress: streamCoursewareProgress,
-  waitForTerminal: waitForCoursewareTerminal,
-} = useCoursewareJob()
+const tutorQuotedText = ref('')
 
 const activeProfile = computed(() => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null)
 const isFocusMode = computed(() => route.query.focus === '1')
@@ -270,20 +207,6 @@ const taskGroups = computed(() => {
 })
 const activeTask = computed(() => taskGroups.value.find((item) => item.runId === selectedRunId.value) || taskGroups.value[0] || null)
 const activeResources = computed(() => activeTask.value?.resources || [])
-const coursewareSourceIds = computed(() => activeResources.value
-  .filter((item) => item.resource_kind !== 'interactive_courseware')
-  .map((item) => item.resource_id))
-const coursewareCandidates = computed(() => {
-  const source = sameFeedbackBatchSources(visibleResources.value, activeTask.value?.batchId)
-  const activeTopic = activeResources.value.find((item) => item.resource_type === '讲义')?.topic
-  return [...source].sort((left, right) => {
-    const leftScore = Number(Boolean(activeTopic && left.topic === activeTopic)) + Number(left.resource_type === '讲义')
-    const rightScore = Number(Boolean(activeTopic && right.topic === activeTopic)) + Number(right.resource_type === '讲义')
-    return rightScore - leftScore || String(left.created_at || '').localeCompare(String(right.created_at || ''))
-  })
-})
-const canCreateCourseware = computed(() => !coursewareBusy.value && coursewareCandidates.value.length > 0
-  && coursewareCandidates.value.some((item) => item.resource_type === '讲义'))
 const selectedResource = computed(() => {
   const resource = activeResources.value.find(
     (item) => item.resource_id === selectedResourceId.value,
@@ -330,7 +253,13 @@ async function loadSelectedResourceDetail() {
     if (generation !== detailRequestGeneration) return
     const detail = response.data?.resource || response.data?.item || response.data
     if (detail?.resource_id === resourceId) {
-      resourceDetails.value = { ...resourceDetails.value, [resourceId]: detail }
+      // The courseware detail endpoint intentionally exposes only the
+      // courseware contract. Keep the library discriminator so a loaded
+      // detail is still rendered by CoursewareViewer rather than Markdown.
+      resourceDetails.value = {
+        ...resourceDetails.value,
+        [resourceId]: { ...selectedResource.value, ...detail },
+      }
     }
   } catch (error) {
     if (generation !== detailRequestGeneration) return
@@ -339,97 +268,30 @@ async function loadSelectedResourceDetail() {
   }
 }
 
-async function createCourseware() {
-  if (!canCreateCourseware.value || !selectedLearnerId.value) return
-  try {
-    const response = await fetch('/health/ready', { credentials: 'include' })
-    const report = await response.json()
-    if (!response.ok || report.status !== 'ready') {
-      ElMessage.warning('AI/Worker 当前未就绪，请先检查服务状态后再生成。')
-      return
-    }
-  } catch (_) {
-    ElMessage.warning('无法检查 AI/Worker readiness，已阻止无提示降级生成。')
-    return
-  }
-  selectedCoursewareSourceIds.value = coursewareCandidates.value
-    .filter((item) => item.resource_type === '讲义' || item.topic === activeResources.value.find((resource) => resource.resource_type === '讲义')?.topic)
-    .slice(0, 8)
-    .map((item) => item.resource_id)
-  coursewareSourceDialogVisible.value = true
+function openCoursewareGeneration() {
+  router.push({
+    path: '/generate',
+    query: {
+      kind: 'courseware',
+      learnerId: selectedLearnerId.value || undefined,
+      batchId: activeTask.value?.batchId || undefined,
+    },
+  })
 }
 
-async function startSelectedCourseware() {
-  if (!selectedCoursewareSourceIds.value.length || !selectedLearnerId.value) return
-  try {
-    const created = await startCoursewareJob({
-      ...buildCoursewareRequest({ learnerId: selectedLearnerId.value, sourceIds: selectedCoursewareSourceIds.value, preferences: coursewarePreferences.value }),
-    })
-    const runId = created?.run_id
-    coursewareSourceDialogVisible.value = false
-    coursewareDialogVisible.value = true
-    const stopProgressStream = streamCoursewareProgress(runId)
-    let status
-    try {
-      status = await waitForCoursewareTerminal(runId)
-    } finally {
-      stopProgressStream()
-    }
-    if (['published', 'published_with_warnings'].includes(status?.status)) {
-      ElMessage.success(status.status === 'published' ? '互动课件已生成' : '互动课件已生成，部分可选场景已跳过')
-      await loadResources()
-      selectedRunId.value = status.run_id
-      selectedResourceId.value = status.resource_id || ''
-      return
-    }
-    if (['failed', 'rejected_admission'].includes(status?.status)) {
-      ElMessage.error(status.error_message || '互动课件生成未完成')
-      return
-    }
-    ElMessage.info('课件仍在生成，可稍后刷新资源库查看')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error?.response?.data?.message || '互动课件创建失败')
-  }
+function askTutorAboutSelection(selectedText) {
+  tutorQuotedText.value = selectedText
+  tutorOpen.value = true
 }
 
-async function retryCoursewareScene(sceneId) {
-  try {
-    await retryCoursewareSceneJob(sceneId)
-    ElMessage.success('已提交场景级重试；冻结来源与其他已批准场景会被保留')
-  } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || '场景重试失败')
-  }
-}
-
-async function retryCurrentCourseware() {
-  const runId = currentCoursewareJob.value?.run_id
-  if (!runId) return
-  try {
-    await retryCoursewareJob()
-    ElMessage.success('已提交重试，已批准场景和冻结快照会被复用')
-  } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || '课件重试失败')
-  }
-}
-
-function coursewareStateLabel(status) {
-  return ({ queued: '等待中', admitting: '校验来源', snapshotting: '冻结快照', design_reviewing: '课程设计', composing: '生成场景', trace_reviewing: '来源审核', quality_reviewing: '质量审核', rendering: '渲染课件', validating: '安全校验', approved_pending_publish: '等待发布', published: '已发布', published_with_warnings: '已发布（有警告）', failed: '失败', rejected_admission: '来源未通过' })[status] || status
-}
-
-function coursewareStateType(status) {
-  if (['published', 'published_with_warnings'].includes(status)) return 'success'
-  if (['failed', 'rejected_admission'].includes(status)) return 'danger'
-  if (status === 'approved_pending_publish') return 'warning'
-  return 'primary'
-}
-
-function formatQualityRate(value) {
-  return typeof value === 'number' ? `${Math.round(value * 100)}%` : '未测量'
+function openTutor() {
+  tutorQuotedText.value = ''
+  tutorOpen.value = true
 }
 
 function handleRunChange(value) {
   if (value && !value.startsWith('resource:')) localStorage.setItem('current_generation_run_id', value)
+  router.replace({ query: { ...route.query, runId: value || undefined, resourceId: undefined } })
   syncSelectedResource()
 }
 
@@ -502,26 +364,15 @@ watch(activeTask, () => {
   void loadSelectedResourceDetail()
 })
 watch(selectedResourceId, () => {
+  tutorQuotedText.value = ''
   void loadSelectedResourceDetail()
+  if (selectedResourceId.value && route.query.resourceId !== selectedResourceId.value) {
+    router.replace({ query: { ...route.query, resourceId: selectedResourceId.value } })
+  }
 })
-async function resumeCoursewareTracking() {
-  const restored = await restoreCoursewareActiveRun()
-  if (!restored || ['published', 'published_with_warnings', 'quarantined', 'failed', 'rejected_admission', 'release_blocked', 'cancelled', 'timed_out'].includes(restored.status)) return
-  coursewareDialogVisible.value = true
-  const stopProgressStream = streamCoursewareProgress(restored.run_id)
-  void waitForCoursewareTerminal(restored.run_id).then(async (status) => {
-    if (['published', 'published_with_warnings'].includes(status?.status)) {
-      await loadResources()
-      selectedRunId.value = status.run_id
-      selectedResourceId.value = status.resource_id || ''
-    }
-  }).finally(stopProgressStream)
-}
-
 onMounted(async () => {
   await loadProfiles()
   await loadResources()
-  await resumeCoursewareTracking()
 })
 </script>
 
@@ -551,7 +402,7 @@ onMounted(async () => {
 
 .learning-toolbar {
   display: grid;
-  grid-template-columns: minmax(150px, .55fr) minmax(540px, 1.45fr) 84px;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 18px;
   align-items: end;
   padding: 15px 18px;
@@ -561,14 +412,12 @@ onMounted(async () => {
   box-shadow: 0 8px 22px rgba(35, 62, 94, .045);
 }
 
-.toolbar-title { display: flex; flex-direction: column; gap: 5px; padding-bottom: 1px; }
-.toolbar-title .eyebrow { color: #2058a7; font-size: 12px; font-weight: 800; letter-spacing: 0; text-transform: uppercase; }
-.toolbar-title h3 { margin: 0; color: #172033; font-size: 28px; line-height: 1.1; }
-.toolbar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.toolbar-fields { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .field-label { gap: 5px; font-size: 11px; }
 .field-label :deep(.el-select__wrapper) { min-height: 36px; border-radius: 8px; }
 .refresh-button { width: 36px; height: 36px; margin: 0; border-color: #cbd9e8; color: #2058a7; }
-.toolbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.toolbar-actions { display: flex; align-items: center; justify-content: flex-end; min-width: max-content; gap: 8px; white-space: nowrap; }
+.courseware-button { height: 36px; margin: 0; padding: 0 12px; border-color: #8fb9e7; border-radius: 8px; color: #2058a7; font-weight: 700; }
 .focus-button { width: 36px; height: 36px; margin: 0; border-color: #9fc5ec; color: #2058a7; background: #f5f9ff; }
 .focus-button:hover, .focus-button:focus-visible { border-color: #2f8b7b; color: #fff; background: #2058a7; }
 
@@ -680,14 +529,13 @@ onMounted(async () => {
 .courseware-quality-summary strong { color:#173654; }
 
 @media (max-width: 1160px) {
-  .learning-toolbar { grid-template-columns: 1fr 84px; }
-  .toolbar-title { display: none; }
+  .learning-toolbar { grid-template-columns: minmax(0, 1fr) max-content; }
   .learning-workspace { display: flex; flex-direction: column; }
 }
 
 @media (max-width: 760px) {
   .resources-page { min-height: auto; }
-  .learning-toolbar { grid-template-columns: 1fr 84px; padding: 12px; }
+  .learning-toolbar { grid-template-columns: minmax(0, 1fr) max-content; padding: 12px; }
   .toolbar-fields { grid-template-columns: 1fr; }
   .learning-workspace { display: flex; flex-direction: column; }
   .resource-shelf { align-items: stretch; }

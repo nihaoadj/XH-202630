@@ -9,6 +9,29 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+PageRole = Literal[
+    "cover", "learning_map", "concept_explanation", "process_breakdown",
+    "case_diagnosis", "comparison_analysis", "practice_workspace",
+    "knowledge_check", "summary_action",
+]
+LayoutRecipeId = Literal[
+    "editorial_cover", "learning_map_grid", "concept_split", "process_lane",
+    "comparison_matrix", "case_diagnostic", "practice_workspace",
+    "quiz_focus", "recap_dashboard",
+]
+
+
+class ContentBudget(BaseModel):
+    """Deterministic page-density target; never supplied as executable styling."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    min_zones: int = Field(default=2, ge=1, le=4)
+    max_zones: int = Field(default=4, ge=1, le=4)
+    min_chars: int = Field(default=220, ge=0, le=1200)
+    max_chars: int = Field(default=650, ge=80, le=1600)
+
+
 class LearningObjective(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -47,12 +70,20 @@ class StoryboardScene(BaseModel):
     interaction_purpose: str = Field(default="understand", max_length=120)
     allowed_components: tuple[str, ...] = ()
     allowed_component_ids: tuple[str, ...] = ()
+    page_role: PageRole | None = None
+    layout_recipe_id: LayoutRecipeId | None = None
+    key_question: str = Field(default="", max_length=240)
+    required_zones: tuple[str, ...] = ()
+    content_budget: ContentBudget = Field(default_factory=ContentBudget)
+    # Practice variants are platform-owned visual arrangements. They never
+    # change the source order, component registry, or runtime behavior.
+    practice_variant: Literal["guided", "code", "verify"] | None = None
 
 
 class StoryboardSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "2.0"] = "2.0"
     scenes: tuple[StoryboardScene, ...] = ()
     objective_graph_hash: str = Field(min_length=1, max_length=128)
 
@@ -84,7 +115,7 @@ class SourceConceptIndex(BaseModel):
 class CoursewareLearningDesign(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0", "2.0"] = "2.0"
+    schema_version: Literal["1.0", "2.0", "3.0"] = "3.0"
     resource_bundle_hash: str = Field(min_length=1, max_length=128)
     learner_context_hash: str = Field(min_length=1, max_length=128)
     objectives: LearningObjectiveGraph
@@ -96,6 +127,6 @@ class CoursewareLearningDesign(BaseModel):
 
 
 __all__ = [
-    "CoursewareLearningDesign", "LearningObjective", "LearningObjectiveGraph",
+    "ContentBudget", "CoursewareLearningDesign", "LayoutRecipeId", "LearningObjective", "LearningObjectiveGraph", "PageRole",
     "StoryboardScene", "StoryboardSpec", "SourceConcept", "SourceConceptRelation", "SourceConceptIndex",
 ]

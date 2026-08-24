@@ -71,6 +71,7 @@ class OnboardingService:
                 self._question_by_id(manifest["knowledge_base_id"]),
                 self._answer_payload(request),
             )
+            self.mastery_service.initialize_tier_progress(profile)
             profile = self.learner_repo.get(profile.learner_id) or profile
 
         questions = self._select_initial_diagnostic_questions(

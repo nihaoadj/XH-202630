@@ -18,7 +18,7 @@ def test_settings_safe_defaults():
 
     assert settings.app_mode == "development"
     assert settings.allow_degraded_generation is False
-    assert settings.courseware_auto_revision_max_attempts == 2
+    assert settings.courseware_auto_revision_max_attempts == 3
     assert settings.courseware_scene_lease_seconds == 120
     assert settings.courseware_auto_review_max_seconds == 180
     assert settings.courseware_worker_enabled is False
@@ -29,13 +29,13 @@ def test_settings_safe_defaults():
     assert settings.sql_echo is False
     assert settings.llm_workflow_timeout_seconds == 1200
     assert settings.workflow_run_lease_seconds == 1260
-    assert settings.courseware_planner_token_budget == 4096
-    assert settings.courseware_total_llm_token_budget == 49152
+    assert settings.courseware_planner_token_budget == 8192
+    assert settings.courseware_total_llm_token_budget == 73728
     assert settings.courseware_total_run_timeout_seconds == 1050
-    assert settings.courseware_scene_composition_token_budget == 30720
+    assert settings.courseware_scene_composition_token_budget == 40960
     assert settings.courseware_scene_composition_max_seconds == 600.0
-    assert settings.courseware_quality_review_reserved_tokens == 4096
-    assert settings.courseware_revision_reserved_tokens == 10240
+    assert settings.courseware_quality_review_reserved_tokens == 8192
+    assert settings.courseware_revision_reserved_tokens == 16384
 
 
 def test_live_model_defaults_are_explicitly_non_runnable_without_metadata():
@@ -94,8 +94,8 @@ def test_settings_reject_invalid_courseware_automation_budgets(field, value):
     ("overrides", "code"),
     [
         ({"courseware_planner_token_budget": 20000}, "CFG_INVALID_COURSEWARE_STAGE_TOKEN_BUDGET"),
-        ({"courseware_quality_review_reserved_tokens": 5000}, "CFG_INVALID_COURSEWARE_REVIEW_RESERVE"),
-        ({"courseware_revision_reserved_tokens": 11000}, "CFG_INVALID_COURSEWARE_REVISION_RESERVE"),
+        ({"courseware_quality_review_reserved_tokens": 9000}, "CFG_INVALID_COURSEWARE_REVIEW_RESERVE"),
+        ({"courseware_revision_reserved_tokens": 17000}, "CFG_INVALID_COURSEWARE_REVISION_RESERVE"),
         ({"courseware_scene_call_max_tokens": 16000}, "CFG_INVALID_COURSEWARE_SCENE_CALL_LIMIT"),
         ({"courseware_total_run_timeout_seconds": 899}, "CFG_INVALID_COURSEWARE_STAGE_TIMEOUT_BUDGET"),
     ],

@@ -720,6 +720,7 @@ class RagSkillNodeORM(Base):
     name = Column(String(256), nullable=False)
     description = Column(Text, nullable=True)
     level = Column(String(32), nullable=True)
+    tier = Column(Integer, nullable=True, index=True)
     knowledge_points = Column(JSON, default=list)
     assessment_methods = Column(JSON, default=list)
     extra_metadata = Column("metadata", JSON, default=dict)
@@ -837,6 +838,57 @@ class AbilityStateEventORM(Base):
     after_state = Column(JSON, nullable=False)
     occurred_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class LearnerCurriculumNodeORM(Base):
+    """Durable learning-process projection, separate from objective mastery."""
+
+    __tablename__ = "learner_curriculum_nodes"
+    __table_args__ = (
+        UniqueConstraint(
+            "learner_id", "knowledge_base_id", "skill_node_id",
+            name="uq_learner_curriculum_node",
+        ),
+        Index("ix_curriculum_learner_status", "learner_id", "knowledge_base_id", "progress_status"),
+    )
+
+    curriculum_node_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    skill_node_id = Column(String(128), ForeignKey("rag_skill_nodes.node_id"), nullable=False, index=True)
+    progress_status = Column(String(32), nullable=False, default="unplanned", server_default="unplanned")
+    wait_rounds = Column(Integer, nullable=False, default=0, server_default="0")
+    scheduled_run_id = Column(String(128), nullable=True, index=True)
+    published_resource_count = Column(Integer, nullable=False, default=0, server_default="0")
+    verified_attempt_count = Column(Integer, nullable=False, default=0, server_default="0")
+    placement_exempt = Column(Boolean, nullable=False, default=False, server_default="0")
+    placement_evidence_id = Column(String(128), nullable=True, index=True)
+    last_verified_attempt_id = Column(String(128), nullable=True, index=True)
+    last_scheduled_at = Column(DateTime(timezone=True), nullable=True)
+    last_published_at = Column(DateTime(timezone=True), nullable=True)
+    last_verified_at = Column(DateTime(timezone=True), nullable=True)
+    row_version = Column(Integer, nullable=False, default=1, server_default="1")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True)
+
+
+class LearnerTierProgressORM(Base):
+    """Durable access state for the three-level curriculum policy."""
+
+    __tablename__ = "learner_tier_progress"
+    __table_args__ = (UniqueConstraint("learner_id", "knowledge_base_id", name="uq_learner_tier_progress"),)
+
+    tier_progress_id = Column(String(128), primary_key=True)
+    learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=False, index=True)
+    knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=False, index=True)
+    placement_tier = Column(Integer, nullable=False)
+    active_tier = Column(Integer, nullable=False)
+    highest_unlocked_tier = Column(Integer, nullable=False)
+    remediation_return_tier = Column(Integer, nullable=True)
+    profile_version = Column(Integer, nullable=False, default=1, server_default="1")
+    row_version = Column(Integer, nullable=False, default=1, server_default="1")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True)
 
 
 class AgentRunORM(Base):

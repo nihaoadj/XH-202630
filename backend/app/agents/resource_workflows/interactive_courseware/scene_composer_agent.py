@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareSceneSpec
+from app.agents.resource_workflows.interactive_courseware.contracts import (
+    CoursewareNarrativeEnrichment, CoursewarePracticeEnrichment, CoursewareSceneSpec,
+)
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.llm import LLMCallContext
@@ -31,27 +34,68 @@ def compose_courseware_scene(
         for item in source.get("blocks", [])[:12]
     ]
     review_instruction = str(deterministic_scene.get("_review_instruction") or "").strip()
+    scene_kind = str(deterministic_scene["kind"])
+    is_step_scene = scene_kind == "practice"
+    is_narrative_scene = scene_kind in {"intro", "recap"}
+    is_platform_enrichment = is_step_scene or is_narrative_scene
+    interaction_instruction = (
+        "本次是 practice 步骤页：steps 必须是仅含 1 条非空字符串的数组；这条只写当前页的一个可执行动作。"
+        "blocks 仍必须是 2 至 4 个对象数组，且每个对象必须包含 component、text、pedagogical_role、source_refs；"
+        "不要把步骤写成对象、不要把步骤放进 options、不要省略 conclusion。"
+        if is_step_scene else
+        "本次不是步骤页：steps 必须是空数组。"
+    )
     try:
         result = llm_gateway.invoke_structured(
             messages=[
                 SystemMessage(content=(
-                    "你是互动课件场景编写器。只输出符合 SceneSpec 的 JSON。只可使用给定来源块支持的内容；"
+                    "你是互动课件场景编写器。只输出给定 JSON Schema 所要求的字段。只可使用给定来源块支持的内容；"
                     "每个 block 必须携带来源。禁止 HTML、CSS、JavaScript、URL、Markdown 链接和任何可执行内容。"
                     "题目、选项、答案和反馈也必须可由来源支持。首次输出必须完整：每个 block 都要有 block_id、"
                     "component、text、pedagogical_role（仅 explain/example/warning/recap）和非空 source_refs。"
-                    "优先使用 callout、key_point、steps、single_choice、multiple_choice 或 recap；除非任务明确要求，"
-                    "不要使用 flashcard、matching、ordering 等需要额外嵌套字段的组件。practice 必须有 steps；"
+                    "按输入中的页面蓝图填充 2 至 4 个互补信息区，形成引导语、主体信息、证据或示例、页面结论的闭环。"
+                    "不得输出只有标题、单句或单卡片的最小占位页。优先使用 callout、key_point、compare、steps、"
+                    "single_choice、multiple_choice 或 recap；practice 必须有 steps；"
                     "quiz 必须有至少两个 options、answer（只能取自 options）和 feedback。"
+                        + interaction_instruction +
+                        ("本次只输出 PracticeEnrichment：title、lead、steps、conclusion；不要输出 blocks、source_refs、options、answer 或 schema_version。"
+                       if is_step_scene else "本次只输出 NarrativeEnrichment：title、lead、conclusion；不要输出 blocks、source_refs、steps、options、answer 或 schema_version。"
+                       if is_narrative_scene else "输出 2.0 合法结构，并用给定来源 ID 替换示例：") +
+                    '{"schema_version":"2.0","kind":"explain","title":"标题","lead":"引导语","blocks":[{"schema_version":"1.0",'
+                    '"block_id":"block-1","component":"callout","text":"内容","pedagogical_role":"explain",'
+                    '"source_refs":[{"source_resource_id":"resource","source_block_ids":["block-1"],"transformation":"paraphrase"}]}],'
+                    '"steps":[],"options":[],"answer":[],"conclusion":"页面结论","title_source_refs":[],"feedback_source_refs":[]}。'
                 )),
                 HumanMessage(content=json.dumps({
-                    "scene_id": scene_id, "required_kind": deterministic_scene["kind"],
+                    "scene_id": scene_id, "required_kind": scene_kind,
                     "fallback_title": deterministic_scene["title"], "source_resource_id": source["resource_id"],
                     "source_blocks": source_blocks,
                     "supported_components": ["callout", "key_point", "steps", "single_choice", "multiple_choice", "recap"],
+                    "page_blueprint": {
+                        key: deterministic_scene.get(key)
+                        for key in ("page_role", "layout_recipe_id", "key_question", "required_zones", "content_budget")
+                    },
                     "review_instruction": review_instruction or None,
+                    "response_contract": (
+                        {
+                            "schema_version": "2.0", "kind": "practice", "title": "步骤页标题",
+                            "lead": "先说明本页要完成什么", "blocks": [
+                                {"schema_version": "1.0", "block_id": "zone-1", "component": "callout",
+                                 "text": "准备说明", "pedagogical_role": "explain",
+                                 "source_refs": [{"source_resource_id": source["resource_id"], "source_block_ids": [source_blocks[0]["block_id"]], "transformation": "adapted_step"}]},
+                                {"schema_version": "1.0", "block_id": "zone-2", "component": "steps",
+                                 "text": "按以下步骤操作", "pedagogical_role": "example",
+                                 "source_refs": [{"source_resource_id": source["resource_id"], "source_block_ids": [source_blocks[0]["block_id"]], "transformation": "adapted_step"}]},
+                            ], "steps": ["完成当前页对应的来源操作"], "options": [], "answer": [],
+                            "feedback": None, "conclusion": "依据来源完成检查", "title_source_refs": [], "feedback_source_refs": [],
+                        } if is_step_scene else
+                        {"title": "页面标题", "lead": "本页学习引导", "conclusion": "页面结论"}
+                        if is_narrative_scene else None
+                    ),
                 }, ensure_ascii=False)),
             ],
-            output_schema=CoursewareSceneSpec,
+            output_schema=(CoursewarePracticeEnrichment if is_step_scene else CoursewareNarrativeEnrichment
+                           if is_narrative_scene else CoursewareSceneSpec),
             context=LLMCallContext(
                 run_id=run_id, step_id=f"{run_id}:{scene_id}", node_name="courseware_scene_composer",
                 schema_name="CoursewareSceneSpec",
@@ -59,6 +103,32 @@ def compose_courseware_scene(
             options=allowance or llm_gateway.options_for("generator", temperature=0.0),
         )
         spec = result.output
+        if is_platform_enrichment:
+            # Platform-owned blocks, component IDs and source maps remain
+            # immutable. This makes a model retry about instructional prose,
+            # not a fragile reconstruction of the renderer contract.
+            rendered = deepcopy(deterministic_scene)
+            rendered.update({
+                "title": spec.title,
+                "lead": spec.lead,
+                "conclusion": spec.conclusion,
+            })
+            if is_step_scene:
+                rendered["steps"] = list(spec.steps)
+            source_block_ids = list(rendered.get("source_block_ids") or [])
+            if is_step_scene and source_block_ids:
+                rendered.setdefault("source_map", {})["steps"] = [
+                    [source_block_ids[min(index, len(source_block_ids) - 1)]]
+                    for index in range(len(spec.steps))
+                ]
+            if is_step_scene:
+                for block in rendered.get("component_blocks") or []:
+                    if isinstance(block, dict) and block.get("component") in {"steps", "ordered_steps"}:
+                        block["steps"] = list(spec.steps)
+            trace_method = getattr(result, "trace_metadata", None)
+            trace = trace_method() if callable(trace_method) else {}
+            node_name = "courseware_practice_enricher" if is_step_scene else "courseware_narrative_enricher"
+            return rendered, ({"code": "LLM_TRACE", "node_name": node_name, "trace": trace} if trace else None)
         allowed_blocks = {item["block_id"] for item in source_blocks}
         if spec.kind != deterministic_scene["kind"] or set(spec.source_refs) != {source["resource_id"]}:
             raise ValueError("AI 场景越过既定类型或来源")
@@ -69,9 +139,13 @@ def compose_courseware_scene(
             raise ValueError("AI 场景包含不安全的学习者内容")
         trace_method = getattr(result, "trace_metadata", None)
         trace = trace_method() if callable(trace_method) else {}
+        rendered = spec.to_renderer_scene()
+        for key in ("scene_id", "objective_ids", "page_role", "layout_recipe_id", "key_question", "required_zones", "content_budget", "allowed_component_ids"):
+            if key in deterministic_scene:
+                rendered[key] = deterministic_scene[key]
         if not trace:
-            return spec.to_renderer_scene(), None
-        return spec.to_renderer_scene(), {
+            return rendered, None
+        return rendered, {
             "code": "LLM_TRACE",
             "node_name": "courseware_scene_composer",
             "trace": trace,

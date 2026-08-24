@@ -18,6 +18,43 @@ RESOURCE_VERSION_UNIQUE_INDEX = "uq_generated_resources_run_type_version"
 SQLITE_TEMP_RESOURCE_TABLE = "_p0_09_generated_resources"
 
 
+def _legacy_integrity_report(engine: Engine, report: dict) -> dict:
+    """Keep P0-09's legacy uniqueness guard scoped to legacy resources.
+
+    P0-13 changed resource identity to ``resource_spec_id`` plus
+    ``representation``.  A text resource and its generated HTML representation
+    therefore intentionally share the same legacy type/version tuple.  When a
+    database has already received those columns (for example after an
+    interrupted upgrade), treating that pair as a P0-09 duplicate prevents the
+    later migration from completing.  Only rows without a spec identity remain
+    subject to the old guard.
+    """
+    columns = {
+        item["name"] for item in inspect(engine).get_columns("generated_resources")
+    }
+    if "resource_spec_id" not in columns:
+        return report
+
+    scoped_report = dict(report)
+    with engine.connect() as connection:
+        scoped_report["resource_version_duplicates"] = [
+            {
+                "run_id": row[0],
+                "resource_type": row[1],
+                "version": row[2],
+                "count": int(row[3]),
+            }
+            for row in connection.execute(text(
+                "SELECT run_id, resource_type, version, COUNT(*) "
+                "FROM generated_resources "
+                "WHERE run_id IS NOT NULL AND resource_spec_id IS NULL "
+                "GROUP BY run_id, resource_type, version "
+                "HAVING COUNT(*) > 1"
+            )).fetchall()
+        ]
+    return scoped_report
+
+
 def rebuild_sqlite_generated_resources_table(engine: Engine) -> None:
     """Rebuild one clean legacy table so declared resource FKs become real SQLite FKs."""
     current_columns = [
@@ -86,7 +123,7 @@ def apply_p0_09_migration(engine: Engine) -> None:
     if "generated_resources" not in tables:
         return
 
-    report = inspect_database_integrity(engine)
+    report = _legacy_integrity_report(engine, inspect_database_integrity(engine))
     assert_integrity_migration_preconditions(report)
 
     if (
@@ -94,7 +131,7 @@ def apply_p0_09_migration(engine: Engine) -> None:
         and report["missing_resource_foreign_keys"]
     ):
         rebuild_sqlite_generated_resources_table(engine)
-        report = inspect_database_integrity(engine)
+        report = _legacy_integrity_report(engine, inspect_database_integrity(engine))
         assert_integrity_migration_preconditions(report)
         if report["missing_resource_foreign_keys"]:
             raise RuntimeError("RESOURCE_FOREIGN_KEYS_NOT_CREATED")

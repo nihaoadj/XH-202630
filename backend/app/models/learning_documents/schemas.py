@@ -117,6 +117,7 @@ class SkillNode(BaseModel):
     name: str
     description: Optional[str] = None
     level: Optional[str] = None
+    tier: Optional[int] = Field(default=None, ge=1, le=3)
     prerequisites: List[str] = Field(default_factory=list)
     children: List[str] = Field(default_factory=list)
     knowledge_points: List[str] = Field(default_factory=list)
@@ -680,6 +681,18 @@ class ResourceDetail(LearningResource):
     status: str = "unpublished"
     is_published: bool = False
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def derive_tier_from_level(self) -> "SkillNode":
+        """Keep legacy knowledge-base manifests valid while making tier explicit."""
+        from app.core.learning_tiers import tier_for_level
+        if self.tier is None:
+            if self.level is None:
+                raise ValueError("skill node requires a level or tier")
+            self.tier = tier_for_level(self.level)
+        elif self.level is not None and tier_for_level(self.level) != self.tier:
+            raise ValueError("skill node level and tier disagree")
+        return self
     execution: Optional[ResourceExecutionProgress] = None
     review_summary: Dict[str, Any] = Field(default_factory=dict)
 

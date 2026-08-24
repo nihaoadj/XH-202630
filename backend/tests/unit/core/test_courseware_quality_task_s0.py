@@ -134,8 +134,8 @@ def test_deepseek_live_config_reserves_stage_budgets_and_a_short_deadline():
         "max_duration_seconds": 1200,
         "stages": {
             "spec": {"max_provider_calls": 20, "max_tokens": 80000},
-            "scene": {"max_provider_calls": 90, "max_tokens": 400000},
-            "quality_review": {"max_provider_calls": 30, "max_tokens": 120000},
+            "scene": {"max_provider_calls": 90, "max_tokens": 360000},
+            "quality_review": {"max_provider_calls": 30, "max_tokens": 160000},
         },
     }
 
@@ -191,36 +191,34 @@ def test_planner_accepts_pydantic_learning_objectives_in_live_path(monkeypatch):
             scenes=(StoryboardScene(scene_id="scene-1", kind="intro"),),
         ),
     )
-    output = CoursewareSpec(
-        title="课程",
-        learning_objectives=["原始目标"],
-        scenes=[CoursewareScenePlan(
-            source_resource_id="resource-1",
-            kind="intro",
-            title="场景",
-            source_block_ids=["block-1"],
-        )],
-        enrichment=CoursewarePlanEnrichmentV2(
-            course_title="课程",
-            course_summary="摘要",
-            objectives=[{
-                "objective_id": "objective-1",
-                "title": "更新目标",
-                "teaching_intent": "帮助学习者理解核心概念",
-            }],
-        ),
+    output = CoursewarePlanEnrichmentV2(
+        course_title="课程",
+        course_summary="摘要",
+        objectives=[{
+            "objective_id": "objective-1",
+            "title": "更新目标",
+            "teaching_intent": "帮助学习者理解核心概念",
+        }],
+        scenes=[{
+            "scene_id": "scene-1",
+            "title": "模型场景标题",
+            "teaching_intent": "解释核心概念",
+        }],
     )
 
     class FakeGateway:
         def invoke_structured(self, **kwargs):
+            self.request = json.loads(kwargs["messages"][-1].content)
+            self.output_schema = kwargs["output_schema"]
             return SimpleNamespace(output=output)
 
         def options_for(self, *args, **kwargs):
             return None
 
     monkeypatch.setattr(planner, "courseware_ai_available", lambda gateway: True)
+    gateway = FakeGateway()
     result, warning = planner.build_courseware_spec(
-        FakeGateway(),
+        gateway,
         "run-1",
         [{"resource_id": "resource-1", "role": "text", "topic": "主题", "blocks": [{"block_id": "block-1"}]}],
         learning_design=learning_design,
@@ -228,4 +226,14 @@ def test_planner_accepts_pydantic_learning_objectives_in_live_path(monkeypatch):
 
     assert warning is None
     assert result is not None
+    assert gateway.output_schema is CoursewarePlanEnrichmentV2
+    assert gateway.request["plan_enrichment_contract"] == {
+        "objective_ids": ["objective-1"],
+        "scene_ids": ["scene-1"],
+        "allowed_component_ids_by_scene": {"scene-1": []},
+    }
     assert result.learning_objectives == ["更新目标"]
+    assert [(scene.kind, scene.source_resource_id, scene.source_block_ids) for scene in result.scenes] == [
+        ("intro", "resource-1", ["block-1"]),
+    ]
+    assert result.scenes[0].title == "模型场景标题"

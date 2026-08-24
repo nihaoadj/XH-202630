@@ -1,22 +1,20 @@
 /**
- * Courseware sources are frozen from one feedback batch only.  Keeping this
- * policy in a small pure function lets the UI and its browser-free tests use
- * the same boundary without relying on Vue internals.
+ * A selected resource creates its own interactive representation.  Keeping
+ * this policy pure lets the UI and browser-free tests share the same rule.
  */
-export function sameFeedbackBatchSources(resources, batchId) {
-  const expectedBatchId = String(batchId || '').trim()
-  if (!expectedBatchId) return []
-  return (resources || []).filter((resource) => (
-    resource?.resource_kind !== 'interactive_courseware'
-    && String(resource?.batch_id || '').trim() === expectedBatchId
-  ))
+export const COURSEWARE_SOURCE_TYPES = Object.freeze(['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析'])
+
+export function coursewareEligibleSources(resources) {
+  return (resources || [])
+    .filter((resource) => resource?.resource_kind !== 'interactive_courseware'
+      && COURSEWARE_SOURCE_TYPES.includes(resource?.resource_type)
+      && resource?.resource_id)
 }
 
-export function buildCoursewareRequest({ learnerId, sourceIds, preferences = {} }) {
+export function buildCoursewareBatchRequest({ learnerId, resourceIds, preferences = {} }) {
   return {
     learner_id: learnerId,
-    source_resource_ids: [...sourceIds],
-    publish_mode: 'automatic',
+    resource_ids: [...resourceIds],
     learning_goal: preferences.learning_goal || null,
     expected_duration_minutes: preferences.expected_duration_minutes ?? null,
     interaction_intensity: preferences.interaction_intensity || 'medium',

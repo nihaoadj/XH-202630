@@ -148,7 +148,7 @@ class CoursewareBudgetCoordinator:
 
     def _stage_tokens(self, traces: list[dict[str, Any]], stage: str) -> int:
         names = {
-            "planner": {"courseware_spec_builder"},
+            "planner": {"courseware_spec_builder", "courseware_practice_structure_extractor"},
             "scene": {"courseware_scene_composer"},
             "quality_review": {"courseware_quality_reviewer"},
             "revision": {"courseware_scene_composer", "courseware_quality_reviewer"},

@@ -3,7 +3,10 @@
 from app.models.courseware.contracts import (
     CoursewareEvent,
     CoursewareJobCreateRequest,
+    CoursewareBatchCreateRequest,
+    CoursewareBatchJobResponse,
     CoursewareJobDetail,
+    CoursewareJobListResponse,
     CoursewareJobResponse,
     CoursewareJobState,
     CoursewareResourceDetail,
@@ -16,7 +19,10 @@ from app.models.courseware.events import CoursewareEventType, CoursewareLearning
 __all__ = [
     "CoursewareEvent",
     "CoursewareJobCreateRequest",
+    "CoursewareBatchCreateRequest",
+    "CoursewareBatchJobResponse",
     "CoursewareJobDetail",
+    "CoursewareJobListResponse",
     "CoursewareJobResponse",
     "CoursewareJobState",
     "CoursewareResourceDetail",

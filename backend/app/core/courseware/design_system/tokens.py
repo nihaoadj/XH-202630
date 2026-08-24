@@ -1,6 +1,6 @@
 """Stable token names and values; no model output is interpolated here."""
 
-DESIGN_SYSTEM_VERSION = "1.0"
+DESIGN_SYSTEM_VERSION = "2.0"
 
 TOKENS = {
     "font_body": "system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
@@ -13,6 +13,10 @@ TOKENS = {
     "radius_card": "0.875rem", "radius_control": "0.5rem", "radius_pill": "999px",
     "shadow_card": "0 4px 18px #17324b16", "content_max": "60rem", "density": "1",
     "focus_width": "3px", "touch_min": "44px", "state_success": "#147a4b", "state_error": "#b42318",
+    "state_warning": "#a25a16", "grid_columns": "12", "safe_area": "clamp(1rem,2.5vw,2rem)",
+    "density_compact": ".84", "density_comfortable": "1", "density_spacious": "1.16",
+    "radius_panel": "1.25rem", "shadow_floating": "0 18px 48px #17324b20",
+    "page_header_height": "3rem", "page_footer_height": "3.5rem",
 }
 
 __all__ = ["DESIGN_SYSTEM_VERSION", "TOKENS"]

@@ -19,6 +19,8 @@ from app.db.generation.repository import create_generation_job_repository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.learners.repository import create_learner_repository
 from app.db.learners.mastery import create_mastery_repository
+from app.db.learners.curriculum import create_curriculum_repository
+from app.db.learners.tier_progress import create_tier_progress_repository
 from app.db.questionnaire.repository import create_questionnaire_repository
 from app.db.learning_documents.repository import create_resource_repository
 from app.db.courseware.repository import create_courseware_repository
@@ -91,6 +93,16 @@ class Container(containers.DeclarativeContainer):
         session_factory=db_session_factory,
         learner_repository=learner_repository,
     )
+    curriculum_repository = providers.Singleton(
+        create_curriculum_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+    )
+    tier_progress_repository = providers.Singleton(
+        create_tier_progress_repository,
+        db_type=config.db_type,
+        session_factory=db_session_factory,
+    )
     user_repository = providers.Singleton(
         create_user_repository,
         db_type=config.db_type,
@@ -157,6 +169,9 @@ class Container(containers.DeclarativeContainer):
         MasteryService,
         repository=mastery_repository,
         knowledge_service=knowledge_service,
+        resource_repo=resource_repository,
+        curriculum_repo=curriculum_repository,
+        tier_progress_repo=tier_progress_repository,
     )
 
     vector_search_backend = providers.Singleton(
@@ -243,6 +258,7 @@ class Container(containers.DeclarativeContainer):
         knowledge_catalog=knowledge_catalog,
         llm_gateway=llm_gateway,
         tutor_repo=tutor_repository,
+        mastery_service=mastery_service,
     )
     report_service = providers.Singleton(
         ReportService,
@@ -251,6 +267,8 @@ class Container(containers.DeclarativeContainer):
         feedback_loop_repo=feedback_loop_repository,
         generation_job_repo=generation_job_repository,
         mastery_service=mastery_service,
+        claim_repo=claim_repository,
+        audit_repo=audit_repository,
     )
     tutor_context_builder = providers.Singleton(
         TutorContextBuilder,

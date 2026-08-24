@@ -1,11 +1,13 @@
 <template>
-  <div class="generate-page">
+  <CoursewareGenerationWorkspace v-if="isCoursewareWorkspace" @open-text-workspace="openTextWorkspace" />
+  <div v-else class="generate-page">
     <section class="control-panel">
       <div class="panel-title">
         <div>
           <span class="eyebrow">Resource Generation</span>
           <h3>学习资源生成</h3>
         </div>
+        <el-button class="courseware-workspace-button" @click="openCoursewareWorkspace">互动课件生成</el-button>
       </div>
 
       <div class="task-selector">
@@ -279,11 +281,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, Clock, Delete, Plus, Reading, Refresh, RefreshRight } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { generateApi, knowledgeApi, profileApi, resourceApi, runApi } from '../../api'
 import { createRunEventClient } from '../runs/api'
 import ResourceViewer from '../learning-documents/ResourceViewer.vue'
 import AgentVisualization from './AgentVisualization.vue'
+import CoursewareGenerationWorkspace from '../courseware/CoursewareGenerationWorkspace.vue'
 import { useAppStore } from '../../stores/app'
 import {
   formatDateTime,
@@ -300,6 +303,29 @@ import {
 
 const store = useAppStore()
 const router = useRouter()
+const route = useRoute()
+const WORKSPACE_KIND_STORAGE_KEY = 'generation_workspace_kind'
+const isCoursewareWorkspace = computed(() => (
+  route.query.kind === 'courseware'
+  || (!route.query.kind && localStorage.getItem(WORKSPACE_KIND_STORAGE_KEY) === 'courseware')
+))
+
+function openCoursewareWorkspace() {
+  localStorage.setItem(WORKSPACE_KIND_STORAGE_KEY, 'courseware')
+  router.push({
+    path: '/generate',
+    query: { kind: 'courseware', learnerId: selectedLearnerId.value || undefined },
+  })
+}
+
+function openTextWorkspace() {
+  localStorage.setItem(WORKSPACE_KIND_STORAGE_KEY, 'learning_documents')
+  const query = { ...route.query }
+  delete query.kind
+  delete query.runId
+  delete query.batchId
+  router.push({ path: '/generate', query })
+}
 
 const learningDirectionName = computed(
   () => store.currentLearningDirectionName || localStorage.getItem('learning_direction_name') || ''

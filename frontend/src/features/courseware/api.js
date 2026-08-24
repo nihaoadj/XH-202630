@@ -2,6 +2,8 @@ import { api } from '../../api/client.js'
 
 export const coursewareApi = {
   createJob: (data) => api.post('/resources/courseware/jobs', data),
+  createJobs: (data) => api.post('/resources/courseware/jobs/batch', data),
+  listJobs: (learnerId) => api.get('/resources/courseware/jobs', { params: { learner_id: learnerId } }),
   getJob: (runId) => api.get(`/resources/courseware/jobs/${encodeURIComponent(runId)}`),
   getJobDetail: (runId) => api.get(`/resources/courseware/jobs/${encodeURIComponent(runId)}/detail`),
   eventsUrl: (runId, afterSequence = 0) => `/api/resources/courseware/jobs/${encodeURIComponent(runId)}/events?after_sequence=${Number(afterSequence) || 0}`,

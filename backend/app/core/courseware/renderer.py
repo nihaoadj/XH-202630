@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 from typing import Any
 
 from app.core.courseware.runtime import ALLOWED_SCENE_KINDS, SCRIPT, STYLE
@@ -16,23 +17,46 @@ def _text(value: Any) -> str:
     return html.escape(str(value or ""), quote=True)
 
 
+_FENCED_CODE = re.compile(r"```[^\n]*\n?(.*?)```", flags=re.DOTALL)
+
+
+def _rich_text(value: Any) -> str:
+    """Render frozen Markdown code as readable, inert code rather than prose."""
+    source = str(value or "")
+    parts: list[str] = []
+    cursor = 0
+    for match in _FENCED_CODE.finditer(source):
+        prose = source[cursor:match.start()].strip()
+        if prose:
+            parts.append(f'<p class="component-prose">{_text(prose)}</p>')
+        code = match.group(1).strip("\n")
+        if code:
+            parts.append(f'<pre class="source-code" tabindex="0"><code>{_text(code)}</code></pre>')
+        cursor = match.end()
+    tail = source[cursor:].strip()
+    if tail:
+        parts.append(f'<p class="component-prose">{_text(tail)}</p>')
+    return "".join(parts) or '<p class="component-prose">来源内容为空。</p>'
+
+
 def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int) -> str:
     """Render only catalog-owned component shapes, never model-supplied markup."""
     definition = component_definition(block.get("component"), str(block.get("schema_version") or "1.0"))
     if definition is None:
         raise ValueError("课件包含未注册互动组件")
     text = _text(block.get("text"))
+    rich_text = _rich_text(block.get("text"))
     css = f"block component-{definition.renderer}"
     component_id = _text(block.get("component_id") or block.get("block_id") or f"{definition.name}-{index}")
     attributes = f'class="{css}" data-component-id="{component_id}" data-scene-id="{_text(scene_id)}"'
     if definition.renderer == "key-point":
-        return f'<aside {attributes} aria-label="关键点">{text}</aside>'
+        return f'<aside {attributes} aria-label="关键点"><div class="component-content">{rich_text}</div></aside>'
     if definition.renderer == "compare":
-        return f'<section {attributes} aria-label="对比说明">{text}</section>'
+        return f'<section {attributes} aria-label="对比说明"><div class="component-content">{rich_text}</div></section>'
     if definition.renderer == "recap":
-        return f'<section {attributes} aria-label="复盘"><h3>复盘</h3><p>{text}</p></section>'
+        return f'<section {attributes} aria-label="复盘"><h3>复盘</h3><div class="component-content">{rich_text}</div></section>'
     if definition.renderer == "callout":
-        return f'<aside {attributes} role="note" aria-label="提示"><strong>提示</strong><p>{text}</p></aside>'
+        return f'<aside {attributes} role="note" aria-label="提示"><strong>提示</strong><div class="component-content">{rich_text}</div></aside>'
     if definition.name == "flashcard":
         front, back = _text(block.get("front") or text), _text(block.get("back") or text)
         return f'<section {attributes} data-flashcard tabindex="0" role="button" aria-label="翻转卡片"><p class="flash-front">{front}</p><p class="flash-back" hidden>{back}</p><button type="button" data-flashcard-action="review">再复习</button><button type="button" data-flashcard-action="known">已记住</button></section>'
@@ -88,10 +112,23 @@ def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int)
             for item in (block.get("events") or [])
         )
         return f'<section {attributes} data-timeline-explorer aria-label="时间线"><p>{text}</p><div class="timeline-events" role="list">{events}</div><p data-timeline-detail aria-live="polite"></p></section>'
+    if definition.schema_version == "3.0":
+        items = block.get("items") or []
+        if definition.name == "comparison_table":
+            rows = "".join(
+                f'<tr><th scope="row">{_text(item.get("label"))}</th><td>{_text(item.get("value"))}</td></tr>'
+                for item in items
+            )
+            return f'<section {attributes} aria-label="结构化对比"><p>{text}</p><table><tbody>{rows}</tbody></table></section>'
+        rows = "".join(
+            f'<li><span>{_text(item.get("label"))}</span><strong>{_text(item.get("value"))}</strong></li>'
+            for item in items
+        )
+        return f'<section {attributes} aria-label="{_text(definition.name)}"><p>{text}</p><ol class="visual-items">{rows}</ol></section>'
     if definition.renderer in {"steps", "ordered-steps"}:
         values = block.get("steps") or [block.get("text") or "完成本步骤"]
         tag = "ol" if definition.renderer == "ordered-steps" else "ul"
-        items = "".join(f'<li><label><input type="checkbox" id="component-step-{i}" data-check="component-step-{i}"><span>{_text(value)}</span></label></li>' for i, value in enumerate(values))
+        items = "".join(f'<li><label><input type="checkbox" id="{component_id}-step-{i}" data-check="{component_id}-step-{i}"><span>{_text(value)}</span></label></li>' for i, value in enumerate(values))
         return f'<section {attributes} aria-label="步骤"><{tag} class="component-steps">{items}</{tag}></section>'
     if definition.name == "single_choice":
         options = block.get("options") or ["是", "否"]
@@ -129,22 +166,15 @@ def _design_for(document: dict[str, Any], design: CoursewareDesign | dict[str, A
 def _design_style(design: CoursewareDesign) -> str:
     colors = THEMES[design.theme.theme_id]
     variables = ";".join(f"--{key.replace('_', '-') }:{value}" for key, value in {
-        **TOKENS,
-        "surface": colors["surface"], "canvas": colors["canvas"], "ink": colors["ink"],
-        "accent": colors["accent"], "border": colors["border"], "focus": colors["focus"],
+        **TOKENS, **colors,
     }.items())
     return STYLE.replace(":root{", f":root{{{variables};", 1)
 
 
 SCENE_RECIPE_BY_KIND = {
-    "intro": "cover",
-    "explain": "concept",
-    "example": "concept",
-    "compare": "concept",
-    "scenario": "practice",
-    "practice": "practice",
-    "quiz": "quiz",
-    "recap": "recap",
+    "intro": "editorial_cover", "explain": "concept_split", "example": "concept_split",
+    "compare": "comparison_matrix", "scenario": "case_diagnostic",
+    "practice": "practice_workspace", "quiz": "quiz_focus", "recap": "recap_dashboard",
 }
 
 
@@ -163,7 +193,7 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
     for index, scene in enumerate(scenes):
         if scene.get("kind") not in ALLOWED_SCENE_KINDS:
             raise ValueError("课件场景类型不受 runtime 支持")
-        recipe_id = str(scene.get("recipe_id") or SCENE_RECIPE_BY_KIND[scene["kind"]])
+        recipe_id = str(scene.get("layout_recipe_id") or scene.get("recipe_id") or SCENE_RECIPE_BY_KIND[scene["kind"]])
         recipe = resolve_recipe(resolved_design.theme.theme_id, recipe_id)
         if not scene.get("source_refs"):
             raise ValueError("每个课件场景必须包含冻结来源引用")
@@ -190,7 +220,10 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
         else:
             blocks = "".join(f'<p class="block">{_text(block)}</p>' for block in scene.get("blocks", []))
         interaction = ""
-        if scene.get("kind") == "practice":
+        if scene.get("kind") == "practice" and not any(
+            block.get("component") in {"steps", "ordered_steps"}
+            for block in component_blocks if isinstance(block, dict)
+        ):
             steps = "".join(
                 f'<li><label><input id="step-{index}-{step}" type="checkbox"> {_text(value)}</label></li>'
                 for step, value in enumerate(scene.get("steps", []))
@@ -208,19 +241,24 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
                 f'{options}<p class="feedback" aria-live="polite" hidden></p></div>'
             )
         active_class = " active" if index == 0 else ""
+        scene_heading = title if index == 0 and scene.get("page_role") == "cover" else _text(scene.get("title"))
+        lead = f'<p class="scene-lead">{_text(scene.get("lead"))}</p>' if scene.get("lead") else ""
+        question = f'<p class="scene-question">{_text(scene.get("key_question"))}</p>' if scene.get("key_question") else ""
+        conclusion = f'<p class="scene-conclusion">{_text(scene.get("conclusion"))}</p>' if scene.get("conclusion") else ""
         rendered_scenes.append(
-            f'<section class="scene recipe-{_text(recipe["recipe_id"])}{active_class}" data-scene-id="{_text(scene.get("scene_id") or f"scene-{index}")}" data-recipe-id="{_text(recipe["recipe_id"])}" data-decoration-id="{_text(recipe["decoration_id"])}" aria-label="第 {index + 1} 节">'
-            f'<h2>{_text(scene.get("title"))}</h2>{blocks}{interaction}</section>'
+            f'<section class="scene recipe-{_text(recipe["recipe_id"])}{active_class}" data-scene-id="{_text(scene.get("scene_id") or f"scene-{index}")}" data-page-role="{_text(scene.get("page_role"))}" data-practice-variant="{_text(scene.get("practice_variant") or "guided")}" data-recipe-id="{_text(recipe["recipe_id"])}" data-decoration-id="{_text(recipe["decoration_id"])}" aria-label="第 {index + 1} 节">'
+            f'<header class="scene-header"><span class="scene-kicker">{_text(scene.get("page_role") or scene.get("kind"))}</span><h2>{scene_heading}</h2>{question}{lead}</header>'
+            f'<div class="scene-body">{blocks}{interaction}</div>{conclusion}</section>'
         )
     html_document = (
         "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
         f'<meta http-equiv="Content-Security-Policy" content="{security_policy(style_content=style)}">'
         f"<title>{title}</title><style>{style}</style></head><body>"
-        f'<main class="course layout-{resolved_design.layout.layout_id}" data-theme="{resolved_design.theme.theme_id}" data-motion="{resolved_design.motion.motion_id}" data-resource-id="{resource_id}" data-release-id="{release_id}"><header class="course-header"><h1>{title}</h1><p>离线互动学习资源</p></header>'
-        f'<p class="progress" aria-live="polite"></p>{"".join(rendered_scenes)}'
-        '<nav class="nav" aria-label="课件导航"><button type="button" data-nav="-1">上一节</button>'
-        '<button type="button" data-nav="1">下一节</button></nav></main>'
+        f'<main class="course layout-{resolved_design.layout.layout_id}" data-theme="{resolved_design.theme.theme_id}" data-motion="{resolved_design.motion.motion_id}" data-resource-id="{resource_id}" data-release-id="{release_id}"><header class="course-topbar"><h1>{title}</h1><span>INTERACTIVE COURSEWARE</span></header>'
+        f'<p class="progress" aria-live="polite"></p><div class="course-stage">{"".join(rendered_scenes)}</div>'
+        '<nav class="nav" aria-label="课件导航"><button type="button" data-nav="-1" aria-label="上一节">上一节</button>'
+        '<span class="nav-status">← → 键亦可翻页</span><button type="button" data-nav="1" aria-label="下一节">下一节</button></nav></main>'
         f"<script>{SCRIPT}</script></body></html>"
     )
     return html_document.encode("utf-8")

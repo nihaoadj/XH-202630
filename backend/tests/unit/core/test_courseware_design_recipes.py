@@ -19,5 +19,5 @@ def test_renderer_binds_registered_scene_recipes_to_the_artifact():
             {"kind": "quiz", "title": "自测", "blocks": ["问题"], "options": ["A"], "answer": ["A"], "source_refs": ["source"]},
         ],
     }).decode("utf-8")
-    assert 'data-recipe-id="cover"' in artifact
-    assert 'data-recipe-id="quiz"' in artifact
+    assert 'data-recipe-id="editorial_cover"' in artifact
+    assert 'data-recipe-id="quiz_focus"' in artifact

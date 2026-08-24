@@ -29,6 +29,7 @@ from app.models.knowledge.knowledge import (
     SourceType,
 )
 from app.models.learning_documents.schemas import DiagnosticQuestion, SkillNode
+from app.core.learning_tiers import validate_tier_graph
 
 
 def _stable_id(prefix: str, *parts: object) -> str:
@@ -607,6 +608,10 @@ class KnowledgeCatalogRepository:
                 raise TypeError("能力节点必须是 SkillNode、dict 或 str")
 
         name_to_id = {node.name: node.node_id for node in normalised}
+        normalised = [node.model_copy(update={
+            "prerequisites": [name_to_id.get(item, item) for item in node.prerequisites],
+        }) for node in normalised]
+        validate_tier_graph(normalised)
         with self.session_factory() as db:
             for node in normalised:
                 if node.knowledge_base_id != knowledge_base_id:
@@ -616,6 +621,7 @@ class KnowledgeCatalogRepository:
                     "name": node.name,
                     "description": node.description,
                     "level": node.level,
+                    "tier": node.tier,
                     "knowledge_points": node.knowledge_points,
                     "assessment_methods": node.assessment_methods,
                     "extra_metadata": node.metadata,
@@ -721,6 +727,7 @@ class KnowledgeCatalogRepository:
                 name=row.name,
                 description=row.description,
                 level=row.level,
+                tier=row.tier,
                 prerequisites=sorted(prerequisites[row.node_id]),
                 children=sorted(children[row.node_id]),
                 knowledge_points=row.knowledge_points or [],

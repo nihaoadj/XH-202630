@@ -100,6 +100,33 @@ def test_p0_09_refuses_preexisting_resource_version_duplicates(tmp_path):
         apply_p0_09_migration(engine)
 
 
+def test_p0_09_allows_current_text_and_html_representations_to_share_legacy_version(tmp_path):
+    engine = _legacy_engine(tmp_path, "current-representations.db")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "ALTER TABLE generated_resources ADD COLUMN resource_spec_id VARCHAR(64)"
+        ))
+        connection.execute(text(
+            "ALTER TABLE generated_resources ADD COLUMN representation VARCHAR(16)"
+        ))
+        connection.execute(text("INSERT INTO agent_runs VALUES ('run-a')"))
+        connection.execute(text(
+            "INSERT INTO generated_resources "
+            "(resource_id, run_id, resource_spec_id, representation, learner_id, topic, "
+            "resource_type, difficulty, version) VALUES "
+            "('guide-text', 'run-a', 'guide-spec', 'text', 'learner', 'RAG', '讲义', '初级', 1), "
+            "('guide-html', 'run-a', 'guide-spec', 'html', 'learner', 'RAG', '讲义', '初级', 1)"
+        ))
+
+    apply_p0_09_migration(engine)
+
+    with engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT COUNT(*) FROM generated_resources "
+            "WHERE run_id='run-a' AND resource_type='讲义' AND version=1"
+        )).scalar_one() == 2
+
+
 def test_p0_09_refuses_null_version_for_nonlegacy_run(tmp_path):
     engine = _legacy_engine(tmp_path, "null-version.db")
     with engine.begin() as connection:

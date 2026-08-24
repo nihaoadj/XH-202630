@@ -3,6 +3,7 @@
 from app.core.courseware.components.catalog import (
     CATALOG_V1,
     CATALOG_V2,
+    CATALOG_V3,
     ComponentDefinition,
     component_asset_matrix,
     component_definition,
@@ -12,6 +13,6 @@ from app.core.courseware.components.catalog import (
 )
 
 __all__ = [
-    "CATALOG_V1", "CATALOG_V2", "ComponentDefinition", "component_asset_matrix",
+    "CATALOG_V1", "CATALOG_V2", "CATALOG_V3", "ComponentDefinition", "component_asset_matrix",
     "component_definition", "is_registered_component", "migrate_component_payload", "validate_component_payload",
 ]

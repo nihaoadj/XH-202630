@@ -1,26 +1,19 @@
 <template>
   <div class="feedback-page">
     <section class="feedback-hero">
-      <div class="hero-copy">
-        <span class="page-kicker">PRACTICE REFLECTION</span>
-        <h2>练习反馈</h2>
-        <p>完成本轮资源练习后，用测评和真实感受更新学习画像，让下一轮内容更贴近你的掌握情况。</p>
-      </div>
-
-      <div class="hero-focus">
-        <span class="focus-state"><i />当前学习方向</span>
-        <strong>{{ currentDirectionName }}</strong>
-        <div class="focus-divider" />
-        <div class="focus-details">
-          <span>待反馈任务 <b>{{ pendingTaskCount }}</b></span>
-        </div>
-      </div>
-
       <div class="task-selection task-selection-inline">
-        <span class="task-selection-label">本轮资源批次</span>
-        <el-select v-model="selectedRunId" filterable placeholder="选择要反馈的学习资源批次" class="task-select" @change="selectBatch">
-          <el-option v-for="task in taskGroups" :key="task.runId" :label="task.label" :value="task.runId" />
-        </el-select>
+        <label class="task-filter-field">
+          <span class="task-selection-label">学习画像</span>
+          <el-select v-model="selectedLearnerId" filterable placeholder="选择学习画像" class="profile-select" @change="handleProfileChange">
+            <el-option v-for="profile in profileOptions" :key="profile.learner_id" :label="profile.label" :value="profile.learner_id" />
+          </el-select>
+        </label>
+        <label class="task-filter-field">
+          <span class="task-selection-label">本轮资源批次</span>
+          <el-select v-model="selectedRunId" filterable placeholder="选择要反馈的学习资源批次" class="task-select" @change="selectBatch">
+            <el-option v-for="task in taskGroups" :key="task.runId" :label="task.label" :value="task.runId" />
+          </el-select>
+        </label>
         <el-button class="start-evaluation-button" type="primary" :icon="VideoPlay" @click="startEvaluation" :disabled="!selectedRunId">{{ selectedBatchHasFeedback ? '再次测评' : '开始测评' }}</el-button>
       </div>
 
@@ -33,8 +26,8 @@
       <p v-else class="task-empty-tip">暂时没有可用于反馈的资源任务，请先完成一轮学习资源生成。</p>
     </section>
 
-    <section v-if="!result" ref="workspaceRef" class="feedback-workspace">
-      <article class="evaluation-panel">
+    <section v-if="!result" ref="workspaceRef" class="feedback-workspace" :class="{ 'has-empty-evaluation': !evaluation.questions.length }">
+      <article class="evaluation-panel" :class="{ 'is-empty-evaluation': !evaluation.questions.length }">
         <div class="section-heading">
           <div>
             <span class="page-kicker">STEP 01 · PRACTICE CHECK</span>
@@ -124,11 +117,44 @@
         <p v-if="result.analysis.reflection_insight" class="reflection-insight">{{ friendlyText(result.analysis.reflection_insight) }}</p>
         <ul v-if="result.analysis.learner_suggestions?.length"><li v-for="item in result.analysis.learner_suggestions" :key="item">{{ friendlyText(item) }}</li></ul>
       </article>
+      <article v-if="feedbackReport.capability_results?.length" class="capability-result-panel">
+        <div class="analysis-heading"><strong>能力节点结果</strong><span>仅基于服务端正式判分</span></div>
+        <div class="capability-result-list">
+          <div v-for="item in feedbackReport.capability_results" :key="item.skill_node_id">
+            <strong>{{ item.skill_node_id }}</strong><span>{{ Math.round((item.score || 0) * 100) }}% · {{ item.mastery_status }}</span>
+          </div>
+        </div>
+      </article>
       <section class="next-step-panel">
-        <div class="next-step-copy"><span class="page-kicker">NEXT STEP</span><h4>接下来怎么学，由你决定</h4><p>可以先继续使用这批资源巩固，再提交一次反馈；也可以确认要生成的资源组合。</p></div>
+        <div class="next-step-copy"><span class="page-kicker">NEXT STEP</span><h4>接下来怎么学，由你决定</h4><p>可先针对本次已确认的薄弱点生成强化包，或继续学习新的能力节点。</p><small v-if="tierProgress">当前学习阶：{{ tierProgress.active_tier }} · 已解锁至第 {{ tierProgress.highest_unlocked_tier }} 阶<span v-if="tierProgress.remediation_return_tier"> · 补救后返回第 {{ tierProgress.remediation_return_tier }} 阶</span></small></div>
         <div class="next-step-actions">
-          <el-button plain @click="continueLearning">继续学习这批资源</el-button>
           <template v-if="!result.followup_run_id">
+            <section v-if="correctionPackageOption" class="correction-package-card" :class="{ 'is-disabled': !correctionPackageOption.eligible }">
+              <div><strong>强化薄弱点</strong><p>生成一份包含概念补救、对照辨析与递进练习的薄弱点强化包。</p></div>
+              <el-checkbox-group v-if="correctionPackageOption.eligible" v-model="selectedCorrectionNodes" class="resource-type-choice">
+                <el-checkbox v-for="node in correctionPackageOption.selectable_targets" :key="node.skill_node_id" :label="node.skill_node_id">{{ node.name }}</el-checkbox>
+              </el-checkbox-group>
+              <small v-if="correctionPackageOption.eligible">系统锁定难度：{{ correctionPackageOption.recommended_difficulty }}；请选择 1–3 个目标。</small>
+              <small v-else>{{ correctionPackageOption.disabled_reason_code === 'NO_LEARNED_NOT_MASTERED_TARGET' ? '本次没有已学习但未掌握的能力节点，请选择学习新知识。' : '当前不能创建强化包。' }}</small>
+              <el-button type="primary" :loading="selectingOption === correctionPackageOption.option_id" :disabled="!correctionPackageOption.eligible || !selectedCorrectionNodes.length" @click="selectCorrectionPackage">生成薄弱点强化包</el-button>
+            </section>
+            <div v-if="curriculumProgress" class="curriculum-progress-row">
+              <strong>13 节点进度：{{ curriculumProgress.completed_count }}/{{ curriculumProgress.total_count }} 已完成</strong>
+              <span>待学习 {{ curriculumProgress.unplanned_count }} · 待验证 {{ curriculumProgress.exposed_count + curriculumProgress.verification_pending_count }} · 需巩固 {{ curriculumProgress.reinforcement_due_count }}</span>
+            </div>
+            <div v-if="generationOptions" class="intent-selection-row">
+              <span>学习新知识：</span>
+              <small>仅显示当前学习阶的节点；节点不足 3 个时不会跨阶补位。</small>
+            </div>
+            <div v-if="generationOptions" class="intent-node-row">
+              <span>选择能力节点（最多 3 个）：</span>
+              <el-checkbox-group v-model="selectedIntentNodes" class="resource-type-choice" :max="3">
+                <el-checkbox v-for="node in intentCandidates" :key="node.skill_node_id" :label="node.skill_node_id" :disabled="node.blocked_by_node_ids?.length > 0">
+                  {{ node.name }} · 第 {{ node.tier }} 阶<small v-if="node.blocked_by_node_ids?.length">（需先学习前置能力）</small>
+                </el-checkbox>
+              </el-checkbox-group>
+              <em v-if="!intentCandidates.length">当前没有此类可选能力节点。</em>
+            </div>
             <div class="resource-selection-row"><span>生成资源：</span>
           <el-checkbox-group v-model="selectedResourceTypes" class="resource-type-choice">
             <el-checkbox label="讲义">讲义</el-checkbox>
@@ -137,7 +163,7 @@
             <el-checkbox label="复习清单">复习清单</el-checkbox>
             <el-checkbox label="案例分析">案例分析</el-checkbox>
           </el-checkbox-group>
-          <el-select v-model="selectedDifficulty" class="difficulty-choice" aria-label="资源难度">
+          <el-select v-model="selectedDifficulty" class="difficulty-choice" aria-label="资源难度" :disabled="Boolean(generationOptions)">
             <el-option label="初级" value="初级" />
             <el-option label="中级" value="中级" />
             <el-option label="高级" value="高级" />
@@ -146,14 +172,11 @@
             class="custom-generation-button"
             type="primary"
             :loading="selectingOption === 'custom-selection'"
-            :disabled="!selectedResourceTypes.length"
+            :disabled="!selectedResourceTypes.length || (generationOptions && !selectedIntentNodes.length)"
             @click="selectFeedbackOption('custom-selection')"
           >
             生成已选资源
           </el-button>
-            </div>
-            <div class="recommendation-row"><span>推荐方案：</span>
-          <el-button v-for="option in result.resource_options || []" :key="option.option_id" plain type="primary" :loading="selectingOption === option.option_id" :disabled="!selectedResourceTypes.length" @click="selectFeedbackOption(option.option_id)">{{ option.title }}</el-button>
             </div>
           </template>
         </div>
@@ -181,7 +204,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheck, VideoPlay } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { feedbackApi, generateApi, resourceApi } from '../../api'
+import { feedbackApi, generateApi, knowledgeApi, profileApi, resourceApi } from '../../api'
 import { useAppStore } from '../../stores/app'
 import { formatDateTime } from '../../utils/generationDisplay'
 import TutorDrawer from '../tutor/TutorDrawer.vue'
@@ -190,16 +213,21 @@ import { countTutorTurns } from '../../utils/tutorState'
 const router = useRouter()
 const store = useAppStore()
 const workspaceRef = ref(null)
-const form = reactive({ learner_id: store.currentLearnerId || localStorage.getItem('last_learner_id') || '', completed: true, time_spent_seconds: 1800, self_rating: 4, difficulty_feeling: '', helpful_part: '', confusing_part: '', comment: '' })
+const selectedLearnerId = ref(store.currentLearnerId || localStorage.getItem('last_learner_id') || '')
+const form = reactive({ learner_id: selectedLearnerId.value, completed: true, time_spent_seconds: 1800, self_rating: 4, difficulty_feeling: '', helpful_part: '', confusing_part: '', comment: '' })
 const resources = ref([])
 const generationJobs = ref([])
 const feedbackResults = ref([])
+const profiles = ref([])
+const tracks = ref([])
 const selectedRunId = ref(localStorage.getItem('current_generation_run_id') || '')
 const submitting = ref(false)
 const selectingOption = ref('')
 const result = ref(null)
 const selectedResourceTypes = ref([])
 const selectedDifficulty = ref('中级')
+const learningIntent = ref('reinforce_weakness')
+const selectedIntentNodes = ref([])
 const evaluation = reactive({ topic: '', questions: [], resourceIds: [] })
 const evaluationAnswers = reactive({})
 const tutorOpen = ref(false)
@@ -207,6 +235,10 @@ const tutorQuestion = ref(null)
 const tutorHelpCount = ref(0)
 
 const currentDirectionName = computed(() => store.currentLearningDirectionName || localStorage.getItem('learning_direction_name') || '未选择学习方向')
+const profileOptions = computed(() => profiles.value.map((profile) => ({
+  ...profile,
+  label: `${resolveTrackName(profile.knowledge_base_id)} / ${formatSkillLevel(profile.skill_level)}`,
+})))
 const completedRunIds = computed(() => new Set(feedbackResults.value.flatMap((item) => [
   item.attempt?.source_run_id,
   item.attempt?.metadata?.session_id,
@@ -281,7 +313,6 @@ const taskGroups = computed(() => {
     })
 })
 const activeTask = computed(() => taskGroups.value.find((item) => item.runId === selectedRunId.value) || taskGroups.value[0] || null)
-const pendingTaskCount = computed(() => taskGroups.value.filter((item) => !item.completed).length)
 const selectedBatchHasFeedback = computed(() => Boolean(taskGroups.value.find((item) => item.runId === selectedRunId.value)?.completed))
 const tutorResource = computed(() => {
   const questionResourceId = String(tutorQuestion.value?.question_id || '').split(':', 1)[0]
@@ -299,17 +330,49 @@ const attemptCorrectSummary = computed(() => {
   return `${points.reduce((sum, item) => sum + item.correct_count, 0)} / ${points.reduce((sum, item) => sum + item.total_count, 0)}`
 })
 const studyTimeLabel = computed(() => `${Math.floor((form.time_spent_seconds || 0) / 60)} 分钟`)
+const generationOptions = computed(() => result.value?.generation_options || null)
+const tierProgress = computed(() => generationOptions.value?.tier_progress || null)
+const correctionPackageOption = computed(() => result.value?.correction_package_option || null)
+const curriculumProgress = computed(() => generationOptions.value?.curriculum_progress || null)
+const intentCandidates = computed(() => generationOptions.value?.[learningIntent.value] || [])
+const feedbackReport = computed(() => result.value?.feedback_report || {})
+const selectedCorrectionNodes = ref([])
 
-watch(() => store.currentLearnerId, (value) => { if (value) form.learner_id = value })
+watch(() => store.currentLearnerId, (value) => {
+  if (value && value !== selectedLearnerId.value) {
+    selectedLearnerId.value = value
+    form.learner_id = value
+  }
+})
 watch(result, (value) => {
   const option = value?.resource_options?.[0]
   if (option) {
     selectedResourceTypes.value = [...option.resource_types]
     selectedDifficulty.value = option.difficulty
   }
+  const options = value?.generation_options
+  if (options) {
+    learningIntent.value = 'learn_new_knowledge'
+    const recommended = new Set(options.recommended_node_ids || [])
+    const candidates = options[learningIntent.value] || []
+    selectedIntentNodes.value = candidates
+      .filter((item) => recommended.has(item.skill_node_id) && !(item.blocked_by_node_ids || []).length)
+      .slice(0, 3)
+      .map((item) => item.skill_node_id)
+    if (!selectedIntentNodes.value.length) selectedIntentNodes.value = candidates
+      .filter((item) => !(item.blocked_by_node_ids || []).length)
+      .slice(0, 3)
+      .map((item) => item.skill_node_id)
+  } else selectedIntentNodes.value = []
+  const correction = value?.correction_package_option
+  selectedCorrectionNodes.value = correction?.eligible ? [...(correction.recommended_target_ids || [])].slice(0, 3) : []
 })
 
 function hasAnswer(value) { return Array.isArray(value) ? value.length > 0 : String(value || '').trim().length > 0 }
+function resolveTrackName(trackId) {
+  return tracks.value.find((track) => track.track_id === trackId || track.knowledge_base_id === trackId)?.name || trackId || '未选择学习方向'
+}
+function formatSkillLevel(level) { return ({ beginner: '初级', intermediate: '中级', advanced: '高级' })[level] || level || '未分级' }
 function resetEvaluationAnswers() { Object.keys(evaluationAnswers).forEach((key) => delete evaluationAnswers[key]) }
 function formatTaskTime(value) { return formatDateTime(value) }
 function feedbackActionLabel(action) { return { remediate: '补救学习', practice: '强化练习', advance: '继续进阶', hold: '保持路径', human_review: '人工复核' }[action] || action || '已记录' }
@@ -322,6 +385,12 @@ function friendlyText(value) {
     .replaceAll('客观成绩', '测评结果')
 }
 function buildIdempotencyKey(runId, submittedAt) { return `web-${runId.slice(0, 24)}-${submittedAt.toISOString().replace(/[^0-9]/g, '')}`.slice(0, 128) }
+function resetIntentNodes() {
+  selectedIntentNodes.value = intentCandidates.value
+    .filter((item) => !(item.blocked_by_node_ids || []).length)
+    .slice(0, 3)
+    .map((item) => item.skill_node_id)
+}
 function scrollToWorkspace() { workspaceRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 async function startEvaluation() { await loadEvaluationSession({ forceNew: true }); scrollToWorkspace() }
 function selectBatch() {
@@ -335,6 +404,39 @@ function selectBatch() {
     evaluation.resourceIds = []
     resetEvaluationAnswers()
   }
+}
+async function loadProfiles() {
+  try {
+    const [profileResponse, domainResponse] = await Promise.all([
+      profileApi.list({ page: 1, page_size: 50 }),
+      knowledgeApi.listDomains(),
+    ])
+    profiles.value = profileResponse.data.items || profileResponse.data.profiles || []
+    tracks.value = (domainResponse.data.domains || []).flatMap((domain) => domain.tracks || [])
+    if (!profiles.value.length) {
+      selectedLearnerId.value = ''
+      form.learner_id = ''
+      return
+    }
+    if (!profiles.value.some((profile) => profile.learner_id === selectedLearnerId.value)) {
+      selectedLearnerId.value = profiles.value[0].learner_id
+      form.learner_id = selectedLearnerId.value
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.warning('学习画像加载失败')
+  }
+}
+async function handleProfileChange() {
+  form.learner_id = selectedLearnerId.value
+  localStorage.setItem('last_learner_id', selectedLearnerId.value)
+  result.value = null
+  selectedRunId.value = ''
+  evaluation.questions = []
+  evaluation.resourceIds = []
+  resetEvaluationAnswers()
+  tutorHelpCount.value = 0
+  await loadResources()
 }
 function tutorCountKey(batchId = selectedRunId.value) { return `tutor_help_count:${form.learner_id}:${batchId}` }
 function requestTutorHint(question) { tutorQuestion.value = question; tutorOpen.value = true }
@@ -423,7 +525,12 @@ async function selectFeedbackOption(optionId) {
       attempt_id: result.value.attempt.attempt_id,
       option_id: optionId,
       resource_types: selectedResourceTypes.value,
-      difficulty: selectedDifficulty.value,
+      ...(!generationOptions.value ? { difficulty: selectedDifficulty.value } : {}),
+      ...(generationOptions.value ? {
+        learning_intent: learningIntent.value,
+        selected_skill_node_ids: selectedIntentNodes.value,
+        next_generation_snapshot_hash: generationOptions.value.snapshot_hash,
+      } : {}),
     })
     result.value = res.data
     ElMessage.success('已确认下一步资源方案，正在创建生成任务')
@@ -431,20 +538,29 @@ async function selectFeedbackOption(optionId) {
     console.error(error); ElMessage.error(error?.response?.data?.detail || '资源方案确认失败')
   } finally { selectingOption.value = '' }
 }
-function continueLearning() {
-  if (!selectedRunId.value) return
-  result.value = null
-  evaluation.questions = []
-  evaluation.resourceIds = []
-  resetEvaluationAnswers()
-  ElMessage.info('你可以继续使用当前资源学习；准备好后点击“再次测评”提交下一次反馈。')
+async function selectCorrectionPackage() {
+  const option = correctionPackageOption.value
+  if (!option?.eligible || !result.value?.attempt?.attempt_id || !generationOptions.value) return
+  selectingOption.value = option.option_id
+  try {
+    const res = await feedbackApi.selectFollowup({
+      learner_id: form.learner_id, attempt_id: result.value.attempt.attempt_id,
+      option_id: option.option_id, learning_intent: 'reinforce_weakness',
+      selected_skill_node_ids: selectedCorrectionNodes.value,
+      next_generation_snapshot_hash: option.snapshot_hash,
+    })
+    result.value = res.data
+    ElMessage.success('薄弱点强化包正在创建')
+  } catch (error) {
+    console.error(error); ElMessage.error(error?.response?.data?.detail || '强化包创建失败')
+  } finally { selectingOption.value = '' }
 }
 function goToFollowupRun() {
   if (!result.value?.followup_run_id) return
   localStorage.setItem('current_generation_run_id', result.value.followup_run_id)
   router.push({ path: '/generate', query: { runId: result.value.followup_run_id, learnerId: form.learner_id } })
 }
-onMounted(async () => { await loadResources() })
+onMounted(async () => { await loadProfiles(); await loadResources() })
 </script>
 
 <style scoped>
@@ -464,26 +580,18 @@ onMounted(async () => { await loadResources() })
 
 /* Keep selection context available without competing with the practice workspace. */
 .feedback-page { gap: 12px; }
-.feedback-hero { grid-template-columns: minmax(0, 1fr) minmax(250px, .36fr); min-height: 168px; gap: 12px 20px; padding: 16px 22px; border-radius: 10px; }
+.feedback-hero { grid-template-columns:minmax(0,1fr); min-height:0; gap:12px; padding:18px 22px 16px; border-radius:10px; }
 .feedback-hero::after { right: 12%; bottom: -98px; width: 170px; height: 132px; }
-.hero-copy h2 { margin-top: 5px; font-size: 27px; letter-spacing: 0; }
-.hero-copy p { display: none; }
-.hero-actions { margin-top: 10px; }
-.hero-actions :deep(.el-button) { height: 30px; padding: 0 12px; }
-.hero-focus { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 14px; padding: 11px 14px; border-radius: 10px; }
-.focus-state { grid-column: 1 / -1; font-size: 11px; }
-.hero-focus strong { min-width: 0; margin: 0; font-size: 15px; }
-.focus-divider { display: none; }
-.focus-details { display: flex; gap: 12px; }
-.focus-details span { white-space: nowrap; font-size: 11px; }
-.focus-details b { display: inline; margin: 0 0 0 4px; font-size: 13px; }
 .task-panel { padding: 13px 18px; border-radius: 10px; }
 .task-panel .section-heading h3 { margin: 4px 0 0; font-size: 18px; }
 .task-panel .page-kicker { font-size: 10px; }
-.task-selection { max-width: none; margin-top: 10px; }
-.task-selection-inline { grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; margin-top: 2px; }
-.task-selection-label { color: #47637e; font-size: 12px; font-weight: 800; white-space: nowrap; }
-.task-selection :deep(.el-select__wrapper) { min-height: 34px; }
+.task-selection { max-width:none; margin-top:0; }
+.task-selection-inline { grid-column:1 / -1; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; align-items:end; gap:16px; }
+.task-filter-field { display:grid; gap:8px; min-width:0; }
+.task-selection-label { color:#47637e; font-size:13px; font-weight:800; white-space:nowrap; }
+.profile-select { width:100%; }
+.task-selection :deep(.el-select__wrapper) { min-height:46px; }
+.task-selection :deep(.el-button) { height:46px; }
 .hero-task-stats { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 0; }
 .task-stats div { padding: 8px 11px; border-radius: 8px; }
 .task-stats strong { margin-top: 3px; font-size: 14px; }
@@ -491,6 +599,9 @@ onMounted(async () => { await loadResources() })
 .task-empty-tip { grid-column: 1 / -1; margin: 0; color: #6e8198; font-size: 12px; }
 .feedback-workspace { grid-template-columns: minmax(0, 1.55fr) minmax(360px, .65fr); gap: 12px; align-items: start; }
 .evaluation-panel, .reflection-panel { padding: 16px; border-radius: 10px; }
+.is-empty-evaluation { display:flex; min-height:calc(100vh - 190px); flex-direction:column; }
+.is-empty-evaluation :deep(.el-empty) { flex:1; }
+.has-empty-evaluation .reflection-panel { min-height:calc(100vh - 190px); }
 .evaluation-panel .section-heading h3, .reflection-panel .section-heading h3 { margin-top: 5px; font-size: 20px; letter-spacing: 0; }
 .evaluation-panel .section-heading p, .reflection-panel .section-heading p { display: none; }
 .progress-pill { align-self: center; padding: 6px 9px; }
@@ -518,14 +629,12 @@ onMounted(async () => { await loadResources() })
 .result-panel, .history-panel { padding: 16px 18px; border-radius: 10px; }
 
 @media (max-width: 1180px) {
-  .feedback-hero { grid-template-columns: minmax(0, 1fr) minmax(230px, .42fr); }
   .feedback-workspace { grid-template-columns: minmax(0, 1.45fr) minmax(285px, .55fr); }
 }
 
 @media (max-width: 820px) {
   .feedback-hero { grid-template-columns: 1fr; }
-  .hero-focus { display: none; }
-  .task-selection-inline { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .task-selection-inline { grid-template-columns:minmax(200px,.75fr) minmax(240px,1fr) auto; gap:12px; }
   .feedback-workspace { grid-template-columns: 1fr; }
   .reflection-panel { position: static; }
   .question-card { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 9px; }
@@ -533,9 +642,8 @@ onMounted(async () => { await loadResources() })
 
 @media (max-width: 560px) {
   .feedback-hero { min-height: 0; }
-  .task-selection-inline { grid-template-columns: 1fr auto; }
-  .task-selection-label { grid-column: 1 / -1; }
-  .task-selection-inline :deep(.el-button) { width: auto; }
+  .task-selection-inline { grid-template-columns:1fr; }
+  .task-selection-inline :deep(.el-button) { width:100%; }
   .hero-task-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .question-card { display: block; }
   .question-topline { display: flex; align-items: center; justify-content: space-between; }
@@ -647,6 +755,11 @@ onMounted(async () => { await loadResources() })
 .result-summary > p { max-width:660px; margin-top:10px; }
 .result-metrics { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .analysis-summary { margin:0; max-width:none; padding:18px 20px; border-color:#c9e6dc; }
+.capability-result-panel { padding:16px 20px; border:1px solid #d8e6f2; border-radius:12px; background:#fbfdff; }
+.capability-result-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:12px; }
+.capability-result-list div { display:grid; gap:4px; min-width:0; padding:10px 12px; border:1px solid #e1eaf2; border-radius:9px; background:#fff; }
+.capability-result-list strong,.capability-result-list span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.capability-result-list strong { color:#274864; font-size:13px; }.capability-result-list span { color:#6a8196; font-size:12px; }
 .analysis-heading { display:flex; align-items:baseline; gap:10px; }
 .analysis-heading strong { font-size:18px; }
 .analysis-heading span { color:#6d8495; font-size:12px; }
@@ -657,6 +770,12 @@ onMounted(async () => { await loadResources() })
 .next-step-copy p { margin:8px 0 0; color:#607991; font-size:13px; line-height:1.55; }
 .next-step-actions { display:flex; flex-wrap:wrap; align-content:center; gap:10px; }
 .resource-selection-row,.recommendation-row { display:flex; flex-wrap:wrap; align-items:center; gap:9px; width:100%; color:#49687d; font-size:13px; font-weight:700; }
+.intent-selection-row,.intent-node-row { display:flex; flex-wrap:wrap; align-items:center; gap:9px; width:100%; padding:11px 12px; border:1px solid #cfe2ff; border-radius:10px; background:#f7fbff; color:#355571; font-size:13px; font-weight:700; }
+.curriculum-progress-row { display:flex; flex-wrap:wrap; gap:8px 14px; width:100%; padding:10px 12px; border:1px solid #d9e7f8; border-radius:10px; background:#f5f9fe; color:#45647f; font-size:13px; }
+.correction-package-card { display:grid; grid-template-columns:minmax(180px,1fr) minmax(260px,1.4fr) auto; align-items:center; gap:12px; width:100%; padding:14px; border:1px solid #9bd8c7; border-radius:11px; background:linear-gradient(120deg,#effcf7,#f7fffc); color:#285b51; }.correction-package-card strong { color:#176958; font-size:15px; }.correction-package-card p { margin:5px 0 0; color:#5b7e77; font-size:12px; line-height:1.45; }.correction-package-card small { grid-column:2; color:#62837c; font-size:11px; }.correction-package-card.is-disabled { border-color:#d8e2e7; background:#fafcfd; color:#6c7d88; }.correction-package-card.is-disabled strong { color:#5e6d78; }.correction-package-card.is-disabled .el-button { opacity:.65; }
+.curriculum-progress-row strong { color:#234f7d; }
+.intent-selection-row small,.intent-node-row small,.intent-node-row em { color:#6d8297; font-size:11px; font-style:normal; font-weight:500; }
+.intent-selection-row small { width:100%; }
 .resource-type-choice { display:flex; flex-wrap:wrap; gap:5px 13px; }
 .difficulty-choice { width:120px; }
 .custom-generation-button { margin-left:auto; font-weight:750; }
@@ -664,6 +783,7 @@ onMounted(async () => { await loadResources() })
 
 @media (max-width: 900px) {
   .result-header,.next-step-panel { grid-template-columns:1fr; }
-  .result-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .result-metrics,.capability-result-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .correction-package-card { grid-template-columns:1fr; }.correction-package-card small { grid-column:auto; }
 }
 </style>

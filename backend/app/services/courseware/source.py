@@ -1,6 +1,7 @@
 """Source admission, ownership validation, and immutable snapshot construction."""
 
 import hashlib
+import re
 from typing import Any
 
 from app.core.storage import file_storage
@@ -38,6 +39,54 @@ def _knowledge_base_id(source: LearningResource, audit_repo: BaseAuditRepository
     return next(iter(ids)) if len(ids) == 1 else None
 
 
+def _practice_source_blocks(content: str, resource_id: str) -> list[dict[str, str]]:
+    """Preserve Markdown semantics for LLM step-boundary extraction.
+
+    Code fences and paragraph runs are atomic.  Splitting every physical line
+    erased the document structure and made a code line or checklist item look
+    indistinguishable from an operation step.
+    """
+    rows = content.split("\n")
+    values: list[tuple[str, str]] = []
+    current: list[str] = []
+    in_code = False
+
+    def flush(kind: str = "paragraph") -> None:
+        nonlocal current
+        text = "\n".join(current).strip()
+        if text:
+            values.append((kind, text))
+        current = []
+
+    for raw in rows:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            if in_code:
+                current.append(raw)
+                in_code = False
+                flush("code")
+            else:
+                flush()
+                current = [raw]
+                in_code = True
+            continue
+        if in_code:
+            current.append(raw)
+            continue
+        if re.match(r"^#{1,6}\s+", stripped):
+            flush()
+            values.append(("heading", stripped))
+        elif not stripped:
+            flush()
+        else:
+            current.append(raw)
+    flush("code" if in_code else "paragraph")
+    return [
+        {"block_id": f"b{index + 1}_{content_hash(f'{resource_id}:semantic:{kind}:{text}')[:10]}", "text": text, "kind": kind}
+        for index, (kind, text) in enumerate(values)
+    ]
+
+
 def _snapshot(source: LearningResource) -> dict[str, Any]:
     content = source.content_text or ""
     if not content and source.file_path:
@@ -46,10 +95,14 @@ def _snapshot(source: LearningResource) -> dict[str, Any]:
         except (OSError, ValueError):
             content = ""
     clipped = _clip(content)
-    blocks = [
-        {"block_id": f"b{index + 1}_{content_hash(f'{source.resource_id}:{index}:{value}')[:10]}", "text": value}
-        for index, value in enumerate(line.strip() for line in clipped.split("\n") if line.strip())
-    ]
+    blocks = (
+        _practice_source_blocks(clipped, source.resource_id)
+        if source.resource_type == "实操指南"
+        else [
+            {"block_id": f"b{index + 1}_{content_hash(f'{source.resource_id}:{index}:{value}')[:10]}", "text": value}
+            for index, value in enumerate(line.strip() for line in clipped.split("\n") if line.strip())
+        ]
+    )
     for exercise in source.exercise_items:
         question = exercise.question.strip()
         if question:
@@ -112,14 +165,11 @@ def admit_and_snapshot(
         sources.append(source)
     if len(knowledge_base_ids) != 1:
         raise CoursewareAdmissionError("源资源必须来自同一知识库")
-    feedback_batch_ids = {str(source.batch_id).strip() for source in sources if source.batch_id}
-    if len(feedback_batch_ids) != 1 or any(not source.batch_id for source in sources):
-        raise CoursewareAdmissionError("互动课件源资源必须来自同一反馈批次")
-    if not any(source.resource_type == "讲义" for source in sources):
-        raise CoursewareAdmissionError("至少需要选择一份已发布讲义")
+    if len(sources) != 1:
+        raise CoursewareAdmissionError("每份互动课件只能对应一份源学习资源")
     snapshots = [_snapshot(source) for source in sources]
-    if not any(item["role"] == "lecture" and item["content"] for item in snapshots):
-        raise CoursewareAdmissionError("讲义正文不可读取，无法生成课件")
+    if not snapshots[0]["content"] and not snapshots[0]["exercise_items"]:
+        raise CoursewareAdmissionError("源资源正文或题目不可读取，无法生成互动课件")
     return snapshots, next(iter(knowledge_base_ids))
 
 

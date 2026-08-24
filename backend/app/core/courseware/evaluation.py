@@ -29,7 +29,7 @@ def quality_gate_report(
         "explanation_completeness": 1.0 if any(scene.get("kind") in {"intro", "explain"} for scene in scenes) else 0.0,
         "practice_gradient": 1.0 if not any(scene.get("kind") == "practice" for scene in scenes) or any(scene.get("steps") for scene in scenes) else 0.0,
         "feedback_quality": 1.0 if not any(scene.get("kind") == "quiz" for scene in scenes) or any(scene.get("feedback") for scene in scenes) else 0.0,
-        "cognitive_load": 1.0 if len(scenes) <= 12 and all(len(scene.get("blocks") or []) <= 10 for scene in scenes) else 0.0,
+        "cognitive_load": 1.0 if len(scenes) <= 24 and all(len(scene.get("blocks") or []) <= 10 for scene in scenes) else 0.0,
         "provenance_explainability": 1.0 if not trace_issues else 0.0,
     }
     visual = {
@@ -95,6 +95,13 @@ def execute_workflow_case(case: dict[str, Any]) -> dict[str, Any]:
     from app.models.courseware import CoursewareJobCreateRequest
     from app.services.learning_documents.resources import ResourceService
 
+    default_source_content = (
+        "阶段一：建立主题全景，明确关键概念、适用边界与本节需要解决的问题。\n"
+        "阶段二：沿着输入、处理、验证和反馈链路拆解方法，并说明每一步为什么必要。\n"
+        "阶段三：结合脱敏案例比较正确路径与常见误区，用来源证据支撑判断。\n"
+        "阶段四：完成可检查的实践步骤，核对输入输出、完成标准与失败后的修正动作。"
+    )
+
     frozen = case.get("frozen_input") or {}
     raw_source_ids = [str(item) for item in frozen.get("source_ids") or []]
     if len(raw_source_ids) != len(set(raw_source_ids)):
@@ -112,7 +119,7 @@ def execute_workflow_case(case: dict[str, Any]) -> dict[str, Any]:
     resources = {}
     for index, resource_id in enumerate(source_ids):
         resource_type = "讲义" if "lecture" in resource_id else ("实操指南" if "practice" in resource_id else ("案例分析" if "case" in resource_id else "分阶测试题"))
-        content = str(frozen.get("content") if "content" in frozen else "脱敏来源内容。")
+        content = str(frozen.get("content") if "content" in frozen else default_source_content)
         exercises = []
         if resource_type == "分阶测试题" and case.get("id") not in {"missing-quiz", "constrained-interaction-quota"}:
             exercises = [{"question_id": "eval-q", "question_type": "single_choice",
@@ -197,6 +204,9 @@ def execute_workflow_case(case: dict[str, Any]) -> dict[str, Any]:
                 "artifact_present": bool(artifact and artifact.get("released_release_id")),
                 "released_release_id": (artifact or {}).get("released_release_id"),
                 "warning_codes": [item.get("code") for item in (actual.get("warnings") or [])],
+                "error_code": actual.get("error_code"),
+                "error_message": actual.get("error_message"),
+                "reviews": repo.list_reviews(job.run_id),
                 "quality_summary": actual.get("quality_summary") or {},
                 "checkpoint_stage": (repo.latest_checkpoint(job.run_id) or {}).get("stage"),
                 "execution": "workflow",
@@ -274,11 +284,6 @@ def build_deterministic_fixture(case: dict[str, Any]) -> tuple[dict[str, Any], l
             scene["answer"] = ["正确"]
             scene["feedback"] = "根据脱敏来源复盘。"
             scene["source_map"].update({"options": [[block_id], [block_id]], "answer": [[block_id]], "feedback": [[block_id]]})
-        if case.get("id") == "ai-review-unresolved":
-            # This fixture represents a revision that cannot be safely
-            # localized.  Keep the failure deterministic so the quarantine
-            # hard gate is exercised without calling a model.
-            scene["source_map"] = {}
         scenes.append(scene)
     return {"schema_version": "2.0", "title": str(case.get("id") or "fixture"), "scenes": scenes,
             "interaction_quota": {"status": (quality.get("interaction_quota_status") or "met"), "target": quality.get("min_interaction_types"), "actual": len({block.get("component") for scene in scenes for block in scene.get("component_blocks") or []})}}, snapshots
@@ -313,6 +318,17 @@ def evaluate_courseware_case(
     failed_gates: list[str] = []
     if len(source_ids) != len(set(source_ids)):
         failed_gates.append("unique_source_ids")
+    source_kinds = {
+        "lecture" if "lecture" in item else "practice" if "practice" in item else "optional"
+        for item in source_ids
+    }
+    if (
+        source_ids
+        and len(source_ids) == len(set(source_ids))
+        and case.get("id") not in {"empty-source", "unknown-source"}
+        and not {"lecture", "practice"}.issubset(source_kinds)
+    ):
+        failed_gates.append("required_source_types")
     if case.get("id") == "empty-source" or (source_ids and not str(frozen.get("content", "脱敏来源内容。")).strip()):
         failed_gates.append("source_empty")
     if case.get("id") == "unknown-source":

@@ -57,10 +57,30 @@ CATALOG_V2 = {
 }
 
 
+# v3 visual components carry data only.  The renderer owns grids, SVG/DOM,
+# colors and positioning; payload items remain source-bound labels/values.
+CATALOG_V3 = {
+    **CATALOG_V2,
+    **{
+        item.name: item
+        for item in (
+            ComponentDefinition("metric_strip", schema_version="3.0", renderer="metric-strip", required_fields=("text", "source_refs", "items"), aria_role="list"),
+            ComponentDefinition("process_flow", schema_version="3.0", renderer="process-flow", required_fields=("text", "source_refs", "items"), aria_role="list"),
+            ComponentDefinition("concept_map", schema_version="3.0", renderer="concept-map", required_fields=("text", "source_refs", "items"), aria_role="figure"),
+            ComponentDefinition("evidence_card", schema_version="3.0", renderer="evidence-card", required_fields=("text", "source_refs", "items"), aria_role="note"),
+            ComponentDefinition("comparison_table", schema_version="3.0", renderer="comparison-table", required_fields=("text", "source_refs", "items"), aria_role="table"),
+            ComponentDefinition("decision_path", schema_version="3.0", renderer="decision-path", required_fields=("text", "source_refs", "items"), aria_role="list"),
+            ComponentDefinition("code_steps", schema_version="3.0", renderer="code-steps", required_fields=("text", "source_refs", "items"), aria_role="region"),
+            ComponentDefinition("conclusion_bar", schema_version="3.0", renderer="conclusion-bar", required_fields=("text", "source_refs", "items"), aria_role="note"),
+        )
+    },
+}
+
+
 def component_definition(name: object, schema_version: str = "1.0") -> ComponentDefinition | None:
     if not isinstance(name, str):
         return None
-    definition = CATALOG_V2.get(name)
+    definition = CATALOG_V3.get(name)
     return definition if definition is not None and definition.schema_version == schema_version else None
 
 
@@ -120,6 +140,15 @@ def validate_component_payload(name: str, payload: dict[str, Any]) -> bool:
         ids = [item.get("event_id") for item in events if isinstance(item, dict)]
         sequences = [item.get("sequence") for item in events if isinstance(item, dict)]
         return len(ids) == len(events) and len(ids) == len(set(ids)) and len(sequences) == len(events) and len(sequences) == len(set(sequences)) and sequences == sorted(sequences) and all(item.get("source_refs") for item in events)
+    if name in {"metric_strip", "process_flow", "concept_map", "evidence_card", "comparison_table", "decision_path", "code_steps", "conclusion_bar"}:
+        items = payload.get("items")
+        return isinstance(items, list) and 2 <= len(items) <= 8 and all(
+            isinstance(item, dict)
+            and str(item.get("label") or "").strip()
+            and str(item.get("value") or "").strip()
+            and item.get("source_refs")
+            for item in items
+        )
     return True
 
 
@@ -182,9 +211,9 @@ def component_asset_matrix(schema_version: str = "1.0") -> dict[str, dict[str, o
             "keyboard_support": definition.keyboard_support,
             "touch_target": definition.touch_target,
         }
-        for name, definition in CATALOG_V2.items()
+        for name, definition in CATALOG_V3.items()
         if definition.schema_version == schema_version
     }
 
 
-__all__ = ["CATALOG_V1", "CATALOG_V2", "ComponentDefinition", "component_asset_matrix", "component_definition", "is_registered_component", "migrate_component_payload", "validate_component_payload"]
+__all__ = ["CATALOG_V1", "CATALOG_V2", "CATALOG_V3", "ComponentDefinition", "component_asset_matrix", "component_definition", "is_registered_component", "migrate_component_payload", "validate_component_payload"]

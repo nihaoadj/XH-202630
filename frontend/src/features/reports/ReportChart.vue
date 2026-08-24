@@ -12,8 +12,8 @@
         <v-chart v-else class="chart" :option="radarOption" autoresize />
       </article>
       <article class="chart-card">
-        <div class="chart-card-head"><div><span>难度匹配</span><strong>学习节奏曲线</strong></div><i class="line-mark">02</i></div>
-        <el-empty v-if="!hasCurve" description="暂无可展示的学习节奏数据" :image-size="58" />
+        <div class="chart-card-head"><div><span>能力概览</span><strong>掌握度分布</strong></div><i class="line-mark">02</i></div>
+        <el-empty v-if="!hasCurve" description="暂无可展示的掌握度数据" :image-size="58" />
         <v-chart v-else class="chart" :option="lineOption" autoresize />
       </article>
     </div>

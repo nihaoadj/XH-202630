@@ -214,7 +214,7 @@ def list_feedback_results(
     profile = ensure_profile_access(request, request.app.container.profile_service().get(learner_id))
     if profile is None:
         raise HTTPException(status_code=404, detail="学习画像不存在")
-    return request.app.container.feedback_service().list_results(learner_id, limit)
+    return request.app.container.feedback_service().list_results(learner_id, limit, profile)
 
 
 @router.get("/path/{learner_id}", response_model=LearningPath)

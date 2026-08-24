@@ -8,6 +8,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.db.learners.mastery import BaseMasteryRepository
+from app.db.learners.curriculum import BaseCurriculumRepository
+from app.db.learners.tier_progress import BaseTierProgressRepository
+from app.core.learning_tiers import (
+    MAX_TIER, TIER_POLICY_VERSION, difficulty_for_tier, label_for_tier, tier_for_level,
+)
+from app.db.learning_documents.base import BaseResourceRepository
 from app.models.learners.mastery import (
     AbilityConfidence,
     AbilityEvidenceSource,
@@ -16,8 +22,15 @@ from app.models.learners.mastery import (
     AbilityNodesResponseV1,
     AbilityNodeSummaryV1,
     AbilityStatus,
+    CurriculumNodeProgressV1,
+    CurriculumProgressStatus,
+    CurriculumProgressSummaryV1,
     LearnerFocusSkippedV1,
     LearnerFocusSnapshotV1,
+    LearnerTierProgressV1,
+    LearningIntent,
+    NextGenerationCandidateV1,
+    NextGenerationOptionsV1,
     WeaknessPriorityV1,
 )
 from app.models.learning_documents.schemas import LearnerProfile
@@ -34,12 +47,283 @@ def _stable_id(prefix: str, *parts: object) -> str:
 
 
 class MasteryService:
-    def __init__(self, repository: BaseMasteryRepository, knowledge_service: KnowledgeService):
+    def __init__(
+        self,
+        repository: BaseMasteryRepository,
+        knowledge_service: KnowledgeService,
+        resource_repo: BaseResourceRepository | None = None,
+        curriculum_repo: BaseCurriculumRepository | None = None,
+        tier_progress_repo: BaseTierProgressRepository | None = None,
+    ):
         self.repository = repository
         self.knowledge_service = knowledge_service
+        self.resource_repo = resource_repo
+        self.curriculum_repo = curriculum_repo
+        self.tier_progress_repo = tier_progress_repo
 
     def _nodes(self, knowledge_base_id: str):
         return self.knowledge_service.list_skill_nodes(knowledge_base_id)
+
+    @staticmethod
+    def _node_tier(node: object) -> int:
+        value = getattr(node, "tier", None)
+        if value is not None:
+            return int(value)
+        # Catalog imports reject missing tiers.  This only keeps legacy in-memory
+        # projections (created before the migration) deterministic.
+        level = getattr(node, "level", None)
+        return tier_for_level(level) if level is not None else 1
+
+    def _published_node_counts(
+        self,
+        learner_id: str,
+        names: dict[str, str],
+    ) -> dict[str, int]:
+        """Return durable curriculum exposure counts from published resources.
+
+        New resource specs persist graph node IDs.  Older resources may contain
+        the display name instead, so normalize both representations here rather
+        than losing historical coverage when a learner continues their plan.
+        Names that are not unique in a graph are intentionally not guessed.
+        """
+        counts = {node_id: 0 for node_id in names}
+        if self.resource_repo is None:
+            return counts
+        ids_by_unique_name: dict[str, str | None] = {}
+        for node_id, name in names.items():
+            ids_by_unique_name[name] = (
+                node_id if name not in ids_by_unique_name else None
+            )
+        for resource in self.resource_repo.list_by_learner(learner_id):
+            if resource.publication_status != "published":
+                continue
+            resource_nodes: set[str] = set()
+            for point in resource.knowledge_points or []:
+                raw_value = str(point).strip()
+                node_id = raw_value if raw_value in counts else ids_by_unique_name.get(raw_value)
+                if node_id:
+                    resource_nodes.add(node_id)
+            for node_id in resource_nodes:
+                counts[node_id] += 1
+        return counts
+
+    def _curriculum_nodes(
+        self, profile: LearnerProfile, names: dict[str, str],
+    ) -> list[CurriculumNodeProgressV1]:
+        """Ensure the full graph is tracked, then reconcile durable publication facts."""
+        if self.curriculum_repo is None or not profile.knowledge_base_id:
+            return []
+        self.curriculum_repo.ensure_nodes(profile.learner_id, profile.knowledge_base_id, list(names))
+        return self.curriculum_repo.reconcile_exposure(
+            profile.learner_id, profile.knowledge_base_id,
+            self._published_node_counts(profile.learner_id, names), datetime.now(timezone.utc),
+        )
+
+    def _tier_progress(self, profile: LearnerProfile) -> LearnerTierProgressV1 | None:
+        if self.tier_progress_repo is None or not profile.knowledge_base_id:
+            return None
+        tier = tier_for_level(profile.skill_level)
+        state = self.tier_progress_repo.get_or_create(
+            profile.learner_id, profile.knowledge_base_id,
+            placement_tier=tier, profile_version=profile.profile_version,
+        )
+        self._apply_placement_exemptions(profile, state)
+        return state
+
+    def initialize_tier_progress(self, profile: LearnerProfile) -> LearnerTierProgressV1 | None:
+        """Public onboarding hook; safe to call repeatedly."""
+        return self._tier_progress(profile)
+
+    def _apply_placement_exemptions(self, profile: LearnerProfile, state: LearnerTierProgressV1) -> None:
+        """Record placement as unverified self-report, never as objective completion."""
+        if self.curriculum_repo is None or not profile.knowledge_base_id or state.placement_tier <= 1:
+            return
+        graph = self._nodes(profile.knowledge_base_id)
+        exempt_ids = [node.node_id for node in graph if self._node_tier(node) < state.placement_tier]
+        if not exempt_ids:
+            return
+        source_id = _stable_id("placement", profile.learner_id, profile.knowledge_base_id, state.placement_tier)
+        names = {node.node_id: node.name for node in graph}
+        evidence = [AbilityEvidenceV1(
+            evidence_id=_stable_id("abe", source_id, node_id), learner_id=profile.learner_id,
+            knowledge_base_id=profile.knowledge_base_id, skill_node_id=node_id,
+            source_type=AbilityEvidenceSource.ONBOARDING_SELF_REPORT, source_id=source_id,
+            source_hash=_canonical_hash({"placement_tier": state.placement_tier, "node_id": node_id}),
+            observed_score=1.0, verified=False,
+        ) for node_id in exempt_ids]
+        self.repository.apply_evidence(evidence, names, increment_profile_version=False)
+        self.curriculum_repo.ensure_nodes(profile.learner_id, profile.knowledge_base_id, list(names))
+        self.curriculum_repo.set_placement_exemptions(
+            profile.learner_id, profile.knowledge_base_id, node_ids=exempt_ids,
+            evidence_id=source_id, now=datetime.now(timezone.utc),
+        )
+
+    @staticmethod
+    def _curriculum_summary(nodes: list[CurriculumNodeProgressV1]) -> CurriculumProgressSummaryV1:
+        counts = {status: 0 for status in CurriculumProgressStatus}
+        for node in nodes:
+            counts[node.progress_status] += 1
+        return CurriculumProgressSummaryV1(
+            total_count=len(nodes), unplanned_count=counts[CurriculumProgressStatus.UNPLANNED],
+            scheduled_count=counts[CurriculumProgressStatus.SCHEDULED],
+            exposed_count=counts[CurriculumProgressStatus.EXPOSED],
+            verification_pending_count=counts[CurriculumProgressStatus.VERIFICATION_PENDING],
+            completed_count=counts[CurriculumProgressStatus.COMPLETED],
+            reinforcement_due_count=counts[CurriculumProgressStatus.REINFORCEMENT_DUE],
+        )
+
+    def curriculum_progress(self, profile: LearnerProfile) -> tuple[list[CurriculumNodeProgressV1], CurriculumProgressSummaryV1 | None]:
+        if not profile.knowledge_base_id:
+            return [], None
+        names = {node.node_id: node.name for node in self._nodes(profile.knowledge_base_id)}
+        nodes = self._curriculum_nodes(profile, names)
+        return nodes, self._curriculum_summary(nodes) if nodes else None
+
+    def schedule_generation(self, profile: LearnerProfile, *, run_id: str, selected_node_ids: list[str]) -> None:
+        """Atomically settle curriculum wait debt and lock a confirmed batch."""
+        if self.curriculum_repo is None or not profile.knowledge_base_id or not selected_node_ids:
+            return
+        graph = self._nodes(profile.knowledge_base_id)
+        self.validate_generation_targets(profile, selected_node_ids)
+        names = {node.node_id: node.name for node in graph}
+        current = {item.skill_node_id: item for item in self._curriculum_nodes(profile, names)}
+        covered = {node_id for node_id, item in current.items()
+                   if item.placement_exempt or item.progress_status == CurriculumProgressStatus.COMPLETED}
+        eligible = [node.node_id for node in graph if (
+            current.get(node.node_id, CurriculumNodeProgressV1(
+                learner_id=profile.learner_id, knowledge_base_id=profile.knowledge_base_id,
+                skill_node_id=node.node_id,
+            )).progress_status in {CurriculumProgressStatus.UNPLANNED, CurriculumProgressStatus.REINFORCEMENT_DUE}
+            and all(prerequisite in covered for prerequisite in node.prerequisites if prerequisite in names)
+        )]
+        self.curriculum_repo.schedule_round(
+            profile.learner_id, profile.knowledge_base_id, run_id=run_id,
+            selected_node_ids=list(dict.fromkeys(selected_node_ids))[:3],
+            eligible_unplanned_ids=eligible, now=datetime.now(timezone.utc),
+        )
+
+    def validate_generation_targets(self, profile: LearnerProfile, selected_node_ids: list[str]) -> int | None:
+        """Hard gate for every entry point that creates node-targeted resources."""
+        if not selected_node_ids:
+            return None
+        if len(selected_node_ids) > 3:
+            raise ValueError("at most three target skill nodes are allowed")
+        if not profile.knowledge_base_id:
+            raise ValueError("learner knowledge base is required")
+        nodes = {node.node_id: node for node in self._nodes(profile.knowledge_base_id)}
+        unknown = sorted(set(selected_node_ids) - set(nodes))
+        if unknown:
+            raise ValueError(f"target nodes outside knowledge base: {', '.join(unknown)}")
+        tiers = {self._node_tier(nodes[node_id]) for node_id in selected_node_ids}
+        if len(tiers) != 1:
+            raise ValueError("target skill nodes must belong to one learning tier")
+        state = self._tier_progress(profile)
+        target_tier = int(next(iter(tiers)))
+        if state is not None and target_tier != state.active_tier:
+            raise ValueError("target skill nodes are outside the active learning tier")
+        return target_tier
+
+    def apply_tier_feedback(
+        self, profile: LearnerProfile, *, point_scores: dict[str, float],
+    ) -> LearnerTierProgressV1 | None:
+        """Apply the auditable low/practice/high tier transition after formal scoring."""
+        state = self._tier_progress(profile)
+        if state is None or not point_scores:
+            return state
+        graph = {node.node_id: node for node in self._nodes(profile.knowledge_base_id or "")}
+        assessed_tiers = {self._node_tier(graph[node_id]) for node_id in point_scores if node_id in graph}
+        if len(assessed_tiers) != 1:
+            return state
+        assessed_tier = int(next(iter(assessed_tiers)))
+        low = any(score < 0.60 for score in point_scores.values())
+        high = bool(point_scores) and all(score > 0.85 for score in point_scores.values())
+        updated = state
+        if low and assessed_tier > 1:
+            updated = state.model_copy(update={
+                "active_tier": assessed_tier - 1,
+                "remediation_return_tier": assessed_tier,
+                "profile_version": profile.profile_version,
+            })
+        elif high and state.remediation_return_tier and assessed_tier == state.active_tier:
+            updated = state.model_copy(update={
+                "active_tier": state.remediation_return_tier,
+                "remediation_return_tier": None,
+                "profile_version": profile.profile_version,
+            })
+        elif high and self._is_tier_completed(profile, assessed_tier) and assessed_tier < MAX_TIER:
+            next_tier = assessed_tier + 1
+            updated = state.model_copy(update={
+                "active_tier": next_tier,
+                "highest_unlocked_tier": max(state.highest_unlocked_tier, next_tier),
+                "profile_version": profile.profile_version,
+            })
+        if updated != state:
+            return self.tier_progress_repo.save(updated) if self.tier_progress_repo else updated
+        return state
+
+    def recommend_feedback_targets(
+        self, profile: LearnerProfile, *, action: str, point_scores: dict[str, float],
+    ) -> tuple[list[str], int | None, int | None]:
+        """Return same-tier targets or the closest lower-tier prerequisites."""
+        if not profile.knowledge_base_id or not point_scores:
+            return list(point_scores), None, None
+        graph = {node.node_id: node for node in self._nodes(profile.knowledge_base_id)}
+        assessed = [node_id for node_id in point_scores if node_id in graph]
+        tiers = {self._node_tier(graph[node_id]) for node_id in assessed}
+        if len(tiers) != 1:
+            return assessed[:3], None, None
+        assessed_tier = int(next(iter(tiers)))
+        if action != "remediate" or assessed_tier == 1:
+            return assessed[:3], assessed_tier, None
+        weak = [node_id for node_id in assessed if point_scores[node_id] < 0.60]
+        candidates: list[str] = []
+        queue = list(weak)
+        visited = set(queue)
+        while queue:
+            child_id = queue.pop(0)
+            for parent_id in graph[child_id].prerequisites:
+                parent = graph.get(parent_id)
+                if parent is None or parent_id in visited:
+                    continue
+                visited.add(parent_id)
+                if self._node_tier(parent) == assessed_tier - 1:
+                    candidates.append(parent_id)
+                else:
+                    queue.append(parent_id)
+        # The graph traversal is deterministic because metadata order is frozen;
+        # node ID finishes tie-breaking across branches.
+        selected = sorted(set(candidates))[:3]
+        return (selected or weak[:3]), assessed_tier - 1, assessed_tier
+
+    def _is_tier_completed(self, profile: LearnerProfile, tier: int) -> bool:
+        graph = self._nodes(profile.knowledge_base_id or "")
+        records, _ = self.curriculum_progress(profile)
+        by_id = {item.skill_node_id: item for item in records}
+        tier_nodes = [item for item in graph if self._node_tier(item) == tier]
+        return bool(tier_nodes) and all(
+            by_id.get(node.node_id) and by_id[node.node_id].progress_status == CurriculumProgressStatus.COMPLETED
+            for node in tier_nodes
+        )
+
+    def record_curriculum_verification(
+        self, profile: LearnerProfile, *, attempt_id: str, point_scores: dict[str, float], occurred_at: datetime,
+    ) -> None:
+        if self.curriculum_repo is None or not profile.knowledge_base_id:
+            return
+        names = {node.node_id: node.name for node in self._nodes(profile.knowledge_base_id)}
+        self._curriculum_nodes(profile, names)
+        self.curriculum_repo.record_verification(
+            profile.learner_id, profile.knowledge_base_id, attempt_id=attempt_id,
+            scores={node_id: score for node_id, score in point_scores.items() if node_id in names}, now=occurred_at,
+        )
+
+    def release_failed_generation(self, profile: LearnerProfile, *, run_id: str) -> None:
+        if self.curriculum_repo is None or not profile.knowledge_base_id:
+            return
+        self.curriculum_repo.release_failed_run(
+            profile.learner_id, profile.knowledge_base_id, run_id=run_id,
+            now=datetime.now(timezone.utc),
+        )
 
     def ensure_profile_projection(self, profile: LearnerProfile):
         if not profile.knowledge_base_id:
@@ -135,6 +419,30 @@ class MasteryService:
         ) for node_id, score in sorted(node_scores.items())]
         return self.repository.apply_evidence(evidence, names, increment_profile_version=True)
 
+    def apply_learning_attempt(
+        self,
+        profile: LearnerProfile,
+        *,
+        attempt_id: str,
+        point_scores: dict[str, float],
+        occurred_at: datetime,
+    ):
+        """Project a server-scored feedback attempt without incrementing profile twice."""
+        if not profile.knowledge_base_id:
+            return [], profile.profile_version, False
+        names = {node.node_id: node.name for node in self._nodes(profile.knowledge_base_id)}
+        unknown = sorted(set(point_scores) - set(names))
+        if unknown:
+            raise ValueError(f"attempt nodes outside knowledge base: {', '.join(unknown)}")
+        source_hash = _canonical_hash({"attempt_id": attempt_id, "scores": point_scores})
+        evidence = [AbilityEvidenceV1(
+            evidence_id=_stable_id("abe", attempt_id, node_id), learner_id=profile.learner_id,
+            knowledge_base_id=profile.knowledge_base_id, skill_node_id=node_id,
+            source_type=AbilityEvidenceSource.LEARNING_ATTEMPT, source_id=attempt_id,
+            source_hash=source_hash, observed_score=score, verified=True, occurred_at=occurred_at,
+        ) for node_id, score in sorted(point_scores.items())]
+        return self.repository.apply_evidence(evidence, names, increment_profile_version=False)
+
     def ability_nodes(self, profile: LearnerProfile) -> AbilityNodesResponseV1:
         if not profile.knowledge_base_id:
             return AbilityNodesResponseV1(
@@ -159,6 +467,7 @@ class MasteryService:
             } and event.after_state.mastery_score is not None:
                 objective_after.setdefault(event.skill_node_id, []).append(event.after_state.mastery_score)
         priorities = self.weakness_priorities(profile)
+        curriculum_nodes, curriculum_summary = self.curriculum_progress(profile)
         priority_by_id = {item.skill_node_id: item.rank for item in priorities}
         projected = []
         for node in nodes:
@@ -169,6 +478,8 @@ class MasteryService:
                 name=node.name,
                 description=node.description,
                 level=node.level,
+                tier=self._node_tier(node),
+                tier_label=label_for_tier(self._node_tier(node)),
                 prerequisites=node.prerequisites,
                 children=node.children,
                 mastery=state_by_id[node.node_id],
@@ -199,15 +510,26 @@ class MasteryService:
                 for node in nodes for prerequisite in node.prerequisites
             ],
             weakness_priorities=priorities,
+            curriculum_progress=curriculum_summary,
+            curriculum_nodes=curriculum_nodes,
         )
 
     def weakness_priorities(self, profile: LearnerProfile) -> list[WeaknessPriorityV1]:
+        """Rank every graph node for the learner's durable curriculum.
+
+        The legacy name is retained for API compatibility.  Unlike the former
+        exception-only queue, this projection deliberately includes every node:
+        a node that is not urgent is still visible as uncovered or maintained,
+        so it cannot silently disappear from a multi-round learning journey.
+        """
         if not profile.knowledge_base_id:
             return []
         nodes = self._nodes(profile.knowledge_base_id)
         names = {node.node_id: node.name for node in nodes}
         states = self.repository.ensure_states(profile.learner_id, profile.knowledge_base_id, names)
         state_by_id = {item.skill_node_id: item for item in states}
+        published_counts = self._published_node_counts(profile.learner_id, names)
+        covered = {node_id for node_id, count in published_counts.items() if count > 0}
         events = self.repository.list_events(profile.learner_id, profile.knowledge_base_id)
         observed: dict[str, list[float]] = {}
         for event in events:
@@ -231,7 +553,8 @@ class MasteryService:
         candidates = []
         group_order = {
             "confirmed_weak": 0, "regressing_learning": 1,
-            "low_self_report": 2, "unassessed_prerequisite": 3,
+            "ready_uncovered": 2, "low_self_report": 3,
+            "blocked_uncovered": 4, "maintain_mastery": 5,
         }
         def sort_time(value: datetime | None) -> datetime:
             if value is None:
@@ -246,20 +569,28 @@ class MasteryService:
             elif state.status == AbilityStatus.LEARNING and len(observed.get(node.node_id, [])) >= 2 \
                     and observed[node.node_id][-1] < observed[node.node_id][-2]:
                 group, reasons = "regressing_learning", ["RECENT_OBJECTIVE_SCORE_REGRESSED"]
+            elif node.node_id not in covered and all(
+                prerequisite in covered for prerequisite in node.prerequisites if prerequisite in names
+            ):
+                group, reasons = "ready_uncovered", ["CURRICULUM_COVERAGE_PENDING", "PREREQUISITES_COVERED"]
             elif state.status == AbilityStatus.SELF_REPORTED and (state.self_report_prior or 0) < 0.60:
                 group, reasons = "low_self_report", ["LOW_CONFIDENCE_SELF_REPORT_BELOW_0_60"]
-            elif state.status == AbilityStatus.UNASSESSED and downstream(node.node_id) > 0:
-                group, reasons = "unassessed_prerequisite", ["UNASSESSED_BLOCKING_PREREQUISITE"]
-            if group:
-                candidates.append((group_order[group], -downstream(node.node_id),
-                                   state.mastery_score is None, state.mastery_score or 0.0,
-                                   sort_time(state.last_updated),
-                                   node.node_id, group, reasons, state))
+            elif node.node_id not in covered:
+                missing = [prerequisite for prerequisite in node.prerequisites if prerequisite in names and prerequisite not in covered]
+                group, reasons = "blocked_uncovered", ["CURRICULUM_COVERAGE_PENDING", "PREREQUISITE_REQUIRED", *missing]
+            else:
+                group, reasons = "maintain_mastery", ["CURRICULUM_NODE_COVERED"]
+            candidates.append((group_order[group], -downstream(node.node_id),
+                               state.mastery_score is None, state.mastery_score or 0.0,
+                               sort_time(state.last_updated),
+                               node.node_id, group, reasons, state))
         candidates.sort(key=lambda item: item[:6])
         return [WeaknessPriorityV1(
             skill_node_id=item[5], rank=index, priority_group=item[6], reason_codes=item[7],
             mastery_score=item[8].mastery_score, confidence=item[8].confidence,
             downstream_count=-item[1],
+            coverage_status="covered" if item[5] in covered else "uncovered",
+            published_resource_count=published_counts[item[5]],
         ) for index, item in enumerate(candidates, start=1)]
 
     def focus_snapshot(
@@ -294,10 +625,27 @@ class MasteryService:
             ) for item in priorities]
         else:
             focus_mode = "auto"
-            adopted = [item.skill_node_id for item in priorities[:3]]
+            remediation = [
+                item for item in priorities
+                if item.priority_group in {"confirmed_weak", "regressing_learning"}
+            ]
+            ready_uncovered = [
+                item for item in priorities if item.priority_group == "ready_uncovered"
+            ]
+            # Reserve one slot for a ready, uncovered node whenever possible.
+            # This makes coverage progress even while a learner needs repeated
+            # remediation, instead of allowing weak nodes to monopolize every
+            # subsequent resource batch.
+            adopted = [item.skill_node_id for item in remediation[:2]]
+            if ready_uncovered and len(adopted) < 3:
+                adopted.append(ready_uncovered[0].skill_node_id)
+            for item in [*remediation[2:], *ready_uncovered[1:]]:
+                if len(adopted) >= 3:
+                    break
+                adopted.append(item.skill_node_id)
             skipped = [LearnerFocusSkippedV1(
                 skill_node_id=item.skill_node_id, reason_code="MAX_FOCUS_NODES_REACHED"
-            ) for item in priorities[3:]]
+            ) for item in priorities if item.skill_node_id not in adopted]
             if not priorities:
                 skipped = [LearnerFocusSkippedV1(skill_node_id="*", reason_code="NO_ELIGIBLE_WEAKNESS")]
         return LearnerFocusSnapshotV1(
@@ -311,6 +659,129 @@ class MasteryService:
             skipped=skipped,
             created_at=created_at or datetime.now(timezone.utc),
         )
+
+    def next_generation_options(self, profile: LearnerProfile) -> NextGenerationOptionsV1:
+        """Return learner-selectable reinforcement and new-knowledge candidates.
+
+        A published resource is the durable learning-exposure fact in the current
+        data model.  It is deliberately kept separate from objective mastery:
+        an unassessed exposed node is not silently classified as weak.
+        """
+        if not profile.knowledge_base_id:
+            raise ValueError("learner knowledge base is required")
+        tier_state = self._tier_progress(profile)
+        nodes = self._nodes(profile.knowledge_base_id)
+        names = {node.node_id: node.name for node in nodes}
+        curriculum_nodes = {item.skill_node_id: item for item in self._curriculum_nodes(profile, names)}
+        states = self.repository.ensure_states(profile.learner_id, profile.knowledge_base_id, names)
+        state_by_id = {state.skill_node_id: state for state in states}
+        published_counts = self._published_node_counts(profile.learner_id, names)
+        exposed = {node_id for node_id, count in published_counts.items() if count > 0}
+        active_tier = tier_state.active_tier if tier_state else tier_for_level(profile.skill_level)
+        snapshot_hash = _canonical_hash({
+            "states": [item.model_dump(mode="json") for item in states],
+            "exposed": sorted(exposed),
+            "profile_version": profile.profile_version,
+            "tier_progress": tier_state.model_dump(mode="json") if tier_state else None,
+        })
+
+        def prerequisite_blockers(node) -> list[str]:
+            blocked: list[str] = []
+            for prerequisite in node.prerequisites:
+                if prerequisite not in names:
+                    continue
+                record = curriculum_nodes.get(prerequisite)
+                prerequisite_tier = next((self._node_tier(item) for item in nodes if item.node_id == prerequisite), None)
+                satisfied = bool(record and (
+                    record.progress_status == CurriculumProgressStatus.COMPLETED
+                    or (prerequisite_tier is not None and prerequisite_tier < active_tier and record.placement_exempt)
+                ))
+                if not satisfied:
+                    blocked.append(prerequisite)
+            return blocked
+
+        def candidate(node, group: str, rank: int) -> NextGenerationCandidateV1:
+            state = state_by_id[node.node_id]
+            missing_prerequisites = prerequisite_blockers(node)
+            reasons = (
+                ["LEARNED_OBJECTIVELY_NOT_MASTERED"]
+                if group == "learned_not_mastered"
+                else ["NOT_YET_EXPOSED", "PREREQUISITE_REQUIRED"]
+                if missing_prerequisites else ["NOT_YET_EXPOSED"]
+            )
+            return NextGenerationCandidateV1(
+                skill_node_id=node.node_id, name=node.name, priority_group=group,
+                rank=rank, reason_codes=reasons, mastery_score=state.mastery_score,
+                confidence=state.confidence, prerequisite_ids=list(node.prerequisites),
+                blocked_by_node_ids=missing_prerequisites,
+                tier=self._node_tier(node), tier_label=label_for_tier(self._node_tier(node)),
+                eligibility_status=("placement_exempt" if curriculum_nodes.get(node.node_id, CurriculumNodeProgressV1(
+                    learner_id=profile.learner_id, knowledge_base_id=profile.knowledge_base_id,
+                    skill_node_id=node.node_id,
+                )).placement_exempt else "blocked" if missing_prerequisites else "available"),
+            )
+
+        reinforce_nodes = [
+            node for node in nodes
+            if self._node_tier(node) == active_tier
+            and node.node_id in exposed
+            and state_by_id[node.node_id].objective_evidence_count > 0
+            and state_by_id[node.node_id].status in {AbilityStatus.WEAK, AbilityStatus.LEARNING}
+        ]
+        reinforce_nodes.sort(key=lambda node: (
+            state_by_id[node.node_id].mastery_score is None,
+            state_by_id[node.node_id].mastery_score if state_by_id[node.node_id].mastery_score is not None else 1.0,
+            node.node_id,
+        ))
+        new_nodes = [node for node in nodes if self._node_tier(node) == active_tier and node.node_id not in exposed]
+        new_nodes.sort(key=lambda node: (
+            -(curriculum_nodes.get(node.node_id).wait_rounds if node.node_id in curriculum_nodes else 0),
+            bool(prerequisite_blockers(node)), node.node_id))
+        recommended_reinforcement = [node.node_id for node in reinforce_nodes[:2]]
+        recommended_new = [node.node_id for node in new_nodes if not candidate(node, "unlearned", 1).blocked_by_node_ids]
+        # Do not use another tier to fill the remaining slots; one or two nodes is valid.
+        recommended = [*recommended_reinforcement, *recommended_new[:max(0, 3 - len(recommended_reinforcement))]]
+        tier_completed = self._is_tier_completed(profile, active_tier)
+        recommendation_type = (
+            "remedial" if tier_state and tier_state.remediation_return_tier else
+            "complete" if tier_completed and active_tier == MAX_TIER else
+            "advance" if tier_completed else
+            "practice" if recommended_reinforcement else "current_tier"
+        )
+        return NextGenerationOptionsV1(
+            learner_id=profile.learner_id, knowledge_base_id=profile.knowledge_base_id,
+            profile_version=profile.profile_version, snapshot_hash=snapshot_hash,
+            reinforce_weakness=[candidate(node, "learned_not_mastered", index)
+                                for index, node in enumerate(reinforce_nodes, start=1)],
+            learn_new_knowledge=[candidate(node, "unlearned", index)
+                                 for index, node in enumerate(new_nodes, start=1)],
+            recommended_node_ids=recommended[:3],
+            curriculum_progress=self._curriculum_summary(list(curriculum_nodes.values())) if curriculum_nodes else None,
+            tier_progress=tier_state, tier_completion=tier_completed,
+            recommendation_type=recommendation_type,
+        )
+
+    def confirm_next_generation_intent(
+        self,
+        profile: LearnerProfile,
+        *,
+        intent: LearningIntent,
+        selected_node_ids: list[str],
+        snapshot_hash: str,
+    ) -> tuple[NextGenerationOptionsV1, list[str]]:
+        options = self.next_generation_options(profile)
+        if options.snapshot_hash != snapshot_hash:
+            raise ValueError("next generation options are stale")
+        candidates = (options.reinforce_weakness if intent == LearningIntent.REINFORCE_WEAKNESS
+                      else options.learn_new_knowledge)
+        allowed = {item.skill_node_id: item for item in candidates}
+        selected = list(dict.fromkeys(selected_node_ids))
+        if not selected or len(selected) > 3 or set(selected) - set(allowed):
+            raise ValueError("selected nodes are not available for this learning intent")
+        blocked = [node_id for node_id in selected if allowed[node_id].blocked_by_node_ids]
+        if blocked:
+            raise ValueError("selected new knowledge has unlearned prerequisites")
+        return options, selected
 
 
 __all__ = ["MasteryService"]

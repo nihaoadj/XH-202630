@@ -34,29 +34,38 @@ class _WorkflowFakeGateway:
         self.calls.append(context.node_name)
         payload = json.loads(kwargs["messages"][-1].content)
         if context.node_name == "courseware_spec_builder":
-            scenes = [
-                {
-                    "source_resource_id": scene["source_resource_ids"][0],
-                    "kind": scene["kind"],
-                    "title": f"AI：{scene['scene_id']}",
-                    "learning_objective": scene["interaction_purpose"],
-                    "source_block_ids": scene["source_block_ids"],
-                    "required": scene["required"],
-                }
-                for scene in payload["storyboard"]["scenes"]
-                if scene["kind"] != "recap" and scene["source_resource_ids"]
-            ]
-            response = {"title": "AI-first RAG 课件", "learning_objectives": ["理解 RAG"], "scenes": scenes}
-        elif context.node_name == "courseware_scene_composer":
-            block_id = payload["source_blocks"][0]["block_id"]
-            source_id = payload["source_resource_id"]
             response = {
+                "schema_version": "2.0", "course_title": "AI-first RAG 课件",
+                "course_summary": "基于冻结来源的 RAG 课程。",
+                "objectives": [],
+                "scenes": [
+                    {
+                        "scene_id": scene["scene_id"],
+                        "title": f"AI：{scene['scene_id']}",
+                        "teaching_intent": scene["interaction_purpose"],
+                        "preferred_component_ids": [],
+                    }
+                    for scene in payload["storyboard"]["scenes"]
+                    if scene["kind"] != "recap"
+                ],
+            }
+        elif context.node_name == "courseware_scene_composer":
+            source_id = payload["source_resource_id"]
+            source_blocks = payload["source_blocks"][:4]
+            block_id = source_blocks[0]["block_id"]
+            response = {
+                "schema_version": "2.0",
                 "kind": payload["required_kind"], "title": f"AI：{payload['scene_id']}",
-                "blocks": [{
-                    "block_id": f"ai-{block_id}", "component": "callout",
-                    "text": "AI 根据冻结来源组织的学习说明。",
-                    "source_refs": [{"source_resource_id": source_id, "source_block_ids": [block_id]}],
-                }],
+                "lead": source_blocks[0]["text"],
+                "blocks": [
+                    {
+                        "block_id": f"ai-{item['block_id']}", "component": "callout",
+                        "text": item["text"],
+                        "source_refs": [{"source_resource_id": source_id, "source_block_ids": [item["block_id"]]}],
+                    }
+                    for item in source_blocks
+                ],
+                "conclusion": source_blocks[-1]["text"],
                 "title_source_refs": [{"source_resource_id": source_id, "source_block_ids": [block_id]}],
             }
             if response["kind"] == "practice":
@@ -66,7 +75,14 @@ class _WorkflowFakeGateway:
                                  "feedback": "先检索可信上下文。",
                                  "feedback_source_refs": [{"source_resource_id": source_id, "source_block_ids": [block_id]}]})
         elif context.node_name == "courseware_quality_reviewer":
-            response = {"decision": "approved", "issues": []}
+            response = {
+                "decision": "approved", "issues": [],
+                "rubric_scores": {
+                    "objective_alignment": 4, "coherence": 4, "explanation_depth": 3,
+                    "example_usefulness": 3, "misconception_handling": 3, "practice_gradient": 3,
+                    "feedback_quality": 4, "interaction_purpose": 4, "cognitive_load": 3,
+                },
+            }
         else:  # pragma: no cover - makes unexpected production calls visible.
             raise AssertionError(f"unexpected AI node: {context.node_name}")
         output = kwargs["output_schema"].model_validate(response)
@@ -111,6 +127,7 @@ def test_normal_job_uses_planner_scene_and_review_without_deterministic_fallback
     assert not any(item["code"].endswith("FALLBACK") for item in completed.warnings)
     detail = service.get_job_detail(created.run_id)
     assert detail and all(scene.agent_version == "ai-v1" for scene in detail.scenes)
+    assert detail.quality_summary["rubric_passed"] is True
 
 
 def test_requested_learning_preferences_are_durable_and_reach_the_planner(tmp_path, monkeypatch):

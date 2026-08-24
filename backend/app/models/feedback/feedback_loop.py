@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from app.models.learners.mastery import LearningIntent, NextGenerationOptionsV1
 
 
 FEEDBACK_SCHEMA_VERSION = "1.0"
@@ -230,6 +231,9 @@ class FeedbackDecision(StrictFeedbackModel):
     reason_codes: list[str] = Field(min_length=1)
     decision_reason: str = Field(min_length=1, max_length=2000)
     target_knowledge_point_ids: list[str] = Field(default_factory=list)
+    recommended_tier: int | None = Field(default=None, ge=1, le=3)
+    remediation_return_tier: int | None = Field(default=None, ge=1, le=3)
+    tier_transition: str | None = Field(default=None, max_length=64)
     decision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -263,6 +267,22 @@ class FeedbackResourceOption(StrictFeedbackModel):
     target_knowledge_point_ids: list[str] = Field(default_factory=list, max_length=20)
 
 
+class CorrectionPackageOptionV1(StrictFeedbackModel):
+    """Feedback-only choice for a single, evidence-scoped remediation pack."""
+
+    option_id: Literal["personalized-correction-package-v1"] = "personalized-correction-package-v1"
+    resource_type: Literal["个性化纠错训练包"] = "个性化纠错训练包"
+    title: str = "薄弱点强化包"
+    eligible: bool
+    disabled_reason_code: str | None = None
+    selectable_targets: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+    recommended_target_ids: list[str] = Field(default_factory=list, max_length=3)
+    min_targets: Literal[1] = 1
+    max_targets: Literal[3] = 3
+    recommended_difficulty: Literal["初级", "中级", "高级"] = "中级"
+    snapshot_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
 class FeedbackFollowupSelection(StrictFeedbackModel):
     learner_id: str = Field(min_length=1, max_length=64)
     attempt_id: str = Field(min_length=1, max_length=128)
@@ -273,6 +293,9 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
         default=None, min_length=1, max_length=3,
     )
     difficulty: Literal["初级", "中级", "高级"] | None = None
+    learning_intent: LearningIntent | None = None
+    selected_skill_node_ids: list[str] = Field(default_factory=list, max_length=3)
+    next_generation_snapshot_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("resource_types")
     @classmethod
@@ -280,6 +303,18 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
         if value is not None and len(value) != len(set(value)):
             raise ValueError("resource_types must be unique")
         return value
+
+    @model_validator(mode="after")
+    def validate_learning_intent_selection(self) -> "FeedbackFollowupSelection":
+        intent_fields = (self.learning_intent, self.next_generation_snapshot_hash, self.selected_skill_node_ids)
+        if any(item is not None and item != [] for item in intent_fields):
+            if self.learning_intent is None or self.next_generation_snapshot_hash is None:
+                raise ValueError("learning intent requires a snapshot hash")
+            if not self.selected_skill_node_ids:
+                raise ValueError("learning intent requires selected skill nodes")
+        if len(self.selected_skill_node_ids) != len(set(self.selected_skill_node_ids)):
+            raise ValueError("selected_skill_node_ids must be unique")
+        return self
 
 
 class FeedbackLoopResult(StrictFeedbackModel):
@@ -296,6 +331,9 @@ class FeedbackLoopResult(StrictFeedbackModel):
     followup_error_code: str | None = None
     analysis: FeedbackAnalysis | None = None
     resource_options: list[FeedbackResourceOption] = Field(default_factory=list)
+    correction_package_option: CorrectionPackageOptionV1 | None = None
+    generation_options: NextGenerationOptionsV1 | None = None
+    feedback_report: dict[str, Any] = Field(default_factory=dict)
     idempotent_replay: bool = False
 
 

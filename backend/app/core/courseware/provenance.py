@@ -62,12 +62,16 @@ def build_provenance_graph(document: dict[str, Any], snapshots: list[dict[str, A
         artifact_id = f"artifact:scene:{scene_index}"
         nodes.append(ProvenanceNode(node_id=artifact_id, kind="artifact_node", snapshot_hash=scene_hash))
         field_specs: list[tuple[str, Any, int | None]] = [("title", scene.get("title"), None)]
+        if scene.get("lead"):
+            field_specs.append(("lead", scene.get("lead"), None))
         field_specs.extend(("blocks", value, index) for index, value in enumerate(scene.get("blocks") or []))
         field_specs.extend(("steps", value, index) for index, value in enumerate(scene.get("steps") or []))
         field_specs.extend(("options", value, index) for index, value in enumerate(scene.get("options") or []))
         field_specs.extend(("answer", value, index) for index, value in enumerate(scene.get("answer") or []))
         if scene.get("feedback"):
             field_specs.append(("feedback", scene.get("feedback"), None))
+        if scene.get("conclusion"):
+            field_specs.append(("conclusion", scene.get("conclusion"), None))
         for field, value, index in field_specs:
             visible += 1
             field_path = f"scenes[{scene_index}].{field}" + (f"[{index}]" if index is not None else "")

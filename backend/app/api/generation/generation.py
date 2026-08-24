@@ -9,6 +9,8 @@ from app.models.learning_documents.schemas import (
     GenerationJobListResponse,
     GenerationJobStatusResponse,
 )
+from app.models.learning_documents.types import FEEDBACK_ONLY_RESOURCE_TYPES
+from app.core.security.errors import ApplicationError, ErrorCode
 from app.services.generation.jobs import GenerationJobService
 from app.services.learners.profiles import ProfileService
 
@@ -21,6 +23,8 @@ def create_generation_job(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
+    if set(req.resource_types) & set(FEEDBACK_ONLY_RESOURCE_TYPES):
+        raise ApplicationError(ErrorCode.FEEDBACK_ONLY_RESOURCE_TYPE, status_code=422)
     report = build_health_report(get_settings())
     if report.status == "not_ready":
         detail = "生成依赖未就绪"

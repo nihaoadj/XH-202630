@@ -3,8 +3,10 @@
 from types import SimpleNamespace
 
 import pytest
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareSceneSpec
+from app.agents.resource_workflows.interactive_courseware.contracts import CoursewarePracticeEnrichment, CoursewareSceneSpec
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import compose_courseware_scene
+from app.agents.resource_workflows.interactive_courseware.practice_structure_agent import extract_practice_step_structure
+from app.agents.resource_workflows.interactive_courseware.contracts import CoursewarePracticeStepExtraction
 from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import review_courseware_quality_decision
 from app.core.courseware.renderer import render_courseware
 from app.services.courseware.review import source_trace_review
@@ -72,9 +74,137 @@ def test_scene_prompt_prefers_first_attempt_safe_component_contract(monkeypatch)
     gateway = Gateway()
     compose_courseware_scene(gateway, "run-1", "scene-1", _scene(), _source())
     assert "pedagogical_role（仅 explain/example/warning/recap）" in gateway.messages[0].content
+    assert '"schema_version":"2.0","kind":"explain"' in gateway.messages[0].content
+    assert "2 至 4 个互补信息区" in gateway.messages[0].content
+    assert '"transformation":"paraphrase"' in gateway.messages[0].content
     request = gateway.messages[1].content
     assert "flashcard" not in request
     assert '"supported_components": ["callout", "key_point", "steps", "single_choice", "multiple_choice", "recap"]' in request
+
+
+def test_practice_uses_small_enrichment_contract_and_preserves_platform_provenance(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.scene_composer_agent as composition
+
+    monkeypatch.setattr(composition, "courseware_ai_available", lambda _gateway: True)
+    deterministic = {
+        "scene_id": "practice-1", "kind": "practice", "title": "原始标题", "lead": "原始引导",
+        "blocks": ["准备", "执行", "检查", "总结"], "steps": ["旧步骤一", "旧步骤二"], "conclusion": "原始结论",
+        "source_refs": ["lecture"], "source_block_ids": ["b1", "b2"],
+        "source_map": {"blocks": [["b1"], ["b1"], ["b2"], ["b2"]]},
+        "component_blocks": [{"component": "steps", "text": "按步骤操作", "steps": ["旧步骤一"],
+                              "source_refs": [{"source_resource_id": "lecture", "source_block_ids": ["b1"]}]}],
+    }
+
+    class Gateway:
+        def options_for(self, *_args, **_kwargs): return object()
+        def invoke_structured(self, **kwargs):
+            self.output_schema = kwargs["output_schema"]
+            return SimpleNamespace(output=CoursewarePracticeEnrichment(
+                title="步骤一：准备环境", lead="完成本页准备后再进入下一步。", steps=["准备环境并确认依赖可用"], conclusion="核对准备结果。",
+            ))
+
+    gateway = Gateway()
+    rendered, warning = compose_courseware_scene(gateway, "run-1", "practice-1", deterministic, _source())
+    assert gateway.output_schema is CoursewarePracticeEnrichment
+    assert warning is None
+    assert rendered["steps"] == ["准备环境并确认依赖可用"]
+    assert rendered["component_blocks"][0]["steps"] == ["准备环境并确认依赖可用"]
+    assert rendered["source_map"]["steps"] == [["b1"]]
+
+
+def test_llm_practice_structure_requires_ordered_complete_source_coverage(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.practice_structure_agent as extraction
+
+    monkeypatch.setattr(extraction, "courseware_ai_available", lambda _gateway: True)
+
+    class Gateway:
+        def options_for(self, *_args, **_kwargs): return object()
+        def invoke_structured(self, **kwargs):
+            self.output_schema = kwargs["output_schema"]
+            return SimpleNamespace(output=CoursewarePracticeStepExtraction.model_validate({"steps": [
+                {"title": "准备", "source_block_ids": ["b1", "b1-detail"]},
+                {"title": "执行", "source_block_ids": ["b2", "b2-detail"]},
+            ], "context_block_ids": ["intro"]}))
+
+    gateway = Gateway()
+    groups, warning = extract_practice_step_structure(gateway, "run-1", {
+        "resource_id": "guide", "role": "practice", "blocks": [
+            {"block_id": "intro", "kind": "paragraph", "text": "开始前说明"},
+            {"block_id": "b1", "kind": "heading", "text": "## 步骤 1：准备环境"}, {"block_id": "b1-detail", "kind": "paragraph", "text": "创建环境"},
+            {"block_id": "b2", "kind": "heading", "text": "## 步骤 2：执行验证"}, {"block_id": "b2-detail", "kind": "paragraph", "text": "运行检查"},
+        ],
+    })
+    assert gateway.output_schema is CoursewarePracticeStepExtraction
+    assert warning is None
+    assert groups == [
+        {"title": "准备", "source_block_ids": ["b1", "b1-detail"]}, {"title": "执行", "source_block_ids": ["b2", "b2-detail"]},
+    ]
+
+
+def test_invalid_llm_practice_structure_falls_back_without_accepting_partial_groups(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.practice_structure_agent as extraction
+
+    monkeypatch.setattr(extraction, "courseware_ai_available", lambda _gateway: True)
+
+    class Gateway:
+        def options_for(self, *_args, **_kwargs): return object()
+        def invoke_structured(self, **_kwargs):
+            return SimpleNamespace(output=CoursewarePracticeStepExtraction.model_validate({"steps": [
+                {"title": "遗漏来源块", "source_block_ids": ["b1"]},
+            ]}))
+
+    groups, warning = extract_practice_step_structure(Gateway(), "run-1", {
+        "resource_id": "guide", "role": "practice", "blocks": [
+            {"block_id": "b1", "kind": "heading", "text": "## 步骤 1：准备环境"}, {"block_id": "b2", "kind": "paragraph", "text": "执行验证"},
+        ],
+    })
+    assert groups is None
+    assert warning and warning["code"] == "AI_PRACTICE_STRUCTURE_FALLBACK"
+
+
+def test_llm_practice_structure_allows_only_labelled_summary_as_trailing_context(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.practice_structure_agent as extraction
+
+    monkeypatch.setattr(extraction, "courseware_ai_available", lambda _gateway: True)
+
+    class Gateway:
+        def options_for(self, *_args, **_kwargs): return object()
+        def invoke_structured(self, **_kwargs):
+            return SimpleNamespace(output=CoursewarePracticeStepExtraction.model_validate({
+                "steps": [{"title": "建立索引", "source_block_ids": ["h1", "detail"]}],
+                "context_block_ids": ["intro", "summary", "summary-detail"],
+            }))
+
+    groups, warning = extract_practice_step_structure(Gateway(), "run-1", {
+        "resource_id": "guide", "role": "practice", "blocks": [
+            {"block_id": "intro", "kind": "paragraph", "text": "前言"},
+            {"block_id": "h1", "kind": "heading", "text": "## 步骤 1：建立索引"},
+            {"block_id": "detail", "kind": "paragraph", "text": "执行索引构建。"},
+            {"block_id": "summary", "kind": "heading", "text": "## 总结"},
+            {"block_id": "summary-detail", "kind": "paragraph", "text": "复核全部结果。"},
+        ],
+    })
+    assert warning is None
+    assert groups == [{"title": "建立索引", "source_block_ids": ["h1", "detail"]}]
+
+
+@pytest.mark.parametrize("invalid_fields", [
+    {"steps": ["先操作"], "feedback": "根据来源复盘。"},
+    {"steps": [], "feedback": None},
+])
+def test_quiz_contract_requires_one_primary_action_and_feedback(invalid_fields):
+    payload = {
+        "kind": "quiz", "title": "检索检查",
+        "blocks": [{
+            "block_id": "quiz-block", "component": "single_choice", "text": "第一步是什么？",
+            "source_refs": [{"source_resource_id": "lecture", "source_block_ids": ["b1"]}],
+        }],
+        "options": ["检索", "跳过来源"], "answer": ["检索"],
+        **invalid_fields,
+    }
+
+    with pytest.raises(ValueError):
+        CoursewareSceneSpec.model_validate(payload)
 
 
 def test_unsafe_ai_scene_is_blocked_before_renderer(monkeypatch):
@@ -173,4 +303,22 @@ def test_quality_review_prompt_enumerates_required_status_and_severity(monkeypat
     assert gateway.output_schema.__name__ == "CoursewareReviewDecisionV2Draft"
     assert "severity 只能是 info、warning 或 error" in gateway.messages[0].content
     assert "status=pass" in gateway.messages[0].content
+    assert "severity=error" in gateway.messages[0].content
+    assert "MISSING_ANSWER 只能用于实际 kind=quiz" in gateway.messages[0].content
     assert '"schema_version":"2.0","status":"pass","issues":[]' in gateway.messages[0].content
+
+
+def test_review_draft_without_localizer_becomes_course_level_issue():
+    from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import (
+        normalize_review_draft_for_durable_contract,
+    )
+
+    normalized = normalize_review_draft_for_durable_contract({
+        "schema_version": "2.0", "status": "revise",
+        "issues": [{"severity": "error", "scope": "block", "instruction": "补充反馈"}],
+        "rubric_scores": {"coherence": 3, "not_a_rubric": 5},
+    })
+
+    assert normalized["issues"][0]["severity"] == "error"
+    assert normalized["issues"][0]["scope"] == "course"
+    assert normalized["rubric_scores"] == {"coherence": 3}

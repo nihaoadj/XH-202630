@@ -101,7 +101,7 @@
 - `generation_job_service`：异步生成任务创建、状态查询、后台执行
 - `feedback_service`：学习反馈处理与画像更新
 - `learning_history_service`：学习过程时间线组装
-- `report_service`：报告组装
+- `report_service`：确定性 Report 3.0 聚合；读取正式 Attempt、规范能力投影、最终文本资源证据和持久化路径，构造知识盲区、资源难度匹配、学习路径图等只读可视化投影，计算稳定 revision，并提供条件读取与当前快照 SSE
 
 ### 3.3 Agent 层
 
@@ -133,6 +133,7 @@
 - `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
 - `generator.py` 保留历史文件名，但只负责资源 Spec 编排、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
 - 公共资源类型词汇由 `backend/app/models/resource_types.py` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
+- 反馈闭环可额外创建专属 `个性化纠错训练包 -> CorrectionTrainingPackageAgent`。它在学习文档内部受支持，但不属于普通生成词汇；`FeedbackService` 验证强化候选和快照后才可创建，并只向 Agent 传入脱敏目标、教学策略、达标标准和冻结 Evidence。
 
 ## 4. 当前主流程调用链
 
@@ -500,7 +501,7 @@ Candidate 发布由 `services.courseware.release.CandidateReleaseCoordinator` �
 
 ## 13. 互动课件 R0-R5 完整性边界
 
-课件参考源和课件资源使用两个不同字段：任务冻结唯一的 `source_batch_id`，生成资源继承为 `batch_id`；`source_resource_ids` 仍表示事实引用关系。只有同一非空反馈批次的文本资源可以进入一次生成，互动课件虽然归属于该批次，仍从下一次课件参考源选择器排除。`p0_18_courseware_batch_integrity` 只为所有来源快照明确证明同一批次的旧数据回填，其他数据保持 `NULL`。
+互动课件是单一文本学习资源的 HTML 互动版本，而不是资源聚合课程。任务冻结唯一的 `source_resource_ids[0]`，生成资源继承该源资源的 `batch_id`；多选仅是批量创建多个彼此隔离的任务。互动课件仍从课件源选择器排除，避免课件递归作为事实来源。`p0_18_courseware_batch_integrity` 只为所有来源快照明确证明同一批次的旧数据回填，其他数据保持 `NULL`。
 
 普通学习事件和 progress API 以 `released_release_id` 为边界。旧、未知、未发布或混合 release 请求在 API 层返回明确 409，批量事件在校验前不写入。组件状态以 `scene_id + component_id + component_version` 为实例边界，progress schema `2.0` 的嵌套投影和 renderer 的稳定 `data-component-id` 共同阻止同类组件互相覆盖；Viewer 切换资源/release 时更新 nonce 并丢弃迟到响应。
 
@@ -518,7 +519,7 @@ Diagnosis (server scored, verified)
   -> same transition policy and one profile-version increment
 Run/Batch evaluation (server scored, verified)
   -> Attempt + Decision + Ability Event + State Mutation + Learning Path + ProfileVersion
-  -> Report 2.0 + frozen LearnerFocusSnapshotV1
+  -> Report 3.0（事实 revision / ETag / 当前快照 SSE）+ frozen LearnerFocusSnapshotV1
   -> next text-resource GenerationJob
 ```
 
@@ -527,3 +528,6 @@ Run/Batch evaluation (server scored, verified)
 SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范状态、能力事件、mutation、学习路径、画像缓存和画像版本，并由 `(learner_id, idempotency_key)`、source hash、row version 与 profile version 约束重放和并发。问卷和诊断走稳定 source ID；无状态变化的重放不增加证据或版本。客户端聚合分数不是可信入口。
 
 生成任务创建时由 `MasteryService` 按 `confirmed_weak -> regressing_learning -> low_self_report -> unassessed_prerequisite` 排序，冻结 `LearnerFocusSnapshotV1` 到请求快照。显式目标覆盖 auto，off 禁用注入；创建后的画像变化不会改变既有任务。报告、ability API、生成重点和兼容缓存因此读取同一个 profile version 的规范投影。
+# 分阶学习架构
+
+`core/learning_tiers.py` 是三阶等级映射与固定难度的唯一策略面。`MasteryService` 使用其计算准入豁免、当前阶候选、前置门禁和反馈后的升降阶；`learner_tier_progress` 持久化起始阶、活动阶和最高解锁阶。文本生成任务在创建时冻结目标阶与节点，审核阶段复核资源难度，避免不同模块各自推断难度。

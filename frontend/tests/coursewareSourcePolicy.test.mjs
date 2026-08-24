@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { sameFeedbackBatchSources } from '../src/features/courseware/sourcePolicy.js'
+import { buildCoursewareBatchRequest, coursewareEligibleSources } from '../src/features/courseware/sourcePolicy.js'
 
 const resources = [
   { resource_id: 'lecture-a', resource_type: '讲义', batch_id: 'feedback-a' },
@@ -9,9 +9,13 @@ const resources = [
 ]
 
 assert.deepEqual(
-  sameFeedbackBatchSources(resources, 'feedback-a').map((item) => item.resource_id),
-  ['lecture-a', 'guide-a'],
+  coursewareEligibleSources(resources).map((item) => item.resource_id),
+  ['lecture-a', 'guide-a', 'lecture-b'],
 )
-assert.deepEqual(sameFeedbackBatchSources(resources, 'feedback-b').map((item) => item.resource_id), ['lecture-b'])
-assert.deepEqual(sameFeedbackBatchSources(resources, ''), [])
+assert.deepEqual(buildCoursewareBatchRequest({
+  learnerId: 'learner-1', resourceIds: ['lecture-a', 'guide-a'], preferences: { interaction_intensity: 'high' },
+}), {
+  learner_id: 'learner-1', resource_ids: ['lecture-a', 'guide-a'], learning_goal: null,
+  expected_duration_minutes: null, interaction_intensity: 'high', visual_style_id: null,
+})
 console.log('courseware source policy tests passed')

@@ -7,9 +7,9 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from app.api.dependencies import ensure_profile_access
-from app.core.courseware.security import security_policy
+from app.core.courseware.security import security_policy_for_artifact
 from app.models.courseware import (
-    CoursewareJobCreateRequest, CoursewareJobDetail, CoursewareJobResponse, CoursewareResourceDetail,
+    CoursewareBatchCreateRequest, CoursewareBatchJobResponse, CoursewareJobCreateRequest, CoursewareJobDetail, CoursewareJobListResponse, CoursewareJobResponse, CoursewareResourceDetail,
 )
 from app.models.courseware.events import CoursewareLearningEventBatch
 
@@ -48,6 +48,22 @@ def create_courseware_job(payload: CoursewareJobCreateRequest, request: Request)
         raise HTTPException(status_code=404, detail="学习者画像不存在")
     job = _service(request).create_job(payload)
     return job
+
+
+@router.post("/courseware/jobs/batch", response_model=CoursewareBatchJobResponse, status_code=202)
+def create_courseware_jobs(payload: CoursewareBatchCreateRequest, request: Request):
+    profile = request.app.container.profile_service().get(payload.learner_id)
+    if ensure_profile_access(request, profile) is None:
+        raise HTTPException(status_code=404, detail="学习者画像不存在")
+    return _service(request).create_jobs_for_resources(payload)
+
+
+@router.get("/courseware/jobs", response_model=CoursewareJobListResponse)
+def list_courseware_jobs(learner_id: str, request: Request):
+    profile = request.app.container.profile_service().get(learner_id)
+    if ensure_profile_access(request, profile) is None:
+        raise HTTPException(status_code=404, detail="学习者画像不存在")
+    return {"items": _service(request).list_jobs(learner_id)}
 
 
 @router.get("/courseware/jobs/{run_id}", response_model=CoursewareJobResponse)
@@ -192,7 +208,10 @@ def preview_courseware_resource(resource_id: str, request: Request):
         content=content,
         media_type="text/html; charset=utf-8",
         headers={
-            "Content-Security-Policy": security_policy(include_frame_ancestors=True),
+            "Content-Security-Policy": security_policy_for_artifact(
+                content,
+                include_frame_ancestors=True,
+            ),
             "X-Content-Type-Options": "nosniff",
             "Cache-Control": "private, no-store",
         },

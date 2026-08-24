@@ -158,6 +158,13 @@ class MemoryCoursewareRepository:
         row = self.jobs.get(run_id)
         return deepcopy(row) if row else None
 
+    def list_jobs(self, learner_id: str) -> list[dict[str, Any]]:
+        return sorted(
+            (deepcopy(row) for row in self.jobs.values() if row.get("learner_id") == learner_id),
+            key=lambda row: (row.get("updated_at") or row.get("created_at") or _now(), row.get("run_id", "")),
+            reverse=True,
+        )
+
     def update_job(self, run_id: str, **changes: Any) -> dict[str, Any] | None:
         row = self.jobs.get(run_id)
         if row is None:
@@ -238,6 +245,12 @@ class MemoryCoursewareRepository:
     def list_scenes(self, spec_id: str) -> list[dict[str, Any]]:
         rows = (deepcopy(row) for row in self.scenes.values() if row["spec_id"] == spec_id)
         return sorted(rows, key=lambda row: row["scene_order"])
+
+    def purge_scenes(self, spec_id: str) -> None:
+        scene_ids = [scene_id for scene_id, row in self.scenes.items() if row.get("spec_id") == spec_id]
+        for scene_id in scene_ids:
+            self.scenes.pop(scene_id, None)
+            self.scene_revisions.pop(scene_id, None)
 
     def save_scene_revision(self, row: dict[str, Any]) -> dict[str, Any]:
         stored = deepcopy({**row, "created_at": _now()})
@@ -542,6 +555,16 @@ class SQLCoursewareRepository:
             row = db.get(CoursewareGenerationJobORM, run_id)
             return _job_row(row) if row else None
 
+    def list_jobs(self, learner_id: str) -> list[dict[str, Any]]:
+        with self.session_factory() as db:
+            rows = (
+                db.query(CoursewareGenerationJobORM)
+                .filter_by(learner_id=learner_id)
+                .order_by(CoursewareGenerationJobORM.updated_at.desc(), CoursewareGenerationJobORM.run_id.desc())
+                .all()
+            )
+            return [_job_row(row) for row in rows]
+
     def update_job(self, run_id: str, **changes: Any) -> dict[str, Any] | None:
         with self.session_factory() as db:
             row = db.get(CoursewareGenerationJobORM, run_id)
@@ -704,6 +727,16 @@ class SQLCoursewareRepository:
         with self.session_factory() as db:
             rows = db.query(CoursewareSceneORM).filter_by(spec_id=spec_id).order_by(CoursewareSceneORM.scene_order).all()
             return [self._scene_row(row) for row in rows]
+
+    def purge_scenes(self, spec_id: str) -> None:
+        with self.session_factory() as db:
+            scene_ids = [row[0] for row in db.query(CoursewareSceneORM.scene_id).filter_by(spec_id=spec_id).all()]
+            if scene_ids:
+                db.query(CoursewareSceneRevisionORM).filter(CoursewareSceneRevisionORM.scene_id.in_(scene_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(CoursewareSceneORM).filter_by(spec_id=spec_id).delete(synchronize_session=False)
+                db.commit()
 
     def save_scene_revision(self, row: dict[str, Any]) -> dict[str, Any]:
         with self.session_factory() as db:

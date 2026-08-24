@@ -175,6 +175,9 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         messages: list[BaseMessage],
         representation: ResourceRepresentation,
         max_output_tokens: int | None = None,
+        strict_max_output_tokens: bool = False,
+        request_timeout_seconds: float | None = None,
+        max_attempts: int | None = None,
     ) -> LLMCallResult[str]:
         """Generate a long text artifact without serialising it into JSON."""
 
@@ -185,9 +188,23 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         }.get((self.agent_name, representation), "generator")
         options = llm_gateway.options_for(option_node, temperature=self.temperature)
         requested_budget = max_output_tokens or representation_spec.max_output_tokens
-        options = options.model_copy(update={
-            "max_output_tokens": max(requested_budget, options.max_output_tokens),
-        })
+        # Most legacy text agents may use a deployment-wide long-document
+        # allowance.  A tightly structured artifact can instead opt into an
+        # explicit ceiling: otherwise a 6–10k-character package silently
+        # inherits the 32k-token resource budget and becomes far more likely
+        # to stall or time out at the provider.
+        option_updates: dict[str, Any] = {
+            "max_output_tokens": (
+                requested_budget
+                if strict_max_output_tokens
+                else max(requested_budget, options.max_output_tokens)
+            ),
+        }
+        if request_timeout_seconds is not None:
+            option_updates["request_timeout_seconds"] = request_timeout_seconds
+        if max_attempts is not None:
+            option_updates["max_attempts"] = max_attempts
+        options = options.model_copy(update=option_updates)
         return llm_gateway.invoke_plain_text(
             messages=messages,
             context=LLMCallContext(

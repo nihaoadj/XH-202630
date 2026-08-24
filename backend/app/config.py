@@ -29,18 +29,18 @@ class Settings(BaseSettings):
     courseware_generation_mode: str = "ai_first"
     # Deployment-owned: callers cannot downgrade a strict release gate.
     courseware_release_policy: str = "resilient"
-    courseware_auto_revision_max_attempts: int = Field(default=2, ge=0, le=5)
+    courseware_auto_revision_max_attempts: int = Field(default=3, ge=0, le=5)
     courseware_scene_lease_seconds: int = Field(default=120, ge=30, le=900)
     courseware_auto_review_max_seconds: int = Field(default=180, ge=10, le=900)
-    courseware_total_llm_token_budget: int = Field(default=49152, ge=256, le=262144)
+    courseware_total_llm_token_budget: int = Field(default=73728, ge=256, le=262144)
     courseware_total_run_timeout_seconds: int = Field(default=1050, ge=30, le=3600)
-    courseware_planner_token_budget: int = Field(default=4096, ge=0, le=262144)
-    courseware_scene_composition_token_budget: int = Field(default=30720, ge=0, le=262144)
+    courseware_planner_token_budget: int = Field(default=8192, ge=0, le=262144)
+    courseware_scene_composition_token_budget: int = Field(default=40960, ge=0, le=262144)
     courseware_scene_call_max_tokens: int = Field(default=4096, ge=256, le=65536)
-    courseware_quality_review_token_budget: int = Field(default=4096, ge=0, le=262144)
-    courseware_revision_token_budget: int = Field(default=10240, ge=0, le=262144)
-    courseware_quality_review_reserved_tokens: int = Field(default=4096, ge=0, le=262144)
-    courseware_revision_reserved_tokens: int = Field(default=10240, ge=0, le=262144)
+    courseware_quality_review_token_budget: int = Field(default=8192, ge=0, le=262144)
+    courseware_revision_token_budget: int = Field(default=16384, ge=0, le=262144)
+    courseware_quality_review_reserved_tokens: int = Field(default=8192, ge=0, le=262144)
+    courseware_revision_reserved_tokens: int = Field(default=16384, ge=0, le=262144)
     courseware_planner_max_seconds: float = Field(default=90.0, ge=0, le=3600)
     courseware_scene_composition_max_seconds: float = Field(default=600.0, ge=0, le=3600)
     courseware_quality_review_max_seconds: float = Field(default=120.0, ge=0, le=3600)
@@ -143,6 +143,9 @@ class Settings(BaseSettings):
     workflow_sse_poll_interval_seconds: float = Field(default=0.5, ge=0.05, le=10)
     workflow_sse_heartbeat_seconds: float = Field(default=15.0, ge=0.1, le=300)
     workflow_sse_event_page_size: int = Field(default=100, ge=1, le=500)
+    # Report streaming is independent from durable workflow-event streaming.
+    report_sse_poll_interval_seconds: float = Field(default=2.0, ge=0.1, le=60)
+    report_sse_heartbeat_seconds: float = Field(default=15.0, ge=1, le=300)
     vector_distance_metric: str = "cosine"
     db_type: str = "sqlite"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"
@@ -367,6 +370,8 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
         if self.workflow_sse_heartbeat_seconds <= self.workflow_sse_poll_interval_seconds:
             raise ValueError("CFG_INVALID_WORKFLOW_STREAMING_POLICY")
+        if self.report_sse_heartbeat_seconds <= self.report_sse_poll_interval_seconds:
+            raise ValueError("CFG_INVALID_REPORT_STREAMING_POLICY")
         if self.rerank_enabled:
             if not self.rerank_model.strip():
                 raise ValueError("CFG_RERANK_MODEL_MISSING")

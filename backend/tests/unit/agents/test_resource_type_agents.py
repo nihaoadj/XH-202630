@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.agents.resource_workflows.learning_documents.generator_agent import generate_node
-from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, ReviewChecklistAgent
+from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, CorrectionTrainingPackageAgent, ReviewChecklistAgent
 from app.agents.resource_agents.practice import PRACTICE_GUIDE_PROMPT
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
 from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
@@ -135,11 +135,119 @@ def test_new_resource_types_are_registered_and_requestable():
     assert isinstance(get_resource_agent("复习清单"), ReviewChecklistAgent)
     assert isinstance(get_resource_agent("案例分析"), CaseStudyAgent)
     assert normalize_resource_type("复习清单") == "复习清单"
+    assert isinstance(get_resource_agent("个性化纠错训练包"), CorrectionTrainingPackageAgent)
     assert GenerateRequest(
         learner_id="learner-new-resource-type",
         topic="受控检索",
         resource_types=["复习清单", "案例分析"],
     ).resource_types == ["复习清单", "案例分析"]
+
+
+def test_correction_package_requires_frozen_focus_and_complete_units():
+    evidence = make_evidence(evidence_id="ev-correction")
+    focus = {"focus_snapshot_hash": "a" * 64, "difficulty": "中级", "scaffolding_level": "high", "ordered_target_nodes": [
+        {"skill_node_id": "skill-search", "name": "检索能力", "reason_codes": ["LEARNED_OBJECTIVELY_NOT_MASTERED"]}
+    ]}
+    spec = build_resource_specs(
+        run_id="run-correction", resource_types=["个性化纠错训练包"], topic="受控检索", difficulty="中级",
+        learning_plan={"correction_focus_snapshot": focus}, evidence=[evidence], target_skill_nodes=["skill-search"],
+    )[0]
+    context = ResourceGenerationContext(run_id="run-correction", batch_id="run-correction", topic="受控检索", evidence=[evidence], constraints={"correction_focus_snapshot": focus})
+    content = """# 薄弱点强化包：受控检索
+## 本次强化目标
+目标。
+## 薄弱模式概览
+概览。
+## 强化单元：检索能力
+### 错误模式
+误区。
+### 核心概念补救
+补救。
+### 正误对照
+对照。
+### 完整示例
+示例。
+### 引导式练习
+练习一。
+### 同构练习
+练习二。
+### 迁移练习
+练习三。
+## 参考答案与分层反馈
+反馈。
+## 达标标准
+标准。
+## 后续复习动作
+动作。
+## 总结
+总结。"""
+    artifact = CorrectionTrainingPackageAgent().generate(spec, context, llm_gateway=ScriptedLLMGateway([content]))
+    assert artifact.metadata.resource_type == "个性化纠错训练包"
+    assert artifact.artifact_data["correction_focus_snapshot_hash"] == "a" * 64
+
+
+def test_correction_package_uses_a_bounded_output_budget_and_repairs_format_once():
+    evidence = make_evidence(evidence_id="ev-correction-repair")
+    focus = {"focus_snapshot_hash": "b" * 64, "difficulty": "中级", "scaffolding_level": "high", "ordered_target_nodes": [
+        {"skill_node_id": "skill-search", "name": "检索能力", "reason_codes": ["LEARNED_OBJECTIVELY_NOT_MASTERED"]}
+    ]}
+    spec = build_resource_specs(
+        run_id="run-correction-repair", resource_types=["个性化纠错训练包"], topic="受控检索", difficulty="中级",
+        learning_plan={"correction_focus_snapshot": focus}, evidence=[evidence], target_skill_nodes=["skill-search"],
+    )[0]
+    context = ResourceGenerationContext(
+        run_id="run-correction-repair", batch_id="run-correction-repair", topic="受控检索", evidence=[evidence],
+        constraints={"correction_focus_snapshot": focus},
+    )
+    incomplete = "# 薄弱点强化包\n\n## 本次强化目标\n\n目标。"
+    complete = """# 薄弱点强化包：受控检索
+## 本次强化目标
+目标。
+## 薄弱模式概览
+概览。
+## 强化单元：检索能力
+### 错误模式
+误区。
+### 核心概念补救
+补救。
+### 正误对照
+对照。
+### 完整示例
+示例。
+### 引导式练习
+练习一。
+### 同构练习
+练习二。
+### 迁移练习
+练习三。
+## 参考答案与分层反馈
+反馈。
+## 达标标准
+标准。
+## 后续复习动作
+动作。
+## 总结
+总结。"""
+    gateway = ScriptedLLMGateway([incomplete, complete])
+
+    artifact = CorrectionTrainingPackageAgent().generate(spec, context, llm_gateway=gateway)
+
+    assert artifact.content_text == complete
+    assert artifact.artifact_data["format_repair_attempted"] is True
+    assert len(gateway.calls) == 2
+    assert all(call["options"].max_output_tokens == 32768 for call in gateway.calls)
+    assert all(call["options"].request_timeout_seconds == 300.0 for call in gateway.calls)
+    assert all(call["options"].max_attempts == 2 for call in gateway.calls)
+
+
+def test_correction_package_cannot_mix_with_general_resource_types():
+    evidence = make_evidence(evidence_id="ev-correction-mixed")
+    with pytest.raises(ApplicationError) as caught:
+        build_resource_specs(
+            run_id="run-correction-mixed", resource_types=["讲义", "个性化纠错训练包"], topic="受控检索",
+            difficulty="中级", learning_plan={}, evidence=[evidence], target_skill_nodes=["skill-search"],
+        )
+    assert caught.value.code == ErrorCode.WORKFLOW_CONTRACT_INVALID
 
 
 def test_practice_guide_prompt_forbids_literal_secret_examples():

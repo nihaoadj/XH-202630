@@ -30,6 +30,40 @@ def test_runtime_binds_messages_to_the_initializing_parent_origin():
     }).decode("utf-8")
 
 
+def test_fenced_source_code_is_rendered_as_a_readable_inert_code_region():
+    artifact = render_courseware({
+        "title": "代码实操", "scenes": [{
+            "scene_id": "practice-code", "kind": "practice", "page_role": "practice_workspace",
+            "layout_recipe_id": "practice_workspace", "title": "步骤 1", "source_refs": ["source"],
+            "source_block_ids": ["block-1"], "source_map": {"blocks": [["block-1"]]},
+            "component_blocks": [{
+                "component": "key_point", "block_id": "code-zone",
+                "text": "操作说明：\n```python\nif score < limit:\n    return count > 0\n```",
+                "source_refs": [{"source_resource_id": "source", "source_block_ids": ["block-1"]}],
+            }],
+        }],
+    }).decode("utf-8")
+    assert '<pre class="source-code" tabindex="0"><code>if score &lt; limit:' in artifact
+    assert "overflow:visible" in artifact
+    assert "white-space:pre-wrap" in artifact
+
+
+def test_only_practice_steps_keep_an_internal_scroll_region():
+    artifact = render_courseware({
+        "title": "实操指南｜代码演练", "scenes": [{
+            "scene_id": "practice-step", "kind": "practice", "page_role": "practice_workspace",
+            "layout_recipe_id": "practice_workspace", "title": "步骤 1", "source_refs": ["source"],
+            "source_block_ids": ["block-1"], "source_map": {"blocks": [["block-1"]]},
+            "component_blocks": [{
+                "component": "steps", "block_id": "completion", "steps": ["完成当前操作"],
+                "text": "完成当前操作", "source_refs": [{"source_resource_id": "source", "source_block_ids": ["block-1"]}],
+            }, {"component": "key_point", "block_id": "detail", "text": "完整说明。", "source_refs": [{"source_resource_id": "source", "source_block_ids": ["block-1"]}]}],
+        }],
+    }).decode("utf-8")
+    assert ".component-steps{grid-column:span 3;grid-row:1/4;align-self:start;max-height:100%;overflow:auto" in artifact
+    assert ".component-content{min-height:0;overflow:visible" in artifact
+
+
 def _edge() -> str | None:
     return next((candidate for candidate in (
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",

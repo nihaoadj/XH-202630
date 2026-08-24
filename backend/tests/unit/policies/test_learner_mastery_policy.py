@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from app.db.learners.mastery import MemoryMasteryRepository
+from app.db.learners.curriculum import MemoryCurriculumRepository
 from app.db.learners.memory import MemoryLearnerRepository
 from app.models.learners.mastery import AbilityEvidenceV1
-from app.models.learning_documents.schemas import LearnerProfile
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.services.learners.mastery import MasteryService
 
 
@@ -20,7 +23,7 @@ def _service():
     ]
     knowledge = SimpleNamespace(list_skill_nodes=lambda _kb: nodes)
     repository = MemoryMasteryRepository(learner_repo)
-    return MasteryService(repository, knowledge), learner_repo
+    return MasteryService(repository, knowledge, curriculum_repo=MemoryCurriculumRepository()), learner_repo
 
 
 def _evidence(source_type, source_id, score, *, verified, at):
@@ -72,7 +75,9 @@ def test_focus_snapshot_auto_off_and_explicit_are_deterministic():
     auto_b = service.focus_snapshot(profile, mode="auto", explicit_node_ids=[])
     assert auto_a.mastery_snapshot_hash == auto_b.mastery_snapshot_hash
     assert auto_a.adopted_node_ids == ["skill-a"]
-    assert auto_a.ranked_priorities[0].priority_group == "unassessed_prerequisite"
+    assert [item.skill_node_id for item in auto_a.ranked_priorities] == ["skill-a", "skill-b"]
+    assert auto_a.ranked_priorities[0].priority_group == "ready_uncovered"
+    assert auto_a.ranked_priorities[1].priority_group == "blocked_uncovered"
 
     off = service.focus_snapshot(profile, mode="off", explicit_node_ids=[])
     assert off.adopted_node_ids == []
@@ -82,3 +87,134 @@ def test_focus_snapshot_auto_off_and_explicit_are_deterministic():
     assert explicit.focus_mode == "explicit"
     assert explicit.adopted_node_ids == ["skill-b"]
 
+
+def test_curriculum_ranks_every_node_and_advances_coverage_after_publication():
+    service, learner_repo = _service()
+    profile = learner_repo.get("learner")
+    published_a = LearningResource(
+        resource_id="published-a", learner_id="learner", topic="topic", resource_type="讲义",
+        difficulty="初级", content_text="content", knowledge_points=["skill-a"],
+        source_refs=[], publication_status="published",
+    )
+    service.resource_repo = SimpleNamespace(list_by_learner=lambda _learner_id: [published_a])
+    service.apply_diagnosis(
+        profile, {"skill-a": 0.2}, source_id="diagnosis-1", source_hash="a" * 64,
+        occurred_at=datetime.now(timezone.utc),
+    )
+
+    current = learner_repo.get("learner")
+    priorities = service.weakness_priorities(current)
+    assert len(priorities) == 2
+    assert {item.skill_node_id for item in priorities} == {"skill-a", "skill-b"}
+    assert next(item for item in priorities if item.skill_node_id == "skill-a").coverage_status == "covered"
+    assert next(item for item in priorities if item.skill_node_id == "skill-b").priority_group == "ready_uncovered"
+
+    focus = service.focus_snapshot(current, mode="auto", explicit_node_ids=[])
+    assert focus.adopted_node_ids == ["skill-a", "skill-b"]
+
+
+def test_next_generation_options_keep_reinforcement_and_new_knowledge_separate():
+    service, learner_repo = _service()
+    profile = learner_repo.get("learner")
+    service.resource_repo = SimpleNamespace(list_by_learner=lambda _learner_id: [
+        LearningResource(
+            resource_id="published-a", learner_id="learner", topic="topic", resource_type="讲义",
+            difficulty="初级", content_text="content", knowledge_points=["skill-a"],
+            source_refs=[], publication_status="published",
+        )
+    ])
+    service.apply_diagnosis(
+        profile, {"skill-a": 0.2}, source_id="diagnosis-1", source_hash="a" * 64,
+        occurred_at=datetime.now(timezone.utc),
+    )
+    current = learner_repo.get("learner")
+    options = service.next_generation_options(current)
+    assert [item.skill_node_id for item in options.reinforce_weakness] == ["skill-a"]
+    # The L2 node is deliberately hidden: an incomplete L1 batch cannot be
+    # filled with a higher-tier node.
+    assert options.learn_new_knowledge == []
+    assert options.reinforce_weakness[0].priority_group == "learned_not_mastered"
+
+    _, selected = service.confirm_next_generation_intent(
+        current, intent="reinforce_weakness", selected_node_ids=["skill-a"],
+        snapshot_hash=options.snapshot_hash,
+    )
+    assert selected == ["skill-a"]
+    with pytest.raises(ValueError):
+        service.confirm_next_generation_intent(
+            current, intent="reinforce_weakness", selected_node_ids=["skill-b"],
+            snapshot_hash=options.snapshot_hash,
+        )
+
+
+def test_curriculum_uses_published_exposure_to_reach_all_nodes_in_order():
+    learner_repo = MemoryLearnerRepository()
+    learner_repo.save(LearnerProfile(
+        learner_id="learner", learner_type="test", education="本科", major="软件",
+        knowledge_base_id="kb", learning_goal="learn",
+    ))
+    nodes = [
+        SimpleNamespace(node_id="skill-a", name="A", description=None, level="L1", prerequisites=[], children=["skill-b"]),
+        SimpleNamespace(node_id="skill-b", name="B", description=None, level="L2", prerequisites=["skill-a"], children=["skill-c"]),
+        SimpleNamespace(node_id="skill-c", name="C", description=None, level="L3", prerequisites=["skill-b"], children=[]),
+    ]
+    published: list[LearningResource] = []
+    service = MasteryService(
+        MemoryMasteryRepository(learner_repo),
+        SimpleNamespace(list_skill_nodes=lambda _kb: nodes),
+        SimpleNamespace(list_by_learner=lambda _learner_id: published),
+    )
+    profile = learner_repo.get("learner")
+
+    assert service.focus_snapshot(profile, mode="auto", explicit_node_ids=[]).adopted_node_ids == ["skill-a"]
+    published.append(LearningResource(
+        resource_id="published-a", learner_id="learner", topic="topic", resource_type="讲义",
+        difficulty="初级", content_text="content", knowledge_points=["A"],
+        source_refs=[], publication_status="published",
+    ))
+    second_round = service.focus_snapshot(profile, mode="auto", explicit_node_ids=[])
+    assert second_round.adopted_node_ids == ["skill-b"]
+    assert len(second_round.adopted_node_ids) <= 3
+
+    published.append(LearningResource(
+        resource_id="published-b", learner_id="learner", topic="topic", resource_type="讲义",
+        difficulty="初级", content_text="content", knowledge_points=["skill-b"],
+        source_refs=[], publication_status="published",
+    ))
+    third_round = service.focus_snapshot(profile, mode="auto", explicit_node_ids=[])
+    assert third_round.adopted_node_ids == ["skill-c"]
+    assert [item.skill_node_id for item in third_round.ranked_priorities] == [
+        "skill-c", "skill-a", "skill-b",
+    ]
+
+
+def test_curriculum_persists_all_nodes_wait_debt_and_verified_transitions():
+    service, learner_repo = _service()
+    profile = learner_repo.get("learner")
+    service.schedule_generation(profile, run_id="run-1", selected_node_ids=["skill-a"])
+    nodes, summary = service.curriculum_progress(profile)
+    by_id = {item.skill_node_id: item for item in nodes}
+    assert summary.total_count == 2
+    assert by_id["skill-a"].progress_status.value == "scheduled"
+    assert by_id["skill-b"].wait_rounds == 0  # It is blocked by skill-a, so has no debt.
+
+    published = LearningResource(
+        resource_id="published-a", learner_id="learner", topic="topic", resource_type="讲义",
+        difficulty="初级", content_text="content", knowledge_points=["skill-a"],
+        source_refs=[], publication_status="published",
+    )
+    service.resource_repo = SimpleNamespace(list_by_learner=lambda _learner_id: [published])
+    nodes, _ = service.curriculum_progress(profile)
+    by_id = {item.skill_node_id: item for item in nodes}
+    assert by_id["skill-a"].progress_status.value == "exposed"
+    assert by_id["skill-a"].published_resource_count == 1
+
+    service.record_curriculum_verification(
+        profile, attempt_id="attempt-1", point_scores={"skill-a": 0.9},
+        occurred_at=datetime.now(timezone.utc),
+    )
+    nodes, summary = service.curriculum_progress(profile)
+    by_id = {item.skill_node_id: item for item in nodes}
+    assert by_id["skill-a"].progress_status.value == "completed"
+    assert by_id["skill-a"].verified_attempt_count == 1
+    assert summary.completed_count == 1
