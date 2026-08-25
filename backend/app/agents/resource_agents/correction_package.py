@@ -24,6 +24,7 @@ CORRECTION_PACKAGE_PROMPT = """你是 CorrectionTrainingPackageAgent。一次性
 7. 采用短段落和项目符号，避免重复定义、重复题干或冗长铺垫。每个强化单元的三道练习各只出一道；答案、提示和分层反馈只放在文末。
 8. 严格遵守输入 composition_budget。每个事实、示例与练习答案必须由 evidence 支持；证据不足时只做概念辨析或学习步骤，不补充新事实。
 9. 直接输出 Markdown 正文，全文不得超过 14000 个中文字符。
+10. 第一行必须是唯一一级标题，且严格使用输入 display_title。
 """
 
 
@@ -45,7 +46,7 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
     agent_name = "CorrectionTrainingPackageAgent"
     prompt_version = "correction-training-package-v2-controlled-markdown"
     artifact_format = "markdown"
-    # Keep enough headroom for a complete 1–3-node package.  The strict call
+    # Keep enough headroom for a complete 1–2-node package.  The strict call
     # path below makes this an actual ceiling rather than silently inheriting
     # a different global resource-generator budget.
     default_max_output_tokens = 32768
@@ -61,7 +62,7 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
         if not isinstance(focus, dict):
             raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
         targets = focus.get("ordered_target_nodes")
-        if not isinstance(targets, list) or not 1 <= len(targets) <= 3:
+        if not isinstance(targets, list) or not 1 <= len(targets) <= 2:
             raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
         if any(not isinstance(item, dict) or not str(item.get("skill_node_id") or "").strip() for item in targets):
             raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
@@ -75,6 +76,7 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
         return {
             "topic": context.topic,
             "resource_type": spec.resource_type,
+            "display_title": f"{context.topic} · {spec.resource_type}",
             "knowledge_points": spec.knowledge_points,
             "difficulty": spec.difficulty,
             "correction_focus": {
@@ -93,10 +95,6 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
         ranges = {
             1: (6200, 7600, "每个强化单元约 4000–4800 字符，文末部分约 1800–2400 字符"),
             2: (7000, 8600, "每个强化单元约 2200–2800 字符，综合与文末部分约 2200–3000 字符"),
-            # Three targets are the slowest live-provider case.  Keep all
-            # seven required sections, but deliberately cap repetition so a
-            # model does not spend the whole 32k allowance expanding examples.
-            3: (6800, 8200, "每个强化单元约 1350–1650 字符，综合与文末部分约 2200–2800 字符；每段只保留一个最有代表性的例子"),
         }
         minimum, maximum, allocation = ranges[target_count]
         return {

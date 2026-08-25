@@ -19,6 +19,7 @@ from app.models.learners.mastery import AbilityNodeProjectionV1, NextGenerationO
 class ReportRadar(BaseModel):
     dimensions: List[str]
     values: List[float]
+    measurement_statuses: List[Literal["measured", "unassessed"]] = Field(default_factory=list)
 
 
 class DifficultyCurveItem(BaseModel):
@@ -87,6 +88,8 @@ class LearningPathGraphNodeV1(BaseModel):
     recommended_resource_types: List[str] = Field(default_factory=list)
     reason_codes: List[str] = Field(default_factory=list)
     stable_order: int
+    tier: int | None = Field(default=None, ge=1, le=3)
+    prerequisite_ids: List[str] = Field(default_factory=list)
 
 
 class LearningPathGraphEdgeV1(BaseModel):
@@ -103,6 +106,7 @@ class LearningPathGraphV1(BaseModel):
     edges: List[LearningPathGraphEdgeV1] = Field(default_factory=list)
     current_node_ids: List[str] = Field(default_factory=list)
     recommended_next_node_ids: List[str] = Field(default_factory=list)
+    focus_node_ids: List[str] = Field(default_factory=list)
     summary: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -163,6 +167,8 @@ class ReportResponse(BaseModel):
     mastery_summary: Dict[str, Any] = Field(default_factory=dict)
     mastery_trend: List[Dict[str, Any]] = Field(default_factory=list)
     evidence_coverage: Dict[str, Any] = Field(default_factory=dict)
+    diagnostic_measurements: Dict[str, Any] = Field(default_factory=dict)
+    initial_diagnostic: Dict[str, Any] = Field(default_factory=dict)
     weakness_priorities: List[WeaknessPriorityV1] = Field(default_factory=list)
     next_resource_focus: Dict[str, Any] = Field(default_factory=dict)
     generation_options: NextGenerationOptionsV1 | None = None

@@ -111,6 +111,48 @@ function resourceContent(resource) {
   return resource.content_text || resource.content || '暂无内容'
 }
 
+function learnerFacingReviewChecklist(resource, content) {
+  if (resource?.resource_type !== '复习清单') return String(content)
+  let readable = String(content)
+  // Older records may still carry trace IDs in Markdown. Keep those IDs in
+  // the stored structured payload for audits, but never show them to learners.
+  readable = readable
+    .replace(/^(#{3,4})\s+q-(\d+)\s*$/gmi, (_, hashes, number) => `${hashes} 题目 ${Number(number)}`)
+    .replace(/^(小结证据|证据)：.*$/gmi, (_, label) => `${label === '小结证据' ? '小结依据' : '证据依据'}：已完成来源核验。`)
+
+  if (!readable.includes('节点知识小结')) {
+    const blocks = resource.review_practice_payload?.node_blocks
+    const summaries = Array.isArray(blocks)
+      ? blocks.map((block) => String(block?.knowledge_summary || '').trim()).filter(Boolean)
+      : []
+    if (summaries.length) {
+      const summary = summaries.map((item, index) => `### 节点${index + 1}知识小结\n\n${item}\n\n小结依据：已完成来源核验。`).join('\n\n')
+      const marker = '## 答案与证据解释'
+      readable = readable.includes(marker)
+        ? readable.replace(marker, `${summary}\n\n${marker}`)
+        : `${readable.trimEnd()}\n\n${summary}`
+    }
+  }
+  return readable
+}
+
+function resourceTitle(resource) {
+  const type = String(resource?.resource_type || '学习资源').trim()
+  const knowledgePoints = [...new Set((resource?.knowledge_points || [])
+    .map((point) => String(point || '').trim())
+    .filter(Boolean))]
+  return knowledgePoints.length ? `${type} · ${knowledgePoints.join('、')}` : type
+}
+
+function contentWithResourceTitle(resource) {
+  const content = learnerFacingReviewChecklist(resource, resourceContent(resource))
+  // The batch topic can describe every generated artifact and is not a useful
+  // document title.  Always use the resource identity plus its covered nodes,
+  // even for historical content that has no model-provided H1.
+  const body = String(content).replace(/^\s*#\s+.*(?:\r?\n|$)/, '').trimStart()
+  return `# ${resourceTitle(resource)}\n\n${body}`
+}
+
 function escapeHtml(text) {
   return String(text)
     .replace(/&/g, '&amp;')
@@ -213,7 +255,7 @@ function renderMarkdown(text) {
   return blocks.join('')
 }
 
-function renderedContent(resource) { return renderMarkdown(resourceContent(resource)) }
+function renderedContent(resource) { return renderMarkdown(contentWithResourceTitle(resource)) }
 function download(resourceId) { window.open(resourceApi.downloadUrl(resourceId), '_blank') }
 function selectResource(resourceId) { if (resourceId && resourceId !== props.selectedResourceId) emit('select-resource', resourceId) }
 function captureSelectedText(event) {

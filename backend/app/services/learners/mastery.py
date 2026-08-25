@@ -134,6 +134,25 @@ class MasteryService:
         """Public onboarding hook; safe to call repeatedly."""
         return self._tier_progress(profile)
 
+    def finalize_initial_placement(self, profile: LearnerProfile, *, tier: int) -> LearnerTierProgressV1 | None:
+        """Commit the calibrated tier only after the initial diagnostic flow ends."""
+        if not self.tier_progress_repo or not profile.knowledge_base_id:
+            return None
+        state = self.tier_progress_repo.get_or_create(
+            profile.learner_id, profile.knowledge_base_id,
+            placement_tier=tier, profile_version=profile.profile_version,
+        )
+        state = state.model_copy(update={
+            "placement_tier": tier,
+            "active_tier": tier,
+            "highest_unlocked_tier": tier,
+            "remediation_return_tier": None,
+            "profile_version": profile.profile_version,
+        })
+        saved = self.tier_progress_repo.save(state)
+        self._apply_placement_exemptions(profile, saved)
+        return saved
+
     def _apply_placement_exemptions(self, profile: LearnerProfile, state: LearnerTierProgressV1) -> None:
         """Record placement as unverified self-report, never as objective completion."""
         if self.curriculum_repo is None or not profile.knowledge_base_id or state.placement_tier <= 1:
@@ -198,7 +217,7 @@ class MasteryService:
         )]
         self.curriculum_repo.schedule_round(
             profile.learner_id, profile.knowledge_base_id, run_id=run_id,
-            selected_node_ids=list(dict.fromkeys(selected_node_ids))[:3],
+            selected_node_ids=list(dict.fromkeys(selected_node_ids))[:2],
             eligible_unplanned_ids=eligible, now=datetime.now(timezone.utc),
         )
 
@@ -206,10 +225,17 @@ class MasteryService:
         """Hard gate for every entry point that creates node-targeted resources."""
         if not selected_node_ids:
             return None
-        if len(selected_node_ids) > 3:
-            raise ValueError("at most three target skill nodes are allowed")
+        if len(selected_node_ids) > 2:
+            raise ValueError("at most two target skill nodes are allowed")
         if not profile.knowledge_base_id:
             raise ValueError("learner knowledge base is required")
+        metadata = profile.learning_preferences.metadata if profile.learning_preferences else {}
+        initial_flow = metadata.get("initial_diagnostic_flow", {}) if isinstance(metadata, dict) else {}
+        initial_node_id = initial_flow.get("initial_recommended_node_id") if isinstance(initial_flow, dict) else None
+        if initial_flow.get("status") == "final" and initial_node_id and not any(
+            item.publication_status == "published" for item in (self.resource_repo.list_by_learner(profile.learner_id) if self.resource_repo else [])
+        ) and list(dict.fromkeys(selected_node_ids)) != [initial_node_id]:
+            raise ValueError("首轮资源必须使用初始诊断推荐的单一能力节点")
         nodes = {node.node_id: node for node in self._nodes(profile.knowledge_base_id)}
         unknown = sorted(set(selected_node_ids) - set(nodes))
         if unknown:
@@ -271,10 +297,10 @@ class MasteryService:
         assessed = [node_id for node_id in point_scores if node_id in graph]
         tiers = {self._node_tier(graph[node_id]) for node_id in assessed}
         if len(tiers) != 1:
-            return assessed[:3], None, None
+            return assessed[:2], None, None
         assessed_tier = int(next(iter(tiers)))
         if action != "remediate" or assessed_tier == 1:
-            return assessed[:3], assessed_tier, None
+            return assessed[:2], assessed_tier, None
         weak = [node_id for node_id in assessed if point_scores[node_id] < 0.60]
         candidates: list[str] = []
         queue = list(weak)
@@ -292,8 +318,8 @@ class MasteryService:
                     queue.append(parent_id)
         # The graph traversal is deterministic because metadata order is frozen;
         # node ID finishes tie-breaking across branches.
-        selected = sorted(set(candidates))[:3]
-        return (selected or weak[:3]), assessed_tier - 1, assessed_tier
+        selected = sorted(set(candidates))[:2]
+        return (selected or weak[:2]), assessed_tier - 1, assessed_tier
 
     def _is_tier_completed(self, profile: LearnerProfile, tier: int) -> bool:
         graph = self._nodes(profile.knowledge_base_id or "")
@@ -633,7 +659,7 @@ class MasteryService:
         skipped: list[LearnerFocusSkippedV1] = []
         if explicit_node_ids:
             focus_mode = "explicit"
-            adopted = list(dict.fromkeys(explicit_node_ids))[:3]
+            adopted = list(dict.fromkeys(explicit_node_ids))[:2]
             skipped = [LearnerFocusSkippedV1(
                 skill_node_id=item.skill_node_id, reason_code="EXPLICIT_TARGETS_SELECTED"
             ) for item in priorities if item.skill_node_id not in adopted]
@@ -656,11 +682,11 @@ class MasteryService:
             # This makes coverage progress even while a learner needs repeated
             # remediation, instead of allowing weak nodes to monopolize every
             # subsequent resource batch.
-            adopted = [item.skill_node_id for item in remediation[:2]]
-            if ready_uncovered and len(adopted) < 3:
+            adopted = [item.skill_node_id for item in remediation[:1]]
+            if ready_uncovered and len(adopted) < 2:
                 adopted.append(ready_uncovered[0].skill_node_id)
-            for item in [*remediation[2:], *ready_uncovered[1:]]:
-                if len(adopted) >= 3:
+            for item in [*remediation[1:], *ready_uncovered[1:]]:
+                if len(adopted) >= 2:
                     break
                 adopted.append(item.skill_node_id)
             skipped = [LearnerFocusSkippedV1(
@@ -757,10 +783,10 @@ class MasteryService:
         new_nodes.sort(key=lambda node: (
             -(curriculum_nodes.get(node.node_id).wait_rounds if node.node_id in curriculum_nodes else 0),
             bool(prerequisite_blockers(node)), node.node_id))
-        recommended_reinforcement = [node.node_id for node in reinforce_nodes[:2]]
+        recommended_reinforcement = [node.node_id for node in reinforce_nodes[:1]]
         recommended_new = [node.node_id for node in new_nodes if not candidate(node, "unlearned", 1).blocked_by_node_ids]
         # Do not use another tier to fill the remaining slots; one or two nodes is valid.
-        recommended = [*recommended_reinforcement, *recommended_new[:max(0, 3 - len(recommended_reinforcement))]]
+        recommended = [*recommended_reinforcement, *recommended_new[:max(0, 2 - len(recommended_reinforcement))]]
         tier_completed = self._is_tier_completed(profile, active_tier)
         recommendation_type = (
             "remedial" if tier_state and tier_state.remediation_return_tier else
@@ -775,7 +801,7 @@ class MasteryService:
                                 for index, node in enumerate(reinforce_nodes, start=1)],
             learn_new_knowledge=[candidate(node, "unlearned", index)
                                  for index, node in enumerate(new_nodes, start=1)],
-            recommended_node_ids=recommended[:3],
+            recommended_node_ids=recommended[:2],
             curriculum_progress=self._curriculum_summary(list(curriculum_nodes.values())) if curriculum_nodes else None,
             tier_progress=tier_state, tier_completion=tier_completed,
             recommendation_type=recommendation_type,
@@ -792,11 +818,25 @@ class MasteryService:
         options = self.next_generation_options(profile)
         if options.snapshot_hash != snapshot_hash:
             raise ValueError("next generation options are stale")
+        selected = list(dict.fromkeys(selected_node_ids))
+        if not selected or len(selected) > 2:
+            raise ValueError("selected nodes are not available for this learning intent")
+        if intent == LearningIntent.LEARN_NEW_AND_REINFORCE:
+            if len(selected) != 2:
+                raise ValueError("mixed learning requires one new and one reinforcement node")
+            reinforce_ids = {item.skill_node_id for item in options.reinforce_weakness}
+            new_by_id = {item.skill_node_id: item for item in options.learn_new_knowledge}
+            selected_reinforce = [node_id for node_id in selected if node_id in reinforce_ids]
+            selected_new = [node_id for node_id in selected if node_id in new_by_id]
+            if len(selected_reinforce) != 1 or len(selected_new) != 1:
+                raise ValueError("mixed learning requires one new and one reinforcement node")
+            if new_by_id[selected_new[0]].blocked_by_node_ids:
+                raise ValueError("selected new knowledge has unlearned prerequisites")
+            return options, selected
         candidates = (options.reinforce_weakness if intent == LearningIntent.REINFORCE_WEAKNESS
                       else options.learn_new_knowledge)
         allowed = {item.skill_node_id: item for item in candidates}
-        selected = list(dict.fromkeys(selected_node_ids))
-        if not selected or len(selected) > 3 or set(selected) - set(allowed):
+        if set(selected) - set(allowed):
             raise ValueError("selected nodes are not available for this learning intent")
         blocked = [node_id for node_id in selected if allowed[node_id].blocked_by_node_ids]
         if blocked:

@@ -34,6 +34,7 @@ CATALOG_V1 = {
         ComponentDefinition("single_choice", interactive=True, renderer="choice", runtime="single-choice", touch_target=True),
         ComponentDefinition("multiple_choice", interactive=True, renderer="choice", runtime="multiple-choice", touch_target=True),
         ComponentDefinition("recap", renderer="recap", aria_role="note"),
+        ComponentDefinition("code_block", renderer="code-block", required_fields=("text", "source_refs", "language", "code"), aria_role="region"),
         ComponentDefinition("flashcard", interactive=True, renderer="flashcard", runtime="flashcard", touch_target=True, required_fields=("text", "source_refs", "front", "back")),
         ComponentDefinition("matching", interactive=True, renderer="matching", runtime="matching", touch_target=True, required_fields=("text", "source_refs", "pairs")),
         ComponentDefinition("ordering", interactive=True, renderer="ordering", runtime="ordering", touch_target=True, required_fields=("text", "source_refs", "ordering_items", "correct_order")),
@@ -87,7 +88,8 @@ CATALOG_V4 = {
             ComponentDefinition("review_overview", schema_version="4.0", renderer="review-overview", required_fields=("text", "source_refs", "items"), aria_role="note"),
             ComponentDefinition("review_recall_card", interactive=True, schema_version="4.0", renderer="review-recall", runtime="review-practice", required_fields=("text", "source_refs", "items"), aria_role="region", touch_target=True),
             ComponentDefinition("review_distinction_card", interactive=True, schema_version="4.0", renderer="review-distinction", runtime="review-practice", required_fields=("text", "source_refs", "items"), aria_role="region", touch_target=True),
-            ComponentDefinition("review_example_card", interactive=True, schema_version="4.0", renderer="review-example", runtime="review-practice", required_fields=("text", "source_refs", "item"), aria_role="region", touch_target=True),
+            ComponentDefinition("review_example_card", interactive=True, schema_version="4.0", renderer="review-example", runtime="review-practice", required_fields=("text", "source_refs", "items"), aria_role="region", touch_target=True),
+            ComponentDefinition("review_node_summary", schema_version="4.0", renderer="review-node-summary", required_fields=("text", "source_refs"), aria_role="note"),
             ComponentDefinition("review_reflection", schema_version="4.0", renderer="review-reflection", required_fields=("text", "source_refs", "reason"), aria_role="note"),
             ComponentDefinition("review_completion", interactive=True, schema_version="4.0", renderer="review-completion", runtime="review-practice", required_fields=("text", "source_refs", "items"), aria_role="region", touch_target=True),
         )
@@ -171,17 +173,23 @@ def validate_component_payload(name: str, payload: dict[str, Any]) -> bool:
         return isinstance(payload.get("items"), list) and bool(payload["items"])
     if name in {"review_recall_card", "review_distinction_card"}:
         items = payload.get("items")
-        return isinstance(items, list) and 1 <= len(items) <= 3 and all(
+        return isinstance(items, list) and 1 <= len(items) <= 2 and all(
             isinstance(item, dict) and str(item.get("question_id") or "").strip()
             and str(item.get("prompt") or item.get("statement") or "").strip()
             and str(item.get("reference_answer") or item.get("correction") or "").strip()
             for item in items
         )
     if name == "review_example_card":
-        item = payload.get("item")
-        return isinstance(item, dict) and str(item.get("question_id") or "").strip() and all(
-            str(item.get(key) or "").strip() for key in ("candidate_a", "candidate_b", "positive_candidate", "decisive_boundary")
+        items = payload.get("items")
+        if items is None and isinstance(payload.get("item"), dict):
+            items = [payload["item"]]
+        return isinstance(items, list) and 1 <= len(items) <= 2 and all(
+            isinstance(item, dict) and str(item.get("question_id") or "").strip() and all(
+                str(item.get(key) or "").strip() for key in ("candidate_a", "candidate_b", "positive_candidate", "decisive_boundary")
+            ) for item in items
         )
+    if name == "review_node_summary":
+        return str(payload.get("node_name") or "").strip() and str(payload.get("text") or "").strip()
     if name == "review_reflection":
         return str(payload.get("reason") or "").strip() in {"INSUFFICIENT_DISTINCT_EVIDENCE", "NO_EXPLICIT_CONCEPT_BOUNDARY"}
     return True

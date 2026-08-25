@@ -18,6 +18,16 @@ from app.models.shared.llm import LLMCallContext
 from app.models.shared.llm import LLMCallOptions
 
 
+def _format_cover_title(value: str) -> str:
+    """Keep the LLM title in the stable learner-facing cover format."""
+    title = re.sub(r"^实操指南\s*[|｜:：]\s*", "", str(value or "").strip())
+    return f"实操指南 | {title}" if title else "实操指南 | 互动实操指南"
+
+
+def _strip_learning_overview_label(value: str) -> str:
+    return re.sub(r"^学习(?:范围|概述)\s*[：:]\s*", "", str(value or "").strip())
+
+
 def compose_courseware_scene(
     llm_gateway: LLMGateway | None,
     run_id: str,
@@ -46,6 +56,7 @@ def compose_courseware_scene(
     scene_kind = str(deterministic_scene["kind"])
     is_step_scene = scene_kind == "practice"
     is_narrative_scene = scene_kind in {"intro", "recap"}
+    is_cover_scene = review_page_role == "cover"
     is_platform_enrichment = is_step_scene or is_narrative_scene
     interaction_instruction = (
         "本次是 practice 步骤页：steps 必须是仅含 1 条非空字符串的数组；这条只写当前页的一个可执行动作。"
@@ -68,7 +79,8 @@ def compose_courseware_scene(
                     "quiz 必须有至少两个 options、answer（只能取自 options）和 feedback。"
                         + interaction_instruction +
                         ("本次只输出 PracticeEnrichment：title、lead、steps、conclusion；不要输出 blocks、source_refs、options、answer 或 schema_version。"
-                       if is_step_scene else "本次只输出 NarrativeEnrichment：title、lead、conclusion；不要输出 blocks、source_refs、steps、options、answer 或 schema_version。"
+                       if is_step_scene else "本次只输出 NarrativeEnrichment：title、lead、learning_overview、conclusion；封面 title 必须使用‘实操指南 | 具体实操指南名字’格式；learning_overview 只写概述正文，不要重复‘学习概述：’标签；不要输出 blocks、source_refs、steps、options、answer 或 schema_version。"
+                       if is_cover_scene else "本次只输出 NarrativeEnrichment：title、lead、conclusion；不要输出 blocks、source_refs、steps、options、answer 或 schema_version。"
                        if is_narrative_scene else "输出 2.0 合法结构，并用给定来源 ID 替换示例：") +
                     '{"schema_version":"2.0","kind":"explain","title":"标题","lead":"引导语","blocks":[{"schema_version":"1.0",'
                     '"block_id":"block-1","component":"callout","text":"内容","pedagogical_role":"explain",'
@@ -118,10 +130,20 @@ def compose_courseware_scene(
             # not a fragile reconstruction of the renderer contract.
             rendered = deepcopy(deterministic_scene)
             rendered.update({
-                "title": spec.title,
+                "title": _format_cover_title(spec.title) if is_cover_scene else spec.title,
                 "lead": spec.lead,
                 "conclusion": spec.conclusion,
+                "llm_enriched": True,
             })
+            if is_cover_scene and getattr(spec, "learning_overview", ""):
+                overview = _strip_learning_overview_label(spec.learning_overview)
+                rendered["blocks"] = list(rendered.get("blocks") or [])
+                if rendered["blocks"]:
+                    rendered["blocks"][0] = f"学习概述：{overview}"
+                for block in rendered.get("component_blocks") or []:
+                    if isinstance(block, dict):
+                        block["text"] = f"学习概述：{overview}"
+                        break
             if is_step_scene:
                 rendered["steps"] = list(spec.steps)
             source_block_ids = list(rendered.get("source_block_ids") or [])

@@ -110,12 +110,13 @@ class ClaimJudgementCandidate(StrictClaimModel):
 
     @model_validator(mode="after")
     def validate_verdict_evidence(self) -> "ClaimJudgementCandidate":
+        # Keep the LLM envelope permissive enough for the workflow layer to
+        # apply deterministic, claim-type-aware normalization. The final
+        # materializer remains fail-closed for factual claims and evidence
+        # allowlists; rejecting here would turn a recoverable provider shape
+        # mismatch into an avoidable whole-resource failure.
         if len(self.evidence_ids) != len(set(self.evidence_ids)):
             raise ValueError("evidence_ids must be unique")
-        if self.verdict in {ClaimVerdict.SUPPORTED, ClaimVerdict.CONTRADICTED} and not self.evidence_ids:
-            raise ValueError("supported/contradicted verdict requires evidence_ids")
-        if self.verdict in {ClaimVerdict.NOT_IN_EVIDENCE, ClaimVerdict.NON_FACTUAL} and self.evidence_ids:
-            raise ValueError("not_in_evidence/non_factual verdict forbids evidence_ids")
         if not math.isfinite(self.confidence):
             raise ValueError("confidence must be finite")
         return self
@@ -223,7 +224,26 @@ def materialize_claims(
     records: list[ClaimRecord] = []
     for index, candidate in enumerate(candidates):
         if resource_content[candidate.source_start:candidate.source_end] != candidate.source_text:
-            raise ValueError(f"claim source span mismatch at index {index}")
+            # Models reliably return an exact source substring more often than
+            # a Python character offset (especially for Chinese punctuation
+            # and Markdown). The server remains the authority for offsets:
+            # accept only an exact substring and deterministically rebase it
+            # to the occurrence nearest the requested position.
+            positions: list[int] = []
+            search_from = 0
+            while True:
+                position = resource_content.find(candidate.source_text, search_from)
+                if position < 0:
+                    break
+                positions.append(position)
+                search_from = position + 1
+            if not positions:
+                raise ValueError(f"claim source text is not an exact resource substring at index {index}")
+            source_start = min(positions, key=lambda value: abs(value - candidate.source_start))
+            candidate = candidate.model_copy(update={
+                "source_start": source_start,
+                "source_end": source_start + len(candidate.source_text),
+            })
         unknown_evidence = set(candidate.source_evidence_ids) - allowed_evidence_ids
         if unknown_evidence:
             raise ValueError(f"claim references unknown evidence: {sorted(unknown_evidence)}")
@@ -281,6 +301,10 @@ def materialize_judgements(
         unknown_evidence = set(candidate.evidence_ids) - allowed_evidence_ids
         if unknown_evidence:
             raise ValueError(f"judgement references unknown evidence: {sorted(unknown_evidence)}")
+        if candidate.verdict in {ClaimVerdict.SUPPORTED, ClaimVerdict.CONTRADICTED} and not candidate.evidence_ids:
+            raise ValueError("supported/contradicted verdict requires evidence_ids")
+        if candidate.verdict in {ClaimVerdict.NOT_IN_EVIDENCE, ClaimVerdict.NON_FACTUAL} and candidate.evidence_ids:
+            raise ValueError("not_in_evidence/non_factual verdict forbids evidence_ids")
         if claim.claim_type == ClaimType.FACTUAL and candidate.verdict == ClaimVerdict.NON_FACTUAL:
             raise ValueError("factual claim cannot receive non_factual verdict")
         if claim.claim_type != ClaimType.FACTUAL and candidate.verdict != ClaimVerdict.NON_FACTUAL:

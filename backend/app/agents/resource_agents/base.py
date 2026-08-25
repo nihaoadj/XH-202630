@@ -95,6 +95,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
             "topic": context.topic,
             "resource_spec_id": spec.resource_spec_id,
             "resource_type": spec.resource_type,
+            "display_title": f"{context.topic} · {spec.resource_type}",
             "learning_objective": spec.learning_objective,
             "knowledge_points": spec.knowledge_points,
             "difficulty": spec.difficulty,
@@ -135,12 +136,14 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         output_schema: type[ArtifactOutputT],
         representation: ResourceRepresentation,
         max_output_tokens: int | None = None,
+        request_timeout_seconds: float | None = None,
     ) -> LLMCallResult[ArtifactOutputT]:
         self._ensure_route(spec)
         representation_spec = self._representation_spec(spec, representation)
         option_node = {
             ("TextResourceAgent", "text"): "text_resource_agent",
             ("AssessmentAgent", "text"): "assessment_agent",
+            ("PracticeGuideAgent", "text"): "practice_guide_agent",
         }.get((self.agent_name, representation), "generator")
         options = llm_gateway.options_for(option_node, temperature=self.temperature)
         requested_budget = max_output_tokens or representation_spec.max_output_tokens
@@ -151,6 +154,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         # text representation limit.
         options = options.model_copy(update={
             "max_output_tokens": max(requested_budget, options.max_output_tokens),
+            **({"request_timeout_seconds": request_timeout_seconds} if request_timeout_seconds is not None else {}),
         })
         return llm_gateway.invoke_structured(
             messages=messages,

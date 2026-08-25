@@ -49,7 +49,9 @@ CHECKLIST_PAYLOAD = {
     "recall_questions": [{"local_id": "recall-1", "prompt": "说明证据范围。", "reference_answer": "仅使用冻结 Evidence。", "explanation": "答案对应当前证据范围。", "evidence_ids": ["ev-new-resource-type"], "pass_criteria": "说明范围。"}],
     "distinction_questions": [{"local_id": "distinction-1", "statement": "可使用证据外结论。", "truth_value": False, "correction": "只能使用冻结 Evidence。", "explanation": "证据外结论没有依据。", "evidence_ids": ["ev-new-resource-type"], "pass_criteria": "判断并说明。"}],
     "example_recognition": None,
-    "omitted_slots": [{"local_id": "recall-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "recall-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "example-1", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"}],
+    "omitted_slots": [{"local_id": "recall-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "recall-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "recall-4", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-4", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "example-1", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"}, {"local_id": "example-2", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"}],
+        "knowledge_summary": "受控检索必须以冻结 Evidence 为唯一边界：先确认可用证据及其适用范围，再组织结论，并在作答前核对每项判断是否能够回连到对应证据。复习时应同时检查核心概念、关键条件和常见误区；只要结论超出证据内容、遗漏前提或无法定位来源，就应回到原文重新核对后再给出答案。",
+    "summary_evidence_ids": ["ev-new-resource-type"],
 }
 
 
@@ -121,6 +123,8 @@ def test_new_resource_agents_generate_evidence_scoped_markdown(
     assert artifact.metadata.source_evidence_ids == spec.evidence_ids
     assert artifact.content_text.startswith("# ")
     assert required_section in artifact.content_text
+    if resource_type == "复习清单":
+        assert "### 节点知识小结" in artifact.content_text
     assert artifact.knowledge_points == spec.knowledge_points
 
 
@@ -284,13 +288,22 @@ def test_practice_guide_prompt_forbids_literal_secret_examples():
 
 
 def test_practice_guide_review_does_not_block_generated_secret_like_examples():
+    package = {
+        "schema_version": "3.0", "title": "受控实操",
+        "preparation": {"phase_id": "prepare", "goal": "准备环境", "items": ["准备环境"], "evidence_ids": ["ev-new-resource-type"]},
+        "practice": {"phase_id": "practice", "goal": "完成操作", "steps": [{"step_id": "step-1", "title": "执行", "instruction_text": "按步骤执行。", "code_blocks": [], "verification": "检查结果", "evidence_ids": ["ev-new-resource-type"]}]},
+        "verification": {"phase_id": "verify", "goal": "检查结果", "checklist": ["完成检查"], "evidence_ids": ["ev-new-resource-type"]},
+        "reflection": {"phase_id": "reflect", "goal": "复盘结果", "summary": "复盘结果。", "evidence_ids": ["ev-new-resource-type"]},
+    }
     placeholder = SimpleNamespace(
         resource_type="实操指南",
-        content_text="# 示例\n\n准备\n实践步骤\n检查清单\n常见问题\n复盘建议\n\nOPENAI_API_KEY=\"YOUR_API_KEY\"",
+        content_text="# 示例\n\n准备阶段\n实操阶段\n验证阶段\n复盘阶段\n\nOPENAI_API_KEY=\"YOUR_API_KEY\"",
+        practice_guide_payload=package,
     )
     real_secret = SimpleNamespace(
         resource_type="实操指南",
-        content_text="# 示例\n\n准备\n实践步骤\n检查清单\n常见问题\n复盘建议\n\napi_key=\"sk-abcdefghijklmnopqrstuvwx\"",
+        content_text="# 示例\n\n准备阶段\n实操阶段\n验证阶段\n复盘阶段\n\napi_key=\"sk-abcdefghijklmnopqrstuvwx\"",
+        practice_guide_payload=package,
     )
 
     assert _deterministic_practice_guide_review(placeholder)["decision"] == "approve"

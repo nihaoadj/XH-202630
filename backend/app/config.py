@@ -86,9 +86,14 @@ class Settings(BaseSettings):
         normalized = str(value).strip()
         return normalized or None
     llm_request_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
+    # Claim audits inspect long generated resources and need a separate,
+    # bounded budget instead of inheriting the generic auxiliary-node limit.
+    claim_request_timeout_seconds: float = Field(default=300.0, gt=0, le=600)
     # Resource-oriented runs include generation and review/claim evaluation.
     llm_workflow_timeout_seconds: float = Field(default=1200.0, gt=0, le=1800)
     llm_max_attempts: int = Field(default=2, ge=1, le=3)
+    claim_max_attempts: int = Field(default=3, ge=1, le=3)
+    claim_schema_repair_attempts: int = Field(default=2, ge=1, le=3)
     # Resource generation produces the user-facing artifact. It receives one
     # additional bounded recovery attempt for empty provider responses, while
     # supporting nodes (review/diagnosis/claim checks) retain the global limit.
@@ -96,6 +101,7 @@ class Settings(BaseSettings):
     llm_retry_base_delay_seconds: float = Field(default=0.5, ge=0, le=30)
     llm_retry_max_delay_seconds: float = Field(default=3.0, ge=0, le=60)
     llm_max_output_tokens: int = Field(default=4096, ge=256, le=65536)
+    claim_max_output_tokens: int = Field(default=16384, ge=2048, le=65536)
     # Kept for compatibility with existing deployments.  New resource agents
     # use the explicit per-resource settings below.
     llm_generator_max_output_tokens: int = Field(default=8192, ge=256, le=65536)
@@ -119,6 +125,8 @@ class Settings(BaseSettings):
     # ceiling while allowing an independent lecture-specific setting later.
     text_resource_request_timeout_seconds: float = Field(default=240.0, gt=0, le=600)
     text_resource_max_output_tokens: int = Field(default=32768, ge=4096, le=65536)
+    practice_guide_request_timeout_seconds: float = Field(default=300.0, gt=0, le=600)
+    practice_guide_max_output_tokens: int = Field(default=49152, ge=8192, le=65536)
     llm_structured_output_mode: str = "auto"
     tutor_llm_timeout_seconds: float = Field(default=25.0, gt=0, le=120)
     tutor_max_output_tokens: int = Field(default=2048, ge=256, le=8192)
@@ -286,6 +294,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "llm_request_timeout_seconds",
+        "claim_request_timeout_seconds",
         "llm_workflow_timeout_seconds",
         "tutor_llm_timeout_seconds",
         mode="before",
@@ -298,6 +307,7 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_LLM_TIMEOUT") from None
         maximum = {
             "llm_request_timeout_seconds": 300,
+            "claim_request_timeout_seconds": 600,
             "llm_workflow_timeout_seconds": 1800,
             "tutor_llm_timeout_seconds": 120,
         }[info.field_name]
@@ -307,6 +317,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "llm_max_attempts",
+        "claim_max_attempts",
         "llm_resource_generation_max_attempts",
         "llm_retry_base_delay_seconds",
         "llm_retry_max_delay_seconds",
@@ -318,7 +329,7 @@ class Settings(BaseSettings):
             normalized = float(value)
         except (TypeError, ValueError):
             raise ValueError("CFG_INVALID_LLM_RETRY_POLICY") from None
-        if info.field_name in {"llm_max_attempts", "llm_resource_generation_max_attempts"}:
+        if info.field_name in {"llm_max_attempts", "claim_max_attempts", "llm_resource_generation_max_attempts"}:
             if not normalized.is_integer() or not 1 <= normalized <= 3:
                 raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
         else:
@@ -329,9 +340,11 @@ class Settings(BaseSettings):
 
     @field_validator(
         "llm_max_output_tokens",
+        "claim_max_output_tokens",
         "llm_generator_max_output_tokens",
         "llm_resource_generator_max_input_tokens",
         "llm_resource_generator_max_output_tokens",
+        "practice_guide_max_output_tokens",
         "tutor_max_output_tokens",
         mode="before",
     )
@@ -352,7 +365,7 @@ class Settings(BaseSettings):
             1024
             if info.field_name == "llm_resource_generator_max_input_tokens"
             else 8192
-            if info.field_name == "llm_resource_generator_max_output_tokens"
+            if info.field_name in {"llm_resource_generator_max_output_tokens", "practice_guide_max_output_tokens"}
             else 256
         )
         if not normalized.is_integer() or not lower_bound <= normalized <= upper_bound:
@@ -367,7 +380,10 @@ class Settings(BaseSettings):
         if not self.chroma_collection_prefix.strip():
             self.chroma_collection_prefix = "kb"
 
-        if self.llm_workflow_timeout_seconds <= self.llm_request_timeout_seconds:
+        if self.llm_workflow_timeout_seconds <= max(
+            self.llm_request_timeout_seconds,
+            self.claim_request_timeout_seconds,
+        ):
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         if self.workflow_run_lease_seconds < self.llm_workflow_timeout_seconds:
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")

@@ -100,6 +100,25 @@ def test_create_generation_job_and_query_status(monkeypatch):
     assert stored.run_id == run_id
 
 
+def test_create_generation_job_persists_claim_check_choice(monkeypatch):
+    client, _ = _app(monkeypatch)
+
+    response = client.post(
+        "/api/generate/jobs",
+        json=GenerateRequest(
+            learner_id="job_001",
+            topic="关闭 Claim 强化审查",
+            include_claim_check=False,
+            resource_types=["讲义"],
+        ).model_dump(mode="json"),
+    )
+
+    assert response.status_code == 200
+    status = client.get(f"/api/generate/jobs/{response.json()['run_id']}")
+    assert status.status_code == 200
+    assert status.json()["request_payload"]["include_claim_check"] is False
+
+
 def test_create_generation_job_returns_503_when_dependencies_not_ready(monkeypatch):
     client, _ = _app(monkeypatch)
     monkeypatch.setattr(

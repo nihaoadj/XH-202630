@@ -34,6 +34,7 @@ class LearningIntent(str, Enum):
 
     REINFORCE_WEAKNESS = "reinforce_weakness"
     LEARN_NEW_KNOWLEDGE = "learn_new_knowledge"
+    LEARN_NEW_AND_REINFORCE = "learn_new_and_reinforce"
 
 
 class CurriculumProgressStatus(str, Enum):
@@ -213,7 +214,7 @@ class NextGenerationOptionsV1(StrictMasteryModel):
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     reinforce_weakness: list[NextGenerationCandidateV1] = Field(default_factory=list)
     learn_new_knowledge: list[NextGenerationCandidateV1] = Field(default_factory=list)
-    recommended_node_ids: list[str] = Field(default_factory=list, max_length=3)
+    recommended_node_ids: list[str] = Field(default_factory=list, max_length=2)
     curriculum_progress: CurriculumProgressSummaryV1 | None = None
     tier_progress: LearnerTierProgressV1 | None = None
     tier_completion: bool = False

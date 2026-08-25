@@ -292,6 +292,147 @@ class GeneratedArtifact(BaseModel):
         }
 
 
+class PracticeGuideStepV2(StrictLLMOutput):
+    """One source-bound, learner-visible operation in a practice guide."""
+
+    step_id: str = Field(pattern=r"^step-[1-8]$")
+    title: str = Field(min_length=1, max_length=120)
+    goal: str = Field(min_length=1, max_length=400)
+    actions: List[str] = Field(min_length=1, max_length=6)
+    verification: str = Field(min_length=1, max_length=500)
+    common_mistakes: List[str] = Field(default_factory=list, max_length=3)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+
+    @field_validator("actions", "common_mistakes", "evidence_ids")
+    @classmethod
+    def validate_nonblank_unique_values(cls, values: List[str]) -> List[str]:
+        if any(not value.strip() for value in values) or len(values) != len(set(values)):
+            raise ValueError("practice step lists must be nonblank and unique")
+        return values
+
+
+class PracticeGuidePackageV2(StrictLLMOutput):
+    """Canonical JSON contract rendered into the public Markdown guide."""
+
+    schema_version: Literal["2.0"] = "2.0"
+    title: str = Field(min_length=1, max_length=160)
+    preparation: List[str] = Field(min_length=1, max_length=6)
+    steps: List[PracticeGuideStepV2] = Field(min_length=1, max_length=8)
+    completion_checklist: List[str] = Field(min_length=1, max_length=8)
+    troubleshooting: List[str] = Field(default_factory=list, max_length=5)
+    reflection: str = Field(min_length=1, max_length=600)
+
+    @field_validator("preparation", "completion_checklist", "troubleshooting")
+    @classmethod
+    def validate_nonblank_rows(cls, values: List[str]) -> List[str]:
+        if any(not value.strip() for value in values) or len(values) != len(set(values)):
+            raise ValueError("practice package lists must be nonblank and unique")
+        return values
+
+    @model_validator(mode="after")
+    def validate_step_ids(self) -> "PracticeGuidePackageV2":
+        step_ids = [item.step_id for item in self.steps]
+        if step_ids != [f"step-{index}" for index in range(1, len(self.steps) + 1)]:
+            raise ValueError("practice steps must use consecutive step IDs starting at step-1")
+        return self
+
+
+class PracticeGuidePreparationPhaseV3(StrictLLMOutput):
+    phase_id: Literal["prepare"] = "prepare"
+    goal: str = Field(min_length=1, max_length=400)
+    items: List[str] = Field(min_length=1, max_length=6)
+    evidence_ids: List[str] = Field(min_length=1, max_length=6)
+
+
+class PracticeGuideCodeBlockV3(StrictLLMOutput):
+    language: str = Field(min_length=1, max_length=40)
+    code: str = Field(min_length=1, max_length=8000)
+    purpose: str = Field(min_length=1, max_length=400)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+
+    @field_validator("evidence_ids")
+    @classmethod
+    def validate_evidence_ids(cls, values: List[str]) -> List[str]:
+        if any(not value.strip() for value in values) or len(values) != len(set(values)):
+            raise ValueError("practice code evidence IDs must be nonblank and unique")
+        return values
+
+
+class PracticeGuideStepV3(StrictLLMOutput):
+    step_id: str = Field(pattern=r"^step-[1-8]$")
+    title: str = Field(min_length=1, max_length=120)
+    # Exactly three learner-content fields: instruction, code, and verification.
+    instruction_text: str = Field(min_length=1, max_length=1200)
+    code_blocks: List[PracticeGuideCodeBlockV3] = Field(default_factory=list, max_length=3)
+    verification: str = Field(min_length=1, max_length=500)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+
+    @field_validator("evidence_ids")
+    @classmethod
+    def validate_nonblank_unique_values(cls, values: List[str]) -> List[str]:
+        if any(not value.strip() for value in values) or len(values) != len(set(values)):
+            raise ValueError("practice step lists must be nonblank and unique")
+        return values
+
+
+class PracticeGuideExecutionPhaseV3(StrictLLMOutput):
+    phase_id: Literal["practice"] = "practice"
+    goal: str = Field(min_length=1, max_length=400)
+    steps: List[PracticeGuideStepV3] = Field(min_length=1, max_length=8)
+
+
+class PracticeGuideVerificationPhaseV3(StrictLLMOutput):
+    phase_id: Literal["verify"] = "verify"
+    goal: str = Field(min_length=1, max_length=400)
+    checklist: List[str] = Field(min_length=1, max_length=8)
+    evidence_ids: List[str] = Field(min_length=1, max_length=6)
+
+
+class PracticeGuideReflectionPhaseV3(StrictLLMOutput):
+    phase_id: Literal["reflect"] = "reflect"
+    goal: str = Field(min_length=1, max_length=400)
+    summary: str = Field(min_length=1, max_length=600)
+    evidence_ids: List[str] = Field(min_length=1, max_length=6)
+
+
+class PracticeGuidePackageV3(StrictLLMOutput):
+    """Fixed four-phase source contract for guides and courseware."""
+
+    schema_version: Literal["3.0"] = "3.0"
+    title: str = Field(min_length=1, max_length=160)
+    preparation: PracticeGuidePreparationPhaseV3
+    practice: PracticeGuideExecutionPhaseV3
+    verification: PracticeGuideVerificationPhaseV3
+    reflection: PracticeGuideReflectionPhaseV3
+
+    @model_validator(mode="after")
+    def validate_structure(self) -> "PracticeGuidePackageV3":
+        step_ids = [item.step_id for item in self.practice.steps]
+        if step_ids != [f"step-{index}" for index in range(1, len(self.practice.steps) + 1)]:
+            raise ValueError("practice steps must use consecutive step IDs starting at step-1")
+        for values in (
+            self.preparation.items, self.preparation.evidence_ids,
+            self.verification.checklist, self.verification.evidence_ids,
+            self.reflection.evidence_ids,
+        ):
+            if any(not value.strip() for value in values) or len(values) != len(set(values)):
+                raise ValueError("practice phase lists must be nonblank and unique")
+        content = "\n".join([
+            self.preparation.goal, *self.preparation.items,
+            self.practice.goal,
+            *(value for step in self.practice.steps for value in (
+                step.title, step.instruction_text, step.verification,
+                *(item.purpose for item in step.code_blocks), *(item.code for item in step.code_blocks),
+            )),
+            self.verification.goal, *self.verification.checklist,
+            self.reflection.goal, self.reflection.summary,
+        ])
+        forbidden_resource_labels = ("分阶测试题", "复习清单", "案例分析", "讲义")
+        if any(label in content for label in forbidden_resource_labels):
+            raise ValueError("practice guide must not embed another learning-resource type")
+        return self
+
+
 class AssessmentOption(StrictLLMOutput):
     option_id: str = Field(pattern=r"^[A-Z][A-Z0-9]{0,3}$")
     text: str = Field(min_length=1, max_length=400)
@@ -439,7 +580,7 @@ class AssessmentScopeReviewV1(StrictLLMOutput):
 
 
 class ReviewRecallQuestionV2(StrictLLMOutput):
-    local_id: str = Field(pattern=r"^recall-[1-3]$")
+    local_id: str = Field(pattern=r"^recall-[1-4]$")
     prompt: str = Field(min_length=1, max_length=800)
     reference_answer: str = Field(min_length=1, max_length=1600)
     explanation: str = Field(min_length=1, max_length=1200)
@@ -449,7 +590,7 @@ class ReviewRecallQuestionV2(StrictLLMOutput):
 
 
 class ReviewDistinctionQuestionV2(StrictLLMOutput):
-    local_id: str = Field(pattern=r"^distinction-[1-3]$")
+    local_id: str = Field(pattern=r"^distinction-[1-4]$")
     statement: str = Field(min_length=1, max_length=800)
     truth_value: bool
     correction: str = Field(min_length=1, max_length=1000)
@@ -460,7 +601,7 @@ class ReviewDistinctionQuestionV2(StrictLLMOutput):
 
 
 class ReviewExampleRecognitionQuestionV2(StrictLLMOutput):
-    local_id: Literal["example-1"] = "example-1"
+    local_id: str = Field(pattern=r"^example-[1-2]$", default="example-1")
     candidate_a: str = Field(min_length=1, max_length=600)
     candidate_b: str = Field(min_length=1, max_length=600)
     positive_candidate: Literal["A", "B"]
@@ -472,7 +613,7 @@ class ReviewExampleRecognitionQuestionV2(StrictLLMOutput):
 
 
 class ReviewOmittedSlotV2(StrictLLMOutput):
-    local_id: str = Field(pattern=r"^(recall|distinction)-[1-3]$|^example-1$")
+    local_id: str = Field(pattern=r"^(recall|distinction)-[1-4]$|^example-[1-2]$")
     reason: Literal["INSUFFICIENT_DISTINCT_EVIDENCE", "NO_EXPLICIT_CONCEPT_BOUNDARY"]
 
 
@@ -480,25 +621,38 @@ class ReviewPracticeNodeBlockV2(StrictLLMOutput):
     schema_version: Literal["2.0"] = "2.0"
     skill_node_id: str = Field(min_length=1, max_length=128)
     skill_node_name: str = Field(min_length=1, max_length=160)
-    recall_questions: List[ReviewRecallQuestionV2] = Field(min_length=1, max_length=3)
-    distinction_questions: List[ReviewDistinctionQuestionV2] = Field(min_length=1, max_length=3)
+    recall_questions: List[ReviewRecallQuestionV2] = Field(min_length=1, max_length=4)
+    distinction_questions: List[ReviewDistinctionQuestionV2] = Field(min_length=1, max_length=4)
+    # Keep the singular field for backward compatibility with persisted V2
+    # packages; new generation uses the list to support the expanded quota.
     example_recognition: ReviewExampleRecognitionQuestionV2 | None = None
-    omitted_slots: List[ReviewOmittedSlotV2] = Field(default_factory=list, max_length=5)
+    example_recognition_questions: List[ReviewExampleRecognitionQuestionV2] = Field(default_factory=list, max_length=2)
+    omitted_slots: List[ReviewOmittedSlotV2] = Field(default_factory=list, max_length=10)
+    knowledge_summary: str = Field(min_length=100, max_length=1400)
+    summary_evidence_ids: List[str] = Field(min_length=1, max_length=3)
     evidence_ids: List[str] = Field(min_length=1, max_length=20)
 
     @model_validator(mode="after")
     def validate_slots(self) -> "ReviewPracticeNodeBlockV2":
         actual = [item.local_id for item in self.recall_questions + self.distinction_questions]
+        examples = list(self.example_recognition_questions)
         if self.example_recognition:
-            actual.append(self.example_recognition.local_id)
+            examples.append(self.example_recognition)
+        actual.extend(item.local_id for item in examples)
         omitted = [item.local_id for item in self.omitted_slots]
         if len(actual) != len(set(actual)) or len(omitted) != len(set(omitted)) or set(actual) & set(omitted):
             raise ValueError("review question and omitted slot IDs must be unique")
-        expected = {"recall-1", "recall-2", "recall-3", "distinction-1", "distinction-2", "distinction-3", "example-1"}
+        expected = {
+            *(f"recall-{index}" for index in range(1, 5)),
+            *(f"distinction-{index}" for index in range(1, 5)),
+            *(f"example-{index}" for index in range(1, 3)),
+        }
         if set(actual) | set(omitted) != expected:
             raise ValueError("review node must account for every fixed slot")
         if len(self.distinction_questions) >= 2 and len({item.truth_value for item in self.distinction_questions}) != 2:
             raise ValueError("multiple distinction questions require both true and false statements")
+        if not set(self.summary_evidence_ids) <= set(self.evidence_ids):
+            raise ValueError("summary evidence must be included in node evidence")
         return self
 
 

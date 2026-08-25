@@ -77,6 +77,10 @@ class Container(containers.DeclarativeContainer):
         default_options=llm_call_options,
         generator_max_output_tokens=config.llm_generator_max_output_tokens,
         resource_generator_max_output_tokens=config.llm_resource_generator_max_output_tokens,
+        claim_max_attempts=config.claim_max_attempts,
+        claim_max_output_tokens=config.claim_max_output_tokens,
+        claim_request_timeout_seconds=config.claim_request_timeout_seconds,
+        claim_schema_repair_attempts=config.claim_schema_repair_attempts,
     )
 
     vector_store = providers.Singleton(get_vector_store)
@@ -269,6 +273,7 @@ class Container(containers.DeclarativeContainer):
         mastery_service=mastery_service,
         claim_repo=claim_repository,
         audit_repo=audit_repository,
+        diagnosis_repo=diagnosis_repository,
     )
     tutor_context_builder = providers.Singleton(
         TutorContextBuilder,

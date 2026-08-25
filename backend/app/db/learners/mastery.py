@@ -36,15 +36,18 @@ def _stable_id(prefix: str, *parts: object) -> str:
 def _confidence(count: int, distinct_sources: int, prior: float | None) -> AbilityConfidence:
     if count >= 3 and distinct_sources >= 2:
         return AbilityConfidence.HIGH
-    if count >= 1:
+    if count >= 2:
         return AbilityConfidence.MEDIUM
-    return AbilityConfidence.LOW if prior is not None else AbilityConfidence.NONE
+    return AbilityConfidence.LOW if count >= 1 or prior is not None else AbilityConfidence.NONE
 
 
-def _objective_status(score: float) -> AbilityStatus:
+def _objective_status(score: float, objective_count: int) -> AbilityStatus:
     if score < 0.60:
         return AbilityStatus.WEAK
-    if score <= 0.85:
+    # A single strong observation is useful evidence, but it is not enough to
+    # claim durable mastery.  The second independent server-scored source is
+    # enforced by the append-only evidence count.
+    if score <= 0.85 or objective_count < 2:
         return AbilityStatus.LEARNING
     return AbilityStatus.MASTERED
 
@@ -75,8 +78,8 @@ def _transition(
         else:
             mastery = 0.7 * float(mastery or 0.0) + 0.3 * observed
         mastery = round(mastery, 6)
-        status = _objective_status(mastery)
         objective_count += 1
+        status = _objective_status(mastery, objective_count)
         if evidence.source_type == AbilityEvidenceSource.LEARNING_ATTEMPT:
             attempt_count += 1
 

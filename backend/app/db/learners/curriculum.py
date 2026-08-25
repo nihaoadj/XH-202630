@@ -111,9 +111,21 @@ class MemoryCurriculumRepository(BaseCurriculumRepository):
                     continue
                 row = self._rows[key]
                 if count > row.published_resource_count:
+                    # A follow-up resource is often published after feedback.
+                    # Preserve a verified outcome instead of regressing a weak
+                    # node from "reinforcement_due" to "exposed".
+                    next_status = (
+                        CurriculumProgressStatus.EXPOSED
+                        if row.progress_status in {
+                            CurriculumProgressStatus.UNPLANNED,
+                            CurriculumProgressStatus.SCHEDULED,
+                            CurriculumProgressStatus.EXPOSED,
+                            CurriculumProgressStatus.VERIFICATION_PENDING,
+                        }
+                        else row.progress_status
+                    )
                     self._update(key, published_resource_count=count,
-                                 progress_status=CurriculumProgressStatus.EXPOSED,
-                                 last_published_at=now)
+                                 progress_status=next_status, last_published_at=now)
             return self.list_nodes(learner_id, knowledge_base_id)
 
     def record_verification(self, learner_id, knowledge_base_id, *, attempt_id, scores, now):
@@ -200,7 +212,9 @@ class SQLCurriculumRepository(BaseCurriculumRepository):
             for row in rows:
                 count = published_counts.get(row.skill_node_id, 0)
                 if count > (row.published_resource_count or 0):
-                    row.published_resource_count = count; row.progress_status = "exposed"
+                    row.published_resource_count = count
+                    if row.progress_status in {"unplanned", "scheduled", "exposed", "verification_pending"}:
+                        row.progress_status = "exposed"
                     row.last_published_at = now; row.row_version += 1
             db.commit()
         return self.list_nodes(learner_id, knowledge_base_id)

@@ -321,6 +321,20 @@
               </el-checkbox-group>
             </el-form-item>
 
+            <el-form-item label="Claim 强化审查">
+              <div class="claim-review-control">
+                <el-switch
+                  v-model="includeClaimCheck"
+                  active-text="开启"
+                  inactive-text="关闭"
+                />
+                <div>
+                  <strong>对关键事实逐条核对来源证据</strong>
+                  <p>开启后会在常规审核通过后执行 Claim 提取、证据判定和必要的定向修订，生成耗时会相应增加。</p>
+                </div>
+              </div>
+            </el-form-item>
+
             <el-form-item label="补充要求">
               <el-input
                 v-model="supplementalRequirements"
@@ -365,6 +379,7 @@ const submittingProfile = ref(false)
 const submittingDiagnosis = ref(false)
 const submittingGeneration = ref(false)
 const selectedResourceTypes = ref(['讲义', '实操指南', '分阶测试题'])
+const includeClaimCheck = ref(true)
 const supplementalRequirements = ref('')
 
 const form = reactive({})
@@ -651,6 +666,7 @@ async function submitDiagnosis() {
 }
 
 async function submitGeneration() {
+  if (submittingGeneration.value) return
   if (!selectedResourceTypes.value.length) {
     ElMessage.warning('请至少选择一种资源类型')
     return
@@ -667,6 +683,7 @@ async function submitGeneration() {
       topic: generatedTopic.value,
       diagnostic_result_id: diagnosisResult.value?.diagnostic_result_id,
       resource_types: selectedResourceTypes.value,
+      include_claim_check: includeClaimCheck.value,
       constraints: {
         supplemental_requirements: supplementalRequirements.value.trim(),
       },
@@ -682,7 +699,11 @@ async function submitGeneration() {
     })
   } catch (error) {
     console.error(error)
-    ElMessage.error(error?.response?.data?.message || '生成任务提交失败')
+    ElMessage({
+      message: error?.response?.data?.message || '生成任务提交失败',
+      type: 'error',
+      grouping: true,
+    })
   } finally {
     submittingGeneration.value = false
   }
@@ -1612,6 +1633,35 @@ onMounted(async () => {
 .resource-type-grid :deep(.el-checkbox.is-checked) {
   border-color: #4a90ff;
   background: #f0f6ff;
+}
+
+.claim-review-control {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d7e5f3;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f6fbff, #f8fcfb);
+}
+
+.claim-review-control :deep(.el-switch) {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.claim-review-control strong {
+  display: block;
+  color: #203452;
+  font-size: 14px;
+}
+
+.claim-review-control p {
+  margin: 5px 0 0;
+  color: #65758d;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .action-row { padding-top: 20px; }

@@ -42,6 +42,7 @@ def _bundle_hash(snapshots: list[dict[str, Any]]) -> str:
             "has_verifiable_exercises": frozen.has_verifiable_exercises,
             "source_block_ids": list(frozen.source_block_ids),
             "review_practice_payload_hash": raw.get("review_practice_payload_hash"),
+            "practice_guide_payload_hash": raw.get("practice_guide_payload_hash"),
         })
     encoded = json.dumps(sorted(payload, key=lambda item: item["resource_id"]), ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -76,6 +77,17 @@ def _practice_step_groups(
         return [
             (str(step["title"]).strip(), tuple(str(block_id) for block_id in step["source_block_ids"]))
             for step in structured_steps
+        ]
+    package = source.get("practice_guide_payload")
+    if isinstance(package, dict) and package.get("schema_version") == "3.0":
+        blocks_by_step = {
+            str(block.get("practice_step_id")): str(block.get("block_id"))
+            for block in source.get("blocks") or [] if block.get("practice_step_id") and block.get("block_id")
+        }
+        return [
+            (str(step.get("title") or step.get("step_id") or "操作步骤"), (blocks_by_step[str(step["step_id"])],))
+            for step in (package.get("practice") or {}).get("steps") or []
+            if isinstance(step, dict) and str(step.get("step_id") or "") in blocks_by_step
         ]
     rows = [
         (str(block.get("block_id") or ""), str(block.get("text") or "").strip())
@@ -258,28 +270,56 @@ def build_learning_design(
             str(block.get("review_question_id")): str(block.get("block_id"))
             for block in review_checklist.get("blocks") or [] if block.get("review_question_id") and block.get("block_id")
         }
+        summary_blocks = {
+            str(block.get("skill_node_id")): str(block.get("block_id"))
+            for block in review_checklist.get("blocks") or []
+            if block.get("kind") == "review_summary" and block.get("skill_node_id") and block.get("block_id")
+        }
         overview_blocks = tuple(question_blocks.values())[:1] or source_blocks(review_checklist, limit=1)
+
+        def chunks(items: list[dict[str, Any]], size: int = 2) -> list[list[dict[str, Any]]]:
+            return [items[start:start + size] for start in range(0, len(items), size)] or [[]]
+
+        def example_questions(node: dict[str, Any]) -> list[dict[str, Any]]:
+            questions = [item for item in (node.get("example_recognition_questions") or []) if isinstance(item, dict)]
+            if questions:
+                return questions
+            legacy = node.get("example_recognition")
+            return [legacy] if isinstance(legacy, dict) else []
+
         add_scene(scene_id="scene:review:overview", kind="intro", page_role="review_overview", recipe="review_overview",
                   sources=[review_checklist], key_question="如何使用闭卷回忆、误区辨析与正反例判断完成复习？",
                   purpose="review-orient", zones=("route", "node_map", "self_report"),
                   components=("review_overview",), min_chars=80, max_chars=420, block_ids=overview_blocks)
         for index, node in enumerate(package.get("node_blocks") or [], 1):
             node_id = str(node.get("skill_node_id") or index)
-            recall = node.get("recall_questions") or []
-            distinction = node.get("distinction_questions") or []
-            example = node.get("example_recognition")
-            node_blocks = tuple(question_blocks.get(str(question.get("question_id"))) for question in [*recall, *distinction, example]
-                                if isinstance(question, dict) and question_blocks.get(str(question.get("question_id")))) or overview_blocks
+            recall = [item for item in (node.get("recall_questions") or []) if isinstance(item, dict)]
+            distinction = [item for item in (node.get("distinction_questions") or []) if isinstance(item, dict)]
+            examples = example_questions(node)
             prefix = f"scene:review:node:{index}:{node_id}"
-            add_scene(scene_id=f"{prefix}:recall", kind="practice", page_role="review_recall", recipe="review_recall_grid",
-                      sources=[review_checklist], key_question=f"闭卷回忆：{node.get('skill_node_name') or node_id}", purpose="active-recall",
-                      zones=("questions", "reveal", "self_report"), components=("review_recall_card",), min_chars=80, max_chars=1200, block_ids=node_blocks)
-            add_scene(scene_id=f"{prefix}:distinction", kind="practice", page_role="review_distinction", recipe="review_distinction_grid",
-                      sources=[review_checklist], key_question=f"概念辨析：{node.get('skill_node_name') or node_id}", purpose="misconception-calibration",
-                      zones=("statements", "reveal", "self_report"), components=("review_distinction_card",), min_chars=80, max_chars=1200, block_ids=node_blocks)
+            for page_index, page_questions in enumerate(chunks(recall), 1):
+                page_blocks = tuple(question_blocks.get(str(question.get("question_id"))) for question in page_questions
+                                    if question_blocks.get(str(question.get("question_id")))) or overview_blocks
+                add_scene(scene_id=f"{prefix}:recall:{page_index}", kind="practice", page_role="review_recall", recipe="review_recall_grid",
+                          sources=[review_checklist], key_question=f"闭卷回忆（第{page_index}页）：{node.get('skill_node_name') or node_id}", purpose="active-recall",
+                          zones=("questions", "reveal", "self_report"), components=("review_recall_card",), min_chars=80, max_chars=900, block_ids=page_blocks)
+            for page_index, page_questions in enumerate(chunks(distinction), 1):
+                page_blocks = tuple(question_blocks.get(str(question.get("question_id"))) for question in page_questions
+                                    if question_blocks.get(str(question.get("question_id")))) or overview_blocks
+                add_scene(scene_id=f"{prefix}:distinction:{page_index}", kind="practice", page_role="review_distinction", recipe="review_distinction_grid",
+                          sources=[review_checklist], key_question=f"概念辨析（第{page_index}页）：{node.get('skill_node_name') or node_id}", purpose="misconception-calibration",
+                          zones=("statements", "reveal", "self_report"), components=("review_distinction_card",), min_chars=80, max_chars=900, block_ids=page_blocks)
+            example_blocks = tuple(question_blocks.get(str(question.get("question_id"))) for question in examples
+                                   if question_blocks.get(str(question.get("question_id")))) or overview_blocks
             add_scene(scene_id=f"{prefix}:example", kind="recap", page_role="review_example", recipe="review_example_focus",
                       sources=[review_checklist], key_question=f"正反例与边界：{node.get('skill_node_name') or node_id}", purpose="boundary-reflection",
-                      zones=("candidates", "boundary", "node_summary"), components=(("review_example_card",) if example else ("review_reflection",)), min_chars=80, max_chars=1200, block_ids=node_blocks)
+                      zones=("candidates", "boundary", "node_summary"), components=(("review_example_card",) if examples else ("review_reflection",)), min_chars=80, max_chars=900, block_ids=example_blocks)
+            summary = str(node.get("knowledge_summary") or "").strip()
+            summary_block = summary_blocks.get(node_id)
+            if summary and summary_block:
+                add_scene(scene_id=f"{prefix}:summary", kind="recap", page_role="review_node_summary", recipe="review_node_summary",
+                          sources=[review_checklist], key_question=f"知识小结：{node.get('skill_node_name') or node_id}", purpose="node-recap",
+            zones=("core_concept", "boundary", "next_review"), components=("review_node_summary",), min_chars=100, max_chars=1400, block_ids=(summary_block,))
         add_scene(scene_id="scene:review:summary", kind="recap", page_role="summary_action", recipe="recap_dashboard",
                   sources=[review_checklist], key_question="哪些节点已经完成自评，下一步应如何安排？", purpose="review-summary",
                   zones=("completion", "self_report", "next_action"), components=("review_completion",), min_chars=80, max_chars=480, block_ids=overview_blocks)
@@ -289,7 +329,10 @@ def build_learning_design(
         return CoursewareLearningDesign(schema_version="3.0", resource_bundle_hash=_bundle_hash(snapshots), learner_context_hash=context.stable_hash(), objectives=graph,
             storyboard=StoryboardSpec(scenes=tuple(scenes), objective_graph_hash=graph.stable_hash()), resource_usage_plan=tuple(usage_by_resource.values()),
             source_concept_index=SourceConceptIndex(concepts=tuple(SourceConcept(**item) for item in concept_rows)),
-            interaction_quota={"status": "review_practice_v2", "target_scenes": len(scenes), "target_interactions": len(package.get("node_blocks") or []) * 7}, warnings=tuple(warnings))
+            interaction_quota={"status": "review_practice_v3", "target_scenes": len(scenes), "target_interactions": sum(
+                len(node.get("recall_questions") or []) + len(node.get("distinction_questions") or []) + len(example_questions(node))
+                for node in (package.get("node_blocks") or [])
+            )}, warnings=tuple(warnings))
     # Practice guides use one complete page per source step.  The cap protects
     # free-form lecture segmentation only; it must never merge guide steps.
     scene_cap = {"5-15": 10, "16-30": 14, "31-60": 20, "61-240": 24}[band]
@@ -310,7 +353,7 @@ def build_learning_design(
         )
     non_lecture_scene_count = (
         int(bool(anchor)) + int(len(adopted_ordered) >= 2) + len(cases[:2])
-        + int(len(adopted_ordered) >= 2) + sum(
+        + int(len(adopted_ordered) >= 2) + sum(3 +
             sum(len(_practice_step_pages(item, block_ids)) for _, block_ids in _practice_step_groups(
                 item, practice_step_structures.get(str(item["resource_id"]))
             ))
@@ -388,6 +431,20 @@ def build_learning_design(
             zones=("criteria", "comparison", "evidence", "conclusion"), components=("compare", "key_point", "callout"),
         )
     for source in practices[:2]:
+        phase_blocks = {
+            str(block.get("practice_phase_id")): str(block.get("block_id"))
+            for block in source.get("blocks") or [] if block.get("practice_phase_id") and block.get("block_id")
+        }
+        for phase_id, label in (("prepare", "准备阶段"),):
+            block_id = phase_blocks.get(phase_id)
+            if block_id:
+                add_scene(
+                    scene_id=f"scene:practice:{source['resource_id']}:phase:{phase_id}", kind="practice",
+                    page_role="practice_workspace", recipe="practice_workspace", sources=[source],
+                    key_question=f"{label}需要确认哪些前置条件？", purpose=f"practice-{phase_id}",
+                    zones=("phase_goal", "phase_items", "completion_check"), components=("key_point", "steps"),
+                    min_chars=120, max_chars=800, block_ids=(block_id,), practice_variant=phase_id,
+                )
         step_groups = _practice_step_groups(source, practice_step_structures.get(str(source["resource_id"])))
         for step_index, (step_label, step_block_ids) in enumerate(step_groups, 1):
             page_groups = _practice_step_pages(source, step_block_ids)
@@ -398,7 +455,15 @@ def build_learning_design(
                 # concept/process recipes made the title and code area move,
                 # and those layouts can crop dense source-bound code.
                 recipe = "practice_workspace"
-                practice_variant = ("guided", "code", "verify")[(step_index + part_index - 2) % 3]
+                page_blocks = [
+                    block for block in source.get("blocks") or []
+                    if str(block.get("block_id")) in set(page_block_ids)
+                ]
+                # Code is a structural field of the V3 step JSON.  It must
+                # select the matching fixed page layout instead of depending
+                # on a rotating page index.
+                has_code = any(block.get("code_blocks") for block in page_blocks)
+                practice_variant = "code" if has_code else "guided"
                 is_final_part = part_index == len(page_groups)
                 part_suffix = "" if len(page_groups) == 1 else f"（说明 {part_index}/{len(page_groups)}）"
                 scene_suffix = f":part:{part_index}" if len(page_groups) > 1 else ""
@@ -408,8 +473,18 @@ def build_learning_design(
                     key_question=f"步骤 {step_index}{part_suffix}：{step_label[:72]} 应如何完成并验收？",
                     purpose=f"apply-step-{step_index}-part-{part_index}",
                     zones=("step_goal", "operation_detail", "completion_check", "next_step"),
-                    components=("steps", "key_point", "callout"), min_chars=180, max_chars=1100,
+                    components=("key_point", "code_block", "callout"), min_chars=180, max_chars=1100,
                     block_ids=page_block_ids, practice_variant=practice_variant,
+                )
+        for phase_id, label in (("verify", "验证阶段"), ("reflect", "复盘阶段")):
+            block_id = phase_blocks.get(phase_id)
+            if block_id:
+                add_scene(
+                    scene_id=f"scene:practice:{source['resource_id']}:phase:{phase_id}", kind="practice",
+                    page_role="practice_workspace", recipe="practice_workspace", sources=[source],
+                    key_question=f"{label}需要如何完成？", purpose=f"practice-{phase_id}",
+                    zones=("phase_goal", "phase_items", "completion_check"), components=("key_point", "callout") if phase_id == "reflect" else ("key_point", "steps"),
+                    min_chars=120, max_chars=900, block_ids=(block_id,), practice_variant=phase_id,
                 )
     for source in checklists[:1]:
         add_scene(

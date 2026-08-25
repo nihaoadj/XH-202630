@@ -51,7 +51,7 @@ def build_resource_specs(
     is_correction_package = normalized == ["个性化纠错训练包"]
     if is_correction_package:
         focus_targets = correction_focus.get("ordered_target_nodes") if isinstance(correction_focus, dict) else None
-        if not isinstance(focus_targets, list) or not 1 <= len(focus_targets) <= 3:
+        if not isinstance(focus_targets, list) or not 1 <= len(focus_targets) <= 2:
             raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
         knowledge_points = [str(item.get("skill_node_id") or "").strip() for item in focus_targets if isinstance(item, dict)]
         if len(knowledge_points) != len(focus_targets) or not all(knowledge_points):

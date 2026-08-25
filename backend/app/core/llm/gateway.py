@@ -274,6 +274,10 @@ class LLMGateway:
         resource_generation_max_attempts: int | None = None,
         generator_max_output_tokens: int | None = None,
         resource_generator_max_output_tokens: int | None = None,
+        claim_max_attempts: int | None = None,
+        claim_max_output_tokens: int | None = None,
+        claim_request_timeout_seconds: float | None = None,
+        claim_schema_repair_attempts: int | None = None,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
@@ -294,6 +298,15 @@ class LLMGateway:
             resource_generator_max_output_tokens
             or self.generator_max_output_tokens
         )
+        self.claim_max_attempts = claim_max_attempts or self.default_options.max_attempts
+        self.claim_max_output_tokens = (
+            claim_max_output_tokens or self.default_options.max_output_tokens
+        )
+        self.claim_request_timeout_seconds = (
+            claim_request_timeout_seconds
+            or self.default_options.request_timeout_seconds
+        )
+        self.claim_schema_repair_attempts = claim_schema_repair_attempts or 2
         self.sleep = sleep
         self.monotonic = monotonic
         self.wall_clock = wall_clock
@@ -312,10 +325,14 @@ class LLMGateway:
         resource_generation_nodes = {
             "text_resource_agent",
             "assessment_agent",
+            "practice_guide_agent",
         }
         if node_name in resource_generation_nodes:
             max_tokens = self.resource_generator_max_output_tokens
             configured_timeout_seconds = self.default_options.request_timeout_seconds
+        elif node_name in {"claim_extractor", "claim_judge"}:
+            max_tokens = self.claim_max_output_tokens
+            configured_timeout_seconds = self.claim_request_timeout_seconds
         elif node_name == "generator":
             max_tokens = self.generator_max_output_tokens
             configured_timeout_seconds = self.default_options.request_timeout_seconds
@@ -327,14 +344,19 @@ class LLMGateway:
             if node_name in (
                 resource_generation_nodes
             )
+            else self.claim_max_attempts
+            if node_name in {"claim_extractor", "claim_judge"}
             else self.default_options.max_attempts
         )
-        return self.default_options.model_copy(update={
+        updates = {
             "temperature": temperature,
             "max_output_tokens": max(1, int(max_output_tokens if max_output_tokens is not None else max_tokens)),
             "request_timeout_seconds": float(request_timeout_seconds if request_timeout_seconds is not None else configured_timeout_seconds),
             "max_attempts": max_attempts,
-        })
+        }
+        if node_name in {"claim_extractor", "claim_judge"}:
+            updates["schema_repair_attempts"] = self.claim_schema_repair_attempts
+        return self.default_options.model_copy(update=updates)
 
     def _remaining_seconds(self, context: LLMCallContext) -> float | None:
         if context.workflow_deadline_at is None:
@@ -531,7 +553,7 @@ class LLMGateway:
         original_messages = list(messages)
         call_messages = list(original_messages)
         finish_reason: str | None = None
-        repair_used = False
+        repair_attempts = 0
 
         for attempt in range(1, options.max_attempts + 1):
             remaining = self._remaining_seconds(context)
@@ -641,15 +663,16 @@ class LLMGateway:
                 and failure.code
                 in {ErrorCode.LLM_BAD_REQUEST, ErrorCode.LLM_STRUCTURED_OUTPUT_UNSUPPORTED}
             )
+            output_repairable = failure.code in {
+                ErrorCode.LLM_OUTPUT_TRUNCATED,
+                ErrorCode.LLM_OUTPUT_PARSE_FAILED,
+                ErrorCode.LLM_OUTPUT_SCHEMA_INVALID,
+            }
             can_repair = (
                 options.allow_schema_repair
-                and not repair_used
-                and failure.code
-                in {
-                    ErrorCode.LLM_OUTPUT_TRUNCATED,
-                    ErrorCode.LLM_OUTPUT_PARSE_FAILED,
-                    ErrorCode.LLM_OUTPUT_SCHEMA_INVALID,
-                }
+                and output_repairable
+                and attempt < options.max_attempts
+                and repair_attempts < options.schema_repair_attempts
             )
             can_empty_output_retry = (
                 failure.code == ErrorCode.LLM_OUTPUT_EMPTY
@@ -680,9 +703,14 @@ class LLMGateway:
             if can_text_fallback:
                 mode = StructuredOutputMode.TEXT
             elif can_repair and raw is not None:
-                repair_used = True
+                # Keep output recovery bounded by max_attempts, but permit a
+                # second repair after the first repair itself is rejected.
+                # Providers can return a different schema violation on the
+                # repair turn; stopping after exactly one repair made Claim
+                # auditing unnecessarily fragile.
+                repair_attempts += 1
                 call_messages = self._repair_messages(
-                    call_messages,
+                    original_messages,
                     output_schema,
                     raw.content,
                     failure,
@@ -692,7 +720,7 @@ class LLMGateway:
                 # any parseable raw payload.  Retrying the same prompt merely
                 # repeats the long response; retry once with an explicit
                 # compact-output recovery instruction instead.
-                repair_used = True
+                repair_attempts += 1
                 call_messages = self._compact_output_recovery_messages(
                     original_messages,
                     output_schema,
@@ -886,4 +914,8 @@ def default_llm_gateway() -> LLMGateway:
         resource_generator_max_output_tokens=(
             settings.llm_resource_generator_max_output_tokens
         ),
+        claim_max_attempts=settings.claim_max_attempts,
+        claim_max_output_tokens=settings.claim_max_output_tokens,
+        claim_request_timeout_seconds=settings.claim_request_timeout_seconds,
+        claim_schema_repair_attempts=settings.claim_schema_repair_attempts,
     )

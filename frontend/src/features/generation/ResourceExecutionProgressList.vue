@@ -114,12 +114,17 @@ function phaseMeta(item) {
   if (props.phase === 'review') {
     if (['queued', 'generating'].includes(state)) return { label: '等待生成', type: 'info' }
     if (state === 'generated') return { label: '等待审核', type: 'info' }
+    if (state === 'approved' && item.publication_status !== 'published') {
+      return { label: '审核通过，等待发布', type: 'warning' }
+    }
   }
   return resourceExecutionStateMeta(state)
 }
 
 function canOpen(item) {
-  return item.resource_execution_state === 'approved' && Boolean(item.resource_id)
+  return item.resource_execution_state === 'approved'
+    && item.publication_status === 'published'
+    && Boolean(item.resource_id)
 }
 
 function canRetry(item) {

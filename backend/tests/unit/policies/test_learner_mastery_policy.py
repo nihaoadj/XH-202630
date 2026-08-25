@@ -46,7 +46,7 @@ def test_prior_first_objective_ewma_confidence_and_replay():
         _evidence("diagnosis", "bbb", 1.0, verified=True, at=now + timedelta(seconds=1))
     ], names, increment_profile_version=True)
     state = next(item for item in states if item.skill_node_id == "skill-a")
-    assert (state.mastery_score, state.status.value, state.confidence.value) == (0.85, "learning", "medium")
+    assert (state.mastery_score, state.status.value, state.confidence.value) == (0.85, "learning", "low")
     assert version == 2 and changed is True
 
     replay_states, replay_version, replay_changed = service.repository.apply_evidence([

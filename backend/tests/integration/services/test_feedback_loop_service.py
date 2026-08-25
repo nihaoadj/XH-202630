@@ -46,6 +46,7 @@ def _setup():
         source_refs=[],
         publication_status="published",
         run_id="source-run",
+        batch_id="source-batch",
     )
     loop = MemoryFeedbackLoopRepository(learners)
     jobs = MemoryGenerationJobRepository()
@@ -251,6 +252,7 @@ def test_feedback_intent_only_accepts_server_returned_reinforcement_nodes():
     assert payload["resource_types"] == ["个性化纠错训练包"]
     assert payload["constraints"]["correction_focus_snapshot"]["ordered_target_nodes"][0]["skill_node_id"] == "skill-a"
     assert "must_include_citations" not in payload["constraints"]
+    assert jobs.get(selected.followup_run_id).batch_id == "source-batch"
 
     with pytest.raises(ApplicationError):
         service.choose_followup(

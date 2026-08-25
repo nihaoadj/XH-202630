@@ -135,6 +135,8 @@ def _materialize(
         assessment_payload_hash=(data.get("assessment_package") or {}).get("payload_hash"),
         review_practice_payload=data.get("review_practice_package"),
         review_practice_payload_hash=(data.get("review_practice_package") or {}).get("payload_hash"),
+        practice_guide_payload=data.get("practice_guide_package"),
+        practice_guide_payload_hash=(data.get("practice_guide_package") or {}).get("payload_hash"),
     )
 
 

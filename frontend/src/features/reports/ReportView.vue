@@ -12,6 +12,12 @@
         <b>能力等级 {{ report.skill_level || activeProfile?.skill_level || '待诊断' }}</b>
         <small v-if="tierProgress.active_tier">当前学习第 {{ tierProgress.active_tier }} 阶 · 已解锁至第 {{ tierProgress.highest_unlocked_tier }} 阶</small>
       </div>
+      <el-alert
+        v-if="report.initial_diagnostic?.final_tier"
+        type="success"
+        :closable="false"
+        :title="`初始校准：问卷预判第 ${report.initial_diagnostic.questionnaire_tier} 阶，最终第 ${report.initial_diagnostic.final_tier} 阶${report.initial_diagnostic.downgraded ? '（已降阶校准）' : ''}`"
+      />
 
       <div class="profile-selector report-selector-row">
         <span>学习画像</span>
@@ -33,33 +39,9 @@
     <ReportChart :data="report" />
 
     <section class="report-visual-grid" aria-label="学情与资源匹配可视化">
-      <KnowledgeBlindSpotHeatmap :data="report.knowledge_blind_spot_map" />
+      <KnowledgeBlindSpotHeatmap :key="`blind-${report.report_revision || 'initial'}`" :data="report.knowledge_blind_spot_map" />
       <ResourceDifficultyCurve :data="report.resource_difficulty_curve" />
       <LearningPathGraph :data="report.learning_path_graph" />
-    </section>
-
-    <section class="report-detail-grid" aria-label="真实学习活动与薄弱点">
-      <article class="report-section">
-        <div class="section-heading"><div><span class="report-kicker">VERIFIED ACTIVITY</span><h3>真实学习活动</h3></div><span class="section-count">{{ report.window?.window_days || 30 }} 天</span></div>
-        <div class="summary-metrics">
-          <article class="summary-metric mint"><span>正式 Attempt</span><strong>{{ learningActivity.verified_attempt_count || 0 }}</strong></article>
-          <article class="summary-metric blue"><span>已答题目</span><strong>{{ learningActivity.answered_item_count || 0 }}</strong></article>
-          <article class="summary-metric amber"><span>加权正确率</span><strong>{{ formatPercent(learningActivity.verified_accuracy) }}</strong></article>
-          <article class="summary-metric slate"><span>前周期变化</span><strong>{{ formatPercent(learningActivity.accuracy_delta) }}</strong></article>
-        </div>
-        <p class="mastery-warning" v-if="learningActivity.status === 'not_measured'">当前窗口没有服务端验证题目；正确率保持未测量，不以 0 代替。</p>
-      </article>
-      <article class="report-section">
-        <div class="section-heading"><div><span class="report-kicker">WEAKNESS EVIDENCE</span><h3>薄弱点与待验证重点</h3></div></div>
-        <div class="suggestion-list">
-          <span v-for="item in generationOptions.reinforce_weakness || []" :key="`reinforce-${item.skill_node_id}`">已学习未掌握：{{ item.name }}</span>
-          <span v-for="item in generationOptions.learn_new_knowledge || []" :key="`new-${item.skill_node_id}`">尚未学习：{{ item.name }}</span>
-          <span v-for="item in weaknessGroups.verified_weak || []" :key="`weak-${item.skill_node_id}`">已验证薄弱：{{ item.name }}</span>
-          <span v-for="item in weaknessGroups.regressing_learning || []" :key="`regress-${item.skill_node_id}`">学习中退步：{{ item.name }}</span>
-          <span v-for="item in weaknessGroups.needs_evidence || []" :key="`evidence-${item.skill_node_id}`">待验证：{{ item.name }}</span>
-          <em v-if="!weaknessGroupCount && !generationOptionCount">暂无需要优先处理的节点。</em>
-        </div>
-      </article>
     </section>
 
     <section class="mastery-panel" aria-labelledby="mastery-heading">
@@ -73,6 +55,8 @@
         <article v-for="node in abilityNodes" :key="node.skill_node_id" class="mastery-card" :class="`status-${node.mastery.status}`" role="listitem" tabindex="0">
           <div class="mastery-card-head"><strong>{{ node.name }}</strong><span>{{ statusLabel(node.mastery.status) }}</span></div>
           <div class="mastery-score"><b>{{ masteryPercent(node.mastery) }}</b><small>置信度 {{ confidenceLabel(node.mastery.confidence) }}</small></div>
+          <p v-if="diagnosticMeasurement(node).measurement_status === 'needs_evidence'">本次 {{ diagnosticMeasurement(node).correct_question_count }}/{{ diagnosticMeasurement(node).valid_question_count }} 正确，证据不足，暂不判定掌握度。</p>
+          <p v-else-if="diagnosticMeasurement(node).measurement_status === 'measured'">诊断 {{ diagnosticMeasurement(node).correct_question_count }}/{{ diagnosticMeasurement(node).valid_question_count }} 正确 · 已覆盖 {{ (diagnosticMeasurement(node).covered_dimensions || []).length }} 个维度</p>
           <p v-if="relationshipLabels(node, abilityNodes).prerequisites.length">前置：{{ relationshipLabels(node, abilityNodes).prerequisites.join('、') }}</p>
           <p v-if="relationshipLabels(node, abilityNodes).children.length">后继：{{ relationshipLabels(node, abilityNodes).children.join('、') }}</p>
           <em v-if="typeof node.trend_delta === 'number'">客观趋势 {{ node.trend_delta > 0 ? '+' : '' }}{{ Math.round(node.trend_delta * 100) }}%</em>
@@ -84,37 +68,6 @@
         <ol v-if="generationOptions.reinforce_weakness?.length"><li v-for="item in generationOptions.reinforce_weakness.slice(0, 3)" :key="`focus-${item.skill_node_id}`"><strong>强化：{{ item.name }}</strong><span>{{ (item.reason_codes || []).join('；') }}</span></li></ol>
         <ol v-else-if="weaknessPriorities.length"><li v-for="item in weaknessPriorities.slice(0, 3)" :key="item.skill_node_id"><strong>{{ abilityName(item.skill_node_id) }}</strong><span>{{ (item.reason_codes || []).map(focusReason).join('；') }}</span></li></ol>
       </div>
-    </section>
-
-    <section class="report-detail-grid">
-      <article class="report-section">
-        <div class="section-heading">
-          <div><span class="report-kicker">LEARNING MATERIALS</span><h3>最近学习资源</h3></div>
-          <span class="section-count">{{ recentResources.length }} 份</span>
-        </div>
-        <el-empty v-if="!recentResources.length" description="本学习画像还没有资源记录" :image-size="62" />
-        <div v-else class="resource-list">
-          <article v-for="item in recentResources" :key="item.resource_id" class="resource-item">
-            <span class="resource-type">{{ item.resource_type }}</span>
-            <div><strong>{{ formatResourceLabel(item, directionName) }}</strong><p>{{ (item.knowledge_points || []).slice(0, 4).join('、') || '等待补充知识点信息' }}</p></div>
-            <span class="difficulty-tag">{{ item.difficulty || '适配当前阶段' }}</span>
-          </article>
-        </div>
-      </article>
-
-      <article class="report-section">
-        <div class="section-heading">
-          <div><span class="report-kicker">PRACTICE FEEDBACK</span><h3>练习反馈记录</h3></div>
-          <span class="section-count">{{ recentFeedback.length }} 次</span>
-        </div>
-        <el-empty v-if="!recentFeedback.length" description="完成练习后，这里会沉淀你的反馈" :image-size="62" />
-        <div v-else class="feedback-list">
-          <article v-for="item in recentFeedback" :key="item.feedback_id || item.resource_id" class="feedback-item">
-            <div><strong>{{ feedbackResourceLabel(item) }}</strong><span>{{ feedbackDecisionLabel(item) }}</span></div>
-            <b>{{ formatPercent(item.correct_rate) }}</b>
-          </article>
-        </div>
-      </article>
     </section>
 
     <section class="report-section" aria-labelledby="credibility-heading">
@@ -141,7 +94,6 @@ import ReportChart from './ReportChart.vue'
 import KnowledgeBlindSpotHeatmap from './KnowledgeBlindSpotHeatmap.vue'
 import ResourceDifficultyCurve from './ResourceDifficultyCurve.vue'
 import LearningPathGraph from './LearningPathGraph.vue'
-import { formatResourceLabel } from '../../utils/generationDisplay'
 import { focusReason, masteryPercent, relationshipLabels, statusLabel } from './masteryViewModel'
 import { learningReportApi } from './api'
 import { ReportStreamClient } from './reportStreamClient'
@@ -153,19 +105,14 @@ const tracks = ref([])
 const report = reactive({})
 const windowDays = ref(30)
 const streamStatus = ref('closed')
-const recentResources = computed(() => report.recent_resources || [])
-const recentFeedback = computed(() => report.recent_feedback || [])
 const metricSummary = computed(() => report.metric_summary || {})
 const nextSuggestions = computed(() => report.next_suggestions || report.weak_points || [])
 const abilityNodes = computed(() => report.ability_nodes || [])
 const masterySummary = computed(() => report.mastery_summary || {})
 const weaknessPriorities = computed(() => report.weakness_priorities || [])
-const learningActivity = computed(() => report.learning_activity || {})
-const weaknessGroups = computed(() => report.weakness_groups || {})
-const weaknessGroupCount = computed(() => Object.values(weaknessGroups.value).reduce((sum, items) => sum + (items?.length || 0), 0))
+const diagnosticMeasurements = computed(() => report.diagnostic_measurements || {})
 const generationOptions = computed(() => report.generation_options || {})
 const tierProgress = computed(() => report.tier_progress || generationOptions.value.tier_progress || {})
-const generationOptionCount = computed(() => (generationOptions.value.reinforce_weakness?.length || 0) + (generationOptions.value.learn_new_knowledge?.length || 0))
 const resourceCredibility = computed(() => report.resource_credibility_summary || {})
 const recentResourceCredibility = computed(() => report.recent_resource_credibility || [])
 const activeProfile = computed(() => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null)
@@ -182,13 +129,9 @@ function profileDisplayName(profile) {
   return snapshot?.display_name || snapshot?.name || profile?.learner_type || '未命名画像'
 }
 function formatPercent(value) { return typeof value === 'number' ? `${Math.round(value * 100)}%` : '--' }
-function feedbackResourceLabel(row) {
-  const resource = recentResources.value.find((item) => item.resource_id === row.resource_id)
-  return resource ? formatResourceLabel(resource, directionName.value) : row.resource_id ? `资源 ${row.resource_id.slice(0, 8)}` : '未命名资源'
-}
-function feedbackDecisionLabel(row) { return row.decision?.action || row.decision || '已记录本次练习结果' }
 function confidenceLabel(value) { return ({ none: '无', low: '低', medium: '中', high: '高' })[value] || value || '无' }
 function abilityName(nodeId) { return abilityNodes.value.find((item) => item.skill_node_id === nodeId)?.name || nodeId }
+function diagnosticMeasurement(node) { return diagnosticMeasurements.value[node?.skill_node_id] || {} }
 
 async function loadProfiles() {
   const [profileRes, domainRes] = await Promise.all([profileApi.list({ page: 1, page_size: 50 }), knowledgeApi.listDomains()])

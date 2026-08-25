@@ -41,6 +41,7 @@ class ResourceExecutionProgress(BaseModel):
     artifact_format: Optional[str] = None
     validation_status: Optional[str] = None
     renderer_version: Optional[str] = None
+    publication_status: Literal["unpublished", "published"] = "unpublished"
     updated_at: Optional[datetime] = None
 
 

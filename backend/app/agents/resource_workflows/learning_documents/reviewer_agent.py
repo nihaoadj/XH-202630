@@ -9,6 +9,7 @@ from app.core.retrieval.evidence import source_refs_are_scoped
 from app.core.security.errors import ErrorCode
 from app.models.shared.agent_contracts import (
     NodeResult,
+    PracticeGuidePackageV3,
     ReviewLLMOutput,
     ReviewerInput,
     ReviewerOutput,
@@ -65,7 +66,7 @@ revise 必须包含至少一条 revision_instructions；approve 不得包含 rev
 
 
 STRUCTURED_MARKDOWN_SECTIONS = {
-    "复习清单": ("使用说明", "答案与证据解释", "自评与下一步"),
+    "复习清单": ("使用说明", "节点知识小结", "答案与证据解释", "自评与下一步"),
     "案例分析": ("案例背景", "任务目标", "分析过程", "参考方案", "复盘要点"),
     "个性化纠错训练包": ("本次强化目标", "薄弱模式概览", "参考答案与分层反馈", "达标标准", "后续复习动作", "总结"),
 }
@@ -101,21 +102,28 @@ def _deterministic_resource_structure_review(resource) -> dict | None:
         package = resource.review_practice_payload
         blocks = package.get("node_blocks", []) if isinstance(package, dict) else []
         valid = bool(blocks) and all(
-            1 <= len(block.get("recall_questions", [])) <= 3
-            and 1 <= len(block.get("distinction_questions", [])) <= 3
-            and len(block.get("omitted_slots", [])) == 7 - len(block.get("recall_questions", [])) - len(block.get("distinction_questions", [])) - int(bool(block.get("example_recognition")))
+            1 <= len(block.get("recall_questions", [])) <= 4
+            and 1 <= len(block.get("distinction_questions", [])) <= 4
+            and len(str(block.get("knowledge_summary") or "").strip()) >= 100
+            and bool(block.get("summary_evidence_ids"))
+            and set(block.get("summary_evidence_ids") or []) <= set(block.get("evidence_ids") or [])
+            and len(block.get("omitted_slots", [])) == 10 - len(block.get("recall_questions", [])) - len(block.get("distinction_questions", [])) - (
+                len(block.get("example_recognition_questions") or [])
+                or int(bool(block.get("example_recognition")))
+            )
             for block in blocks
         )
         content = resource.content_text or ""
-        if valid and content.find("## 答案与证据解释") > content.find("## 节点") and "<script" not in content.lower():
+        if valid and "### 节点知识小结" in content and content.find("## 答案与证据解释") > content.find("## 节点") and "<script" not in content.lower():
             return None
-        return {"decision": "revise", "hallucination_score": 0.0, "issues": [{"code": "structure_quality", "severity": "high", "resource_type": resource.resource_type, "knowledge_point": None, "description": "主动回忆清单必须满足每节点最低 1+1+0，缺省槽位可审计，且答案统一位于文末。"}], "difficulty_match": True, "coverage_rate": 0.0, "suggestion": "按 V2 主动回忆结构重建。", "revision_instructions": [{"issue_codes": ["structure_quality"], "target_resource_type": resource.resource_type, "action": "恢复节点题组、缺省原因和文末答案区。", "priority": 1}]}
+        return {"decision": "revise", "hallucination_score": 0.0, "issues": [{"code": "structure_quality", "severity": "high", "resource_type": resource.resource_type, "knowledge_point": None, "description": "主动回忆清单必须满足每节点最低 1+1+0、带证据的节点知识小结、缺省槽位可审计，且答案统一位于文末。"}], "difficulty_match": True, "coverage_rate": 0.0, "suggestion": "按 V3 主动回忆结构重建。", "revision_instructions": [{"issue_codes": ["structure_quality"], "target_resource_type": resource.resource_type, "action": "恢复节点题组、知识小结、缺省原因和文末答案区。", "priority": 1}]}
     required_sections = STRUCTURED_MARKDOWN_SECTIONS.get(resource.resource_type)
     if not required_sections:
         return None
     content = (resource.content_text or "").strip()
     missing_sections = [
-        section for section in required_sections if f"## {section}" not in content
+        section for section in required_sections
+        if (f"### {section}" if section == "节点知识小结" else f"## {section}") not in content
     ]
     has_script = "<script" in content.lower()
     correction_sections = ("错误模式", "核心概念补救", "正误对照", "完整示例", "引导式练习", "同构练习", "迁移练习")
@@ -172,8 +180,29 @@ def _deterministic_practice_guide_review(resource) -> dict:
     so they must not cause a retry; correctness is assessed by the normal
     evidence and content review path.
     """
+    package = getattr(resource, "practice_guide_payload", None)
+    try:
+        valid_package = isinstance(package, dict) and package.get("schema_version") == "3.0"
+        if valid_package:
+            PracticeGuidePackageV3.model_validate(
+                {key: value for key, value in package.items() if key != "payload_hash"}
+            )
+    except ValueError:
+        valid_package = False
+    if not valid_package:
+        return {
+            "decision": "revise", "hallucination_score": 0.0,
+            "issues": [{"code": "structure_quality", "severity": "high",
+                        "resource_type": resource.resource_type, "knowledge_point": None,
+                        "description": "实操指南缺少有效的 V3 固定阶段 JSON，禁止仅以 Markdown 发布。"}],
+            "difficulty_match": True, "coverage_rate": 0.0,
+            "suggestion": "重新生成并持久化四阶段结构化 JSON，再渲染 Markdown。",
+            "revision_instructions": [{"issue_codes": ["structure_quality"],
+                                        "target_resource_type": resource.resource_type,
+                                        "action": "生成有效的 V3 固定阶段 JSON，并由该 JSON 确定性渲染 Markdown。", "priority": 1}],
+        }
     content = resource.content_text or ""
-    required_sections = ("准备", "实践步骤", "检查清单", "常见问题", "复盘建议")
+    required_sections = ("准备阶段", "实操阶段", "验证阶段", "复盘阶段")
     missing_sections = [section for section in required_sections if section not in content]
     if missing_sections:
         description = f"缺少必要章节：{'、'.join(missing_sections)}。"

@@ -80,7 +80,7 @@ def _questionnaire_payload():
     }
 
 
-def test_onboarding_creates_profile_and_only_returns_known_node_questions():
+def test_onboarding_creates_stage_scoped_three_node_diagnostic_questions():
     client, repository, _ = _client()
     response = client.post("/api/onboarding/initial-profile", json=_questionnaire_payload())
 
@@ -88,11 +88,13 @@ def test_onboarding_creates_profile_and_only_returns_known_node_questions():
     body = response.json()
     learner_id = body["learner_id"]
     assert learner_id.startswith("user_001__rag_engineering_training__")
-    assert body["diagnostic_node_ids"] == ["rag_basics", "embedding", "rerank"]
+    assert body["diagnostic_node_ids"] == ["rag_basics", "document_parsing", "embedding"]
     assert body["screening_results"] == {}
-    assert len(body["diagnostic_questions"]) == 10
+    assert body["questionnaire_tier"] == 1
+    assert body["initial_diagnostic_status"] == "pending"
+    assert len(body["diagnostic_questions"]) == 9
     returned_node_ids = [question["skill_node_id"] for question in body["diagnostic_questions"]]
-    assert returned_node_ids[:9] == ["rag_basics"] * 3 + ["embedding"] * 3 + ["rerank"] * 3
+    assert returned_node_ids == ["rag_basics"] * 3 + ["document_parsing"] * 3 + ["embedding"] * 3
     assert all("answer" not in question and "explanation" not in question for question in body["diagnostic_questions"])
     assert "chunking" in body["not_started_node_ids"]
 
@@ -147,16 +149,14 @@ def test_diagnosis_keeps_unassessed_nodes_out_of_confirmed_weaknesses():
     client, repository, knowledge_service = _client()
     onboarding_response = client.post("/api/onboarding/initial-profile", json=_questionnaire_payload())
     learner_id = onboarding_response.json()["learner_id"]
-    questions = knowledge_service.select_diagnostic_questions(
-        "rag_engineering_training",
-        skill_node_ids=["rag_basics", "embedding", "rerank"],
-    )
+    questions = onboarding_response.json()["diagnostic_questions"]
+    raw_questions = {item.question_id: item for item in knowledge_service.load_diagnostic_questions("rag_engineering_training")}
     response = client.post(
         "/api/diagnosis/submit",
         json={
             "learner_id": learner_id,
             "learning_direction_id": "rag_engineering_training",
-            "answers": [{"question_id": question.question_id, "answer": question.answer} for question in questions],
+            "answers": [{"question_id": question["question_id"], "answer": raw_questions[question["question_id"]].answer} for question in questions],
         },
     )
 
@@ -164,10 +164,12 @@ def test_diagnosis_keeps_unassessed_nodes_out_of_confirmed_weaknesses():
     profile = repository.get(learner_id)
     assert profile.knowledge_states["chunking"].status == "unassessed"
     assert "Chunk 切分" not in profile.weak_points
-    assert "Embedding" in profile.strong_points
+    assert response.json()["initial_diagnostic_status"] == "final"
+    assert response.json()["initial_recommended_node_id"] in {"rag_basics", "document_parsing", "embedding"}
+    assert "Embedding" not in profile.strong_points
 
 
-def test_onboarding_all_unknown_returns_baseline_diagnostic_questions():
+def test_onboarding_all_unknown_still_uses_stage_scoped_diagnostic_questions():
     client, _, _ = _client()
     payload = _questionnaire_payload()
     payload["learner_id"] = "user_001__rag_engineering_training_unknown"
@@ -176,8 +178,51 @@ def test_onboarding_all_unknown_returns_baseline_diagnostic_questions():
 
     response = client.post("/api/onboarding/initial-profile", json=payload)
     assert response.status_code == 200
-    assert response.json()["diagnostic_node_ids"] == []
-    assert len(response.json()["diagnostic_questions"]) == 10
+    assert response.json()["diagnostic_node_ids"] == ["rag_basics", "document_parsing", "embedding"]
+    assert len(response.json()["diagnostic_questions"]) == 9
+
+
+def test_intermediate_initial_diagnosis_retests_lower_tier_before_finalizing():
+    client, repository, knowledge_service = _client()
+    payload = _questionnaire_payload()
+    payload.update({
+        "python_level": "能写脚本和调用 API",
+        "llm_api_level": "调用过 OpenAI 或兼容 API",
+        "prompt_level": "知道角色设定、格式约束、上下文注入",
+        "rag_level": "知道大致流程：文档、向量化、检索、生成",
+    })
+    onboarding_response = client.post("/api/onboarding/initial-profile", json=payload)
+    body = onboarding_response.json()
+    assert body["questionnaire_tier"] == 2
+    assert len(body["diagnostic_questions"]) == 9
+
+    retest = client.post("/api/diagnosis/submit", json={
+        "learner_id": body["learner_id"],
+        "learning_direction_id": "rag_engineering_training",
+        "answers": [{"question_id": item["question_id"], "answer": "__wrong__"} for item in body["diagnostic_questions"]],
+    })
+    assert retest.status_code == 200
+    retest_body = retest.json()
+    assert retest_body["initial_diagnostic_status"] == "retest"
+    assert retest_body["assessed_tier"] == 2
+    assert len(retest_body["next_diagnostic_questions"]) == 9
+    assert all(
+        state.objective_evidence_count == 0
+        for state in repository.get(body["learner_id"]).knowledge_states.values()
+    )
+
+    raw_questions = {item.question_id: item for item in knowledge_service.load_diagnostic_questions("rag_engineering_training")}
+    final = client.post("/api/diagnosis/submit", json={
+        "learner_id": body["learner_id"],
+        "learning_direction_id": "rag_engineering_training",
+        "answers": [
+            {"question_id": item["question_id"], "answer": raw_questions[item["question_id"]].answer}
+            for item in retest_body["next_diagnostic_questions"]
+        ],
+    })
+    assert final.status_code == 200
+    assert final.json()["initial_diagnostic_status"] == "final"
+    assert final.json()["final_tier"] == 1
 
 
 def test_learning_focus_is_profile_preference_not_diagnostic_gate():

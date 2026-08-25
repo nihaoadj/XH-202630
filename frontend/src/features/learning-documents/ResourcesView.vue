@@ -49,7 +49,7 @@
             :selected-resource-id="selectedResourceId"
             @select-resource="selectedResourceId = $event"
           />
-          <CoursewareViewer v-if="selectedResource?.resource_kind === 'interactive_courseware'" :resource="selectedResource" />
+          <CoursewareViewer v-if="selectedResource?.resource_kind === 'interactive_courseware'" :resource="selectedResource" :focus-mode="isFocusMode" />
           <ResourceViewer
             v-else-if="selectedResource"
             :resources="[selectedResource]"
@@ -178,30 +178,27 @@ function resolveTrackName(trackId) {
 }
 
 const taskGroups = computed(() => {
+  // Historical correction packages used their own run as batch_id.  Group
+  // them with the source learning resources while their persisted batch is
+  // being corrected by newly generated data.
+  const effectiveBatchByRunId = new Map()
+  for (const job of generationJobs.value) {
+    const correctionSourceRunId = job.request_payload?.constraints?.correction_focus_snapshot?.source_run_id
+    if (!correctionSourceRunId) continue
+    const sourceJob = generationJobs.value.find((candidate) => candidate.run_id === correctionSourceRunId)
+    effectiveBatchByRunId.set(job.run_id, sourceJob?.batch_id || sourceJob?.run_id || correctionSourceRunId)
+  }
   const groups = new Map()
   for (const resource of visibleResources.value) {
-    const batchId = resource.batch_id || resource.run_id || `resource:${resource.resource_id}`
+    const batchId = effectiveBatchByRunId.get(resource.run_id) || resource.batch_id || resource.run_id || `resource:${resource.resource_id}`
     if (!groups.has(batchId)) groups.set(batchId, { runId: batchId, batchId, shortRunId: batchId.startsWith('resource:') ? '独立资源' : batchId.slice(0, 8).toUpperCase(), resources: [] })
     groups.get(batchId).resources.push(resource)
   }
-  const jobsByBatch = new Map()
-  for (const job of generationJobs.value) {
-    const batchId = job.batch_id || job.run_id
-    if (!jobsByBatch.has(batchId)) jobsByBatch.set(batchId, [])
-    jobsByBatch.get(batchId).push(job)
-  }
-  let initialIndex = 0
-  let feedbackIndex = 0
   return Array.from(groups.values())
     .sort((left, right) => String(left.resources[0]?.created_at || '').localeCompare(String(right.resources[0]?.created_at || '')))
-    .map((task) => {
+    .map((task, taskIndex) => {
     const timestamp = task.resources[0]?.created_at || task.resources[0]?.updated_at
-    const isFeedbackBatch = (jobsByBatch.get(task.batchId) || []).some(
-      (job) => Boolean(job.request_payload?.constraints?.feedback_attempt_id),
-    )
-    const batchLabel = isFeedbackBatch
-      ? `反馈批次 ${String(++feedbackIndex).padStart(2, '0')}`
-      : `初始资源批次 ${String(++initialIndex).padStart(2, '0')}`
+    const batchLabel = `资源批次 ${String(taskIndex + 1).padStart(2, '0')}`
     return { ...task, batchLabel, label: `${batchLabel} · ${task.resources.length} 份资源 · ${formatDateTime(timestamp)}` }
   })
 })
@@ -272,9 +269,8 @@ function openCoursewareGeneration() {
   router.push({
     path: '/generate',
     query: {
-      kind: 'courseware',
       learnerId: selectedLearnerId.value || undefined,
-      batchId: activeTask.value?.batchId || undefined,
+      runId: activeTask.value?.batchId || undefined,
     },
   })
 }

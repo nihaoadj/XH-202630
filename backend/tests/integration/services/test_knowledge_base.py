@@ -425,11 +425,11 @@ def test_diagnosis_submission_scores_on_server_and_updates_profile():
         )
     )
 
-    assert result.knowledge_states["rag_basics"].score == round(2 / 3, 6)
+    assert result.knowledge_states["rag_basics"].score == 0.6
     assert result.knowledge_states["rag_basics"].status == "learning"
     updated = learner_repo.get(learner.learner_id)
     assert updated is not None
-    assert updated.theory_scores["rag_basics"] == round(200 / 3, 1)
+    assert updated.theory_scores["rag_basics"] == 60.0
 
 
 def test_assessment_question_bank_has_ten_layered_questions_per_skill_node():

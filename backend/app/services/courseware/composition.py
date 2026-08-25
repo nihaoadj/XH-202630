@@ -137,6 +137,103 @@ def _compose_blueprint_scenes(
         ]
         block_owner = {str(block["block_id"]): str(source["resource_id"]) for source, block in selected_blocks}
         block_ids = [str(block["block_id"]) for _, block in selected_blocks]
+        structured_practice_source = sources[0] if len(sources) == 1 and sources[0].get("role") == "practice" else None
+        practice_package = structured_practice_source.get("practice_guide_payload") if structured_practice_source else None
+        practice_step_id = next(
+            (str(block.get("practice_step_id")) for _, block in selected_blocks if block.get("practice_step_id")),
+            None,
+        )
+        practice_phase_id = next(
+            (str(block.get("practice_phase_id")) for _, block in selected_blocks if block.get("practice_phase_id")),
+            None,
+        )
+        if (slot.kind == "practice" and isinstance(practice_package, dict)
+                and practice_package.get("schema_version") == "3.0" and (practice_step_id or practice_phase_id)):
+            source_id = str(structured_practice_source["resource_id"])
+            source_refs = [{"source_resource_id": source_id, "source_block_ids": block_ids}]
+            if practice_phase_id in {"prepare", "verify", "reflect"}:
+                phase_key = {"prepare": "preparation", "verify": "verification", "reflect": "reflection"}[practice_phase_id]
+                phase = practice_package[phase_key]
+                items = list(phase.get("items") or phase.get("checklist") or [])
+                labels = {"prepare": "准备阶段", "verify": "验证阶段", "reflect": "复盘与小结"}
+                item_path = {"prepare": "preparation.items", "verify": "verification.checklist"}.get(practice_phase_id)
+                evidence_path = f"{phase_key}.evidence_ids"
+                display_blocks = [str(item) for item in items]
+                component_blocks = [
+                    {
+                        "schema_version": "1.0", "block_id": f"{slot.scene_id}:goal", "component": "key_point",
+                        "label": {"prepare": "阶段目标", "verify": "验证目标", "reflect": "复盘目标"}.get(practice_phase_id, "阶段目标"),
+                        "presentation_role": (
+                            "practice_phase_goal" if practice_phase_id == "prepare"
+                            else "practice_phase_completion" if practice_phase_id == "verify"
+                            else "practice_reflection_goal"
+                        ),
+                        "text": str(phase.get("goal") or ""), "source_json_path": f"{phase_key}.goal",
+                        "evidence_json_path": evidence_path, "source_refs": source_refs,
+                    },
+                ]
+                if item_path:
+                    component_blocks.append({
+                        "schema_version": "1.0", "block_id": f"{slot.scene_id}:items", "component": "steps",
+                        "text": "准备项目" if practice_phase_id == "prepare" else "最终检查项",
+                        "presentation_role": "practice_phase_items", "steps": display_blocks,
+                        "source_json_path": item_path, "evidence_json_path": evidence_path, "source_refs": source_refs,
+                    })
+                if practice_phase_id == "reflect":
+                    summary = str(phase.get("summary") or "")
+                    display_blocks = [summary]
+                    component_blocks.append({"schema_version": "1.0", "block_id": f"{slot.scene_id}:summary", "component": "callout", "label": "复盘小结", "presentation_role": "practice_reflection_summary", "text": summary, "source_json_path": "reflection.summary", "evidence_json_path": evidence_path, "source_refs": source_refs})
+                scene = {
+                    "scene_id": slot.scene_id, "kind": "practice", "page_role": "practice_workspace",
+                    "layout_recipe_id": slot.layout_recipe_id or "practice_workspace", "key_question": slot.key_question,
+                    "practice_variant": practice_phase_id, "practice_json_schema_version": "3.0", "practice_json_subject": phase_key, "required_zones": list(slot.required_zones),
+                    "content_budget": slot.content_budget.model_dump(mode="json"), "title": labels[practice_phase_id],
+                    "lead": str(phase.get("goal") or ""), "blocks": display_blocks,
+                    "conclusion": f"完成{labels[practice_phase_id]}后，再进入下一阶段。", "steps": [str(item) for item in items],
+                    "source_refs": [source_id], "source_block_ids": block_ids,
+                    "objective_ids": list(slot.objective_ids), "allowed_component_ids": list(slot.allowed_component_ids),
+                    "source_map": {"title": [block_ids], "lead": [block_ids], "blocks": [block_ids], "conclusion": [block_ids], "steps": [block_ids]},
+                    "component_blocks": component_blocks,
+                }
+                scenes.append(scene)
+                continue
+            practice_step = next(
+                (step for step in (practice_package.get("practice") or {}).get("steps") or []
+                 if isinstance(step, dict) and str(step.get("step_id")) == practice_step_id),
+                None,
+            )
+            if practice_step is None:
+                warnings.append({"code": "PRACTICE_JSON_STEP_MISSING", "message": f"{slot.scene_id} 缺少对应 JSON 步骤"})
+                continue
+            step_number = practice_step_id.removeprefix("step-")
+            verification = str(practice_step.get("verification") or "").strip()
+            instruction = str(practice_step.get("instruction_text") or "").strip()
+            code_blocks = [block for block in practice_step.get("code_blocks") or [] if isinstance(block, dict)]
+            scene = {
+                "scene_id": slot.scene_id, "kind": "practice", "page_role": "practice_workspace",
+                "layout_recipe_id": slot.layout_recipe_id or "practice_workspace",
+                "key_question": slot.key_question, "practice_variant": slot.practice_variant, "practice_json_schema_version": "3.0", "practice_json_subject": f"practice.steps.{practice_step_id}", "title_source_json_path": f"practice.steps.{practice_step_id}.title",
+                "required_zones": list(slot.required_zones), "content_budget": slot.content_budget.model_dump(mode="json"),
+                "title": f"步骤 {step_number}｜{str(practice_step.get('title') or practice_step_id)}",
+                "lead": instruction, "blocks": [instruction, f"完成验证：{verification}"],
+                "conclusion": f"完成本步骤的验证：{verification}", "steps": [],
+                "source_refs": [source_id], "source_block_ids": block_ids,
+                "objective_ids": list(slot.objective_ids), "allowed_component_ids": list(slot.allowed_component_ids),
+                "source_map": {
+                    "title": [block_ids],
+                    "lead": [block_ids],
+                    "blocks": [block_ids, block_ids, block_ids],
+                    "conclusion": [block_ids],
+                    "steps": [block_ids],
+                },
+                "component_blocks": [
+                    {"schema_version": "1.0", "block_id": f"{slot.scene_id}:instruction", "component": "key_point", "text": instruction, "source_json_path": f"practice.steps.{practice_step_id}.instruction_text", "evidence_json_path": f"practice.steps.{practice_step_id}.evidence_ids", "source_refs": source_refs},
+                    *[{"schema_version": "1.0", "block_id": f"{slot.scene_id}:code:{index}", "component": "code_block", "text": str(code_block.get("purpose") or "代码"), "language": str(code_block.get("language") or "text"), "code": str(code_block.get("code") or ""), "purpose": str(code_block.get("purpose") or ""), "source_json_path": f"practice.steps.{practice_step_id}.code_blocks.{index - 1}", "evidence_json_path": f"practice.steps.{practice_step_id}.code_blocks.{index - 1}.evidence_ids", "source_refs": source_refs} for index, code_block in enumerate(code_blocks, 1)],
+                    {"schema_version": "1.0", "block_id": f"{slot.scene_id}:verification", "component": "callout", "label": "完成验证", "text": verification, "presentation_role": "practice_verification", "source_json_path": f"practice.steps.{practice_step_id}.verification", "evidence_json_path": f"practice.steps.{practice_step_id}.evidence_ids", "source_refs": source_refs},
+                ],
+            }
+            scenes.append(scene)
+            continue
         content_parts = [str(block.get("text") or "").strip() for _, block in selected_blocks if str(block.get("text") or "").strip()]
         if not content_parts:
             content_parts = [part for source in sources for part in _paragraphs(str(source.get("content") or ""))]
@@ -161,7 +258,7 @@ def _compose_blueprint_scenes(
         # gate as an AI-composed page.  These phrases add no domain facts.
         if role == "cover":
             display_parts = [
-                f"学习范围：{source_content_parts[0]}",
+                f"学习概述：{source_content_parts[0]}",
                 "学习方法：围绕这份冻结资源阅读关键内容，并在互动中主动检查自己的理解。",
                 "完成信号：能够依据资源说明核心要点，并知道下一步应继续练习还是复习。",
             ]
@@ -288,29 +385,59 @@ def _review_practice_scenes(snapshots: list[dict[str, Any]], enrichment: Any | N
     enrichment_data = enrichment.model_dump(mode="json") if hasattr(enrichment, "model_dump") else (enrichment if isinstance(enrichment, dict) else {})
     summaries = {str(item.get("skill_node_id")): str(item.get("summary")) for item in enrichment_data.get("node_summaries") or [] if isinstance(item, dict)}
     block_by_question = {str(block.get("review_question_id")): str(block.get("block_id")) for block in source.get("blocks") or [] if block.get("review_question_id")}
+    block_by_summary = {str(block.get("skill_node_id")): str(block.get("block_id")) for block in source.get("blocks") or [] if block.get("kind") == "review_summary" and block.get("skill_node_id")}
     resource_id = str(source["resource_id"])
     def refs(ids: list[str]) -> list[dict[str, Any]]:
         return [{"source_resource_id": resource_id, "source_block_ids": ids or [next(iter(block_by_question.values()), "review-source")]}]
     def question_ids(node: dict[str, Any]) -> list[str]:
-        return [str(item.get("question_id")) for item in [*(node.get("recall_questions") or []), *(node.get("distinction_questions") or []), node.get("example_recognition")] if isinstance(item, dict) and item.get("question_id")]
+        examples = [item for item in (node.get("example_recognition_questions") or []) if isinstance(item, dict)]
+        if not examples and isinstance(node.get("example_recognition"), dict):
+            examples = [node["example_recognition"]]
+        return [str(item.get("question_id")) for item in [*(node.get("recall_questions") or []), *(node.get("distinction_questions") or []), *examples] if isinstance(item, dict) and item.get("question_id")]
+    def chunks(items: list[dict[str, Any]], size: int = 2) -> list[list[dict[str, Any]]]:
+        return [items[start:start + size] for start in range(0, len(items), size)] or [[]]
+    def example_questions(node: dict[str, Any]) -> list[dict[str, Any]]:
+        questions = [item for item in (node.get("example_recognition_questions") or []) if isinstance(item, dict)]
+        if questions:
+            return questions
+        legacy = node.get("example_recognition")
+        return [legacy] if isinstance(legacy, dict) else []
     scenes: list[dict[str, Any]] = []
     nodes = package.get("node_blocks") or []
     overview_ids = [block_by_question[item] for node in nodes for item in question_ids(node) if item in block_by_question][:1]
-    scenes.append({"scene_id": "scene:review:overview", "kind": "intro", "page_role": "review_overview", "layout_recipe_id": "review_overview", "content_budget": {"min_chars": 40, "min_zones": 2}, "title": enrichment_data.get("course_title") or package.get("title") or "复习清单", "lead": enrichment_data.get("overview_lead") or "先独立回忆，再揭示答案并完成自评。", "blocks": [package.get("instructions") or "完成每道题的闭卷回忆后再揭示答案。"], "conclusion": "本课件的自评不会计入正式测评成绩。", "source_refs": [resource_id], "source_block_ids": overview_ids, "component_blocks": [{"schema_version": "4.0", "block_id": "review-overview", "component": "review_overview", "text": package.get("instructions") or "主动回忆训练", "items": [{"label": str(node.get("skill_node_name") or node.get("skill_node_id")), "value": "闭卷回忆、概念辨析与正反例辨认"} for node in nodes], "source_refs": refs(overview_ids)}]})
+    node_items = [{"label": str(node.get("skill_node_name") or node.get("skill_node_id")), "value": "闭卷回忆、概念辨析与正反例辨认"} for node in nodes]
+    overview_items = [
+        {"label": "学习范围", "value": str(enrichment_data.get("learning_scope") or "覆盖当前复习清单中的全部学习节点，以及每个节点的核心概念、判断边界与证据依据。")},
+        {"label": "学习方法", "value": str(enrichment_data.get("learning_method") or "先闭卷回忆，再揭示答案并进行会、模糊、不会自评；遇到不确定内容回到来源复核。")},
+    ]
+    scenes.append({"scene_id": "scene:review:overview", "kind": "intro", "page_role": "review_overview", "layout_recipe_id": "review_overview", "content_budget": {"min_chars": 80, "min_zones": 4}, "title": enrichment_data.get("course_title") or package.get("title") or "复习清单", "lead": enrichment_data.get("overview_lead") or "先独立回忆，再揭示答案并完成自评。", "blocks": [package.get("instructions") or "完成每道题的闭卷回忆后再揭示答案。"], "conclusion": "本课件的自评不会计入正式测评成绩。", "source_refs": [resource_id], "source_block_ids": overview_ids, "component_blocks": [{"schema_version": "4.0", "block_id": "review-overview", "component": "review_overview", "text": package.get("instructions") or "主动回忆训练", "items": overview_items, "node_items": node_items, "source_refs": refs(overview_ids)}]})
     for index, node in enumerate(nodes, 1):
         node_id = str(node.get("skill_node_id") or index)
-        ids = [block_by_question[item] for item in question_ids(node) if item in block_by_question]
         base = f"scene:review:node:{index}:{node_id}"
-        recall = list(node.get("recall_questions") or [])
-        distinction = list(node.get("distinction_questions") or [])
-        scenes.append({"scene_id": f"{base}:recall", "kind": "practice", "page_role": "review_recall", "layout_recipe_id": "review_recall_grid", "title": f"{node.get('skill_node_name') or node_id}｜闭卷回忆", "lead": "先在脑中作答；准备好后再显示答案。", "blocks": [], "conclusion": "根据答案标记会、模糊或不会。", "source_refs": [resource_id], "source_block_ids": ids, "component_blocks": [{"schema_version": "4.0", "block_id": f"{base}:recall-cards", "component": "review_recall_card", "text": "闭卷回忆", "items": recall, "source_refs": refs(ids)}]})
-        scenes.append({"scene_id": f"{base}:distinction", "kind": "practice", "page_role": "review_distinction", "layout_recipe_id": "review_distinction_grid", "title": f"{node.get('skill_node_name') or node_id}｜概念辨析", "lead": "先判断陈述，再揭示纠正表述与依据。", "blocks": [], "conclusion": "把误区转化为下一次判断时的检查条件。", "source_refs": [resource_id], "source_block_ids": ids, "component_blocks": [{"schema_version": "4.0", "block_id": f"{base}:distinction-cards", "component": "review_distinction_card", "text": "概念辨析", "items": distinction, "source_refs": refs(ids)}]})
-        example = node.get("example_recognition")
-        component = {"schema_version": "4.0", "block_id": f"{base}:example", "component": "review_example_card" if isinstance(example, dict) else "review_reflection", "text": "正反例辨认" if isinstance(example, dict) else "当前 Evidence 不足以形成单一明确边界。", "source_refs": refs(ids)}
-        if isinstance(example, dict): component["item"] = example
-        else: component["reason"] = next((item.get("reason") for item in (node.get("omitted_slots") or []) if item.get("local_id") == "example-1"), "NO_EXPLICIT_CONCEPT_BOUNDARY")
-        scenes.append({"scene_id": f"{base}:example", "kind": "recap", "page_role": "review_example", "layout_recipe_id": "review_example_focus", "title": f"{node.get('skill_node_name') or node_id}｜正反例与边界", "lead": "辨认决定性差异，再以 Evidence 校准理解边界。", "blocks": [], "conclusion": summaries.get(node_id) or "完成本节点全部实际题目的自评后，即可形成低置信度掌握记录。", "source_refs": [resource_id], "source_block_ids": ids, "component_blocks": [component]})
-    scenes.append({"scene_id": "scene:review:summary", "kind": "recap", "page_role": "summary_action", "layout_recipe_id": "recap_dashboard", "content_budget": {"min_chars": 80, "min_zones": 2}, "title": "复习完成与下一步", "lead": "回顾每个节点的自评，再选择下一步。", "blocks": [], "conclusion": "出现不会时返回对应节点；两项及以上模糊时重新闭卷作答；全部会时进入实操或分阶测试。", "source_refs": [resource_id], "source_block_ids": overview_ids, "component_blocks": [{"schema_version": "4.0", "block_id": "review-completion", "component": "review_completion", "text": "节点完成情况", "items": [{"node_id": str(node.get("skill_node_id") or index), "label": str(node.get("skill_node_name") or node.get("skill_node_id") or index)} for index, node in enumerate(nodes, 1)], "source_refs": refs(overview_ids)}]})
+        recall = [item for item in (node.get("recall_questions") or []) if isinstance(item, dict)]
+        distinction = [item for item in (node.get("distinction_questions") or []) if isinstance(item, dict)]
+        examples = example_questions(node)
+        for page_index, page_questions in enumerate(chunks(recall), 1):
+            page_ids = tuple(block_by_question.get(str(question.get("question_id"))) for question in page_questions if block_by_question.get(str(question.get("question_id")))) or overview_ids
+            scenes.append({"scene_id": f"{base}:recall:{page_index}", "kind": "practice", "page_role": "review_recall", "layout_recipe_id": "review_recall_grid", "title": f"{node.get('skill_node_name') or node_id}｜闭卷回忆（第{page_index}页）", "lead": "先在脑中作答；准备好后再显示答案。", "blocks": [], "conclusion": "根据答案标记会、模糊或不会。", "source_refs": [resource_id], "source_block_ids": list(page_ids), "component_blocks": [{"schema_version": "4.0", "block_id": f"{base}:recall:{page_index}:cards", "component": "review_recall_card", "text": "闭卷回忆", "items": page_questions, "source_refs": refs(list(page_ids))}]})
+        for page_index, page_questions in enumerate(chunks(distinction), 1):
+            page_ids = tuple(block_by_question.get(str(question.get("question_id"))) for question in page_questions if block_by_question.get(str(question.get("question_id")))) or overview_ids
+            scenes.append({"scene_id": f"{base}:distinction:{page_index}", "kind": "practice", "page_role": "review_distinction", "layout_recipe_id": "review_distinction_grid", "title": f"{node.get('skill_node_name') or node_id}｜概念辨析（第{page_index}页）", "lead": "先判断陈述，再揭示纠正表述与依据。", "blocks": [], "conclusion": "把误区转化为下一次判断时的检查条件。", "source_refs": [resource_id], "source_block_ids": list(page_ids), "component_blocks": [{"schema_version": "4.0", "block_id": f"{base}:distinction:{page_index}:cards", "component": "review_distinction_card", "text": "概念辨析", "items": page_questions, "source_refs": refs(list(page_ids))}]})
+        example_ids = tuple(block_by_question.get(str(question.get("question_id"))) for question in examples if block_by_question.get(str(question.get("question_id")))) or overview_ids
+        component = {"schema_version": "4.0", "block_id": f"{base}:example", "component": "review_example_card" if examples else "review_reflection", "text": "正反例辨认" if examples else "当前 Evidence 不足以形成单一明确边界。", "source_refs": refs(list(example_ids))}
+        if examples:
+            component["items"] = examples
+        else:
+            component["reason"] = next((item.get("reason") for item in (node.get("omitted_slots") or []) if str(item.get("local_id")) in {"example-1", "example-2"}), "NO_EXPLICIT_CONCEPT_BOUNDARY")
+        scenes.append({"scene_id": f"{base}:example", "kind": "recap", "page_role": "review_example", "layout_recipe_id": "review_example_focus", "title": f"{node.get('skill_node_name') or node_id}｜正反例与边界", "lead": "辨认决定性差异，再以 Evidence 校准理解边界。", "blocks": [], "conclusion": summaries.get(node_id) or "完成本节点全部实际题目的自评后，即可形成低置信度掌握记录。", "source_refs": [resource_id], "source_block_ids": list(example_ids), "component_blocks": [component]})
+        knowledge_summary = str(node.get("knowledge_summary") or summaries.get(node_id) or "").strip()
+        summary_id = block_by_summary.get(node_id)
+        if knowledge_summary and summary_id:
+            scenes.append({"scene_id": f"{base}:summary", "kind": "recap", "page_role": "review_node_summary", "layout_recipe_id": "review_node_summary", "content_budget": {"min_chars": 100, "min_zones": 2}, "title": f"{node.get('skill_node_name') or node_id}｜知识小结", "lead": "把闭卷回忆、概念辨析与边界判断收束为本节点的可执行复盘。", "blocks": [knowledge_summary], "conclusion": "完成本页小结后，再进入下一个节点的三组固定练习。", "source_refs": [resource_id], "source_block_ids": [summary_id], "component_blocks": [{"schema_version": "4.0", "block_id": f"{base}:summary", "component": "review_node_summary", "node_name": str(node.get("skill_node_name") or node_id), "text": knowledge_summary, "source_refs": refs([summary_id])}]})
+    completion_lead = str(enrichment_data.get("completion_lead") or "回顾每个节点的自评，再选择下一步。")
+    completion_message = str(enrichment_data.get("completion_message") or "出现不会时返回对应节点；两项及以上模糊时重新闭卷作答；全部会时进入实操或分阶测试。")
+    overall_summary = str(enrichment_data.get("overall_summary") or "本轮复习把各节点的核心概念、判断边界与证据依据串联起来：先闭卷回忆，再通过概念辨析和正反例辨认检查理解是否能够迁移。完成自评后，优先回到标记为模糊或不会的题目，重新核对对应来源与前提条件。")
+    scenes.append({"scene_id": "scene:review:summary", "kind": "recap", "page_role": "summary_action", "layout_recipe_id": "recap_dashboard", "content_budget": {"min_chars": 140, "min_zones": 3}, "title": "复习完成与下一步", "lead": completion_lead, "blocks": [], "conclusion": completion_message, "source_refs": [resource_id], "source_block_ids": overview_ids, "component_blocks": [{"schema_version": "4.0", "block_id": "review-completion", "component": "review_completion", "text": "节点完成情况", "overall_summary": overall_summary, "items": [{"node_id": str(node.get("skill_node_id") or index), "label": str(node.get("skill_node_name") or node.get("skill_node_id") or index)} for index, node in enumerate(nodes, 1)], "source_refs": refs(overview_ids)}]})
     # Preserve the ordinary workflow's scene contract even though the visible
     # learning material is renderer-owned structured cards rather than prose
     # zones.  These fields keep storyboard/source hard gates and the existing

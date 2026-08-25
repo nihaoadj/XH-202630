@@ -1,0 +1,787 @@
+{
+  "renderer": "app.core.courseware.renderer.render_courseware",
+  "source_fixture": "backend/tests/fixtures/courseware/structured_practice_full_preview.json",
+  "schema_version": "3.0",
+  "visual_style_seed": "deterministic-practice-preview-v1",
+  "selected_step_style_ids": [
+    "practice-step-lilac",
+    "practice-step-signal",
+    "practice-step-sand",
+    "practice-step-terminal",
+    "practice-step-coral"
+  ],
+  "page_count": 9,
+  "complete_courseware_file": "courseware-complete-long-text.html",
+  "complete_page_count": 11,
+  "text_test_mode": "long_cover_text",
+  "warnings": [],
+  "pages": [
+    {
+      "index": 1,
+      "file": "01-prepare.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:prepare",
+      "title": "准备阶段",
+      "variant": "prepare",
+      "visual_style_id": "practice-prepare-calm",
+      "json_subject": "preparation",
+      "component_source_paths": [
+        "preparation.goal",
+        "preparation.items"
+      ]
+    },
+    {
+      "index": 2,
+      "file": "02-code.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-lilac",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": [
+        "practice.steps.step-1.instruction_text",
+        "practice.steps.step-1.code_blocks.0",
+        "practice.steps.step-1.verification"
+      ]
+    },
+    {
+      "index": 3,
+      "file": "03-code.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-signal",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": [
+        "practice.steps.step-2.instruction_text",
+        "practice.steps.step-2.code_blocks.0",
+        "practice.steps.step-2.verification"
+      ]
+    },
+    {
+      "index": 4,
+      "file": "04-code.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-sand",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": [
+        "practice.steps.step-3.instruction_text",
+        "practice.steps.step-3.code_blocks.0",
+        "practice.steps.step-3.verification"
+      ]
+    },
+    {
+      "index": 5,
+      "file": "05-code.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-terminal",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": [
+        "practice.steps.step-4.instruction_text",
+        "practice.steps.step-4.code_blocks.0",
+        "practice.steps.step-4.verification"
+      ]
+    },
+    {
+      "index": 6,
+      "file": "06-code.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-coral",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": [
+        "practice.steps.step-5.instruction_text",
+        "practice.steps.step-5.code_blocks.0",
+        "practice.steps.step-5.verification"
+      ]
+    },
+    {
+      "index": 7,
+      "file": "07-code.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-lilac",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": [
+        "practice.steps.step-6.instruction_text",
+        "practice.steps.step-6.code_blocks.0",
+        "practice.steps.step-6.verification"
+      ]
+    },
+    {
+      "index": 8,
+      "file": "08-verify.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:verify",
+      "title": "验证阶段",
+      "variant": "verify",
+      "visual_style_id": "practice-verify-classic",
+      "json_subject": "verification",
+      "component_source_paths": [
+        "verification.goal",
+        "verification.checklist"
+      ]
+    },
+    {
+      "index": 9,
+      "file": "09-reflect.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:reflect",
+      "title": "复盘与小结",
+      "variant": "reflect",
+      "visual_style_id": "practice-reflect-dawn",
+      "json_subject": "reflection",
+      "component_source_paths": [
+        "reflection.goal",
+        "reflection.summary"
+      ]
+    }
+  ],
+  "complete_pages": [
+    {
+      "index": 1,
+      "scene_id": "scene:intro",
+      "kind": "intro",
+      "page_role": "cover",
+      "practice_variant": null,
+      "title": "课程导览",
+      "visual_style_id": null
+    },
+    {
+      "index": 2,
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:prepare",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "prepare",
+      "title": "准备阶段",
+      "visual_style_id": "practice-prepare-calm"
+    },
+    {
+      "index": 3,
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "code",
+      "title": "步骤 1｜准备运行环境",
+      "visual_style_id": "practice-step-lilac"
+    },
+    {
+      "index": 4,
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "code",
+      "title": "步骤 2｜安装并锁定依赖",
+      "visual_style_id": "practice-step-signal"
+    },
+    {
+      "index": 5,
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "code",
+      "title": "步骤 3｜读取并切分测试文档",
+      "visual_style_id": "practice-step-sand"
+    },
+    {
+      "index": 6,
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "code",
+      "title": "步骤 4｜构建向量索引",
+      "visual_style_id": "practice-step-terminal"
+    },
+    {
+      "index": 7,
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "code",
+      "title": "步骤 5｜执行检索并核对来源",
+      "visual_style_id": "practice-step-coral"
+    },
+    {
+      "index": 8,
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "code",
+      "title": "步骤 6｜生成并检查课件页面",
+      "visual_style_id": "practice-step-lilac"
+    },
+    {
+      "index": 9,
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:verify",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "verify",
+      "title": "验证阶段",
+      "visual_style_id": "practice-verify-classic"
+    },
+    {
+      "index": 10,
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:reflect",
+      "kind": "practice",
+      "page_role": "practice_workspace",
+      "practice_variant": "reflect",
+      "title": "复盘与小结",
+      "visual_style_id": "practice-reflect-dawn"
+    },
+    {
+      "index": 11,
+      "scene_id": "scene:recap",
+      "kind": "recap",
+      "page_role": "summary_action",
+      "practice_variant": null,
+      "title": "总结与行动",
+      "visual_style_id": null
+    }
+  ],
+  "style_variant_count": 54,
+  "style_variants": [
+    {
+      "index": 1,
+      "file": "01-practice-prepare-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:prepare",
+      "title": "准备阶段",
+      "variant": "prepare",
+      "visual_style_id": "practice-prepare-classic",
+      "json_subject": "preparation",
+      "component_source_paths": []
+    },
+    {
+      "index": 1,
+      "file": "01-practice-prepare-calm.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:prepare",
+      "title": "准备阶段",
+      "variant": "prepare",
+      "visual_style_id": "practice-prepare-calm",
+      "json_subject": "preparation",
+      "component_source_paths": []
+    },
+    {
+      "index": 2,
+      "file": "02-practice-step-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-classic",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": []
+    },
+    {
+      "index": 2,
+      "file": "02-practice-step-terminal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-terminal",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": []
+    },
+    {
+      "index": 2,
+      "file": "02-practice-step-signal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-signal",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": []
+    },
+    {
+      "index": 2,
+      "file": "02-practice-step-ocean.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-ocean",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": []
+    },
+    {
+      "index": 2,
+      "file": "02-practice-step-forest.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-forest",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": []
+    },
+    {
+      "index": 2,
+      "file": "02-practice-step-coral.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-coral",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": []
+    },
+    {
+      "index": 2,
+      "file": "02-practice-step-lilac.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-lilac",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": []
+    },
+    {
+      "index": 2,
+      "file": "02-practice-step-sand.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:1",
+      "title": "步骤 1｜准备运行环境",
+      "variant": "code",
+      "visual_style_id": "practice-step-sand",
+      "json_subject": "practice.steps.step-1",
+      "component_source_paths": []
+    },
+    {
+      "index": 3,
+      "file": "03-practice-step-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-classic",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": []
+    },
+    {
+      "index": 3,
+      "file": "03-practice-step-terminal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-terminal",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": []
+    },
+    {
+      "index": 3,
+      "file": "03-practice-step-signal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-signal",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": []
+    },
+    {
+      "index": 3,
+      "file": "03-practice-step-ocean.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-ocean",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": []
+    },
+    {
+      "index": 3,
+      "file": "03-practice-step-forest.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-forest",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": []
+    },
+    {
+      "index": 3,
+      "file": "03-practice-step-coral.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-coral",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": []
+    },
+    {
+      "index": 3,
+      "file": "03-practice-step-lilac.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-lilac",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": []
+    },
+    {
+      "index": 3,
+      "file": "03-practice-step-sand.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:2",
+      "title": "步骤 2｜安装并锁定依赖",
+      "variant": "code",
+      "visual_style_id": "practice-step-sand",
+      "json_subject": "practice.steps.step-2",
+      "component_source_paths": []
+    },
+    {
+      "index": 4,
+      "file": "04-practice-step-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-classic",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": []
+    },
+    {
+      "index": 4,
+      "file": "04-practice-step-terminal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-terminal",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": []
+    },
+    {
+      "index": 4,
+      "file": "04-practice-step-signal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-signal",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": []
+    },
+    {
+      "index": 4,
+      "file": "04-practice-step-ocean.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-ocean",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": []
+    },
+    {
+      "index": 4,
+      "file": "04-practice-step-forest.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-forest",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": []
+    },
+    {
+      "index": 4,
+      "file": "04-practice-step-coral.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-coral",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": []
+    },
+    {
+      "index": 4,
+      "file": "04-practice-step-lilac.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-lilac",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": []
+    },
+    {
+      "index": 4,
+      "file": "04-practice-step-sand.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:3",
+      "title": "步骤 3｜读取并切分测试文档",
+      "variant": "code",
+      "visual_style_id": "practice-step-sand",
+      "json_subject": "practice.steps.step-3",
+      "component_source_paths": []
+    },
+    {
+      "index": 5,
+      "file": "05-practice-step-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-classic",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": []
+    },
+    {
+      "index": 5,
+      "file": "05-practice-step-terminal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-terminal",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": []
+    },
+    {
+      "index": 5,
+      "file": "05-practice-step-signal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-signal",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": []
+    },
+    {
+      "index": 5,
+      "file": "05-practice-step-ocean.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-ocean",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": []
+    },
+    {
+      "index": 5,
+      "file": "05-practice-step-forest.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-forest",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": []
+    },
+    {
+      "index": 5,
+      "file": "05-practice-step-coral.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-coral",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": []
+    },
+    {
+      "index": 5,
+      "file": "05-practice-step-lilac.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-lilac",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": []
+    },
+    {
+      "index": 5,
+      "file": "05-practice-step-sand.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:4",
+      "title": "步骤 4｜构建向量索引",
+      "variant": "code",
+      "visual_style_id": "practice-step-sand",
+      "json_subject": "practice.steps.step-4",
+      "component_source_paths": []
+    },
+    {
+      "index": 6,
+      "file": "06-practice-step-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-classic",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": []
+    },
+    {
+      "index": 6,
+      "file": "06-practice-step-terminal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-terminal",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": []
+    },
+    {
+      "index": 6,
+      "file": "06-practice-step-signal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-signal",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": []
+    },
+    {
+      "index": 6,
+      "file": "06-practice-step-ocean.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-ocean",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": []
+    },
+    {
+      "index": 6,
+      "file": "06-practice-step-forest.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-forest",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": []
+    },
+    {
+      "index": 6,
+      "file": "06-practice-step-coral.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-coral",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": []
+    },
+    {
+      "index": 6,
+      "file": "06-practice-step-lilac.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-lilac",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": []
+    },
+    {
+      "index": 6,
+      "file": "06-practice-step-sand.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:5",
+      "title": "步骤 5｜执行检索并核对来源",
+      "variant": "code",
+      "visual_style_id": "practice-step-sand",
+      "json_subject": "practice.steps.step-5",
+      "component_source_paths": []
+    },
+    {
+      "index": 7,
+      "file": "07-practice-step-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-classic",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": []
+    },
+    {
+      "index": 7,
+      "file": "07-practice-step-terminal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-terminal",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": []
+    },
+    {
+      "index": 7,
+      "file": "07-practice-step-signal.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-signal",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": []
+    },
+    {
+      "index": 7,
+      "file": "07-practice-step-ocean.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-ocean",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": []
+    },
+    {
+      "index": 7,
+      "file": "07-practice-step-forest.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-forest",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": []
+    },
+    {
+      "index": 7,
+      "file": "07-practice-step-coral.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-coral",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": []
+    },
+    {
+      "index": 7,
+      "file": "07-practice-step-lilac.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-lilac",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": []
+    },
+    {
+      "index": 7,
+      "file": "07-practice-step-sand.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:step:6",
+      "title": "步骤 6｜生成并检查课件页面",
+      "variant": "code",
+      "visual_style_id": "practice-step-sand",
+      "json_subject": "practice.steps.step-6",
+      "component_source_paths": []
+    },
+    {
+      "index": 8,
+      "file": "08-practice-verify-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:verify",
+      "title": "验证阶段",
+      "variant": "verify",
+      "visual_style_id": "practice-verify-classic",
+      "json_subject": "verification",
+      "component_source_paths": []
+    },
+    {
+      "index": 8,
+      "file": "08-practice-verify-blueprint.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:verify",
+      "title": "验证阶段",
+      "variant": "verify",
+      "visual_style_id": "practice-verify-blueprint",
+      "json_subject": "verification",
+      "component_source_paths": []
+    },
+    {
+      "index": 9,
+      "file": "09-practice-reflect-classic.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:reflect",
+      "title": "复盘与小结",
+      "variant": "reflect",
+      "visual_style_id": "practice-reflect-classic",
+      "json_subject": "reflection",
+      "component_source_paths": []
+    },
+    {
+      "index": 9,
+      "file": "09-practice-reflect-dawn.html",
+      "scene_id": "scene:practice:deterministic-practice-preview:phase:reflect",
+      "title": "复盘与小结",
+      "variant": "reflect",
+      "visual_style_id": "practice-reflect-dawn",
+      "json_subject": "reflection",
+      "component_source_paths": []
+    }
+  ]
+}

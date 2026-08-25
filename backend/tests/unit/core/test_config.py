@@ -28,6 +28,10 @@ def test_settings_safe_defaults():
     assert settings.debug is False
     assert settings.sql_echo is False
     assert settings.llm_workflow_timeout_seconds == 1200
+    assert settings.claim_request_timeout_seconds == 300.0
+    assert settings.claim_max_attempts == 3
+    assert settings.claim_schema_repair_attempts == 2
+    assert settings.claim_max_output_tokens == 16384
     assert settings.text_resource_request_timeout_seconds == 240.0
     assert settings.text_resource_max_output_tokens == 32768
     assert settings.workflow_run_lease_seconds == 1260
@@ -121,6 +125,11 @@ def test_container_gives_resource_agents_their_dedicated_recovery_budget():
     assert gateway.options_for("text_resource_agent").max_attempts == 2
     assert gateway.options_for("assessment_agent").max_attempts == 2
     assert gateway.options_for("reviewer").max_attempts == 2
+    assert gateway.options_for("claim_extractor").max_attempts == 3
+    assert gateway.options_for("claim_extractor").schema_repair_attempts == 2
+    assert gateway.options_for("claim_extractor").max_output_tokens == 16384
+    assert gateway.options_for("claim_extractor").request_timeout_seconds == 300.0
+    assert gateway.options_for("claim_judge").max_attempts == 3
 
 
 @pytest.mark.parametrize("mode", ["development", "demo", "production"])

@@ -2,7 +2,7 @@
  * A selected resource creates its own interactive representation.  Keeping
  * this policy pure lets the UI and browser-free tests share the same rule.
  */
-export const COURSEWARE_SOURCE_TYPES = Object.freeze(['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析'])
+export const COURSEWARE_SOURCE_TYPES = Object.freeze(['实操指南', '复习清单'])
 
 export function coursewareEligibleSources(resources) {
   return (resources || [])
@@ -18,6 +18,5 @@ export function buildCoursewareBatchRequest({ learnerId, resourceIds, preference
     learning_goal: preferences.learning_goal || null,
     expected_duration_minutes: preferences.expected_duration_minutes ?? null,
     interaction_intensity: preferences.interaction_intensity || 'medium',
-    visual_style_id: preferences.visual_style_id || null,
   }
 }

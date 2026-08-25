@@ -83,7 +83,13 @@ async def lifespan(app: FastAPI):
             if settings.db_type == "sqlite":
                 stale_job_ids = (
                     container.generation_job_repository().fail_incomplete_before(
-                        now,
+                        # A development reload starts a new web process while a
+                        # request's persisted workflow may still own a valid
+                        # lease.  Do not turn every in-flight job into a
+                        # terminal failure merely because this process started.
+                        # The audit repository above owns the authoritative
+                        # interruption decision once the lease actually expires.
+                        now - timedelta(seconds=settings.workflow_run_lease_seconds),
                         ErrorCode.GENERATION_JOB_INTERRUPTED.value,
                     )
                 )

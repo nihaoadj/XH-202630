@@ -31,7 +31,12 @@ def list_resource_library(learner_id: str, request: Request):
         )
         for item in request.app.container.resource_service().list_by_learner(learner_id)
     ]
-    courseware_items = request.app.container.courseware_service().list_library_items(learner_id)
+    courseware_provider = getattr(request.app.container, "courseware_service", None)
+    courseware_items = (
+        courseware_provider().list_library_items(learner_id)
+        if courseware_provider is not None
+        else []
+    )
     return sorted(text_items + courseware_items,
                   key=lambda item: str(item.published_at or item.created_at or ""),
                   reverse=True)

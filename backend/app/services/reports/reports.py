@@ -9,8 +9,17 @@ from app.models.reviews.claims import ClaimMetricStatus, ClaimVerdict, compute_c
 from app.models.reports.contracts import ReportRevisionPartsV1
 from app.services.reports.difficulty_matching import STRATEGY_VERSION, match_difficulty
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 import hashlib
 import json
+
+
+# Increment this whenever a report's client-visible projection changes without
+# any underlying learner fact changing.  It deliberately participates in the
+# ETag/revision so a browser cannot retain a structurally stale report after a
+# deployment (for example, the radar changing from measured nodes to the full
+# knowledge graph).
+REPORT_PROJECTION_VERSION = "4.0-full-knowledge-radar"
 
 
 class ReportSnapshotUnstable(RuntimeError):
@@ -32,6 +41,7 @@ class ReportService:
         mastery_service: MasteryService | None = None,
         claim_repo=None,
         audit_repo=None,
+        diagnosis_repo=None,
     ):
         self.resource_repo = resource_repo
         self.feedback_repo = feedback_repo
@@ -40,6 +50,7 @@ class ReportService:
         self.mastery_service = mastery_service
         self.claim_repo = claim_repo
         self.audit_repo = audit_repo
+        self.diagnosis_repo = diagnosis_repo
 
     def build_report(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> dict:
         for _ in range(3):
@@ -47,6 +58,26 @@ class ReportService:
             if self._snapshot_is_current(profile, report, window_days):
                 return report
         raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+
+    @staticmethod
+    def _initial_diagnostic_flow(profile) -> dict:
+        preferences = profile.learning_preferences
+        metadata = preferences.metadata if preferences and isinstance(preferences.metadata, dict) else {}
+        flow = metadata.get("initial_diagnostic_flow")
+        return dict(flow) if isinstance(flow, dict) else {}
+
+    @staticmethod
+    def _initial_diagnostic_summary(flow: dict) -> dict:
+        return {
+            "questionnaire_tier": flow.get("questionnaire_tier"),
+            "final_tier": flow.get("final_tier"),
+            "initial_recommended_node_id": flow.get("initial_recommended_node_id"),
+            "downgraded": flow.get("questionnaire_tier") != flow.get("final_tier"),
+            "rounds": [
+                {"tier": item.get("tier"), "node_ids": item.get("node_ids", []), "status": item.get("status")}
+                for item in flow.get("rounds", []) if isinstance(item, dict)
+            ],
+        }
 
     def _build_report_once(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> dict:
         """构建学情报告"""
@@ -58,13 +89,41 @@ class ReportService:
             self.mastery_service.next_generation_options(profile)
             if self.mastery_service and profile.knowledge_base_id else None
         )
+        ordered_nodes = self._ordered_ability_nodes(
+            ability_projection.nodes if ability_projection else []
+        )
         measured_nodes = [
-            node for node in (ability_projection.nodes if ability_projection else [])
+            node for node in ordered_nodes
             if node.mastery.objective_evidence_count > 0 and node.mastery.mastery_score is not None
         ]
-        topics = [node.name for node in measured_nodes] or list(profile.theory_scores.keys())
-        scores = [round(float(node.mastery.mastery_score) * 100, 1) for node in measured_nodes] \
-            or list(profile.theory_scores.values())
+        # The radar is always the complete knowledge graph, even when a
+        # legacy/partial ability projection is unavailable.  Questionnaire
+        # theory fields must never replace graph-node axes.
+        projected_by_id = {node.skill_node_id: node for node in ordered_nodes}
+        catalog_nodes = (
+            self.mastery_service.knowledge_service.list_skill_nodes(profile.knowledge_base_id)
+            if self.mastery_service and profile.knowledge_base_id else []
+        )
+        radar_nodes = self._ordered_ability_nodes([
+            SimpleNamespace(
+                skill_node_id=node.node_id, name=node.name, tier=node.tier,
+                prerequisites=node.prerequisites,
+            )
+            for node in catalog_nodes
+        ])
+        if not radar_nodes:
+            radar_nodes = ordered_nodes
+        topics = [node.name for node in radar_nodes]
+        scores = []
+        radar_measurement_statuses = []
+        for node in radar_nodes:
+            projected = projected_by_id.get(node.skill_node_id)
+            measured = bool(
+                projected and projected.mastery.objective_evidence_count > 0
+                and projected.mastery.mastery_score is not None
+            )
+            scores.append(round(float(projected.mastery.mastery_score) * 100, 1) if measured else 0.0)
+            radar_measurement_statuses.append("measured" if measured else "unassessed")
         resources = self._visible_resources(profile.learner_id)
         feedback = self.feedback_repo.list_by_learner(profile.learner_id)
         weak_points = ([node.name for node in measured_nodes if node.mastery.status.value == "weak"]
@@ -75,6 +134,11 @@ class ReportService:
         # lists are bounded later; revision and activity consume all durable
         # formal attempts available from the repository.
         attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10_000) if self.feedback_loop_repo else []
+        diagnostic_runs = self.diagnosis_repo.list_runs_by_learner(profile.learner_id) if self.diagnosis_repo else []
+        initial_flow = self._initial_diagnostic_flow(profile)
+        calibration_pending = initial_flow.get("status") in {"pending", "retest"}
+        visible_diagnostic_runs = [] if calibration_pending else diagnostic_runs
+        diagnostic_measurements = self._diagnostic_measurements(visible_diagnostic_runs, ability_projection)
         loop_results = self.feedback_loop_repo.list_results(profile.learner_id, 10) if self.feedback_loop_repo else []
         formal_feedback = [
             {
@@ -109,18 +173,18 @@ class ReportService:
         }
 
         credibility = self._resource_credibility(resources, knowledge_base_id=profile.knowledge_base_id)
-        blind_spot_map = self._build_blind_spot_map(ability_projection, attempts)
+        blind_spot_map = self._build_blind_spot_map(ability_projection, attempts, visible_diagnostic_runs)
         resource_difficulty_curve = self._build_resource_difficulty_curve(ability_projection, resources)
         learning_path_graph = self._build_learning_path_graph(ability_projection, path, generation_options)
         revision_parts = self._revision_parts(
-            profile, ability_projection, attempts, resources, window_days, credibility["items"],
+            profile, ability_projection, attempts, resources, window_days, credibility["items"], diagnostic_runs=visible_diagnostic_runs,
             resource_difficulty_curve=resource_difficulty_curve,
             learning_path_graph=learning_path_graph,
         )
         report_revision = self._revision(revision_parts, window_days)
         data_as_of = self._data_as_of(profile, attempts, resources, mastery_events)
         return {
-            "report_schema_version": "3.0",
+            "report_schema_version": "4.0",
             "report_revision": report_revision,
             "data_as_of": data_as_of,
             "window": {
@@ -141,6 +205,7 @@ class ReportService:
             "radar": {
                 "dimensions": topics,
                 "values": scores,
+                "measurement_statuses": radar_measurement_statuses,
             },
             "weak_points": weak_points,
             "strong_points": strong_points,
@@ -294,7 +359,7 @@ class ReportService:
                 if item.followup_generation_status.value != "not_requested"
             ],
             "profile_versions": [item.model_dump(mode="json") for item in versions],
-            "ability_nodes": ability_projection.nodes if ability_projection else [],
+            "ability_nodes": ordered_nodes if ability_projection else [],
             "mastery_summary": ability_projection.summary.model_dump(mode="json") if ability_projection else {},
             "mastery_trend": [
                 {
@@ -321,6 +386,8 @@ class ReportService:
                     + ability_projection.summary.self_reported_count
                 ),
             } if ability_projection else {}),
+            "diagnostic_measurements": diagnostic_measurements,
+            "initial_diagnostic": (self._initial_diagnostic_summary(initial_flow) if initial_flow.get("status") == "final" else {}),
             "weakness_priorities": priorities,
             "next_resource_focus": {
                 "focus_mode": "auto",
@@ -345,11 +412,14 @@ class ReportService:
             if self.mastery_service and profile.knowledge_base_id else None
         )
         attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10_000) if self.feedback_loop_repo else []
+        diagnostic_runs = self.diagnosis_repo.list_runs_by_learner(profile.learner_id) if self.diagnosis_repo else []
+        if self._initial_diagnostic_flow(profile).get("status") in {"pending", "retest"}:
+            diagnostic_runs = []
         resources = self._visible_resources(profile.learner_id)
         path = self.feedback_loop_repo.get_current_path(profile.learner_id) if self.feedback_loop_repo else None
         credibility = self._resource_credibility(resources, knowledge_base_id=profile.knowledge_base_id)
         current_parts = self._revision_parts(
-            profile, projection, attempts, resources, window_days, credibility["items"],
+            profile, projection, attempts, resources, window_days, credibility["items"], diagnostic_runs=diagnostic_runs,
             resource_difficulty_curve=self._build_resource_difficulty_curve(projection, resources),
             learning_path_graph=self._build_learning_path_graph(projection, path, generation_options),
         )
@@ -408,7 +478,47 @@ class ReportService:
             return "learning"
         return "mastered"
 
-    def _build_blind_spot_map(self, ability_projection, attempts) -> dict:
+    @staticmethod
+    def _ordered_ability_nodes(nodes):
+        """Return a stable learning order: prerequisites first, then tier.
+
+        Catalog storage order is not a learning sequence.  A Kahn traversal
+        makes the dependency rule explicit; the tier/name key only resolves
+        independent nodes at the same ready point.  Cycles remain visible in a
+        deterministic tail instead of making the report fail to render.
+        """
+        by_id = {node.skill_node_id: node for node in nodes}
+        child_ids = {node_id: [] for node_id in by_id}
+        indegree = {node_id: 0 for node_id in by_id}
+        for node in nodes:
+            for prerequisite in node.prerequisites:
+                if prerequisite not in by_id:
+                    continue
+                child_ids[prerequisite].append(node.skill_node_id)
+                indegree[node.skill_node_id] += 1
+
+        def sort_key(node_id: str):
+            node = by_id[node_id]
+            tier = getattr(node, "tier", None)
+            # Within one tier, show a prerequisite that unlocks downstream
+            # learning before an unrelated peer.  This makes the horizontal
+            # report order useful as a study path, not merely alphabetical.
+            return (int(tier) if tier is not None else 99, -len(child_ids[node_id]), node.name, node_id)
+
+        ready = sorted((node_id for node_id, degree in indegree.items() if degree == 0), key=sort_key)
+        ordered_ids = []
+        while ready:
+            node_id = ready.pop(0)
+            ordered_ids.append(node_id)
+            for child_id in sorted(child_ids[node_id], key=sort_key):
+                indegree[child_id] -= 1
+                if indegree[child_id] == 0:
+                    ready.append(child_id)
+            ready.sort(key=sort_key)
+        ordered_ids.extend(sorted((node_id for node_id in by_id if node_id not in set(ordered_ids)), key=sort_key))
+        return [by_id[node_id] for node_id in ordered_ids]
+
+    def _build_blind_spot_map(self, ability_projection, attempts, diagnostic_runs=()) -> dict:
         """Project only dimension evidence that can be reconstructed exactly.
 
         A point-level attempt result can cover several questions.  If its stored
@@ -417,9 +527,30 @@ class ReportService:
         an evidence-needed state instead of copying the node score.
         """
         dimensions = ["concept", "scenario", "misconception", "practice"]
-        nodes = sorted((ability_projection.nodes if ability_projection else []), key=lambda item: item.skill_node_id)
+        nodes = self._ordered_ability_nodes(ability_projection.nodes if ability_projection else [])
         node_ids = {item.skill_node_id for item in nodes}
         exact_scores: dict[tuple[str, str], tuple[datetime, str, float]] = {}
+        pending_diagnostic_cells: set[tuple[str, str]] = set()
+        # Initial direction diagnosis is a formal server-scored source too.
+        # Its trace is deliberately de-identified: no learner answer, answer
+        # key, or explanation is needed to render a blind-spot cell.
+        for run in diagnostic_runs:
+            raw = run.raw_result if isinstance(run.raw_result, dict) else {}
+            submitted_at = self._utc(run.created_at) if run.created_at else datetime.min.replace(tzinfo=timezone.utc)
+            for item in raw.get("blind_spot_trace", []):
+                if not isinstance(item, dict):
+                    continue
+                node_id = item.get("skill_node_id")
+                dimension = item.get("diagnostic_dimension")
+                if node_id not in node_ids or dimension not in dimensions or not isinstance(item.get("correct"), bool):
+                    continue
+                key = (node_id, dimension)
+                if item.get("measurement_status") != "measured":
+                    pending_diagnostic_cells.add(key)
+                    continue
+                candidate = (submitted_at, f"diagnosis:{run.diagnostic_result_id}", 1.0 if item["correct"] else 0.0)
+                if key not in exact_scores or candidate[:2] > exact_scores[key][:2]:
+                    exact_scores[key] = candidate
         for attempt in attempts:
             trace = attempt.metadata.get("question_trace", []) if isinstance(attempt.metadata, dict) else []
             trace_by_question = {
@@ -449,12 +580,33 @@ class ReportService:
         for node in nodes:
             state = node.mastery
             statuses = []
+            has_dimension_score = any(
+                (node.skill_node_id, dimension) in exact_scores for dimension in dimensions
+            )
             for dimension in dimensions:
                 evidence = exact_scores.get((node.skill_node_id, dimension))
                 if evidence is not None:
                     score = round(evidence[2], 6)
                     status = self._score_status(score)
                     reasons = ["FORMAL_DIMENSION_EVIDENCE"]
+                elif (node.skill_node_id, dimension) in pending_diagnostic_cells:
+                    score = None
+                    status = "needs_evidence"
+                    reasons = ["DIAGNOSTIC_COVERAGE_INCOMPLETE"]
+                elif (
+                    dimension == "concept"
+                    and not has_dimension_score
+                    and state.objective_evidence_count > 0
+                    and state.mastery_score is not None
+                ):
+                    # Older generated-resource assessments recorded a verified
+                    # node score but did not label each question with a
+                    # diagnostic dimension.  Surface that real aggregate in
+                    # one clearly bounded cell rather than reporting the whole
+                    # node as unmeasured; do not copy it into other dimensions.
+                    score = round(float(state.mastery_score), 6)
+                    status = self._score_status(score)
+                    reasons = ["FORMAL_NODE_EVIDENCE_NO_DIMENSION"]
                 elif state.objective_evidence_count > 0:
                     score = None
                     status = "needs_evidence"
@@ -511,8 +663,28 @@ class ReportService:
             },
         }
 
+    @staticmethod
+    def _diagnostic_measurements(diagnostic_runs, ability_projection) -> dict:
+        """Return only the latest safe coverage summary for each node."""
+        result: dict[str, dict] = {}
+        for run in sorted(
+            diagnostic_runs,
+            key=lambda item: (ReportService._utc(item.created_at) if item.created_at else datetime.min.replace(tzinfo=timezone.utc), item.diagnostic_result_id),
+        ):
+            raw = run.raw_result if isinstance(run.raw_result, dict) else {}
+            for node_id, summary in (raw.get("measurement_coverage", {}) or {}).items():
+                if isinstance(summary, dict):
+                    result[node_id] = dict(summary)
+        for node in (ability_projection.nodes if ability_projection else []):
+            item = result.get(node.skill_node_id)
+            if item is not None:
+                item["formal_evidence_count"] = node.mastery.objective_evidence_count
+        return result
+
     def _build_resource_difficulty_curve(self, ability_projection, resources) -> dict:
-        nodes = {item.skill_node_id: item for item in (ability_projection.nodes if ability_projection else [])}
+        ordered_nodes = self._ordered_ability_nodes(ability_projection.nodes if ability_projection else [])
+        node_order = {item.skill_node_id: index for index, item in enumerate(ordered_nodes)}
+        nodes = {item.skill_node_id: item for item in ordered_nodes}
         points = []
         for resource in sorted(resources, key=lambda item: (item.resource_id, item.version)):
             if resource.publication_status != "published":
@@ -542,7 +714,7 @@ class ReportService:
                     "resource_ids": [resource.resource_id],
                     "reason_codes": list(match.reason_codes),
                 })
-        points.sort(key=lambda item: (item["skill_node_id"], item["resource_id"]))
+        points.sort(key=lambda item: (node_order[item["skill_node_id"]], item["resource_id"]))
         counts = {key: 0 for key in ("too_easy", "matched", "challenging", "too_hard", "not_measured")}
         for point in points:
             counts[point["match_status"]] += 1
@@ -560,7 +732,7 @@ class ReportService:
         }
 
     def _build_learning_path_graph(self, ability_projection, path, generation_options) -> dict:
-        nodes = sorted((ability_projection.nodes if ability_projection else []), key=lambda item: item.skill_node_id)
+        nodes = self._ordered_ability_nodes(ability_projection.nodes if ability_projection else [])
         known_ids = {item.skill_node_id for item in nodes}
         curriculum = {
             item.skill_node_id: item for item in (ability_projection.curriculum_nodes if ability_projection else [])
@@ -570,6 +742,9 @@ class ReportService:
             if item.knowledge_point_id in known_ids:
                 path_nodes[item.knowledge_point_id] = item
         recommended_ids = set(generation_options.recommended_node_ids if generation_options else [])
+        remedial_ids = {
+            item.skill_node_id for item in (generation_options.reinforce_weakness if generation_options else [])
+        }
         new_ids = {
             item.skill_node_id for item in (generation_options.learn_new_knowledge if generation_options else [])
         }
@@ -586,7 +761,12 @@ class ReportService:
                 if prerequisite in known_ids and (curriculum.get(prerequisite) is None or curriculum[prerequisite].published_resource_count <= 0)
             ]
             blocked = bool(missing) or bool(path_node and path_node.status.value == "locked")
-            if path_node and path_node.node_type.value == "challenge":
+            if node.skill_node_id in remedial_ids:
+                # Only the server's eligible "learned but not mastered" set is
+                # actionable remediation. A weak diagnosis alone does not mean
+                # the learner has first received this node's learning resource.
+                role = "remedial"
+            elif path_node and path_node.node_type.value == "challenge":
                 role = "challenge"
             elif path_node and path_node.node_type.value == "remedial":
                 role = "remedial"
@@ -594,7 +774,9 @@ class ReportService:
                 role = "current"
             elif node.skill_node_id in recommended_ids or node.skill_node_id in new_ids:
                 role = "next"
-            elif node.mastery.status.value == "weak":
+            elif node.mastery.status.value == "weak" and generation_options is None:
+                # Retain the legacy read-only projection for report callers
+                # that do not have the generation-option service wired.
                 role = "remedial"
             elif node.mastery.status.value in {"unassessed", "self_reported"}:
                 role = "verification"
@@ -629,13 +811,24 @@ class ReportService:
                 "recommended_resource_types": resource_types,
                 "reason_codes": reason_codes or ["KNOWLEDGE_GRAPH_POSITION"],
                 "stable_order": index,
+                "tier": node.tier,
+                "prerequisite_ids": [item for item in node.prerequisites if item in known_ids],
             })
         edges = [
             {"source_skill_node_id": edge["from"], "target_skill_node_id": edge["to"], "relation": "prerequisite"}
             for edge in (ability_projection.edges if ability_projection else [])
             if edge.get("from") in known_ids and edge.get("to") in known_ids and edge.get("from") != edge.get("to")
         ]
-        edges.sort(key=lambda item: (item["source_skill_node_id"], item["target_skill_node_id"]))
+        order_by_id = {item["skill_node_id"]: item["stable_order"] for item in graph_nodes}
+        edges.sort(key=lambda item: (
+            order_by_id[item["source_skill_node_id"]],
+            order_by_id[item["target_skill_node_id"]],
+        ))
+        focus_ids = [
+            item["skill_node_id"]
+            for item in graph_nodes
+            if item["role"] in {"remedial", "current", "next"}
+        ]
         return {
             "schema_version": "1.0",
             "path_id": path.path_id if path else None,
@@ -644,10 +837,12 @@ class ReportService:
             "edges": edges,
             "current_node_ids": sorted(current_ids),
             "recommended_next_node_ids": sorted(recommended_ids),
+            "focus_node_ids": focus_ids,
             "summary": {
                 "total_node_count": len(graph_nodes),
                 "blocked_node_count": sum(item["blocked"] for item in graph_nodes),
                 "remedial_node_count": sum(item["role"] == "remedial" for item in graph_nodes),
+                "eligible_remedial_node_count": len(remedial_ids),
                 "verification_node_count": sum(item["role"] == "verification" for item in graph_nodes),
                 "next_node_count": sum(item["role"] == "next" for item in graph_nodes),
             },
@@ -655,14 +850,23 @@ class ReportService:
 
     def _revision_parts(
         self, profile, ability_projection, attempts, resources, window_days, credibility_items=None,
-        *, resource_difficulty_curve=None, learning_path_graph=None,
+        *, resource_difficulty_curve=None, learning_path_graph=None, diagnostic_runs=(),
     ):
+        flow = self._initial_diagnostic_flow(profile)
+        calibration_pending = flow.get("status") in {"pending", "retest"}
         profile_part = {"learner_id": profile.learner_id, "knowledge_base_id": profile.knowledge_base_id,
-                        "profile_version": profile.profile_version, "skill_level": profile.skill_level,
+                        "profile_version": "initial_calibration_pending" if calibration_pending else profile.profile_version,
+                        "skill_level": profile.skill_level,
                         "learning_goal": profile.learning_goal}
         mastery_part = [node.model_dump(mode="json") for node in sorted((ability_projection.nodes if ability_projection else []), key=lambda item: item.skill_node_id)]
-        activity_part = [{"id": item.attempt_id, "submitted_at": item.submitted_at, "results": [x.model_dump(mode="json") for x in item.knowledge_point_results]}
+        activity_part = [{"id": item.attempt_id, "submitted_at": item.submitted_at, "results": [x.model_dump(mode="json") for x in item.knowledge_point_results],
+                          "question_trace": [{key: trace.get(key) for key in ("question_id", "skill_node_id", "diagnostic_dimension")} for trace in item.metadata.get("question_trace", []) if isinstance(trace, dict)]}
                          for item in sorted(attempts, key=lambda item: (self._utc(item.submitted_at), item.attempt_id))]
+        activity_part.append({"diagnostic_traces": [
+            {"id": run.diagnostic_result_id, "created_at": run.created_at,
+             "trace": (run.raw_result or {}).get("blind_spot_trace", [])}
+            for run in sorted(diagnostic_runs, key=lambda run: (self._utc(run.created_at) if run.created_at else datetime.min.replace(tzinfo=timezone.utc), run.diagnostic_result_id))
+        ]})
         resource_part = [{"id": item.resource_id, "version": item.version, "publication": item.publication_status,
                           "review": item.review_status, "review_id": item.review_id, "claim_metric": item.claim_metric_status,
                           "claim_rate": item.claim_hallucination_rate, "refs": [ref.model_dump(mode="json") for ref in sorted(item.source_refs, key=lambda ref: (ref.evidence_id or "", ref.doc_id, ref.chunk_id or ""))]}
@@ -683,7 +887,11 @@ class ReportService:
         ).model_dump()
 
     def _revision(self, parts, window_days):
-        return "rpt_" + self._canonical_hash({"parts": parts, "window_days": window_days})
+        return "rpt_" + self._canonical_hash({
+            "parts": parts,
+            "window_days": window_days,
+            "projection_version": REPORT_PROJECTION_VERSION,
+        })
 
     @staticmethod
     def _data_as_of(profile, attempts, resources, events):

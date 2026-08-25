@@ -10,7 +10,7 @@
 
 能力图谱采用三个有序等级：`零基础=1`、`Python 基础=2`、`进阶 RAG=3`；画像中的初级、中级、进阶/高级分别映射到对应等级。中级和进阶的低阶节点只记录为未验证的自评准入豁免，不能被报告或统计为客观掌握。
 
-- 每次生成最多选择三个、且只能选择同一等级的目标节点；当阶不足三个时不得用高阶节点补位。
+- 每次生成最多选择两个、且只能选择同一等级的目标节点；当阶不足两个时不得用高阶节点补位。反馈后可选择最多两个新节点、最多两个旧节点，或一新一旧；高分默认推荐一个新节点，中等分推荐一新一旧或纠错包，低分推荐纠错包。
 - 正式测评总分或任一节点低于60%时，推荐低一阶的直接前置节点；第一阶只进行同阶基础补救。
 - 60%至85%保持当阶并推荐补弱；高于85%且没有低分节点时完成当前节点并解锁同阶后继。
 - 只有当阶全部节点均已发布资源且经过正式测评高于85%，才可解锁下一阶。第三阶完成后仅推荐同阶综合挑战或复习。
@@ -329,7 +329,7 @@ mastery_snapshot_hash
 source_type = diagnosis | learning_attempt | reassessment
 source_id
 status = proposed | accepted | superseded | completed
-targets[]                    # 最多 3 个
+targets[]                    # 最多 2 个
 recommended_resource_options[]
 reassessment_blueprint
 created_at
@@ -366,7 +366,7 @@ success_criteria
 5. 最近证据时间；
 6. node ID。
 
-只取前三个目标。不得在 FeedbackService、ReportService 或 planner 中复制该排序。
+只取前两个目标。不得在 FeedbackService、ReportService 或 planner 中复制该排序。
 
 - 新诊断/Attempt/复测改变规范优先级时，旧 proposed 处方变为 `superseded`。
 - 用户确认时校验 learner、KB、profile version 和 mastery hash。

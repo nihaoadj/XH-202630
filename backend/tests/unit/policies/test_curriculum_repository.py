@@ -44,6 +44,23 @@ def test_curriculum_exposure_and_verification_are_idempotent():
     assert row.verified_attempt_count == 1
 
 
+def test_new_resource_exposure_does_not_erase_reinforcement_due():
+    repository = MemoryCurriculumRepository()
+    now = datetime.now(timezone.utc)
+    repository.ensure_nodes("learner", "kb", ["a"])
+    repository.reconcile_exposure("learner", "kb", {"a": 1}, now)
+    repository.record_verification(
+        "learner", "kb", attempt_id="attempt-weak", scores={"a": 0.2}, now=now,
+    )
+
+    # A remediation package adds another published resource after feedback.
+    repository.reconcile_exposure("learner", "kb", {"a": 2}, now)
+
+    row = repository.list_nodes("learner", "kb")[0]
+    assert row.progress_status.value == "reinforcement_due"
+    assert row.published_resource_count == 2
+
+
 def test_failed_run_releases_unpublished_scheduled_node():
     repository = MemoryCurriculumRepository()
     now = datetime.now(timezone.utc)

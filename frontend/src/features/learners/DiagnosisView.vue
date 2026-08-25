@@ -66,7 +66,7 @@
         </div>
       </el-card>
 
-      <el-card v-if="result" class="result-card">
+      <el-card v-if="result && result.initial_diagnostic_status !== 'retest'" class="result-card">
         <template #header>
           <div class="summary-head">
             <span>诊断结果</span>
@@ -76,6 +76,7 @@
 
         <el-descriptions :column="2" border>
           <el-descriptions-item label="能力层级">{{ result.ability_level }}</el-descriptions-item>
+          <el-descriptions-item v-if="result.final_tier" label="最终校准阶段">第 {{ result.final_tier }} 阶段</el-descriptions-item>
           <el-descriptions-item label="学习方向">{{ store.currentLearningDirectionName || result.knowledge_base_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="薄弱点" :span="2">{{ (result.weak_points || []).join('、') || '-' }}</el-descriptions-item>
           <el-descriptions-item label="强项" :span="2">{{ (result.strong_points || []).join('、') || '-' }}</el-descriptions-item>
@@ -137,6 +138,15 @@ async function submitDiagnosis() {
         ...(res.data.knowledge_states || {}),
       },
     })
+    if (res.data.initial_diagnostic_status === 'retest') {
+      store.setPendingDiagnosis(res.data.next_diagnostic_questions || [])
+      for (const key of Object.keys(diagnosticAnswers)) delete diagnosticAnswers[key]
+      for (const question of res.data.next_diagnostic_questions || []) {
+        diagnosticAnswers[question.question_id] = question.question_type === 'multiple_choice' ? [] : ''
+      }
+      ElMessage.info('本阶段校准未通过，已自动进入下一阶段复测')
+      return
+    }
     store.clearPendingDiagnosis()
     ElMessage.success('诊断已完成')
   } catch (error) {

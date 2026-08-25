@@ -52,7 +52,7 @@ def test_generate_request_maps_every_control_field_to_workflow_state():
         topic="  工业视觉  ",
         knowledge_base_id="request-kb",
         diagnostic_result_id="diag-001",
-        target_skill_nodes=["node-a", "node-a", "node-b"],
+        target_skill_nodes=["node-a", "node-b"],
         resource_types=["讲义", "实操指南"],
         difficulty_preference="中级",
         generation_mode="strict",
@@ -92,6 +92,14 @@ def test_claim_check_requires_resource_review():
             include_review=False,
             include_claim_check=True,
         )
+
+
+def test_claim_check_defaults_to_enabled_with_review_and_is_disabled_for_explicit_drafts():
+    reviewed = GenerateRequest(learner_id="contract_001", topic="工业视觉")
+    draft = GenerateRequest(learner_id="contract_001", topic="工业视觉", include_review=False)
+
+    assert reviewed.include_claim_check is True
+    assert draft.include_claim_check is False
 
 
 def test_workflow_state_json_round_trip_preserves_schema_version_and_ids():

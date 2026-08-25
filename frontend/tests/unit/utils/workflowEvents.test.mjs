@@ -7,6 +7,7 @@ import {
   hydrateWorkflowTimeline,
   reduceWorkflowEvent,
 } from '../../../src/utils/workflowEventReducer.js'
+import { normalizeResourceProgressSummary } from '../../../src/utils/generationDisplay.js'
 
 
 class FakeEventSource {
@@ -76,6 +77,13 @@ const hydrated = hydrateWorkflowTimeline({
 })
 assert.equal(hydrated.resourceExecutions[0].resource_execution_state, 'approved', 'durable snapshot must override stale events')
 assert.equal(hydrated.resourceExecutions[0].publication_status, 'published')
+
+const refreshedProgress = normalizeResourceProgressSummary(
+  { total: 1, approved: 0, counts: { approved: 0 } },
+  [{ resource_spec_id: 'spec-1', representation: 'text', resource_execution_state: 'approved' }],
+)
+assert.equal(refreshedProgress.approved, 1, 'concrete execution state must override a stale job counter')
+assert.equal(refreshedProgress.published, 0, 'review approval must not be presented as publication')
 
 state = reduceWorkflowEvent(state, {
   event_id: 'evt-5',

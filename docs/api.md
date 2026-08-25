@@ -185,6 +185,8 @@
 - `diagnostic_node_ids`
 - `not_started_node_ids`
 - `diagnostic_questions`
+- `questionnaire_tier`：首份问卷预判的三阶阶段；服务端固定从该阶段按依赖关系选择 3 个节点。
+- `initial_diagnostic_status`：初始为 `pending`；每个节点固定返回 `concept`、`scenario`、`misconception` 三题，共 9 题。
 - `next_step`
 
 说明：
@@ -214,6 +216,9 @@
 - 强弱项
 - 知识状态
 - 推荐学习路径
+- `initial_diagnostic_status`：初诊分阶流程中为 `retest` 或 `final`。阶段得分低于 6/9 时，`retest` 会附带下一低阶段的 `next_diagnostic_questions`；完成最终轮才返回 `final_tier` 与 `initial_recommended_node_id`。
+
+初始分阶诊断由服务端以 `learner_id` 绑定当前轮次，提交必须恰好包含指定的 9 题。中间复测只保留审计答题记录，不写入客观掌握度、正式报告或资源建议；初级为最低阶段，即使未达 60% 也会完成初诊并给出一个遵循依赖关系的首轮学习节点。
 
 ## 8. 资源生成接口
 
@@ -250,7 +255,7 @@
   "difficulty_preference": "从基础开始",
   "generation_mode": "standard",
   "include_review": true,
-  "include_claim_check": false,
+  "include_claim_check": true,
   "max_iterations": 2,
   "constraints": {}
 }
@@ -385,7 +390,7 @@
 - 它不是知识库原始文档列表，而是面向用户交付的学习资源列表。
 - 同一次生成任务产出的多个资源，会通过同一个 `run_id` 关联起来。
 - 默认资源列表只返回已经发布的资源；草稿、返工中、拒绝和人工审核资源不可预览。
-- 实操指南以审核后的 Markdown 文本形式提供阅读。
+- 实操指南以审核后的 Markdown 文本形式提供阅读；该文本由内部严格 JSON（最多 8 个连续步骤、步骤 Evidence 绑定及 hash）确定性拼接。内部 JSON 不经通用 API 暴露，并直接作为互动 HTML 的逐步骤来源；旧实操指南仍兼容 Markdown 标题解析。
 - `source_refs[].score` 是 0 到 1 的最终相关度；精排可用时为 CrossEncoder logits 经 sigmoid 映射后的分数，降级时为归一化 RRF 分数，数值越大排名越靠前。
 - `source_refs[].metadata.retrieval_method` 正常为 `hybrid_rrf_cross_encoder`，精排关闭或不可用时回退为 `hybrid_rrf`；`retrieval_channels` 标识片段来自 `vector`、`bm25` 或两路共同召回。
 - `source_refs[].metadata` 保留 `vector_rank`、`vector_score`、`lexical_rank`、`lexical_score`、`hybrid_rank`、`hybrid_score`、`rerank_rank`、`rerank_raw_score`、`rerank_score`、`reranker_model`、`rerank_latency_ms` 和 `rerank_candidate_count`，用于检索审计和消融评测。
@@ -617,7 +622,8 @@ GenerationJob 预分配 run_id
 - `review_status` 与 `publication_status` 分离。只有最终 approve 的当前叶子版本可以 published。
 - 默认资源列表及文件下载只暴露 published；unpublished 与不存在的下载统一返回 404。
 - 历史字符串 issues/instructions 在读取时兼容归一化，但不会补造不存在的审核事实。
-- `include_claim_check=true` 要求 `include_review=true`；否则请求校验失败。
+- `include_claim_check` 在普通审核开启时默认 `true`；它会在 Reviewer 通过后执行 Claim 提取、证据判定和定向修订。`include_review=false` 且未显式提供该字段时，系统将其有效值设为 `false`，以保留未审核草稿路径；显式 `include_claim_check=true` 仍要求 `include_review=true`，否则请求校验失败。
+- `POST /api/resources/batches/{batch_id}/continuations` 可选传入 `include_claim_check`，以覆盖源任务的 Claim 审核设置；省略时沿用源任务。前端“追加资源”默认勾选该选项。
 - `hallucination_rate` 保留为旧 Reviewer 主观分兼容字段；正式 Claim 指标使用
   `claim_hallucination_rate` 和 `claim_metric_status`。
 
@@ -796,21 +802,23 @@ POST /api/resources/courseware/jobs/batch
 - `reinforce_weakness`：仅包含已学习、已有客观证据且尚未掌握的节点；
 - `learn_new_knowledge`：仅包含尚未被已发布资源覆盖的节点；含未学习前置节点的候选会标出 `blocked_by_node_ids`。
 
-学习者通过既有 `POST /api/feedback/followups/select` 确认下一批资源时，可附加 `learning_intent`、`selected_skill_node_ids`（1–3 个）和 `next_generation_snapshot_hash`。服务端重新校验候选集合、快照、知识库和先修关系；意图与节点不匹配、快照过期或越过未学习先修节点均返回 422，不创建生成任务。确认后的 intent snapshot 写入 child generation job 的 `constraints`，重试复用该冻结请求。
+学习者通过既有 `POST /api/feedback/followups/select` 确认下一批资源时，可附加 `learning_intent`、`selected_skill_node_ids`（1–2 个）和 `next_generation_snapshot_hash`。`learning_intent` 支持 `learn_new_knowledge`（最多两个新节点）、`reinforce_weakness`（最多两个旧节点）和 `learn_new_and_reinforce`（必须一新一旧）。服务端重新校验候选集合、快照、知识库和先修关系；意图与节点不匹配、快照过期或越过未学习先修节点均返回 422，不创建生成任务。确认后的 intent snapshot 写入 child generation job 的 `constraints`，重试复用该冻结请求。
 
-反馈结果若返回 `correction_package_option.eligible=true`，可用固定 `option_id=personalized-correction-package-v1`、`learning_intent=reinforce_weakness`、1–3 个目标节点和该选项 `snapshot_hash` 创建薄弱点强化包。请求必须省略 `resource_types` 和 `difficulty`；服务端冻结脱敏纠错快照，原题、答案、解析、原始作答、自由文本和 held-out 内容不会进入生成。
+反馈结果若返回 `correction_package_option.eligible=true`，可用固定 `option_id=personalized-correction-package-v1`、`learning_intent=reinforce_weakness`、1–2 个目标节点和该选项 `snapshot_hash` 创建薄弱点强化包。请求必须省略 `resource_types` 和 `difficulty`；服务端冻结脱敏纠错快照，原题、答案、解析、原始作答、自由文本和 held-out 内容不会进入生成。
 
-`POST /api/generate/jobs` 新增可选 `profile_focus_mode: "auto" | "off"`，默认 `auto`。显式 `target_skill_nodes` 的优先级最高并形成 `focus_mode="explicit"`；`off` 不采用画像弱项；`auto` 采用稳定排序的前三个 eligible 节点。创建响应、任务状态和列表项新增 `focus_snapshot`，包括 `profile_version`、`mastery_snapshot_hash`、排序依据、`adopted_node_ids` 和带原因码的 `skipped`。任务创建后该快照冻结，重试不按新画像重算。
+`POST /api/generate/jobs` 新增可选 `profile_focus_mode: "auto" | "off"`，默认 `auto`。显式 `target_skill_nodes` 的优先级最高并形成 `focus_mode="explicit"`；`off` 不采用画像弱项；`auto` 采用稳定排序的前两个 eligible 节点。创建响应、任务状态和列表项新增 `focus_snapshot`，包括 `profile_version`、`mastery_snapshot_hash`、排序依据、`adopted_node_ids` 和带原因码的 `skipped`。任务创建后该快照冻结，重试不按新画像重算。
 
 #### 课程推进与覆盖欠债
 
 能力节点响应可附加 `curriculum_nodes` 与 `curriculum_progress`。它们是独立于掌握度的课程流程投影：节点状态为 `unplanned/scheduled/exposed/verification_pending/completed/reinforcement_due`，并包含 `wait_rounds`、已发布资源数、正式验证次数和版本号。掌握度仍仅以服务端客观证据为准。
 
-反馈响应的 `generation_options` 可附加 `recommended_node_ids` 与 `curriculum_progress`。服务端只将前置满足的未覆盖节点计入等待轮数；节点连续等待会提高推荐优先级，但不会越过前置关系。创建新任务时，确认的 1–3 个节点会被锁定并写入冻结请求；反馈/测评后仅重算推荐，不会自动创建下一轮任务。
+反馈响应的 `generation_options` 可附加 `recommended_node_ids` 与 `curriculum_progress`。反馈报告同时给出 `next_step_recommendation`：高分默认推荐一个新节点（用户可扩展至两个）；中等分推荐一新一旧，并保留纠错包替代方案；低分推荐纠错包。服务端只将前置满足的未覆盖节点计入等待轮数；节点连续等待会提高推荐优先级，但不会越过前置关系。创建新任务时，确认的 1–2 个节点会被锁定并写入冻结请求；反馈/测评后仅重算推荐，不会自动创建下一轮任务。
 
-### 17.5 报告 3.0 动态读取
+### 17.5 报告 4.0 动态读取
 
-`GET /api/report/{learner_id}?window_days=7|30|90` 保持原路径、原字段和权限边界，并使用 `report_schema_version="3.0"`。新增 `report_revision`、`data_as_of`、`window`、`freshness`、`learning_activity`、`mastery_overview`、`mastery_trends`、`weakness_groups`、`resource_credibility_summary` 和 `recent_resource_credibility`。雷达图、弱强项、新字段和下一批建议均来自同一规范 `knowledge_states` 投影；自评事件可显示在趋势中但不计为客观覆盖率。
+`GET /api/report/{learner_id}?window_days=7|30|90` 保持原路径、原字段和权限边界，并使用 `report_schema_version="4.0"`。新增 `report_revision`、`data_as_of`、`window`、`freshness`、`learning_activity`、`mastery_overview`、`mastery_trends`、`weakness_groups`、`resource_credibility_summary` 和 `recent_resource_credibility`。雷达图覆盖知识库全部能力节点，`radar.measurement_statuses` 标记未测节点，客户端必须显示“待测”而非 0 分；弱强项、新字段和下一批建议均来自同一规范 `knowledge_states` 投影；自评事件可显示在趋势中但不计为客观覆盖率。报告的客户端投影视图版本也纳入 `report_revision`，因此服务端升级全量雷达等展示结构时，旧 ETag 不会导致客户端继续保留旧快照。
+
+诊断节点只有在至少三题且覆盖 `concept`、`scenario`、`misconception` 后才形成客观掌握投影；不足覆盖的提交以 `knowledge_states[*].measurement_status="needs_evidence"` 返回答题计数和覆盖维度，`score` 为 `null`。报告增量返回 `diagnostic_measurements`，并将其脱敏的维度追踪与正式 Attempt 合并到 `knowledge_blind_spot_map`；追踪不包含学习者答案、标准答案或解析。SSE 的 `report_changed` 仍为失效通知，客户端必须重新获取完整快照。
 
 报告 additive 返回三个版本化可视化投影：
 

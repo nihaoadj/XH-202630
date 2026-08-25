@@ -32,6 +32,7 @@ from app.models.feedback.feedback_loop import (
     ProfileVersionRecord,
 )
 from app.models.shared.persistence import WorkflowEventType, canonical_hash
+from app.models.learners.mastery import LearningIntent
 from app.models.shared.agent_contracts import AssessmentShortAnswerGradeV1
 from app.models.learning_documents.schemas import (
     FeedbackAnswer,
@@ -152,6 +153,13 @@ class FeedbackService:
             request_hash=request_hash,
             **req.model_dump(mode="python"),
         )
+        # A feedback follow-up is anchored to the resource group being
+        # assessed.  Persist that group on the attempt so a correction package
+        # can remain in the same batch even when it is selected later.
+        if resource.batch_id:
+            attempt = attempt.model_copy(update={
+                "metadata": {**attempt.metadata, "source_batch_id": resource.batch_id},
+            })
         point_ids = [item.knowledge_point_id for item in attempt.knowledge_point_results]
         context = self.feedback_loop_repo.get_context(req.learner_id, point_ids)
         policy = decide_attempt(attempt, context)
@@ -240,10 +248,15 @@ class FeedbackService:
         self._apply_profile_copy(profile, profile_patch, state_mutations, new_version)
         if self.mastery_service is not None and profile.knowledge_base_id:
             point_scores = {item.knowledge_point_id: item.score for item in attempt.knowledge_point_results}
+            mastery_scores = {
+                item.knowledge_point_id: (item.correct_count + 1) / (item.total_count + 2)
+                for item in attempt.knowledge_point_results
+                if item.total_count > 0
+            }
             self.mastery_service.apply_learning_attempt(
                 profile,
                 attempt_id=attempt.attempt_id,
-                point_scores=point_scores,
+                point_scores=mastery_scores,
                 occurred_at=attempt.submitted_at,
             )
             self.mastery_service.record_curriculum_verification(
@@ -455,6 +468,9 @@ class FeedbackService:
         total_score = float(result.attempt.metadata.get("total_score", result.attempt.overall_score * 100))
         max_score = float(result.attempt.metadata.get("max_score", 100))
         correction_option = self._correction_package_option(generation_options, profile)
+        next_step_recommendation = self._next_step_recommendation(
+            result, generation_options, correction_option,
+        )
         feedback_report = {
             "schema_version": "1.0",
             "attempt_id": result.attempt.attempt_id,
@@ -491,6 +507,7 @@ class FeedbackService:
                 item.model_dump(mode="json") for item in (generation_options.learn_new_knowledge if generation_options else [])
             ],
             "correction_package_option": correction_option.model_dump(mode="json") if correction_option else None,
+            "next_step_recommendation": next_step_recommendation,
         }
         return result.model_copy(update={
             "analysis": analysis,
@@ -513,9 +530,54 @@ class FeedbackService:
         difficulty = profile.skill_level if profile and profile.skill_level in {"初级", "中级", "高级"} else "中级"
         return CorrectionPackageOptionV1(
             eligible=True, selectable_targets=[item.model_dump(mode="json") for item in candidates],
-            recommended_target_ids=[item.skill_node_id for item in candidates[:3]],
+            recommended_target_ids=[item.skill_node_id for item in candidates[:2]],
             recommended_difficulty=difficulty, snapshot_hash=generation_options.snapshot_hash,
         )
+
+    @staticmethod
+    def _next_step_recommendation(
+        result: FeedbackLoopResult,
+        generation_options,
+        correction_option: CorrectionPackageOptionV1 | None,
+    ) -> dict[str, object]:
+        """Return an explainable default without taking the next step for the learner."""
+        if generation_options is None:
+            return {"recommended_action": "review_feedback", "title": "先回顾本次反馈"}
+        new_nodes = [item for item in generation_options.learn_new_knowledge if not item.blocked_by_node_ids]
+        review_nodes = list(generation_options.reinforce_weakness)
+        action = result.decision.action.value
+        if action == "advance" and new_nodes:
+            return {
+                "recommended_action": "learn_new", "learning_intent": LearningIntent.LEARN_NEW_KNOWLEDGE.value,
+                "title": "建议学习一个新节点", "description": "本轮掌握较好，默认先聚焦一个新节点；你也可以自行再选择第二个同阶新节点。",
+                "default_new_node_ids": [new_nodes[0].skill_node_id], "default_review_node_ids": [],
+                "can_choose_second_new_node": len(new_nodes) > 1,
+            }
+        if action == "practice" and new_nodes and review_nodes:
+            return {
+                "recommended_action": "learn_new_and_reinforce", "learning_intent": LearningIntent.LEARN_NEW_AND_REINFORCE.value,
+                "title": "建议一新一旧学习", "description": "兼顾推进与巩固：学习一个新节点，同时复习一个已学习但未完全掌握的节点；也可改选纠错包强化。",
+                "default_new_node_ids": [new_nodes[0].skill_node_id],
+                "default_review_node_ids": [review_nodes[0].skill_node_id],
+                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
+            }
+        if action == "remediate":
+            return {
+                "recommended_action": "correction_package", "title": "建议生成薄弱点强化包",
+                "description": "先通过纠错包补齐薄弱环节，再进入新的学习内容。",
+                "default_new_node_ids": [], "default_review_node_ids": [item.skill_node_id for item in review_nodes[:2]],
+            }
+        if new_nodes:
+            return {
+                "recommended_action": "learn_new", "learning_intent": LearningIntent.LEARN_NEW_KNOWLEDGE.value,
+                "title": "建议选择一个新节点", "description": "默认一次学习一个节点，你可以在同阶范围内选择至多两个新节点。",
+                "default_new_node_ids": [new_nodes[0].skill_node_id], "default_review_node_ids": [],
+            }
+        return {
+            "recommended_action": "correction_package" if correction_option and correction_option.eligible else "review_feedback",
+            "title": "建议复习巩固", "description": "当前没有可推进的新节点，建议先巩固已学习内容。",
+            "default_new_node_ids": [], "default_review_node_ids": [item.skill_node_id for item in review_nodes[:2]],
+        }
 
     def choose_followup(
         self,
@@ -586,7 +648,11 @@ class FeedbackService:
                 raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422) from exc
             option = FeedbackResourceOption(
                 option_id=f"intent-{selection.learning_intent.value}",
-                title="强化薄弱点" if selection.learning_intent.value == "reinforce_weakness" else "学习新知识",
+                title={
+                    LearningIntent.REINFORCE_WEAKNESS.value: "复习巩固",
+                    LearningIntent.LEARN_NEW_KNOWLEDGE.value: "学习新知识",
+                    LearningIntent.LEARN_NEW_AND_REINFORCE.value: "一新一旧学习",
+                }[selection.learning_intent.value],
                 description="按你选择的学习目标生成下一批资源。",
                 resource_types=list(selection.resource_types or ["讲义", "实操指南", "分阶测试题"]),
                 difficulty=options[0].difficulty if options else "中级",
@@ -608,8 +674,6 @@ class FeedbackService:
             raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
         if self.generation_job_service is None:
             raise ApplicationError(ErrorCode.FOLLOWUP_GENERATION_FAILED, status_code=503)
-        if selection.learning_intent is not None and selection.learning_intent.value == "reinforce_weakness" and not is_correction_package:
-            raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
         resource_types = ["个性化纠错训练包"] if is_correction_package else (selection.resource_types or option.resource_types)
         # A user may choose resource types, but may not override the server's
         # node-tier difficulty contract.
@@ -642,10 +706,25 @@ class FeedbackService:
                              if intent_options is not None else {})},
         )
         run_id = self._stable_id(
-            "run", result.attempt.attempt_id, option.option_id, difficulty, *(selection.selected_skill_node_ids if is_correction_package else resource_types),
+            "run", result.attempt.attempt_id, option.option_id, difficulty,
+            *(selection.selected_skill_node_ids if selection.learning_intent is not None else resource_types),
+        )
+        # A personalized correction package supplements the learning resources
+        # that led to this feedback; it is not the start of another learning
+        # group.  Other user-confirmed follow-ups intentionally start a new
+        # batch because they may target a different set of skill nodes.
+        source_batch_id = (
+            str(result.attempt.metadata.get("source_batch_id") or "").strip()
+            if is_correction_package else None
         )
         try:
-            job = self.generation_job_service.create_job(profile, request, run_id=run_id, retry_failed=True)
+            job = self.generation_job_service.create_job(
+                profile,
+                request,
+                run_id=run_id,
+                batch_id=source_batch_id or None,
+                retry_failed=True,
+            )
             updated = self.feedback_loop_repo.attach_followup(
                 attempt_id=result.attempt.attempt_id, decision_id=result.decision.decision_id,
                 parent_run_id=result.attempt.source_run_id, child_run_id=job.run_id,

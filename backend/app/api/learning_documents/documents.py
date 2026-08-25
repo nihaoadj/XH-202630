@@ -95,9 +95,20 @@ def continue_resource_batch(
         # Keep prior artifacts auditable, while allowing the learner-facing
         # batch projection to use this run as the latest version of each type.
         constraints["replacement_resource_types"] = list(payload.resource_types)
-    generation_request = source_request.model_copy(
-        update={"resource_types": payload.resource_types, "constraints": constraints}
-    )
+    request_updates = {
+        "resource_types": payload.resource_types,
+        "constraints": constraints,
+    }
+    if payload.include_claim_check is not None:
+        request_updates["include_claim_check"] = payload.include_claim_check
+    try:
+        # Revalidate the copied request so an explicit Claim option cannot
+        # bypass the invariant that Claim review requires normal review.
+        generation_request = GenerateRequest.model_validate(
+            {**source_request.model_dump(mode="python"), **request_updates}
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     job = generation_job_service.create_job(
         learner,
         generation_request,

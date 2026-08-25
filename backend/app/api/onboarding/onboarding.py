@@ -24,7 +24,7 @@ def get_onboarding_questions(request: Request, learning_direction_id: str | None
 
 @router.post("/initial-profile", response_model=InitialProfileResponse)
 def create_initial_profile(payload: InitialProfileQuestionnaire, request: Request):
-    """由入门问卷创建画像，仅返回用户声明已了解节点的诊断题。"""
+    """由入门问卷创建画像，并返回服务端按预判阶段抽取的九题初诊。"""
     service: OnboardingService = request.app.container.onboarding_service()
     try:
         return service.create_initial_profile(payload, authenticated_user=request_user(request))

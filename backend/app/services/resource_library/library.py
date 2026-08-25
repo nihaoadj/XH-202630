@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.models.shared.resource_library import ResourceLibraryItem
+
+
+logger = logging.getLogger(__name__)
 
 
 class ResourceLibraryService:
@@ -34,7 +39,14 @@ class ResourceLibraryService:
             )
             for item in self.resource_service.list_by_learner(learner_id)
         ]
-        courseware_items = self.courseware_service.list_library_items(learner_id)
+        # Interactive courseware is an optional projection in this read model.
+        # A stale/missing courseware table or malformed legacy row must not
+        # make the text-resource page unusable.
+        try:
+            courseware_items = self.courseware_service.list_library_items(learner_id)
+        except Exception:  # pragma: no cover - concrete storage errors vary by backend
+            logger.exception("courseware library projection unavailable")
+            courseware_items = []
         return sorted(
             text_items + courseware_items,
             key=lambda item: str(item.published_at or item.created_at or ""),

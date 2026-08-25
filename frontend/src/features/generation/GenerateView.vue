@@ -1,13 +1,11 @@
 <template>
-  <CoursewareGenerationWorkspace v-if="isCoursewareWorkspace" @open-text-workspace="openTextWorkspace" />
-  <div v-else class="generate-page">
+  <div class="generate-page" :class="{ 'is-courseware-workspace': isCoursewareWorkspace }">
     <section class="control-panel">
       <div class="panel-title">
         <div>
           <span class="eyebrow">Resource Generation</span>
           <h3>学习资源生成</h3>
         </div>
-        <el-button class="courseware-workspace-button" @click="openCoursewareWorkspace">互动课件生成</el-button>
       </div>
 
       <div class="task-selector">
@@ -49,14 +47,14 @@
           <el-select
             v-model="selectedRunId"
             filterable
-            :disabled="!jobs.length"
-            :placeholder="jobs.length ? '选择要查看的生成任务' : '暂无资源批次'"
+            :disabled="!taskItems.length"
+            :placeholder="taskItems.length ? '选择要查看的生成任务' : '暂无资源批次'"
             class="task-select"
             popper-class="refined-select-dropdown"
             @change="handleTaskChange"
           >
             <el-option
-              v-for="task in jobs"
+              v-for="task in taskItems"
               :key="task.run_id"
               :label="taskLabel(task)"
               :value="task.run_id"
@@ -65,7 +63,7 @@
         </div>
       </div>
 
-      <div v-if="selectedJob" class="job-summary">
+      <div v-if="selectedTask" class="job-summary">
           <div class="summary-item">
             <span>学习方向</span>
             <strong>{{ learningDirectionName || '-' }}</strong>
@@ -76,21 +74,21 @@
           </div>
           <div class="summary-item">
             <span>任务状态</span>
-            <strong class="status-value" :class="`status-${selectedJob.job_status || 'idle'}`">
-              {{ statusLabel(selectedJob.job_status) }}
+            <strong class="status-value" :class="`status-${selectedTask.job_status || 'idle'}`">
+              {{ taskStatusLabel(selectedTask) }}
             </strong>
           </div>
           <div class="summary-item">
             <span>资源数量</span>
-            <strong>{{ resources.length }} 份</strong>
+            <strong>{{ taskResourceCount }} 份</strong>
           </div>
           <div class="summary-item">
             <span>创建时间</span>
-            <strong>{{ formatDateTime(selectedJob.created_at) }}</strong>
+            <strong>{{ formatDateTime(selectedTask.created_at) }}</strong>
           </div>
           <div class="summary-item">
             <span>完成时间</span>
-            <strong>{{ selectedJob.finished_at ? formatDateTime(selectedJob.finished_at) : '等待完成' }}</strong>
+            <strong>{{ selectedTask.finished_at ? formatDateTime(selectedTask.finished_at) : '等待完成' }}</strong>
           </div>
       </div>
       <div v-else class="job-summary">
@@ -120,7 +118,7 @@
         </div>
       </div>
 
-      <p v-if="selectedJob?.error_message" class="error-message">{{ selectedJob.error_message }}</p>
+      <p v-if="selectedTask?.error_message" class="error-message">{{ selectedTask.error_message }}</p>
 
       <div class="status-actions">
         <el-button
@@ -128,6 +126,14 @@
           class="status-action status-action-refresh"
           :icon="Refresh"
           @click="refreshStatus"
+        >
+          刷新状态
+        </el-button>
+        <el-button
+          v-if="selectedCoursewareJob"
+          class="status-action status-action-refresh"
+          :icon="Refresh"
+          @click="coursewareWorkspace?.refreshCurrentJob()"
         >
           刷新状态
         </el-button>
@@ -149,20 +155,32 @@
         >
           {{ hasRetryableResources ? `重新生成失败资源（${retryableResourceTypes.length}）` : '刷新资源' }}
         </el-button>
-        <el-button
-          v-if="selectedJob"
-          class="status-action status-action-append"
-          :icon="Plus"
-          :loading="appendingResources"
-          @click="appendResources"
-        >
-          追加资源
-        </el-button>
+        <el-dropdown v-if="selectedJob || selectedCoursewareJob" trigger="click" @command="handleAppendCommand">
+          <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources">追加资源</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="text" :disabled="!selectedJob">文本学习资源</el-dropdown-item>
+              <el-dropdown-item command="courseware" :disabled="!resources.length">HTML 互动课件</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button class="status-action status-action-history" :icon="Clock" @click="$router.push('/learning/history')">
           查看学习历史
         </el-button>
       </div>
     </section>
+
+    <CoursewareGenerationWorkspace
+      v-if="coursewareComposerVisible || selectedCoursewareJob"
+      ref="coursewareWorkspace"
+      embedded
+      hide-controls
+      :learner-id="selectedLearnerId"
+      :active-run-id="selectedCoursewareJob?.run_id || ''"
+      :source-resources="resources"
+      @created="handleCoursewareCreated"
+      @published="handleCoursewarePublished"
+    />
 
     <section v-if="selectedJob" class="studio-grid">
       <div class="process-panel">
@@ -243,7 +261,7 @@
       </div>
     </section>
 
-    <section v-else class="empty-studio">
+    <section v-else-if="!selectedCoursewareJob && !coursewareComposerVisible" class="empty-studio">
       <div>
         <span class="eyebrow">Waiting</span>
         <h3>还没有可查看的生成任务</h3>
@@ -269,6 +287,15 @@
           {{ option.type }}<span v-if="option.alreadyIncluded" class="append-resource-existing">（本批次已有）</span>
         </el-checkbox>
       </el-checkbox-group>
+      <div class="append-claim-option">
+        <el-checkbox v-model="appendIncludeClaimCheck" :disabled="!appendReviewEnabled">
+          启用 Claim 审核
+        </el-checkbox>
+        <p>
+          默认开启。对生成内容中的可验证事实进行证据核验与定向纠错。
+          <template v-if="!appendReviewEnabled">当前源任务未启用普通审核，不能单独开启 Claim 审核。</template>
+        </p>
+      </div>
       <template #footer>
         <el-button @click="appendDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="appendingResources" @click="confirmAppendResources">开始追加</el-button>
@@ -278,15 +305,17 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, Clock, Delete, Plus, Reading, Refresh, RefreshRight } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { generateApi, knowledgeApi, profileApi, resourceApi, runApi } from '../../api'
+import { coursewareApi } from '../courseware/api'
+import { resourceLibraryApi } from '../resource-library/api'
 import { createRunEventClient } from '../runs/api'
 import ResourceViewer from '../learning-documents/ResourceViewer.vue'
-import AgentVisualization from './AgentVisualization.vue'
 import CoursewareGenerationWorkspace from '../courseware/CoursewareGenerationWorkspace.vue'
+import AgentVisualization from './AgentVisualization.vue'
 import { useAppStore } from '../../stores/app'
 import {
   formatDateTime,
@@ -304,29 +333,6 @@ import {
 const store = useAppStore()
 const router = useRouter()
 const route = useRoute()
-const WORKSPACE_KIND_STORAGE_KEY = 'generation_workspace_kind'
-const isCoursewareWorkspace = computed(() => (
-  route.query.kind === 'courseware'
-  || (!route.query.kind && localStorage.getItem(WORKSPACE_KIND_STORAGE_KEY) === 'courseware')
-))
-
-function openCoursewareWorkspace() {
-  localStorage.setItem(WORKSPACE_KIND_STORAGE_KEY, 'courseware')
-  router.push({
-    path: '/generate',
-    query: { kind: 'courseware', learnerId: selectedLearnerId.value || undefined },
-  })
-}
-
-function openTextWorkspace() {
-  localStorage.setItem(WORKSPACE_KIND_STORAGE_KEY, 'learning_documents')
-  const query = { ...route.query }
-  delete query.kind
-  delete query.runId
-  delete query.batchId
-  router.push({ path: '/generate', query })
-}
-
 const learningDirectionName = computed(
   () => store.currentLearningDirectionName || localStorage.getItem('learning_direction_name') || ''
 )
@@ -360,10 +366,14 @@ const retryingResourceKey = ref('')
 const appendingResources = ref(false)
 const appendDialogVisible = ref(false)
 const selectedAppendResourceTypes = ref([])
+const appendIncludeClaimCheck = ref(true)
+const coursewareComposerVisible = ref(false)
+const coursewareWorkspace = ref(null)
 const selectedRunId = ref(initialRunId)
 const selectedResourceId = ref('')
 const profiles = ref([])
 const tracks = ref([])
+const coursewareJobs = ref([])
 const timelineState = ref(createInitialTimelineState())
 const connectionStatus = ref('idle')
 let streamClient = null
@@ -379,10 +389,27 @@ const profileOptions = computed(() =>
     label: `${profileDisplayName(profile)} / ${resolveTrackName(profile.knowledge_base_id)} / ${profile.skill_level || '未分级'} / 创建于 ${profileCreatedAt(profile)}`,
   }))
 )
+const taskItems = computed(() => [
+  ...jobs.value.map((job) => ({ ...job, task_kind: 'learning_documents' })),
+  ...coursewareJobs.value.map((job) => ({
+    ...job,
+    task_kind: 'interactive_courseware',
+    job_status: job.status,
+    finished_at: ['published', 'published_with_warnings'].includes(job.status) ? job.updated_at : null,
+  })),
+].sort((left, right) => String(right.updated_at || right.created_at || '').localeCompare(String(left.updated_at || left.created_at || ''))))
+const selectedTask = computed(
+  () => taskItems.value.find((item) => item.run_id === selectedRunId.value) || null
+)
 const selectedJob = computed(
   () => jobs.value.find((item) => item.run_id === selectedRunId.value) || null
 )
-const shortRunId = computed(() => (selectedJob.value?.run_id ? selectedJob.value.run_id.slice(0, 8).toUpperCase() : '-'))
+const selectedCoursewareJob = computed(
+  () => coursewareJobs.value.find((item) => item.run_id === selectedRunId.value) || null
+)
+const isCoursewareWorkspace = computed(() => coursewareComposerVisible.value || Boolean(selectedCoursewareJob.value))
+const shortRunId = computed(() => (selectedTask.value?.run_id ? selectedTask.value.run_id.slice(0, 8).toUpperCase() : '-'))
+const taskResourceCount = computed(() => selectedCoursewareJob.value ? (selectedCoursewareJob.value.resource_id ? 1 : 0) : resources.value.length)
 const selectedResource = computed(
   () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
 )
@@ -405,6 +432,7 @@ const appendResourceOptions = computed(() => {
     alreadyIncluded: existingTypes.has(type),
   }))
 })
+const appendReviewEnabled = computed(() => selectedJob.value?.request_payload?.include_review !== false)
 
 function enterLearningMode() {
   if (!selectedJob.value || !selectedResource.value) return
@@ -439,6 +467,16 @@ function statusTagType(status) {
   )
 }
 
+function taskStatusLabel(task) {
+  if (task?.task_kind !== 'interactive_courseware') return statusLabel(task?.job_status)
+  return ({
+    queued: '排队中', admitting: '校验来源', snapshotting: '冻结来源', design_reviewing: '规划课程', composing: '生成页面',
+    trace_reviewing: '来源审核', quality_reviewing: '质量审核', auto_revising: '定向修订', rendering: '渲染课件',
+    validating: '发布校验', publishing: '自动发布', published: '已发布', published_with_warnings: '已发布（有警告）',
+    failed: '失败', rejected_admission: '来源未通过', release_blocked: '发布受阻', quarantined: '已隔离', cancelled: '已取消', timed_out: '已超时',
+  }[task?.job_status] || '未开始')
+}
+
 function resolveTrackName(trackId) {
   return tracks.value.find((item) => item.track_id === trackId)?.name || trackId || '未命名方向'
 }
@@ -463,13 +501,16 @@ function profileCreatedAt(profile) {
 }
 
 function taskLabel(task) {
+  if (task.task_kind === 'interactive_courseware') {
+    return `HTML 课件 / ${taskStatusLabel(task)} / ${task.run_id.slice(0, 8).toUpperCase()} / ${formatDateTime(task.updated_at || task.created_at)}`
+  }
   const prefix = task.job_status === 'running' || task.job_status === 'queued' ? '当前' : '历史'
   return `${prefix} / ${task.run_id.slice(0, 8).toUpperCase()} / ${formatDateTime(task.finished_at || task.created_at)}`
 }
 
 function persistSelectedJob() {
-  localStorage.setItem('current_generation_run_id', selectedJob.value?.run_id || '')
-  localStorage.setItem('current_generation_status', selectedJob.value?.job_status || '')
+  localStorage.setItem('current_generation_run_id', selectedTask.value?.run_id || '')
+  localStorage.setItem('current_generation_status', selectedTask.value?.job_status || '')
 }
 
 function resourceLabel(resource) {
@@ -632,6 +673,7 @@ async function loadProfiles() {
 async function loadJobs(preferDefault = false) {
   if (!selectedLearnerId.value) {
     jobs.value = []
+    coursewareJobs.value = []
     selectedRunId.value = ''
     resources.value = []
     resourcesLoaded.value = false
@@ -642,9 +684,13 @@ async function loadJobs(preferDefault = false) {
   }
   loadingJobs.value = true
   try {
-    const res = await generateApi.listJobs(selectedLearnerId.value)
+    const [res, coursewareRes] = await Promise.all([
+      generateApi.listJobs(selectedLearnerId.value),
+      coursewareApi.listJobs(selectedLearnerId.value),
+    ])
     jobs.value = (res.data.items || []).filter((item) => !item.superseded_by_run_id)
-    if (!jobs.value.length) {
+    coursewareJobs.value = coursewareRes.data.items || []
+    if (!taskItems.value.length) {
       closeRealtime()
       selectedRunId.value = ''
       timelineState.value = createInitialTimelineState()
@@ -659,9 +705,9 @@ async function loadJobs(preferDefault = false) {
     if (
       preferDefault ||
       !selectedRunId.value ||
-      !jobs.value.some((item) => item.run_id === selectedRunId.value)
+      !taskItems.value.some((item) => item.run_id === selectedRunId.value)
     ) {
-      selectedRunId.value = pickDefaultRunId(jobs.value)
+      selectedRunId.value = pickDefaultRunId(taskItems.value)
     }
 
     persistSelectedJob()
@@ -700,6 +746,31 @@ async function loadResourcesForSelectedJob() {
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.response?.data?.message || '资源列表加载失败')
+  } finally {
+    loadingResources.value = false
+  }
+}
+
+async function loadCoursewareSourceResources() {
+  const batchId = selectedCoursewareJob.value?.source_batch_id
+  if (!selectedLearnerId.value || !batchId) {
+    resources.value = []
+    resourcesLoaded.value = true
+    return
+  }
+  loadingResources.value = true
+  try {
+    const response = await resourceLibraryApi.listByLearner(selectedLearnerId.value)
+    resources.value = (response.data || []).filter((resource) => (
+      resource.resource_kind !== 'interactive_courseware'
+      && resource.batch_id === batchId
+    ))
+    resourcesLoaded.value = true
+  } catch (error) {
+    console.error(error)
+    resources.value = []
+    resourcesLoaded.value = true
+    ElMessage.error(error?.response?.data?.message || '课件来源资源加载失败')
   } finally {
     loadingResources.value = false
   }
@@ -745,6 +816,16 @@ async function handleTaskChange() {
   resourcesLoaded.value = false
   selectedResourceId.value = ''
 
+  if (selectedCoursewareJob.value) {
+    closeRealtime()
+    await loadCoursewareSourceResources()
+    coursewareComposerVisible.value = true
+    return
+  }
+  // The temporary composer is only needed before a new courseware task has
+  // been created. Do not keep it mounted when the user returns to a text
+  // generation task, otherwise both task workspaces render together.
+  coursewareComposerVisible.value = false
   if (!selectedJob.value) return
   if (selectedJob.value.job_status === 'completed' || selectedJob.value.resource_progress_summary?.published) {
     await loadResourcesForSelectedJob()
@@ -756,6 +837,7 @@ async function handleTaskChange() {
 
 async function handleProfileChange() {
   syncProfileContext()
+  coursewareComposerVisible.value = false
   selectedRunId.value = ''
   selectedResourceId.value = ''
   resources.value = []
@@ -856,7 +938,41 @@ function appendResources() {
   selectedAppendResourceTypes.value = appendResourceOptions.value
     .filter((option) => !option.alreadyIncluded)
     .map((option) => option.type)
+  appendIncludeClaimCheck.value = appendReviewEnabled.value
+    && sourceJob.request_payload?.include_claim_check !== false
   appendDialogVisible.value = true
+}
+
+async function handleAppendCommand(kind) {
+  if (kind === 'text') {
+    appendResources()
+    return
+  }
+  if (!resources.value.length) {
+    ElMessage.info('请先选择一个已发布资源的任务，再追加 HTML 互动课件。')
+    return
+  }
+  coursewareComposerVisible.value = true
+  await nextTick()
+  coursewareWorkspace.value?.openCreateDialog()
+}
+
+async function handleCoursewareCreated(payload) {
+  const createdJobs = payload?.jobs || []
+  coursewareJobs.value = [
+    ...createdJobs,
+    ...coursewareJobs.value.filter((job) => !createdJobs.some((created) => created.run_id === job.run_id)),
+  ]
+  if (payload?.activeJob?.run_id) selectedRunId.value = payload.activeJob.run_id
+  // Once the new run is selected, selectedCoursewareJob keeps the workspace
+  // mounted; clear the temporary creation-only flag.
+  coursewareComposerVisible.value = false
+  persistSelectedJob()
+}
+
+async function handleCoursewarePublished() {
+  await loadJobs(false)
+  ElMessage.success('HTML 互动课件已追加到当前资源批次。')
 }
 
 async function regeneratePendingResources() {
@@ -907,6 +1023,7 @@ async function confirmAppendResources() {
       resource_types: resourceTypes,
       instructions: '追加指定类型的学习资源，并与本批次已有资源保持衔接。',
       source_run_id: sourceJob.run_id,
+      include_claim_check: appendIncludeClaimCheck.value,
     })
     selectedRunId.value = response.data.run_id
     localStorage.setItem('current_generation_run_id', selectedRunId.value)
@@ -984,6 +1101,23 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 20px;
   color: #172033;
+}
+
+.generate-page.is-courseware-workspace {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.generate-page.is-courseware-workspace :deep(.courseware-generation-page) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.generate-page.is-courseware-workspace :deep(.generation-grid) {
+  height: 100%;
+  min-height: 0;
 }
 
 .control-panel,
@@ -1471,7 +1605,34 @@ onBeforeUnmount(() => {
   color: #98a4b5;
 }
 
+.append-claim-option {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e6ebf2;
+}
+
+.append-claim-option p {
+  margin: 8px 0 0 24px;
+  color: #7b8798;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 @media (max-width: 1200px) {
+  .generate-page.is-courseware-workspace {
+    height: auto;
+    overflow: visible;
+  }
+
+  .generate-page.is-courseware-workspace :deep(.courseware-generation-page) {
+    flex: initial;
+    overflow: visible;
+  }
+
+  .generate-page.is-courseware-workspace :deep(.generation-grid) {
+    height: auto;
+  }
+
   .job-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

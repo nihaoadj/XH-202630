@@ -117,6 +117,8 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         assessment_payload_hash=orm.assessment_payload_hash,
         review_practice_payload=orm.review_practice_payload,
         review_practice_payload_hash=orm.review_practice_payload_hash,
+        practice_guide_payload=orm.practice_guide_payload,
+        practice_guide_payload_hash=orm.practice_guide_payload_hash,
     )
 
 
@@ -169,6 +171,8 @@ def _pydantic_to_orm(
         assessment_payload_hash=resource.assessment_payload_hash,
         review_practice_payload=resource.review_practice_payload,
         review_practice_payload_hash=resource.review_practice_payload_hash,
+        practice_guide_payload=resource.practice_guide_payload,
+        practice_guide_payload_hash=resource.practice_guide_payload_hash,
     )
 
 

@@ -118,6 +118,7 @@ class LearningAttemptSubmit(StrictFeedbackModel):
             "question_results",
             "total_score",
             "max_score",
+            "source_batch_id",
         }
         if set(value) - allowed:
             raise ValueError("metadata contains unsupported keys")
@@ -279,9 +280,9 @@ class CorrectionPackageOptionV1(StrictFeedbackModel):
     eligible: bool
     disabled_reason_code: str | None = None
     selectable_targets: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
-    recommended_target_ids: list[str] = Field(default_factory=list, max_length=3)
+    recommended_target_ids: list[str] = Field(default_factory=list, max_length=2)
     min_targets: Literal[1] = 1
-    max_targets: Literal[3] = 3
+    max_targets: Literal[2] = 2
     recommended_difficulty: Literal["初级", "中级", "高级"] = "中级"
     snapshot_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
@@ -297,7 +298,7 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
     )
     difficulty: Literal["初级", "中级", "高级"] | None = None
     learning_intent: LearningIntent | None = None
-    selected_skill_node_ids: list[str] = Field(default_factory=list, max_length=3)
+    selected_skill_node_ids: list[str] = Field(default_factory=list, max_length=2)
     next_generation_snapshot_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("resource_types")

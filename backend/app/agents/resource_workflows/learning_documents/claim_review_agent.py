@@ -15,7 +15,9 @@ from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.agent_contracts import build_trace_item, make_error_info, start_step
 from app.models.reviews.claims import (
     ClaimExtractionLLMOutput,
+    ClaimJudgementCandidate,
     ClaimJudgementLLMOutput,
+    ClaimType,
     ClaimMetricStatus,
     ClaimRecord,
     ClaimVerdict,
@@ -27,19 +29,62 @@ from app.models.shared.llm import LLMCallContext
 from app.models.shared.workflow import ClaimCheckStatus, ReviewDecision, StepStatus
 
 
-EXTRACTOR_PROMPT_VERSION = "p0-06-extract-v1"
+EXTRACTOR_PROMPT_VERSION = "p0-06-extract-v2"
 JUDGE_PROMPT_VERSION = "p0-06-judge-v1"
 
 EXTRACTOR_PROMPT = """你是独立 Claim 抽取器。仅从给定资源原文抽取可单独判断的陈述。
-resource_id 必须从输入中原样选择；source_text 必须是资源原文的连续精确子串，
-source_start/source_end 使用 Python 字符下标且 end 为开区间。事实陈述标 factual，
+resource_id 必须从输入中原样选择；source_text 必须是资源原文的连续精确子串。
+source_start/source_end 请按 Python 字符下标填写且 end 为开区间；服务端会以精确 source_text
+重新校验并确定最终位置。事实陈述标 factual，
 教学动作标 instructional，主观/过渡表达标 non_factual。evidence_id 和 knowledge_point_id
 只能从输入白名单选择，不能创造 ID。每个非空资源至少输出一个 Claim，不要输出解释。"""
 
 JUDGE_PROMPT = """你是独立 Claim 证据判定器。逐条且仅依据本次冻结 Evidence 判定。
 每个 claim_id 必须恰好出现一次。事实 Claim 只能判 supported、contradicted、not_in_evidence；
 instructional/non_factual Claim 必须判 non_factual。supported/contradicted 必须引用白名单
-evidence_ids，not_in_evidence/non_factual 禁止引用证据。不能使用常识补全，不能创造 ID。"""
+evidence_ids，not_in_evidence/non_factual 禁止引用证据。不能使用常识补全，不能创造 ID。
+verdict 必须严格使用上述小写枚举值，不要输出 value、label、中文值或其它别名；
+先逐条核对 claim_type 与 verdict/evidence_ids 的组合，再输出唯一 JSON 对象。"""
+
+
+def _normalize_judgement_candidates(
+    claims: list[ClaimRecord],
+    candidates: list[ClaimJudgementCandidate],
+) -> list[ClaimJudgementCandidate]:
+    """Repair only deterministic, conservative Judge envelope mismatches."""
+    claims_by_id = {claim.claim_id: claim for claim in claims}
+    normalized: list[ClaimJudgementCandidate] = []
+    for candidate in candidates:
+        claim = claims_by_id.get(candidate.claim_id)
+        if claim is None:
+            normalized.append(candidate)
+            continue
+
+        if claim.claim_type != ClaimType.FACTUAL:
+            # The extractor has already classified this claim. It is not
+            # eligible for factual support metrics, so normalize provider
+            # enum/evidence noise without creating factual support.
+            if (
+                candidate.verdict != ClaimVerdict.NON_FACTUAL
+                or candidate.evidence_ids
+            ):
+                candidate = candidate.model_copy(
+                    update={
+                        "verdict": ClaimVerdict.NON_FACTUAL,
+                        "evidence_ids": [],
+                    }
+                )
+        elif candidate.verdict in {
+            ClaimVerdict.NOT_IN_EVIDENCE,
+            ClaimVerdict.NON_FACTUAL,
+        } and candidate.evidence_ids:
+            # A conservative absence/non-factual verdict cannot gain support
+            # from an accidental evidence reference. Removing that reference
+            # preserves the conservative verdict; the opposite direction is
+            # never inferred here.
+            candidate = candidate.model_copy(update={"evidence_ids": []})
+        normalized.append(candidate)
+    return normalized
 
 
 def _claim_audit_content(resource) -> str:
@@ -61,6 +106,7 @@ def _failure(
     code: ErrorCode,
     detail: str,
     llm_error: LLMGatewayError | None = None,
+    prior_errors: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     error = llm_error.error if llm_error else make_error_info(
         code,
@@ -93,12 +139,16 @@ def _failure(
         step_context=step_context,
         llm_metadata=llm_error.trace_metadata() if llm_error else None,
     )
+    persisted_errors = list(prior_errors or [])
+    serialized_error = error.model_dump(mode="json")
+    if serialized_error not in persisted_errors:
+        persisted_errors.append(serialized_error)
     return {
         "review_result": review,
         "claim_check_status": ClaimCheckStatus.FAILED.value,
         "current_node": node_name,
         "trace": [trace],
-        "errors": [error.model_dump(mode="json")],
+        "errors": persisted_errors,
     }
 
 
@@ -204,6 +254,7 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
             node_name="claim_extractor",
             code=ErrorCode.CLAIM_EXTRACTION_INVALID,
             detail="all resource claim extractions failed",
+            prior_errors=errors,
         )
     trace = build_trace_item(
         state,
@@ -281,9 +332,13 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
                 ),
                 options=llm_gateway.options_for("claim_judge", temperature=0.0),
             )
+            normalized_candidates = _normalize_judgement_candidates(
+                resource_claims,
+                result.output.judgements,
+            )
             judgements.extend(materialize_judgements(
                 claims=resource_claims,
-                candidates=result.output.judgements,
+                candidates=normalized_candidates,
                 allowed_evidence_ids={item.evidence_id for item in evidence},
                 judge_prompt_version=JUDGE_PROMPT_VERSION,
                 judge_model=result.model_name,

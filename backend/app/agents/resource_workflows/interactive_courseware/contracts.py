@@ -24,6 +24,7 @@ ComponentKind = Literal[
     "branching_scenario", "categorization", "word_bank_cloze", "timeline_explorer",
     "metric_strip", "process_flow", "concept_map", "evidence_card", "comparison_table",
     "decision_path", "code_steps", "conclusion_bar",
+    "review_node_summary",
 ]
 PedagogicalRole = Literal["explain", "example", "warning", "recap"]
 
@@ -97,6 +98,11 @@ class ReviewPracticeCoursewarePlanEnrichment(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     course_title: str = Field(min_length=1, max_length=160)
     overview_lead: str = Field(min_length=1, max_length=500)
+    learning_scope: str = Field(min_length=1, max_length=500)
+    learning_method: str = Field(min_length=1, max_length=500)
+    completion_lead: str = Field(min_length=1, max_length=500)
+    completion_message: str = Field(min_length=1, max_length=500)
+    overall_summary: str = Field(min_length=1, max_length=800)
     node_summaries: list[ReviewPracticeNodeSummary] = Field(default_factory=list, max_length=3)
 
     @model_validator(mode="after")
@@ -399,6 +405,7 @@ class CoursewareNarrativeEnrichment(BaseModel):
 
     title: str = Field(min_length=1, max_length=120)
     lead: str = Field(min_length=1, max_length=500)
+    learning_overview: str = Field(default="", max_length=500)
     conclusion: str = Field(min_length=1, max_length=500)
 
 

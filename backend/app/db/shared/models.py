@@ -137,6 +137,8 @@ class GeneratedResourceORM(Base):
     assessment_payload_hash = Column(String(64), nullable=True, index=True)
     review_practice_payload = Column(JSON, nullable=True, comment="结构化主动回忆复习清单内部 payload")
     review_practice_payload_hash = Column(String(64), nullable=True, index=True)
+    practice_guide_payload = Column(JSON, nullable=True, comment="结构化实操指南内部 payload")
+    practice_guide_payload_hash = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
 
 

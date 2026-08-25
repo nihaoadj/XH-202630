@@ -134,16 +134,42 @@ def build_courseware_spec(
             result = llm_gateway.invoke_structured(
                 messages=[
                     SystemMessage(content=(
-                        "你只为主动回忆复习课件补充简短引导语和节点总结。题目、答案、Evidence、组件、"
-                        "页面顺序全部由平台冻结；不得输出或改写它们，不得输出 HTML、CSS、JavaScript、URL。"
+                        "你只为主动回忆复习课件补充封面标题、封面导语和节点总结。"
+                        "复习清单封面沿用编辑化的大标题、信息卡和完成提示的版式节奏，但使用独立的复习主题表达；"
+                        "不要复制实操指南的措辞，不要输出颜色、CSS、HTML、JavaScript 或 URL。"
+                        "course_title 应是简洁、适合封面展示的复习清单标题；overview_lead 应用 1—2 句说明"
+                        "先闭卷回忆、再概念辨析、再进行正反例辨认并完成自评。"
+                        "learning_scope 用 1—2 句说明本轮实际覆盖的学习节点、能力或证据范围；"
+                        "learning_method 用 1—2 句说明如何使用课件：先独立回忆，再揭示答案、自评并回到证据复核。"
+                        "这两个字段会渲染为封面信息卡，文字应短而具体，不要输出列表、颜色、CSS、HTML 或组件名。"
+                        "completion_lead 应是结尾页的完成检查引导，completion_message 应是 1—2 句可执行的结语："
+                        "根据学习者的会/模糊/不会自评，说明何时回到节点复习、何时进入实操或分阶测试；"
+                        "overall_summary 应是结尾页中间主卡的整体复盘，写 2—4 句，串联本轮覆盖的节点、"
+                        "闭卷回忆、概念辨析、正反例辨认三种练习，以及学习者接下来应关注的证据边界；"
+                        "只能依据输入的节点与复习结构，不得虚构掌握率、成绩或未提供的事实。"
+                        "不得声称学习者已经掌握，也不得虚构成绩。"
+                        "题目、答案、Evidence、组件、页面顺序和每页题量全部由平台冻结；不得输出或改写它们。"
                         "每个节点总结只说明本节点应如何依据题目与证据复盘。"
                     )),
                     HumanMessage(content=json.dumps({
                         "topic": review_source.get("topic"), "title": package.get("title"),
                         "node_ids": node_ids,
-                        "nodes": [{"skill_node_id": item.get("skill_node_id"), "skill_node_name": item.get("skill_node_name"),
-                                   "question_count": len(item.get("recall_questions") or []) + len(item.get("distinction_questions") or []) + (1 if item.get("example_recognition") else 0)}
-                                  for item in package.get("node_blocks") or []],
+                        "page_design": {
+                            "recall": "闭卷回忆：2页，每页2题",
+                            "distinction": "概念辨析：2页，每页2题",
+                            "example_recognition": "正反例辨认：1页，2题",
+                            "completion": "结尾页：节点完成检查、自评提示和下一步建议",
+                            "overall_summary": "结尾页中间区域：模型生成整体复盘主卡，串联节点、练习方法和下一步关注点",
+                            "overview_cards": "封面信息卡：学习范围、学习方法、节点复习路径",
+                        },
+                        "nodes": [{
+                            "skill_node_id": item.get("skill_node_id"),
+                            "skill_node_name": item.get("skill_node_name"),
+                            "question_count": len(item.get("recall_questions") or [])
+                            + len(item.get("distinction_questions") or [])
+                            + len(item.get("example_recognition_questions") or [])
+                            + (1 if not item.get("example_recognition_questions") and item.get("example_recognition") else 0),
+                        } for item in package.get("node_blocks") or []],
                     }, ensure_ascii=False)),
                 ], output_schema=ReviewPracticeCoursewarePlanEnrichment,
                 context=LLMCallContext(run_id=run_id, step_id=f"{run_id}:review-practice-enrichment", node_name="courseware_review_practice_enricher", schema_name="ReviewPracticeCoursewarePlanEnrichment"),

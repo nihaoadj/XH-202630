@@ -306,6 +306,72 @@ class KnowledgeService:
         ordered.extend(question for question in questions if question not in ordered)
         return ordered[:limit]
 
+    def select_initial_tier_diagnostic_questions(
+        self,
+        knowledge_base_id: str | None,
+        *,
+        tier: int,
+        node_limit: int = 3,
+    ) -> list[DiagnosticQuestion]:
+        """Select a deterministic, dependency-aware initial placement set.
+
+        This is deliberately server-owned: one placement round always means
+        three nodes and one question for each diagnostic dimension per node.
+        """
+        if node_limit != 3:
+            raise ValueError("initial placement requires exactly three skill nodes")
+        nodes = self.list_skill_nodes(knowledge_base_id)
+        node_by_id = {node.node_id: node for node in nodes}
+        tier_nodes = [node for node in nodes if int(node.tier or 1) == tier]
+        if len(tier_nodes) < node_limit:
+            raise ValueError(f"学习阶段 {tier} 不足三个可诊断节点")
+
+        tier_ids = {node.node_id for node in tier_nodes}
+        descendants = {node.node_id: 0 for node in tier_nodes}
+        for node in tier_nodes:
+            pending = list(node.children)
+            seen: set[str] = set()
+            while pending:
+                child_id = pending.pop(0)
+                if child_id in seen or child_id not in node_by_id:
+                    continue
+                seen.add(child_id)
+                descendants[node.node_id] += 1
+                pending.extend(node_by_id[child_id].children)
+
+        # Kahn ordering keeps same-tier prerequisites before their dependants;
+        # the downstream count makes the placement set useful for later paths.
+        remaining = {node.node_id: node for node in tier_nodes}
+        ordered_nodes: list[str] = []
+        while remaining:
+            ready = [
+                node for node in remaining.values()
+                if not any(parent in remaining for parent in node.prerequisites if parent in tier_ids)
+            ]
+            if not ready:  # Catalog validation normally prevents cycles; fail deterministically if legacy data has one.
+                ready = list(remaining.values())
+            ready.sort(key=lambda node: (-descendants[node.node_id], nodes.index(node), node.node_id))
+            chosen = ready[0]
+            ordered_nodes.append(chosen.node_id)
+            remaining.pop(chosen.node_id)
+
+        selected_node_ids = ordered_nodes[:node_limit]
+        dimensions = ("concept", "scenario", "misconception")
+        questions = self.load_diagnostic_questions(knowledge_base_id)
+        selected: list[DiagnosticQuestion] = []
+        for node_id in selected_node_ids:
+            by_dimension = {
+                str(question.metadata.get("diagnostic_dimension")): question
+                for question in questions
+                if question.skill_node_id == node_id
+                and str(question.metadata.get("diagnostic_dimension")) in dimensions
+            }
+            missing = [dimension for dimension in dimensions if dimension not in by_dimension]
+            if missing:
+                raise ValueError(f"节点 {node_id} 缺少初诊维度题: {', '.join(missing)}")
+            selected.extend(by_dimension[dimension] for dimension in dimensions)
+        return selected
+
     def public_question(self, question: DiagnosticQuestion) -> dict[str, Any]:
         payload = question.model_dump()
         payload.pop("answer", None)

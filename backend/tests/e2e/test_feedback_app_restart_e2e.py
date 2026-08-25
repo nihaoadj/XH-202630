@@ -79,7 +79,6 @@ def test_feedback_survives_full_fastapi_lifespan_restart(monkeypatch, tmp_path):
         _authenticated_restart_user,
     )
     _clear_runtime_caches()
-
     payload = {
         "learner_id": "restart-learner",
         "source_resource_id": "restart-resource",
@@ -206,5 +205,54 @@ def test_feedback_survives_full_fastapi_lifespan_restart(monkeypatch, tmp_path):
         jobs = restarted_client.get("/api/generate/jobs?learner_id=restart-learner")
         assert jobs.status_code == 200
         assert jobs.json()["total"] == 1
+
+    _clear_runtime_caches()
+
+
+def test_lifespan_reload_keeps_a_recent_running_generation_job(monkeypatch, tmp_path):
+    """A development reload must not fail a job whose workflow lease is valid."""
+    db_path = tmp_path / "generation-reload.db"
+    monkeypatch.setenv("DB_TYPE", "sqlite")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("RERANK_ENABLED", "false")
+    monkeypatch.setattr(main_module, "build_health_report", _ready_report)
+    _clear_runtime_caches()
+
+    run_id = "recent-running-generation"
+    with TestClient(main_module.app):
+        container = main_module.app.container
+        container.user_repository().save(_restart_user())
+        with container.db_session_factory()() as db:
+            db.add(KnowledgeBaseORM(
+                knowledge_base_id="reload-kb",
+                name="Reload KB",
+                version="1.0",
+            ))
+            db.commit()
+        container.learner_repository().save(LearnerProfile(
+            learner_id="reload-learner",
+            user_id="restart-user",
+            learner_type="测试",
+            education="本科",
+            major="软件工程",
+            knowledge_base_id="reload-kb",
+            learning_goal="验证热重载生成任务",
+        ))
+        jobs = container.generation_job_repository()
+        jobs.create(
+            run_id=run_id,
+            batch_id=run_id,
+            learner_id="reload-learner",
+            topic="reload-safe generation",
+            knowledge_base_id="reload-kb",
+            request_payload={},
+        )
+        assert jobs.mark_running(run_id).job_status == "running"
+
+    with TestClient(main_module.app):
+        job = main_module.app.container.generation_job_repository().get(run_id)
+        assert job is not None
+        assert job.job_status == "running"
+        assert job.error_message is None
 
     _clear_runtime_caches()

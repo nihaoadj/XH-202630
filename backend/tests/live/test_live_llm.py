@@ -67,8 +67,9 @@ def test_live_llm_generation_and_claim_schema_compatibility():
             schema_name=ClaimExtractionLLMOutput.__name__,
         ),
         options=gateway.options_for("claim_extractor", temperature=0.0).model_copy(update={
-            "max_attempts": 1,
-            "request_timeout_seconds": min(30.0, settings.llm_request_timeout_seconds),
+            "max_attempts": settings.claim_max_attempts,
+            "request_timeout_seconds": settings.claim_request_timeout_seconds,
+            "schema_repair_attempts": settings.claim_schema_repair_attempts,
         }),
     )
     candidates = extraction.output.resources[0].claims
@@ -102,8 +103,9 @@ def test_live_llm_generation_and_claim_schema_compatibility():
             schema_name=ClaimJudgementLLMOutput.__name__,
         ),
         options=gateway.options_for("claim_judge", temperature=0.0).model_copy(update={
-            "max_attempts": 1,
-            "request_timeout_seconds": min(30.0, settings.llm_request_timeout_seconds),
+            "max_attempts": settings.claim_max_attempts,
+            "request_timeout_seconds": settings.claim_request_timeout_seconds,
+            "schema_repair_attempts": settings.claim_schema_repair_attempts,
         }),
     )
 

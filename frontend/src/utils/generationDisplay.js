@@ -86,18 +86,36 @@ export function normalizeResourceProgressSummary(summary, executions = []) {
   // has already arrived over SSE. Prefer the concrete execution list in that
   // transient state so the UI never shows the misleading "0/0" badge.
   const logicalExecutions = new Map()
+  const logicalPublication = new Map()
   for (const execution of executions) {
     const key = execution?.resource_spec_id || `${execution?.resource_type || 'resource'}:${execution?.representation || 'text'}`
     const values = logicalExecutions.get(key) || []
     values.push(execution?.resource_execution_state || 'queued')
     logicalExecutions.set(key, values)
+    logicalPublication.set(
+      key,
+      Boolean(logicalPublication.get(key) || execution?.publication_status === 'published'),
+    )
   }
   // A practical guide's canonical text remains a single resource artifact.
   // for user-facing progress. Prefer that logical count whenever events exist.
   const total = logicalExecutions.size || (reportedTotal > 0 ? reportedTotal : executions.length)
-  const approved = count('approved')
-  const failed = count('failed')
-  const humanReview = count('human_review')
+  const logicalStateCounts = [...logicalExecutions.values()].reduce((result, states) => {
+    const state = states.includes('failed') ? 'failed'
+      : states.includes('human_review') ? 'human_review'
+        : states.every((item) => item === 'approved') ? 'approved'
+          : 'in_progress'
+    result[state] = (result[state] || 0) + 1
+    return result
+  }, {})
+  // A durable execution row can arrive before the job summary refreshes.
+  // Prefer those concrete rows so the card and its approval counter agree.
+  const approved = logicalExecutions.size ? (logicalStateCounts.approved || 0) : count('approved')
+  const failed = logicalExecutions.size ? (logicalStateCounts.failed || 0) : count('failed')
+  const humanReview = logicalExecutions.size ? (logicalStateCounts.human_review || 0) : count('human_review')
+  const published = logicalExecutions.size
+    ? [...logicalPublication.values()].filter(Boolean).length
+    : count('published')
   const completed = logicalExecutions.size
     ? [...logicalExecutions.values()].filter((states) => states.every((state) => (
       ['approved', 'failed', 'human_review'].includes(state)
@@ -108,6 +126,7 @@ export function normalizeResourceProgressSummary(summary, executions = []) {
     approved,
     failed,
     human_review: humanReview,
+    published,
     completed: Math.min(total || completed, completed),
     state_counts: { ...counts },
     can_finalize: Boolean(summary?.can_finalize),

@@ -13,13 +13,13 @@ PageRole = Literal[
     "cover", "learning_map", "concept_explanation", "process_breakdown",
     "case_diagnosis", "comparison_analysis", "practice_workspace",
     "knowledge_check", "summary_action", "review_overview", "review_recall",
-    "review_distinction", "review_example",
+    "review_distinction", "review_example", "review_node_summary",
 ]
 LayoutRecipeId = Literal[
     "editorial_cover", "learning_map_grid", "concept_split", "process_lane",
     "comparison_matrix", "case_diagnostic", "practice_workspace",
     "quiz_focus", "recap_dashboard", "review_overview", "review_recall_grid",
-    "review_distinction_grid", "review_example_focus",
+    "review_distinction_grid", "review_example_focus", "review_node_summary",
 ]
 
 
@@ -79,7 +79,7 @@ class StoryboardScene(BaseModel):
     content_budget: ContentBudget = Field(default_factory=ContentBudget)
     # Practice variants are platform-owned visual arrangements. They never
     # change the source order, component registry, or runtime behavior.
-    practice_variant: Literal["guided", "code", "verify"] | None = None
+    practice_variant: Literal["prepare", "guided", "code", "verify", "reflect"] | None = None
 
 
 class StoryboardSpec(BaseModel):

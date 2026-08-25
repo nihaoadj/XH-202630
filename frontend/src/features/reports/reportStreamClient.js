@@ -37,11 +37,13 @@ export class ReportStreamClient {
       if (payload.learner_id !== this.learnerId || payload.window_days !== this.windowDays) return
       const revisionChanged = payload.report_revision !== this.revision
       this.pendingRefresh = this.pendingRefresh || this.pending
-      this.revision = payload.report_revision
       // A reconnect always contains a snapshot.  It is an invalidation only
       // when it represents facts newer than the report already on screen.
       if (onlyWhenRevisionChanges && !revisionChanged) return
-      clearTimeout(this.debounce); this.debounce = setTimeout(() => this._refresh(generation), 250)
+      // Keep the on-screen revision until the full payload has arrived. If we
+      // set it here, the conditional request below sends the *new* ETag and
+      // the server correctly responds 304, leaving stale charts on screen.
+      clearTimeout(this.debounce); this.debounce = setTimeout(() => this._refresh(generation, true), 250)
     }
     source.addEventListener('report_snapshot', (event) => scheduleRefresh(JSON.parse(event.data), { onlyWhenRevisionChanges: true }))
     source.addEventListener('report_changed', (event) => scheduleRefresh(JSON.parse(event.data), { onlyWhenRevisionChanges: false }))

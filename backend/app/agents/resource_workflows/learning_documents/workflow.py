@@ -253,7 +253,10 @@ def route_after_review(state: AgentState) -> str:
         if state.get("revision_count", 0) < state.get("max_iterations", 1):
             return "prepare_revision"
         return "finalize"
-    if decision == ReviewDecision.APPROVE and state.get("include_claim_check", False):
+    # Claim audit is an explicitly requested independent evidence check.  It
+    # must not disappear merely because the ordinary reviewer concludes
+    # reject/human_review; those outcomes still control publication later.
+    if state.get("include_claim_check", False):
         return "claim_extract"
     return "finalize"
 

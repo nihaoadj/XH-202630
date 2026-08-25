@@ -36,7 +36,7 @@
           <div class="resource-tree-title">
             <span>审核与发布</span>
             <el-tag :type="progressSummary.failed ? 'warning' : 'success'" size="small" effect="plain">
-              已批准 {{ progressSummary.approved }}/{{ progressSummary.total }}
+              已发布 {{ progressSummary.published }}/{{ progressSummary.total }}
             </el-tag>
           </div>
         </template>

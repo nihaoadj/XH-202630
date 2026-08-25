@@ -10,6 +10,11 @@ from app.core.courseware.runtime import ALLOWED_SCENE_KINDS, SCRIPT, STYLE
 from app.core.courseware.components import component_definition, is_registered_component, validate_component_payload
 from app.core.courseware.security import security_policy
 from app.core.courseware.design_system import THEMES, TOKENS, resolve_layout, resolve_motion, resolve_recipe, resolve_theme
+from app.core.courseware.design_system.visual_styles import (
+    REVIEW_QUESTION_PAGE_ROLES,
+    practice_style_family,
+    visual_style_for_scene,
+)
 from app.models.courseware.design import CoursewareDesign
 
 
@@ -39,7 +44,9 @@ def _rich_text(value: Any) -> str:
     return "".join(parts) or '<p class="component-prose">来源内容为空。</p>'
 
 
-def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int) -> str:
+def _render_component_block(
+    block: dict[str, Any], *, scene_id: str, index: int, scene_page_role: str | None = None
+) -> str:
     """Render only catalog-owned component shapes, never model-supplied markup."""
     definition = component_definition(block.get("component"), str(block.get("schema_version") or "1.0"))
     if definition is None:
@@ -49,14 +56,52 @@ def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int)
     css = f"block component-{definition.renderer}"
     component_id = _text(block.get("component_id") or block.get("block_id") or f"{definition.name}-{index}")
     attributes = f'class="{css}" data-component-id="{component_id}" data-scene-id="{_text(scene_id)}"'
+    source_json_path = _text(block.get("source_json_path"))
+    evidence_json_path = _text(block.get("evidence_json_path"))
+    if source_json_path:
+        attributes += f' data-source-json-path="{source_json_path}"'
+    if evidence_json_path:
+        attributes += f' data-evidence-json-path="{evidence_json_path}"'
+    if scene_page_role == "cover" and index == 0:
+        attributes += " data-cover-learning-scope"
+    elif scene_page_role == "cover" and index == 1:
+        attributes += " data-cover-learning-method"
     if definition.renderer == "key-point":
+        role = str(block.get("presentation_role") or "")
+        label = _text(block.get("label") or "阶段目标")
+        if role == "practice_phase_completion":
+            english = "VERIFICATION GOAL"
+            return (
+                f'<section {attributes} data-practice-phase-completion aria-label="{label}">'
+                f'<label><input type="checkbox" data-practice-phase-completion-check>'
+                f'<span><small class="component-english-label">{english}</small><strong>{label}：</strong>{text}</span></label></section>'
+            )
+        if role == "practice_phase_goal":
+            return (
+                f'<section {attributes} data-practice-phase-goal aria-label="{label}">'
+                f'<label><input type="checkbox" data-practice-phase-goal-check>'
+                f'<span><small class="component-english-label">PHASE GOAL</small><strong>{label}：</strong>{text}</span></label></section>'
+            )
+        if role == "practice_reflection_goal":
+            return f'<aside {attributes} data-practice-reflection-goal aria-label="{label}"><small class="component-english-label">REFLECTION GOAL</small><strong>{label}</strong><div class="component-content">{rich_text}</div></aside>'
         return f'<aside {attributes} aria-label="关键点"><div class="component-content">{rich_text}</div></aside>'
     if definition.renderer == "compare":
         return f'<section {attributes} aria-label="对比说明"><div class="component-content">{rich_text}</div></section>'
     if definition.renderer == "recap":
         return f'<section {attributes} aria-label="复盘"><h3>复盘</h3><div class="component-content">{rich_text}</div></section>'
     if definition.renderer == "callout":
-        return f'<aside {attributes} role="note" aria-label="提示"><strong>提示</strong><div class="component-content">{rich_text}</div></aside>'
+        label = _text(block.get("label") or "提示")
+        if scene_page_role == "cover" and index == 0:
+            return f'<aside {attributes} role="note" aria-label="学习范围"><div class="component-content">{rich_text}</div></aside>'
+        if block.get("presentation_role") == "practice_verification":
+            return (
+                f'<section {attributes} data-practice-verification aria-label="{label}">'
+                f'<label><input type="checkbox" data-practice-verification-check>'
+                f'<span><strong>{label}：</strong>{text}</span></label></section>'
+            )
+        if block.get("presentation_role") == "practice_reflection_summary":
+            return f'<section {attributes} data-practice-reflection-summary aria-label="{label}"><strong>{label}</strong><div class="component-content">{rich_text}</div></section>'
+        return f'<aside {attributes} role="note" aria-label="{label}"><strong>{label}</strong><div class="component-content">{rich_text}</div></aside>'
     if definition.name == "flashcard":
         front, back = _text(block.get("front") or text), _text(block.get("back") or text)
         return f'<section {attributes} data-flashcard tabindex="0" role="button" aria-label="翻转卡片"><p class="flash-front">{front}</p><p class="flash-back" hidden>{back}</p><button type="button" data-flashcard-action="review">再复习</button><button type="button" data-flashcard-action="known">已记住</button></section>'
@@ -69,21 +114,38 @@ def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int)
                 answer = f"判断：{'正确' if item.get('truth_value') else '错误'}<br>纠正：{_text(item.get('correction'))}<br>依据：{_text(item.get('explanation'))}"
             else:
                 answer = f"参考答案：{_text(item.get('reference_answer'))}<br>解释：{_text(item.get('explanation'))}<br>达标标准：{_text(item.get('pass_criteria'))}"
-            cards.append(f'<article class="review-card" data-review-question-id="{question_id}"><h3>{question_id}</h3><p>{prompt}</p><button type="button" data-review-reveal>显示答案</button><div class="review-answer" hidden>{answer}</div><div class="review-rating" hidden role="group" aria-label="自评"><button type="button" data-review-rating="known">会</button><button type="button" data-review-rating="uncertain">模糊</button><button type="button" data-review-rating="not_known">不会</button></div></article>')
-        return f'<section {attributes} data-review-practice data-review-kind="{_text(definition.name)}" aria-label="主动回忆练习"><p>{text}</p><div class="review-card-grid">{"".join(cards)}</div></section>'
+            cards.append(f'<article class="review-card" data-review-question-id="{question_id}"><div class="review-question-content"><h3>{question_id}</h3><p>{prompt}</p></div><button type="button" data-review-reveal>显示答案</button><div class="review-answer" hidden>{answer}</div><div class="review-rating" hidden role="group" aria-label="自评"><button type="button" data-review-rating="known" aria-pressed="false">会</button><button type="button" data-review-rating="uncertain" aria-pressed="false">模糊</button><button type="button" data-review-rating="not_known" aria-pressed="false">不会</button></div></article>')
+        return f'<section {attributes} data-review-practice data-review-kind="{_text(definition.name)}" aria-label="主动回忆练习"><div class="review-card-grid">{"".join(cards)}</div></section>'
     if definition.name == "review_example_card":
-        item = block.get("item") or {}
-        question_id = _text(item.get("question_id"))
-        answer = f"正例：{_text(item.get('positive_candidate'))}<br>决定性边界：{_text(item.get('decisive_boundary'))}<br>解释：{_text(item.get('explanation'))}"
-        return f'<section {attributes} data-review-practice data-review-kind="review-example" aria-label="正反例辨认"><p>{text}</p><article class="review-card review-example" data-review-question-id="{question_id}"><h3>{question_id}</h3><div class="review-candidates"><p>A. {_text(item.get("candidate_a"))}</p><p>B. {_text(item.get("candidate_b"))}</p></div><button type="button" data-review-reveal>显示答案</button><div class="review-answer" hidden>{answer}</div><div class="review-rating" hidden role="group" aria-label="自评"><button type="button" data-review-rating="known">会</button><button type="button" data-review-rating="uncertain">模糊</button><button type="button" data-review-rating="not_known">不会</button></div></article></section>'
+        items = block.get("items") or ([block["item"]] if isinstance(block.get("item"), dict) else [])
+        cards = []
+        for item in items:
+            question_id = _text(item.get("question_id"))
+            answer = f"正例：{_text(item.get('positive_candidate'))}<br>决定性边界：{_text(item.get('decisive_boundary'))}<br>解释：{_text(item.get('explanation'))}"
+            cards.append(f'<article class="review-card review-example" data-review-question-id="{question_id}"><div class="review-question-content"><h3>{question_id}</h3><div class="review-candidates"><p>A. {_text(item.get("candidate_a"))}</p><p>B. {_text(item.get("candidate_b"))}</p></div></div><button type="button" data-review-reveal>显示答案</button><div class="review-answer" hidden>{answer}</div><div class="review-rating" hidden role="group" aria-label="自评"><button type="button" data-review-rating="known" aria-pressed="false">会</button><button type="button" data-review-rating="uncertain" aria-pressed="false">模糊</button><button type="button" data-review-rating="not_known" aria-pressed="false">不会</button></div></article>')
+        return f'<section {attributes} data-review-practice data-review-kind="review-example" aria-label="正反例辨认"><div class="review-card-grid">{"".join(cards)}</div></section>'
+    if definition.name == "review_node_summary":
+        node_name = _text(block.get("node_name") or "本节点")
+        summary_attributes = attributes.replace(f'class="{css}"', f'class="{css} review-node-summary"', 1)
+        return f'<aside {summary_attributes} aria-label="{node_name}知识小结"><span class="review-summary-kicker">NODE RECAP</span><h3>{node_name}｜知识小结</h3><div class="review-summary-copy">{rich_text}</div><p class="review-summary-action">带着这份小结回顾刚才的三组练习：能解释概念、辨认边界，并在相似情境中作出判断。</p></aside>'
     if definition.name == "review_reflection":
-        return f'<aside {attributes} class="{css} review-reflection" role="note"><h3>边界反思</h3><p>{text}</p><p>本节点未生成正反例辨认题：{_text(block.get("reason"))}。请完成上方回忆与辨析后再核对证据边界。</p></aside>'
+        reflection_attributes = attributes.replace(f'class="{css}"', f'class="{css} review-reflection"', 1)
+        return f'<aside {reflection_attributes} role="note"><h3>边界反思</h3><p>{text}</p><p>本节点未生成正反例辨认题：{_text(block.get("reason"))}。请完成上方回忆与辨析后再核对证据边界。</p></aside>'
     if definition.name == "review_overview":
-        rows = "".join(f'<li>{_text(item.get("label"))}：{_text(item.get("value"))}</li>' for item in (block.get("items") or []))
-        return f'<section {attributes} class="{css} review-overview" aria-label="复习导览"><h3>复习导览</h3><p>{text}</p><ol>{rows}</ol></section>'
+        overview_attributes = attributes.replace(f'class="{css}"', f'class="{css} review-overview"', 1)
+        cards = "".join(f'<article class="review-overview-card"><span>{_text(item.get("label"))}</span><p>{_text(item.get("value"))}</p></article>' for item in (block.get("items") or []))
+        rows = "".join(f'<li><strong>{_text(item.get("label"))}</strong><span>{_text(item.get("value"))}</span></li>' for item in (block.get("node_items") or block.get("items") or []))
+        return f'<section {overview_attributes} aria-label="复习导览"><div class="review-overview-heading"><span class="review-overview-kicker">START HERE</span><h3>复习导览</h3><p>{text}</p></div><div class="review-overview-grid">{cards}</div><div class="review-overview-path"><span class="review-overview-path-label">复习路径</span><ol>{rows}</ol></div></section>'
     if definition.name == "review_completion":
         rows = "".join(f'<li data-review-node="{_text(item.get("node_id"))}">{_text(item.get("label"))}：完成全部题目自评后，可回到本节点确认完成。</li>' for item in (block.get("items") or []))
-        return f'<section {attributes} class="{css} review-completion" aria-label="完成总结"><p>{text}</p><ol>{rows}</ol><p>自评只用于低置信度学习记录，不计入正式测评成绩。</p></section>'
+        completion_attributes = attributes.replace(f'class="{css}"', f'class="{css} review-completion"', 1)
+        overall_summary = _text(block.get("overall_summary") or "本轮复习把核心概念、判断边界与证据依据串联起来；请根据自评结果回到需要再次核对的题目。")
+        return f'<section {completion_attributes} aria-label="完成总结"><span class="review-completion-kicker">NEXT STEP</span><h3>完成检查</h3><div class="review-completion-summary"><span>OVERALL REVIEW</span><p>{overall_summary}</p></div><div class="review-completion-next"><span class="review-completion-section-label">节点完成情况</span><ol>{rows}</ol></div><p class="review-completion-note">自评只用于低置信度学习记录，不计入正式测评成绩。</p></section>'
+    if definition.name == "code_block":
+        language = _text(block.get("language") or "text")
+        purpose = _text(block.get("purpose") or text)
+        code = _text(block.get("code"))
+        return f'<section {attributes} aria-label="代码示例 {language}"><p>{purpose}</p><pre class="source-code"><code data-language="{language}">{code}</code></pre></section>'
     if definition.name == "matching":
         pairs = block.get("pairs") or []
         left = "".join(f'<button type="button" data-match="left" data-pair-id="{index}" aria-label="选择左项">{_text(pair.get("left"))}</button>' for index, pair in enumerate(pairs))
@@ -153,7 +215,10 @@ def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int)
         values = block.get("steps") or [block.get("text") or "完成本步骤"]
         tag = "ol" if definition.renderer == "ordered-steps" else "ul"
         items = "".join(f'<li><label><input type="checkbox" id="{component_id}-step-{i}" data-check="{component_id}-step-{i}"><span>{_text(value)}</span></label></li>' for i, value in enumerate(values))
-        return f'<section {attributes} aria-label="步骤"><{tag} class="component-steps">{items}</{tag}></section>'
+        phase_attribute = ' data-practice-phase-items' if block.get("presentation_role") == "practice_phase_items" else ""
+        phase_english = {"准备项目": "PREPARATION ITEMS", "最终检查项": "VERIFICATION CHECKLIST"}.get(text, "CHECKLIST")
+        phase_label = f'<small class="component-english-label">{phase_english}</small><strong class="practice-phase-items-label">{text}</strong>' if phase_attribute else ""
+        return f'<section {attributes}{phase_attribute} aria-label="步骤">{phase_label}<{tag} class="component-steps">{items}</{tag}></section>'
     if definition.name == "single_choice":
         options = block.get("options") or ["是", "否"]
         controls = "".join(f'<label><input type="radio" name="choice-{_text(block.get("block_id") or "1")}" value="{_text(value)}"><span>{_text(value)}</span></label>' for value in options)
@@ -210,18 +275,69 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
     event_context = document.get("event_context") or {}
     resource_id = _text(event_context.get("resource_id") or "unknown-resource")
     release_id = _text(event_context.get("release_id") or "unknown-release")
+    resource_name_value = (
+        document.get("resource_name_en")
+        or event_context.get("resource_name_en")
+        or document.get("resource_name")
+        or event_context.get("resource_name")
+        or document.get("resource_title")
+        or (str(document.get("title") or "互动课件").split("｜", 1)[-1])
+    )
+    resource_name = _text(resource_name_value)
+    style_seed = str(
+        document.get("visual_style_seed")
+        or event_context.get("visual_style_seed")
+        or f"{event_context.get('resource_id') or 'unknown-resource'}|{event_context.get('release_id') or 'unknown-release'}"
+    )
     scenes = document.get("scenes") or []
     if not scenes:
         raise ValueError("课件至少需要一个场景")
     rendered_scenes: list[str] = []
+    step_sequence_index = int(document.get("visual_style_sequence_index") or 0)
+    review_question_sequence_index = 0
     for index, scene in enumerate(scenes):
         if scene.get("kind") not in ALLOWED_SCENE_KINDS:
             raise ValueError("课件场景类型不受 runtime 支持")
         recipe_id = str(scene.get("layout_recipe_id") or scene.get("recipe_id") or SCENE_RECIPE_BY_KIND[scene["kind"]])
         recipe = resolve_recipe(resolved_design.theme.theme_id, recipe_id)
+        family = practice_style_family(scene)
+        is_review_question = family == "review" and str(scene.get("page_role") or "") in REVIEW_QUESTION_PAGE_ROLES
+        sequence_index = review_question_sequence_index if is_review_question else step_sequence_index
+        visual_style_id = visual_style_for_scene(scene, seed=style_seed, sequence_index=sequence_index)
+        if family == "step":
+            step_sequence_index += 1
+        if is_review_question:
+            review_question_sequence_index += 1
         if not scene.get("source_refs"):
             raise ValueError("每个课件场景必须包含冻结来源引用")
         component_blocks = scene.get("component_blocks") or []
+        if scene.get("page_role") == "cover":
+            # The cover has two vertical information lanes only. The
+            # completion signal belongs to later phase pages, not the entry
+            # screen.
+            component_blocks = component_blocks[:2]
+        is_structured_practice_step = (
+            scene.get("practice_json_schema_version") == "3.0"
+            and str(scene.get("practice_json_subject") or "").startswith("practice.steps.")
+        )
+        structured_practice_phase = (
+            str(scene.get("practice_variant") or "")
+            if scene.get("practice_json_schema_version") == "3.0"
+            and str(scene.get("practice_variant") or "") in {"prepare", "verify"}
+            else ""
+        )
+        is_structured_practice_reflection = (
+            scene.get("practice_json_schema_version") == "3.0"
+            and str(scene.get("practice_variant") or "") == "reflect"
+        )
+        if is_structured_practice_step:
+            # The step layout is a direct projection of the fixed V3 guide
+            # contract. The instruction is rendered once below the title;
+            # only code and completion verification belong in the workspace.
+            component_blocks = [
+                block for block in component_blocks
+                if isinstance(block, dict) and block.get("component") in {"code_block", "callout"}
+            ]
         # Legacy scene-level quiz/practice interaction is a thin adapter. Do
         # not duplicate the component payload's form controls in that path.
         if scene.get("kind") == "quiz" and any(block.get("component") in {"single_choice", "multiple_choice"} for block in component_blocks if isinstance(block, dict)):
@@ -238,13 +354,14 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
                     block,
                     scene_id=str(scene.get("scene_id") or f"scene-{index}"),
                     index=block_index,
+                    scene_page_role=scene.get("page_role"),
                 )
                 for block_index, block in enumerate(component_blocks)
             )
         else:
             blocks = "".join(f'<p class="block">{_text(block)}</p>' for block in scene.get("blocks", []))
         interaction = ""
-        if scene.get("kind") == "practice" and not any(
+        if scene.get("kind") == "practice" and scene.get("steps") and not any(
             block.get("component") in {"steps", "ordered_steps"}
             for block in component_blocks if isinstance(block, dict)
         ):
@@ -265,14 +382,61 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
                 f'{options}<p class="feedback" aria-live="polite" hidden></p></div>'
             )
         active_class = " active" if index == 0 else ""
-        scene_heading = title if index == 0 and scene.get("page_role") == "cover" else _text(scene.get("title"))
-        lead = f'<p class="scene-lead">{_text(scene.get("lead"))}</p>' if scene.get("lead") else ""
+        scene_heading = (
+            _text(scene.get("title"))
+            if index == 0 and scene.get("page_role") == "cover" and scene.get("llm_enriched") and scene.get("title")
+            else title
+            if index == 0 and scene.get("page_role") == "cover"
+            else _text(scene.get("title"))
+        )
+        instruction_block = next(
+            (block for block in (scene.get("component_blocks") or [])
+             if isinstance(block, dict) and block.get("component") == "key_point"),
+            None,
+        ) if is_structured_practice_step else None
+        title_mapping = _text(scene.get("title_source_json_path"))
+        title_attribute = f' data-source-json-path="{title_mapping}"' if title_mapping else ""
+        instruction_attributes = ""
+        if instruction_block:
+            instruction_path = _text(instruction_block.get("source_json_path"))
+            evidence_path = _text(instruction_block.get("evidence_json_path"))
+            if instruction_path:
+                instruction_attributes += f' data-source-json-path="{instruction_path}"'
+            if evidence_path:
+                instruction_attributes += f' data-evidence-json-path="{evidence_path}"'
+        lead = f'<p class="scene-lead"{instruction_attributes}>{_text(scene.get("lead"))}</p>' if scene.get("lead") else ""
         question = f'<p class="scene-question">{_text(scene.get("key_question"))}</p>' if scene.get("key_question") else ""
         conclusion = f'<p class="scene-conclusion">{_text(scene.get("conclusion"))}</p>' if scene.get("conclusion") else ""
+        structured_step_attribute = ' data-practice-json-step="true"' if is_structured_practice_step else ''
+        structured_phase_attribute = (
+            f' data-practice-json-phase="{structured_practice_phase}"'
+            if structured_practice_phase else ''
+        )
+        structured_reflection_attribute = ' data-practice-json-reflection="true"' if is_structured_practice_reflection else ''
+        reflection_encouragement = (
+            '<p class="practice-reflection-encouragement">每一次认真复盘，都会让下一次实践更从容。</p>'
+            if is_structured_practice_reflection else ''
+        )
+        reflection_kicker = (
+            '<span class="practice-reflection-kicker">REFLECTION · WRAP-UP</span>'
+            if is_structured_practice_reflection else ''
+        )
+        phase_kicker = (
+            {
+                "prepare": "PREPARATION · SETUP",
+                "verify": "VERIFICATION · CHECK",
+            }.get(str(scene.get("practice_variant") or ""), "PRACTICE · WORKSPACE")
+            if structured_practice_phase or is_structured_practice_step else ''
+        )
+        phase_kicker_markup = (
+            f'<span class="practice-phase-kicker">{phase_kicker}</span>'
+            if phase_kicker and not is_structured_practice_reflection else ''
+        )
+        scene_kicker = resource_name if scene.get("page_role") == "cover" else _text(scene.get("page_role") or scene.get("kind"))
         rendered_scenes.append(
-            f'<section class="scene recipe-{_text(recipe["recipe_id"])}{active_class}" data-scene-id="{_text(scene.get("scene_id") or f"scene-{index}")}" data-page-role="{_text(scene.get("page_role"))}" data-practice-variant="{_text(scene.get("practice_variant") or "guided")}" data-recipe-id="{_text(recipe["recipe_id"])}" data-decoration-id="{_text(recipe["decoration_id"])}" aria-label="第 {index + 1} 节">'
-            f'<header class="scene-header"><span class="scene-kicker">{_text(scene.get("page_role") or scene.get("kind"))}</span><h2>{scene_heading}</h2>{question}{lead}</header>'
-            f'<div class="scene-body">{blocks}{interaction}</div>{conclusion}</section>'
+            f'<section class="scene recipe-{_text(recipe["recipe_id"])}{active_class}" data-scene-id="{_text(scene.get("scene_id") or f"scene-{index}")}" data-page-role="{_text(scene.get("page_role"))}" data-practice-variant="{_text(scene.get("practice_variant") or "guided")}" data-visual-style="{_text(visual_style_id or "courseware-default")}"{structured_step_attribute}{structured_phase_attribute}{structured_reflection_attribute} data-recipe-id="{_text(recipe["recipe_id"])}" data-decoration-id="{_text(recipe["decoration_id"])}" aria-label="第 {index + 1} 节">'
+            f'<header class="scene-header">{reflection_kicker}{phase_kicker_markup}<span class="scene-kicker">{scene_kicker}</span><h2{title_attribute}>{scene_heading}</h2>{question}{lead}</header>'
+            f'<div class="scene-body">{blocks}{interaction}</div>{conclusion}{reflection_encouragement}</section>'
         )
     html_document = (
         "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"

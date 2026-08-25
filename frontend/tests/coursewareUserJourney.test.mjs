@@ -19,10 +19,10 @@ const { buildCoursewareBatchRequest } = await import('../src/features/courseware
 assert.deepEqual(buildCoursewareBatchRequest({
   learnerId: 'learner-1',
   resourceIds: ['lecture-1', 'practice-1'],
-  preferences: { learning_goal: '掌握检索', expected_duration_minutes: 30, interaction_intensity: 'high', visual_style_id: 'midnight' },
+  preferences: { learning_goal: '掌握检索', expected_duration_minutes: 30, interaction_intensity: 'high' },
 }), {
   learner_id: 'learner-1', resource_ids: ['lecture-1', 'practice-1'],
-  learning_goal: '掌握检索', expected_duration_minutes: 30, interaction_intensity: 'high', visual_style_id: 'midnight',
+  learning_goal: '掌握检索', expected_duration_minutes: 30, interaction_intensity: 'high',
 })
 
 let calls = 0
@@ -51,6 +51,7 @@ assert.match(generationView, /generation_workspace_kind/, 'generation page must 
 assert.match(coursewareWorkspace, /coursewareApi\.listJobs/, 'courseware workspace must restore learner task history')
 assert.match(coursewareWorkspace, /kind: 'courseware'/, 'courseware creation must keep the generation workspace route')
 assert.match(coursewareWorkspace, /courseware_active_run_id/, 'courseware workspace must restore the last active courseware run')
+assert.doesNotMatch(coursewareWorkspace, /视觉主题|v-model="preferences\.visual_style_id"|<el-option label="编辑风"/, 'courseware generation must not expose a selectable visual style')
 assert.match(coursewareWorkspace, /coursewareApi\.getJobDetail\(restoredRunId\)/, 'courseware workspace must recover the saved task when the task-list API is temporarily unavailable')
 assert.match(focusSwitcher, /interactive_courseware/, 'shared focus switcher must include courseware resources')
 console.log('courseware user journey tests passed')

@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 
 from app.agents.resource_workflows.learning_documents.claim_review_agent import claim_decide_node, claim_extract_node, claim_judge_node
-from app.agents.resource_workflows.learning_documents.workflow import decide_node
+from app.agents.resource_workflows.learning_documents.workflow import decide_node, route_after_review
 from app.core.security.errors import ErrorCode
 from app.core.llm.gateway import LLMGatewayError
 from app.models.shared.agent_contracts import make_error_info
 from app.models.reviews.claims import ClaimMetricStatus
 from app.models.learning_documents.schemas import LearningResource
+from app.models.shared.workflow import ReviewDecision
 from tests.fakes.evidence import make_evidence
 from tests.fakes.llm import ScriptedLLMGateway
 
@@ -150,6 +151,40 @@ def test_not_in_evidence_generates_claim_targeted_revision():
     assert state["review_result"]["revision_instructions"][-1]["target_claim_ids"] == [claim_id]
 
 
+def test_judge_normalizes_non_factual_evidence_shape_without_factual_support():
+    state = _state()
+    content = state["generated_resources"][0].content_text
+    state["generated_resources"][0] = state["generated_resources"][0].model_copy(
+        update={"content_text": content + "\n请先观察示例。"}
+    )
+    extracted = claim_extract_node(state, llm_gateway=ScriptedLLMGateway([{
+        "resources": [{"resource_id": "res-claim", "claims": [{
+            "claim_text": "请先观察示例。",
+            "claim_type": "instructional",
+            "source_text": "请先观察示例。",
+            "source_start": len(content) + 1,
+            "source_end": len(content) + 8,
+            "knowledge_point_id": None,
+            "source_evidence_ids": [],
+        }]}],
+    }]))
+    state.update(extracted)
+    claim_id = state["extracted_claims"][0]["claim_id"]
+    state.update(claim_judge_node(state, llm_gateway=ScriptedLLMGateway([{
+        "judgements": [{
+            "claim_id": claim_id,
+            "verdict": "supported",
+            "evidence_ids": ["ev-claim"],
+            "reason": "模型错误地带入了证据",
+            "confidence": 0.9,
+        }],
+    }])))
+
+    assert state["claim_check_status"] == "completed"
+    assert state["claim_judgements"][0]["verdict"] == "non_factual"
+    assert state["claim_judgements"][0]["evidence_ids"] == []
+
+
 def test_forged_evidence_fails_closed_without_leaking_claim_text():
     state = _state()
     content = state["generated_resources"][0].content_text
@@ -168,6 +203,7 @@ def test_forged_evidence_fails_closed_without_leaking_claim_text():
     assert result["claim_check_status"] == "failed"
     assert result["review_result"]["decision"] == "human_review"
     assert "Python" not in json.dumps(result["trace"], ensure_ascii=False)
+    assert any("unknown evidence" in (item.get("safe_detail") or "") for item in result["errors"])
 
 
 def test_claim_extractor_and_judge_invoke_once_per_resource():
@@ -311,3 +347,11 @@ def test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes(
     assert by_id["res-claim"].review_status == "approved"
     assert by_id["res-claim-second"].publication_status == "unpublished"
     assert by_id["res-claim-second"].review_status == "human_review"
+
+
+def test_requested_claim_audit_runs_after_terminal_non_approved_review():
+    state = _state()
+    state["review_result"]["decision"] = ReviewDecision.HUMAN_REVIEW.value
+    state["resource_review_results"] = {"res-claim": {"decision": "human_review"}}
+
+    assert route_after_review(state) == "claim_extract"

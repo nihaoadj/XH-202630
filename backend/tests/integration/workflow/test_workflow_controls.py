@@ -156,7 +156,7 @@ def test_max_iterations_counts_revisions_not_initial_generation(monkeypatch, max
 
 
 def test_review_approve_marks_resources_approved(monkeypatch):
-    result, calls = _invoke(monkeypatch, include_review=True)
+    result, calls = _invoke(monkeypatch, include_review=True, include_claim_check=False)
 
     assert calls == {"generate": 1, "review": 1}
     assert result["workflow_status"] == "completed"

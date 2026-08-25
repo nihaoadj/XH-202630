@@ -42,7 +42,6 @@ from app.agents.resource_workflows.interactive_courseware.planner_agent import b
 from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import review_courseware_quality_decision, resolve_review_targets
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import compose_courseware_scene
-from app.agents.resource_workflows.interactive_courseware.practice_structure_agent import extract_practice_step_structure
 from app.agents.resource_workflows.interactive_courseware.validators import validate_scene_shape, validate_storyboard_bindings
 from app.agents.resource_workflows.interactive_courseware.budget import CoursewareBudgetCoordinator
 from app.services.courseware.composition import compose_scenes, default_title, resource_courseware_title, source_summary, topic
@@ -311,37 +310,33 @@ class InteractiveCoursewareWorkflow:
         for source in snapshots:
             if source.get("role") != "practice":
                 continue
-            if not courseware_ai_available(self.llm_gateway):
-                extracted = None
-                warning = None
-            else:
-                structure_budget = self.budget.before_call(run_id, "planner", requested_output_tokens=2200)
-                if not structure_budget.allowed:
-                    extracted, warning = None, structure_budget.warning
-                else:
-                    structure_options = self.llm_gateway.options_for("generator", temperature=0.0).model_copy(update={
-                        "max_output_tokens": structure_budget.max_output_tokens,
-                        "request_timeout_seconds": structure_budget.timeout_seconds,
-                        "max_attempts": 3,
-                    })
-                    extracted, warning = extract_practice_step_structure(
-                        self.llm_gateway, run_id, source, allowance=structure_options,
-                    )
-                    self.budget.reconcile(run_id, structure_budget.call_id, actual_input=None, actual_output=None,
-                                          status="completed" if extracted is not None else "failed")
-            warning = self._record_agent_trace(
-                run_id, warning, "courseware_practice_structure_extractor", budget_stage="planner",
-            )
-            if warning and warning.pop("deterministic_anchor_fallback", False):
-                self._event(run_id, "practice_structure", "recovered", {
-                    "strategy": "explicit_heading_partition",
-                    "failure_type": warning.get("failure_type"),
-                })
-                warning = None
-            if extracted:
-                practice_step_structures[str(source["resource_id"])] = extracted
-            elif warning:
-                warnings.append(warning)
+            package = source.get("practice_guide_payload")
+            if not isinstance(package, dict) or package.get("schema_version") != "3.0":
+                row = self.repo.update_job(
+                    run_id, status="rejected_admission", error_code="COURSEWARE_PRACTICE_JSON_REQUIRED",
+                    error_message="实操课件必须使用已校验的 V3 固定阶段 JSON，禁止从 Markdown 拆分步骤",
+                    warnings=warnings,
+                )
+                self._event(run_id, "practice_structure", "rejected", {"error_code": "COURSEWARE_PRACTICE_JSON_REQUIRED"})
+                return self._job_response(row)
+            blocks_by_step = {
+                str(block.get("practice_step_id")): str(block.get("block_id"))
+                for block in source.get("blocks") or [] if block.get("practice_step_id") and block.get("block_id")
+            }
+            extracted = [
+                {"title": str(step.get("title") or step["step_id"]), "source_block_ids": [blocks_by_step[str(step["step_id"])]]}
+                for step in (package.get("practice") or {}).get("steps") or []
+                if isinstance(step, dict) and str(step.get("step_id") or "") in blocks_by_step
+            ]
+            if not extracted:
+                row = self.repo.update_job(
+                    run_id, status="quarantined", error_code="COURSEWARE_PRACTICE_JSON_BINDING_INVALID",
+                    error_message="实操指南 JSON 步骤无法与冻结来源块一一绑定",
+                    warnings=warnings,
+                )
+                self._event(run_id, "practice_structure", "quarantined", {"error_code": "COURSEWARE_PRACTICE_JSON_BINDING_INVALID"})
+                return self._job_response(row)
+            practice_step_structures[str(source["resource_id"])] = extracted
         learning_design = build_learning_design(
             snapshots, learner_context, job.get("request_options") or {}, practice_step_structures,
         )
@@ -469,6 +464,10 @@ class InteractiveCoursewareWorkflow:
             source_id = next(iter(scene.get("source_refs") or []), None)
             source = sources_by_id.get(source_id) if source_id else None
             if source is None or scene.get("kind") == "recap":
+                return index, scene, None
+            if source.get("role") == "practice" and isinstance(source.get("practice_guide_payload"), dict):
+                # Practice pages are a deterministic projection of the frozen
+                # guide JSON. An AI must never re-split or rewrite their steps.
                 return index, scene, None
             self._control_guard(run_id)
             scene_budget = self.budget.before_call(run_id, "scene")
@@ -979,6 +978,21 @@ class InteractiveCoursewareWorkflow:
             # A recap aggregates multiple sources and is deterministic today.
             # Keeping it immutable avoids accidentally regenerating unrelated pages.
             return self._job_response(job)
+        if source.get("role") == "practice" and isinstance(source.get("practice_guide_payload"), dict):
+            # Structured guide steps must never be rewritten by a scene model,
+            # including when a quality review asks for a local retry. Their
+            # fields and presentation are rebuilt only by the deterministic
+            # V3 JSON-to-component projection during a fresh courseware run.
+            self.repo.upsert_scene({
+                **{key: scene[key] for key in ("scene_id", "spec_id", "scene_order", "kind", "scene_json", "content_hash")},
+                "status": "approved", "attempt": int(scene.get("attempt") or 0),
+                "input_snapshot_hash": scene.get("input_snapshot_hash") or "",
+                "agent_version": "deterministic-v1", "prompt_version": "deterministic-v1",
+                "approved_at": datetime.now(timezone.utc), "lease_owner": None, "lease_expires_at": None,
+                "error_code": None, "error_message": None,
+            })
+            self._event(run_id, "composing", "scene_retry_deterministic", {"reason": "PRACTICE_JSON_LOCKED"}, scene_id)
+            return self._job_response(self.repo.get_job(run_id))
         before_hash = scene["content_hash"]
         next_attempt = int(scene.get("attempt") or 0) + 1
         input_snapshot_hash = content_hash(json.dumps({
@@ -1121,6 +1135,15 @@ class InteractiveCoursewareWorkflow:
                 idempotency_key=f"scene-retry:{run_id}:{content_hash(json.dumps(document, ensure_ascii=False, sort_keys=True))}",
             )
             release_id = candidate["release_id"]
+            # The release-scoped seed must be present on the artifact that is
+            # actually saved; otherwise a scene retry would fall back to the
+            # legacy unknown-resource seed and ignore the random style policy.
+            document["event_context"] = {
+                "resource_id": resource["resource_id"],
+                "release_id": release_id,
+            }
+            artifact = render_courseware(document)
+            browser_smoke_check(artifact)
             file_path, file_size, artifact_sha = save_courseware_html(
                 job["learner_id"], resource["resource_id"], artifact, release_id=release_id
             )

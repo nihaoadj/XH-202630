@@ -17,11 +17,12 @@ from app.models.learning_documents.schemas import (
 from app.models.users.users import UserProfile
 from app.services.knowledge.knowledge import KnowledgeService
 from app.services.learners.mastery import MasteryService
+from app.core.learning_tiers import tier_for_level
 
 
 class OnboardingService:
     COMMON_QUESTIONNAIRE_ID = "common_initial_profile_v1"
-    DIAGNOSTIC_QUESTION_LIMIT = 10
+    INITIAL_DIAGNOSTIC_NODE_LIMIT = 3
 
     def __init__(
         self,
@@ -51,7 +52,12 @@ class OnboardingService:
         nodes = self.knowledge_service.list_skill_nodes(manifest["knowledge_base_id"])
         node_by_id = {node.node_id: node for node in nodes}
 
-        diagnostic_node_ids, screening_results = self._diagnostic_node_ids(request, node_by_id)
+        _, screening_results = self._diagnostic_node_ids(request, node_by_id)
+        questionnaire_tier = tier_for_level(self._questionnaire_skill_level(request, manifest["knowledge_base_id"]))
+        questions = self.knowledge_service.select_initial_tier_diagnostic_questions(
+            manifest["knowledge_base_id"], tier=questionnaire_tier, node_limit=self.INITIAL_DIAGNOSTIC_NODE_LIMIT,
+        )
+        diagnostic_node_ids = list(dict.fromkeys(question.skill_node_id for question in questions if question.skill_node_id))
         not_started_node_ids = [node.node_id for node in nodes if node.node_id not in diagnostic_node_ids]
         existing = self.learner_repo.get(request.learner_id)
         profile = self._build_profile(
@@ -63,6 +69,12 @@ class OnboardingService:
             diagnostic_node_ids,
             not_started_node_ids,
         )
+        profile.learning_preferences.metadata["initial_diagnostic_flow"] = {
+            "status": "pending",
+            "questionnaire_tier": questionnaire_tier,
+            "current_tier": questionnaire_tier,
+            "rounds": [{"tier": questionnaire_tier, "node_ids": diagnostic_node_ids, "status": "pending"}],
+        }
         self.learner_repo.save(profile)
         self._save_questionnaire_submissions(request, manifest, profile)
         if self.mastery_service is not None:
@@ -71,13 +83,8 @@ class OnboardingService:
                 self._question_by_id(manifest["knowledge_base_id"]),
                 self._answer_payload(request),
             )
-            self.mastery_service.initialize_tier_progress(profile)
             profile = self.learner_repo.get(profile.learner_id) or profile
 
-        questions = self._select_initial_diagnostic_questions(
-            manifest["knowledge_base_id"],
-            diagnostic_node_ids,
-        )
         return InitialProfileResponse(
             learner_id=profile.learner_id,
             profile=profile,
@@ -85,7 +92,9 @@ class OnboardingService:
             not_started_node_ids=not_started_node_ids,
             screening_results=screening_results,
             diagnostic_questions=[self.knowledge_service.public_question(question) for question in questions],
-            next_step="提交诊断答案到 POST /api/diagnosis/submit，然后进入第 5 步选择资源类型。",
+            questionnaire_tier=questionnaire_tier,
+            initial_diagnostic_status="pending",
+            next_step="完成本阶段 9 道诊断题；系统会在必要时自动降阶复测后给出首轮学习节点。",
         )
 
     @staticmethod
@@ -93,32 +102,13 @@ class OnboardingService:
         direction = (learning_direction_id or "general").strip() or "general"
         return f"{user_id}__{direction}__{uuid4().hex[:12]}"
 
-    def _select_initial_diagnostic_questions(
-        self,
-        knowledge_base_id: str,
-        diagnostic_node_ids: list[str],
-    ):
-        selected = (
-            self.knowledge_service.select_diagnostic_questions(
-                knowledge_base_id,
-                skill_node_ids=diagnostic_node_ids,
-            )
-            if diagnostic_node_ids
-            else []
+    def _questionnaire_skill_level(self, request: InitialProfileQuestionnaire, knowledge_base_id: str) -> str:
+        mapped = self._profile_mapping_values(
+            self._question_by_id(knowledge_base_id), self._answer_payload(request),
         )
-        if len(selected) >= self.DIAGNOSTIC_QUESTION_LIMIT:
-            return selected[: self.DIAGNOSTIC_QUESTION_LIMIT]
-
-        seen = {question.question_id for question in selected}
-        fill = [
-            question
-            for question in self.knowledge_service.select_diagnostic_questions(
-                knowledge_base_id,
-                limit=self.DIAGNOSTIC_QUESTION_LIMIT,
-            )
-            if question.question_id not in seen
-        ]
-        return [*selected, *fill][: self.DIAGNOSTIC_QUESTION_LIMIT]
+        values = list(mapped["self_report_scores"]) or [25]
+        average = sum(values) / len(values)
+        return "初级" if average < 40 else "中级" if average < 75 else "进阶"
 
     def questionnaire(self, learning_direction_id: str | None = None) -> list[dict[str, Any]]:
         manifest = self.knowledge_service._ensure_knowledge_base(learning_direction_id)
@@ -173,9 +163,7 @@ class OnboardingService:
         questions = self._question_by_id(knowledge_base_id)
         answers = self._answer_payload(request)
         mapped = self._profile_mapping_values(questions, answers)
-        score_values = list(mapped["self_report_scores"]) or [25]
-        average = sum(score_values) / len(score_values)
-        skill_level = "初级" if average < 40 else "中级" if average < 75 else "进阶"
+        skill_level = self._questionnaire_skill_level(request, knowledge_base_id)
 
         prior_states = dict(existing.knowledge_states) if existing else {}
 

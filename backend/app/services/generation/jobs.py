@@ -34,6 +34,33 @@ class GenerationJobService:
         self.generation_service = generation_service
         self.mastery_service = mastery_service
 
+    def _initial_generation_target(self, learner: LearnerProfile) -> list[str] | None:
+        """Return the frozen initial-diagnosis target for the first batch.
+
+        The initial placement decision is authoritative until the learner has
+        a published resource.  Later batches intentionally fall back to the
+        normal mastery/exposure recommendation policy.
+        """
+        if self.mastery_service is None:
+            return None
+        preferences = learner.learning_preferences
+        metadata = preferences.metadata if preferences and isinstance(preferences.metadata, dict) else {}
+        flow = metadata.get("initial_diagnostic_flow")
+        if not isinstance(flow, dict) or flow.get("status") != "final":
+            return None
+        target = str(flow.get("initial_recommended_node_id") or "").strip()
+        if not target:
+            return None
+        resource_repo = getattr(self.mastery_service, "resource_repo", None)
+        published = (
+            resource_repo.list_by_learner(learner.learner_id)
+            if resource_repo is not None
+            else []
+        )
+        if any(item.publication_status == "published" for item in published):
+            return None
+        return [target]
+
     def create_job(
         self,
         learner: LearnerProfile,
@@ -61,8 +88,14 @@ class GenerationJobService:
             # feedback follow-up.  Do not let a three-node focus snapshot mix tiers.
             auto_targets = None
             if not req.target_skill_nodes and req.profile_focus_mode == "auto":
-                options = self.mastery_service.next_generation_options(learner)
-                auto_targets = list(options.recommended_node_ids)
+                auto_targets = self._initial_generation_target(learner)
+                if auto_targets is None:
+                    options = self.mastery_service.next_generation_options(learner)
+                    # A generated request has no user-confirmed second choice.
+                    # Keep later automatic generation on the product default
+                    # of one current-tier node. Explicit entry points may
+                    # still submit up to two nodes and are validated below.
+                    auto_targets = list(options.recommended_node_ids[:1])
             focus_snapshot = self.mastery_service.focus_snapshot(
                 learner,
                 mode=req.profile_focus_mode,
@@ -163,9 +196,20 @@ class GenerationJobService:
         )
         executions = []
         counts: dict[str, int] = {}
+        published = 0
         for record in records:
             payload = record.model_dump(mode="python")
             payload["resource_execution_state"] = payload.pop("state")
+            resource = (
+                resource_repo.get(record.resource_id)
+                if record.resource_id
+                else None
+            )
+            payload["publication_status"] = (
+                resource.publication_status if resource is not None else "unpublished"
+            )
+            if payload["publication_status"] == "published":
+                published += 1
             executions.append(ResourceExecutionProgress.model_validate(payload))
             counts[record.state] = counts.get(record.state, 0) + 1
         total = len(executions)
@@ -173,9 +217,9 @@ class GenerationJobService:
         summary = RunResourceProgressSummary(
             total=total, counts=counts, approved=counts.get("approved", 0),
             human_review=counts.get("human_review", 0), failed=counts.get("failed", 0),
-            # Approved execution rows are the public projection of resources
-            # that passed the publication gate.
-            published=counts.get("approved", 0),
+            # Review approval and publication are distinct gates.  A resource
+            # can be approved while Claim extraction is still in progress.
+            published=published,
             can_finalize=bool(total and terminal == total), items=executions)
         return job.model_copy(update={"resource_progress_summary": summary})
 

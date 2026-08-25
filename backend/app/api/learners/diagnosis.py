@@ -19,10 +19,17 @@ def get_diagnostic_questions(
     limit: int | None = Query(default=None, ge=1, le=39),
 ):
     """获取题目，不向客户端暴露标准答案和解析。"""
-    del learner_id  # 预留给后续根据历史作答进行自适应抽题。
     service: KnowledgeService = request.app.container.knowledge_service()
     node_ids = [item.strip() for item in skill_node_ids.split(",")] if skill_node_ids else None
     try:
+        if learner_id:
+            diagnosis_service: DiagnosisService = request.app.container.diagnosis_service()
+            resolved_id, questions = diagnosis_service.initial_questions_for_learner(learner_id)
+            return {
+                "knowledge_base_id": resolved_id,
+                "total": len(questions),
+                "questions": [service.public_question(question) for question in questions],
+            }
         direction_id = learning_direction_id or knowledge_base_id
         questions = service.select_diagnostic_questions(direction_id, node_ids, level, limit)
         resolved_id = service._ensure_knowledge_base(direction_id)["knowledge_base_id"]
@@ -31,7 +38,7 @@ def get_diagnostic_questions(
             "total": len(questions),
             "questions": [service.public_question(question) for question in questions],
         }
-    except ValueError as exc:
+    except (ValueError, LookupError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 

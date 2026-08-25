@@ -3,7 +3,9 @@
 from types import SimpleNamespace
 
 import pytest
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewarePracticeEnrichment, CoursewareSceneSpec
+from app.agents.resource_workflows.interactive_courseware.contracts import (
+    CoursewareNarrativeEnrichment, CoursewarePracticeEnrichment, CoursewareSceneSpec,
+)
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import compose_courseware_scene
 from app.agents.resource_workflows.interactive_courseware.practice_structure_agent import extract_practice_step_structure
 from app.agents.resource_workflows.interactive_courseware.contracts import CoursewarePracticeStepExtraction
@@ -110,6 +112,44 @@ def test_practice_uses_small_enrichment_contract_and_preserves_platform_provenan
     assert rendered["steps"] == ["准备环境并确认依赖可用"]
     assert rendered["component_blocks"][0]["steps"] == ["准备环境并确认依赖可用"]
     assert rendered["source_map"]["steps"] == [["b1"]]
+
+
+def test_llm_cover_enrichment_formats_title_and_updates_learning_overview(monkeypatch):
+    import app.agents.resource_workflows.interactive_courseware.scene_composer_agent as composition
+
+    monkeypatch.setattr(composition, "courseware_ai_available", lambda _gateway: True)
+    source_ref = [{"source_resource_id": "lecture", "source_block_ids": ["b1"]}]
+    deterministic = {
+        "scene_id": "cover-1", "kind": "intro", "page_role": "cover", "title": "课程导览",
+        "lead": "确定性引导", "conclusion": "确定性结论", "blocks": ["学习概述：旧内容", "学习方法：旧方法"],
+        "source_refs": ["lecture"], "source_block_ids": ["b1"],
+        "component_blocks": [
+            {"schema_version": "1.0", "block_id": "scope", "component": "callout",
+             "text": "学习概述：旧内容", "source_refs": source_ref},
+            {"schema_version": "1.0", "block_id": "method", "component": "key_point",
+             "text": "学习方法：旧方法", "source_refs": source_ref},
+        ],
+    }
+
+    class Gateway:
+        def options_for(self, *_args, **_kwargs): return object()
+
+        def invoke_structured(self, **_kwargs):
+            return SimpleNamespace(output=CoursewareNarrativeEnrichment(
+                title="RAG 相似度检索工程实操", lead="先理解检索目标。",
+                learning_overview="围绕文档切分、向量索引与相似度检索完成一轮实操。",
+                conclusion="完成后回到来源核对关键判断。",
+            ))
+
+    rendered, warning = compose_courseware_scene(Gateway(), "run-1", "cover-1", deterministic, _source())
+    assert warning is None
+    assert rendered["llm_enriched"] is True
+    assert rendered["title"] == "实操指南 | RAG 相似度检索工程实操"
+    assert rendered["component_blocks"][0]["text"].startswith("学习概述：")
+
+    html = render_courseware({"title": "确定性回退标题", "scenes": [rendered]}).decode("utf-8")
+    assert "<h2>实操指南 | RAG 相似度检索工程实操</h2>" in html
+    assert "学习概述：围绕文档切分、向量索引与相似度检索完成一轮实操。" in html
 
 
 def test_llm_practice_structure_requires_ordered_complete_source_coverage(monkeypatch):

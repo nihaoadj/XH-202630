@@ -295,6 +295,30 @@ def test_gateway_schema_repair_uses_same_global_attempt_budget():
     assert len(transport.calls[1]["messages"]) > len(transport.calls[0]["messages"])
 
 
+def test_gateway_allows_bounded_second_schema_repair():
+    transport = ScriptedLLMTransport([
+        raw('{"wrong":"first"}'),
+        raw('{"wrong":"second"}'),
+        raw('{"value":"repaired"}'),
+    ])
+    gateway = LLMGateway(transport)
+
+    result = gateway.invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(),
+        options=options(max_attempts=3, schema_repair_attempts=2),
+    )
+
+    assert result.output.value == "repaired"
+    assert result.attempt_count == 3
+    assert [item.error_code for item in result.attempts[:2]] == [
+        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID.value,
+        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID.value,
+    ]
+    assert len(transport.calls) == 3
+
+
 def test_gateway_recovers_empty_output_with_fresh_prompt_and_bounded_retry():
     sleeps = []
     transport = ScriptedLLMTransport([

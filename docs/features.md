@@ -82,7 +82,7 @@
 | 类型 | 专用 Agent | 默认输出预算 | 表示 |
 |---|---|---:|---|
 | 讲义 | `TextResourceAgent` | 8192 | Markdown 文本 |
-| 实操指南 | `PracticeGuideAgent` | 32768 | Markdown 实操指南 |
+| 实操指南 | `PracticeGuideAgent` | 49152 | V3 严格 JSON：固定准备、实操、验证、复盘四阶段；每个步骤仅含说明、操作、代码块、验证四个内容字段。服务端确定性拼接 Markdown，JSON 直接驱动互动 HTML 阶段页与步骤页 |
 | 分阶测试题 | `AssessmentAgent` | 8192 | 结构化测试题文本投影 |
 | 复习清单 | `ReviewChecklistAgent` | 8192 | 按能力节点生成的主动回忆 Markdown：闭卷回忆、概念辨析和正反例辨认；答案集中于文末 |
 | 案例分析 | `CaseStudyAgent` | 8192 | Markdown 案例分析 |

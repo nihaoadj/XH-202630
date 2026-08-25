@@ -39,6 +39,10 @@ class LLMCallOptions(BaseModel):
     structured_output_mode: StructuredOutputMode = StructuredOutputMode.AUTO
     allow_text_fallback: bool = True
     allow_schema_repair: bool = True
+    # Most nodes use one repair turn; Claim nodes may use a second bounded
+    # repair because long audits can expose a different validation error after
+    # the first correction.
+    schema_repair_attempts: int = Field(default=1, ge=1, le=3)
 
 
 class LLMUsage(BaseModel):

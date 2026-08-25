@@ -135,8 +135,8 @@ def test_knowledge_and_diagnosis_endpoints_keep_answers_on_server():
     )
     assert submit_response.status_code == 200
     payload = submit_response.json()
-    assert payload["ability_level"] == "进阶"
-    assert payload["strong_points"]
+    assert all(state["status"] == "needs_evidence" for state in payload["knowledge_states"].values())
+    assert not payload["strong_points"]
 
     info_response = client.get("/api/knowledge/info")
     assert info_response.status_code == 200

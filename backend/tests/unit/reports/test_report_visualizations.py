@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from app.db.feedback.memory import MemoryFeedbackRepository
 from app.db.learning_documents.memory import MemoryResourceRepository
 from app.models.feedback.feedback_loop import KnowledgePointAttemptResult
+from app.models.learners.history import DiagnosticRunRecord
 from app.models.learners.mastery import (
     AbilityMasteryStateV2,
     AbilityNodeProjectionV1,
@@ -11,6 +12,7 @@ from app.models.learners.mastery import (
     AbilityNodesResponseV1,
 )
 from app.models.learning_documents.schemas import LearningResource
+from app.services.reports import reports as reports_module
 from app.services.reports.reports import ReportService
 
 
@@ -65,6 +67,63 @@ def test_blind_spot_map_only_projects_dimension_scores_with_exact_question_trace
     assert scenario["status"] == "needs_evidence"
     assert unassessed["score"] is None
     assert unassessed["status"] == "unassessed"
+
+
+def test_blind_spot_map_surfaces_verified_node_score_when_legacy_questions_lack_dimension():
+    attempt = SimpleNamespace(
+        attempt_id="attempt", submitted_at=datetime(2026, 8, 24, tzinfo=timezone.utc),
+        metadata={"question_trace": [{"question_id": "q1", "skill_node_id": "foundation"}]},
+        knowledge_point_results=[KnowledgePointAttemptResult(
+            knowledge_point_id="foundation", question_ids=["q1"], correct_count=0, total_count=1,
+        )],
+    )
+
+    result = _service()._build_blind_spot_map(_projection(), [attempt])
+
+    concept = next(item for item in result["cells"] if item["skill_node_id"] == "foundation" and item["dimension"] == "concept")
+    scenario = next(item for item in result["cells"] if item["skill_node_id"] == "foundation" and item["dimension"] == "scenario")
+    assert concept["score"] == 0.4
+    assert concept["status"] == "verified_weak"
+    assert concept["reason_codes"] == ["FORMAL_NODE_EVIDENCE_NO_DIMENSION"]
+    assert scenario["score"] is None
+    assert result["summary"]["measured_node_count"] == 1
+
+
+def test_blind_spot_map_consumes_deidentified_initial_diagnosis_trace():
+    run = DiagnosticRunRecord(
+        diagnostic_result_id="diagnosis-1", learner_id="learner", knowledge_base_id="kb",
+        ability_level="初级", raw_result={"blind_spot_trace": [{
+            "question_id": "diagnostic-q1", "skill_node_id": "foundation",
+            "diagnostic_dimension": "concept", "correct": False, "measurement_status": "measured",
+        }]},
+        created_at=datetime(2026, 8, 25, tzinfo=timezone.utc),
+    )
+
+    result = _service()._build_blind_spot_map(_projection(), [], [run])
+
+    concept = next(item for item in result["cells"] if item["skill_node_id"] == "foundation" and item["dimension"] == "concept")
+    assert concept["score"] == 0.0
+    assert concept["status"] == "verified_weak"
+
+
+def test_report_node_order_respects_prerequisites_then_tier():
+    base = SimpleNamespace(skill_node_id="base", name="基础", tier=1, prerequisites=[])
+    independent = SimpleNamespace(skill_node_id="independent", name="同阶", tier=1, prerequisites=[])
+    advanced = SimpleNamespace(skill_node_id="advanced", name="进阶", tier=2, prerequisites=["base"])
+
+    ordered = ReportService._ordered_ability_nodes([advanced, independent, base])
+
+    assert [item.skill_node_id for item in ordered] == ["base", "independent", "advanced"]
+
+
+def test_report_revision_changes_when_the_client_projection_changes(monkeypatch):
+    service = _service()
+    parts = {"profile": "profile", "mastery": "mastery"}
+
+    previous_revision = service._revision(parts, 30)
+    monkeypatch.setattr(reports_module, "REPORT_PROJECTION_VERSION", "4.1-test-projection")
+
+    assert service._revision(parts, 30) != previous_revision
 
 
 def test_resource_curve_and_path_graph_do_not_invent_readiness_or_prerequisites():

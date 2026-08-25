@@ -57,6 +57,11 @@ class KnowledgeState(BaseModel):
     last_evidence_type: Optional[str] = None
     last_evidence_id: Optional[str] = None
     row_version: int = Field(default=1, ge=1)
+    measurement_status: Optional[Literal["measured", "needs_evidence"]] = None
+    valid_question_count: int = Field(default=0, ge=0)
+    correct_question_count: int = Field(default=0, ge=0)
+    covered_dimensions: List[str] = Field(default_factory=list)
+    latest_observed_accuracy: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class LearningPreferences(BaseModel):
@@ -107,6 +112,8 @@ class InitialProfileResponse(BaseModel):
     not_started_node_ids: List[str]
     screening_results: Dict[str, bool] = Field(default_factory=dict)
     diagnostic_questions: List[Dict[str, Any]]
+    questionnaire_tier: Optional[int] = Field(default=None, ge=1, le=3)
+    initial_diagnostic_status: Optional[Literal["pending", "retest", "final"]] = None
     next_step: str
 
 
@@ -123,6 +130,19 @@ class SkillNode(BaseModel):
     knowledge_points: List[str] = Field(default_factory=list)
     assessment_methods: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def derive_tier_from_level(self) -> "SkillNode":
+        """Keep legacy knowledge-base manifests valid while making tier explicit."""
+        from app.core.learning_tiers import tier_for_level
+
+        if self.tier is None:
+            if self.level is None:
+                raise ValueError("skill node requires a level or tier")
+            self.tier = tier_for_level(self.level)
+        elif self.level is not None and tier_for_level(self.level) != self.tier:
+            raise ValueError("skill node level and tier disagree")
+        return self
 
 
 class DiagnosticQuestion(BaseModel):
@@ -183,6 +203,12 @@ class DiagnosticResult(BaseModel):
     strong_points: List[str] = Field(default_factory=list)
     knowledge_states: Dict[str, KnowledgeState] = Field(default_factory=dict)
     recommended_path: List[LearningPathItem] = Field(default_factory=list)
+    initial_diagnostic_status: Optional[Literal["pending", "retest", "final"]] = None
+    questionnaire_tier: Optional[int] = Field(default=None, ge=1, le=3)
+    assessed_tier: Optional[int] = Field(default=None, ge=1, le=3)
+    final_tier: Optional[int] = Field(default=None, ge=1, le=3)
+    next_diagnostic_questions: List[Dict[str, Any]] = Field(default_factory=list)
+    initial_recommended_node_id: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -192,7 +218,7 @@ class GenerateRequest(BaseModel):
     topic: str = Field(..., description="学习主题")
     knowledge_base_id: Optional[str] = Field(default=None, description="当前知识库 ID")
     diagnostic_result_id: Optional[str] = Field(default=None, description="诊断结果 ID")
-    target_skill_nodes: List[str] = Field(default_factory=list, description="目标能力节点")
+    target_skill_nodes: List[str] = Field(default_factory=list, max_length=2, description="目标能力节点（最多两个）")
     profile_focus_mode: Literal["auto", "off"] = Field(
         default="auto", description="画像薄弱点注入模式"
     )
@@ -206,7 +232,7 @@ class GenerateRequest(BaseModel):
         description="生成模式：draft | standard | strict",
     )
     include_review: bool = Field(default=True, description="是否进入审核")
-    include_claim_check: bool = Field(default=False, description="是否进行 Claim 级审核")
+    include_claim_check: bool = Field(default=True, description="是否进行 Claim 级审核；普通审核开启时默认开启")
     # Initial generation plus one revision means at most two visible attempts.
     max_iterations: int = Field(default=1, ge=0, le=3, description="最大业务返工次数")
     constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
@@ -243,6 +269,12 @@ class GenerateRequest(BaseModel):
     @model_validator(mode="after")
     def require_resource_review_for_claim_audit(self) -> "GenerateRequest":
         if self.include_claim_check and not self.include_review:
+            # Keep the explicit no-review/draft path usable.  A caller that
+            # did not send this field receives the effective safe default for
+            # that path; an explicit claim-audit request remains invalid.
+            if "include_claim_check" not in self.model_fields_set:
+                self.include_claim_check = False
+                return self
             raise ValueError("include_claim_check requires include_review=true")
         return self
 
@@ -292,6 +324,10 @@ class ContinueResourceBatchRequest(BaseModel):
     learner_id: str = Field(min_length=1)
     resource_types: List[str] = Field(min_length=1)
     instructions: Optional[str] = Field(default=None, max_length=2000)
+    include_claim_check: Optional[bool] = Field(
+        default=None,
+        description="可选：覆盖源任务的 Claim 审核设置；省略时沿用源任务",
+    )
     source_run_id: Optional[str] = Field(
         default=None,
         description="可选：明确复用该生成任务的原始请求",
@@ -411,6 +447,10 @@ class LearningResource(BaseModel):
     # Internal V2 active-recall package; never exposed through the generic API.
     review_practice_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
     review_practice_payload_hash: Optional[str] = Field(default=None, exclude=True)
+    # Canonical structured practice guide. The public Markdown is a
+    # deterministic projection and this payload feeds the courseware path.
+    practice_guide_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
+    practice_guide_payload_hash: Optional[str] = Field(default=None, exclude=True)
 
 
 class ResourceClaim(BaseModel):
@@ -690,17 +730,6 @@ class ResourceDetail(LearningResource):
     is_published: bool = False
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    @model_validator(mode="after")
-    def derive_tier_from_level(self) -> "SkillNode":
-        """Keep legacy knowledge-base manifests valid while making tier explicit."""
-        from app.core.learning_tiers import tier_for_level
-        if self.tier is None:
-            if self.level is None:
-                raise ValueError("skill node requires a level or tier")
-            self.tier = tier_for_level(self.level)
-        elif self.level is not None and tier_for_level(self.level) != self.tier:
-            raise ValueError("skill node level and tier disagree")
-        return self
     execution: Optional[ResourceExecutionProgress] = None
     review_summary: Dict[str, Any] = Field(default_factory=dict)
 

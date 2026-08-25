@@ -12,9 +12,10 @@ class FakeEventSource {
 globalThis.EventSource = FakeEventSource
 Object.defineProperty(globalThis, 'navigator', { value: { onLine: true }, configurable: true })
 let fetches = 0
+let lastEtag = 'not-called'
 let applied = 0
 const client = new ReportStreamClient({
-  fetchReport: async () => { fetches += 1; return { revision: 'rpt_b'.padEnd(68, '0'), data: { learner_id: 'one', window: { window_days: 30 } } } },
+  fetchReport: async ({ etag }) => { fetches += 1; lastEtag = etag; return { revision: 'rpt_b'.padEnd(68, '0'), data: { learner_id: 'one', window: { window_days: 30 } } } },
   onReport: () => { applied += 1 },
 })
 client.start({ learnerId: 'one', windowDays: 30, revision: 'rpt_a'.padEnd(68, '0') })
@@ -28,6 +29,7 @@ FakeEventSource.current.emit('report_changed', { learner_id: 'one', window_days:
 await new Promise((resolve) => setTimeout(resolve, 300))
 assert.equal(fetches, 1)
 assert.equal(applied, 1)
+assert.equal(lastEtag, null, 'report_changed must fetch a full snapshot instead of conditionally requesting the event revision')
 client.stop()
 
 const reconnectStatuses = []

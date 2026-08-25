@@ -1,18 +1,19 @@
 """Source admission, ownership validation, and immutable snapshot construction."""
 
 import hashlib
+import json
 import re
 from typing import Any
 
 from app.core.storage import file_storage
 from app.db.audit.base import BaseAuditRepository
 from app.models.learning_documents.schemas import LearningResource
+from app.models.shared.agent_contracts import PracticeGuidePackageV3
 from app.services.learning_documents.resources import ResourceService
 
 
 ROLE_BY_TYPE = {
-    "讲义": "lecture", "实操指南": "practice", "分阶测试题": "assessment",
-    "复习清单": "checklist", "案例分析": "case_study",
+    "实操指南": "practice", "复习清单": "checklist",
 }
 
 
@@ -87,6 +88,61 @@ def _practice_source_blocks(content: str, resource_id: str) -> list[dict[str, st
     ]
 
 
+def _structured_practice_source_blocks(package: dict[str, Any], resource_id: str) -> list[dict[str, Any]]:
+    """Expose each fixed guide phase and its steps as immutable source blocks."""
+    blocks: list[dict[str, Any]] = []
+    def append_phase(phase_id: str, title: str, goal: str, items: list[str]) -> None:
+        blocks.append({
+            "block_id": f"practice_{phase_id}_{content_hash(f'{resource_id}:{phase_id}')[:16]}",
+            "text": "\n".join([f"## {title}", f"目标：{goal}", *(f"- {item}" for item in items)]),
+            "kind": "practice_phase", "practice_phase_id": phase_id,
+        })
+    append_phase("prepare", "准备阶段", package["preparation"]["goal"], package["preparation"]["items"])
+    for step in package["practice"].get("steps") or []:
+        if not isinstance(step, dict) or not step.get("step_id"):
+            continue
+        step_id = str(step["step_id"])
+        text = "\n".join(filter(None, [
+            f"### 步骤 {step_id.removeprefix('step-')}：{step.get('title') or ''}",
+            str(step.get("instruction_text") or ""),
+            f"完成验证：{step.get('verification') or ''}",
+        ])).strip()
+        blocks.append({
+            "block_id": f"practice_{content_hash(f'{resource_id}:{step_id}')[:16]}",
+            "text": text, "kind": "practice_step", "practice_phase_id": "practice", "practice_step_id": step_id,
+            "instruction_text": str(step.get("instruction_text") or ""),
+            "code_blocks": list(step.get("code_blocks") or []),
+        })
+    append_phase("verify", "验证阶段", package["verification"]["goal"], package["verification"]["checklist"])
+    append_phase("reflect", "复盘阶段", package["reflection"]["goal"], [package["reflection"]["summary"]])
+    return blocks
+
+
+def _required_practice_package(source: LearningResource) -> dict[str, Any]:
+    """Return a validated canonical practice package or reject courseware admission.
+
+    Practice-guide Markdown is a public projection, not an authoritative
+    source for interactive steps.  Permitting a Markdown fallback here loses
+    step boundaries and can produce malformed courseware pages.
+    """
+    package = source.practice_guide_payload
+    if not isinstance(package, dict) or package.get("schema_version") != "3.0":
+        raise CoursewareAdmissionError("实操指南缺少 V3 固定阶段 JSON，需重新生成后才能创建互动课件")
+    try:
+        validated = PracticeGuidePackageV3.model_validate(
+            {key: value for key, value in package.items() if key != "payload_hash"}
+        )
+    except ValueError as exc:
+        raise CoursewareAdmissionError("实操指南固定阶段 JSON 无效，需重新生成后才能创建互动课件") from exc
+    canonical_payload = validated.model_dump(mode="json")
+    payload_hash = content_hash(
+        json.dumps(canonical_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    )
+    if package.get("payload_hash") != payload_hash or source.practice_guide_payload_hash != payload_hash:
+        raise CoursewareAdmissionError("实操指南结构化 JSON 校验摘要不匹配，需重新生成后才能创建互动课件")
+    return {**canonical_payload, "payload_hash": payload_hash}
+
+
 def _snapshot(source: LearningResource) -> dict[str, Any]:
     content = source.content_text or ""
     if not content and source.file_path:
@@ -95,8 +151,9 @@ def _snapshot(source: LearningResource) -> dict[str, Any]:
         except (OSError, ValueError):
             content = ""
     clipped = _clip(content)
+    practice_package = _required_practice_package(source) if source.resource_type == "实操指南" else None
     blocks = (
-        _practice_source_blocks(clipped, source.resource_id)
+        _structured_practice_source_blocks(practice_package, source.resource_id)
         if source.resource_type == "实操指南"
         else [
             {"block_id": f"b{index + 1}_{content_hash(f'{source.resource_id}:{index}:{value}')[:10]}", "text": value}
@@ -128,6 +185,15 @@ def _snapshot(source: LearningResource) -> dict[str, Any]:
                     "text": str(question.get("prompt") or question.get("statement") or question.get("candidate_a") or question_id),
                     "kind": "review_question", "review_question_id": question_id,
                     "skill_node_id": str(node.get("skill_node_id") or ""),
+                })
+            summary = str(node.get("knowledge_summary") or "").strip()
+            if summary:
+                node_id = str(node.get("skill_node_id") or "")
+                blocks.append({
+                    "block_id": f"review_summary_{content_hash(f'{source.resource_id}:{node_id}')[:16]}",
+                    "text": summary,
+                    "kind": "review_summary",
+                    "skill_node_id": node_id,
                 })
     # Convert source references into a small, versioned graph.  The graph is
     # deliberately metadata-only: snippets and learner prose never enter the
@@ -162,6 +228,8 @@ def _snapshot(source: LearningResource) -> dict[str, Any]:
         "exercise_items": [item.model_dump(mode="json") for item in source.exercise_items],
         "review_practice_payload": review_package if isinstance(review_package, dict) else None,
         "review_practice_payload_hash": source.review_practice_payload_hash,
+        "practice_guide_payload": practice_package if isinstance(practice_package, dict) else None,
+        "practice_guide_payload_hash": source.practice_guide_payload_hash,
         "source_graph": {"schema_version": "1.0", "nodes": source_nodes, "edges": source_edges},
     }
 
