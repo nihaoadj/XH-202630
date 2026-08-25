@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+from threading import Event
+from time import monotonic
 
 import httpx
 import pytest
@@ -95,6 +97,7 @@ def test_gateway_success_returns_typed_output_and_telemetry():
     assert result.usage.total_tokens == 5
     assert result.provider_request_id == "provider-request"
     assert result.call_id
+    assert transport.calls[0]["timeout_seconds"] == 10
 
 
 def test_gateway_retries_timeout_without_changing_call_identity():
@@ -115,6 +118,26 @@ def test_gateway_retries_timeout_without_changing_call_identity():
     assert result.retry_count == 1
     assert result.attempts[0].error_code == ErrorCode.LLM_TIMEOUT.value
     assert sleeps == [0.5]
+
+
+def test_gateway_enforces_hard_timeout_when_transport_blocks():
+    class BlockingTransport:
+        model_name = "blocking"
+
+        def invoke(self, **kwargs):
+            Event().wait(1)
+
+    gateway = LLMGateway(BlockingTransport(), sleep=lambda _: None, jitter=lambda: 0.0)
+    started = monotonic()
+
+    with pytest.raises(LLMGatewayError) as caught:
+        gateway.invoke_structured(
+            messages=[HumanMessage(content="test")], output_schema=Payload,
+            context=context(), options=options(max_attempts=1, request_timeout_seconds=0.02),
+        )
+
+    assert caught.value.error.code == ErrorCode.LLM_TIMEOUT.value
+    assert monotonic() - started < 0.5
 
 
 def test_gateway_honors_bounded_retry_after():

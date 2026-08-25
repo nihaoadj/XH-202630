@@ -60,6 +60,30 @@ def _render_component_block(block: dict[str, Any], *, scene_id: str, index: int)
     if definition.name == "flashcard":
         front, back = _text(block.get("front") or text), _text(block.get("back") or text)
         return f'<section {attributes} data-flashcard tabindex="0" role="button" aria-label="翻转卡片"><p class="flash-front">{front}</p><p class="flash-back" hidden>{back}</p><button type="button" data-flashcard-action="review">再复习</button><button type="button" data-flashcard-action="known">已记住</button></section>'
+    if definition.name in {"review_recall_card", "review_distinction_card"}:
+        cards = []
+        for item in block.get("items") or []:
+            question_id = _text(item.get("question_id"))
+            prompt = _text(item.get("prompt") or item.get("statement"))
+            if definition.name == "review_distinction_card":
+                answer = f"判断：{'正确' if item.get('truth_value') else '错误'}<br>纠正：{_text(item.get('correction'))}<br>依据：{_text(item.get('explanation'))}"
+            else:
+                answer = f"参考答案：{_text(item.get('reference_answer'))}<br>解释：{_text(item.get('explanation'))}<br>达标标准：{_text(item.get('pass_criteria'))}"
+            cards.append(f'<article class="review-card" data-review-question-id="{question_id}"><h3>{question_id}</h3><p>{prompt}</p><button type="button" data-review-reveal>显示答案</button><div class="review-answer" hidden>{answer}</div><div class="review-rating" hidden role="group" aria-label="自评"><button type="button" data-review-rating="known">会</button><button type="button" data-review-rating="uncertain">模糊</button><button type="button" data-review-rating="not_known">不会</button></div></article>')
+        return f'<section {attributes} data-review-practice data-review-kind="{_text(definition.name)}" aria-label="主动回忆练习"><p>{text}</p><div class="review-card-grid">{"".join(cards)}</div></section>'
+    if definition.name == "review_example_card":
+        item = block.get("item") or {}
+        question_id = _text(item.get("question_id"))
+        answer = f"正例：{_text(item.get('positive_candidate'))}<br>决定性边界：{_text(item.get('decisive_boundary'))}<br>解释：{_text(item.get('explanation'))}"
+        return f'<section {attributes} data-review-practice data-review-kind="review-example" aria-label="正反例辨认"><p>{text}</p><article class="review-card review-example" data-review-question-id="{question_id}"><h3>{question_id}</h3><div class="review-candidates"><p>A. {_text(item.get("candidate_a"))}</p><p>B. {_text(item.get("candidate_b"))}</p></div><button type="button" data-review-reveal>显示答案</button><div class="review-answer" hidden>{answer}</div><div class="review-rating" hidden role="group" aria-label="自评"><button type="button" data-review-rating="known">会</button><button type="button" data-review-rating="uncertain">模糊</button><button type="button" data-review-rating="not_known">不会</button></div></article></section>'
+    if definition.name == "review_reflection":
+        return f'<aside {attributes} class="{css} review-reflection" role="note"><h3>边界反思</h3><p>{text}</p><p>本节点未生成正反例辨认题：{_text(block.get("reason"))}。请完成上方回忆与辨析后再核对证据边界。</p></aside>'
+    if definition.name == "review_overview":
+        rows = "".join(f'<li>{_text(item.get("label"))}：{_text(item.get("value"))}</li>' for item in (block.get("items") or []))
+        return f'<section {attributes} class="{css} review-overview" aria-label="复习导览"><h3>复习导览</h3><p>{text}</p><ol>{rows}</ol></section>'
+    if definition.name == "review_completion":
+        rows = "".join(f'<li data-review-node="{_text(item.get("node_id"))}">{_text(item.get("label"))}：完成全部题目自评后，可回到本节点确认完成。</li>' for item in (block.get("items") or []))
+        return f'<section {attributes} class="{css} review-completion" aria-label="完成总结"><p>{text}</p><ol>{rows}</ol><p>自评只用于低置信度学习记录，不计入正式测评成绩。</p></section>'
     if definition.name == "matching":
         pairs = block.get("pairs") or []
         left = "".join(f'<button type="button" data-match="left" data-pair-id="{index}" aria-label="选择左项">{_text(pair.get("left"))}</button>' for index, pair in enumerate(pairs))

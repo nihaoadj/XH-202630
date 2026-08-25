@@ -443,6 +443,7 @@ GenerationJobService
 架构约束：
 
 - 混合召回和精排只产生候选；候选必须经过 SQL Chunk 历史版本、KB 范围和内容哈希校验后才能成为 Evidence。
+- 有冻结目标节点时，检索保存一个全局 Evidence 快照及 `skill_node_id -> evidence_ids` 的节点命中投影；同一 Evidence 可属于多个节点。节点型测评和主动回忆清单只能读取本节点投影，讲义等普通资源仍读取全局快照。
 - `RecordedNode` 在节点副作用前创建 running Step；`DurableWorkflowRunner` 在状态合并后、checkpoint 前保存业务制品。
 - Generator 定向返工使用上一版本和结构化指令，新版本不可原地覆盖旧正文。
 - Reviewer 的模型建议必须经过确定性 policy 二次裁决。
@@ -531,3 +532,6 @@ SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范�
 # 分阶学习架构
 
 `core/learning_tiers.py` 是三阶等级映射与固定难度的唯一策略面。`MasteryService` 使用其计算准入豁免、当前阶候选、前置门禁和反馈后的升降阶；`learner_tier_progress` 持久化起始阶、活动阶和最高解锁阶。文本生成任务在创建时冻结目标阶与节点，审核阶段复核资源难度，避免不同模块各自推断难度。
+# 复习清单 V2 课件适配
+
+互动课件来源快照保留 `review_practice_payload` 及其 hash。课件规划和确定性渲染将其投影为受控 review-practice 组件；模型不改写题目或答案，只能参与既有课件场景的受约束叙事补充。学习事件只保存题目 ID、答案揭示状态和三态自评，不保存学习者作答文本。

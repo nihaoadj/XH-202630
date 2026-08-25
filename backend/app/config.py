@@ -112,6 +112,13 @@ class Settings(BaseSettings):
         ge=8192,
         le=65536,
     )
+    # Lecture notes have a bounded long-form Markdown contract. Keep this
+    # separate from the generic resource allowance so a slow, complete lecture
+    # is not cut off at the normal request timeout or allowed to consume the
+    # generic long-document budget. The default preserves the deployed 32k
+    # ceiling while allowing an independent lecture-specific setting later.
+    text_resource_request_timeout_seconds: float = Field(default=240.0, gt=0, le=600)
+    text_resource_max_output_tokens: int = Field(default=32768, ge=4096, le=65536)
     llm_structured_output_mode: str = "auto"
     tutor_llm_timeout_seconds: float = Field(default=25.0, gt=0, le=120)
     tutor_max_output_tokens: int = Field(default=2048, ge=256, le=8192)

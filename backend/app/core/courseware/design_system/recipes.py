@@ -5,7 +5,8 @@ from typing import Final
 THEME_IDS: Final = ("editorial", "midnight", "paper")
 SCENE_RECIPE_IDS: Final = (
     "editorial_cover", "learning_map_grid", "concept_split", "process_lane",
-    "comparison_matrix", "case_diagnostic", "practice_workspace",
+    "comparison_matrix", "case_diagnostic", "practice_workspace", "review_overview",
+    "review_recall_grid", "review_distinction_grid", "review_example_focus",
     "quiz_focus", "recap_dashboard",
 )
 LEGACY_RECIPE_ALIASES: Final = {
@@ -18,7 +19,9 @@ _LAYOUT_BY_RECIPE = {
     "editorial_cover": "cover", "learning_map_grid": "progress",
     "concept_split": "focus", "process_lane": "steps",
     "comparison_matrix": "compare", "case_diagnostic": "focus",
-    "practice_workspace": "practice", "quiz_focus": "focus",
+    "practice_workspace": "practice", "review_overview": "progress",
+    "review_recall_grid": "practice", "review_distinction_grid": "practice",
+    "review_example_focus": "focus", "quiz_focus": "focus",
     "recap_dashboard": "recap",
 }
 RECIPES = {

@@ -111,6 +111,7 @@ def test_low_attempt_updates_profile_path_and_returns_manual_resource_options():
     assert jobs.get(selected.followup_run_id).job_status == "queued"
     assert jobs.get(selected.followup_run_id).request_payload["resource_types"] == ["讲义", "分阶测试题"]
     assert jobs.get(selected.followup_run_id).request_payload["difficulty_preference"] == "高级"
+    assert "must_include_citations" not in jobs.get(selected.followup_run_id).request_payload["constraints"]
     relation = service.feedback_loop_repo.get_followup_relation(selected.followup_run_id)
     assert relation["attempt_id"] == result.attempt.attempt_id
     assert len(scheduled) == 1
@@ -144,6 +145,7 @@ def test_custom_followup_selection_generates_the_checked_resource_types():
     followup_job = jobs.get(selected.followup_run_id)
     assert followup_job.request_payload["resource_types"] == selected_types
     assert followup_job.request_payload["difficulty_preference"] == "初级"
+    assert "must_include_citations" not in followup_job.request_payload["constraints"]
     relation = service.feedback_loop_repo.get_followup_relation(selected.followup_run_id)
     assert relation["parent_run_id"] == "source-run"
 
@@ -248,6 +250,7 @@ def test_feedback_intent_only_accepts_server_returned_reinforcement_nodes():
     payload = jobs.get(selected.followup_run_id).request_payload
     assert payload["resource_types"] == ["个性化纠错训练包"]
     assert payload["constraints"]["correction_focus_snapshot"]["ordered_target_nodes"][0]["skill_node_id"] == "skill-a"
+    assert "must_include_citations" not in payload["constraints"]
 
     with pytest.raises(ApplicationError):
         service.choose_followup(

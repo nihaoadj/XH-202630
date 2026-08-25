@@ -446,6 +446,7 @@ planner 和资源 Agent 必须消费处方而不是只消费通用 weak points�
 - 实操指南：针对失败步骤提供可执行练习和排错；
 - 分阶测试题：覆盖 success criteria，但不得使用 held-out item；
 - 复习清单：生成对应节点、错误维度和复习动作；
+- 新版复习清单的“会/模糊/不会”只是一份本地阅读自评，不创建正式 Attempt，不更新 Mastery、画像或 LearningPath。
 - 案例分析：验证跨情境迁移和决策原因。
 
 Prompt 只接收必要的脱敏处方字段，不接收标准答案、held-out 题面或学习者原始自由文本。
@@ -816,3 +817,6 @@ joint_status = JOINT_PENDING
 ## 17. 执行记录
 
 执行者从 M0 开始追加。任务分发前不得预填“已完成”。
+# 课件主动回忆自评
+
+`courseware_self_report` 是非验证、低置信度 Evidence 来源。完整节点的“会=1、模糊=0.5、不会=0”等权平均只更新 `self_report_prior`，不会创建 Attempt、增加客观证据计数或替代正式成绩。

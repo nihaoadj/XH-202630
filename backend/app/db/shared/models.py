@@ -135,6 +135,8 @@ class GeneratedResourceORM(Base):
     exercise_items = Column(JSON, default=list, comment="练习项")
     assessment_payload = Column(JSON, nullable=True, comment="结构化测试题内部 payload（含答案）")
     assessment_payload_hash = Column(String(64), nullable=True, index=True)
+    review_practice_payload = Column(JSON, nullable=True, comment="结构化主动回忆复习清单内部 payload")
+    review_practice_payload_hash = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
 
 
@@ -283,6 +285,7 @@ class ResourceSpecORM(Base):
     learning_objective = Column(Text, nullable=False)
     knowledge_points = Column(JSON, default=list)
     evidence_ids = Column(JSON, default=list)
+    node_evidence_map = Column(JSON, default=dict)
     difficulty = Column(String(16), nullable=False)
     representations = Column(JSON, default=list)
     dependencies = Column(JSON, default=list)

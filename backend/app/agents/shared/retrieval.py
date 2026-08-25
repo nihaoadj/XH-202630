@@ -21,12 +21,37 @@ from app.models.knowledge.knowledge import RetrievalRequest, RetrievalStatus
 from app.models.shared.workflow import StepStatus
 
 
-def _queries(node_input: RetrieverInput) -> list[str]:
+def _node_descriptor(node_id: str) -> tuple[str, list[str]]:
+    """Resolve a human-searchable node descriptor from the frozen manifest."""
+    try:
+        nodes = load_knowledge_base_manifest().get("skill_nodes", [])
+    except Exception:
+        nodes = []
+    for node in nodes:
+        if isinstance(node, dict) and node.get("node_id") == node_id:
+            return (
+                str(node.get("name") or node_id),
+                [str(item) for item in node.get("knowledge_points", []) if str(item).strip()],
+            )
+    return node_id, []
+
+
+def _queries(node_input: RetrieverInput) -> tuple[list[str], dict[str, str]]:
     weak_points = node_input.diagnosis.get("weak_points", [])
     values = [node_input.topic]
-    values.extend(f"{node_input.topic} {node}" for node in node_input.target_skill_nodes[:3])
-    values.extend(f"{node_input.topic} {point}" for point in weak_points[:2])
-    return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+    query_node_ids: dict[str, str] = {}
+    target_nodes = list(dict.fromkeys(node_input.target_skill_nodes[:3]))
+    if target_nodes:
+        for node_id in target_nodes:
+            name, points = _node_descriptor(node_id)
+            query = " ".join([node_input.topic, name, *points]).strip()
+            if query:
+                values.append(query)
+                query_node_ids[query] = node_id
+    else:
+        values.extend(f"{node_input.topic} {point}" for point in weak_points[:2])
+    queries = list(dict.fromkeys(value.strip() for value in values if value.strip()))
+    return queries, {query: node_id for query, node_id in query_node_ids.items() if query in queries}
 
 
 def retrieve_node(
@@ -41,7 +66,7 @@ def retrieve_node(
     knowledge_base_id = node_input.knowledge_base_id or str(
         load_knowledge_base_manifest()["knowledge_base_id"]
     )
-    queries = _queries(node_input)
+    queries, query_node_ids = _queries(node_input)
     configured_top_k = node_input.constraints.get("retrieval_top_k")
     top_k_override = (
         min(10, max(1, configured_top_k))
@@ -57,6 +82,7 @@ def retrieve_node(
         step_id=step_context["step_id"],
         knowledge_base_id=knowledge_base_id,
         queries=queries,
+        query_node_ids=query_node_ids,
         policy=policy,
     )
     batch = evidence_retriever.retrieve(request)
@@ -78,6 +104,7 @@ def retrieve_node(
     status = StepStatus.DEGRADED if error else StepStatus.SUCCESS
     output = RetrieverOutput(
         retrieved_evidence=batch.evidence,
+        node_evidence_map=batch.node_evidence_map,
         retrieval_status=batch.status,
         retrieval_config_hash=batch.config_hash,
         retrieval_query_hashes=batch.query_hashes,
@@ -123,6 +150,7 @@ def retrieve_node(
     return {
         "knowledge_base_id": knowledge_base_id,
         "retrieved_evidence": batch.evidence,
+        "node_evidence_map": batch.node_evidence_map,
         "retrieved_chunks": [],
         "retrieval_status": batch.status.value,
         "retrieval_config_hash": batch.config_hash,

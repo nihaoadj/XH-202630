@@ -28,7 +28,7 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresAuth && !auth.currentUser) {
     return { name: 'landing', query: { login: '1', redirect: to.fullPath } }
   }
-  if (to.meta.guestOnly && auth.currentUser) {
+  if (to.meta.guestOnly && auth.currentUser && to.name !== 'register') {
     return { name: 'dashboard' }
   }
   return true

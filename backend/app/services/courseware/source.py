@@ -110,6 +110,25 @@ def _snapshot(source: LearningResource) -> dict[str, Any]:
                 "block_id": f"q{len(blocks) + 1}_{content_hash(f'{source.resource_id}:q:{question}')[:10]}",
                 "text": question,
             })
+    # A V2 review checklist is a structured learning source, not merely a
+    # Markdown document.  Preserve stable question boundaries in the frozen
+    # snapshot so the courseware renderer can bind each interaction to the
+    # already-reviewed question without asking a second model to recreate it.
+    review_package = source.review_practice_payload if source.resource_type == "复习清单" else None
+    if isinstance(review_package, dict) and review_package.get("schema_version") == "2.0":
+        for node in review_package.get("node_blocks") or []:
+            if not isinstance(node, dict):
+                continue
+            for question in [*(node.get("recall_questions") or []), *(node.get("distinction_questions") or []), node.get("example_recognition")]:
+                if not isinstance(question, dict) or not question.get("question_id"):
+                    continue
+                question_id = str(question["question_id"])
+                blocks.append({
+                    "block_id": f"review_{content_hash(f'{source.resource_id}:{question_id}')[:16]}",
+                    "text": str(question.get("prompt") or question.get("statement") or question.get("candidate_a") or question_id),
+                    "kind": "review_question", "review_question_id": question_id,
+                    "skill_node_id": str(node.get("skill_node_id") or ""),
+                })
     # Convert source references into a small, versioned graph.  The graph is
     # deliberately metadata-only: snippets and learner prose never enter the
     # courseware contract, while every source/block edge remains auditable.
@@ -141,6 +160,8 @@ def _snapshot(source: LearningResource) -> dict[str, Any]:
         "knowledge_points": source.knowledge_points, "content": clipped, "blocks": blocks,
         "content_hash": content_hash(content),
         "exercise_items": [item.model_dump(mode="json") for item in source.exercise_items],
+        "review_practice_payload": review_package if isinstance(review_package, dict) else None,
+        "review_practice_payload_hash": source.review_practice_payload_hash,
         "source_graph": {"schema_version": "1.0", "nodes": source_nodes, "edges": source_edges},
     }
 

@@ -60,6 +60,7 @@ def _specs_for_state(state: AgentState, node_input: GeneratorInput) -> list[Reso
             },
             evidence=node_input.retrieved_evidence,
             target_skill_nodes=node_input.target_skill_nodes,
+            node_evidence_map=node_input.node_evidence_map,
         )
     expected = [normalize_resource_type(item) for item in node_input.resource_types]
     if [item.resource_type for item in specs] != expected:
@@ -82,6 +83,7 @@ def _context(node_input: GeneratorInput, state: AgentState, step_id: str) -> Res
         },
         learning_path=list(node_input.learning_plan.get("learning_path", []))[:50],
         evidence=node_input.retrieved_evidence,
+        node_evidence_map=node_input.node_evidence_map,
         continuation_context=list(node_input.constraints.get("continuation_context", []))[:12],
         constraints=node_input.constraints,
         generation_attempt=node_input.generation_attempt,
@@ -131,6 +133,8 @@ def _materialize(
         exercise_items=list(data.get("exercise_items") or []),
         assessment_payload=data.get("assessment_package"),
         assessment_payload_hash=(data.get("assessment_package") or {}).get("payload_hash"),
+        review_practice_payload=data.get("review_practice_package"),
+        review_practice_payload_hash=(data.get("review_practice_package") or {}).get("payload_hash"),
     )
 
 

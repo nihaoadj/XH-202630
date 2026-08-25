@@ -23,6 +23,7 @@ def _spec_orm_to_record(orm: ResourceSpecORM) -> ResourceSpecRecord:
         learning_objective=orm.learning_objective,
         knowledge_points=orm.knowledge_points or [],
         evidence_ids=orm.evidence_ids or [],
+        node_evidence_map=orm.node_evidence_map or {},
         difficulty=orm.difficulty,
         representations=orm.representations or [],
         dependencies=orm.dependencies or [],
@@ -114,6 +115,8 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         exercise_items=[ExerciseItem(**item) for item in (orm.exercise_items or [])],
         assessment_payload=orm.assessment_payload,
         assessment_payload_hash=orm.assessment_payload_hash,
+        review_practice_payload=orm.review_practice_payload,
+        review_practice_payload_hash=orm.review_practice_payload_hash,
     )
 
 
@@ -164,6 +167,8 @@ def _pydantic_to_orm(
         exercise_items=[item.model_dump() for item in resource.exercise_items],
         assessment_payload=resource.assessment_payload,
         assessment_payload_hash=resource.assessment_payload_hash,
+        review_practice_payload=resource.review_practice_payload,
+        review_practice_payload_hash=resource.review_practice_payload_hash,
     )
 
 
@@ -415,6 +420,7 @@ class SQLResourceRepository(BaseResourceRepository):
                         learning_objective=spec.learning_objective,
                         knowledge_points=spec.knowledge_points,
                         evidence_ids=spec.evidence_ids,
+                        node_evidence_map=spec.node_evidence_map,
                         difficulty=spec.difficulty,
                         representations=spec.representations,
                         dependencies=spec.dependencies,

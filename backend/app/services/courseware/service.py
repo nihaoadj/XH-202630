@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
+import hashlib
+import json
 
 from app.agents.resource_workflows.interactive_courseware.workflow import (
     InteractiveCoursewareWorkflow,
@@ -137,3 +139,29 @@ class CoursewareService:
 
     def learning_progress(self, resource_id: str, release_id: str) -> dict[str, Any]:
         return self.repo.learning_progress(resource_id=resource_id, release_id=release_id)
+
+    def review_practice_self_reports(self, resource_id: str, release_id: str) -> tuple[str, dict[str, float]]:
+        """Derive only complete node scores from persisted bounded events."""
+        resource = self.repo.get_resource(resource_id) or {}
+        job = self.repo.get_job(resource.get("run_id")) if resource.get("run_id") else None
+        snapshot = next((item for item in (job or {}).get("source_snapshots") or []
+                         if isinstance(item.get("review_practice_payload"), dict)), None)
+        package = (snapshot or {}).get("review_practice_payload") or {}
+        if package.get("schema_version") != "2.0":
+            return "", {}
+        ratings: dict[str, str] = {}
+        for event in self.repo.list_learning_events(resource_id=resource_id, release_id=release_id):
+            value = (((event.get("state") or {}).get("component_state") or {}).get(event.get("scene_id") or "") or {})
+            for entry in value.values():
+                review = ((entry or {}).get("value") or {}).get("review_practice") or {}
+                if review.get("revealed") and review.get("self_rating") in {"known", "uncertain", "not_known"}:
+                    ratings[str(review.get("question_id"))] = str(review["self_rating"])
+        scores: dict[str, float] = {}
+        values = {"known": 1.0, "uncertain": 0.5, "not_known": 0.0}
+        for node in package.get("node_blocks") or []:
+            questions = [*node.get("recall_questions", []), *node.get("distinction_questions", []), node.get("example_recognition")]
+            ids = [str(item.get("question_id")) for item in questions if isinstance(item, dict) and item.get("question_id")]
+            if ids and all(item in ratings for item in ids):
+                scores[str(node.get("skill_node_id"))] = round(sum(values[ratings[item]] for item in ids) / len(ids), 6)
+        source_id = hashlib.sha256(json.dumps({"resource_id": resource_id, "release_id": release_id, "payload_hash": package.get("payload_hash"), "scores": scores}, sort_keys=True).encode()).hexdigest()
+        return source_id, scores

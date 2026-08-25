@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.agents.resource_workflows.learning_documents.generator_agent import generate_node
-from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, CorrectionTrainingPackageAgent, ReviewChecklistAgent
+from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, CorrectionTrainingPackageAgent, ReviewChecklistAgent, TextResourceAgent
 from app.agents.resource_agents.practice import PRACTICE_GUIDE_PROMPT
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
 from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
@@ -44,6 +44,14 @@ CHECKLIST_MARKDOWN = """# 受控检索复习清单
 第 1 天完成必会清单，第 3 天完成自测。
 """
 
+CHECKLIST_PAYLOAD = {
+    "schema_version": "2.0", "skill_node_id": "skill-search", "skill_node_name": "skill-search", "evidence_ids": ["ev-new-resource-type"],
+    "recall_questions": [{"local_id": "recall-1", "prompt": "说明证据范围。", "reference_answer": "仅使用冻结 Evidence。", "explanation": "答案对应当前证据范围。", "evidence_ids": ["ev-new-resource-type"], "pass_criteria": "说明范围。"}],
+    "distinction_questions": [{"local_id": "distinction-1", "statement": "可使用证据外结论。", "truth_value": False, "correction": "只能使用冻结 Evidence。", "explanation": "证据外结论没有依据。", "evidence_ids": ["ev-new-resource-type"], "pass_criteria": "判断并说明。"}],
+    "example_recognition": None,
+    "omitted_slots": [{"local_id": "recall-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "recall-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "example-1", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"}],
+}
+
 
 CASE_STUDY_MARKDOWN = """# 受控检索案例分析
 
@@ -80,12 +88,14 @@ def _inputs(resource_type: str):
         learning_plan={"learning_path": [{"topic": "检索", "order": 1}]},
         evidence=[evidence],
         target_skill_nodes=["skill-search"],
+        node_evidence_map={"skill-search": [evidence.evidence_id]},
     )
     context = ResourceGenerationContext(
         run_id="run-new-resource-type",
         batch_id="run-new-resource-type",
         topic="受控检索",
         evidence=[evidence],
+        node_evidence_map={"skill-search": [evidence.evidence_id]},
     )
     return specs[0], context, evidence
 
@@ -93,7 +103,7 @@ def _inputs(resource_type: str):
 @pytest.mark.parametrize(
     ("resource_type", "agent_type", "markdown", "required_section"),
     [
-        ("复习清单", ReviewChecklistAgent, CHECKLIST_MARKDOWN, "## 自测清单"),
+        ("复习清单", ReviewChecklistAgent, CHECKLIST_PAYLOAD, "## 自评与下一步"),
         ("案例分析", CaseStudyAgent, CASE_STUDY_MARKDOWN, "## 参考方案"),
     ],
 )
@@ -112,6 +122,24 @@ def test_new_resource_agents_generate_evidence_scoped_markdown(
     assert artifact.content_text.startswith("# ")
     assert required_section in artifact.content_text
     assert artifact.knowledge_points == spec.knowledge_points
+
+
+def test_text_resource_uses_bounded_long_form_timeout_and_output_budget(monkeypatch):
+    spec, context, _ = _inputs("讲义")
+    gateway = ScriptedLLMGateway(["# 受控检索讲义\n\n## 学习目标\n\n掌握证据范围。"])
+    monkeypatch.setattr(
+        "app.agents.resource_agents.text.get_settings",
+        lambda: SimpleNamespace(
+            text_resource_request_timeout_seconds=240.0,
+            text_resource_max_output_tokens=32768,
+        ),
+    )
+
+    artifact = TextResourceAgent().generate(spec, context, llm_gateway=gateway)
+
+    assert artifact.content_text.startswith("# 受控检索讲义")
+    assert gateway.calls[0]["options"].request_timeout_seconds == 240.0
+    assert gateway.calls[0]["options"].max_output_tokens == 32768
 
 
 @pytest.mark.parametrize(
@@ -331,13 +359,14 @@ def test_new_resource_types_flow_through_generation_and_independent_review(monke
         "resource_types": ["复习清单", "案例分析"],
         "target_skill_nodes": ["skill-search"],
         "retrieved_evidence": [evidence],
+        "node_evidence_map": {"skill-search": [evidence.evidence_id]},
         "learning_plan": {"learning_path": [{"topic": "检索", "order": 1}]},
         "generation_attempt": 1,
         "trace": [],
     }
     generated = generate_node(
         state,
-        llm_gateway=ScriptedLLMGateway([CHECKLIST_MARKDOWN, CASE_STUDY_MARKDOWN]),
+        llm_gateway=ScriptedLLMGateway([CHECKLIST_PAYLOAD, CASE_STUDY_MARKDOWN]),
     )
 
     assert [item.resource_type for item in generated["generated_resources"]] == ["复习清单", "案例分析"]

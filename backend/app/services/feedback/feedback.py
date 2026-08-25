@@ -626,7 +626,11 @@ class FeedbackService:
             difficulty_preference=difficulty,
             profile_focus_mode="off", generation_mode="standard", include_review=True, include_claim_check=True,
             max_iterations=1,
-            constraints={"must_include_citations": True, "feedback_attempt_id": result.attempt.attempt_id,
+            # Provenance is enforced by retrieval, the evidence gate, and scoped
+            # source_refs in the normal generation workflow.  Do not add a
+            # presentation-level citation requirement here: it makes reviewers
+            # expect raw internal evidence IDs in learner-facing content.
+            constraints={"feedback_attempt_id": result.attempt.attempt_id,
                          "source_attempt_id": result.attempt.attempt_id,
                           "feedback_option_id": option.option_id,
                           "feedback_resource_types": resource_types,
@@ -1260,7 +1264,11 @@ class FeedbackService:
         actual_hash = hashlib.sha256(json.dumps(actual_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         if not expected_hash or expected_hash != actual_hash:
             raise ValueError("结构化测试题资源校验失败")
-        rows = [question for block in payload.get("node_blocks", []) for question in block.get("questions", [])]
+        rows = []
+        for block in payload.get("node_blocks", []):
+            for field_name in ("single_choice_questions", "multiple_choice_questions", "short_answer_questions"):
+                for question in block.get(field_name, []):
+                    rows.append({**question, "skill_node_id": block.get("skill_node_id"), "skill_node_name": block.get("skill_node_name")})
         if not rows or round(sum(float(item.get("max_score", 0)) for item in rows), 2) != 100:
             raise ValueError("结构化测试题资源内容不完整")
         return rows
@@ -1291,11 +1299,17 @@ class FeedbackService:
         learner_id: str,
         session_id: str,
     ) -> list[ResourceEvaluationQuestion]:
-        """Shuffle choices deterministically so a session stays resumable and gradable."""
+        """Shuffle fallback-bank choices while preserving generated-resource choices.
+
+        Generated and structured assessment resources already have an authored
+        option order.  Only fallback questions selected from the shared bank
+        need deterministic shuffling to avoid presenting the same bank order
+        to every learner while keeping a session resumable.
+        """
         shuffled_questions = []
         for question in questions:
             options = list(question.options or [])
-            if len(options) > 1:
+            if question.source in {"assessment_bank", "knowledge_base"} and len(options) > 1:
                 seed_material = f"{learner_id}\x1f{session_id}\x1f{question.question_id}"
                 seed = int.from_bytes(hashlib.sha256(seed_material.encode("utf-8")).digest()[:8], "big")
                 random.Random(seed).shuffle(options)

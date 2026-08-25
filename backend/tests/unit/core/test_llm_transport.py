@@ -34,6 +34,7 @@ def test_chat_model_disables_sdk_retry_and_applies_call_budget(monkeypatch):
     assert captured["max_tokens"] == 1234
     assert captured["temperature"] == 0.2
     assert captured["http_client"].trust_env is False
+    assert captured["http_client"].timeout.read == 7.5
 
 
 def test_chat_model_uses_only_the_explicitly_configured_proxy(monkeypatch):

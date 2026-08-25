@@ -69,6 +69,7 @@ _TYPE_TO_ID = {
 _STAGE_BY_SCHEMA = {
     "CoursewareSpec": "spec",
     "CoursewarePlanEnrichmentV2": "spec",
+    "ReviewPracticeCoursewarePlanEnrichment": "spec",
     "CoursewareSceneSpec": "scene",
     "CoursewarePracticeEnrichment": "scene",
     "CoursewareNarrativeEnrichment": "scene",

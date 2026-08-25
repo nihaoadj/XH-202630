@@ -13,7 +13,7 @@ CoursewareEventType = Literal[
     "scene_viewed", "scene_completed", "answer_submitted", "answer_correct",
     "answer_retry", "hint_opened", "courseware_completed",
     "flashcard_flipped", "flashcard_known", "flashcard_review",
-    "matching_attempt", "ordering_submitted",
+    "matching_attempt", "ordering_submitted", "review_answer_revealed", "review_self_assessed",
 ]
 
 
@@ -77,6 +77,18 @@ def sanitize_component_state(value: Any) -> dict[str, Any]:
                 state[key] = ordering[key]
         if state:
             result["ordering"] = state
+    review = value.get("review_practice")
+    if isinstance(review, Mapping):
+        question_id = review.get("question_id")
+        state = {}
+        if isinstance(question_id, str) and 0 < len(question_id) <= 64:
+            state["question_id"] = question_id
+        if isinstance(review.get("revealed"), bool):
+            state["revealed"] = review["revealed"]
+        if str(review.get("self_rating")) in {"known", "uncertain", "not_known"}:
+            state["self_rating"] = str(review["self_rating"])
+        if state:
+            result["review_practice"] = state
     return result
 
 

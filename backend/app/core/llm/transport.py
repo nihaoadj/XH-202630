@@ -34,6 +34,12 @@ def create_chat_model(
     http_client = httpx.Client(
         proxy=settings.llm_proxy_url or None,
         trust_env=False,
+        # Passing a custom client makes that client's timeout authoritative for
+        # the OpenAI SDK.  Keep it aligned with the per-call gateway budget so
+        # a provider read cannot outlive a workflow lease.
+        timeout=httpx.Timeout(
+            timeout_seconds or getattr(settings, "llm_request_timeout_seconds", 30.0)
+        ),
     )
     kwargs = {
         "api_key": settings.llm_api_key.get_secret_value(),

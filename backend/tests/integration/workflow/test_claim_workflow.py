@@ -89,6 +89,35 @@ def test_supported_claim_completes_and_approves():
     assert state["claim_metrics"]["res-claim"]["metric_status"] == ClaimMetricStatus.COMPLETE.value
 
 
+def test_structured_assessment_uses_internal_audit_instead_of_public_markdown_claims():
+    state = _state()
+    assessment = LearningResource(
+        resource_id="res-assessment", resource_type="分阶测试题", difficulty="初级",
+        content_text="# 测评\n\n### 单选题（基础）\n\n题干不含答案。",
+        knowledge_points=["skill-python"], source_refs=[], run_id="run-claim", version=1,
+        assessment_payload={
+            "schema_version": "2.0", "title": "内部题卷", "instructions": "内部审核使用",
+            "node_blocks": [{"skill_node_id": "skill-python", "skill_node_name": "Python",
+                "single_choice_questions": [{"answer_option_ids": ["A"], "evidence_ids": ["ev-claim"]}],
+                "multiple_choice_questions": [], "short_answer_questions": []}],
+        },
+    )
+    state["generated_resources"] = [assessment]
+    state["review_result"]["review_ids"] = {assessment.resource_id: "review-assessment"}
+
+    extracted = claim_extract_node(state, llm_gateway=ScriptedLLMGateway([]))
+    state.update(extracted)
+    assert state["extracted_claims"] == []
+    assert state["assessment_claim_skipped_resource_ids"] == [assessment.resource_id]
+
+    state.update(claim_judge_node(state, llm_gateway=ScriptedLLMGateway([])))
+    state.update(claim_decide_node(state))
+    assert state["claim_check_status"] == "completed"
+    assert state["review_result"]["decision"] == "approve"
+    assert state["claim_metrics"][assessment.resource_id]["metric_status"] == ClaimMetricStatus.NOT_APPLICABLE.value
+    assert state["claim_metrics"][assessment.resource_id]["audit_mode"] == "structured_assessment_internal"
+
+
 def test_not_in_evidence_generates_claim_targeted_revision():
     state = _state()
     content = state["generated_resources"][0].content_text

@@ -18,6 +18,8 @@ from app.db.migrations.p0_18_courseware_batch_integrity import apply_p0_18_cours
 from app.db.migrations.p0_19_learner_mastery import apply_p0_19_learner_mastery_migration
 from app.db.migrations.p0_20_curriculum_progress import apply_p0_20_curriculum_progress_migration
 from app.db.migrations.p0_21_learning_tiers import apply_p0_21_learning_tiers_migration
+from app.db.migrations.p0_22_review_practice import apply_p0_22_review_practice_migration
+from app.db.migrations.p0_23_curriculum_attempt_id import apply_p0_23_curriculum_attempt_id_migration
 from app.db.migrations.tutor import apply_tutor_migration
 
 __all__ = [
@@ -39,5 +41,7 @@ __all__ = [
     "apply_p0_19_learner_mastery_migration",
     "apply_p0_20_curriculum_progress_migration",
     "apply_p0_21_learning_tiers_migration",
+    "apply_p0_22_review_practice_migration",
+    "apply_p0_23_curriculum_attempt_id_migration",
     "apply_tutor_migration",
 ]

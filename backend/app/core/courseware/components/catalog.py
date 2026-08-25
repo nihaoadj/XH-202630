@@ -76,11 +76,29 @@ CATALOG_V3 = {
     },
 }
 
+# Review practice V2 is an additive, platform-rendered interaction family.
+# Its answers come from an already audited review payload; the model can never
+# substitute a free-form flashcard or choose the component implementation.
+CATALOG_V4 = {
+    **CATALOG_V3,
+    **{
+        item.name: item
+        for item in (
+            ComponentDefinition("review_overview", schema_version="4.0", renderer="review-overview", required_fields=("text", "source_refs", "items"), aria_role="note"),
+            ComponentDefinition("review_recall_card", interactive=True, schema_version="4.0", renderer="review-recall", runtime="review-practice", required_fields=("text", "source_refs", "items"), aria_role="region", touch_target=True),
+            ComponentDefinition("review_distinction_card", interactive=True, schema_version="4.0", renderer="review-distinction", runtime="review-practice", required_fields=("text", "source_refs", "items"), aria_role="region", touch_target=True),
+            ComponentDefinition("review_example_card", interactive=True, schema_version="4.0", renderer="review-example", runtime="review-practice", required_fields=("text", "source_refs", "item"), aria_role="region", touch_target=True),
+            ComponentDefinition("review_reflection", schema_version="4.0", renderer="review-reflection", required_fields=("text", "source_refs", "reason"), aria_role="note"),
+            ComponentDefinition("review_completion", interactive=True, schema_version="4.0", renderer="review-completion", runtime="review-practice", required_fields=("text", "source_refs", "items"), aria_role="region", touch_target=True),
+        )
+    },
+}
+
 
 def component_definition(name: object, schema_version: str = "1.0") -> ComponentDefinition | None:
     if not isinstance(name, str):
         return None
-    definition = CATALOG_V3.get(name)
+    definition = CATALOG_V4.get(name)
     return definition if definition is not None and definition.schema_version == schema_version else None
 
 
@@ -149,6 +167,23 @@ def validate_component_payload(name: str, payload: dict[str, Any]) -> bool:
             and item.get("source_refs")
             for item in items
         )
+    if name in {"review_overview", "review_completion"}:
+        return isinstance(payload.get("items"), list) and bool(payload["items"])
+    if name in {"review_recall_card", "review_distinction_card"}:
+        items = payload.get("items")
+        return isinstance(items, list) and 1 <= len(items) <= 3 and all(
+            isinstance(item, dict) and str(item.get("question_id") or "").strip()
+            and str(item.get("prompt") or item.get("statement") or "").strip()
+            and str(item.get("reference_answer") or item.get("correction") or "").strip()
+            for item in items
+        )
+    if name == "review_example_card":
+        item = payload.get("item")
+        return isinstance(item, dict) and str(item.get("question_id") or "").strip() and all(
+            str(item.get(key) or "").strip() for key in ("candidate_a", "candidate_b", "positive_candidate", "decisive_boundary")
+        )
+    if name == "review_reflection":
+        return str(payload.get("reason") or "").strip() in {"INSUFFICIENT_DISTINCT_EVIDENCE", "NO_EXPLICIT_CONCEPT_BOUNDARY"}
     return True
 
 
@@ -211,9 +246,9 @@ def component_asset_matrix(schema_version: str = "1.0") -> dict[str, dict[str, o
             "keyboard_support": definition.keyboard_support,
             "touch_target": definition.touch_target,
         }
-        for name, definition in CATALOG_V3.items()
+        for name, definition in CATALOG_V4.items()
         if definition.schema_version == schema_version
     }
 
 
-__all__ = ["CATALOG_V1", "CATALOG_V2", "CATALOG_V3", "ComponentDefinition", "component_asset_matrix", "component_definition", "is_registered_component", "migrate_component_payload", "validate_component_payload"]
+__all__ = ["CATALOG_V1", "CATALOG_V2", "CATALOG_V3", "CATALOG_V4", "ComponentDefinition", "component_asset_matrix", "component_definition", "is_registered_component", "migrate_component_payload", "validate_component_payload"]

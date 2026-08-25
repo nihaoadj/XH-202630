@@ -84,7 +84,7 @@
 | 讲义 | `TextResourceAgent` | 8192 | Markdown 文本 |
 | 实操指南 | `PracticeGuideAgent` | 32768 | Markdown 实操指南 |
 | 分阶测试题 | `AssessmentAgent` | 8192 | 结构化测试题文本投影 |
-| 复习清单 | `ReviewChecklistAgent` | 8192 | Markdown 复习清单 |
+| 复习清单 | `ReviewChecklistAgent` | 8192 | 按能力节点生成的主动回忆 Markdown：闭卷回忆、概念辨析和正反例辨认；答案集中于文末 |
 | 案例分析 | `CaseStudyAgent` | 8192 | Markdown 案例分析 |
 | 个性化纠错训练包 | `CorrectionTrainingPackageAgent` | 16384 | 仅正式反馈后的薄弱点强化 Markdown |
 
@@ -288,3 +288,6 @@
 
 - 能力节点支持统一三阶等级、学习者起始阶级、自评准入豁免、同阶最多三节点推荐、低分降阶补前置节点、中分补弱和高分解锁/升阶。
 - 节点目标、资源难度和发布审核采用同一服务端阶级契约；不允许混阶目标或用高阶节点补足批次。
+# 复习清单 V2 互动课件
+
+已发布的 V2 主动回忆复习清单可沿用既有互动课件工作流生成 HTML 课件。课件固定呈现总览、每能力节点的闭卷回忆/概念辨析/正反例三页及总结页；题目与答案来自冻结的结构化 payload，答案默认隐藏。学习者的“会/模糊/不会”仅形成低置信度自评，不作为正式测评成绩。

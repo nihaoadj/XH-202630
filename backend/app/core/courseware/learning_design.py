@@ -17,6 +17,8 @@ from app.models.courseware.learning_design import (
     CoursewareLearningDesign,
     LearningObjective,
     LearningObjectiveGraph,
+    SourceConcept,
+    SourceConceptIndex,
     StoryboardScene,
     StoryboardSpec,
 )
@@ -39,6 +41,7 @@ def _bundle_hash(snapshots: list[dict[str, Any]]) -> str:
             "knowledge_points": list(frozen.knowledge_points),
             "has_verifiable_exercises": frozen.has_verifiable_exercises,
             "source_block_ids": list(frozen.source_block_ids),
+            "review_practice_payload_hash": raw.get("review_practice_payload_hash"),
         })
     encoded = json.dumps(sorted(payload, key=lambda item: item["resource_id"]), ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -242,11 +245,51 @@ def build_learning_design(
     practices = [item for item in adopted_ordered if item.get("role") == "practice" and item.get("content")]
     assessments = [item for item in adopted_ordered if item.get("role") == "assessment"]
     checklists = [item for item in adopted_ordered if item.get("role") == "checklist" and item.get("content")]
+    review_checklist = next((item for item in checklists if isinstance(item.get("review_practice_payload"), dict)
+                             and item["review_practice_payload"].get("schema_version") == "2.0"), None)
     usable_assessment = next((source for source in assessments if any(
         len(item.get("options") or []) >= 2 and item.get("answer") is not None
         for item in source.get("exercise_items") or [] if isinstance(item, dict)
     )), None)
     band = "5-15" if duration <= 15 else "16-30" if duration <= 30 else "31-60" if duration <= 60 else "61-240"
+    if review_checklist:
+        package = review_checklist["review_practice_payload"]
+        question_blocks = {
+            str(block.get("review_question_id")): str(block.get("block_id"))
+            for block in review_checklist.get("blocks") or [] if block.get("review_question_id") and block.get("block_id")
+        }
+        overview_blocks = tuple(question_blocks.values())[:1] or source_blocks(review_checklist, limit=1)
+        add_scene(scene_id="scene:review:overview", kind="intro", page_role="review_overview", recipe="review_overview",
+                  sources=[review_checklist], key_question="如何使用闭卷回忆、误区辨析与正反例判断完成复习？",
+                  purpose="review-orient", zones=("route", "node_map", "self_report"),
+                  components=("review_overview",), min_chars=80, max_chars=420, block_ids=overview_blocks)
+        for index, node in enumerate(package.get("node_blocks") or [], 1):
+            node_id = str(node.get("skill_node_id") or index)
+            recall = node.get("recall_questions") or []
+            distinction = node.get("distinction_questions") or []
+            example = node.get("example_recognition")
+            node_blocks = tuple(question_blocks.get(str(question.get("question_id"))) for question in [*recall, *distinction, example]
+                                if isinstance(question, dict) and question_blocks.get(str(question.get("question_id")))) or overview_blocks
+            prefix = f"scene:review:node:{index}:{node_id}"
+            add_scene(scene_id=f"{prefix}:recall", kind="practice", page_role="review_recall", recipe="review_recall_grid",
+                      sources=[review_checklist], key_question=f"闭卷回忆：{node.get('skill_node_name') or node_id}", purpose="active-recall",
+                      zones=("questions", "reveal", "self_report"), components=("review_recall_card",), min_chars=80, max_chars=1200, block_ids=node_blocks)
+            add_scene(scene_id=f"{prefix}:distinction", kind="practice", page_role="review_distinction", recipe="review_distinction_grid",
+                      sources=[review_checklist], key_question=f"概念辨析：{node.get('skill_node_name') or node_id}", purpose="misconception-calibration",
+                      zones=("statements", "reveal", "self_report"), components=("review_distinction_card",), min_chars=80, max_chars=1200, block_ids=node_blocks)
+            add_scene(scene_id=f"{prefix}:example", kind="recap", page_role="review_example", recipe="review_example_focus",
+                      sources=[review_checklist], key_question=f"正反例与边界：{node.get('skill_node_name') or node_id}", purpose="boundary-reflection",
+                      zones=("candidates", "boundary", "node_summary"), components=(("review_example_card",) if example else ("review_reflection",)), min_chars=80, max_chars=1200, block_ids=node_blocks)
+        add_scene(scene_id="scene:review:summary", kind="recap", page_role="summary_action", recipe="recap_dashboard",
+                  sources=[review_checklist], key_question="哪些节点已经完成自评，下一步应如何安排？", purpose="review-summary",
+                  zones=("completion", "self_report", "next_action"), components=("review_completion",), min_chars=80, max_chars=480, block_ids=overview_blocks)
+        concept_rows = [{"concept_id": f"concept:{review_checklist['resource_id']}:{index}", "label": str(node.get("skill_node_name") or node.get("skill_node_id") or index), "source_refs": overview_blocks, "adopted_source_ids": (str(review_checklist["resource_id"]),)} for index, node in enumerate(package.get("node_blocks") or [])]
+        for scene in scenes:
+            usage_by_resource[str(review_checklist["resource_id"])]["scene_ids"].append(scene.scene_id)
+        return CoursewareLearningDesign(schema_version="3.0", resource_bundle_hash=_bundle_hash(snapshots), learner_context_hash=context.stable_hash(), objectives=graph,
+            storyboard=StoryboardSpec(scenes=tuple(scenes), objective_graph_hash=graph.stable_hash()), resource_usage_plan=tuple(usage_by_resource.values()),
+            source_concept_index=SourceConceptIndex(concepts=tuple(SourceConcept(**item) for item in concept_rows)),
+            interaction_quota={"status": "review_practice_v2", "target_scenes": len(scenes), "target_interactions": len(package.get("node_blocks") or []) * 7}, warnings=tuple(warnings))
     # Practice guides use one complete page per source step.  The cap protects
     # free-form lecture segmentation only; it must never merge guide steps.
     scene_cap = {"5-15": 10, "16-30": 14, "31-60": 20, "61-240": 24}[band]

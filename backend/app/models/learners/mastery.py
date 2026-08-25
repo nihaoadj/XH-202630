@@ -15,6 +15,7 @@ class StrictMasteryModel(BaseModel):
 
 class AbilityEvidenceSource(str, Enum):
     ONBOARDING_SELF_REPORT = "onboarding_self_report"
+    COURSEWARE_SELF_REPORT = "courseware_self_report"
     DIAGNOSIS = "diagnosis"
     LEARNING_ATTEMPT = "learning_attempt"
     LEGACY_IMPORT = "legacy_import"

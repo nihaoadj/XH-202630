@@ -91,12 +91,13 @@
             <strong>{{ allQuestionsAnswered ? '可以提交本轮反馈' : '请先完成全部测评题' }}</strong>
             <span>{{ allQuestionsAnswered ? '系统会根据结果为下一轮学习调整资源与重点。' : `还差 ${Math.max(evaluation.questions.length - answeredCount, 0)} 题未作答` }}</span>
           </div>
-          <el-button class="submit-feedback-button" type="primary" :icon="CircleCheck" :loading="submitting" :disabled="!canSubmit" @click="submitEvaluation">提交反馈</el-button>
+          <el-button class="submit-feedback-button" type="primary" :icon="CircleCheck" :disabled="!canSubmit || submitting" @click="submitEvaluation">提交反馈</el-button>
+          <p v-if="feedbackStatus" class="feedback-generation-status" role="status">{{ feedbackStatus }}</p>
         </div>
       </aside>
     </section>
 
-    <section v-if="result" class="result-panel">
+    <section v-if="result" id="feedback-report" ref="resultPanelRef" class="result-panel">
       <header class="result-header">
         <div class="result-summary">
         <span class="page-kicker">LEARNING RESULT</span>
@@ -209,7 +210,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheck, VideoPlay } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
@@ -222,6 +223,7 @@ import { countTutorTurns } from '../../utils/tutorState'
 const router = useRouter()
 const store = useAppStore()
 const workspaceRef = ref(null)
+const resultPanelRef = ref(null)
 const selectedLearnerId = ref(store.currentLearnerId || localStorage.getItem('last_learner_id') || '')
 const form = reactive({ learner_id: selectedLearnerId.value, completed: true, time_spent_seconds: 1800, self_rating: 4, difficulty_feeling: '', helpful_part: '', confusing_part: '', comment: '' })
 const resources = ref([])
@@ -231,6 +233,7 @@ const profiles = ref([])
 const tracks = ref([])
 const selectedRunId = ref(localStorage.getItem('current_generation_run_id') || '')
 const submitting = ref(false)
+const feedbackStatus = ref('')
 const selectingOption = ref('')
 const result = ref(null)
 const selectedResourceTypes = ref([])
@@ -408,6 +411,7 @@ function selectBatch() {
     || item.attempt?.metadata?.session_id === selectedRunId.value
   ))
   result.value = existing || null
+  feedbackStatus.value = ''
   if (!existing) {
     evaluation.questions = []
     evaluation.resourceIds = []
@@ -508,6 +512,7 @@ async function loadEvaluationSession({ forceNew = false } = {}) {
 async function submitEvaluation() {
   if (!canSubmit.value) { ElMessage.warning('请先完成全部测评题。'); return }
   submitting.value = true
+  feedbackStatus.value = '已提交反馈，正在生成反馈报告与建议。'
   try {
     const submittedAt = new Date()
     const payload = {
@@ -522,8 +527,14 @@ async function submitEvaluation() {
     feedbackResults.value = [res.data, ...feedbackResults.value.filter((item) => item.attempt?.attempt_id !== res.data.attempt?.attempt_id)]
     if (store.currentProfile) store.setCurrentProfile({ ...store.currentProfile, profile_version: res.data.profile_version })
     ElMessage.success('本轮练习反馈已提交')
-  } catch (error) { console.error(error); ElMessage.error(error?.response?.data?.message || '提交失败，请稍后再试') }
-  finally { submitting.value = false }
+    await nextTick()
+    resultPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    feedbackStatus.value = ''
+  } catch (error) {
+    console.error(error)
+    feedbackStatus.value = ''
+    ElMessage.error(error?.response?.data?.message || '提交失败，请稍后再试')
+  } finally { submitting.value = false }
 }
 async function selectFeedbackOption(optionId) {
   if (!result.value?.attempt?.attempt_id) return
@@ -722,6 +733,8 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
 .rating-field :deep(.el-rate__icon) { margin-right: 5px; }
 .submit-box {
   align-items: center;
+  display: flex;
+  flex-wrap: wrap;
   min-height: 64px;
   margin-top: 14px;
   padding: 12px 13px;
@@ -730,6 +743,13 @@ onMounted(async () => { await loadProfiles(); await loadResources() })
   background: #f6f9ff;
 }
 .submit-box strong { color: #17447e; letter-spacing: .01em; }
+.feedback-generation-status {
+  flex: 0 0 100%;
+  margin: 8px 0 0;
+  color: #2058a7;
+  font-size: 13px;
+  font-weight: 700;
+}
 .start-evaluation-button,
 .submit-feedback-button {
   border-color: #2058a7 !important;

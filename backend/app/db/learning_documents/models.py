@@ -34,6 +34,7 @@ class ResourceSpecRecord(BaseModel):
     learning_objective: str = Field(min_length=1)
     knowledge_points: list[str] = Field(default_factory=list)
     evidence_ids: list[str] = Field(default_factory=list)
+    node_evidence_map: dict[str, list[str]] = Field(default_factory=dict)
     difficulty: str = Field(min_length=1, max_length=16)
     representations: list[dict[str, Any]] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)

@@ -8,6 +8,7 @@ import random
 import time
 from datetime import datetime, timezone
 from functools import lru_cache
+from threading import Event, Thread
 from typing import Any, Callable, Protocol, TypeVar
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
@@ -224,6 +225,42 @@ def _serialize_repair_value(value: Any) -> str:
     else:
         text = str(value)
     return text[:12000]
+
+
+def _invoke_transport_with_hard_timeout(
+    transport: LLMTransport,
+    *,
+    timeout_seconds: float,
+    **kwargs: Any,
+) -> RawLLMResponse:
+    """Bound a synchronous adapter even when its HTTP stack ignores timeout.
+
+    Some OpenAI-compatible adapters accept a custom httpx client but then do
+    not reliably propagate the SDK timeout to a blocked socket read.  The
+    gateway must still honour its workflow budget.  The worker is daemonized:
+    on a provider defect it cannot keep the workflow process alive after the
+    gateway has failed closed and applied its bounded retry policy.
+    """
+    completed = Event()
+    outcome: dict[str, Any] = {}
+
+    def invoke() -> None:
+        try:
+            outcome["value"] = transport.invoke(timeout_seconds=timeout_seconds, **kwargs)
+        except Exception as exc:  # mapped by the normal gateway failure path
+            outcome["error"] = exc
+        finally:
+            completed.set()
+
+    Thread(target=invoke, name="llm-transport", daemon=True).start()
+    if not completed.wait(timeout=max(0.001, timeout_seconds)):
+        raise TimeoutError("llm transport hard timeout")
+    if "error" in outcome:
+        raise outcome["error"]
+    value = outcome.get("value")
+    if not isinstance(value, RawLLMResponse):
+        raise TypeError("transport returned an invalid response")
+    return value
 
 
 class LLMGateway:
@@ -526,11 +563,12 @@ class LLMGateway:
             attempt_started = self.monotonic()
             raw: RawLLMResponse | None = None
             try:
-                raw = self.transport.invoke(
+                raw = _invoke_transport_with_hard_timeout(
+                    self.transport,
+                    timeout_seconds=timeout,
                     messages=prepared_messages,
                     output_schema=output_schema,
                     mode=mode,
-                    timeout_seconds=timeout,
                     temperature=options.temperature,
                     max_output_tokens=options.max_output_tokens,
                 )
@@ -733,13 +771,14 @@ class LLMGateway:
             attempt_started = self.monotonic()
             raw: RawLLMResponse | None = None
             try:
-                raw = self.transport.invoke(
+                raw = _invoke_transport_with_hard_timeout(
+                    self.transport,
+                    timeout_seconds=timeout,
                     messages=call_messages,
                     # TEXT mode never reads this schema; the parameter keeps
                     # the transport protocol shared with structured calls.
                     output_schema=BaseModel,
                     mode=StructuredOutputMode.TEXT,
-                    timeout_seconds=timeout,
                     temperature=options.temperature,
                     max_output_tokens=options.max_output_tokens,
                 )

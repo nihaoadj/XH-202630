@@ -408,6 +408,9 @@ class LearningResource(BaseModel):
     # answer keys and short-answer rubrics.
     assessment_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
     assessment_payload_hash: Optional[str] = Field(default=None, exclude=True)
+    # Internal V2 active-recall package; never exposed through the generic API.
+    review_practice_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
+    review_practice_payload_hash: Optional[str] = Field(default=None, exclude=True)
 
 
 class ResourceClaim(BaseModel):

@@ -60,7 +60,7 @@ def _transition(
     objective_count = before.objective_evidence_count
     attempt_count = before.attempt_count
 
-    if evidence.source_type == AbilityEvidenceSource.ONBOARDING_SELF_REPORT:
+    if evidence.source_type in {AbilityEvidenceSource.ONBOARDING_SELF_REPORT, AbilityEvidenceSource.COURSEWARE_SELF_REPORT}:
         prior = evidence.observed_score
         if objective_count == 0:
             mastery = prior

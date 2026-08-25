@@ -90,6 +90,7 @@ def _app(*, include_resource_exercises=True, tutor_repo=None):
                     question_id="q1",
                     skill_node_id="skill_retrieval",
                     question="What does R stand for in RAG?",
+                    options=["Retrieval", "Ranking", "Routing"],
                     answer="Retrieval",
                     knowledge_point="retrieval",
                     difficulty="beginner",
@@ -98,6 +99,7 @@ def _app(*, include_resource_exercises=True, tutor_repo=None):
                     question_id="q2",
                     skill_node_id="skill_generation",
                     question="What does G stand for in RAG?",
+                    options=["Generation", "Grounding", "Graph"],
                     answer="Generation",
                     knowledge_point="generation",
                     difficulty="beginner",
@@ -157,6 +159,7 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     assert question_by_id["res_feedback_001:q1"]["source"] == "resource"
     assert question_by_id["res_feedback_001:q1"]["skill_node_id"] == "skill_retrieval"
     assert question_by_id["res_feedback_001:q1"]["path_node_id"] == "skill_generation"
+    assert question_by_id["res_feedback_001:q1"]["options"] == ["Retrieval", "Ranking", "Routing"]
     assert "answer" not in question_by_id["res_feedback_001:q1"]
 
     submit_response = client.post(

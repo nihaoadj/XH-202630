@@ -443,6 +443,26 @@ class MasteryService:
         ) for node_id, score in sorted(point_scores.items())]
         return self.repository.apply_evidence(evidence, names, increment_profile_version=False)
 
+    def apply_courseware_self_report(
+        self, profile: LearnerProfile, *, source_id: str, node_scores: dict[str, float],
+    ):
+        """Record review-courseware self reports without creating objective evidence."""
+        if not profile.knowledge_base_id or not node_scores:
+            return [], profile.profile_version, False
+        names = {node.node_id: node.name for node in self._nodes(profile.knowledge_base_id)}
+        unknown = sorted(set(node_scores) - set(names))
+        if unknown:
+            raise ValueError(f"courseware self-report nodes outside knowledge base: {', '.join(unknown)}")
+        source_hash = _canonical_hash({"source_id": source_id, "scores": node_scores})
+        evidence = [AbilityEvidenceV1(
+            evidence_id=_stable_id("abe", source_id, node_id), learner_id=profile.learner_id,
+            knowledge_base_id=profile.knowledge_base_id, skill_node_id=node_id,
+            source_type=AbilityEvidenceSource.COURSEWARE_SELF_REPORT, source_id=source_id,
+            source_hash=source_hash, observed_score=score, verified=False,
+            occurred_at=datetime.now(timezone.utc),
+        ) for node_id, score in sorted(node_scores.items())]
+        return self.repository.apply_evidence(evidence, names, increment_profile_version=False)
+
     def ability_nodes(self, profile: LearnerProfile) -> AbilityNodesResponseV1:
         if not profile.knowledge_base_id:
             return AbilityNodesResponseV1(

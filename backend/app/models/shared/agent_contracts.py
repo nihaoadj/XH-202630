@@ -92,6 +92,7 @@ class RetrieverInput(AgentInput):
 
 class RetrieverOutput(BaseModel):
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
+    node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     retrieval_status: RetrievalStatus
     retrieval_config_hash: Optional[str] = None
     retrieval_query_hashes: List[str] = Field(default_factory=list)
@@ -110,6 +111,7 @@ class PlannerInput(AgentInput):
     constraints: Dict[str, Any] = Field(default_factory=dict)
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
+    node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
 
 
 class PlannerOutput(BaseModel):
@@ -126,6 +128,7 @@ class GeneratorInput(AgentInput):
     constraints: Dict[str, Any] = Field(default_factory=dict)
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
+    node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
     review_result: Dict[str, Any] = Field(default_factory=dict)
     generated_resources: List[LearningResource] = Field(default_factory=list)
@@ -169,6 +172,7 @@ class ResourceSpec(BaseModel):
     learning_objective: str = Field(min_length=1, max_length=4000)
     knowledge_points: List[str] = Field(min_length=1, max_length=50)
     evidence_ids: List[str] = Field(min_length=1, max_length=100)
+    node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     difficulty: str = Field(min_length=1, max_length=32)
     representations: List[ResourceRepresentationSpec] = Field(min_length=1, max_length=1)
     dependencies: List[str] = Field(default_factory=list, max_length=20)
@@ -205,6 +209,14 @@ class ResourceSpec(BaseModel):
             raise ValueError(
                 f"{self.resource_type} requires a supported representation order"
             )
+        evidence_ids = set(self.evidence_ids)
+        for node_id, node_evidence_ids in self.node_evidence_map.items():
+            if not node_id.strip() or not node_evidence_ids:
+                raise ValueError("node evidence mappings require a node and evidence")
+            if len(node_evidence_ids) != len(set(node_evidence_ids)):
+                raise ValueError("node evidence mappings must be unique")
+            if any(not item.strip() for item in node_evidence_ids) or not set(node_evidence_ids) <= evidence_ids:
+                raise ValueError("node evidence mappings must be a subset of spec evidence")
         return self
 
 
@@ -221,6 +233,7 @@ class ResourceGenerationContext(BaseModel):
     learner_profile_summary: Dict[str, Any] = Field(default_factory=dict)
     learning_path: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
     evidence: List[EvidenceItem] = Field(min_length=1, max_length=100)
+    node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     continuation_context: List[Dict[str, Any]] = Field(default_factory=list, max_length=20)
     constraints: Dict[str, Any] = Field(default_factory=dict)
     generation_attempt: int = Field(default=1, ge=1)
@@ -340,6 +353,11 @@ class AssessmentChoiceQuestionV2(StrictLLMOutput):
     answer_option_ids: List[str] = Field(min_length=1, max_length=3)
     knowledge_point_tags: List[str] = Field(min_length=1, max_length=3)
     evidence_ids: List[str] = Field(min_length=1, max_length=3)
+    # Assigned deterministically by the server after all node calls succeed.
+    question_id: str | None = Field(default=None, pattern=r"^q-[0-9]{3}$")
+    max_score: float | None = Field(default=None, gt=0, le=100)
+    # The server, not the model, fixes the stage from question type.
+    difficulty_stage: Literal["基础", "进阶", "挑战"] | None = None
 
     @model_validator(mode="after")
     def validate_choice(self) -> "AssessmentChoiceQuestionV2":
@@ -368,6 +386,11 @@ class AssessmentShortAnswerQuestionV2(StrictLLMOutput):
     rubric: List[AssessmentRubricItemV2] = Field(min_length=2, max_length=6)
     knowledge_point_tags: List[str] = Field(min_length=1, max_length=3)
     evidence_ids: List[str] = Field(min_length=1, max_length=3)
+    # Assigned deterministically by the server after all node calls succeed.
+    question_id: str | None = Field(default=None, pattern=r"^q-[0-9]{3}$")
+    max_score: float | None = Field(default=None, gt=0, le=100)
+    # The server, not the model, fixes the stage from question type.
+    difficulty_stage: Literal["基础", "进阶", "挑战"] | None = None
 
 
 class AssessmentNodeBlockV2(StrictLLMOutput):
@@ -400,6 +423,91 @@ class AssessmentPackageV2(StrictLLMOutput):
 class AssessmentShortAnswerGradeV1(StrictLLMOutput):
     score: float = Field(ge=0.0)
     feedback: str = Field(min_length=1, max_length=600)
+
+
+class AssessmentScopeFindingV1(StrictLLMOutput):
+    question_id: str = Field(pattern=r"^q-[0-9]{3}$")
+    decision: Literal["in_scope", "out_of_scope", "insufficient_evidence"]
+    reason: str = Field(min_length=1, max_length=120)
+    # One directly supporting excerpt is sufficient for an auditable finding;
+    # bounding this prevents a scope audit from expanding into a long essay.
+    supported_evidence_ids: List[str] = Field(default_factory=list, max_length=1)
+
+
+class AssessmentScopeReviewV1(StrictLLMOutput):
+    findings: List[AssessmentScopeFindingV1] = Field(min_length=1, max_length=250)
+
+
+class ReviewRecallQuestionV2(StrictLLMOutput):
+    local_id: str = Field(pattern=r"^recall-[1-3]$")
+    prompt: str = Field(min_length=1, max_length=800)
+    reference_answer: str = Field(min_length=1, max_length=1600)
+    explanation: str = Field(min_length=1, max_length=1200)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+    pass_criteria: str = Field(min_length=1, max_length=500)
+    question_id: str | None = Field(default=None, pattern=r"^q-[0-9]{3}$")
+
+
+class ReviewDistinctionQuestionV2(StrictLLMOutput):
+    local_id: str = Field(pattern=r"^distinction-[1-3]$")
+    statement: str = Field(min_length=1, max_length=800)
+    truth_value: bool
+    correction: str = Field(min_length=1, max_length=1000)
+    explanation: str = Field(min_length=1, max_length=1200)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+    pass_criteria: str = Field(min_length=1, max_length=500)
+    question_id: str | None = Field(default=None, pattern=r"^q-[0-9]{3}$")
+
+
+class ReviewExampleRecognitionQuestionV2(StrictLLMOutput):
+    local_id: Literal["example-1"] = "example-1"
+    candidate_a: str = Field(min_length=1, max_length=600)
+    candidate_b: str = Field(min_length=1, max_length=600)
+    positive_candidate: Literal["A", "B"]
+    decisive_boundary: str = Field(min_length=1, max_length=800)
+    explanation: str = Field(min_length=1, max_length=1200)
+    evidence_ids: List[str] = Field(min_length=1, max_length=3)
+    pass_criteria: str = Field(min_length=1, max_length=500)
+    question_id: str | None = Field(default=None, pattern=r"^q-[0-9]{3}$")
+
+
+class ReviewOmittedSlotV2(StrictLLMOutput):
+    local_id: str = Field(pattern=r"^(recall|distinction)-[1-3]$|^example-1$")
+    reason: Literal["INSUFFICIENT_DISTINCT_EVIDENCE", "NO_EXPLICIT_CONCEPT_BOUNDARY"]
+
+
+class ReviewPracticeNodeBlockV2(StrictLLMOutput):
+    schema_version: Literal["2.0"] = "2.0"
+    skill_node_id: str = Field(min_length=1, max_length=128)
+    skill_node_name: str = Field(min_length=1, max_length=160)
+    recall_questions: List[ReviewRecallQuestionV2] = Field(min_length=1, max_length=3)
+    distinction_questions: List[ReviewDistinctionQuestionV2] = Field(min_length=1, max_length=3)
+    example_recognition: ReviewExampleRecognitionQuestionV2 | None = None
+    omitted_slots: List[ReviewOmittedSlotV2] = Field(default_factory=list, max_length=5)
+    evidence_ids: List[str] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_slots(self) -> "ReviewPracticeNodeBlockV2":
+        actual = [item.local_id for item in self.recall_questions + self.distinction_questions]
+        if self.example_recognition:
+            actual.append(self.example_recognition.local_id)
+        omitted = [item.local_id for item in self.omitted_slots]
+        if len(actual) != len(set(actual)) or len(omitted) != len(set(omitted)) or set(actual) & set(omitted):
+            raise ValueError("review question and omitted slot IDs must be unique")
+        expected = {"recall-1", "recall-2", "recall-3", "distinction-1", "distinction-2", "distinction-3", "example-1"}
+        if set(actual) | set(omitted) != expected:
+            raise ValueError("review node must account for every fixed slot")
+        if len(self.distinction_questions) >= 2 and len({item.truth_value for item in self.distinction_questions}) != 2:
+            raise ValueError("multiple distinction questions require both true and false statements")
+        return self
+
+
+class ReviewPracticePackageV2(StrictLLMOutput):
+    schema_version: Literal["2.0"] = "2.0"
+    title: str = Field(min_length=1, max_length=120)
+    instructions: str = Field(min_length=1, max_length=1000)
+    node_blocks: List[ReviewPracticeNodeBlockV2] = Field(min_length=1, max_length=3)
+    payload_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class ReviewerInput(AgentInput):

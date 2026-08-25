@@ -31,6 +31,7 @@ def build_resource_specs(
     learning_plan: dict[str, Any],
     evidence: list[EvidenceItem],
     target_skill_nodes: list[str] | None = None,
+    node_evidence_map: dict[str, list[str]] | None = None,
 ) -> list[ResourceSpec]:
     if not evidence:
         raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
@@ -82,6 +83,7 @@ def build_resource_specs(
             learning_objective=objective,
             knowledge_points=knowledge_points,
             evidence_ids=evidence_ids,
+            node_evidence_map=node_evidence_map or {},
             difficulty=difficulty,
             representations=representations,
             dependencies=[],

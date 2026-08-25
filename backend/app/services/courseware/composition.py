@@ -278,10 +278,63 @@ def _compose_blueprint_scenes(
     return scenes, warnings
 
 
+def _review_practice_scenes(snapshots: list[dict[str, Any]], enrichment: Any | None = None) -> list[dict[str, Any]] | None:
+    """Project an audited review package into fixed, renderer-owned pages."""
+    source = next((item for item in snapshots if item.get("role") == "checklist" and isinstance(item.get("review_practice_payload"), dict)
+                   and item["review_practice_payload"].get("schema_version") == "2.0"), None)
+    if source is None:
+        return None
+    package = source["review_practice_payload"]
+    enrichment_data = enrichment.model_dump(mode="json") if hasattr(enrichment, "model_dump") else (enrichment if isinstance(enrichment, dict) else {})
+    summaries = {str(item.get("skill_node_id")): str(item.get("summary")) for item in enrichment_data.get("node_summaries") or [] if isinstance(item, dict)}
+    block_by_question = {str(block.get("review_question_id")): str(block.get("block_id")) for block in source.get("blocks") or [] if block.get("review_question_id")}
+    resource_id = str(source["resource_id"])
+    def refs(ids: list[str]) -> list[dict[str, Any]]:
+        return [{"source_resource_id": resource_id, "source_block_ids": ids or [next(iter(block_by_question.values()), "review-source")]}]
+    def question_ids(node: dict[str, Any]) -> list[str]:
+        return [str(item.get("question_id")) for item in [*(node.get("recall_questions") or []), *(node.get("distinction_questions") or []), node.get("example_recognition")] if isinstance(item, dict) and item.get("question_id")]
+    scenes: list[dict[str, Any]] = []
+    nodes = package.get("node_blocks") or []
+    overview_ids = [block_by_question[item] for node in nodes for item in question_ids(node) if item in block_by_question][:1]
+    scenes.append({"scene_id": "scene:review:overview", "kind": "intro", "page_role": "review_overview", "layout_recipe_id": "review_overview", "content_budget": {"min_chars": 40, "min_zones": 2}, "title": enrichment_data.get("course_title") or package.get("title") or "复习清单", "lead": enrichment_data.get("overview_lead") or "先独立回忆，再揭示答案并完成自评。", "blocks": [package.get("instructions") or "完成每道题的闭卷回忆后再揭示答案。"], "conclusion": "本课件的自评不会计入正式测评成绩。", "source_refs": [resource_id], "source_block_ids": overview_ids, "component_blocks": [{"schema_version": "4.0", "block_id": "review-overview", "component": "review_overview", "text": package.get("instructions") or "主动回忆训练", "items": [{"label": str(node.get("skill_node_name") or node.get("skill_node_id")), "value": "闭卷回忆、概念辨析与正反例辨认"} for node in nodes], "source_refs": refs(overview_ids)}]})
+    for index, node in enumerate(nodes, 1):
+        node_id = str(node.get("skill_node_id") or index)
+        ids = [block_by_question[item] for item in question_ids(node) if item in block_by_question]
+        base = f"scene:review:node:{index}:{node_id}"
+        recall = list(node.get("recall_questions") or [])
+        distinction = list(node.get("distinction_questions") or [])
+        scenes.append({"scene_id": f"{base}:recall", "kind": "practice", "page_role": "review_recall", "layout_recipe_id": "review_recall_grid", "title": f"{node.get('skill_node_name') or node_id}｜闭卷回忆", "lead": "先在脑中作答；准备好后再显示答案。", "blocks": [], "conclusion": "根据答案标记会、模糊或不会。", "source_refs": [resource_id], "source_block_ids": ids, "component_blocks": [{"schema_version": "4.0", "block_id": f"{base}:recall-cards", "component": "review_recall_card", "text": "闭卷回忆", "items": recall, "source_refs": refs(ids)}]})
+        scenes.append({"scene_id": f"{base}:distinction", "kind": "practice", "page_role": "review_distinction", "layout_recipe_id": "review_distinction_grid", "title": f"{node.get('skill_node_name') or node_id}｜概念辨析", "lead": "先判断陈述，再揭示纠正表述与依据。", "blocks": [], "conclusion": "把误区转化为下一次判断时的检查条件。", "source_refs": [resource_id], "source_block_ids": ids, "component_blocks": [{"schema_version": "4.0", "block_id": f"{base}:distinction-cards", "component": "review_distinction_card", "text": "概念辨析", "items": distinction, "source_refs": refs(ids)}]})
+        example = node.get("example_recognition")
+        component = {"schema_version": "4.0", "block_id": f"{base}:example", "component": "review_example_card" if isinstance(example, dict) else "review_reflection", "text": "正反例辨认" if isinstance(example, dict) else "当前 Evidence 不足以形成单一明确边界。", "source_refs": refs(ids)}
+        if isinstance(example, dict): component["item"] = example
+        else: component["reason"] = next((item.get("reason") for item in (node.get("omitted_slots") or []) if item.get("local_id") == "example-1"), "NO_EXPLICIT_CONCEPT_BOUNDARY")
+        scenes.append({"scene_id": f"{base}:example", "kind": "recap", "page_role": "review_example", "layout_recipe_id": "review_example_focus", "title": f"{node.get('skill_node_name') or node_id}｜正反例与边界", "lead": "辨认决定性差异，再以 Evidence 校准理解边界。", "blocks": [], "conclusion": summaries.get(node_id) or "完成本节点全部实际题目的自评后，即可形成低置信度掌握记录。", "source_refs": [resource_id], "source_block_ids": ids, "component_blocks": [component]})
+    scenes.append({"scene_id": "scene:review:summary", "kind": "recap", "page_role": "summary_action", "layout_recipe_id": "recap_dashboard", "content_budget": {"min_chars": 80, "min_zones": 2}, "title": "复习完成与下一步", "lead": "回顾每个节点的自评，再选择下一步。", "blocks": [], "conclusion": "出现不会时返回对应节点；两项及以上模糊时重新闭卷作答；全部会时进入实操或分阶测试。", "source_refs": [resource_id], "source_block_ids": overview_ids, "component_blocks": [{"schema_version": "4.0", "block_id": "review-completion", "component": "review_completion", "text": "节点完成情况", "items": [{"node_id": str(node.get("skill_node_id") or index), "label": str(node.get("skill_node_name") or node.get("skill_node_id") or index)} for index, node in enumerate(nodes, 1)], "source_refs": refs(overview_ids)}]})
+    # Preserve the ordinary workflow's scene contract even though the visible
+    # learning material is renderer-owned structured cards rather than prose
+    # zones.  These fields keep storyboard/source hard gates and the existing
+    # scene composer on the same base pipeline.
+    objective_id = f"objective:{resource_id}"
+    for scene in scenes:
+        ids = list(scene.get("source_block_ids") or overview_ids)
+        scene["objective_ids"] = [objective_id]
+        scene["source_map"] = {"title": [ids[:1]], "lead": [ids[:1]], "blocks": [ids[:1]], "conclusion": [ids[-1:]]}
+        if not scene.get("blocks"):
+            scene["blocks"] = [str(scene.get("lead") or "完成当前主动回忆练习。")]
+        if scene.get("kind") == "practice":
+            scene["steps"] = ["完成本页题目后揭示答案并进行自评。"]
+            scene["source_map"]["steps"] = [ids[:1]]
+    return scenes
+
+
 def compose_scenes(
     snapshots: list[dict[str, Any]], plan: CoursewareSpec | None = None,
     *, learning_design: CoursewareLearningDesign | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    review_scenes = _review_practice_scenes(snapshots, getattr(plan, "review_practice_enrichment", None) if plan else None)
+    if review_scenes is not None:
+        return review_scenes, []
     if learning_design and learning_design.schema_version == "3.0":
         return _compose_blueprint_scenes(snapshots, learning_design)
     scenes: list[dict[str, Any]] = []

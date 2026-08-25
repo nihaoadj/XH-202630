@@ -28,6 +28,8 @@ def test_settings_safe_defaults():
     assert settings.debug is False
     assert settings.sql_echo is False
     assert settings.llm_workflow_timeout_seconds == 1200
+    assert settings.text_resource_request_timeout_seconds == 240.0
+    assert settings.text_resource_max_output_tokens == 32768
     assert settings.workflow_run_lease_seconds == 1260
     assert settings.courseware_planner_token_budget == 8192
     assert settings.courseware_total_llm_token_budget == 73728

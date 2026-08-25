@@ -271,6 +271,7 @@
 - 未知资源类型在任务创建和任何模型调用前以 HTTP 422 拒绝，不创建失败任务占位。
 - `个性化纠错训练包` 是反馈专属的第六类内部文本资源。普通生成请求它会以 HTTP 422 `FEEDBACK_ONLY_RESOURCE_TYPE` 拒绝。
 - 路由固定为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`。
+- `复习清单` 保持同名、同请求值和同一 Markdown 读取接口；新生成版本以冻结目标节点为单位提供闭卷回忆、概念辨析和可选正反例辨认（每节点最低 `1+1+0`），答案集中在文末。自评框仅供阅读，不提交 Attempt、Mastery 或 LearningPath。
 - 当前推荐前端流程：
   提交任务 -> 轮询任务状态 -> 完成后拉取资源列表。
 
@@ -827,3 +828,6 @@ POST /api/resources/courseware/jobs/batch
 `ability_nodes[].tier` 与 `tier_label` 提供节点所属阶级。`generation_options` 额外返回 `tier_progress`（起始阶、当前阶、最高解锁阶、补救返回阶）、`tier_completion` 和 `recommendation_type`；每个候选节点都带 `tier`、`tier_label` 与 `eligibility_status`。
 
 当生成请求包含 `target_skill_nodes` 时，服务端要求节点数量不超过3且属于同一当前阶；请求中的 `difficulty_preference` 必须等于该阶的固定难度，否则以 `LEARNING_TIER_INVALID` 拒绝。`POST /api/feedback/followups/select` 在分阶处方存在时同样锁定难度，不接受客户端改写。
+# 复习清单 V2 互动课件兼容
+
+互动课件仍使用既有的创建、预览、学习事件和进度 HTTP 路径。选择含 `review_practice_payload` 的“复习清单”时，服务端自动生成 V2 主动回忆课件；学习事件只接受答案揭示与三态自评的受控状态，不新增作答提交接口。

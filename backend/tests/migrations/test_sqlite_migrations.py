@@ -8,6 +8,10 @@ from app.db.shared.database import (
     _migrate_sqlite_learner_profiles,
     _migrate_sqlite_users,
 )
+from app.db.migrations.p0_23_curriculum_attempt_id import (
+    MIGRATION_ID,
+    apply_p0_23_curriculum_attempt_id_migration,
+)
 
 
 def _columns(engine, table_name: str) -> set[str]:
@@ -148,3 +152,31 @@ def test_auth_columns_and_learner_owner_are_migrated(tmp_path):
             text("SELECT user_id FROM learner_profiles WHERE learner_id = 'learner_1'")
         ).scalar_one()
     assert owner == "user_1"
+
+
+def test_curriculum_attempt_marker_migration_is_additive_and_idempotent(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-curriculum.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE schema_migrations (migration_id VARCHAR(128) PRIMARY KEY)"))
+        conn.execute(text(
+            "CREATE TABLE learner_curriculum_nodes ("
+            "curriculum_node_id VARCHAR(128) PRIMARY KEY, learner_id VARCHAR(64), "
+            "knowledge_base_id VARCHAR(128), skill_node_id VARCHAR(128), "
+            "verified_attempt_count INTEGER NOT NULL DEFAULT 0)"
+        ))
+
+    apply_p0_23_curriculum_attempt_id_migration(engine)
+    apply_p0_23_curriculum_attempt_id_migration(engine)
+
+    assert "last_verified_attempt_id" in _columns(engine, "learner_curriculum_nodes")
+    with engine.begin() as conn:
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM schema_migrations WHERE migration_id=:migration_id"
+        ), {"migration_id": MIGRATION_ID}).scalar_one() == 1
+        indexes = {
+            row[1]
+            for row in conn.exec_driver_sql(
+                "PRAGMA index_list(learner_curriculum_nodes)"
+            ).fetchall()
+        }
+    assert "ix_learner_curriculum_nodes_last_verified_attempt_id" in indexes

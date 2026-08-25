@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.interactive_courseware.contracts import (
     CoursewarePlanEnrichmentV2,
+    ReviewPracticeCoursewarePlanEnrichment,
     CoursewareScenePlan,
     CoursewareSpec,
 )
@@ -125,6 +126,37 @@ def build_courseware_spec(
     if not courseware_ai_available(llm_gateway):
         return None, None
     try:
+        review_source = next((item for item in snapshots if isinstance(item.get("review_practice_payload"), dict)
+                              and item["review_practice_payload"].get("schema_version") == "2.0"), None)
+        if review_source is not None and learning_design is not None:
+            package = review_source["review_practice_payload"]
+            node_ids = [str(item.get("skill_node_id")) for item in package.get("node_blocks") or []]
+            result = llm_gateway.invoke_structured(
+                messages=[
+                    SystemMessage(content=(
+                        "你只为主动回忆复习课件补充简短引导语和节点总结。题目、答案、Evidence、组件、"
+                        "页面顺序全部由平台冻结；不得输出或改写它们，不得输出 HTML、CSS、JavaScript、URL。"
+                        "每个节点总结只说明本节点应如何依据题目与证据复盘。"
+                    )),
+                    HumanMessage(content=json.dumps({
+                        "topic": review_source.get("topic"), "title": package.get("title"),
+                        "node_ids": node_ids,
+                        "nodes": [{"skill_node_id": item.get("skill_node_id"), "skill_node_name": item.get("skill_node_name"),
+                                   "question_count": len(item.get("recall_questions") or []) + len(item.get("distinction_questions") or []) + (1 if item.get("example_recognition") else 0)}
+                                  for item in package.get("node_blocks") or []],
+                    }, ensure_ascii=False)),
+                ], output_schema=ReviewPracticeCoursewarePlanEnrichment,
+                context=LLMCallContext(run_id=run_id, step_id=f"{run_id}:review-practice-enrichment", node_name="courseware_review_practice_enricher", schema_name="ReviewPracticeCoursewarePlanEnrichment"),
+                options=allowance or llm_gateway.options_for("generator", temperature=0.0),
+            )
+            if any(item.skill_node_id not in set(node_ids) for item in result.output.node_summaries):
+                raise ValueError("未知 review node ID")
+            spec, _, _ = _platform_spec(learning_design, snapshots)
+            spec.title = result.output.course_title.strip()
+            spec.review_practice_enrichment = result.output
+            trace_method = getattr(result, "trace_metadata", None)
+            trace = trace_method() if callable(trace_method) else {}
+            return spec, ({"code": "LLM_TRACE", "node_name": "courseware_review_practice_enricher", "trace": trace} if trace else None)
         provider_schema = CoursewarePlanEnrichmentV2 if learning_design is not None else CoursewareSpec
         enrichment_contract = None
         if learning_design is not None:

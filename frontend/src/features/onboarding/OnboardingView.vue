@@ -1,35 +1,5 @@
 <template>
   <div class="onboarding-page">
-    <section class="user-bar">
-      <div>
-        <span class="page-kicker">LEARNING SETUP</span>
-        <h2>创建学习方向</h2>
-        <p>先确认当前用户，再按 5 步完成问卷、诊断和资源选择。</p>
-      </div>
-
-      <div class="user-actions">
-        <label v-if="existingProfiles.length" class="existing-direction-control">
-          <span>已有学习方向</span>
-          <el-select
-            v-model="selectedExistingLearnerId"
-            size="small"
-            filterable
-            placeholder="切换已有方向"
-            @change="activateExistingProfile"
-          >
-            <el-option
-              v-for="profile in existingProfiles"
-              :key="profile.learner_id"
-              :label="existingProfileLabel(profile)"
-              :value="profile.learner_id"
-            />
-          </el-select>
-        </label>
-        <el-tag effect="plain">{{ currentUser?.username || currentUser?.display_name }}</el-tag>
-        <el-button @click="$router.push('/user/profile')">维护用户资料</el-button>
-      </div>
-    </section>
-
     <section class="wizard-layout" :class="{ compactWizard: stepStage === 'domain' || stepStage === 'track' }">
       <aside class="progress-panel">
         <button
@@ -378,7 +348,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { diagnosisApi, generateApi, knowledgeApi, onboardingApi, profileApi } from '../../api'
+import { diagnosisApi, generateApi, knowledgeApi, onboardingApi } from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import { useAppStore } from '../../stores/app'
 
@@ -387,11 +357,9 @@ const auth = useAuthStore()
 const store = useAppStore()
 
 const domains = ref([])
-const existingProfiles = ref([])
 const questions = ref([])
 const selectedDomainId = ref('')
 const selectedDirectionId = ref('')
-const selectedExistingLearnerId = ref('')
 const stepStage = ref('domain')
 const submittingProfile = ref(false)
 const submittingDiagnosis = ref(false)
@@ -406,7 +374,6 @@ const currentUser = computed(() => auth.currentUser || store.currentUserProfile 
 const selectedDomain = computed(() => domains.value.find((item) => item.domain_id === selectedDomainId.value))
 const tracks = computed(() => selectedDomain.value?.tracks || [])
 const selectedDirection = computed(() => tracks.value.find((item) => item.track_id === selectedDirectionId.value))
-const allTracks = computed(() => domains.value.flatMap((domain) => domain.tracks || []))
 const totalTrackCount = computed(() => domains.value.reduce((sum, item) => sum + (item.tracks?.length || 0), 0))
 const selectedDomainDocumentCount = computed(() =>
   tracks.value.reduce((sum, item) => sum + (item.metadata?.document_count || 0), 0)
@@ -561,14 +528,6 @@ function isTrackAvailable(track) {
   return track.metadata?.available !== false
 }
 
-function resolveTrack(trackId) {
-  return allTracks.value.find((track) => track.track_id === trackId || track.knowledge_base_id === trackId)
-}
-
-function existingProfileLabel(profile) {
-  return `${resolveTrack(profile.knowledge_base_id)?.name || profile.knowledge_base_id || '未命名方向'} · ${profile.skill_level || '待诊断'}`
-}
-
 function selectDomain(item) {
   selectedDomainId.value = item.domain_id
   selectedDirectionId.value = ''
@@ -593,33 +552,6 @@ function selectDirection(item) {
 async function loadDomains() {
   const res = await knowledgeApi.listDomains()
   domains.value = res.data.domains || []
-}
-
-async function loadExistingProfiles() {
-  const res = await profileApi.list({ page: 1, page_size: 50 })
-  existingProfiles.value = res.data.items || res.data.profiles || []
-}
-
-function activateExistingProfile(learnerId) {
-  const profile = existingProfiles.value.find((item) => item.learner_id === learnerId)
-  const track = profile ? resolveTrack(profile.knowledge_base_id) : null
-  if (!profile || !track) return
-
-  const domain = domains.value.find((item) => item.tracks?.some((candidate) => candidate.track_id === track.track_id))
-  selectedDomainId.value = domain?.domain_id || ''
-  selectedDirectionId.value = track.track_id
-  questions.value = []
-  store.resumeProfile(profile, track.track_id, track.name)
-  store.setPendingDiagnosis([])
-  store.setDiagnosisResult({
-    ability_level: profile.skill_level || '待诊断',
-    weak_points: profile.weak_points || [],
-    strong_points: profile.strong_points || [],
-    knowledge_states: profile.knowledge_states || {},
-    diagnostic_result_id: '',
-  })
-  stepStage.value = 'review'
-  ElMessage.success(`已切换到${track.name}`)
 }
 
 async function loadQuestions() {
@@ -764,7 +696,6 @@ onMounted(async () => {
     store.setPendingDiagnosis([])
     store.setDiagnosisResult(null)
     await loadDomains()
-    await loadExistingProfiles()
   } catch (error) {
     console.error(error)
     ElMessage.error('初始化学习方向页面失败')
@@ -1422,6 +1353,11 @@ onMounted(async () => {
   overflow-y: hidden;
 }
 
+.compactWizard .domain-stage-card :deep(.el-card__body) {
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .compactWizard .action-row {
   margin-top: 14px;
   padding-top: 0;
@@ -1439,6 +1375,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  justify-content: space-between;
   overflow: auto;
 }
 

@@ -133,6 +133,7 @@ class WorkflowState(TypedDict, total=False):
 
     diagnosis: Dict[str, Any]
     retrieved_evidence: List[EvidenceItem]
+    node_evidence_map: Dict[str, List[str]]
     # Compatibility projection retained for P0-02 callers. It is never accepted
     # as factual evidence by the P0-03 generation path.
     retrieved_chunks: List[Dict[str, Any]]
@@ -192,6 +193,7 @@ class WorkflowStateSnapshot(BaseModel):
 
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
+    node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     retrieved_chunks: List[Dict[str, Any]] = Field(default_factory=list)
     learning_plan: Dict[str, Any] = Field(default_factory=dict)
     resource_specs: List[Dict[str, Any]] = Field(default_factory=list)

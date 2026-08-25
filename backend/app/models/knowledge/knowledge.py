@@ -154,6 +154,10 @@ class RetrievalRequest(StrictKnowledgeModel):
     step_id: str = Field(min_length=1)
     knowledge_base_id: str = Field(min_length=1, max_length=128)
     queries: List[str] = Field(min_length=1, max_length=10)
+    # Query text is retained only for the retrieval call.  This optional map
+    # records which node-scoped query produced a hit so the result can expose
+    # a safe, many-to-many node -> evidence projection after global dedupe.
+    query_node_ids: Dict[str, str] = Field(default_factory=dict)
     policy: RetrievalPolicy = Field(default_factory=RetrievalPolicy)
 
     @field_validator("queries")
@@ -167,6 +171,13 @@ class RetrievalRequest(StrictKnowledgeModel):
         if any(len(value) > 2000 for value in normalized):
             raise ValueError("retrieval query exceeds maximum length")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_query_node_ids(self) -> "RetrievalRequest":
+        unknown = set(self.query_node_ids) - set(self.queries)
+        if unknown or any(not str(node_id).strip() for node_id in self.query_node_ids.values()):
+            raise ValueError("query_node_ids must reference non-empty request queries")
+        return self
 
 
 class VectorCandidate(StrictKnowledgeModel):
@@ -230,6 +241,9 @@ class EvidenceBatch(StrictKnowledgeModel):
     status: RetrievalStatus
     knowledge_base_id: str = Field(min_length=1, max_length=128)
     evidence: List[EvidenceItem] = Field(default_factory=list)
+    # This is a classification of the one immutable evidence snapshot, not a
+    # second evidence store.  One evidence ID may appear under multiple nodes.
+    node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     query_hashes: List[str] = Field(default_factory=list)
     query_count: int = Field(ge=0)
     candidate_count: int = Field(ge=0)
@@ -254,6 +268,12 @@ class EvidenceBatch(StrictKnowledgeModel):
         }:
             if self.evidence or self.error is None:
                 raise ValueError("failed evidence batches require an error and no evidence")
+        evidence_ids = {item.evidence_id for item in self.evidence}
+        for node_id, ids in self.node_evidence_map.items():
+            if not str(node_id).strip() or not ids or len(ids) != len(set(ids)):
+                raise ValueError("node evidence bindings must be non-empty and unique")
+            if not set(ids) <= evidence_ids:
+                raise ValueError("node evidence bindings must belong to the batch")
         return self
 
 

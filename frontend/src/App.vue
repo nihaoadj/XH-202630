@@ -532,9 +532,43 @@ async function handleLogout() {
 .is-sidebar-collapsed .nav-hint,
 .is-sidebar-collapsed .sidebar-toggle-label,
 .is-sidebar-collapsed .logout-label {
+  display: none;
   opacity: 0;
   transform: translateX(-8px);
   pointer-events: none;
+}
+
+.is-sidebar-collapsed .brand-copy {
+  display: none;
+}
+
+.is-sidebar-collapsed .nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.is-sidebar-collapsed .nav-icon {
+  flex: 0 0 20px;
+  margin: 0;
+}
+
+.is-sidebar-collapsed .brand-block {
+  width: 100%;
+  justify-content: center;
+  gap: 0;
+}
+
+.is-sidebar-collapsed .nav-list {
+  width: 100%;
+}
+
+.is-sidebar-collapsed .sidebar-toggle,
+.is-sidebar-collapsed .logout-button {
+  justify-content: center;
+  padding-inline: 0;
 }
 
 .is-sidebar-collapsed .context-panel {

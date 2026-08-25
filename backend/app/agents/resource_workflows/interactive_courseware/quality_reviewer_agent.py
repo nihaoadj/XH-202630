@@ -157,8 +157,13 @@ def review_courseware_quality_decision(
             for item in document.get("scenes", [])
         ],
     }
-    try:
-        result = llm_gateway.invoke_structured(
+    # A transient provider failure must not immediately turn a fully valid V2
+    # review course into a warning release.  Keep this bounded: the gateway
+    # still owns per-call structured repair, while this loop makes at most one
+    # fresh review request with the identical frozen document.
+    for request_attempt in range(2):
+        try:
+            result = llm_gateway.invoke_structured(
             messages=[
                 SystemMessage(content=(
                     "你是课件教学质量审核器。只输出 CoursewareReviewDecision v2 JSON；使用九个 rubric 维度，"
@@ -190,19 +195,22 @@ def review_courseware_quality_decision(
             ),
             options=allowance or llm_gateway.options_for("generator", temperature=0.0),
         )
-        trace_method = getattr(result, "trace_metadata", None)
-        trace = trace_method() if callable(trace_method) else {}
-        draft = result.output.model_dump(mode="python") if hasattr(result.output, "model_dump") else result.output
-        output = CoursewareReviewDecision.model_validate(
-            normalize_review_draft_for_durable_contract(draft)
-        ).model_copy(update={"trace_metadata": trace})
-        return output, None
-    except LLMGatewayError:
-        return _unavailable("AI_QUALITY_REVIEW_GATEWAY_ERROR", "AI 教学质量审核调用失败")
-    except Exception:
-        # Timeouts, empty responses and schema failures are unavailable review
-        # evidence; none of them can be represented as an approval.
-        return _unavailable("AI_QUALITY_REVIEW_INVALID_OUTPUT", "AI 教学质量审核未返回有效结构化结论")
+            trace_method = getattr(result, "trace_metadata", None)
+            trace = trace_method() if callable(trace_method) else {}
+            draft = result.output.model_dump(mode="python") if hasattr(result.output, "model_dump") else result.output
+            output = CoursewareReviewDecision.model_validate(
+                normalize_review_draft_for_durable_contract(draft)
+            ).model_copy(update={"trace_metadata": trace})
+            return output, ({"code": "AI_QUALITY_REVIEW_RETRY_SUCCEEDED", "message": "AI 教学质量审核在一次有界重试后成功"} if request_attempt else None)
+        except LLMGatewayError:
+            if request_attempt == 0:
+                continue
+            return _unavailable("AI_QUALITY_REVIEW_GATEWAY_ERROR", "AI 教学质量审核调用失败")
+        except Exception:
+            # Invalid structured output is not safely recoverable by a second
+            # identical call; it remains unavailable review evidence.
+            return _unavailable("AI_QUALITY_REVIEW_INVALID_OUTPUT", "AI 教学质量审核未返回有效结构化结论")
+    return _unavailable("AI_QUALITY_REVIEW_GATEWAY_ERROR", "AI 教学质量审核调用失败")
 
 
 def _unavailable(code: str, message: str) -> tuple[CoursewareReviewDecision, dict[str, Any]]:

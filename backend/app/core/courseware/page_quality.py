@@ -14,6 +14,17 @@ _CONCLUSION_OPTIONAL = {"cover", "learning_map"}
 def _visible_text(scene: dict[str, Any]) -> str:
     values: list[Any] = [scene.get("lead"), *(scene.get("blocks") or []), *(scene.get("steps") or [])]
     values.extend([scene.get("feedback"), scene.get("conclusion")])
+    # Review-practice V2 keeps its learner-visible prompts/answers in
+    # renderer-owned item payloads rather than unsafe free-form prose blocks.
+    # Count those fields for density without loosening ordinary page checks.
+    for component in scene.get("component_blocks") or []:
+        if not isinstance(component, dict) or not str(component.get("component") or "").startswith("review_"):
+            continue
+        values.append(component.get("text"))
+        items = component.get("items") or ([component.get("item")] if component.get("item") else [])
+        for item in items:
+            if isinstance(item, dict):
+                values.extend(item.get(key) for key in ("prompt", "statement", "candidate_a", "candidate_b", "reference_answer", "correction", "explanation", "decisive_boundary"))
     return "".join(str(value).strip() for value in values if str(value or "").strip())
 
 
@@ -35,6 +46,10 @@ def page_quality_issues(document: dict[str, Any]) -> list[dict[str, Any]]:
             for block in (scene.get("component_blocks") or []) if isinstance(block, dict)
         )
         effective_zones = len([block for block in (scene.get("component_blocks") or []) if isinstance(block, dict) and str(block.get("text") or "").strip()])
+        if role.startswith("review_"):
+            for block in scene.get("component_blocks") or []:
+                if isinstance(block, dict) and str(block.get("component") or "").startswith("review_"):
+                    effective_zones += len(block.get("items") or []) or (1 if block.get("item") or block.get("reason") else 0)
         if scene.get("options"):
             effective_zones += 1
         if scene.get("feedback"):
@@ -43,8 +58,8 @@ def page_quality_issues(document: dict[str, Any]) -> list[dict[str, Any]]:
             effective_zones += 1
         effective_zones = min(4, effective_zones)
         budget = scene.get("content_budget") or {}
-        min_chars = int(budget.get("min_chars") or (80 if role == "cover" else 120 if role in {"learning_map", "knowledge_check", "summary_action"} else 220))
-        min_zones = int(budget.get("min_zones") or (2 if role == "cover" else 3))
+        min_chars = int(budget.get("min_chars") or (80 if role == "cover" or role.startswith("review_") else 120 if role in {"learning_map", "knowledge_check", "summary_action"} else 220))
+        min_zones = int(budget.get("min_zones") or (2 if role == "cover" or role.startswith("review_") else 3))
 
         def add(code: str, detail: str) -> None:
             issues.append({"code": code, "scene_id": scene_id, "scene_index": index, "detail": detail})

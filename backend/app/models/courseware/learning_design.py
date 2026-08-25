@@ -12,12 +12,14 @@ from pydantic import BaseModel, ConfigDict, Field
 PageRole = Literal[
     "cover", "learning_map", "concept_explanation", "process_breakdown",
     "case_diagnosis", "comparison_analysis", "practice_workspace",
-    "knowledge_check", "summary_action",
+    "knowledge_check", "summary_action", "review_overview", "review_recall",
+    "review_distinction", "review_example",
 ]
 LayoutRecipeId = Literal[
     "editorial_cover", "learning_map_grid", "concept_split", "process_lane",
     "comparison_matrix", "case_diagnostic", "practice_workspace",
-    "quiz_focus", "recap_dashboard",
+    "quiz_focus", "recap_dashboard", "review_overview", "review_recall_grid",
+    "review_distinction_grid", "review_example_focus",
 ]
 
 

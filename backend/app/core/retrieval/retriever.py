@@ -323,12 +323,27 @@ class EvidenceRetriever:
 
         query_order = {query: index for index, query in enumerate(queries)}
         validated: dict[str, tuple[VectorCandidate, object, float]] = {}
+        # Preserve node-query provenance before the global chunk dedupe below.
+        # A chunk can support several nodes even though the immutable evidence
+        # snapshot stores it only once.
+        node_validated: dict[str, dict[str, tuple[VectorCandidate, object, float]]] = {}
         try:
             for candidate in candidates:
                 chunk = self._validate_candidate(candidate, request)
                 normalized_score = self._normalize_score(candidate)
                 if normalized_score < policy.min_normalized_score:
                     continue
+                node_id = request.query_node_ids.get(candidate.query)
+                if node_id:
+                    per_node = node_validated.setdefault(node_id, {})
+                    node_previous = per_node.get(candidate.chunk_id)
+                    node_key = (normalized_score, -candidate.query_rank)
+                    node_previous_key = (
+                        (node_previous[2], -node_previous[0].query_rank)
+                        if node_previous is not None else None
+                    )
+                    if node_previous_key is None or node_key > node_previous_key:
+                        per_node[candidate.chunk_id] = (candidate, chunk, normalized_score)
                 previous = validated.get(candidate.chunk_id)
                 key = (
                     normalized_score,
@@ -359,7 +374,7 @@ class EvidenceRetriever:
                 retrieval_profile=retrieval_profile,
             )
 
-        ranked = sorted(
+        globally_ranked = sorted(
             validated.values(),
             key=lambda item: (
                 -item[2],
@@ -367,7 +382,27 @@ class EvidenceRetriever:
                 item[0].query_rank,
                 item[0].chunk_id,
             ),
-        )[: policy.max_evidence_count]
+        )
+        # Reserve the strongest valid chunk for every targeted node before
+        # filling the remaining global budget.  This prevents one broad topic
+        # query from starving a selected node while retaining one total pool.
+        selected_chunk_ids: list[str] = []
+        node_order = list(dict.fromkeys(request.query_node_ids.values()))
+        for node_id in node_order:
+            candidates_for_node = sorted(
+                node_validated.get(node_id, {}).values(),
+                key=lambda item: (-item[2], item[0].query_rank, item[0].chunk_id),
+            )
+            if candidates_for_node:
+                selected_chunk_ids.append(candidates_for_node[0][0].chunk_id)
+        selected_chunk_ids = list(dict.fromkeys(selected_chunk_ids))[: policy.max_evidence_count]
+        for candidate, _chunk, _score in globally_ranked:
+            if len(selected_chunk_ids) >= policy.max_evidence_count:
+                break
+            if candidate.chunk_id not in selected_chunk_ids:
+                selected_chunk_ids.append(candidate.chunk_id)
+        selected_chunk_set = set(selected_chunk_ids)
+        ranked = [item for item in globally_ranked if item[0].chunk_id in selected_chunk_set]
         if len(ranked) < policy.min_evidence_count:
             if partial_failures:
                 return self._failed_batch(
@@ -401,10 +436,11 @@ class EvidenceRetriever:
 
         retrieved_at = self.clock()
         evidence: list[EvidenceItem] = []
+        evidence_by_chunk: dict[str, str] = {}
         for rank, (candidate, chunk, normalized_score) in enumerate(ranked, start=1):
             hashed_query = query_hash(candidate.query)
             excerpt = normalize_text(chunk.text)[: policy.max_excerpt_chars]
-            evidence.append(EvidenceItem(
+            item = EvidenceItem(
                 evidence_id=evidence_id(
                     run_id=request.run_id,
                     step_id=request.step_id,
@@ -429,11 +465,24 @@ class EvidenceRetriever:
                 locator=chunk.locator,
                 config_hash=config_hash,
                 retrieved_at=retrieved_at,
-            ))
+            )
+            evidence.append(item)
+            evidence_by_chunk[chunk.chunk_id] = item.evidence_id
+        node_evidence_map: dict[str, list[str]] = {}
+        for node_id in node_order:
+            ordered = sorted(
+                node_validated.get(node_id, {}).values(),
+                key=lambda item: (-item[2], item[0].query_rank, item[0].chunk_id),
+            )
+            ids = [evidence_by_chunk[item[0].chunk_id] for item in ordered
+                   if item[0].chunk_id in evidence_by_chunk]
+            if ids:
+                node_evidence_map[node_id] = list(dict.fromkeys(ids))
         return EvidenceBatch(
             status=RetrievalStatus.AVAILABLE,
             knowledge_base_id=request.knowledge_base_id,
             evidence=evidence,
+            node_evidence_map=node_evidence_map,
             query_hashes=query_hashes,
             query_count=len(queries),
             candidate_count=len(candidates),
@@ -445,6 +494,8 @@ class EvidenceRetriever:
                 "total_retrieval_ms": round((perf_counter() - retrieval_started) * 1000, 3),
                 "unique_candidate_count": len(validated),
                 "final_evidence_count": len(evidence),
+                "node_evidence_counts": {key: len(value) for key, value in node_evidence_map.items()},
+                "unmapped_node_count": sum(1 for node_id in node_order if node_id not in node_evidence_map),
             },
         )
 

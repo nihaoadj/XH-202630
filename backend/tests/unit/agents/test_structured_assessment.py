@@ -1,3 +1,5 @@
+import json
+
 from app.agents.resource_agents.assessment import AssessmentAgent
 from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
 from app.models.shared.agent_contracts import ResourceGenerationContext
@@ -32,8 +34,31 @@ def test_assessment_calls_once_per_target_node_and_renders_without_answers():
     package = artifact.artifact_data["assessment_package"]
     assert len(gateway.calls) == 2
     assert [item["skill_node_id"] for item in package["node_blocks"]] == ["node-a", "node-b"]
-    questions = [item for block in package["node_blocks"] for item in block["questions"]]
+    questions = [item for block in package["node_blocks"]
+                 for field_name in ("single_choice_questions", "multiple_choice_questions", "short_answer_questions")
+                 for item in block[field_name]]
     assert len(questions) == 10
     assert sum(item["max_score"] for item in questions) == 100
+    assert {item["difficulty_stage"] for item in package["node_blocks"][0]["single_choice_questions"]} == {"基础"}
+    assert package["node_blocks"][0]["multiple_choice_questions"][0]["difficulty_stage"] == "进阶"
+    assert {item["difficulty_stage"] for item in package["node_blocks"][0]["short_answer_questions"]} == {"挑战"}
     assert "参考答案" not in artifact.content_text
     assert "### 单选题" in artifact.content_text and "### 多选题" in artifact.content_text and "### 问答题" in artifact.content_text
+
+
+def test_assessment_revision_prompt_includes_scoped_reviewer_feedback():
+    evidence = make_evidence(evidence_id="ev-assessment-revision")
+    spec = build_resource_specs(run_id="run-assessment-revision", resource_types=["分阶测试题"], topic="检索",
+        difficulty="中级", learning_plan={}, evidence=[evidence], target_skill_nodes=["node-a"])[0]
+    context = ResourceGenerationContext(
+        run_id="run-assessment-revision", batch_id="batch-assessment-revision", topic="检索", evidence=[evidence],
+        generation_attempt=2,
+        constraints={"revision_feedback": {"issues": [{"code": "coverage_gap", "knowledge_point": "node-a", "description": "q-001 越界"}]}},
+    )
+
+    messages = AssessmentAgent()._messages(spec, context, "node-a")
+    payload = json.loads(messages[-1].content)
+
+    assert payload["revision_feedback"]["issues"][0]["description"] == "q-001 越界"
+    assert payload["server_assigned_question_ids_for_this_node"] == ["q-001", "q-002", "q-003", "q-004", "q-005"]
+    assert payload["revision_feedback"]["rejected_question_ids"] == ["q-001"]

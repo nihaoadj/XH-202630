@@ -51,8 +51,8 @@ def test_v3_learning_design_has_page_blueprints_without_padding_pages():
     assert not any(scene.kind == "example" for scene in design.storyboard.scenes)
 
 
-def test_nine_recipes_resolve_for_all_three_themes():
-    assert len(SCENE_RECIPE_IDS) == 9
+def test_recipes_resolve_for_all_three_themes():
+    assert len(SCENE_RECIPE_IDS) == 13
     for theme in ("editorial", "midnight", "paper"):
         for recipe_id in SCENE_RECIPE_IDS:
             assert resolve_recipe(theme, recipe_id)["recipe_id"] == recipe_id

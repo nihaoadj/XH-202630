@@ -21,6 +21,9 @@ from app.models.shared.workflow import ResourceStatus, ReviewDecision, StepStatu
 from app.agents.shared.policies import decide_review, locked_human_review_resource_ids
 from app.agents.shared.validators import revision_instructions_are_valid
 from app.agents.resource_workflows.learning_documents.generator_agent import progress_summary
+from app.agents.resource_workflows.learning_documents.specialized_reviews.assessment_scope import (
+    review_assessment_scope,
+)
 
 
 REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习资源进行审核，重点检查：
@@ -29,7 +32,10 @@ REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习�
 3. 资源难度是否与学习者水平匹配。
 4. 内容是否完整覆盖目标知识点。
 
-资源类型解释：当 resource_type 为“分阶测试题”时，“基础、进阶、挑战”是该资源的必备层级结构；不能仅因题目同时包含三个层级，或题目层级名称与资源的总体 difficulty 不同，就判定 difficulty_mismatch。此类资源应审核每层题目的可判定性、证据范围、知识点覆盖和层级递进是否合理。
+资源类型解释：当 resource_type 为“分阶测试题”时，V2 固定结构是每个能力节点恰有 2 道单选（基础）、1 道多选（进阶）、2 道问答（挑战）。应同时审核题型配额、题型与难度阶段映射、可判定性、证据范围和知识点覆盖。
+当输入含有“内部结构化题卷”时，逐题范围与证据审核已经由独立专用审核器完成。你只做包级补充审核：
+不得复述题干、选项、正确答案、参考答案、rubric、evidence 或逐题清单；不得重新解释已通过的逐题范围结论。
+若没有新的包级事实、结构或难度问题，直接输出 approve 和空 issues；每个字段使用最短必要中文。
 
 请用 JSON 格式输出：
 {
@@ -59,7 +65,7 @@ revise 必须包含至少一条 revision_instructions；approve 不得包含 rev
 
 
 STRUCTURED_MARKDOWN_SECTIONS = {
-    "复习清单": ("复习目标", "必会清单", "易错点", "自测清单", "复习节奏"),
+    "复习清单": ("使用说明", "答案与证据解释", "自评与下一步"),
     "案例分析": ("案例背景", "任务目标", "分析过程", "参考方案", "复盘要点"),
     "个性化纠错训练包": ("本次强化目标", "薄弱模式概览", "参考答案与分层反馈", "达标标准", "后续复习动作", "总结"),
 }
@@ -68,6 +74,42 @@ STRUCTURED_MARKDOWN_SECTIONS = {
 def _deterministic_resource_structure_review(resource) -> dict | None:
     """Reject malformed specialized Markdown before an advisory LLM review."""
 
+    if resource.resource_type == "分阶测试题" and resource.assessment_payload is not None:
+        blocks = resource.assessment_payload.get("node_blocks", [])
+        expected_fields = ("single_choice_questions", "multiple_choice_questions", "short_answer_questions")
+        valid = bool(blocks) and all(
+            len(block.get("single_choice_questions", [])) == 2
+            and len(block.get("multiple_choice_questions", [])) == 1
+            and len(block.get("short_answer_questions", [])) == 2
+            and all(item.get("difficulty_stage") == "基础" for item in block.get("single_choice_questions", []))
+            and all(item.get("difficulty_stage") == "进阶" for item in block.get("multiple_choice_questions", []))
+            and all(item.get("difficulty_stage") == "挑战" for item in block.get("short_answer_questions", []))
+            and all(block.get(field_name) for field_name in expected_fields)
+            for block in blocks
+        )
+        if valid and all(f"### {title}" in (resource.content_text or "") for title in ("单选题（基础）", "多选题（进阶）", "问答题（挑战）")):
+            return None
+        return {
+            "decision": "revise", "hallucination_score": 0.0,
+            "issues": [{"code": "structure_quality", "severity": "high", "resource_type": resource.resource_type,
+                        "knowledge_point": None, "description": "结构化测试题必须每节点含 2 基础单选、1 进阶多选、2 挑战问答，并按题型与阶段渲染。"}],
+            "difficulty_match": True, "coverage_rate": 0.0, "suggestion": "按固定 V2 题组结构重建。",
+            "revision_instructions": [{"issue_codes": ["structure_quality"], "target_resource_type": resource.resource_type,
+                                        "action": "恢复每节点固定题型配额、题型阶段映射及 Markdown 分类。", "priority": 1}],
+        }
+    if resource.resource_type == "复习清单" and resource.review_practice_payload is not None:
+        package = resource.review_practice_payload
+        blocks = package.get("node_blocks", []) if isinstance(package, dict) else []
+        valid = bool(blocks) and all(
+            1 <= len(block.get("recall_questions", [])) <= 3
+            and 1 <= len(block.get("distinction_questions", [])) <= 3
+            and len(block.get("omitted_slots", [])) == 7 - len(block.get("recall_questions", [])) - len(block.get("distinction_questions", [])) - int(bool(block.get("example_recognition")))
+            for block in blocks
+        )
+        content = resource.content_text or ""
+        if valid and content.find("## 答案与证据解释") > content.find("## 节点") and "<script" not in content.lower():
+            return None
+        return {"decision": "revise", "hallucination_score": 0.0, "issues": [{"code": "structure_quality", "severity": "high", "resource_type": resource.resource_type, "knowledge_point": None, "description": "主动回忆清单必须满足每节点最低 1+1+0，缺省槽位可审计，且答案统一位于文末。"}], "difficulty_match": True, "coverage_rate": 0.0, "suggestion": "按 V2 主动回忆结构重建。", "revision_instructions": [{"issue_codes": ["structure_quality"], "target_resource_type": resource.resource_type, "action": "恢复节点题组、缺省原因和文末答案区。", "priority": 1}]}
     required_sections = STRUCTURED_MARKDOWN_SECTIONS.get(resource.resource_type)
     if not required_sections:
         return None
@@ -110,6 +152,16 @@ def _deterministic_resource_structure_review(resource) -> dict | None:
             "priority": 1,
         }],
     }
+
+
+def _internal_assessment_review_payload(resource) -> str:
+    """Expose the canonical answer-bearing payload only to the internal reviewer."""
+    if resource.resource_type != "分阶测试题" or not resource.assessment_payload:
+        return ""
+    return json.dumps({
+        "audit_scope": "internal_only_do_not_repeat_answers_in_review",
+        "assessment_package": resource.assessment_payload,
+    }, ensure_ascii=False, separators=(",", ":"))
 
 
 def _deterministic_practice_guide_review(resource) -> dict:
@@ -273,6 +325,7 @@ def review_node(
     for resource in resources:
         invalid_source_refs = not source_refs_are_scoped(resource.source_refs, evidence)
         error = None
+        specialized_review = None
         tier_contract = node_input.constraints.get("target_tier")
         expected_difficulty = node_input.difficulty_preference
         if tier_contract is not None and resource.difficulty != expected_difficulty:
@@ -316,14 +369,78 @@ def review_node(
                    "suggestion": "引用证据不完整，禁止自动批准。", "revision_instructions": []}
         elif structured_review := _deterministic_resource_structure_review(resource):
             raw = structured_review
+        elif resource.resource_type == "分阶测试题" and resource.assessment_payload is not None:
+            try:
+                specialized_review = review_assessment_scope(
+                    resource=resource,
+                    evidence=evidence,
+                    target_skill_nodes=list(state.get("target_skill_nodes", [])),
+                    llm_gateway=llm_gateway,
+                    context=LLMCallContext(
+                        run_id=node_input.run_id, step_id=step_context["step_id"],
+                        node_name="assessment_scope_reviewer",
+                        schema_name="AssessmentScopeReviewV1",
+                        generation_attempt=node_input.generation_attempt,
+                        workflow_deadline_at=state.get("workflow_deadline_at"),
+                    ),
+                )
+                if not specialized_review.passed:
+                    raw = {
+                        "decision": "revise", "hallucination_score": 0.0,
+                        "issues": specialized_review.issues,
+                        "difficulty_match": True, "coverage_rate": 0.0,
+                        "suggestion": "逐题范围审核发现越界或证据不足，需定向重建。",
+                        "revision_instructions": specialized_review.revision_instructions,
+                    }
+                else:
+                    internal_assessment = _internal_assessment_review_payload(resource)
+                    user_input = (f"专业知识片段：\n{context}\n\n待审核的唯一资源：\n"
+                                  f"resource_id={resource.resource_id}\nresource_type={resource.resource_type}\n"
+                                  f"难度={resource.difficulty}\n{resource.content_text or ''}\n\n"
+                                  f"目标难度：{node_input.difficulty_preference or '按画像与诊断结果'}\n"
+                                  f"生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}"
+                                  f"\n\n仅供内部审核的完整结构化题卷（含答案、rubric 与 evidence ID；不得在输出中复述）：\n{internal_assessment}")
+                    last_llm_result = llm_gateway.invoke_structured(
+                        messages=[SystemMessage(content=REVIEW_PROMPT), HumanMessage(content=user_input)],
+                        output_schema=ReviewLLMOutput,
+                        context=LLMCallContext(run_id=node_input.run_id, step_id=step_context["step_id"],
+                            node_name="reviewer", schema_name=ReviewLLMOutput.__name__,
+                            generation_attempt=node_input.generation_attempt,
+                            workflow_deadline_at=state.get("workflow_deadline_at")),
+                        options=llm_gateway.options_for("reviewer", temperature=0.0).model_copy(
+                            update={"max_output_tokens": 12288}
+                        ))
+                    raw = last_llm_result.output.model_dump(mode="python")
+            except LLMGatewayError as exc:
+                error = _fail_closed_review_error(exc.error)
+                last_llm_result = exc
+                raw = {"decision": "human_review", "hallucination_score": 0.5,
+                       "issues": [{"code": "evidence_gap", "severity": "high",
+                                   "resource_type": resource.resource_type, "knowledge_point": None,
+                                   "description": "测评范围审核不可用，无法安全完成自动审核"}],
+                       "difficulty_match": False, "coverage_rate": 0.0,
+                       "suggestion": "", "revision_instructions": []}
+            except ValueError:
+                error = _fail_closed_review_error(make_error_info(
+                    ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, source="assessment_scope_reviewer",
+                    attempt=node_input.generation_attempt, category="assessment_scope"))
+                raw = {"decision": "human_review", "hallucination_score": 0.5,
+                       "issues": [{"code": "evidence_gap", "severity": "high",
+                                   "resource_type": resource.resource_type, "knowledge_point": None,
+                                   "description": "测评范围审核结果无效，无法安全完成自动审核"}],
+                       "difficulty_match": False, "coverage_rate": 0.0,
+                       "suggestion": "", "revision_instructions": []}
         elif resource.resource_type == "实操指南":
             raw = _deterministic_practice_guide_review(resource)
         else:
+            internal_assessment = _internal_assessment_review_payload(resource)
             user_input = (f"专业知识片段：\n{context}\n\n待审核的唯一资源：\n"
                           f"resource_id={resource.resource_id}\nresource_type={resource.resource_type}\n"
                           f"难度={resource.difficulty}\n{resource.content_text or ''}\n\n"
                           f"目标难度：{node_input.difficulty_preference or '按画像与诊断结果'}\n"
-                          f"生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}")
+                          f"生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}"
+                          + (f"\n\n仅供内部审核的完整结构化题卷（含答案、rubric 与 evidence ID；不得在输出中复述）：\n{internal_assessment}"
+                             if internal_assessment else ""))
             try:
                 last_llm_result = llm_gateway.invoke_structured(
                     messages=[SystemMessage(content=REVIEW_PROMPT), HumanMessage(content=user_input)],
@@ -333,7 +450,7 @@ def review_node(
                         generation_attempt=node_input.generation_attempt,
                         workflow_deadline_at=state.get("workflow_deadline_at")),
                     options=llm_gateway.options_for("reviewer", temperature=0.0).model_copy(
-                        update={"max_output_tokens": 8192}
+                        update={"max_output_tokens": 12288}
                     ))
                 raw = last_llm_result.output.model_dump(mode="python")
             except LLMGatewayError as exc:
@@ -347,6 +464,13 @@ def review_node(
                        "suggestion": "", "revision_instructions": []}
         decorated = _decorate_review_items(raw, run_id=f"{node_input.run_id}:{resource.resource_id}",
                                            generation_attempt=node_input.generation_attempt)
+        if specialized_review is not None:
+            decorated["specialized_reviews"] = {
+                "assessment_scope": {
+                    "passed": specialized_review.passed,
+                    "findings": specialized_review.findings,
+                }
+            }
         valid = revision_instructions_are_valid(decorated.get("revision_instructions", []),
                                                 [resource.resource_type])
         decision = (ReviewDecision.HUMAN_REVIEW if error else decide_review(

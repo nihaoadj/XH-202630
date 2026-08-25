@@ -86,6 +86,27 @@ class CoursewarePlanEnrichmentV2(BaseModel):
         return self
 
 
+class ReviewPracticeNodeSummary(BaseModel):
+    skill_node_id: str = Field(min_length=1, max_length=128)
+    summary: str = Field(min_length=1, max_length=500)
+
+
+class ReviewPracticeCoursewarePlanEnrichment(BaseModel):
+    """Only the prose the platform may enrich in a fixed review course."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    course_title: str = Field(min_length=1, max_length=160)
+    overview_lead: str = Field(min_length=1, max_length=500)
+    node_summaries: list[ReviewPracticeNodeSummary] = Field(default_factory=list, max_length=3)
+
+    @model_validator(mode="after")
+    def unique_node_ids(self):
+        ids = [item.skill_node_id for item in self.node_summaries]
+        if len(ids) != len(set(ids)):
+            raise ValueError("review node summary IDs must be unique")
+        return self
+
+
 class CoursewareSpec(BaseModel):
     """The structured outline generated before individual scenes."""
 
@@ -97,6 +118,7 @@ class CoursewareSpec(BaseModel):
     learning_design: CoursewareLearningDesign | None = None
     design: CoursewareDesign | None = None
     enrichment: CoursewarePlanEnrichmentV2 | None = None
+    review_practice_enrichment: ReviewPracticeCoursewarePlanEnrichment | None = None
 
     @field_validator("learning_objectives")
     @classmethod

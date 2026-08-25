@@ -29,10 +29,19 @@ def compose_courseware_scene(
     """Return None for a failed model call so the service can retain its fallback."""
     if not courseware_ai_available(llm_gateway):
         return None, None
+    review_page_role = str(deterministic_scene.get("page_role") or "")
+    # Review questions and their answers are frozen learning-document output.
+    # Only the node's final boundary page may receive a short narrative
+    # enrichment; all question pages remain byte-for-byte platform projections.
+    if (review_page_role.startswith("review_") and review_page_role != "review_example") or str(scene_id) == "scene:review:summary":
+        return deepcopy(deterministic_scene), None
+    allowed_review_blocks = set(deterministic_scene.get("source_block_ids") or [])
     source_blocks = [
         {"block_id": item["block_id"], "text": str(item.get("text") or "")[:1600]}
-        for item in source.get("blocks", [])[:12]
+        for item in source.get("blocks", [])
+        if not allowed_review_blocks or item.get("block_id") in allowed_review_blocks
     ]
+    source_blocks = source_blocks[:12]
     review_instruction = str(deterministic_scene.get("_review_instruction") or "").strip()
     scene_kind = str(deterministic_scene["kind"])
     is_step_scene = scene_kind == "practice"

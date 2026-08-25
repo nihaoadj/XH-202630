@@ -36,6 +36,7 @@ backend/logs/*.log
 .tmp-pytest/
 backend/.pytest-tmp*/
 .pytest-tmp*/
+backend/.local-eval-artifacts/
 .tmp-pytest-*/
 frontend/tests/test-results/
 

@@ -172,7 +172,10 @@ def _build_regenerate_suggestion(
     return {
         "topic": f"{topic} 补救训练",
         "resource_types": ["定制讲义", "分阶测试题"],
-        "constraints": {"difficulty": "基础", "must_include_citations": True},
+        # The generation workflow validates provenance through its evidence
+        # gate and source_refs.  Learner-facing content must not be required to
+        # expose raw internal evidence identifiers.
+        "constraints": {"difficulty": "基础"},
     }
 
 

@@ -184,6 +184,10 @@ def ingest_courseware_learning_events(resource_id: str, payload: CoursewareLearn
     if any(item.get("release_id") != current_release for item in events):
         raise HTTPException(status_code=409, detail={"code": "COURSEWARE_RELEASE_NOT_CURRENT", "message": "学习事件必须写入当前 release"})
     acknowledged = _service(request).ingest_learning_events(events)
+    source_id, node_scores = _service(request).review_practice_self_reports(resource_id, current_release)
+    if source_id and node_scores:
+        profile = request.app.container.profile_service().get(resource.learner_id)
+        request.app.container.mastery_service().apply_courseware_self_report(profile, source_id=source_id, node_scores=node_scores)
     return {"acknowledged_event_ids": [item["event_id"] for item in acknowledged]}
 
 

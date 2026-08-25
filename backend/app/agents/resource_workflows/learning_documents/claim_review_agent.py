@@ -42,6 +42,18 @@ instructional/non_factual Claim 必须判 non_factual。supported/contradicted �
 evidence_ids，not_in_evidence/non_factual 禁止引用证据。不能使用常识补全，不能创造 ID。"""
 
 
+def _claim_audit_content(resource) -> str:
+    """Mask V2 question text without changing offsets; answers stay evidence-auditable."""
+    content = resource.content_text or ""
+    if resource.resource_type != "复习清单" or not resource.review_practice_payload:
+        return content
+    marker = "## 答案与证据解释"
+    position = content.find(marker)
+    if position < 0:
+        return content
+    return "".join("\n" if char == "\n" else " " for char in content[:position]) + content[position:]
+
+
 def _failure(
     state: AgentState,
     *,
@@ -93,21 +105,30 @@ def _failure(
 def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str, Any]:
     # HTML is a presentation derived from the canonical practice-guide text;
     # claim review, like normal review, assesses only canonical text.
-    resources = [
+    all_resources = [
         item for item in state.get("generated_resources", [])
         if item.representation.value == "text"
     ]
+    # Assessment answers and evidence are intentionally absent from public
+    # Markdown. Their canonical JSON is already checked by the internal
+    # resource reviewer, so generic substring-based Claim extraction would
+    # audit the wrong (redacted) projection and must be skipped.
+    assessment_resource_ids = {
+        item.resource_id for item in all_resources
+        if item.resource_type == "分阶测试题" and item.assessment_payload is not None
+    }
+    resources = [item for item in all_resources if item.resource_id not in assessment_resource_ids]
     evidence = state.get("retrieved_evidence", [])
     review_ids = state.get("review_result", {}).get("review_ids", {})
     step_context = start_step(state)
-    if not resources or any(not item.content_text for item in resources):
+    if not all_resources or any(not item.content_text for item in resources):
         return _failure(
             state,
             node_name="claim_extractor",
             code=ErrorCode.CLAIM_EXTRACTION_INVALID,
             detail="resource content unavailable",
         )
-    if set(review_ids) != {item.resource_id for item in resources}:
+    if set(review_ids) != {item.resource_id for item in all_resources}:
         return _failure(
             state,
             node_name="claim_extractor",
@@ -131,7 +152,7 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
                 "resources": [{
                     "resource_id": resource.resource_id,
                     "resource_version": resource.version,
-                    "content_text": resource.content_text,
+                    "content_text": _claim_audit_content(resource),
                 }],
             }
             result = llm_gateway.invoke_structured(
@@ -177,7 +198,7 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
                 category="claim_audit",
                 safe_detail=str(exc)[:256],
             ).model_dump(mode="json"))
-    if not claims:
+    if not claims and not assessment_resource_ids:
         return _failure(
             state,
             node_name="claim_extractor",
@@ -189,18 +210,19 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
         agent_name="claim_extractor",
         action="独立 Claim 抽取",
         status=StepStatus.DEGRADED if failed_resource_ids else StepStatus.SUCCESS,
-        input_summary=f"资源数：{len(resources)}；冻结证据数：{len(evidence)}",
+        input_summary=f"资源数：{len(all_resources)}；冻结证据数：{len(evidence)}",
         output_summary=(f"已抽取 {len(claims)} 条 Claim；"
-                        f"失败资源 {len(failed_resource_ids)} 个"),
-        decision_reason="成功资源通过白名单校验；失败资源被隔离并转人工复核。",
+                        f"结构化测评专用审核 {len(assessment_resource_ids)} 个；失败资源 {len(failed_resource_ids)} 个"),
+        decision_reason="结构化测评由内部 JSON 审核；其余资源通过 Claim 白名单校验。",
         evidence_refs=[item.evidence_id for item in evidence],
-        resource_ids=[item.resource_id for item in resources],
+        resource_ids=[item.resource_id for item in all_resources],
         review_ids=list(review_ids.values()),
         step_context=step_context,
         llm_metadata=last_result.trace_metadata() if last_result else None,
     )
     return {
         "extracted_claims": [item.model_dump(mode="json") for item in claims],
+        "assessment_claim_skipped_resource_ids": sorted(assessment_resource_ids),
         "claim_failed_resource_ids": failed_resource_ids,
         "claim_check_status": ClaimCheckStatus.PENDING.value,
         "current_node": "claim_extractor",
@@ -216,7 +238,8 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
     except ValueError as exc:
         return _failure(state, node_name="claim_judge",
                         code=ErrorCode.CLAIM_JUDGEMENT_INVALID, detail=str(exc))
-    if not claims:
+    assessment_resource_ids = set(state.get("assessment_claim_skipped_resource_ids", []))
+    if not claims and not assessment_resource_ids:
         return _failure(state, node_name="claim_judge",
                         code=ErrorCode.CLAIM_JUDGEMENT_INVALID, detail="no validated claims")
     evidence = state.get("retrieved_evidence", [])
@@ -285,6 +308,19 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
         resource_id: compute_claim_metric(items, judgements_by_resource[resource_id])
         for resource_id, items in claims_by_resource.items()
     }
+    for resource_id in assessment_resource_ids:
+        metrics[resource_id] = {
+            "metric_status": ClaimMetricStatus.NOT_APPLICABLE.value,
+            "claim_hallucination_rate": None,
+            "claim_total": 0,
+            "factual_claim_total": 0,
+            "supported_claim_total": 0,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0,
+            "audit_mode": "structured_assessment_internal",
+        }
     for resource_id in failed_resource_ids:
         if resource_id not in metrics:
             metrics[resource_id] = {
@@ -303,7 +339,7 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
         agent_name="claim_judge",
         action="冻结证据 Claim 判定",
         status=StepStatus.DEGRADED if failed_resource_ids else StepStatus.SUCCESS,
-        input_summary=f"Claim 数：{len(claims)}；冻结证据数：{len(evidence)}",
+        input_summary=f"Claim 数：{len(claims)}；结构化测评专用审核 {len(assessment_resource_ids)} 个；冻结证据数：{len(evidence)}",
         output_summary=(f"完成 {len(judgements)} 条独立判定；"
                         f"失败资源 {len(failed_resource_ids)} 个"),
         decision_reason="成功资源完成冻结证据判定；失败资源被隔离并转人工复核。",

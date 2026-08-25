@@ -30,6 +30,8 @@ from app.db.migrations import (
     apply_p0_19_learner_mastery_migration,
     apply_p0_20_curriculum_progress_migration,
     apply_p0_21_learning_tiers_migration,
+    apply_p0_22_review_practice_migration,
+    apply_p0_23_curriculum_attempt_id_migration,
     apply_tutor_migration,
 )
 
@@ -135,6 +137,8 @@ def init_database():
     apply_p0_19_learner_mastery_migration(engine)
     apply_p0_20_curriculum_progress_migration(engine)
     apply_p0_21_learning_tiers_migration(engine)
+    apply_p0_22_review_practice_migration(engine)
+    apply_p0_23_curriculum_attempt_id_migration(engine)
     apply_tutor_migration(engine)
 
 
