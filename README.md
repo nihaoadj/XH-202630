@@ -48,24 +48,14 @@ cd ..
 python scripts/ingest_knowledge.py
 python scripts/init_db.py
 
-# 3. 启动后端
-cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 3b. 另一个终端启动互动课件 Durable Worker（Web 进程不会自动启动）
-cd ..
-python backend/scripts/courseware_worker.py
-
-# 4. 启动前端（新终端）
-cd frontend
-npm install
-npm run dev
+# 3. 推荐：一键启动 Web、互动课件 Durable Worker 与前端
+# 首次安装依赖、创建本地配置时使用 --install --bootstrap；初始化数据需显式附加 --initialize
+python scripts/start_local.py
 ```
 
-互动课件 Worker 默认在 `127.0.0.1:8081` 提供 `/health/live`、`/health/ready` 和安全的
-`/metrics`。当前 SQLite Worker 每轮只 claim 一个任务；`COURSEWARE_WORKER_BATCH_SIZE` 大于 `1` 会被安全归一为 `1`，避免未开始任务的租约过期；当前 SQLite
-拓扑只能运行一个 Web 进程加一个 Durable Worker。意外第二消费者仅由 lease/CAS/幂等保护覆盖，
-不是受支持的横向扩容。
+启动器会等待后端 `/health` 与课件 Worker `/health/ready`，并把日志写入 `backend/logs/`。互动课件 Worker 默认在 `127.0.0.1:8081` 提供 `/health/live`、`/health/ready` 和安全的 `/metrics`；Web 进程不会自动启动它。当前 SQLite Worker 每轮只 claim 一个任务，`COURSEWARE_WORKER_BATCH_SIZE` 大于 `1` 会被安全归一为 `1`，不能作为并发或横向扩容手段。
+
+完整的一键启动、首次安装、手动三进程启动、Worker 健康检查、停机和 SQLite 数据保护方案见 [部署说明](docs/deployment.md)。
 
 知识索引异常后，可按知识库 ID 显式重新入库并对账 SQL/Chroma：
 

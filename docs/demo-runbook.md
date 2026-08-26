@@ -59,26 +59,23 @@ Remove-Item Env:RUN_LIVE_LLM
 
 ### 2.4 启动服务
 
-终端 A：
+推荐在仓库根目录一键启动 Web、课件 Worker 和前端：
 
 ```powershell
-Set-Location backend
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+.\.venv\python.exe scripts\start_local.py
 ```
 
-终端 B：
-
-```powershell
-Set-Location frontend
-npm run dev
-```
+标准 Windows venv 请将 `.venv\python.exe` 替换为 `.venv\Scripts\python.exe`。互动课件演示必须确认 Worker 已就绪；仅启动 Web 与前端会让课件任务一直留在队列。
 
 检查：
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8000/health/ready
+Invoke-RestMethod http://127.0.0.1:8081/health/ready
 ```
+
+需要分终端观察日志时，使用 [部署说明](deployment.md) 的三进程命令。`/health/ready` 是 Web 就绪，`8081/health/ready` 才是课件 Worker 完成首次持久 outbox 轮询后的就绪状态。
 
 管理员全 KB health 需要有效管理员 Token；不得在投屏、日志或截图中显示 Token。
 

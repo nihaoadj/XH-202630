@@ -101,7 +101,7 @@
 - `generation_job_service`：异步生成任务创建、状态查询、后台执行
 - `feedback_service`：学习反馈处理与画像更新
 - `learning_history_service`：学习过程时间线组装
-- `report_service`：确定性 Report 3.0 聚合；读取正式 Attempt、规范能力投影、最终文本资源证据和持久化路径，构造知识盲区、资源难度匹配、学习路径图等只读可视化投影，计算稳定 revision，并提供条件读取与当前快照 SSE
+- `report_service`：确定性学习报告聚合；读取正式 Attempt、规范能力投影、最终文本资源证据和持久化路径，构造全节点掌握、资源难度匹配、学习路径图等只读可视化投影，计算稳定 revision，并提供条件读取与当前快照 SSE
 
 ### 3.3 Agent 层
 
@@ -233,8 +233,8 @@ POST /api/feedback/attemptsattempts
 -> 读取 profile_version、knowledge state、最近趋势和当前 path
 -> deterministic policy
    |- overall < 0.60 或任一点 < 0.60 -> remediate
-   |- 0.60 <= overall <= 0.85       -> practice
-   |- overall > 0.85 且无 blocker   -> advance
+   |- 0.60 <= overall < 0.80        -> practice
+   |- overall >= 0.80 且无 blocker  -> advance
 -> Transaction A
    |- learning_attempts + point_results
    |- feedback_decisions
@@ -411,6 +411,9 @@ scripts/
 - 项目本地接口基地址统一为 `http://127.0.0.1:8000`
 - Vite 前端代理应指向 `8000`
 - 文档与联调口径均以 `8000` 为准
+- 互动课件任务由 `backend/scripts/courseware_worker.py` 的独立 Durable Worker 消费；Web 生命周期不执行课件工作流
+- 当前 SQLite 拓扑只运行一个顺序 Worker，默认健康端点为 `http://127.0.0.1:8081`；`/health/ready` 表示完成过持久 outbox 轮询
+- 一键本地启动入口为 `python scripts/start_local.py`，完整操作与停机语义见 `docs/deployment.md`
 
 ### 8.4 当前实现边界
 
@@ -490,7 +493,7 @@ flowchart TD
 
 `TutorPolicy` 在服务端控制 0~3 级提示，客户端不能提交 `hint_level`。`TutorContextBuilder` 只投影教学必要画像字段、相关资源片段、后端解析的题目字段、有限历史和有限 Evidence；题目答案、原始 Prompt、模型原文和 Chain-of-Thought 不进入公开契约。Evidence 顺序固定为当前 Run 的 Frozen Evidence、资源 SourceRef、Ready 知识库上的受控 Fresh Retrieval，全部不可用时返回 `evidence_insufficient` 且不调用模型自由回答。
 
-Tutor 持久化仅记录会话、轮次、教学动作、引用与脱敏调用遥测。会话源兼容单 Resource、旧 Run 和当前 Resource Batch；Batch 会话保留真实 `source_run_id` 用于证据定位，并以独立 `source_batch_id` 保证跨 Run 的批次恢复与统计不会混淆。正式状态迁移仍由 `Formal Attempt -> Feedback Policy -> ProfileVersion / Mastery / LearningPath` 完成。测评提交时，`FeedbackService` 从 Tutor Repository 统计该 Batch（旧接口为 Run）的真实 `question_help` 轮次写入现有 `hint_count`，但不改变掌握度公式或 0.60/0.85 阈值。
+Tutor 持久化仅记录会话、轮次、教学动作、引用与脱敏调用遥测。会话源兼容单 Resource、旧 Run 和当前 Resource Batch；Batch 会话保留真实 `source_run_id` 用于证据定位，并以独立 `source_batch_id` 保证跨 Run 的批次恢复与统计不会混淆。正式状态迁移仍由 `Formal Attempt -> Feedback Policy -> ProfileVersion / Mastery / LearningPath` 完成。测评提交时，`FeedbackService` 从 Tutor Repository 统计该 Batch（旧接口为 Run）的真实 `question_help` 轮次写入现有 `hint_count`，但不改变掌握度公式或 0.60/0.80 阈值。
 
 ## 12. 互动课件字段级来源图
 
@@ -524,7 +527,7 @@ Run/Batch evaluation (server scored, verified)
   -> next text-resource GenerationJob
 ```
 
-状态策略是确定性的：只有自评时保存 `self_report_prior` 并标记 `self_reported/low`；首次客观证据为 `0.2 × prior + 0.8 × observed`（无 prior 时直接使用 observed）；后续客观证据为 `0.7 × old + 0.3 × observed`。阈值为 `<0.60 weak`、`0.60–0.85 learning`、`>0.85 mastered`。至少一条客观证据为 medium；至少三条且来自至少两个不同客观 source 时为 high。
+状态策略是确定性的：只有自评时保存 `self_report_prior` 并标记 `self_reported/low`；首次客观证据为 `0.2 × prior + 0.8 × observed`（无 prior 时直接使用 observed）；后续客观证据为 `0.7 × old + 0.3 × observed`。阈值为 `<0.60 weak`、`0.60–<0.80 learning`、`>=0.80 mastered`。至少一条客观证据为 medium；至少三条且来自至少两个不同客观 source 时为 high。
 
 SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范状态、能力事件、mutation、学习路径、画像缓存和画像版本，并由 `(learner_id, idempotency_key)`、source hash、row version 与 profile version 约束重放和并发。问卷和诊断走稳定 source ID；无状态变化的重放不增加证据或版本。客户端聚合分数不是可信入口。
 

@@ -1,306 +1,206 @@
-# 部署说明
+# 本地启动与部署说明
 
-> 当前项目仍处于 P0 开发阶段；production 模式采用 fail-fast，不应把 degraded 演示产物当作正式生成结果。
+> 当前可验证的部署拓扑是 SQLite：一个 FastAPI Web 进程、一个独立互动课件 Durable Worker 和一个 Vite 前端。它适用于开发、演示和本地验收；不应描述为多 Worker 或多实例的生产集群。
 
-## 1. 环境要求
+## 1. 运行前提
 
-- Python 3.11（使用项目根目录唯一 `.venv/`）
-- Node.js 18+
-- OpenAI-compatible LLM API Key
-- 预先准备的 Embedding 模型缓存和 Chroma collection
+- Python 3.11；推荐将项目虚拟环境放在仓库根目录 `.venv/`。
+- Node.js 18+ 与 npm。
+- 已准备的 Embedding 模型缓存和 Chroma collection。默认 `EMBEDDING_LOCAL_FILES_ONLY=true`，运行时不会下载模型。
+- 真实生成需要 OpenAI-compatible Provider 的 `LLM_API_KEY`；离线测试不应设置 `RUN_LIVE_LLM=1` 或 `COURSEWARE_LIVE_EVAL=1`。
 
-`.venv/`、`backend/.env`、SQLite、Chroma 索引、日志和生成资源不得提交。
+本地配置、SQLite、Chroma、日志和生成物都是运行时数据，不能提交。配置统一从 `backend/.env` 读取；相对数据库、向量库和资源路径均相对 `backend/` 解释。
 
-## 2. Windows PowerShell
+## 2. 一键启动（推荐）
 
-从仓库根目录执行，不依赖机器上的绝对项目路径：
+仓库提供跨 Windows、Linux 和 macOS 的标准库启动器：[scripts/start_local.py](../scripts/start_local.py)。它根据自身位置定位仓库，不依赖开发者的用户名或绝对路径，并分别启动：
+
+1. FastAPI Web：`127.0.0.1:8000`；
+2. 互动课件 Durable Worker：健康端点默认 `127.0.0.1:8081`；
+3. Vite 前端：`127.0.0.1:5173`。
+
+脚本从不替换已占用端口上的进程，也不会默认安装依赖、复制配置、下载模型或初始化数据。它把新启动进程的 PID 写入 `backend/logs/local-dev-processes.json`，日志写入 `backend/logs/local-*.log`。
+
+### 2.1 首次准备
+
+Windows PowerShell：
 
 ```powershell
 py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-Copy-Item backend\.env.example backend\.env
+.\.venv\Scripts\python.exe scripts\start_local.py --install --bootstrap
+# 编辑 backend\.env，填写 LLM_API_KEY 等本机配置
+.\.venv\Scripts\python.exe scripts\start_local.py --bootstrap --initialize
 ```
 
-编辑 `backend/.env`。推荐开发配置：
+当前仓库若已使用便携式 `.venv\python.exe`，将上面两处 `.venv\Scripts\python.exe` 替换为 `.venv\python.exe`；启动器会自动识别这两种 Windows 布局和 Linux/macOS 的 `.venv/bin/python`。
 
-```env
+Linux/macOS：
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/python scripts/start_local.py --install --bootstrap
+# 编辑 backend/.env，填写 LLM_API_KEY 等本机配置
+.venv/bin/python scripts/start_local.py --bootstrap --initialize
+```
+
+`--initialize` 会显式执行知识入库和示例数据库初始化，可能耗时；不要把它当作每次启动步骤。已有真实数据时，先备份 SQLite 文件，并只在确认需要时初始化。
+
+### 2.2 日常一键启动
+
+在仓库根目录使用虚拟环境解释器执行：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\start_local.py
+```
+
+或在当前便携式 Windows 虚拟环境中：
+
+```powershell
+.\.venv\python.exe scripts\start_local.py
+```
+
+Linux/macOS：
+
+```bash
+.venv/bin/python scripts/start_local.py
+```
+
+启动器依次等待 `GET /health` 和 Worker 的 `GET /health/ready`。成功后访问 `http://127.0.0.1:5173`。启动前可只校验本机环境：
+
+```powershell
+.\.venv\python.exe scripts\start_local.py --check
+```
+
+常用选项：
+
+| 选项 | 用途 |
+|---|---|
+| `--no-worker` | 仅调试文本资源、反馈或报告时不启动课件 Worker；提交互动课件任务前必须去掉此选项。 |
+| `--no-frontend` | 仅启动 API 和 Worker，便于 API/Worker 验收。 |
+| `--no-reload` | 禁用 Uvicorn 热重载，适合稳定演示。 |
+| `--host 0.0.0.0` | 允许局域网访问开发服务器；公开部署前仍须配置 HTTPS、鉴权和网络边界。 |
+| `--worker-health-port 8082` | 将 Worker 健康端口改为未占用端口。 |
+
+前端 Vite 代理当前固定指向 `localhost:8000`，因此同时启动前端时不要修改 `--backend-port`。脚本检测到不兼容的端口组合会直接退出。
+
+## 3. 为什么课件必须单独启动 Worker
+
+`POST /api/resources/courseware/jobs` 只创建持久任务和 outbox 记录；FastAPI lifespan **不会**执行课件工作流。独立 Worker 轮询 outbox、claim 一个任务、续租、执行规划/场景生成/审核/定向修订/渲染/发布，并在任务边界记录失败或死信。未启动 Worker 时，课件任务会停留在队列，Web 健康检查仍可能是 ready。
+
+当前 SQLite 只支持一个顺序 Worker：`COURSEWARE_WORKER_BATCH_SIZE` 即使配置大于 `1` 也会被归一为 `1`。不要用第二个 Worker 作为扩容方案；租约和幂等保护只用于崩溃恢复和防止重复副作用，不构成多消费者吞吐保证。
+
+Worker 的三个只读端点为：
+
+| 端点 | 含义 |
+|---|---|
+| `GET /health/live` | 进程仍在运行。 |
+| `GET /health/ready` | 至少完成一次持久 outbox 轮询，可安全消费任务。 |
+| `GET /metrics` | 脱敏计数：claim、processed、failed、lease-lost、retry、fallback、quarantine、release。 |
+
+## 4. 手动三进程启动与停机
+
+需要分别观察日志或排障时，使用三个终端。以下是 Windows 当前便携式虚拟环境的命令；标准 venv 请把 `.venv\python.exe` 换成 `.venv\Scripts\python.exe`。
+
+终端 A（Web）：
+
+```powershell
+Set-Location backend
+..\.venv\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+终端 B（**必需，互动课件生成链路**）：
+
+```powershell
+Set-Location <仓库根目录>
+.\.venv\python.exe backend\scripts\courseware_worker.py `
+  --health-host 127.0.0.1 --health-port 8081
+```
+
+终端 C（前端）：
+
+```powershell
+Set-Location frontend
+npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+Linux/macOS 的对应命令：
+
+```bash
+cd backend && ../.venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+# 新终端，从仓库根目录执行
+.venv/bin/python backend/scripts/courseware_worker.py --health-host 127.0.0.1 --health-port 8081
+# 新终端
+cd frontend && npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+正常停机优先在各进程终端按 `Ctrl+C`，让 Worker 在当前租约边界有序退出。自动启动时，先根据 `backend/logs/local-dev-processes.json` 确认 PID 与命令行属于本项目，再停止对应进程；不要按端口或名称批量强杀其他人的服务。Worker 也接受 `SIGINT`/`SIGTERM`，本地编排可传 `--shutdown-file <sentinel>` 后创建该文件请求同一有序停止路径。
+
+进程异常退出后，下一 Worker 会在租约到期后接管未完成 outbox 任务；已写入的 checkpoint、candidate 和 release 指针不会被回退。若任务为 `release_blocked`，保留旧 release，检查 job 的 `error_code`、Worker 日志和候选 manifest；不得手工改名候选文件来冒充发布。
+
+## 5. 配置与健康检查
+
+最小开发配置应保留：
+
+```dotenv
 APP_MODE=development
 ALLOW_DEGRADED_GENERATION=false
 DB_TYPE=sqlite
 DATABASE_URL=sqlite:///./data/domain_knowledge.db
-DEBUG=false
-SQL_ECHO=false
-CHROMA_COLLECTION_PREFIX=kb
-LLM_REQUEST_TIMEOUT_SECONDS=30
-LLM_WORKFLOW_TIMEOUT_SECONDS=105
-LLM_MAX_ATTEMPTS=2
-LLM_RETRY_BASE_DELAY_SECONDS=0.5
-LLM_RETRY_MAX_DELAY_SECONDS=3.0
-LLM_MAX_OUTPUT_TOKENS=4096
-LLM_GENERATOR_MAX_OUTPUT_TOKENS=8192
-LLM_STRUCTURED_OUTPUT_MODE=auto
+SQLITE_BUSY_TIMEOUT_SECONDS=60
+COURSEWARE_AI_ENABLED=true
+COURSEWARE_GENERATION_MODE=ai_first
+COURSEWARE_WORKER_POLL_SECONDS=2
+COURSEWARE_WORKER_BATCH_SIZE=1
+COURSEWARE_WORKER_HEALTH_HOST=127.0.0.1
+COURSEWARE_WORKER_HEALTH_PORT=8081
 ```
 
-LLM 预算约束：workflow timeout 必须大于单次 request timeout，并建议小于前端当前 120 秒 Axios timeout；attempts 允许 `1..3`，delay 不得为负且 max delay 不得小于 base delay。`auto` 优先使用结构化调用，Provider 不支持时受控切到 text + 严格 parser。对于已知不支持 function calling 的 OpenAI-compatible 服务，应显式设置 `LLM_STRUCTURED_OUTPUT_MODE=text`，这样每个 Agent 不会先付出一次固定的 BAD_REQUEST 探测开销。SDK retry 固定关闭，所有重试都计入 Gateway 总预算。
+课件 AI-first 链路的预算、总时限和审核策略由 `COURSEWARE_*` 环境变量控制，完整受约束模板见 [backend/.env.example](../backend/.env.example)。AI 审核不可用、预算耗尽或硬门失败会按策略降级、隔离或拒绝，不能把失败当作发布成功。
 
-互动课件另外使用分阶段预算协调器：planner 默认 4096、场景合成 30720、质量审核 4096、定向修订 10240 tokens，总计 49152；质量审核和修订各自的预留额度不会被前序阶段借用，阶段时间预算默认为 90/600/120/180 秒，并额外保留 60 秒收尾窗口，总时限 1050 秒。可通过 `COURSEWARE_*_TOKEN_BUDGET`、`COURSEWARE_*_MAX_SECONDS` 和 `COURSEWARE_*_RESERVED_*` 调整，但总和必须不超过总预算。预算不足会记录明确 warning，并按 release policy 走确定性降级或隔离。
-
-填入真实 `LLM_API_KEY` 后执行只读环境检查：
+启动前的只读检查不会调用计费 LLM、下载 Embedding 或创建 collection：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\check_environment.py
-$LASTEXITCODE
+.\.venv\python.exe scripts\check_environment.py
+$LASTEXITCODE  # 0=ready，2=degraded，1=not-ready 或配置非法
 ```
 
-退出码：0=ready、2=degraded、1=not-ready/配置非法。脚本不调用计费 LLM、不下载模型、不创建 collection。
-
-初始化默认知识库和示例数据：
+服务启动后：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\ingest_knowledge.py
-.\.venv\Scripts\python.exe scripts\init_db.py
+Invoke-RestMethod http://127.0.0.1:8000/health
+Invoke-RestMethod http://127.0.0.1:8081/health/live
+Invoke-RestMethod http://127.0.0.1:8081/health/ready
+Invoke-RestMethod http://127.0.0.1:8081/metrics
 ```
 
-启动后端：
+`/health=200` 不代表课件 Worker 已运行；必须额外看到 `/health/ready=200`，再提交互动课件生成任务。公共健康接口只检查默认知识库和核心依赖。完整多知识库详情需配置 `ADMIN_HEALTH_TOKEN` 并调用管理员接口，见 [API 文档](api.md)。
+
+## 6. SQLite 数据保护与模式边界
+
+- 当前开发、演示和本轮部署使用 SQLite。PostgreSQL 分支仅为兼容基础，尚无驱动、迁移和并发验收，不能作为已支持部署方案。
+- SQLite 使用 WAL 与有界 busy timeout。Web 和唯一 Worker 必须指向同一个文件型 `DATABASE_URL`、同一资源根目录和同一 Chroma 配置。
+- 备份前必须停止 Web/Worker 写入；禁止复制正在写入的 `.db`、`-wal` 或 `-shm` 文件。
+- `development` 可启动但核心依赖 not-ready 时生成返回 503；`demo` 仅在显式 `ALLOW_DEGRADED_GENERATION=true` 时允许标记为 degraded 的保底结果；`production` 禁止降级且核心依赖 not-ready 时 fail-fast。
+
+数据库迁移或演示联调前运行只读完整性预检：
 
 ```powershell
-Set-Location backend
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+.\.venv\python.exe scripts\check_database_integrity.py
 ```
 
-互动课件任务由独立 Durable Worker 消费；Web 进程不会在 lifespan 中启动 Worker。另开终端执行：
+## 7. 验收与反向代理
+
+最小本地验收：
 
 ```powershell
-Set-Location <repo-root>
-.venv\Scripts\python.exe backend\scripts\courseware_worker.py
-```
-
-Worker 监听 `COURSEWARE_WORKER_HEALTH_HOST`/`COURSEWARE_WORKER_HEALTH_PORT`（默认
-`127.0.0.1:8081`）。`GET /health/live` 只证明进程存活，`GET /health/ready` 仅在至少完成一次
-持久 outbox 轮询后返回 200，`GET /metrics` 返回脱敏的 claim、processed、failed 与 lease-lost
-以及 retry、fallback、quarantine、release 计数。Worker 顺序处理一个已 claim 任务；`COURSEWARE_WORKER_BATCH_SIZE` 大于 `1` 会归一为 `1`，不能作为批量 claim 或并发许可；
-同一 SQLite 文件只允许编排一个 Worker，不能将重复消费者保护描述为横向扩容支持。
-
-编排器应发送 `SIGINT`/`SIGTERM` 请求 graceful shutdown；在 Windows 本地编排或验收中也可显式传入
-`--shutdown-file <local-sentinel>`，创建该本地文件会请求同一有序停止路径。不要使用强制终止来代替
-正常停机；强制终止只用于验证租约过期后的接管。
-
-互动课件的 SQLite 部署只启动一个上述 Worker；Web 进程不消费
-`courseware.run`。Worker 进程可安全重启：任务租约过期后由下一次轮询接管，已写入的
-checkpoint、candidate 和 released 指针不会被回退。发布文件位于带 `release_id` 的不可变目录，
-下载只读取 `released_release_id`，因此重试不会覆盖旧版本。若任务进入 `release_blocked`，先保留旧
-release，再检查 job 的 `error_code` 和候选 manifest；不要手工把候选文件改名为当前资源。
-
-本地故障矩阵与发布证据：
-
-```powershell
-python -m pytest backend/tests/migrations backend/tests/integration/courseware backend/tests/unit/db/courseware -q
-python backend/scripts/courseware_ci_artifacts.py `
-  --manifest backend/tests/fixtures/courseware/evals/manifest.json `
-  --output backend/courseware-ci-artifacts
-```
-
-发布候选汇总和完整发布周期观察见 `docs/courseware/release_candidate_runbook.md`。SCORM/xAPI
-目前仍是基础导出包，不能描述为完整规范兼容。
-
-CI 还必须运行后端全量测试、required Playwright（`COURSEWARE_BROWSER_REQUIRED=1`）和 evaluator，
-并上传 evaluator JSON、HTML/ZIP、浏览器截图/控制台/a11y 及 JUnit 摘要。没有这些外部证据时，状态只能
-写为“代码完成，验收待部署环境”。
-
-## 3. Linux/macOS
-
-```bash
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -r backend/requirements.txt
-cp backend/.env.example backend/.env
-.venv/bin/python scripts/check_environment.py
-.venv/bin/python scripts/ingest_knowledge.py
-.venv/bin/python scripts/init_db.py
-cd backend
-../.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-另开终端启动互动课件 Worker（当前 SQLite 部署只启动一个）：
-
-```bash
-../.venv/bin/python backend/scripts/courseware_worker.py
-```
-
-## 4. 多 KB collection 与兼容期
-
-- 每个 KB 的 Chroma collection 由统一 `_collection_name(kb_id)` 生成：`<prefix>_<kb_id_hash>`。
-- 创建、写入、查询、删除和 health 使用同一个 resolver，不再共享唯一固定集合名。
-- 首选 `CHROMA_COLLECTION_PREFIX=kb`。
-- 兼容期保留旧 `CHROMA_COLLECTION_NAME`；若未显式设置新变量，它按“前缀”解释，不再表示固定 collection。
-- 更换前缀会改变目标 collection 名，应重新对每个 KB 执行入库；不要直接复制/重命名 Chroma 内部文件。
-
-公共 `GET /health` 和 `GET /health/ready` 只检查默认 KB 和核心依赖：默认 KB 异常可按模式产生 degraded/503，非默认 KB 异常不会影响公共 readiness。
-
-全 KB 详情接口默认关闭。需要时设置随机高强度 `ADMIN_HEALTH_TOKEN`，再使用：
-
-```powershell
-$headers = @{ "X-Admin-Token" = "<ADMIN_HEALTH_TOKEN>" }
-Invoke-RestMethod http://127.0.0.1:8000/api/admin/knowledge-bases/health -Headers $headers
-```
-
-知识索引崩溃恢复：服务启动时会将超过
-`KNOWLEDGE_INDEX_STALE_SECONDS=900` 仍处于 `indexing` 的记录标为
-`not_ready/KNOWLEDGE_INDEXING_INTERRUPTED`，不会在启动阶段自动下载模型或阻塞重建。
-确认源文件无误后，由管理员显式执行：
-
-```powershell
-$headers = @{ "X-Admin-Token" = "<ADMIN_HEALTH_TOKEN>" }
-Invoke-RestMethod -Method Post `
-  http://127.0.0.1:8000/api/admin/knowledge-bases/rag_engineering_training/reconcile `
-  -Headers $headers
-```
-
-也可以在服务器本地执行：
-
-```powershell
-.\.venv\Scripts\python.exe scripts\ingest_knowledge.py `
-  --knowledge-base-id rag_engineering_training
-```
-
-未配置 token 返回 404，错误 token 返回 401；部分非默认 KB 异常返回 HTTP 200 + `status=degraded`。响应不包含 token、绝对路径、Embedding 内容或完整异常。
-
-## 5. 运行模式
-
-| 模式 | degraded | memory | not-ready 行为 |
-|---|---|---|---|
-| development | 默认 false，可显式 true | 允许但标 ephemeral | 应用可启动，生成 503 |
-| demo | 仅显式 true | 允许但标 ephemeral | 有保底产物时 HTTP 200 + degraded |
-| production | 禁止 | 禁止 | 核心依赖/默认 KB 不可用时启动失败 |
-
-`DEBUG=false` 和 `SQL_ECHO=false` 是安全默认；即使临时开启 SQL echo，SQLAlchemy 仍使用 `hide_parameters=True`。
-
-## 6. 前端
-
-```powershell
-Set-Location frontend
-npm install
-npm run dev
-```
-
-生产构建：
-
-```powershell
-npm run build
-```
-
-## 7. 验收
-
-```powershell
-Set-Location <仓库根目录>
-.\.venv\Scripts\python.exe -m pip check
-.\.venv\Scripts\python.exe -m pytest backend\tests -m "not live_llm" -q
+.\.venv\python.exe -m pip check
+.\.venv\python.exe -m pytest backend\tests -m "not live_llm" -q
+npm --prefix frontend run build
 Invoke-WebRequest http://127.0.0.1:8000/health -UseBasicParsing
+Invoke-WebRequest http://127.0.0.1:8081/health/ready -UseBasicParsing
 git diff --check
-git status --short --branch
 ```
 
-验收不能只检查 HTTP 200：还要确认 `status/error_codes`、默认 KB collection/count、degraded 标记、管理员接口鉴权，以及日志中没有 Key、完整画像、prompt、模型原文、SQL 参数和原始上游异常。可选 live smoke 必须显式设置 `RUN_LIVE_LLM_TESTS=1`，默认测试不得访问 Provider。
+SSE 路由须关闭代理缓冲，read timeout 必须大于 `WORKFLOW_SSE_HEARTBEAT_SECONDS`，并保留 `Cache-Control: no-cache`、`Connection: keep-alive`、`X-Accel-Buffering: no`。反向代理、HTTPS、密钥管理、备份恢复演练和真实浏览器/CI 证据均属于目标部署环境的额外责任；本地测试通过不能替代它们。
 
-## 8. P0-04 Run 持久化与迁移
-
-可配置项：
-
-```dotenv
-WORKFLOW_RUN_LEASE_SECONDS=180
-WORKFLOW_CHECKPOINT_MAX_BYTES=65536
-WORKFLOW_TIMELINE_DEFAULT_LIMIT=100
-WORKFLOW_TIMELINE_MAX_LIMIT=500
-```
-
-应用启动时先执行版本化 additive migration，再仅将 lease 已过期的
-`running/finalizing` Run 标记为 `interrupted`。该扫描不会自动 resume，也不会调用
-LLM。当前部署使用 SQLite，migration 已包含幂等回归；部署前仍需对实际 SQLite
-文件执行备份、完整性预检和两次 migration rehearsal。
-
-SQLite 单进程重启时还会将上一进程遗留的 `queued/running` GenerationJob 标记为
-`failed`，错误码为 `GENERATION_JOB_INTERRUPTED`；对应的 `feedback_followup_runs`
-同步转为 `failed`。如果 Feedback 已提交、但进程在创建 Follow-up 关系前退出，启动
-扫描会补一条 `failed` 关系，不会伪造 child Run。相同幂等请求再次提交时复用稳定
-run_id，将失败 Job 安全重排队，不会再次增加 mastery、profile version 或 PathMutation。
-该自动扫描只适用于当前 SQLite 单进程/单 Durable Worker 模式。Web 与 Worker 可以是
-两个进程，但同一 SQLite 文件只能配置一个任务 Worker；重复启动仍必须由 outbox 条件更新
-和幂等键阻止重复副作用。
-
-迁移或生命周期 Repository 不可用属于核心持久化故障；即使 demo 模式允许生成降级，
-也不得绕过 Run/Step/Event 写入继续调用模型。查询验证：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>
-Invoke-RestMethod "http://127.0.0.1:8000/api/runs/<run_id>/timeline?after_sequence=0&limit=100"
-Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/evidence
-Invoke-RestMethod http://127.0.0.1:8000/api/runs/<run_id>/claims
-```
-
-## 9. P0-07 反馈闭环迁移与验收
-
-应用初始化会幂等执行 `20260811_p0_07_feedback_profile_path_closed_loop`。该迁移只做 additive 列/表创建，不删除或重写 legacy feedback。当前 SQLite 部署需验证唯一约束、FK、索引和 profile CAS；如果以后另行迁移到其他数据库，再单独审核对应 DDL 和锁语义。
-
-最小验收：
-
-```powershell
-$body = @{
-  learner_id = "<learner_id>"
-  source_resource_id = "<published_resource_id>"
-  source_resource_version = 1
-  source_run_id = "<source_run_id>"
-  idempotency_key = "feedback-e2e-0001"
-  expected_profile_version = 1
-  submitted_at = (Get-Date).ToString("o")
-  knowledge_point_results = @(@{
-    knowledge_point_id = "<stable_skill_node_id>"
-    question_ids = @("q-1", "q-2")
-    correct_count = 1
-    total_count = 2
-  })
-} | ConvertTo-Json -Depth 8
-$result = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/feedback/attempts -ContentType "application/json" -Body $body
-$result
-Invoke-RestMethod http://127.0.0.1:8000/api/feedback/path/<learner_id>
-Invoke-RestMethod http://127.0.0.1:8000/api/report/<learner_id>
-```
-
-用同一 body 再提交一次，应返回同一 `attempt_id`、`idempotent_replay=true`，且画像版本、路径版本和 child run 数量不再增加。服务重启后再次查询 Attempt、Path 和 Report，结果必须保持。
-
-真实 Uvicorn 进程重启演练使用隔离临时数据库且不调用 LLM：
-
-```powershell
-python scripts/rehearse_feedback_process_restart.py
-```
-
-## 10. P0-08 SSE 配置与反向代理
-
-```dotenv
-WORKFLOW_SSE_POLL_INTERVAL_SECONDS=0.5
-WORKFLOW_SSE_HEARTBEAT_SECONDS=15
-WORKFLOW_SSE_EVENT_PAGE_SIZE=100
-```
-
-约束：poll 至少 50ms，heartbeat 必须大于 poll，page size 最大 500。SSE 不属于生成 hard dependency；传输失败时前端回退到 Job/timeline 查询，但底层 Workflow persistence 失败仍按既有策略 fail closed。
-
-接口响应包含 `Cache-Control: no-cache`、`Connection: keep-alive`、`X-Accel-Buffering: no`。Nginx/网关还需关闭该路由的响应缓冲，并将 read timeout 配置为大于 heartbeat；不得由 CDN 聚合或缓存事件流。手工查看：
-
-```powershell
-curl.exe -N -H "Accept: text/event-stream" "http://127.0.0.1:8000/api/runs/<run_id>/events?after_sequence=0"
-curl.exe -N -H "Last-Event-ID: 18" "http://127.0.0.1:8000/api/runs/<run_id>/events"
-```
-
-浏览器 EventSource 使用同源 cookie/session（当前仓库尚未引入应用登录鉴权），不把 bearer token 放到 URL。未来增加 Run ownership 后，SSE 必须与 `/runs/{id}` 使用同一授权依赖。
-
-## 11. P0-09 Demo Gate
-
-正式 demo 前从仓库根目录执行：
-
-```powershell
-python scripts/p0_09_preflight.py --output wzx/out/p0-09-preflight.json
-python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-manifest.json
-python scripts/run_p0_09_acceptance.py --runtime --output wzx/out/p0-09-runtime-manifest.json
-```
-
-preflight 为只读检查：数据库可达与 migration、默认 KB/Chroma、一次本地 retrieval smoke、LLM/structured-output 配置和前端构建产物。它不打印 secret、不调用收费 LLM、不重建数据库。退出码为 `0 READY`、`1 NOT_READY`、`2 DEGRADED`；acceptance runner 对应 `0 PASS`、`1 FAIL`、`2 PARTIAL`。
-
-正式放行要求 preflight `READY`、offline Scenario A～J 全 PASS、runtime PASS 和浏览器 checklist 通过。`/health/ready=200` 不能覆盖数据库或前端比赛 Gate。当前代码已强制 SQLite 每连接 FK，并通过 P0-09 migration 建立 `generated_resources(run_id, resource_type, version)` 唯一约束；正式数据仍必须完成只读完整性检查和受控 migration rehearsal。完整操作见 `docs/demo-runbook.md`。
+课件本地故障矩阵、浏览器验证和发布候选证据以当前代码、测试目录和本部署文档为准；课件工作流的公开入口与启动方式由 `backend/scripts/courseware_worker.py` 和 [API 文档](api.md) 维护。

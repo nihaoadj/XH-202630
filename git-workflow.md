@@ -125,7 +125,7 @@ git push origin feature/<name>
 | API 字段、路径、状态码变化 | `docs/api.md` |
 | 架构分层、路径、模块边界变化 | `docs/architecture.md` |
 | 功能范围、页面能力变化 | `docs/features.md` |
-| 小组职责、任务、交付物变化 | `docs/RAG链路匠学_六人分工任务书.md` |
+| 小组职责、任务、交付物变化 | 在对应的议题、项目管理工具或 Pull Request 中维护；仓库不再保存阶段性分工文档 |
 | 启动方式、部署路径变化 | `README.md`, `docs/deployment.md` |
 
 ## 7. 冲突处理
@@ -141,5 +141,5 @@ git push origin feature/<name>
 - 修改 API 时已同步 `docs/api.md` 和 `backend/app/models/schemas.py`。
 - 修改路径时已同步 `README.md`、`docs/deployment.md` 和 `.env.example`。
 - 修改功能范围时已同步 `docs/features.md`。
-- 修改分工或职责时已同步 `docs/RAG链路匠学_六人分工任务书.md`。
+- 修改分工或职责时已同步对应的协作记录或 Pull Request。
 - 能运行的测试已运行；不能运行时，在提交说明或沟通中说明原因。
