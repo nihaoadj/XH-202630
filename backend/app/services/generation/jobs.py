@@ -15,6 +15,7 @@ from app.models.generation.progress import ResourceExecutionProgress, RunResourc
 from app.services.generation.generation import GenerationService
 from app.services.learners.mastery import MasteryService
 from app.models.learning_documents.types import FEEDBACK_ONLY_RESOURCE_TYPES
+from app.models.feedback.feedback_loop import LearningIntent
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.core.learning_tiers import TIER_POLICY_VERSION, difficulty_for_tier
 
@@ -71,9 +72,13 @@ class GenerationJobService:
         retry_failed: bool = False,
     ) -> GenerationJobCreateResponse:
         feedback_only = set(req.resource_types) & set(FEEDBACK_ONLY_RESOURCE_TYPES)
+        correction_followup = (
+            req.resource_types == ["个性化纠错训练包"]
+            and isinstance(req.constraints.get("correction_focus_snapshot"), dict)
+        )
+        selection_type = req.constraints.get("selection_type") if isinstance(req.constraints, dict) else None
         if feedback_only and (
-            req.resource_types != ["个性化纠错训练包"]
-            or not isinstance(req.constraints.get("correction_focus_snapshot"), dict)
+            not correction_followup
         ):
             raise ApplicationError(ErrorCode.FEEDBACK_ONLY_RESOURCE_TYPE, status_code=422)
         run_id = run_id or str(uuid.uuid4())
@@ -122,7 +127,23 @@ class GenerationJobService:
                 req.constraints = {**req.constraints, "learner_focus_snapshot": raw_snapshot}
         if self.mastery_service is not None and req.target_skill_nodes:
             try:
-                tier = self.mastery_service.validate_generation_targets(learner, req.target_skill_nodes)
+                if correction_followup:
+                    tier = self.mastery_service.validate_correction_targets(
+                        learner,
+                        req.target_skill_nodes,
+                        req.constraints["correction_focus_snapshot"],
+                    )
+                elif selection_type in {"lower_tier_selection", "cross_tier_prerequisite_review"}:
+                    intent = (
+                        LearningIntent.DOWNGRADE_LEARNING
+                        if selection_type == "lower_tier_selection"
+                        else LearningIntent.LEARN_NEW_AND_REINFORCE
+                    )
+                    tier = self.mastery_service.classify_generation_selection(
+                        learner, req.target_skill_nodes, intent=intent,
+                    )[1]
+                else:
+                    tier = self.mastery_service.validate_generation_targets(learner, req.target_skill_nodes)
             except ValueError as exc:
                 raise ApplicationError(ErrorCode.LEARNING_TIER_INVALID, status_code=422) from exc
             tier_options = self.mastery_service.next_generation_options(learner)
@@ -167,9 +188,15 @@ class GenerationJobService:
             job_status = "queued"
             created_new = True
         if (created_new or rescheduled_retry) and self.mastery_service is not None:
-            self.mastery_service.schedule_generation(
-                learner, run_id=run_id, selected_node_ids=req.target_skill_nodes,
-            )
+            try:
+                self.mastery_service.schedule_generation(
+                    learner, run_id=run_id, selected_node_ids=req.target_skill_nodes,
+                    selection_type=selection_type,
+                )
+            except Exception:
+                self.job_repo.mark_failed(run_id, "CURRICULUM_SCHEDULE_FAILED")
+                self.mastery_service.release_failed_generation(learner, run_id=run_id)
+                raise
         return GenerationJobCreateResponse(
             message="generation job accepted",
             run_id=run_id,

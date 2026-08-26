@@ -11,7 +11,13 @@ export const coursewareApi = {
   retryScene: (runId, sceneId) => api.post(`/resources/courseware/jobs/${encodeURIComponent(runId)}/scenes/${encodeURIComponent(sceneId)}/retry`),
   getSceneReview: (runId, sceneId) => api.get(`/resources/courseware/jobs/${encodeURIComponent(runId)}/scenes/${encodeURIComponent(sceneId)}/review`),
   get: (resourceId) => api.get(`/resources/courseware/items/${encodeURIComponent(resourceId)}`),
-  previewUrl: (resourceId) => `/api/resources/courseware/items/${encodeURIComponent(resourceId)}/preview`,
+  // A retry can publish a new release under the same courseware resource.
+  // Keep the release in the iframe URL so the browser cannot keep an older
+  // document mounted after the release changes.
+  previewUrl: (resourceId, releaseId) => {
+    const base = `/api/resources/courseware/items/${encodeURIComponent(resourceId)}/preview`
+    return releaseId ? `${base}?release_id=${encodeURIComponent(releaseId)}` : base
+  },
   downloadUrl: (resourceId) => `/api/resources/courseware/items/${encodeURIComponent(resourceId)}/file`,
   packageUrl: (resourceId, format) => `/api/resources/courseware/items/${encodeURIComponent(resourceId)}/packages/${encodeURIComponent(format)}`,
   ingestLearningEvents: (resourceId, events) => api.post(`/resources/courseware/items/${encodeURIComponent(resourceId)}/learning-events`, { events }),

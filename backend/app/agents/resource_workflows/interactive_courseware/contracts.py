@@ -71,12 +71,27 @@ class CoursewareSceneEnrichment(BaseModel):
     preferred_component_ids: list[str] = Field(default_factory=list, max_length=8)
 
 
+class PracticeGuideCoverEnrichment(BaseModel):
+    """Planner-owned prose for the practice guide entry page only.
+
+    The guide body remains a direct projection of the audited V3 JSON.  These
+    fields only explain the purpose and route into that fixed sequence.
+    """
+
+    cover_title: str = Field(min_length=1, max_length=120)
+    cover_lead: str = Field(min_length=1, max_length=360)
+    learning_goal: str = Field(min_length=1, max_length=360)
+    learning_method: str = Field(min_length=1, max_length=360)
+    completion_standard: str = Field(min_length=1, max_length=360)
+
+
 class CoursewarePlanEnrichmentV2(BaseModel):
     schema_version: Literal["2.0"] = "2.0"
     course_title: str = Field(min_length=1, max_length=160)
     course_summary: str = Field(min_length=1, max_length=500)
     objectives: list[CoursewareObjectiveEnrichment] = Field(default_factory=list, max_length=8)
     scenes: list[CoursewareSceneEnrichment] = Field(default_factory=list, max_length=24)
+    practice_cover: PracticeGuideCoverEnrichment | None = None
 
     @model_validator(mode="after")
     def unique_ids(self):

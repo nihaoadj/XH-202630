@@ -4,6 +4,7 @@ from __future__ import annotations
 from functools import lru_cache
 import hashlib
 import math
+from threading import Lock
 from time import perf_counter
 from typing import Sequence
 
@@ -14,6 +15,7 @@ from app.config import get_settings, resolve_backend_path
 
 _RERANKER_LOAD_FAILURE_AT: float | None = None
 _RERANKER_LOAD_RETRY_SECONDS = 60.0
+_RERANKER_LOAD_LOCK = Lock()
 
 
 @lru_cache(maxsize=1)
@@ -46,26 +48,31 @@ def get_reranker():
     """
 
     global _RERANKER_LOAD_FAILURE_AT
-    now = perf_counter()
-    if (
-        _RERANKER_LOAD_FAILURE_AT is not None
-        and now - _RERANKER_LOAD_FAILURE_AT < _RERANKER_LOAD_RETRY_SECONDS
-    ):
-        get_reranker.last_cache_status = "failure_backoff"  # type: ignore[attr-defined]
-        raise RuntimeError("RERANK_MODEL_LOAD_BACKOFF")
-    before = _load_reranker.cache_info()
-    try:
-        model = _load_reranker()
-    except Exception:
-        _RERANKER_LOAD_FAILURE_AT = now
-        get_reranker.last_cache_status = "load_failed"  # type: ignore[attr-defined]
-        raise
-    after = _load_reranker.cache_info()
-    _RERANKER_LOAD_FAILURE_AT = None
-    get_reranker.last_cache_status = (  # type: ignore[attr-defined]
-        "cold" if after.misses > before.misses else "warm"
-    )
-    return model
+    # functools.lru_cache protects its mapping, but permits duplicate
+    # concurrent cache misses.  Serializing only the cold-load section avoids
+    # multiple CrossEncoder instances racing over the model cache when several
+    # generation jobs reach retrieval at the same time.
+    with _RERANKER_LOAD_LOCK:
+        now = perf_counter()
+        if (
+            _RERANKER_LOAD_FAILURE_AT is not None
+            and now - _RERANKER_LOAD_FAILURE_AT < _RERANKER_LOAD_RETRY_SECONDS
+        ):
+            get_reranker.last_cache_status = "failure_backoff"  # type: ignore[attr-defined]
+            raise RuntimeError("RERANK_MODEL_LOAD_BACKOFF")
+        before = _load_reranker.cache_info()
+        try:
+            model = _load_reranker()
+        except Exception:
+            _RERANKER_LOAD_FAILURE_AT = now
+            get_reranker.last_cache_status = "load_failed"  # type: ignore[attr-defined]
+            raise
+        after = _load_reranker.cache_info()
+        _RERANKER_LOAD_FAILURE_AT = None
+        get_reranker.last_cache_status = (  # type: ignore[attr-defined]
+            "cold" if after.misses > before.misses else "warm"
+        )
+        return model
 
 
 def _sigmoid(value: float) -> float:

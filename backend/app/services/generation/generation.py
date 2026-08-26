@@ -69,11 +69,13 @@ def build_workflow_state(
             include_review=req.include_review,
             include_claim_check=req.include_claim_check,
             max_iterations=req.max_iterations,
+            claim_max_iterations=req.claim_max_iterations,
             constraints=constraints,
             workflow_status=WorkflowStatus.RUNNING,
             current_node="pending",
             generation_attempt=1,
             revision_count=0,
+            claim_revision_count=0,
             workflow_started_at=workflow_started_at,
             workflow_deadline_at=workflow_started_at + timedelta(
                 seconds=settings.llm_workflow_timeout_seconds
@@ -263,6 +265,7 @@ def _request_snapshot(req: GenerateRequest, state: WorkflowState) -> dict:
         "include_review": req.include_review,
         "include_claim_check": req.include_claim_check,
         "max_iterations": req.max_iterations,
+        "claim_max_iterations": req.claim_max_iterations,
         "constraints": {
             key: constraints[key]
             for key in allowed_constraint_keys

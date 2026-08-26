@@ -1,4 +1,5 @@
 from app.core.courseware.learning_design import build_learning_design
+from app.core.courseware.renderer import render_courseware
 from app.services.courseware.composition import compose_scenes
 from app.models.courseware.snapshots import LearnerContextSnapshot
 from app.models.courseware.snapshots import ResourceBundleSnapshot
@@ -88,9 +89,9 @@ def test_resource_scoped_design_selects_the_interaction_matching_its_source_type
         ], "exercise_items": exercise_items,
     }])
 
-    expected_kinds = ["intro", primary_kind, "recap"]
+    expected_kinds = ["intro", primary_kind]
     if role == "practice":
-        expected_kinds = ["intro", "practice", "practice", "recap"]
+        expected_kinds = ["intro", "practice", "practice"]
     assert [scene.kind for scene in design.storyboard.scenes] == expected_kinds
     assert all(scene.source_resource_ids == ("source-1",) for scene in design.storyboard.scenes)
 
@@ -145,6 +146,27 @@ def test_practice_step_page_keeps_detail_but_has_one_completion_action():
     assert "安装项目所需依赖。" in first_step["blocks"][1]
     assert "确认命令可运行。" in first_step["blocks"][1]
     assert first_step["source_block_ids"] == ["s1", "s1a", "s1b", "s1c"]
+
+
+def test_practice_cover_uses_resource_topic_and_has_no_generic_question_or_final_summary():
+    snapshot = {
+        "resource_id": "guide-cover", "resource_type": "实操指南", "role": "practice", "version": 1,
+        "content_hash": "guide-cover-hash", "topic": "RAG 工程链路实操指南｜复习清单",
+        "knowledge_points": ["chunking"], "content": "步骤 1：准备环境\n安装依赖。",
+        "blocks": [
+            {"block_id": "prepare", "text": "步骤 1：准备环境"},
+            {"block_id": "detail", "text": "安装依赖。"},
+        ],
+    }
+    design = build_learning_design([snapshot])
+    scenes, warnings = compose_scenes([snapshot], learning_design=design)
+
+    assert warnings == []
+    assert not any(scene.get("page_role") == "summary_action" for scene in scenes)
+    cover = scenes[0]
+    assert cover["title"] == "RAG 工程链路实操指南"
+    assert "这门课程能帮助我解决什么问题" not in render_courseware({"title": "x", "scenes": [cover]}).decode()
+    assert "学习目标：" in "\n".join(cover["blocks"])
 
 
 def test_llm_validated_practice_structure_controls_step_grouping():

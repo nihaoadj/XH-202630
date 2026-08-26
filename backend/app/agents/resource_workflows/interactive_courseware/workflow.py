@@ -66,6 +66,25 @@ class CoursewareReleaseGateError(RuntimeError):
         self.failed_dimensions = list(failed_dimensions or [])
 
 
+def source_resource_type_from_projection(
+    resource_row: dict[str, Any], links: list[dict[str, Any]] | None = None,
+) -> str | None:
+    """Read the originating text resource type from persisted courseware metadata."""
+    for summary in resource_row.get("source_summary") or []:
+        if isinstance(summary, dict) and summary.get("resource_type"):
+            return str(summary["resource_type"])
+    for link in links or []:
+        snapshot = link.get("source_snapshot")
+        if isinstance(snapshot, str):
+            try:
+                snapshot = json.loads(snapshot)
+            except (TypeError, ValueError):
+                snapshot = None
+        if isinstance(snapshot, dict) and snapshot.get("resource_type"):
+            return str(snapshot["resource_type"])
+    return None
+
+
 class InteractiveCoursewareWorkflow:
     """Own the courseware production state machine and its persistence writes."""
 
@@ -350,6 +369,7 @@ class InteractiveCoursewareWorkflow:
             ResourceBundleSnapshot.from_snapshot(item).model_dump(mode="json") for item in snapshots
         ]
         recovered_spec = self.repo.get_spec_by_run(run_id) if completed_rank >= 2 else None
+        plan_enrichment = None
         if recovered_spec:
             plan, plan_warning = None, None
             spec_id = recovered_spec["spec_id"]
@@ -360,6 +380,7 @@ class InteractiveCoursewareWorkflow:
             spec_json.setdefault("learner_context_snapshot", learner_context.model_dump(mode="json"))
             spec_json.setdefault("design", CoursewareDesign().model_dump(mode="json"))
             spec_json.setdefault("storyboard", learning_design.storyboard.model_dump(mode="json"))
+            plan_enrichment = spec_json.get("enrichment")
             title = job.get("title") or spec_json.get("title") or default_title(snapshots)
             title = resource_courseware_title(title, snapshots)
             self._event(run_id, "design_reviewing", "reused", {"spec_id": spec_id})
@@ -405,6 +426,7 @@ class InteractiveCoursewareWorkflow:
                 "resource_bundle_snapshot": resource_bundle,
                 "learner_context_snapshot": learner_context.model_dump(mode="json"),
                 "design": selected_design.model_dump(mode="json"),
+                "enrichment": plan.enrichment.model_dump(mode="json") if plan and plan.enrichment else None,
                 "scenes": ([item.model_dump(mode="json") for item in plan.scenes] if plan else [
                     {
                         "source_resource_id": scene.source_resource_ids[0], "kind": scene.kind,
@@ -430,7 +452,10 @@ class InteractiveCoursewareWorkflow:
             scenes, scene_warnings = [row["scene_json"] for row in recovered_scenes], []
             self._event(run_id, "composing", "reused", {"scene_count": len(scenes)})
         else:
-            scenes, scene_warnings = compose_scenes(snapshots, plan, learning_design=learning_design)
+            scenes, scene_warnings = compose_scenes(
+                snapshots, plan, learning_design=learning_design,
+                plan_enrichment=plan.enrichment if plan and plan.enrichment else plan_enrichment,
+            )
             design_payload = learning_design.model_dump(mode="json")
             for candidate in scenes:
                 binding_errors = validate_storyboard_bindings(candidate, design_payload)
@@ -1269,7 +1294,11 @@ class InteractiveCoursewareWorkflow:
                 topic=row["topic"], learner_id=row["learner_id"], created_at=row.get("created_at"),
                 published_at=row.get("published_at"), version=row["version"], status=row["status"],
                 preview_capability=True, download_capability=True, source_summary=row["source_summary"],
-                run_id=row["run_id"], batch_id=row.get("batch_id"), resource_type="互动HTML课件", difficulty="互动学习",
+                run_id=row["run_id"], batch_id=row.get("batch_id"), resource_type="互动HTML课件",
+                source_resource_type=source_resource_type_from_projection(
+                    row, self.repo.get_links(row["resource_id"]),
+                ),
+                difficulty="互动学习",
             )
             for row in self.repo.list_resources(learner_id)
             if row["status"] in {"published", "stale"}

@@ -388,6 +388,31 @@ def test_gateway_repairs_parse_and_truncated_output(first):
     assert result.attempt_count == 2
 
 
+def test_gateway_increases_claim_output_budget_after_length_truncation():
+    length_failure = type("LengthFinishReasonError", (Exception,), {})()
+    transport = ScriptedLLMTransport([length_failure, raw('{"value":"ok"}')])
+    gateway = LLMGateway(
+        transport,
+        claim_max_attempts=2,
+        claim_max_output_tokens=32768,
+        claim_truncated_retry_output_tokens=65536,
+        sleep=lambda _: None,
+        jitter=lambda: 0.0,
+    )
+
+    result = gateway.invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(node_name="claim_extractor"),
+        options=gateway.options_for("claim_extractor"),
+    )
+
+    assert result.output == Payload(value="ok")
+    assert len(transport.calls) == 2
+    assert transport.calls[0]["max_output_tokens"] == 32768
+    assert transport.calls[1]["max_output_tokens"] == 65536
+
+
 def test_gateway_stops_when_repair_budget_is_exhausted():
     transport = ScriptedLLMTransport([
         raw("bad"),

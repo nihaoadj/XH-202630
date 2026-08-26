@@ -22,7 +22,8 @@
       <div class="courseware-canvas" :style="canvasStyle">
         <iframe
           ref="frame"
-          :src="coursewareApi.previewUrl(resource.resource_id)"
+          :key="lifecycle"
+          :src="coursewareApi.previewUrl(resource.resource_id, resource.released_release_id || resource.release_id)"
           sandbox="allow-scripts"
           title="互动HTML课件预览"
           @load="initializeFrame"

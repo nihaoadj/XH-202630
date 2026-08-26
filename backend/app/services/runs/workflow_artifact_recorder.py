@@ -14,6 +14,7 @@ from app.models.learning_documents.schemas import LearningResource
 from app.agents.shared.validators import validate_resource_lineage
 from app.db.audit.base import PersistenceConflict
 from app.db.learning_documents.models import ResourceExecutionRecord, ResourceSpecRecord
+from app.db.shared.retry import run_with_sqlite_retry
 
 
 def _event_id(run_id: str, event_type: str, subject_id: str) -> str:
@@ -38,6 +39,15 @@ class WorkflowArtifactRecorder:
         self.claim_repository = claim_repository
 
     def record(self, state: dict[str, Any], trace_item: dict[str, Any]) -> None:
+        # A merge-boundary write may include several idempotent sub-writes
+        # (Claim audit, metrics, events and execution projections). Retry the
+        # whole boundary so a SQLite lock cannot leave only part of the audit
+        # durable and strand the workflow before its next node.
+        run_with_sqlite_retry(
+            lambda: self._record_once(state, trace_item),
+        )
+
+    def _record_once(self, state: dict[str, Any], trace_item: dict[str, Any]) -> None:
         run_id = str(state["run_id"])
         for raw_spec in state.get("resource_specs", []):
             payload = dict(raw_spec)

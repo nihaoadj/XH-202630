@@ -43,7 +43,7 @@ def compose_courseware_scene(
     # Review questions and their answers are frozen learning-document output.
     # Only the node's final boundary page may receive a short narrative
     # enrichment; all question pages remain byte-for-byte platform projections.
-    if (review_page_role.startswith("review_") and review_page_role != "review_example") or str(scene_id) == "scene:review:summary":
+    if review_page_role.startswith("review_") and review_page_role != "review_example":
         return deepcopy(deterministic_scene), None
     allowed_review_blocks = set(deterministic_scene.get("source_block_ids") or [])
     source_blocks = [

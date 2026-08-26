@@ -970,9 +970,19 @@ async function handleCoursewareCreated(payload) {
   persistSelectedJob()
 }
 
-async function handleCoursewarePublished() {
+async function handleCoursewarePublished(coursewareJob) {
   await loadJobs(false)
   ElMessage.success('HTML 互动课件已追加到当前资源批次。')
+  const publishedJob = coursewareJob || selectedCoursewareJob.value
+  if (!publishedJob?.resource_id) return
+  await router.push({
+    path: '/resources',
+    query: {
+      learnerId: selectedLearnerId.value,
+      runId: publishedJob.source_batch_id || publishedJob.run_id,
+      resourceId: publishedJob.resource_id,
+    },
+  })
 }
 
 async function regeneratePendingResources() {

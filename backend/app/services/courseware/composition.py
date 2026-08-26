@@ -41,6 +41,17 @@ def _practice_step_title(scene_id: str, source_parts: list[str], key_question: s
     return f"步骤 {number}{suffix}｜{(raw or '完成本步操作')[:42]}"
 
 
+def _cover_title(source: dict[str, Any]) -> str:
+    """Use the frozen resource topic for the cover instead of a generic label."""
+    topic = str(source.get("topic") or "").strip()
+    resource_type = str(source.get("resource_type") or "课程").strip()
+    topic = re.sub(r"\s*[|｜。:：]?\s*复习清单\s*$", "", topic).strip(" |｜。:：")
+    topic = re.sub(r"\s*(?:学习资源包|资源包)\s*", " ", topic).strip()
+    if topic.endswith(resource_type):
+        return topic
+    return f"{resource_type} | {topic}" if topic else f"{resource_type} | 互动课件"
+
+
 def _quiz(source: dict[str, Any]) -> dict[str, Any] | None:
     for item in source.get("exercise_items", []):
         options = item.get("options") or []
@@ -74,6 +85,26 @@ def _component_block(scene: dict[str, Any], component: str, source_block_ids: li
     return block
 
 
+def _model_dump(value: Any) -> dict[str, Any] | None:
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    return value if isinstance(value, dict) else None
+
+
+def _practice_cover_enrichment(value: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Read only planner prose for the practice guide cover.
+
+    The body of a practice guide never enters this path: its preparation,
+    steps, code, verification and reflection pages remain projected from the
+    audited V3 JSON below.
+    """
+    enrichment = _model_dump(value)
+    if not enrichment:
+        return None, None
+    cover = _model_dump(enrichment.get("practice_cover"))
+    return cover, enrichment
+
+
 def _decorate_components(scenes: list[dict[str, Any]]) -> None:
     for scene in scenes:
         if scene.get("component_blocks"):
@@ -90,6 +121,7 @@ def _decorate_components(scenes: list[dict[str, Any]]) -> None:
 
 def _compose_blueprint_scenes(
     snapshots: list[dict[str, Any]], learning_design: CoursewareLearningDesign,
+    plan_enrichment: Any | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """Fill v3 storyboard slots without inventing pages or copying a source in a loop."""
 
@@ -113,6 +145,7 @@ def _compose_blueprint_scenes(
     }
     scenes: list[dict[str, Any]] = []
     warnings: list[dict[str, str]] = []
+    practice_cover, plan_enrichment_payload = _practice_cover_enrichment(plan_enrichment)
     final_practice_scene_ids = {
         slot.scene_id
         for slot in learning_design.storyboard.scenes
@@ -256,11 +289,36 @@ def _compose_blueprint_scenes(
         # source-bound instructional zones (goal, method and completion) so
         # deterministic fallback is useful and passes the same page-quality
         # gate as an AI-composed page.  These phrases add no domain facts.
-        if role == "cover":
+        if role == "cover" and practice_cover:
+            # This is the only learner-facing practice-guide prose produced by
+            # the planner. The renderer consumes these registered components
+            # directly; no scene-level model rewrite is allowed afterwards.
+            cover_refs = [{"source_resource_id": source_ids[0], "source_block_ids": block_ids or ["block-1"]}]
+            learning_method = str(practice_cover.get("learning_method") or "阅读每页操作说明后实际执行，并用完成验证核对结果。").strip()
             display_parts = [
-                f"学习概述：{source_content_parts[0]}",
-                "学习方法：围绕这份冻结资源阅读关键内容，并在互动中主动检查自己的理解。",
-                "完成信号：能够依据资源说明核心要点，并知道下一步应继续练习还是复习。",
+                f"学习目标：{str(practice_cover.get('learning_goal') or '').strip()}",
+                f"学习方法：{learning_method}",
+                f"完成标准：{str(practice_cover.get('completion_standard') or '').strip()}",
+            ]
+            component_blocks = [
+                {
+                    "schema_version": "1.0", "block_id": f"{slot.scene_id}:learning-goal",
+                    "component": "key_point", "label": "学习目标",
+                    "text": str(practice_cover.get("learning_goal") or "完成来源步骤并核对结果。"),
+                    "source_refs": cover_refs,
+                },
+                {
+                    "schema_version": "1.0", "block_id": f"{slot.scene_id}:learning-method",
+                    "component": "callout", "label": "学习方法", "text": learning_method,
+                    "source_refs": cover_refs,
+                },
+            ]
+        elif role == "cover":
+            topic = str(sources[0].get("topic") or "").strip()
+            display_parts = [
+                f"学习目标：围绕{topic or '这份冻结资源'}完成从准备、操作到验证的完整闭环。",
+                "学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。",
+                "完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。",
             ]
         elif role == "practice_workspace":
             # ``block_ids`` has already been bounded to one page-sized segment
@@ -309,16 +367,28 @@ def _compose_blueprint_scenes(
             "practice_variant": slot.practice_variant,
             "required_zones": list(slot.required_zones), "content_budget": slot.content_budget.model_dump(mode="json"),
             "title": (
+                str(
+                    (practice_cover or {}).get("cover_title")
+                    or (plan_enrichment_payload or {}).get("course_title")
+                    or _cover_title(sources[0])
+                )
+                if role == "cover" else
                 _practice_step_title(slot.scene_id, source_content_parts, slot.key_question or "")
                 if slot.kind == "practice" and ":step:" in slot.scene_id
                 else title_by_role.get(role, slot.interaction_purpose)
             ),
             "lead": (
+                str(practice_cover.get("cover_lead") or "先了解本课件要解决的任务，再进入对应的来源步骤。").strip()
+                if role == "cover" and practice_cover else
+                "先了解本课件的目标与完成路径，再进入对应的来源步骤。"
+                if role == "cover" else
                 f"本页聚焦“{slot.key_question or slot.interaction_purpose}”。"
                 "请带着问题阅读来源信息，并观察概念、证据与行动之间的联系。"
             ),
             "blocks": display_parts[:4],
             "conclusion": (
+                f"完成标准：{str(practice_cover.get('completion_standard') or '').strip()}"
+                if role == "cover" and practice_cover else
                 f"页面结论：{source_content_parts[-1]}"
                 "下一步请把本页判断带入后续场景，通过操作或检查验证理解。"
             ),
@@ -330,6 +400,11 @@ def _compose_blueprint_scenes(
                 "conclusion": [block_ids[-1:] if block_ids else []],
             },
         }
+        if role == "cover" and practice_cover:
+            scene["llm_enriched"] = True
+            scene["component_blocks"] = component_blocks
+            scene["source_map"]["blocks"] = [block_ids[:1] for _ in component_blocks]
+            scene["source_map"]["title"] = [block_ids[:1]]
         if slot.kind == "practice":
             # One page represents one source-guide step.  The detailed source
             # remains in the explanatory zones; the checklist has exactly one
@@ -354,23 +429,28 @@ def _compose_blueprint_scenes(
                 warnings.append({"code": "ASSESSMENT_SCENE_SKIPPED", "message": "知识检查页缺少可验证答案，已阻止发布空壳测验"})
                 continue
         preferred = tuple(slot.allowed_component_ids or slot.allowed_components) or component_by_role.get(role, ("callout", "key_point"))
-        scene["component_blocks"] = []
-        for index, text in enumerate(scene["blocks"][:4]):
-            component = preferred[min(index, len(preferred) - 1)]
-            component_block = {
-                "schema_version": "1.0", "block_id": f"{slot.scene_id}:zone-{index + 1}",
-                "component": component, "text": text,
-                "pedagogical_role": "recap" if role == "summary_action" else ("example" if index == 2 else "explain"),
-                "source_refs": [{
-                    "source_resource_id": block_owner.get(
-                        block_ids[min(index, len(block_ids) - 1)] if block_ids else "", source_ids[0]
-                    ),
-                    "source_block_ids": [block_ids[min(index, len(block_ids) - 1)]] if block_ids else list(slot.source_block_ids[:1]),
-                }],
-            }
-            if component in {"steps", "ordered_steps"}:
-                component_block["steps"] = list(scene.get("steps") or content_parts[:6])
-            scene["component_blocks"].append(component_block)
+        if role == "cover" and practice_cover:
+            # Keep the planner-owned cover components exactly as structured;
+            # the generic prose-to-component adapter must not overwrite them.
+            pass
+        else:
+            scene["component_blocks"] = []
+            for index, text in enumerate(scene["blocks"][:4]):
+                component = preferred[min(index, len(preferred) - 1)]
+                component_block = {
+                    "schema_version": "1.0", "block_id": f"{slot.scene_id}:zone-{index + 1}",
+                    "component": component, "text": text,
+                    "pedagogical_role": "recap" if role == "summary_action" else ("example" if index == 2 else "explain"),
+                    "source_refs": [{
+                        "source_resource_id": block_owner.get(
+                            block_ids[min(index, len(block_ids) - 1)] if block_ids else "", source_ids[0]
+                        ),
+                        "source_block_ids": [block_ids[min(index, len(block_ids) - 1)]] if block_ids else list(slot.source_block_ids[:1]),
+                    }],
+                }
+                if component in {"steps", "ordered_steps"}:
+                    component_block["steps"] = list(scene.get("steps") or content_parts[:6])
+                scene["component_blocks"].append(component_block)
         scenes.append(scene)
     return scenes, warnings
 
@@ -458,12 +538,16 @@ def _review_practice_scenes(snapshots: list[dict[str, Any]], enrichment: Any | N
 def compose_scenes(
     snapshots: list[dict[str, Any]], plan: CoursewareSpec | None = None,
     *, learning_design: CoursewareLearningDesign | None = None,
+    plan_enrichment: Any | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     review_scenes = _review_practice_scenes(snapshots, getattr(plan, "review_practice_enrichment", None) if plan else None)
     if review_scenes is not None:
         return review_scenes, []
     if learning_design and learning_design.schema_version == "3.0":
-        return _compose_blueprint_scenes(snapshots, learning_design)
+        return _compose_blueprint_scenes(
+            snapshots, learning_design,
+            plan_enrichment if plan_enrichment is not None else getattr(plan, "enrichment", None) if plan else None,
+        )
     scenes: list[dict[str, Any]] = []
     warnings: list[dict[str, str]] = []
     if learning_design:

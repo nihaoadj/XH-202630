@@ -17,6 +17,5 @@ export function buildCoursewareBatchRequest({ learnerId, resourceIds, preference
     resource_ids: [...resourceIds],
     learning_goal: preferences.learning_goal || null,
     expected_duration_minutes: preferences.expected_duration_minutes ?? null,
-    interaction_intensity: preferences.interaction_intensity || 'medium',
   }
 }

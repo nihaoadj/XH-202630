@@ -25,8 +25,9 @@ def test_duration_and_intensity_create_auditable_scene_and_interaction_quotas():
     assert len(design.storyboard.scenes) < 9
     assert {scene.page_role for scene in design.storyboard.scenes} >= {
         "cover", "learning_map", "concept_explanation", "comparison_analysis",
-        "practice_workspace", "summary_action",
+        "practice_workspace",
     }
+    assert not any(scene.page_role == "summary_action" for scene in design.storyboard.scenes)
     assert not any(scene.kind == "example" for scene in design.storyboard.scenes)
     assert any(item["code"] == "SOURCE_DENSITY_REDUCED_PAGE_COUNT" for item in design.warnings)
 

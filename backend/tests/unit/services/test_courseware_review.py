@@ -26,3 +26,17 @@ def test_real_markup_and_urls_remain_blocked_outside_code():
 def test_urls_in_a_source_bound_code_example_are_not_treated_as_learner_markup():
     issues = quality_review(_document("```python\nbase_url = 'https://api.example.invalid'\n```"))
     assert not any(issue["code"] == "UNSAFE_LEARNER_CONTENT" for issue in issues)
+
+
+def test_structured_practice_reflection_is_the_guide_recap():
+    issues = quality_review({
+        "scenes": [
+            {"kind": "intro", "title": "开始", "blocks": ["说明"]},
+            {
+                "kind": "practice", "page_role": "practice_workspace",
+                "practice_json_schema_version": "3.0", "practice_variant": "reflect",
+                "title": "复盘与小结", "blocks": ["完成复盘"],
+            },
+        ]
+    })
+    assert not any(issue["code"] == "MISSING_RECAP" for issue in issues)

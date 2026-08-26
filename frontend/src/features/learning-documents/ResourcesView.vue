@@ -36,7 +36,7 @@
           </div>
           <button v-for="(resource, index) in activeResources" :key="resource.resource_id" type="button" class="resource-item" :class="{ 'is-active': resource.resource_id === selectedResourceId }" @click="selectedResourceId = resource.resource_id">
             <span class="resource-order">{{ String(index + 1).padStart(2, '0') }}</span>
-            <span class="resource-item-copy"><strong>{{ resource.resource_type || '学习资源' }}</strong><small>{{ resource.difficulty || '待分级' }} · {{ knowledgePointSummary(resource) }}</small></span>
+            <span class="resource-item-copy"><strong>{{ resourceShelfTypeLabel(resource) }}</strong><small>{{ resource.difficulty || '待分级' }} · {{ knowledgePointSummary(resource) }}</small></span>
             <span class="resource-arrow">→</span>
           </button>
           <div class="shelf-footnote"><span class="footnote-dot"></span>按顺序完成本批次学习</div>
@@ -88,7 +88,7 @@
     :run-id="selectedResource?.run_id || ''"
     :quoted-text="tutorQuotedText"
     context-type="resource_help"
-    :title="selectedResource ? `${selectedResource.resource_type || '学习资源'} · Tutor` : '学习导引'"
+    :title="selectedResource ? `${resourceShelfTypeLabel(selectedResource)} · Tutor` : '学习导引'"
     @clear-quoted-text="tutorQuotedText = ''"
   />
   </div>
@@ -104,6 +104,7 @@ import { coursewareApi } from '../courseware/api'
 import { resourceLibraryApi } from '../resource-library/api'
 import { useAppStore } from '../../stores/app'
 import { formatDateTime } from '../../utils/generationDisplay'
+import { resourceShelfTypeLabel, sortResourcesForShelf } from '../../utils/resourceShelfOrder'
 import ResourceViewer from './ResourceViewer.vue'
 import CoursewareViewer from '../courseware/CoursewareViewer.vue'
 import FocusResourceSwitcher from './FocusResourceSwitcher.vue'
@@ -203,7 +204,7 @@ const taskGroups = computed(() => {
   })
 })
 const activeTask = computed(() => taskGroups.value.find((item) => item.runId === selectedRunId.value) || taskGroups.value[0] || null)
-const activeResources = computed(() => activeTask.value?.resources || [])
+const activeResources = computed(() => sortResourcesForShelf(activeTask.value?.resources || []))
 const selectedResource = computed(() => {
   const resource = activeResources.value.find(
     (item) => item.resource_id === selectedResourceId.value,

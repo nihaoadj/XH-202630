@@ -35,7 +35,8 @@ JUDGE_PROMPT_VERSION = "p0-06-judge-v1"
 EXTRACTOR_PROMPT = """你是独立 Claim 抽取器。仅从给定资源原文抽取可单独判断的陈述。
 resource_id 必须从输入中原样选择；source_text 必须是资源原文的连续精确子串。
 source_start/source_end 请按 Python 字符下标填写且 end 为开区间；服务端会以精确 source_text
-重新校验并确定最终位置。事实陈述标 factual，
+重新校验并确定最终位置。复习清单中的题干、选项和提示语不是 factual Claim；如需保留，
+请标 instructional 或 non_factual。事实陈述标 factual，
 教学动作标 instructional，主观/过渡表达标 non_factual。evidence_id 和 knowledge_point_id
 只能从输入白名单选择，不能创造 ID。每个非空资源至少输出一个 Claim，不要输出解释。"""
 
@@ -88,15 +89,57 @@ def _normalize_judgement_candidates(
 
 
 def _claim_audit_content(resource) -> str:
-    """Mask V2 question text without changing offsets; answers stay evidence-auditable."""
-    content = resource.content_text or ""
-    if resource.resource_type != "复习清单" or not resource.review_practice_payload:
-        return content
-    marker = "## 答案与证据解释"
-    position = content.find(marker)
-    if position < 0:
-        return content
-    return "".join("\n" if char == "\n" else " " for char in content[:position]) + content[position:]
+    """Return canonical text so model spans and server validation share one source.
+
+    Checklist masking previously changed the text sent to the model while
+    ``materialize_claims`` validated against the unmasked resource. The
+    extractor prompt now classifies checklist questions as non-factual or
+    instructional instead.
+    """
+    return resource.content_text or ""
+
+
+def _with_resource_context(error, resource_id: str):
+    detail = error.safe_detail or error.message
+    return error.model_copy(update={
+        "safe_detail": f"resource_id={resource_id}; {detail}"[:512],
+    })
+
+
+def _compact_error_summary(errors: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for item in errors:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "UNKNOWN")
+        detail = str(item.get("safe_detail") or item.get("message") or "")
+        parts.append(f"{code}({detail[:180]})")
+    return "; ".join(parts)[:1000]
+
+
+def claim_eligible_resource_ids(state: AgentState) -> list[str]:
+    """Return current text resources that independently cleared ordinary review.
+
+    Claim is a release gate for a resource version, not for a batch aggregate.
+    A sibling awaiting revision or human review must neither be audited here nor
+    prevent an already approved sibling from clearing its own Claim gate.
+    """
+    review = state.get("review_result", {})
+    review_ids = review.get("review_ids", {})
+    per_resource = state.get("resource_review_results", {})
+    aggregate = str(review.get("decision") or review.get("status") or "")
+    eligible: list[str] = []
+    for resource in state.get("generated_resources", []):
+        if (
+            resource.representation.value != "text"
+            or not (review_ids.get(resource.resource_id) or resource.review_id)
+        ):
+            continue
+        result = per_resource.get(resource.resource_id, {})
+        decision = str(result.get("decision") or result.get("status") or aggregate)
+        if decision == ReviewDecision.APPROVE.value:
+            eligible.append(resource.resource_id)
+    return eligible
 
 
 def _failure(
@@ -107,6 +150,7 @@ def _failure(
     detail: str,
     llm_error: LLMGatewayError | None = None,
     prior_errors: list[dict[str, Any]] | None = None,
+    resource_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     error = llm_error.error if llm_error else make_error_info(
         code,
@@ -130,10 +174,10 @@ def _failure(
         agent_name=node_name,
         action="Claim 级审核",
         status=StepStatus.HUMAN_REVIEW,
-        input_summary=f"资源数：{len(state.get('generated_resources', []))}",
+        input_summary=f"候选资源数：{len(resource_ids or state.get('claim_eligible_resource_ids', []))}",
         output_summary="Claim 审核失败，转人工复核",
         decision_reason="Claim 或 Evidence 的机器判定结果未通过确定性校验。",
-        resource_ids=[item.resource_id for item in state.get("generated_resources", [])],
+        resource_ids=resource_ids or state.get("claim_eligible_resource_ids", []),
         review_ids=list(review.get("review_ids", {}).values()),
         error=error,
         step_context=step_context,
@@ -143,6 +187,7 @@ def _failure(
     serialized_error = error.model_dump(mode="json")
     if serialized_error not in persisted_errors:
         persisted_errors.append(serialized_error)
+    trace["error_message"] = _compact_error_summary(persisted_errors) or error.safe_detail or error.message
     return {
         "review_result": review,
         "claim_check_status": ClaimCheckStatus.FAILED.value,
@@ -155,9 +200,10 @@ def _failure(
 def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str, Any]:
     # HTML is a presentation derived from the canonical practice-guide text;
     # claim review, like normal review, assesses only canonical text.
+    eligible_resource_ids = claim_eligible_resource_ids(state)
     all_resources = [
         item for item in state.get("generated_resources", [])
-        if item.representation.value == "text"
+        if item.resource_id in eligible_resource_ids
     ]
     # Assessment answers and evidence are intentionally absent from public
     # Markdown. Their canonical JSON is already checked by the internal
@@ -169,7 +215,14 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
     }
     resources = [item for item in all_resources if item.resource_id not in assessment_resource_ids]
     evidence = state.get("retrieved_evidence", [])
-    review_ids = state.get("review_result", {}).get("review_ids", {})
+    review_ids = {
+        **{
+            item.resource_id: item.review_id
+            for item in state.get("generated_resources", [])
+            if item.review_id
+        },
+        **state.get("review_result", {}).get("review_ids", {}),
+    }
     step_context = start_step(state)
     if not all_resources or any(not item.content_text for item in resources):
         return _failure(
@@ -177,13 +230,15 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
             node_name="claim_extractor",
             code=ErrorCode.CLAIM_EXTRACTION_INVALID,
             detail="resource content unavailable",
+            resource_ids=eligible_resource_ids,
         )
-    if set(review_ids) != {item.resource_id for item in all_resources}:
+    if not set(eligible_resource_ids) <= set(review_ids):
         return _failure(
             state,
             node_name="claim_extractor",
             code=ErrorCode.CLAIM_EXTRACTION_INVALID,
             detail="review/resource boundary mismatch",
+            resource_ids=eligible_resource_ids,
         )
     claims: list[ClaimRecord] = []
     allowed_evidence = {item.evidence_id for item in evidence}
@@ -202,6 +257,7 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
                 "resources": [{
                     "resource_id": resource.resource_id,
                     "resource_version": resource.version,
+                    "resource_type": resource.resource_type,
                     "content_text": _claim_audit_content(resource),
                 }],
             }
@@ -238,16 +294,18 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
             last_result = result
         except LLMGatewayError as exc:
             failed_resource_ids.append(resource.resource_id)
-            errors.append(exc.error.model_dump(mode="json"))
+            errors.append(_with_resource_context(
+                exc.error, resource.resource_id,
+            ).model_dump(mode="json"))
         except (ValueError, KeyError) as exc:
             failed_resource_ids.append(resource.resource_id)
-            errors.append(make_error_info(
+            errors.append(_with_resource_context(make_error_info(
                 ErrorCode.CLAIM_EXTRACTION_INVALID,
                 source="claim_extractor",
                 attempt=state.get("generation_attempt", 1),
                 category="claim_audit",
                 safe_detail=str(exc)[:256],
-            ).model_dump(mode="json"))
+            ), resource.resource_id).model_dump(mode="json"))
     if not claims and not assessment_resource_ids:
         return _failure(
             state,
@@ -255,25 +313,38 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
             code=ErrorCode.CLAIM_EXTRACTION_INVALID,
             detail="all resource claim extractions failed",
             prior_errors=errors,
+            resource_ids=eligible_resource_ids,
         )
+    error_summary = _compact_error_summary(errors)
     trace = build_trace_item(
         state,
         agent_name="claim_extractor",
         action="独立 Claim 抽取",
         status=StepStatus.DEGRADED if failed_resource_ids else StepStatus.SUCCESS,
-        input_summary=f"资源数：{len(all_resources)}；冻结证据数：{len(evidence)}",
+        input_summary=f"Claim 候选资源数：{len(all_resources)}；冻结证据数：{len(evidence)}",
         output_summary=(f"已抽取 {len(claims)} 条 Claim；"
-                        f"结构化测评专用审核 {len(assessment_resource_ids)} 个；失败资源 {len(failed_resource_ids)} 个"),
+                        f"结构化测评专用审核 {len(assessment_resource_ids)} 个；失败资源 {len(failed_resource_ids)} 个"
+                        + (f"；逐资源错误：{error_summary}" if error_summary else "")),
         decision_reason="结构化测评由内部 JSON 审核；其余资源通过 Claim 白名单校验。",
         evidence_refs=[item.evidence_id for item in evidence],
         resource_ids=[item.resource_id for item in all_resources],
         review_ids=list(review_ids.values()),
         step_context=step_context,
+        error=(make_error_info(
+            ErrorCode.CLAIM_EXTRACTION_INVALID,
+            source="claim_extractor",
+            attempt=state.get("generation_attempt", 1),
+            category="claim_audit",
+            safe_detail=error_summary,
+        ) if errors else None),
         llm_metadata=last_result.trace_metadata() if last_result else None,
     )
+    if error_summary:
+        trace["error_message"] = error_summary
     return {
         "extracted_claims": [item.model_dump(mode="json") for item in claims],
         "assessment_claim_skipped_resource_ids": sorted(assessment_resource_ids),
+        "claim_eligible_resource_ids": eligible_resource_ids,
         "claim_failed_resource_ids": failed_resource_ids,
         "claim_check_status": ClaimCheckStatus.PENDING.value,
         "current_node": "claim_extractor",
@@ -292,7 +363,8 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
     assessment_resource_ids = set(state.get("assessment_claim_skipped_resource_ids", []))
     if not claims and not assessment_resource_ids:
         return _failure(state, node_name="claim_judge",
-                        code=ErrorCode.CLAIM_JUDGEMENT_INVALID, detail="no validated claims")
+                        code=ErrorCode.CLAIM_JUDGEMENT_INVALID, detail="no validated claims",
+                        resource_ids=state.get("claim_eligible_resource_ids", []))
     evidence = state.get("retrieved_evidence", [])
     claims_by_resource: dict[str, list[ClaimRecord]] = defaultdict(list)
     for item in claims:
@@ -346,16 +418,18 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
             last_result = result
         except LLMGatewayError as exc:
             failed_resource_ids.add(resource_id)
-            errors.append(exc.error.model_dump(mode="json"))
+            errors.append(_with_resource_context(
+                exc.error, resource_id,
+            ).model_dump(mode="json"))
         except (ValueError, KeyError) as exc:
             failed_resource_ids.add(resource_id)
-            errors.append(make_error_info(
+            errors.append(_with_resource_context(make_error_info(
                 ErrorCode.CLAIM_JUDGEMENT_INVALID,
                 source="claim_judge",
                 attempt=state.get("generation_attempt", 1),
                 category="claim_audit",
                 safe_detail=str(exc)[:256],
-            ).model_dump(mode="json"))
+            ), resource_id).model_dump(mode="json"))
     judgements_by_resource: dict[str, list] = defaultdict(list)
     for item in judgements:
         judgements_by_resource[item.resource_id].append(item)
@@ -389,6 +463,7 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
                 "non_factual_claim_total": 0,
                 "incomplete_claim_total": 1,
             }
+    error_summary = _compact_error_summary(errors)
     trace = build_trace_item(
         state,
         agent_name="claim_judge",
@@ -396,14 +471,24 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
         status=StepStatus.DEGRADED if failed_resource_ids else StepStatus.SUCCESS,
         input_summary=f"Claim 数：{len(claims)}；结构化测评专用审核 {len(assessment_resource_ids)} 个；冻结证据数：{len(evidence)}",
         output_summary=(f"完成 {len(judgements)} 条独立判定；"
-                        f"失败资源 {len(failed_resource_ids)} 个"),
+                        f"失败资源 {len(failed_resource_ids)} 个"
+                        + (f"；逐资源错误：{error_summary}" if error_summary else "")),
         decision_reason="成功资源完成冻结证据判定；失败资源被隔离并转人工复核。",
         evidence_refs=[item.evidence_id for item in evidence],
         resource_ids=sorted(claims_by_resource),
         review_ids=sorted({item.review_id for item in claims}),
         step_context=step_context,
+        error=(make_error_info(
+            ErrorCode.CLAIM_JUDGEMENT_INVALID,
+            source="claim_judge",
+            attempt=state.get("generation_attempt", 1),
+            category="claim_audit",
+            safe_detail=error_summary,
+        ) if errors else None),
         llm_metadata=last_result.trace_metadata() if last_result else None,
     )
+    if error_summary:
+        trace["error_message"] = error_summary
     return {
         "claim_judgements": [item.model_dump(mode="json") for item in judgements],
         "claim_metrics": {
@@ -421,6 +506,9 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
 def claim_decide_node(state: AgentState) -> dict[str, Any]:
     step_context = start_step(state)
     review = dict(state.get("review_result", {}))
+    ordinary_decision = ReviewDecision(
+        review.get("decision", review.get("status", ReviewDecision.HUMAN_REVIEW.value))
+    )
     failed_resource_ids = set(state.get("claim_failed_resource_ids", []))
     if state.get("claim_check_status") != ClaimCheckStatus.COMPLETED.value:
         review.update({
@@ -514,7 +602,9 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
                     "priority": index,
                 })
         else:
-            decision = ReviewDecision.APPROVE
+            # Claim approval only clears the Claim gate for eligible resources.
+            # It must not overwrite a sibling's ordinary-review hold.
+            decision = ordinary_decision
         review.update({
             "decision": decision.value,
             "status": decision.value,

@@ -30,13 +30,17 @@ from app.agents.resource_workflows.learning_documents.specialized_reviews.assess
 REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习资源进行审核，重点检查：
 1. 是否存在与专业知识片段不符的事实错误（幻觉）。
 2. 操作步骤是否符合行业规范。
-3. 资源难度是否与学习者水平匹配。
+3. 资源难度是否与学习者水平匹配。对“复习清单”，难度审核的首要依据是资源覆盖的能力节点是否属于冻结的目标节点阶级，
+   不是题目数量、题型表面复杂度或文字中是否出现“综合/挑战”等词。高级难度必须覆盖高级（tier=3）能力节点；
+   中级必须覆盖中级（tier=2）节点；初级必须覆盖初级（tier=1）节点。复习清单保持主动回忆结构，
+   不能因为其包含回忆题或辨析题就判定高级节点“不够高级”。其他资源沿用其既有的难度审核口径。
 4. 内容是否完整覆盖目标知识点。
 
 资源类型解释：当 resource_type 为“分阶测试题”时，V2 固定结构是每个能力节点恰有 2 道单选（基础）、1 道多选（进阶）、2 道问答（挑战）。应同时审核题型配额、题型与难度阶段映射、可判定性、证据范围和知识点覆盖。
 当输入含有“内部结构化题卷”时，逐题范围与证据审核已经由独立专用审核器完成。你只做包级补充审核：
 不得复述题干、选项、正确答案、参考答案、rubric、evidence 或逐题清单；不得重新解释已通过的逐题范围结论。
-若没有新的包级事实、结构或难度问题，直接输出 approve 和空 issues；每个字段使用最短必要中文。
+复习清单标题是服务端按批次主题生成的展示标题；审核内容是否匹配时，以当前目标能力节点和 Evidence 为准，
+不要仅因标题比当前节点更宽泛就提出覆盖或结构问题。若没有新的包级事实、结构或难度问题，直接输出 approve 和空 issues；每个字段使用最短必要中文。
 
 请用 JSON 格式输出：
 {
@@ -70,6 +74,73 @@ STRUCTURED_MARKDOWN_SECTIONS = {
     "案例分析": ("案例背景", "任务目标", "分析过程", "参考方案", "复盘要点"),
     "个性化纠错训练包": ("本次强化目标", "薄弱模式概览", "参考答案与分层反馈", "达标标准", "后续复习动作", "总结"),
 }
+
+
+def _node_tier_difficulty_review(resource, state: AgentState) -> dict | None:
+    """Enforce difficulty from the frozen target-node tier, not surface form."""
+
+    if resource.resource_type != "复习清单":
+        return None
+    constraints = state.get("constraints", {})
+    target_tier = constraints.get("target_tier")
+    expected_difficulty = state.get("difficulty_preference")
+    target_nodes = {str(item) for item in state.get("target_skill_nodes", []) if str(item).strip()}
+    covered_nodes = {str(item) for item in resource.knowledge_points if str(item).strip()}
+    if target_tier is None or not expected_difficulty:
+        return None
+
+    valid = (
+        resource.difficulty == expected_difficulty
+        and bool(target_nodes)
+        and bool(covered_nodes)
+        and covered_nodes <= target_nodes
+    )
+    if valid:
+        return None
+    return {
+        "decision": "revise",
+        "hallucination_score": 0.0,
+        "issues": [{
+            "code": "difficulty_mismatch",
+            "severity": "high",
+            "resource_type": resource.resource_type,
+            "knowledge_point": None,
+            "description": "资源覆盖节点未满足冻结目标阶级，不能据此证明资源难度匹配。",
+        }],
+        "difficulty_match": False,
+        "coverage_rate": 0.0,
+        "suggestion": "仅覆盖冻结目标能力节点，并保持资源难度与目标阶级一致。",
+        "revision_instructions": [{
+            "issue_codes": ["difficulty_mismatch"],
+            "target_resource_type": resource.resource_type,
+            "action": "按冻结目标节点阶级重建资源，不以题型或措辞替代节点覆盖。",
+            "priority": 1,
+        }],
+    }
+
+
+def _normalize_node_tier_review(raw: dict, resource, state: AgentState) -> dict:
+    """Remove false difficulty findings when the target-node contract passes."""
+
+    if resource.resource_type != "复习清单":
+        return raw
+    if _node_tier_difficulty_review(resource, state) is not None:
+        return raw
+    if state.get("constraints", {}).get("target_tier") is None:
+        return raw
+    normalized = dict(raw)
+    normalized["difficulty_match"] = True
+    issues = [item for item in normalized.get("issues", []) if item.get("code") != "difficulty_mismatch"]
+    instructions = [
+        item for item in normalized.get("revision_instructions", [])
+        if "difficulty_mismatch" not in item.get("issue_codes", [])
+    ]
+    normalized["issues"] = issues
+    normalized["revision_instructions"] = instructions
+    if normalized.get("decision") == "revise" and not issues and not instructions:
+        normalized["decision"] = "approve"
+        normalized["suggestion"] = "目标能力节点阶级与资源难度一致；继续按证据和结构审核。"
+    return normalized
 
 
 def _deterministic_resource_structure_review(resource) -> dict | None:
@@ -357,18 +428,8 @@ def review_node(
         specialized_review = None
         tier_contract = node_input.constraints.get("target_tier")
         expected_difficulty = node_input.difficulty_preference
-        if tier_contract is not None and resource.difficulty != expected_difficulty:
-            raw = {
-                "decision": "revise", "hallucination_score": 0.0,
-                "issues": [{"code": "other", "severity": "high", "resource_type": resource.resource_type,
-                            "resource_id": resource.resource_id, "knowledge_point": None,
-                            "description": "资源难度与冻结的能力节点阶级不一致。"}],
-                "difficulty_match": False, "coverage_rate": 1.0,
-                "suggestion": "按冻结阶级重建资源规格。",
-                "revision_instructions": [{"target_resource_type": resource.resource_type,
-                                           "instruction": "将资源难度调整为冻结目标阶级。"}],
-            }
-        elif resource.resource_id in locked_resource_ids:
+        node_tier_review = _node_tier_difficulty_review(resource, state)
+        if resource.resource_id in locked_resource_ids:
             raw = {
                 "decision": "human_review",
                 "hallucination_score": 1.0,
@@ -384,6 +445,19 @@ def review_node(
                 "coverage_rate": 0.0,
                 "suggestion": "保持未发布，等待人工复核。",
                 "revision_instructions": [],
+            }
+        elif node_tier_review is not None:
+            raw = node_tier_review
+        elif tier_contract is not None and resource.difficulty != expected_difficulty:
+            raw = {
+                "decision": "revise", "hallucination_score": 0.0,
+                "issues": [{"code": "other", "severity": "high", "resource_type": resource.resource_type,
+                            "resource_id": resource.resource_id, "knowledge_point": None,
+                            "description": "资源难度与冻结的能力节点阶级不一致。"}],
+                "difficulty_match": False, "coverage_rate": 1.0,
+                "suggestion": "按冻结阶级重建资源规格。",
+                "revision_instructions": [{"target_resource_type": resource.resource_type,
+                                           "instruction": "将资源难度调整为冻结目标阶级。"}],
             }
         elif invalid_source_refs:
             error = _fail_closed_review_error(make_error_info(
@@ -491,6 +565,7 @@ def review_node(
                                    "description": "审核能力暂不可用，无法安全完成自动审核"}],
                        "difficulty_match": False, "coverage_rate": 0.0,
                        "suggestion": "", "revision_instructions": []}
+        raw = _normalize_node_tier_review(raw, resource, state)
         decorated = _decorate_review_items(raw, run_id=f"{node_input.run_id}:{resource.resource_id}",
                                            generation_attempt=node_input.generation_attempt)
         if specialized_review is not None:

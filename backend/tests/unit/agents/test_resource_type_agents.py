@@ -12,6 +12,7 @@ from app.agents.resource_workflows.learning_documents.spec_builder import build_
 from app.agents.resource_workflows.learning_documents.reviewer_agent import (
     _deterministic_practice_guide_review,
     _deterministic_resource_structure_review,
+    _normalize_node_tier_review,
     review_node,
 )
 from app.core.security.errors import ApplicationError, ErrorCode
@@ -126,6 +127,72 @@ def test_new_resource_agents_generate_evidence_scoped_markdown(
     if resource_type == "复习清单":
         assert "### 节点知识小结" in artifact.content_text
     assert artifact.knowledge_points == spec.knowledge_points
+
+
+def test_review_checklist_uses_expanded_structured_output_budget():
+    spec, context, _ = _inputs("复习清单")
+
+    gateway = ScriptedLLMGateway([CHECKLIST_PAYLOAD])
+    ReviewChecklistAgent().generate(spec, context, llm_gateway=gateway)
+
+    assert gateway.calls[0]["options"].max_output_tokens == 16384
+
+
+def test_case_study_uses_bounded_long_form_budget(monkeypatch):
+    spec, context, _ = _inputs("案例分析")
+    monkeypatch.setattr(
+        "app.agents.resource_agents.case_study.get_settings",
+        lambda: SimpleNamespace(
+            text_resource_request_timeout_seconds=240.0,
+            llm_resource_generation_max_attempts=2,
+        ),
+    )
+    gateway = ScriptedLLMGateway([CASE_STUDY_MARKDOWN])
+
+    CaseStudyAgent().generate(spec, context, llm_gateway=gateway)
+
+    options = gateway.calls[0]["options"]
+    assert options.max_output_tokens == 16384
+    assert options.request_timeout_seconds == 300.0
+    assert options.max_attempts == 2
+
+
+def test_checklist_node_tier_difficulty_ignores_surface_complexity_only_for_checklist():
+    state = {
+        "target_skill_nodes": ["skill-high"],
+        "difficulty_preference": "高级",
+        "constraints": {"target_tier": 3},
+    }
+    raw = {
+        "decision": "revise",
+        "difficulty_match": False,
+        "issues": [{"code": "difficulty_mismatch"}],
+        "revision_instructions": [{"issue_codes": ["difficulty_mismatch"]}],
+    }
+
+    normalized = _normalize_node_tier_review(
+        raw,
+        SimpleNamespace(
+            resource_type="复习清单",
+            difficulty="高级",
+            knowledge_points=["skill-high"],
+        ),
+        state,
+    )
+    assert normalized["decision"] == "approve"
+    assert normalized["difficulty_match"] is True
+    assert normalized["issues"] == []
+
+    untouched = _normalize_node_tier_review(
+        raw,
+        SimpleNamespace(
+            resource_type="案例分析",
+            difficulty="高级",
+            knowledge_points=["skill-high"],
+        ),
+        state,
+    )
+    assert untouched is raw
 
 
 def test_text_resource_uses_bounded_long_form_timeout_and_output_budget(monkeypatch):

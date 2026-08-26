@@ -5,7 +5,10 @@ from pydantic import ValidationError
 
 from app.models.courseware import CoursewareBatchCreateRequest, CoursewareJobCreateRequest, CoursewareJobResponse
 from app.services.courseware.service import CoursewareService
-from app.agents.resource_workflows.interactive_courseware.workflow import InteractiveCoursewareWorkflow
+from app.agents.resource_workflows.interactive_courseware.workflow import (
+    InteractiveCoursewareWorkflow,
+    source_resource_type_from_projection,
+)
 from app.db.courseware.repository import MemoryCoursewareRepository
 
 
@@ -24,6 +27,15 @@ class _Workflow:
 class _ResourceService:
     def get(self, _resource_id):
         return None
+
+
+def test_courseware_library_recovers_source_text_type_from_persisted_projection():
+    assert source_resource_type_from_projection({
+        "source_summary": [{"resource_id": "text-1", "resource_type": "讲义"}],
+    }) == "讲义"
+    assert source_resource_type_from_projection({}, [{
+        "source_snapshot": '{"resource_type": "分阶测试题"}',
+    }]) == "分阶测试题"
 
 
 def test_single_job_contract_refuses_multiple_sources():

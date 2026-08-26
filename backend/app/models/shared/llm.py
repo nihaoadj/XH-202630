@@ -34,6 +34,9 @@ class LLMCallContext(BaseModel):
 class LLMCallOptions(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     max_output_tokens: int = Field(default=4096, ge=1)
+    # A bounded second budget for Claim calls that stop because the provider
+    # exhausted the first output-token budget. Other nodes leave this unset.
+    truncated_retry_output_tokens: Optional[int] = Field(default=None, ge=1)
     request_timeout_seconds: float = Field(default=30.0, gt=0)
     max_attempts: int = Field(default=2, ge=1, le=3)
     structured_output_mode: StructuredOutputMode = StructuredOutputMode.AUTO

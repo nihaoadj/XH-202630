@@ -11,6 +11,9 @@ from .base import BaseResourceGenerationAgent
 
 REVIEW_PRACTICE_PROMPT = """你是 ReviewChecklistAgent。一次只能为一个能力节点生成主动回忆训练的严格 JSON。
 只使用输入的当前节点 Evidence 和允许知识点；不得使用常识补全、相邻节点或未冻结的前置知识。
+必须严格保持当前 ReviewPracticeNodeBlockV2 结构和字段，不得新增、删除、重命名字段，也不得输出 Markdown、代码围栏或额外文字。
+本清单的标题由服务端按批次主题生成；当前节点内容只需准确覆盖输入的 skill_node_id、skill_node_name 和 allowed_knowledge_points，
+不要因为清单标题包含更宽的批次主题而扩展内容，也不要因此判定当前节点内容与标题不匹配。
 目标配额是 4 道闭卷回忆、4 道概念辨析和 2 道正反例辨认；正反例放入 example_recognition_questions 数组。
 证据不足时可以减量，但每个未生成槽位
 必须写入 omitted_slots，原因只能是 INSUFFICIENT_DISTINCT_EVIDENCE 或 NO_EXPLICIT_CONCEPT_BOUNDARY；闭卷回忆
@@ -96,7 +99,7 @@ class ReviewChecklistAgent(BaseResourceGenerationAgent[ReviewPracticeNodeBlockV2
             last_error: Exception | None = None
             for _ in range(self.validation_retry_attempts):
                 try:
-                    result = self.invoke(spec=spec, context=context.model_copy(update={"step_id":f"{context.step_id}:node:{index+1}"}), llm_gateway=llm_gateway, messages=self._messages(spec, context, node_id), output_schema=ReviewPracticeNodeBlockV2, representation="text", max_output_tokens=8192)
+                    result = self.invoke(spec=spec, context=context.model_copy(update={"step_id":f"{context.step_id}:node:{index+1}"}), llm_gateway=llm_gateway, messages=self._messages(spec, context, node_id), output_schema=ReviewPracticeNodeBlockV2, representation="text", max_output_tokens=16384)
                     self._validate_block(result.output, spec, node_id); block = result.output.model_dump(mode="json"); base=index*10
                     for item in block["recall_questions"]: item["question_id"] = f"q-{base+int(item['local_id'][-1]):03d}"
                     for item in block["distinction_questions"]: item["question_id"] = f"q-{base+4+int(item['local_id'][-1]):03d}"
@@ -113,6 +116,14 @@ class ReviewChecklistAgent(BaseResourceGenerationAgent[ReviewPracticeNodeBlockV2
         return self.validate(artifact, spec=spec, context=context)
     def validate(self, artifact: GeneratedArtifact, *, spec: ResourceSpec, context: ResourceGenerationContext) -> GeneratedArtifact:
         package=artifact.artifact_data.get("review_practice_package")
-        if not isinstance(package, dict) or [item.get("skill_node_id") for item in package.get("node_blocks", [])] != list(spec.knowledge_points): raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
+        if not isinstance(package, dict): raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
+        try:
+            # Re-validate the persisted boundary after question IDs and hashes
+            # are materialized; the learner-facing renderer must remain the
+            # existing V2 shape.
+            ReviewPracticePackageV2.model_validate(package)
+        except ValueError as exc:
+            raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422) from exc
+        if [item.get("skill_node_id") for item in package.get("node_blocks", [])] != list(spec.knowledge_points): raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
         if package.get("payload_hash") != _canonical_hash({key:value for key,value in package.items() if key != "payload_hash"}) or artifact.content_text != render_review_practice_markdown(package): raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
         return artifact

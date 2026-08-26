@@ -21,6 +21,8 @@ def _visible_text(scene: dict[str, Any]) -> str:
         if not isinstance(component, dict) or not str(component.get("component") or "").startswith("review_"):
             continue
         values.append(component.get("text"))
+        if component.get("component") == "review_completion":
+            values.extend((component.get("overall_summary"), "节点完成情况", "自评结果"))
         items = component.get("items") or ([component.get("item")] if component.get("item") else [])
         for item in items:
             if isinstance(item, dict):
@@ -46,6 +48,17 @@ def page_quality_issues(document: dict[str, Any]) -> list[dict[str, Any]]:
             for block in (scene.get("component_blocks") or []) if isinstance(block, dict)
         )
         effective_zones = len([block for block in (scene.get("component_blocks") or []) if isinstance(block, dict) and str(block.get("text") or "").strip()])
+        # The completion component renders an overview and a node-status
+        # section inside one registered component. Count those renderer-owned
+        # regions separately so the designed summary page is not classified
+        # as a thin page merely because it has one component block.
+        if any(
+            isinstance(block, dict)
+            and block.get("component") == "review_completion"
+            and (block.get("overall_summary") or block.get("items"))
+            for block in scene.get("component_blocks") or []
+        ):
+            effective_zones += 2
         if role.startswith("review_"):
             for block in scene.get("component_blocks") or []:
                 if isinstance(block, dict) and str(block.get("component") or "").startswith("review_"):

@@ -77,7 +77,19 @@ def quality_review(document: dict[str, Any]) -> list[dict[str, Any]]:
     kinds = [scene.get("kind") for scene in scenes]
     if not kinds or kinds[0] != "intro":
         issues.append({"code": "MISSING_INTRO"})
-    if not kinds or kinds[-1] != "recap":
+    # A structured practice guide intentionally ends on its reflection page.
+    # That page is renderer-owned JSON content, so its scene kind remains
+    # ``practice`` even though it is the guide's recap/summary page.  Treating
+    # only a generic ``kind=recap`` as a valid close incorrectly quarantines
+    # the deterministic guide after the duplicate final recap was removed.
+    final_scene = scenes[-1] if scenes else {}
+    structured_practice_reflection = (
+        final_scene.get("kind") == "practice"
+        and final_scene.get("page_role") == "practice_workspace"
+        and final_scene.get("practice_json_schema_version") == "3.0"
+        and final_scene.get("practice_variant") == "reflect"
+    )
+    if not kinds or (kinds[-1] != "recap" and not structured_practice_reflection):
         issues.append({"code": "MISSING_RECAP"})
     if len(scenes) > 24:
         issues.append({"code": "TOO_MANY_SCENES"})

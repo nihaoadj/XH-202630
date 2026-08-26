@@ -22,7 +22,7 @@ assert.deepEqual(buildCoursewareBatchRequest({
   preferences: { learning_goal: '掌握检索', expected_duration_minutes: 30, interaction_intensity: 'high' },
 }), {
   learner_id: 'learner-1', resource_ids: ['lecture-1', 'practice-1'],
-  learning_goal: '掌握检索', expected_duration_minutes: 30, interaction_intensity: 'high',
+  learning_goal: '掌握检索', expected_duration_minutes: 30,
 })
 
 let calls = 0
@@ -46,11 +46,16 @@ assert.match(
 assert.match(resourcesView, /path: '\/generate'/, 'learning resources must hand courseware creation to the generation page')
 assert.doesNotMatch(resourcesView, /waitForCoursewareTerminal/, 'learning resources must not wait for courseware generation')
 assert.match(generationView, /CoursewareGenerationWorkspace/, 'generation page must host the courseware workspace')
-assert.match(generationView, /互动课件生成/, 'generation page must expose a direct courseware workspace switch')
-assert.match(generationView, /generation_workspace_kind/, 'generation page must restore the selected workspace after navigation')
+assert.match(generationView, /command="courseware"/, 'generation page must expose a direct courseware workspace switch')
+assert.match(generationView, /selectedCoursewareJob/, 'generation page must restore the selected courseware workspace after navigation')
+assert.match(generationView, /source_batch_id \|\| publishedJob\.run_id/, 'embedded published courseware must navigate with a stable resource batch or run')
 assert.match(coursewareWorkspace, /coursewareApi\.listJobs/, 'courseware workspace must restore learner task history')
 assert.match(coursewareWorkspace, /kind: 'courseware'/, 'courseware creation must keep the generation workspace route')
 assert.match(coursewareWorkspace, /courseware_active_run_id/, 'courseware workspace must restore the last active courseware run')
+assert.match(coursewareWorkspace, /source_batch_id \|\| currentJob\.value\.run_id/, 'published courseware must fall back to its own run when no source batch exists')
+const coursewareViewer = readFileSync(new URL('../src/features/courseware/CoursewareViewer.vue', import.meta.url), 'utf8')
+assert.match(coursewareViewer, /:key="lifecycle"/, 'courseware preview iframe must be replaced when the release changes')
+assert.match(coursewareViewer, /previewUrl\(resource\.resource_id, resource\.released_release_id \|\| resource\.release_id\)/, 'courseware preview must be bound to the active release')
 assert.doesNotMatch(coursewareWorkspace, /视觉主题|v-model="preferences\.visual_style_id"|<el-option label="编辑风"/, 'courseware generation must not expose a selectable visual style')
 assert.match(coursewareWorkspace, /coursewareApi\.getJobDetail\(restoredRunId\)/, 'courseware workspace must recover the saved task when the task-list API is temporarily unavailable')
 assert.match(focusSwitcher, /interactive_courseware/, 'shared focus switcher must include courseware resources')

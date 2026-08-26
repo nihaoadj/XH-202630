@@ -84,6 +84,8 @@ def _render_component_block(
             )
         if role == "practice_reflection_goal":
             return f'<aside {attributes} data-practice-reflection-goal aria-label="{label}"><small class="component-english-label">REFLECTION GOAL</small><strong>{label}</strong><div class="component-content">{rich_text}</div></aside>'
+        if scene_page_role == "cover" and index == 0:
+            return f'<aside {attributes} aria-label="{label}"><strong>{label}</strong><div class="component-content">{rich_text}</div></aside>'
         return f'<aside {attributes} aria-label="关键点"><div class="component-content">{rich_text}</div></aside>'
     if definition.renderer == "compare":
         return f'<section {attributes} aria-label="对比说明"><div class="component-content">{rich_text}</div></section>'
@@ -405,7 +407,7 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
             if evidence_path:
                 instruction_attributes += f' data-evidence-json-path="{evidence_path}"'
         lead = f'<p class="scene-lead"{instruction_attributes}>{_text(scene.get("lead"))}</p>' if scene.get("lead") else ""
-        question = f'<p class="scene-question">{_text(scene.get("key_question"))}</p>' if scene.get("key_question") else ""
+        question = f'<p class="scene-question">{_text(scene.get("key_question"))}</p>' if scene.get("key_question") and scene.get("page_role") != "cover" else ""
         conclusion = f'<p class="scene-conclusion">{_text(scene.get("conclusion"))}</p>' if scene.get("conclusion") else ""
         structured_step_attribute = ' data-practice-json-step="true"' if is_structured_practice_step else ''
         structured_phase_attribute = (
@@ -432,7 +434,16 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
             f'<span class="practice-phase-kicker">{phase_kicker}</span>'
             if phase_kicker and not is_structured_practice_reflection else ''
         )
-        scene_kicker = resource_name if scene.get("page_role") == "cover" else _text(scene.get("page_role") or scene.get("kind"))
+        # The practice-guide cover uses a compact, stable English category
+        # label.  The generated Chinese title remains the page heading; using
+        # the resource name here made the small kicker repeat a long topic.
+        scene_kicker = (
+            "PRACTICE GUIDE"
+            if scene.get("page_role") == "cover" and scene.get("llm_enriched")
+            else resource_name
+            if scene.get("page_role") == "cover"
+            else _text(scene.get("page_role") or scene.get("kind"))
+        )
         rendered_scenes.append(
             f'<section class="scene recipe-{_text(recipe["recipe_id"])}{active_class}" data-scene-id="{_text(scene.get("scene_id") or f"scene-{index}")}" data-page-role="{_text(scene.get("page_role"))}" data-practice-variant="{_text(scene.get("practice_variant") or "guided")}" data-visual-style="{_text(visual_style_id or "courseware-default")}"{structured_step_attribute}{structured_phase_attribute}{structured_reflection_attribute} data-recipe-id="{_text(recipe["recipe_id"])}" data-decoration-id="{_text(recipe["decoration_id"])}" aria-label="第 {index + 1} 节">'
             f'<header class="scene-header">{reflection_kicker}{phase_kicker_markup}<span class="scene-kicker">{scene_kicker}</span><h2{title_attribute}>{scene_heading}</h2>{question}{lead}</header>'

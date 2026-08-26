@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.config import get_settings
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.core.llm.gateway import LLMGateway
 from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
@@ -49,6 +50,7 @@ class CaseStudyAgent(BaseResourceGenerationAgent):
         llm_gateway: LLMGateway,
         **_: object,
     ) -> GeneratedArtifact:
+        settings = get_settings()
         result = self.invoke_plain_text(
             spec=spec,
             context=context,
@@ -61,6 +63,14 @@ class CaseStudyAgent(BaseResourceGenerationAgent):
                 ),
             ],
             representation="text",
+            # Case studies are bounded long-form Markdown. Keep their
+            # provider call separate from the shorter generic generator
+            # allowance so a complete artifact is not cut off by the default
+            # request budget.
+            max_output_tokens=16384,
+            strict_max_output_tokens=True,
+            request_timeout_seconds=min(600.0, max(300.0, settings.text_resource_request_timeout_seconds)),
+            max_attempts=settings.llm_resource_generation_max_attempts,
         )
         artifact = GeneratedArtifact(
             metadata=self.metadata(

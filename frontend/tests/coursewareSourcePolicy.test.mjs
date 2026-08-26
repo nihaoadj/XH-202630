@@ -17,6 +17,6 @@ assert.deepEqual(buildCoursewareBatchRequest({
   learnerId: 'learner-1', resourceIds: ['lecture-a', 'guide-a'], preferences: { interaction_intensity: 'high' },
 }), {
   learner_id: 'learner-1', resource_ids: ['lecture-a', 'guide-a'], learning_goal: null,
-  expected_duration_minutes: null, interaction_intensity: 'high',
+  expected_duration_minutes: null,
 })
 console.log('courseware source policy tests passed')

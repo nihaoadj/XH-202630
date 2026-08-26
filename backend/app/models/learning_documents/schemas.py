@@ -235,6 +235,9 @@ class GenerateRequest(BaseModel):
     include_claim_check: bool = Field(default=True, description="是否进行 Claim 级审核；普通审核开启时默认开启")
     # Initial generation plus one revision means at most two visible attempts.
     max_iterations: int = Field(default=1, ge=0, le=3, description="最大业务返工次数")
+    claim_max_iterations: int = Field(
+        default=0, ge=0, le=3, description="Claim 审核专用最大返工次数；当前默认不返工"
+    )
     constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
 
     @field_validator("topic")

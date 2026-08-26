@@ -135,6 +135,7 @@ class GeneratorInput(AgentInput):
     include_review: bool = True
     generation_attempt: int = Field(default=1, ge=1)
     revision_count: int = Field(default=0, ge=0)
+    claim_revision_count: int = Field(default=0, ge=0)
 
 
 class GeneratorOutput(BaseModel):

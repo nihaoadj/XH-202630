@@ -6,11 +6,11 @@
       type="button"
       :class="{ 'is-active': resource.resource_id === selectedResourceId }"
       :aria-pressed="resource.resource_id === selectedResourceId"
-      :aria-label="`切换到第 ${index + 1} 份：${resource.resource_type || '学习资源'}`"
+      :aria-label="`切换到第 ${index + 1} 份：${resourceShelfTypeLabel(resource)}`"
       @click="$emit('select-resource', resource.resource_id)"
     >
       <span>{{ String(index + 1).padStart(2, '0') }}</span>
-      <strong>{{ resource.resource_type || '学习资源' }}</strong>
+      <strong>{{ resourceShelfTypeLabel(resource) }}</strong>
       <small>{{ resource.resource_kind === 'interactive_courseware' ? '互动课件' : resource.difficulty || '待分级' }}</small>
       <i>→</i>
     </button>
@@ -18,6 +18,8 @@
 </template>
 
 <script setup>
+import { resourceShelfTypeLabel } from '../../utils/resourceShelfOrder'
+
 defineProps({ resources: { type: Array, default: () => [] }, selectedResourceId: { type: String, default: '' } })
 defineEmits(['select-resource'])
 </script>

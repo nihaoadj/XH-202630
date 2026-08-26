@@ -204,6 +204,14 @@ def build_courseware_spec(
                     "补充标题、教学意图和已注册组件偏好；不得重新生成、删除、重排或改写来源槽位。"
                     "只能使用 plan_enrichment_contract 中列出的 ID 与对应场景允许的组件；"
                     "recap 不接受 enrichment。数组顺序不重要，未知 ID 和未知组件会被拒绝。"
+                    "如果输入包含 schema_version=3.0 的实操指南，必须额外填写 practice_cover："
+                    "cover_title 生成简洁、适合大标题展示的实操课件标题，不要带‘互动课件’、页码或长段落；"
+                    "cover_lead 用一句话说明这份实操指南解决的实际任务；"
+                    "learning_goal 用一句话说明完成这份实操指南后应具备的可观察能力；"
+                    "learning_method 用一段简短说明介绍本指南的使用方法，例如先阅读每页的操作说明、"
+                    "再实际执行并用完成验证核对结果；不要输出编号步骤、清单或路径；"
+                    "completion_standard 说明什么结果才算完成。"
+                    "这些内容只能概括输入的实操 JSON，不得虚构工具、步骤、指标或学习结果。"
                 )),
                 HumanMessage(content=json.dumps({
                     "sources": [
@@ -214,6 +222,17 @@ def build_courseware_spec(
                     ],
                     "storyboard": learning_design.storyboard.model_dump(mode="json") if learning_design else None,
                     "plan_enrichment_contract": enrichment_contract,
+                    "practice_guides": [
+                        {
+                            "resource_id": item["resource_id"],
+                            "topic": item.get("topic"),
+                            "practice_guide_payload": item.get("practice_guide_payload"),
+                        }
+                        for item in snapshots
+                        if item.get("role") == "practice"
+                        and isinstance(item.get("practice_guide_payload"), dict)
+                        and item["practice_guide_payload"].get("schema_version") == "3.0"
+                    ],
                     "learner_request": request_options or {},
                 }, ensure_ascii=False)),
             ],
@@ -225,13 +244,30 @@ def build_courseware_spec(
             options=allowance or llm_gateway.options_for("generator", temperature=0.0),
         )
         if learning_design is not None:
+            has_structured_practice = any(
+                item.get("role") == "practice"
+                and isinstance(item.get("practice_guide_payload"), dict)
+                and item["practice_guide_payload"].get("schema_version") == "3.0"
+                for item in snapshots
+            )
+            if has_structured_practice and result.output.practice_cover is None:
+                raise ValueError("实操指南规划缺少 practice_cover")
             spec, scene_ids, objective_ids = _platform_spec(learning_design, snapshots)
-            result.output = merge_plan_enrichment(
+            # ``merge_plan_enrichment`` deliberately applies only the platform
+            # owned title/objective/slot projections to ``spec``.  Keep the
+            # original planner payload as well: the practice cover fields are
+            # renderer-safe prose consumed later by deterministic composition.
+            # Without this assignment they were validated successfully here,
+            # then silently discarded before the spec was persisted.
+            enrichment = result.output
+            spec = merge_plan_enrichment(
                 spec,
-                result.output,
+                enrichment,
                 scene_ids=scene_ids,
                 objective_ids=objective_ids,
             )
+            spec.enrichment = enrichment
+            result.output = spec
         allowed = {item["resource_id"] for item in snapshots}
         allowed_blocks = {
             item["resource_id"]: {

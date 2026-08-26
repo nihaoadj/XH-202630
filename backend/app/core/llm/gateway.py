@@ -276,6 +276,7 @@ class LLMGateway:
         resource_generator_max_output_tokens: int | None = None,
         claim_max_attempts: int | None = None,
         claim_max_output_tokens: int | None = None,
+        claim_truncated_retry_output_tokens: int | None = None,
         claim_request_timeout_seconds: float | None = None,
         claim_schema_repair_attempts: int | None = None,
         sleep: Callable[[float], None] = time.sleep,
@@ -301,6 +302,11 @@ class LLMGateway:
         self.claim_max_attempts = claim_max_attempts or self.default_options.max_attempts
         self.claim_max_output_tokens = (
             claim_max_output_tokens or self.default_options.max_output_tokens
+        )
+        self.claim_truncated_retry_output_tokens = min(
+            claim_truncated_retry_output_tokens
+            or self.claim_max_output_tokens * 2,
+            65536,
         )
         self.claim_request_timeout_seconds = (
             claim_request_timeout_seconds
@@ -356,6 +362,9 @@ class LLMGateway:
         }
         if node_name in {"claim_extractor", "claim_judge"}:
             updates["schema_repair_attempts"] = self.claim_schema_repair_attempts
+            updates["truncated_retry_output_tokens"] = (
+                self.claim_truncated_retry_output_tokens
+            )
         return self.default_options.model_copy(update=updates)
 
     def _remaining_seconds(self, context: LLMCallContext) -> float | None:
@@ -554,6 +563,7 @@ class LLMGateway:
         call_messages = list(original_messages)
         finish_reason: str | None = None
         repair_attempts = 0
+        next_output_tokens = options.max_output_tokens
 
         for attempt in range(1, options.max_attempts + 1):
             remaining = self._remaining_seconds(context)
@@ -592,7 +602,7 @@ class LLMGateway:
                     output_schema=output_schema,
                     mode=mode,
                     temperature=options.temperature,
-                    max_output_tokens=options.max_output_tokens,
+                    max_output_tokens=next_output_tokens,
                 )
                 finish_reason = raw.finish_reason
                 if raw.response_metadata.get("refusal") or finish_reason == "content_filter":
@@ -715,6 +725,12 @@ class LLMGateway:
                     raw.content,
                     failure,
                 )
+                if failure.code == ErrorCode.LLM_OUTPUT_TRUNCATED:
+                    next_output_tokens = min(
+                        options.truncated_retry_output_tokens
+                        or options.max_output_tokens,
+                        65536,
+                    )
             elif can_repair:
                 # A provider can report finish_reason=length before exposing
                 # any parseable raw payload.  Retrying the same prompt merely
@@ -726,6 +742,12 @@ class LLMGateway:
                     output_schema,
                     recovery_attempt=attempt,
                 )
+                if failure.code == ErrorCode.LLM_OUTPUT_TRUNCATED:
+                    next_output_tokens = min(
+                        options.truncated_retry_output_tokens
+                        or options.max_output_tokens,
+                        65536,
+                    )
             elif can_empty_output_retry:
                 call_messages = self._empty_output_recovery_messages(
                     original_messages,
@@ -916,6 +938,7 @@ def default_llm_gateway() -> LLMGateway:
         ),
         claim_max_attempts=settings.claim_max_attempts,
         claim_max_output_tokens=settings.claim_max_output_tokens,
+        claim_truncated_retry_output_tokens=settings.claim_truncated_retry_output_tokens,
         claim_request_timeout_seconds=settings.claim_request_timeout_seconds,
         claim_schema_repair_attempts=settings.claim_schema_repair_attempts,
     )

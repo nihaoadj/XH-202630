@@ -13,7 +13,12 @@ from app.agents.learning_agents.diagnosis_agent import diagnose_node
 from app.agents.resource_workflows.learning_documents.generator_agent import generate_node, progress_summary
 from app.agents.resource_workflows.learning_documents.planner_agent import plan_node
 from app.agents.resource_workflows.learning_documents.reviewer_agent import review_node
-from app.agents.resource_workflows.learning_documents.claim_review_agent import claim_decide_node, claim_extract_node, claim_judge_node
+from app.agents.resource_workflows.learning_documents.claim_review_agent import (
+    claim_decide_node,
+    claim_eligible_resource_ids,
+    claim_extract_node,
+    claim_judge_node,
+)
 from app.agents.resource_workflows.learning_documents.state import AgentState
 from app.agents.shared.retrieval import retrieve_node
 from app.core.security.errors import ErrorCode
@@ -34,6 +39,7 @@ from app.models.shared.workflow import (
     StepStatus,
     WorkflowStatus,
 )
+from app.models.reviews.claims import ClaimMetricStatus
 from app.agents.shared.policies import (
     locked_human_review_resource_ids,
     may_publish,
@@ -249,14 +255,12 @@ def route_after_review(state: AgentState) -> str:
         # previously went straight to human review, so one malformed test
         # response could also prevent its sibling lecture from being retried.
         return "prepare_revision"
-    if decision == ReviewDecision.REVISE:
-        if state.get("revision_count", 0) < state.get("max_iterations", 1):
-            return "prepare_revision"
-        return "finalize"
+    if decision == ReviewDecision.REVISE and state.get("revision_count", 0) < state.get("max_iterations", 1):
+        return "prepare_revision"
     # Claim audit is an explicitly requested independent evidence check.  It
     # must not disappear merely because the ordinary reviewer concludes
     # reject/human_review; those outcomes still control publication later.
-    if state.get("include_claim_check", False):
+    if state.get("include_claim_check", False) and claim_eligible_resource_ids(state):
         return "claim_extract"
     return "finalize"
 
@@ -270,6 +274,14 @@ def route_after_claim_extract(state: AgentState) -> str:
 
 
 def route_after_claim_decide(state: AgentState) -> str:
+    claim_revision_requested = any(
+        isinstance(instruction, dict) and instruction.get("target_claim_ids")
+        for instruction in state.get("review_result", {}).get("revision_instructions", [])
+    )
+    if claim_revision_requested and (
+        state.get("claim_revision_count", 0) < state.get("claim_max_iterations", 1)
+    ):
+        return "prepare_claim_revision"
     if _review_decision(state) == ReviewDecision.REVISE and (
         state.get("revision_count", 0) < state.get("max_iterations", 1)
     ):
@@ -285,19 +297,26 @@ def decide_next(state: AgentState) -> str:
     return "generate" if revision_count < state.get("max_iterations", 1) else "decide"
 
 
-def prepare_revision_node(state: AgentState) -> dict[str, Any]:
-    revision_count = state.get("revision_count", 0) + 1
-    generation_attempt = revision_count + 1
+def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, Any]:
+    revision_count = state.get("revision_count", 0) + (0 if claim_only else 1)
+    claim_revision_count = state.get("claim_revision_count", 0) + (1 if claim_only else 0)
+    generation_attempt = revision_count + claim_revision_count + 1
     step_context = start_step(state, attempt=generation_attempt)
     review = state.get("review_result", {})
-    targets = target_resource_types(review.get("revision_instructions", []))
-    targets.update(
-        item.get("resource_type")
-        for item in state.get("resource_executions", [])
-        if isinstance(item, dict)
-        and item.get("validation_status") == "failed"
-        and item.get("resource_type")
-    )
+    instructions = [
+        instruction for instruction in review.get("revision_instructions", [])
+        if isinstance(instruction, dict)
+        and bool(instruction.get("target_claim_ids")) == claim_only
+    ]
+    targets = target_resource_types(instructions)
+    if not claim_only:
+        targets.update(
+            item.get("resource_type")
+            for item in state.get("resource_executions", [])
+            if isinstance(item, dict)
+            and item.get("validation_status") == "failed"
+            and item.get("resource_type")
+        )
     # Carry actionable reviewer feedback into the next generation context.
     # Previously only the target resource type was consumed.
     review_feedback = {
@@ -305,12 +324,12 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
         "issues": [
             issue for issue in review.get("issues", [])
             if isinstance(issue, dict)
+            and bool(issue.get("claim_ids")) == claim_only
             and (not issue.get("resource_type") or issue.get("resource_type") in targets)
         ],
         "revision_instructions": [
-            instruction for instruction in review.get("revision_instructions", [])
-            if isinstance(instruction, dict)
-            and instruction.get("target_resource_type") in targets
+            instruction for instruction in instructions
+            if instruction.get("target_resource_type") in targets
         ],
     }
     constraints = dict(state.get("constraints") or {})
@@ -326,11 +345,17 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
     trace_item = build_trace_item(
         state,
         agent_name="supervisor",
-        action="准备返工",
+        action="准备 Claim 返工" if claim_only else "准备普通审核返工",
         status=StepStatus.SUCCESS,
-        input_summary=f"审核决策：{review.get('decision', 'revise')}；已返工：{revision_count - 1}",
-        output_summary=f"进入第 {generation_attempt} 次生成（第 {revision_count} 次返工）",
-        decision_reason=review.get("suggestion") or "审核要求修改且仍有业务返工额度。",
+        input_summary=(
+            f"Claim 已返工：{claim_revision_count - 1}/{state.get('claim_max_iterations', 1)}"
+            if claim_only else f"普通审核已返工：{revision_count - 1}/{state.get('max_iterations', 1)}"
+        ),
+        output_summary=(
+            f"进入第 {generation_attempt} 次生成（第 {claim_revision_count} 次 Claim 返工）"
+            if claim_only else f"进入第 {generation_attempt} 次生成（第 {revision_count} 次普通审核返工）"
+        ),
+        decision_reason=review.get("suggestion") or "审核要求修改且仍有对应返工额度。",
         resource_ids=[resource.resource_id for resource in state.get("generated_resources", [])],
         attempt=generation_attempt,
         step_context=step_context,
@@ -340,14 +365,24 @@ def prepare_revision_node(state: AgentState) -> dict[str, Any]:
         "extracted_claims": [],
         "claim_judgements": [],
         "claim_metrics": {},
+        "claim_eligible_resource_ids": [],
         "claim_check_status": ClaimCheckStatus.PENDING.value,
         "revision_count": revision_count,
+        "claim_revision_count": claim_revision_count,
         "generation_attempt": generation_attempt,
         "current_node": "prepare_revision",
         "trace": [trace_item],
         "errors": [],
         "constraints": constraints,
     }
+
+
+def prepare_revision_node(state: AgentState) -> dict[str, Any]:
+    return _prepare_revision_node(state, claim_only=False)
+
+
+def prepare_claim_revision_node(state: AgentState) -> dict[str, Any]:
+    return _prepare_revision_node(state, claim_only=True)
 
 
 def finalize_draft_node(state: AgentState) -> dict[str, Any]:
@@ -434,7 +469,12 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     )
     review["claim_check_status"] = claim_status
     review["revision_count"] = state.get("revision_count", 0)
+    review["claim_revision_count"] = state.get("claim_revision_count", 0)
+    review["claim_max_iterations"] = state.get("claim_max_iterations", 1)
     resource_reviews = state.get("resource_review_results", {})
+    claim_eligible_ids = set(state.get("claim_eligible_resource_ids", []))
+    claim_metrics = state.get("claim_metrics", {})
+    claim_failed_ids = set(state.get("claim_failed_resource_ids", []))
     claim_problem_ids = {
         str(item.get("resource_id"))
         for item in review.get("issues", [])
@@ -468,6 +508,22 @@ def decide_node(state: AgentState) -> dict[str, Any]:
                 "human_review": ResourceStatus.HUMAN_REVIEW,
                 "revise": ResourceStatus.HUMAN_REVIEW,
             }.get(item_decision, resource_status)
+        if (
+            state.get("include_claim_check", False)
+            and item_status == ResourceStatus.APPROVED
+        ):
+            metric = claim_metrics.get(canonical_id, {})
+            claim_gate_passed = (
+                canonical_id in claim_eligible_ids
+                and canonical_id not in claim_failed_ids
+                and canonical_id not in claim_problem_ids
+                and metric.get("metric_status") in {
+                    ClaimMetricStatus.COMPLETE.value,
+                    ClaimMetricStatus.NOT_APPLICABLE.value,
+                }
+            )
+            if not claim_gate_passed:
+                item_status = ResourceStatus.HUMAN_REVIEW
         publish = item_status == ResourceStatus.APPROVED
         resources.append(resource.model_copy(update={
             "review_status": item_status.value,
@@ -475,7 +531,7 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             "published_at": resource.published_at or now if publish else None,
         }))
     review_ids = review.get("review_ids", {})
-    metrics = state.get("claim_metrics", {})
+    metrics = claim_metrics
     enriched_resources = []
     for resource in resources:
         metric = metrics.get(resource.resource_id, {})
@@ -521,7 +577,10 @@ def decide_node(state: AgentState) -> dict[str, Any]:
         agent_name="supervisor",
         action="协同决策",
         status=trace_status,
-        input_summary=f"审核决策：{decision.value}；返工次数：{state.get('revision_count', 0)}/{state.get('max_iterations', 1)}",
+        input_summary=(
+            f"审核决策：{decision.value}；普通返工：{state.get('revision_count', 0)}/{state.get('max_iterations', 1)}；"
+            f"Claim 返工：{state.get('claim_revision_count', 0)}/{state.get('claim_max_iterations', 1)}"
+        ),
         output_summary=f"最终决策：{final_decision}",
         decision_reason="综合审核结论、降级状态和业务返工额度确定资源终态。",
         resource_ids=[resource.resource_id for resource in resources],
@@ -589,6 +648,7 @@ def build_workflow(
     )
     add_recorded("review", _bind_llm_gateway(review_node, gateway))
     add_recorded("prepare_revision", prepare_revision_node)
+    add_recorded("prepare_claim_revision", prepare_claim_revision_node)
     add_recorded("finalize_draft", finalize_draft_node)
     add_recorded("claim_extract", _bind_llm_gateway(claim_extract_node, gateway))
     add_recorded("claim_judge", _bind_llm_gateway(claim_judge_node, gateway))
@@ -627,6 +687,7 @@ def build_workflow(
         },
     )
     workflow.add_edge("prepare_revision", "generate")
+    workflow.add_edge("prepare_claim_revision", "generate")
     workflow.add_edge("finalize_draft", END)
     workflow.add_conditional_edges(
         "claim_extract",
@@ -637,7 +698,11 @@ def build_workflow(
     workflow.add_conditional_edges(
         "claim_decide",
         route_after_claim_decide,
-        {"prepare_revision": "prepare_revision", "finalize": "finalize"},
+        {
+            "prepare_revision": "prepare_revision",
+            "prepare_claim_revision": "prepare_claim_revision",
+            "finalize": "finalize",
+        },
     )
     workflow.add_edge("finalize", END)
     workflow.add_edge("finalize_evidence_insufficient", END)

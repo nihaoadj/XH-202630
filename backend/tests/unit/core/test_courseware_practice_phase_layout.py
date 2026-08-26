@@ -218,6 +218,8 @@ def test_verify_phase_uses_full_height_wrapping_checklist_layout():
     html = render_courseware(_verify_document()).decode("utf-8")
 
     assert 'data-practice-json-phase="verify"' in html
+    assert '.scene.active.recipe-practice_workspace[data-practice-json-phase="prepare"],.scene.active.recipe-practice_workspace[data-practice-json-phase="verify"]{display:flex!important' in html
+    assert '.recipe-practice_workspace[data-practice-json-phase="prepare"],.recipe-practice_workspace[data-practice-json-phase="verify"]{display:flex!important' not in html
     assert '.recipe-practice_workspace[data-practice-json-phase="verify"] .scene-body>[data-practice-phase-items]{align-self:stretch!important;height:100%!important' in html
     assert 'background:linear-gradient(135deg,#f7fcff,#e9f7f6)!important' in html
     assert 'overflow-x:hidden!important;overflow-y:auto!important' in html

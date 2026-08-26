@@ -359,7 +359,7 @@ def build_learning_design(
             ))
             for item in practices[:2]
         ) + len(checklists[:1])
-        + int(bool(usable_assessment)) + 1  # recap
+        + int(bool(usable_assessment))
     )
     lecture_page_budget = max(1, scene_cap - non_lecture_scene_count) if lectures else 0
 
@@ -515,10 +515,10 @@ def build_learning_design(
     quota_status = "met" if verifiable or intensity != "high" else "constrained"
     if quota_status == "constrained":
         warnings.append({"code": "INSUFFICIENT_SCORED_EVIDENCE", "message": "来源没有可验证练习，互动配额已受限"})
-    if len(scenes) + 1 < target_scenes:
+    if len(scenes) < target_scenes:
         warnings.append({
             "code": "SOURCE_DENSITY_REDUCED_PAGE_COUNT",
-            "message": f"冻结来源仅支持 {len(scenes) + 1} 个完整页面，已减少页数而非循环复制内容",
+            "message": f"冻结来源仅支持 {len(scenes)} 个完整页面，已减少页数而非循环复制内容",
         })
     concept_rows = []
     for source in adopted_ordered:
@@ -531,18 +531,6 @@ def build_learning_design(
         right = str(adopted_ordered[index]["resource_id"])
         relation_type = "conflict" if any(item.get("source_relation") == "conflict" for item in (adopted_ordered[index - 1], adopted_ordered[index])) else "complementary"
         relations.append({"relation_type": relation_type, "from_concept_id": f"concept:{left}:0", "to_concept_id": f"concept:{right}:0", "source_refs": ()})
-    recap_sources = tuple(str(item["resource_id"]) for item in adopted_ordered)
-    recap_blocks = tuple(str(block["block_id"]) for item in adopted_ordered for block in (item.get("blocks") or [])[:1] if block.get("block_id"))
-    scenes.append(StoryboardScene(
-        scene_id="scene:recap", kind="recap", objective_ids=tuple(item.objective_id for item in objectives),
-        source_resource_ids=recap_sources, source_block_ids=recap_blocks, difficulty=difficulty,
-        information_density=density, interaction_purpose="recall",
-        allowed_components=("recap",), allowed_component_ids=("recap",),
-        page_role="summary_action", layout_recipe_id="recap_dashboard",
-        key_question="我已经完成了哪些目标，下一步应采取什么行动？",
-        required_zones=("objective_status", "core_conclusions", "next_actions"),
-        content_budget={"min_zones": 3, "max_zones": 4, "min_chars": 120, "max_chars": 420},
-    ))
     for scene in scenes:
         for resource_id in scene.source_resource_ids:
             if resource_id in usage_by_resource and scene.scene_id not in usage_by_resource[resource_id]["scene_ids"]:

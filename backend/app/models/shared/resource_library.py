@@ -22,5 +22,9 @@ class ResourceLibraryItem(BaseModel):
     run_id: str | None = None
     batch_id: str | None = None
     resource_type: str | None = None
+    # For interactive courseware, retain the type of the text resource it
+    # was generated from so learner-facing projections can label and group
+    # the two representations together.
+    source_resource_type: str | None = None
     difficulty: str | None = None
     knowledge_points: list[str] = Field(default_factory=list)

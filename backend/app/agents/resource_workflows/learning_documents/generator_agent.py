@@ -216,7 +216,7 @@ def generate_node(
         and item.get("validation_status") == "failed"
         and item.get("resource_type")
     )
-    active_types = (revision_targets if node_input.revision_count and node_input.generated_resources
+    active_types = (revision_targets if (node_input.revision_count or node_input.claim_revision_count) and node_input.generated_resources
                     else {item.resource_type for item in specs})
     if not active_types:
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
