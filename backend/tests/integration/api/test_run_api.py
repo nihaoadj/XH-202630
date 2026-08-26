@@ -4,9 +4,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from app.api import runs
-from app.core.errors import ApplicationError
-from app.services.run_query_service import RunQueryService
+from app.api.runs import run_queries as runs
+from app.core.security.errors import ApplicationError
+from app.services.runs.queries import RunQueryService
 from backend.tests.fakes.persistence import create_command, memory_repository
 
 

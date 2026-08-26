@@ -14,7 +14,7 @@ from app.db.audit.base import (
     PersistenceConflict,
     RunNotFound,
 )
-from app.db.models import (
+from app.db.shared.models import (
     AgentRunORM,
     AgentStepORM,
     ResourceClaimORM,
@@ -23,7 +23,7 @@ from app.db.models import (
     WorkflowCheckpointORM,
     WorkflowEventORM,
 )
-from app.models.persistence import (
+from app.models.shared.persistence import (
     AgentRunRecord,
     AgentStepRecord,
     BeginStepCommand,
@@ -38,8 +38,8 @@ from app.models.persistence import (
     canonical_hash,
     require_run_transition,
 )
-from app.models.knowledge import SourceLocator, SourceType
-from app.models.schemas import ResourceClaim, ReviewSummary, SourceRef
+from app.models.knowledge.knowledge import SourceLocator, SourceType
+from app.models.learning_documents.schemas import ResourceClaim, ReviewSummary, SourceRef
 
 
 def _as_dict(value: Any) -> dict[str, Any]:

@@ -4,18 +4,18 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import feedback
+from app.api.feedback import feedback
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.feedback_loop.memory import MemoryFeedbackLoopRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import LearnerProfile, LearningResource
-from app.services.feedback_service import FeedbackService
-from app.services.profile_service import ProfileService
-from app.services.resource_service import ResourceService
+from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.services.feedback.feedback import FeedbackService
+from app.services.learners.profiles import ProfileService
+from app.services.learning_documents.resources import ResourceService
 
 
-def test_formal_feedback_api_updates_profile_and_exposes_attempt_and_path():
+def test_client_aggregated_formal_feedback_is_rejected_as_unverified():
     learners = MemoryLearnerRepository()
     learners.save(LearnerProfile(
         learner_id="learner",
@@ -64,13 +64,7 @@ def test_formal_feedback_api_updates_profile_and_exposes_attempt_and_path():
             "total_count": 10,
         }],
     })
-    assert response.status_code == 200
-    body = response.json()
-    assert body["decision"]["action"] == "practice"
-    assert body["profile_version"] == 2
-    assert body["followup_generation_status"] == "not_requested"
-
-    assert client.get("/api/feedback/attempts/learner").json()[0]["attempt_id"] == body["attempt"]["attempt_id"]
-    path = client.get("/api/feedback/path/learner")
-    assert path.status_code == 200
-    assert path.json()["version"] >= 1
+    assert response.status_code == 422
+    assert response.json()["detail"] == "FEEDBACK_EVIDENCE_UNVERIFIED"
+    assert client.get("/api/feedback/attempts/learner").json() == []
+    assert learners.get("learner").profile_version == 1

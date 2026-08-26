@@ -6,7 +6,7 @@ from app.config import get_settings
 from app.db.audit.base import BaseAuditRepository
 from app.db.audit.memory import MemoryAuditRepository
 from app.db.audit.sql_repository import SQLAuditRepository
-from app.db.database import get_session_factory
+from app.db.shared.database import get_session_factory
 
 
 def create_audit_repository(

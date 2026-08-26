@@ -1,8 +1,8 @@
 import json
 
-from app.agents.policies import may_publish
+from app.agents.shared.policies import may_publish
 from app.db.claim.memory import MemoryClaimRepository
-from app.models.claims import (
+from app.models.reviews.claims import (
     ClaimCandidate,
     ClaimJudgementCandidate,
     ClaimType,
@@ -10,9 +10,9 @@ from app.models.claims import (
     materialize_claims,
     materialize_judgements,
 )
-from app.models.schemas import LearningResource
-from app.services.claim_evaluation import compute_competition_claim_metrics
-from app.services.p0_09_acceptance import (
+from app.models.learning_documents.schemas import LearningResource
+from app.services.reviews.claim_evaluation import compute_competition_claim_metrics
+from app.services.reports.p0_09_acceptance import (
     FIXTURE_VERSION,
     SUITE_ID,
     SUITE_VERSION,

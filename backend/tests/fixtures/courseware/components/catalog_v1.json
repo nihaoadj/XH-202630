@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "components": [
+    "callout",
+    "compare",
+    "flashcard",
+    "key_point",
+    "matching",
+    "multiple_choice",
+    "ordered_steps",
+    "ordering",
+    "recap",
+    "single_choice",
+    "steps"
+  ],
+  "required_evidence": [
+    "renderer",
+    "runtime",
+    "source_mapping",
+    "keyboard",
+    "touch_target",
+    "a11y"
+  ]
+}

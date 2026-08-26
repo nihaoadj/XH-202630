@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api import evaluation
-from app.db.models import Base, ContestEvalResultORM
-from app.services.evaluation_service import EvaluationService
+from app.api.reports import evaluation
+from app.db.shared.models import Base, ContestEvalResultORM
+from app.services.reports.evaluation import EvaluationService
 
 
 def test_evaluation_summary_aggregates_real_results_by_experiment(tmp_path):

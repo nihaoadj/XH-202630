@@ -4,9 +4,9 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import reviews
+from app.api.reviews import reviews
 from app.db.audit.memory import MemoryAuditRepository
-from app.services.review_service import ReviewService
+from app.services.reviews.reviews import ReviewService
 
 
 def test_review_endpoint_returns_claim_evidence_and_handles_missing_resource():

@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from app.models.claims import ClaimJudgement, ClaimRecord
+from app.models.reviews.claims import ClaimJudgement, ClaimRecord
 
 
 class BaseClaimRepository(ABC):

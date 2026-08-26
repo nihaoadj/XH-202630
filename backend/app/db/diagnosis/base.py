@@ -2,8 +2,8 @@
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from app.models.history_schemas import DiagnosticRunRecord
-from app.models.schemas import DiagnosticAnswerRecord, KnowledgeState
+from app.models.learners.history import DiagnosticRunRecord
+from app.models.learning_documents.schemas import DiagnosticAnswerRecord, KnowledgeState
 
 
 class BaseDiagnosisRepository(ABC):
@@ -14,6 +14,7 @@ class BaseDiagnosisRepository(ABC):
         knowledge_base_id: str,
         answers: Iterable[DiagnosticAnswerRecord],
         knowledge_states: dict[str, KnowledgeState],
+        source_id: str | None = None,
     ) -> None:
         """保存一次诊断答题提交。"""
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.models.claims import (
+from app.models.reviews.claims import (
     ClaimCandidate,
     ClaimJudgementCandidate,
     ClaimMetricStatus,
@@ -82,6 +82,32 @@ def test_materialize_claims_rejects_forged_evidence():
         )
 
 
+def test_materialize_claims_rebases_an_exact_source_text_with_a_stale_offset():
+    claims = materialize_claims(
+        candidates=[
+            ClaimCandidate(
+                claim_text="代码块由缩进定义",
+                claim_type=ClaimType.FACTUAL,
+                source_text="Python 使用缩进定义代码块。",
+                source_start=999,
+                source_end=1012,
+                source_evidence_ids=["ev-1"],
+            )
+        ],
+        resource_content="开头。Python 使用缩进定义代码块。结尾。",
+        resource_id="res",
+        resource_version=1,
+        review_id="rev",
+        run_id="run",
+        allowed_evidence_ids={"ev-1"},
+        allowed_knowledge_point_ids=set(),
+        extractor_prompt_version="v2",
+        extractor_model=None,
+    )
+    assert claims[0].source_start == 3
+    assert claims[0].source_end == 3 + len("Python 使用缩进定义代码块。")
+
+
 def test_metric_counts_claim_once_with_multiple_evidence():
     claims = _claims()
     judgements = materialize_judgements(
@@ -111,6 +137,26 @@ def test_metric_counts_claim_once_with_multiple_evidence():
     assert metric.factual_claim_total == 1
     assert metric.supported_claim_total == 1
     assert metric.claim_hallucination_rate == 0.0
+
+
+def test_judgement_envelope_accepts_shape_mismatch_but_materializer_fails_closed():
+    claims = _claims()
+    candidate = ClaimJudgementCandidate(
+        claim_id=claims[0].claim_id,
+        verdict=ClaimVerdict.SUPPORTED,
+        evidence_ids=[],
+        reason="模型未给出证据引用",
+        confidence=0.5,
+    )
+
+    with pytest.raises(ValueError, match="supported/contradicted verdict requires evidence_ids"):
+        materialize_judgements(
+            claims=[claims[0]],
+            candidates=[candidate],
+            allowed_evidence_ids={"ev-1"},
+            judge_prompt_version="p0-06-judge-v1",
+            judge_model="fake",
+        )
 
 
 def test_metric_is_null_when_factual_judgement_is_incomplete():

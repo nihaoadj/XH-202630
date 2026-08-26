@@ -3,16 +3,16 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import generate
+from app.api.generation import generation as generate
 from app.db.audit.memory import MemoryAuditRepository
-from app.db.generation_job.memory import MemoryGenerationJobRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.services import generation_service as generation_module
-from app.services.generation_job_service import GenerationJobService
-from app.services.generation_service import GenerationService
-from app.services.profile_service import ProfileService
+from app.db.generation.memory import MemoryGenerationJobRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.services.generation import generation as generation_module
+from app.services.generation.jobs import GenerationJobService
+from app.services.generation.generation import GenerationService
+from app.services.learners.profiles import ProfileService
 
 
 class _Workflow:
@@ -98,6 +98,25 @@ def test_create_generation_job_and_query_status(monkeypatch):
     stored = resource_repo.get("job-resource")
     assert stored is not None
     assert stored.run_id == run_id
+
+
+def test_create_generation_job_persists_claim_check_choice(monkeypatch):
+    client, _ = _app(monkeypatch)
+
+    response = client.post(
+        "/api/generate/jobs",
+        json=GenerateRequest(
+            learner_id="job_001",
+            topic="关闭 Claim 强化审查",
+            include_claim_check=False,
+            resource_types=["讲义"],
+        ).model_dump(mode="json"),
+    )
+
+    assert response.status_code == 200
+    status = client.get(f"/api/generate/jobs/{response.json()['run_id']}")
+    assert status.status_code == 200
+    assert status.json()["request_payload"]["include_claim_check"] is False
 
 
 def test_create_generation_job_returns_503_when_dependencies_not_ready(monkeypatch):

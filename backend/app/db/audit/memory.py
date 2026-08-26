@@ -10,7 +10,7 @@ from app.db.audit.base import (
     PersistenceConflict,
     RunNotFound,
 )
-from app.models.persistence import (
+from app.models.shared.persistence import (
     AgentRunRecord,
     AgentStepRecord,
     BeginStepCommand,
@@ -25,7 +25,7 @@ from app.models.persistence import (
     canonical_hash,
     require_run_transition,
 )
-from app.models.schemas import ResourceClaim, ReviewSummary, SourceRef
+from app.models.learning_documents.schemas import ResourceClaim, ReviewSummary, SourceRef
 
 
 def _utcnow() -> datetime:

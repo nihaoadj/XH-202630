@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 from types import SimpleNamespace
 
 from app import main as main_module
-from app.api import admin as admin_module
+from app.api.admin import administration as admin_module
 from app.config import Settings
 from app.core.health import (
     ComponentHealth,
@@ -10,7 +10,7 @@ from app.core.health import (
     KnowledgeBaseHealth,
     KnowledgeBaseHealthReport,
 )
-from app.models.knowledge import IngestionReport
+from app.models.knowledge.knowledge import IngestionReport
 
 
 def _runtime_report():

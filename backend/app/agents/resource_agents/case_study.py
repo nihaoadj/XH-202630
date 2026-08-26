@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.core.errors import ApplicationError, ErrorCode
-from app.core.llm_gateway import LLMGateway
-from app.models.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
+from app.config import get_settings
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.core.llm.gateway import LLMGateway
+from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
 
 from .base import BaseResourceGenerationAgent
 
@@ -24,7 +25,7 @@ CASE_STUDY_PROMPT = """你是 CaseStudyAgent，专门生成用于训练分析与
 8. 直接输出 Markdown 正文，不输出 JSON、HTML、脚本、资源身份字段或额外解释。
 
 稳定输出规则：
-1. 只写一个案例，全文控制在 1,800～3,500 个中文字符内，硬性不得超过 5,000 个中文字符；每个章节只解决一个明确目的，完成“复盘要点”后立即停止。
+1. 第一行必须是唯一一级标题，且严格使用输入 display_title。只写一个案例，全文控制在 1,800～3,500 个中文字符内，硬性不得超过 5,000 个中文字符；每个章节只解决一个明确目的，完成“复盘要点”后立即停止。
 2. “任务目标”固定为 2～3 个可回答的决策问题；“分析过程”固定按“事实 → 判断 → 行动”写 3～5 步；“参考方案”给出与任务目标一一对应的可验证结果。
 3. 将全部 knowledge_points 分配到“案例背景、分析过程、参考方案、复盘要点”中；每个知识点只作一次具体说明，不为凑覆盖而引入额外技术主题。
 4. 难度必须服从输入：当 difficulty 为“中级”时，使用单服务或小规模、可在单次练习中推理的情境；除非冻结 evidence 明确要求且学习目标直接要求，否则不得引入分布式部署、离线大规模实验、LLM-as-judge、治理体系或生产级运维细节。初级时进一步简化为概念辨析与单一步骤选择；高级时才允许多约束权衡。
@@ -49,6 +50,7 @@ class CaseStudyAgent(BaseResourceGenerationAgent):
         llm_gateway: LLMGateway,
         **_: object,
     ) -> GeneratedArtifact:
+        settings = get_settings()
         result = self.invoke_plain_text(
             spec=spec,
             context=context,
@@ -61,6 +63,14 @@ class CaseStudyAgent(BaseResourceGenerationAgent):
                 ),
             ],
             representation="text",
+            # Case studies are bounded long-form Markdown. Keep their
+            # provider call separate from the shorter generic generator
+            # allowance so a complete artifact is not cut off by the default
+            # request budget.
+            max_output_tokens=16384,
+            strict_max_output_tokens=True,
+            request_timeout_seconds=min(600.0, max(300.0, settings.text_resource_request_timeout_seconds)),
+            max_attempts=settings.llm_resource_generation_max_attempts,
         )
         artifact = GeneratedArtifact(
             metadata=self.metadata(

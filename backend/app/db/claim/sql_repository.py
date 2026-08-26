@@ -7,14 +7,15 @@ from sqlalchemy.orm import Session
 
 from app.db.audit.base import PersistenceConflict
 from app.db.claim.base import BaseClaimRepository
-from app.db.models import (
+from app.db.shared.retry import run_with_sqlite_retry
+from app.db.shared.models import (
     ClaimEvidenceORM,
     ClaimJudgementORM,
     ResourceClaimORM,
     ResourceReviewORM,
     RetrievalEvidenceSnapshotORM,
 )
-from app.models.claims import ClaimJudgement, ClaimRecord
+from app.models.reviews.claims import ClaimJudgement, ClaimRecord
 
 
 class SQLClaimRepository(BaseClaimRepository):
@@ -22,6 +23,13 @@ class SQLClaimRepository(BaseClaimRepository):
         self.session_factory = session_factory
 
     def save_audit(self, claims: list[ClaimRecord], judgements: list[ClaimJudgement]) -> None:
+        # This boundary is deliberately idempotent: claims, judgements,
+        # evidence bindings and review metrics are all keyed by stable IDs.
+        # Retrying the complete transaction prevents a transient SQLite lock
+        # from dropping an otherwise valid Claim audit after the LLM finished.
+        run_with_sqlite_retry(lambda: self._save_audit_once(claims, judgements))
+
+    def _save_audit_once(self, claims: list[ClaimRecord], judgements: list[ClaimJudgement]) -> None:
         claims_by_id = {item.claim_id: item for item in claims}
         if any(item.claim_id not in claims_by_id for item in judgements):
             raise PersistenceConflict("judgement references claim outside batch")
@@ -71,12 +79,14 @@ class SQLClaimRepository(BaseClaimRepository):
                     created_at=claim.created_at,
                 ))
             db.flush()
+            new_judgement_ids: set[str] = set()
             for item in judgements:
                 existing = db.get(ClaimJudgementORM, item.judgement_id)
                 if existing:
                     if existing.claim_id != item.claim_id or existing.verdict != (item.verdict.value if item.verdict else None):
                         raise PersistenceConflict("judgement immutable payload conflict")
                     continue
+                new_judgement_ids.add(item.judgement_id)
                 db.add(ClaimJudgementORM(
                     judgement_id=item.judgement_id,
                     claim_id=item.claim_id,
@@ -93,6 +103,14 @@ class SQLClaimRepository(BaseClaimRepository):
                     confidence=item.confidence,
                     created_at=item.created_at,
                 ))
+            # Claim evidence has foreign keys to both the judgement and the
+            # claim.  Flush the complete parent batch before adding bindings;
+            # this keeps the ordering explicit for SQLite's immediate FK
+            # checks when the audit contains many judgements/resources.
+            db.flush()
+            for item in judgements:
+                if item.judgement_id not in new_judgement_ids:
+                    continue
                 for evidence_id in item.evidence_ids:
                     digest = hashlib.sha256(f"{item.judgement_id}\x1f{evidence_id}".encode()).hexdigest()[:32]
                     db.add(ClaimEvidenceORM(

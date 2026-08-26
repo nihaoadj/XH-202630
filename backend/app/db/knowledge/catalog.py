@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, Iterable, List
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.db.models import (
+from app.db.shared.models import (
     AssessmentQuestionORM,
     DiagnosticQuestionORM,
     KnowledgeBaseORM,
@@ -22,13 +22,14 @@ from app.db.models import (
     RagSkillNodeORM,
     SkillNodeRelationORM,
 )
-from app.models.knowledge import (
+from app.models.knowledge.knowledge import (
     KnowledgeChunk,
     KnowledgeDocumentVersion,
     SourceLocator,
     SourceType,
 )
-from app.models.schemas import DiagnosticQuestion, SkillNode
+from app.models.learning_documents.schemas import DiagnosticQuestion, SkillNode
+from app.core.learning_tiers import validate_tier_graph
 
 
 def _stable_id(prefix: str, *parts: object) -> str:
@@ -607,6 +608,10 @@ class KnowledgeCatalogRepository:
                 raise TypeError("能力节点必须是 SkillNode、dict 或 str")
 
         name_to_id = {node.name: node.node_id for node in normalised}
+        normalised = [node.model_copy(update={
+            "prerequisites": [name_to_id.get(item, item) for item in node.prerequisites],
+        }) for node in normalised]
+        validate_tier_graph(normalised)
         with self.session_factory() as db:
             for node in normalised:
                 if node.knowledge_base_id != knowledge_base_id:
@@ -616,6 +621,7 @@ class KnowledgeCatalogRepository:
                     "name": node.name,
                     "description": node.description,
                     "level": node.level,
+                    "tier": node.tier,
                     "knowledge_points": node.knowledge_points,
                     "assessment_methods": node.assessment_methods,
                     "extra_metadata": node.metadata,
@@ -708,10 +714,12 @@ class KnowledgeCatalogRepository:
             )
             edges = db.query(SkillNodeRelationORM).filter_by(knowledge_base_id=knowledge_base_id).all()
         prerequisites: Dict[str, List[str]] = {row.node_id: [] for row in rows}
-        names = {row.node_id: row.name for row in rows}
+        children: Dict[str, List[str]] = {row.node_id: [] for row in rows}
         for edge in edges:
             if edge.child_node_id in prerequisites:
-                prerequisites[edge.child_node_id].append(names.get(edge.parent_node_id, edge.parent_node_id))
+                prerequisites[edge.child_node_id].append(edge.parent_node_id)
+            if edge.parent_node_id in children:
+                children[edge.parent_node_id].append(edge.child_node_id)
         return [
             SkillNode(
                 node_id=row.node_id,
@@ -719,7 +727,9 @@ class KnowledgeCatalogRepository:
                 name=row.name,
                 description=row.description,
                 level=row.level,
-                prerequisites=prerequisites[row.node_id],
+                tier=row.tier,
+                prerequisites=sorted(prerequisites[row.node_id]),
+                children=sorted(children[row.node_id]),
                 knowledge_points=row.knowledge_points or [],
                 assessment_methods=row.assessment_methods or [],
                 metadata=row.extra_metadata or {},

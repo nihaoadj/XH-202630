@@ -2,6 +2,7 @@ from .assessment import AssessmentAgent
 from .base import ResourceGenerationAgent
 from .case_study import CaseStudyAgent
 from .checklist import ReviewChecklistAgent
+from .correction_package import CorrectionTrainingPackageAgent
 from .practice import PracticeGuideAgent
 from .registry import (
     RESOURCE_AGENT_TYPES,
@@ -15,6 +16,7 @@ from .text import TextResourceAgent
 __all__ = [
     "AssessmentAgent",
     "CaseStudyAgent",
+    "CorrectionTrainingPackageAgent",
     "PracticeGuideAgent",
     "ReviewChecklistAgent",
     "RESOURCE_AGENT_TYPES",

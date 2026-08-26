@@ -3,10 +3,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.audit.base import PersistenceConflict
-from app.db.database import configure_sqlite_foreign_keys
-from app.db.models import AgentRunORM, Base
-from app.db.resource.sql_repository import SQLResourceRepository
-from app.models.schemas import LearningResource
+from app.db.shared.database import configure_sqlite_foreign_keys
+from app.db.shared.models import AgentRunORM, Base
+from app.db.learning_documents.sql_repository import SQLResourceRepository
+from app.models.learning_documents.schemas import LearningResource
 
 
 def _resource(resource_id: str, *, run_id=None):

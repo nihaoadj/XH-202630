@@ -1,7 +1,7 @@
 from app.db.audit.base import PersistenceConflict
 from app.db.claim.memory import MemoryClaimRepository
 from app.db.claim.sql_repository import SQLClaimRepository
-from app.db.models import (
+from app.db.shared.models import (
     AgentRunORM,
     AgentStepORM,
     Base,
@@ -9,7 +9,7 @@ from app.db.models import (
     ResourceReviewORM,
     RetrievalEvidenceSnapshotORM,
 )
-from app.models.claims import (
+from app.models.reviews.claims import (
     ClaimCandidate,
     ClaimJudgementCandidate,
     ClaimType,
@@ -19,8 +19,27 @@ from app.models.claims import (
 )
 import pytest
 from datetime import datetime, timezone
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+
+
+def test_sql_claim_repository_retries_a_transient_lock(monkeypatch):
+    repository = SQLClaimRepository(lambda: None)
+    calls = []
+
+    def flaky_save(*args):
+        calls.append(1)
+        if len(calls) == 1:
+            from sqlalchemy.exc import OperationalError
+
+            raise OperationalError("INSERT", {}, RuntimeError("database is locked"))
+
+    monkeypatch.setattr(repository, "_save_audit_once", flaky_save)
+    monkeypatch.setattr("app.db.shared.retry.time.sleep", lambda _: None)
+
+    repository.save_audit([], [])
+
+    assert len(calls) == 2
 
 
 def _audit():
@@ -82,6 +101,10 @@ def test_memory_claim_repository_rejects_immutable_conflict():
 
 def test_sql_claim_repository_persists_judgement_and_frozen_evidence_binding():
     engine = create_engine("sqlite:///:memory:")
+    @event.listens_for(engine, "connect")
+    def _enable_foreign_keys(dbapi_connection, _connection_record):
+        dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     now = datetime.now(timezone.utc)

@@ -11,6 +11,21 @@ from app.db.migrations.p0_11_resource_batches import apply_p0_11_resource_batche
 from app.db.migrations.p0_12_superseded_generation_jobs import apply_p0_12_superseded_generation_jobs_migration
 from app.db.migrations.p0_13_resource_workflow import apply_p0_13_resource_workflow_migration
 from app.db.migrations.p0_14_profile_skill_node_labels import apply_p0_14_profile_skill_node_labels_migration
+from app.db.migrations.p0_15_courseware_execution import apply_p0_15_courseware_execution_migration
+from app.db.migrations.p0_16_courseware_learning_events import apply_p0_16_courseware_learning_events_migration
+from app.db.migrations.p0_17_courseware_request_options import apply_p0_17_courseware_request_options_migration
+from app.db.migrations.p0_18_courseware_batch_integrity import apply_p0_18_courseware_batch_integrity_migration
+from app.db.migrations.p0_19_learner_mastery import apply_p0_19_learner_mastery_migration
+from app.db.migrations.p0_20_curriculum_progress import apply_p0_20_curriculum_progress_migration
+from app.db.migrations.p0_21_learning_tiers import apply_p0_21_learning_tiers_migration
+from app.db.migrations.p0_22_review_practice import apply_p0_22_review_practice_migration
+from app.db.migrations.p0_23_curriculum_attempt_id import apply_p0_23_curriculum_attempt_id_migration
+from app.db.migrations.p0_24_correction_package_batches import apply_p0_24_correction_package_batches_migration
+from app.db.migrations.p0_25_practice_guide_json import apply_p0_25_practice_guide_json_migration
+from app.db.migrations.p0_26_mastery_evidence_gate import apply_p0_26_mastery_evidence_gate_migration
+from app.db.migrations.p0_27_assessment_evidence import apply_p0_27_assessment_evidence_migration
+from app.db.migrations.p0_28_placement_reverification import apply_p0_28_placement_reverification_migration
+from app.db.migrations.p0_29_feedback_decision_tiers import apply_p0_29_feedback_decision_tiers_migration
 from app.db.migrations.tutor import apply_tutor_migration
 
 __all__ = [
@@ -25,5 +40,20 @@ __all__ = [
     "apply_p0_12_superseded_generation_jobs_migration",
     "apply_p0_13_resource_workflow_migration",
     "apply_p0_14_profile_skill_node_labels_migration",
+    "apply_p0_15_courseware_execution_migration",
+    "apply_p0_16_courseware_learning_events_migration",
+    "apply_p0_17_courseware_request_options_migration",
+    "apply_p0_18_courseware_batch_integrity_migration",
+    "apply_p0_19_learner_mastery_migration",
+    "apply_p0_20_curriculum_progress_migration",
+    "apply_p0_21_learning_tiers_migration",
+    "apply_p0_22_review_practice_migration",
+    "apply_p0_23_curriculum_attempt_id_migration",
+    "apply_p0_24_correction_package_batches_migration",
+    "apply_p0_25_practice_guide_json_migration",
+    "apply_p0_26_mastery_evidence_gate_migration",
+    "apply_p0_27_assessment_evidence_migration",
+    "apply_p0_28_placement_reverification_migration",
+    "apply_p0_29_feedback_decision_tiers_migration",
     "apply_tutor_migration",
 ]

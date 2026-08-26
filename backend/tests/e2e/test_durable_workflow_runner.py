@@ -1,13 +1,13 @@
 from datetime import datetime, timezone
 
-from app.models.agent_contracts import build_trace_item, start_step
-from app.models.persistence import canonical_hash
-from app.models.workflow import StepStatus
-from app.services.durable_workflow_runner import DurableWorkflowRunner
-from app.services.recorded_node import RecordedNode
-from app.agents import workflow as workflow_module
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.services.generation_service import build_workflow_state
+from app.models.shared.agent_contracts import build_trace_item, start_step
+from app.models.shared.persistence import canonical_hash
+from app.models.shared.workflow import StepStatus
+from app.services.runs.durable_workflow_runner import DurableWorkflowRunner
+from app.services.runs.recorded_node import RecordedNode
+from app.agents.resource_workflows.learning_documents import workflow as workflow_module
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.services.generation.generation import build_workflow_state
 from tests.fakes.evidence import make_evidence
 from backend.tests.fakes.persistence import create_command, memory_repository
 

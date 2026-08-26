@@ -1,0 +1,86 @@
+{
+  "title": "知识检索实操完整课件",
+  "schema_version": "3.0",
+  "preparation": {
+    "phase_id": "prepare",
+    "goal": "完成环境、资料和验证条件准备，确保后续每一步都可以独立复现。",
+    "items": [
+      "创建并确认 Python 虚拟环境。",
+      "安装文本切分、向量化和页面预览依赖。",
+      "准备包含多个段落的测试文档。",
+      "确认数据读取结果和异常提示。",
+      "记录切分、模型和检索数量等关键参数。"
+    ],
+    "evidence_ids": ["ev-full-preview-1"]
+  },
+  "practice": {
+    "phase_id": "practice",
+    "goal": "完成从准备、构建到验证的完整检索流程。",
+    "steps": [
+      {
+        "step_id": "step-1",
+        "title": "准备运行环境",
+        "instruction_text": "创建虚拟环境并确认运行时版本。",
+        "code_blocks": [{"language": "bash", "code": "python -m venv .venv && python --version", "purpose": "创建隔离环境并确认解释器版本。", "evidence_ids": ["ev-full-preview-1"]}],
+        "verification": "终端显示预期 Python 版本，环境目录可以被后续命令使用。",
+        "evidence_ids": ["ev-full-preview-1"]
+      },
+      {
+        "step_id": "step-2",
+        "title": "安装并锁定依赖",
+        "instruction_text": "安装课件运行所需依赖，并记录依赖版本。",
+        "code_blocks": [{"language": "bash", "code": "python -m pip install -r requirements.txt", "purpose": "安装可复现的运行依赖。", "evidence_ids": ["ev-full-preview-1"]}],
+        "verification": "依赖安装完成且没有未处理的版本冲突或安装错误。",
+        "evidence_ids": ["ev-full-preview-1"]
+      },
+      {
+        "step_id": "step-3",
+        "title": "读取并切分测试文档",
+        "instruction_text": "读取测试文档，将内容切分为可检索的文本块。",
+        "code_blocks": [{"language": "python", "code": "documents = load_documents('examples')\nchunks = split_documents(documents)", "purpose": "将原始文档转换为可追踪的文本块。", "evidence_ids": ["ev-full-preview-1"]}],
+        "verification": "文档数量、文本块数量和来源标识均已记录。",
+        "evidence_ids": ["ev-full-preview-1"]
+      },
+      {
+        "step_id": "step-4",
+        "title": "构建向量索引",
+        "instruction_text": "使用已确认的嵌入配置构建索引，并核对写入结果。",
+        "code_blocks": [{"language": "python", "code": "index = build_index(chunks, embedding_model)\nindex.persist('artifacts/index')", "purpose": "构建并持久化可复用的检索索引。", "evidence_ids": ["ev-full-preview-1"]}],
+        "verification": "索引写入成功，条目数量与文本块数量处于预期范围。",
+        "evidence_ids": ["ev-full-preview-1"]
+      },
+      {
+        "step_id": "step-5",
+        "title": "执行检索并核对来源",
+        "instruction_text": "输入测试问题，检查返回内容和来源边界。",
+        "code_blocks": [{"language": "python", "code": "results = index.search('如何验证检索结果？', top_k=3)\nprint(results)", "purpose": "验证检索结果是否包含相关内容和来源。", "evidence_ids": ["ev-full-preview-1"]}],
+        "verification": "返回结果与问题相关，并且每条结果都带有可追溯来源。",
+        "evidence_ids": ["ev-full-preview-1"]
+      },
+      {
+        "step_id": "step-6",
+        "title": "生成并检查课件页面",
+        "instruction_text": "将结构化课件数据交给生产渲染器，检查页面完整性。",
+        "code_blocks": [{"language": "python", "code": "artifact = render_courseware(document)\nwrite_artifact(artifact)", "purpose": "生成安全、可复现的互动 HTML 课件。", "evidence_ids": ["ev-full-preview-1"]}],
+        "verification": "页面包含封面、全部步骤、验证和复盘内容，且可以正常翻页。",
+        "evidence_ids": ["ev-full-preview-1"]
+      }
+    ]
+  },
+  "verification": {
+    "phase_id": "verify",
+    "goal": "确认完整课件可以复现、浏览和验收。",
+    "checklist": [
+      "确认封面和所有步骤页均已生成。",
+      "确认代码、验证项和来源映射完整显示。",
+      "确认页面可以正常翻页并完成勾选。"
+    ],
+    "evidence_ids": ["ev-full-preview-1"]
+  },
+  "reflection": {
+    "phase_id": "reflect",
+    "goal": "梳理本次完整实操中已验证的流程，并明确下一次独立复现时的检查重点。",
+    "summary": "本次课件覆盖环境准备、依赖安装、文档切分、索引构建、检索验证和页面生成六个步骤。复盘时请记录每一步的输入、预期结果、实际证据和异常处理方式，下一次即可用新的样例独立复现整条流程。",
+    "evidence_ids": ["ev-full-preview-1"]
+  }
+}

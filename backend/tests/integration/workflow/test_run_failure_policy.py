@@ -2,12 +2,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.core.errors import ApplicationError, ErrorCode
+from app.core.security.errors import ApplicationError, ErrorCode
 from app.db.audit.memory import MemoryAuditRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.services import generation_service as generation_module
-from app.services.generation_service import GenerationService
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.services.generation import generation as generation_module
+from app.services.generation.generation import GenerationService
 
 
 def _learner():

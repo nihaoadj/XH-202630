@@ -1,8 +1,8 @@
 from fastapi import HTTPException, Request, status
 
 from app.config import get_settings
-from app.models.schemas import LearnerProfile
-from app.models.user_schemas import UserProfile
+from app.models.learning_documents.schemas import LearnerProfile
+from app.models.users.users import UserProfile
 
 
 def get_current_user(request: Request) -> UserProfile:

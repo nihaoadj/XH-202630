@@ -4,10 +4,10 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.agents.workflow import build_workflow
-from app.models.schemas import GenerateRequest, LearnerProfile
-from app.models.workflow import WorkflowStateSnapshot
-from app.services.generation_service import build_workflow_state
+from app.agents.resource_workflows.learning_documents.workflow import build_workflow
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
+from app.models.shared.workflow import WorkflowStateSnapshot
+from app.services.generation.generation import build_workflow_state
 
 
 def _learner() -> LearnerProfile:
@@ -40,6 +40,8 @@ def test_workflow_compiles_with_expected_baseline_channels():
         "include_review",
         "include_claim_check",
         "max_iterations",
+        "claim_max_iterations",
+        "assessment_claim_skipped_resource_ids",
         "constraints",
         "trace",
         "errors",
@@ -52,13 +54,14 @@ def test_generate_request_maps_every_control_field_to_workflow_state():
         topic="  工业视觉  ",
         knowledge_base_id="request-kb",
         diagnostic_result_id="diag-001",
-        target_skill_nodes=["node-a", "node-a", "node-b"],
+        target_skill_nodes=["node-a", "node-b"],
         resource_types=["讲义", "实操指南"],
         difficulty_preference="中级",
         generation_mode="strict",
         include_review=True,
         include_claim_check=True,
         max_iterations=1,
+        claim_max_iterations=1,
         constraints={"must_include_citations": True, "retrieval_top_k": 5},
     )
 
@@ -78,10 +81,13 @@ def test_generate_request_maps_every_control_field_to_workflow_state():
     assert state["include_review"] is True
     assert state["include_claim_check"] is True
     assert state["max_iterations"] == 1
+    assert state["claim_max_iterations"] == 1
     assert state["constraints"]["retrieval_top_k"] == 5
     assert state["generation_attempt"] == 1
     assert state["revision_count"] == 0
+    assert state["claim_revision_count"] == 0
     assert state["claim_check_status"] == "pending"
+    assert state["assessment_claim_skipped_resource_ids"] == []
 
 
 def test_claim_check_requires_resource_review():
@@ -92,6 +98,15 @@ def test_claim_check_requires_resource_review():
             include_review=False,
             include_claim_check=True,
         )
+
+
+def test_claim_check_defaults_to_enabled_with_review_and_is_disabled_for_explicit_drafts():
+    reviewed = GenerateRequest(learner_id="contract_001", topic="工业视觉")
+    draft = GenerateRequest(learner_id="contract_001", topic="工业视觉", include_review=False)
+
+    assert reviewed.include_claim_check is True
+    assert reviewed.claim_max_iterations == 0
+    assert draft.include_claim_check is False
 
 
 def test_workflow_state_json_round_trip_preserves_schema_version_and_ids():

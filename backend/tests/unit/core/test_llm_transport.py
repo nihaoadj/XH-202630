@@ -1,9 +1,9 @@
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.config import Settings
-from app.core import llm as llm_module
-from app.core.llm import LangChainChatTransport, create_chat_model
-from app.models.llm import StructuredOutputMode
+from app.core.llm import transport as llm_module
+from app.core.llm.transport import LangChainChatTransport, create_chat_model
+from app.models.shared.llm import StructuredOutputMode
 
 
 def _settings() -> Settings:
@@ -34,6 +34,7 @@ def test_chat_model_disables_sdk_retry_and_applies_call_budget(monkeypatch):
     assert captured["max_tokens"] == 1234
     assert captured["temperature"] == 0.2
     assert captured["http_client"].trust_env is False
+    assert captured["http_client"].timeout.read == 7.5
 
 
 def test_chat_model_uses_only_the_explicitly_configured_proxy(monkeypatch):

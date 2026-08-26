@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+from threading import Event
+from time import monotonic
 
 import httpx
 import pytest
@@ -12,9 +14,9 @@ from openai import (
 )
 from pydantic import BaseModel, ConfigDict
 
-from app.core.errors import ErrorCode
-from app.core.llm_gateway import LLMGateway, LLMGatewayError
-from app.models.llm import (
+from app.core.security.errors import ErrorCode
+from app.core.llm.gateway import LLMGateway, LLMGatewayError
+from app.models.shared.llm import (
     LLMCallContext,
     LLMCallOptions,
     LLMUsage,
@@ -95,6 +97,7 @@ def test_gateway_success_returns_typed_output_and_telemetry():
     assert result.usage.total_tokens == 5
     assert result.provider_request_id == "provider-request"
     assert result.call_id
+    assert transport.calls[0]["timeout_seconds"] == 10
 
 
 def test_gateway_retries_timeout_without_changing_call_identity():
@@ -115,6 +118,26 @@ def test_gateway_retries_timeout_without_changing_call_identity():
     assert result.retry_count == 1
     assert result.attempts[0].error_code == ErrorCode.LLM_TIMEOUT.value
     assert sleeps == [0.5]
+
+
+def test_gateway_enforces_hard_timeout_when_transport_blocks():
+    class BlockingTransport:
+        model_name = "blocking"
+
+        def invoke(self, **kwargs):
+            Event().wait(1)
+
+    gateway = LLMGateway(BlockingTransport(), sleep=lambda _: None, jitter=lambda: 0.0)
+    started = monotonic()
+
+    with pytest.raises(LLMGatewayError) as caught:
+        gateway.invoke_structured(
+            messages=[HumanMessage(content="test")], output_schema=Payload,
+            context=context(), options=options(max_attempts=1, request_timeout_seconds=0.02),
+        )
+
+    assert caught.value.error.code == ErrorCode.LLM_TIMEOUT.value
+    assert monotonic() - started < 0.5
 
 
 def test_gateway_honors_bounded_retry_after():
@@ -272,6 +295,30 @@ def test_gateway_schema_repair_uses_same_global_attempt_budget():
     assert len(transport.calls[1]["messages"]) > len(transport.calls[0]["messages"])
 
 
+def test_gateway_allows_bounded_second_schema_repair():
+    transport = ScriptedLLMTransport([
+        raw('{"wrong":"first"}'),
+        raw('{"wrong":"second"}'),
+        raw('{"value":"repaired"}'),
+    ])
+    gateway = LLMGateway(transport)
+
+    result = gateway.invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(),
+        options=options(max_attempts=3, schema_repair_attempts=2),
+    )
+
+    assert result.output.value == "repaired"
+    assert result.attempt_count == 3
+    assert [item.error_code for item in result.attempts[:2]] == [
+        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID.value,
+        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID.value,
+    ]
+    assert len(transport.calls) == 3
+
+
 def test_gateway_recovers_empty_output_with_fresh_prompt_and_bounded_retry():
     sleeps = []
     transport = ScriptedLLMTransport([
@@ -339,6 +386,31 @@ def test_gateway_repairs_parse_and_truncated_output(first):
 
     assert result.output.value == "repaired"
     assert result.attempt_count == 2
+
+
+def test_gateway_increases_claim_output_budget_after_length_truncation():
+    length_failure = type("LengthFinishReasonError", (Exception,), {})()
+    transport = ScriptedLLMTransport([length_failure, raw('{"value":"ok"}')])
+    gateway = LLMGateway(
+        transport,
+        claim_max_attempts=2,
+        claim_max_output_tokens=32768,
+        claim_truncated_retry_output_tokens=65536,
+        sleep=lambda _: None,
+        jitter=lambda: 0.0,
+    )
+
+    result = gateway.invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(node_name="claim_extractor"),
+        options=gateway.options_for("claim_extractor"),
+    )
+
+    assert result.output == Payload(value="ok")
+    assert len(transport.calls) == 2
+    assert transport.calls[0]["max_output_tokens"] == 32768
+    assert transport.calls[1]["max_output_tokens"] == 65536
 
 
 def test_gateway_stops_when_repair_budget_is_exhausted():
@@ -416,7 +488,7 @@ def test_explicit_text_mode_never_probes_function_calling():
     assert [call["mode"] for call in transport.calls] == [StructuredOutputMode.TEXT]
 
 
-def test_json_mode_adds_provider_required_json_instruction():
+def test_json_mode_adds_provider_required_schema_on_first_attempt():
     transport = ScriptedLLMTransport([raw({"value": "json"})])
 
     result = LLMGateway(transport).invoke_structured(
@@ -428,9 +500,10 @@ def test_json_mode_adds_provider_required_json_instruction():
 
     assert result.output.value == "json"
     assert [call["mode"] for call in transport.calls] == [StructuredOutputMode.JSON_MODE]
-    assert transport.calls[0]["messages"][0].content == (
-        "Return exactly one valid json object and no surrounding text."
-    )
+    instruction = transport.calls[0]["messages"][0].content
+    assert "valid json object" in instruction
+    assert '"value"' in instruction
+    assert '"required"' in instruction
 
 
 def test_explicit_structured_mode_does_not_fall_back_to_text():

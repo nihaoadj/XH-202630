@@ -2,20 +2,20 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.agents.generator import generate_node
-from app.agents.reviewer import review_node
-from app.agents.resource_spec_builder import build_resource_specs
-from app.agents.policies import decide_review, may_publish
-from app.agents.validators import revision_instructions_are_valid
-from app.core.evidence import source_refs_from_evidence
+from app.agents.resource_workflows.learning_documents.generator_agent import generate_node
+from app.agents.resource_workflows.learning_documents.reviewer_agent import review_node
+from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
+from app.agents.shared.policies import decide_review, may_publish
+from app.agents.shared.validators import revision_instructions_are_valid
+from app.core.retrieval.evidence import source_refs_from_evidence
 from app.db.audit.base import PersistenceConflict
 from app.db.audit.memory import MemoryAuditRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.persistence import CreateRunCommand, canonical_hash
-from app.models.schemas import LearnerProfile, LearningResource
-from app.models.workflow import ReviewDecision
-from app.services.run_query_service import RunQueryService
-from app.services.workflow_artifact_recorder import WorkflowArtifactRecorder
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.shared.persistence import CreateRunCommand, canonical_hash
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.models.shared.workflow import ReviewDecision
+from app.services.runs.queries import RunQueryService
+from app.services.runs.workflow_artifact_recorder import WorkflowArtifactRecorder
 from tests.fakes.evidence import make_evidence
 from tests.fakes.llm import ScriptedLLMGateway
 

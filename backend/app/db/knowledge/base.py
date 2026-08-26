@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from app.models.knowledge import KnowledgeChunk, SourceLocator
+from app.models.knowledge.knowledge import KnowledgeChunk, SourceLocator
 
 
 class KnowledgeChunkRepository(Protocol):

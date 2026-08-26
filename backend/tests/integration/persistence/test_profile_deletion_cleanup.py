@@ -6,11 +6,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core import file_storage
-from app.db import extended_models  # noqa: F401 - registers diagnostic_runs
-from app.db.database import configure_sqlite_foreign_keys
-from app.db.learner.sql_repository import SQLLearnerRepository
-from app.db.models import (
+from app.core.storage import file_storage
+from app.db.shared import extended_models  # noqa: F401 - registers diagnostic_runs
+from app.db.shared.database import configure_sqlite_foreign_keys
+from app.db.learners.sql_repository import SQLLearnerRepository
+from app.db.shared.models import (
     AgentRunORM,
     AgentStepORM,
     ClaimEvidenceORM,
@@ -47,7 +47,7 @@ from app.db.models import (
     Base,
     DiagnosticQuestionORM,
 )
-from app.db.extended_models import DiagnosticRunORM
+from app.db.shared.extended_models import DiagnosticRunORM
 
 
 def test_sql_profile_delete_removes_all_learner_artifacts_and_resource_files(tmp_path, monkeypatch):

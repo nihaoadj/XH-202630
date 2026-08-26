@@ -4,17 +4,17 @@ import httpx
 import pytest
 from openai import InternalServerError, RateLimitError
 
-from app.agents.diagnosis import diagnose_node
-from app.agents.generator import GENERATION_PROMPT, generate_node
-from app.agents.reviewer import review_node
-from app.agents.workflow import decide_node
+from app.agents.learning_agents.diagnosis_agent import diagnose_node
+from app.agents.resource_workflows.learning_documents.generator_agent import GENERATION_PROMPT, generate_node
+from app.agents.resource_workflows.learning_documents.reviewer_agent import review_node
+from app.agents.resource_workflows.learning_documents.workflow import decide_node
 from app.config import Settings
-from app.core import errors as errors_module
-from app.core.errors import ApplicationError, ErrorCode
-from app.core.evidence import source_refs_from_evidence
-from app.core.llm_gateway import LLMGateway
-from app.models.llm import RawLLMResponse
-from app.models.schemas import LearnerProfile, LearningResource
+from app.core.security import errors as errors_module
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.core.retrieval.evidence import source_refs_from_evidence
+from app.core.llm.gateway import LLMGateway
+from app.models.shared.llm import RawLLMResponse
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from tests.fakes.llm import ScriptedLLMGateway, ScriptedLLMTransport
 from tests.fakes.evidence import make_evidence
 

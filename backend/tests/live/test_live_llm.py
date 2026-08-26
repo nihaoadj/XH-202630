@@ -6,17 +6,17 @@ import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import get_settings, is_placeholder_api_key
-from app.core.llm_gateway import default_llm_gateway
+from app.core.llm.gateway import default_llm_gateway
 from app.agents.resource_agents import AssessmentAgent, PracticeGuideAgent
-from app.agents.resource_spec_builder import build_resource_specs
-from app.models.agent_contracts import GeneratedResourceBatch
-from app.models.agent_contracts import ResourceGenerationContext
-from app.models.claims import (
+from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
+from app.models.shared.agent_contracts import GeneratedResourceBatch
+from app.models.shared.agent_contracts import ResourceGenerationContext
+from app.models.reviews.claims import (
     ClaimExtractionLLMOutput,
     ClaimJudgementLLMOutput,
     materialize_claims,
 )
-from app.models.llm import LLMCallContext
+from app.models.shared.llm import LLMCallContext
 from tests.fakes.evidence import make_evidence
 
 
@@ -67,8 +67,9 @@ def test_live_llm_generation_and_claim_schema_compatibility():
             schema_name=ClaimExtractionLLMOutput.__name__,
         ),
         options=gateway.options_for("claim_extractor", temperature=0.0).model_copy(update={
-            "max_attempts": 1,
-            "request_timeout_seconds": min(30.0, settings.llm_request_timeout_seconds),
+            "max_attempts": settings.claim_max_attempts,
+            "request_timeout_seconds": settings.claim_request_timeout_seconds,
+            "schema_repair_attempts": settings.claim_schema_repair_attempts,
         }),
     )
     candidates = extraction.output.resources[0].claims
@@ -102,8 +103,9 @@ def test_live_llm_generation_and_claim_schema_compatibility():
             schema_name=ClaimJudgementLLMOutput.__name__,
         ),
         options=gateway.options_for("claim_judge", temperature=0.0).model_copy(update={
-            "max_attempts": 1,
-            "request_timeout_seconds": min(30.0, settings.llm_request_timeout_seconds),
+            "max_attempts": settings.claim_max_attempts,
+            "request_timeout_seconds": settings.claim_request_timeout_seconds,
+            "schema_repair_attempts": settings.claim_schema_repair_attempts,
         }),
     )
 
@@ -171,7 +173,7 @@ def test_live_assessment_agent_generation():
     spec, context = _live_resource_context("分阶测试题")
     artifact = AssessmentAgent().generate(spec, context, llm_gateway=default_llm_gateway())
     assert artifact.content_text.startswith("# ")
-    assert artifact.artifact_data["questions"]
+    assert artifact.artifact_data["assessment_package"]["node_blocks"]
 
 
 def test_live_practice_guide_generation():

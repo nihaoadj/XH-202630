@@ -2,20 +2,20 @@ import json
 
 import pytest
 
-from app.agents import (
-    diagnosis as diagnosis_module,
-    generator as generator_module,
-    planner as planner_module,
-    retriever as retriever_module,
-    reviewer as reviewer_module,
+from app.agents.learning_agents import diagnosis_agent as diagnosis_module
+from app.agents.resource_workflows.learning_documents import (
+    generator_agent as generator_module,
+    planner_agent as planner_module,
+    reviewer_agent as reviewer_module,
     workflow as workflow_module,
 )
-from app.models.agent_contracts import build_trace_item
-from app.core.llm_gateway import LLMGateway
-from app.models.llm import RawLLMResponse
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.models.workflow import StepStatus
-from app.services.generation_service import build_workflow_state
+from app.agents.shared import retrieval as retriever_module
+from app.models.shared.agent_contracts import build_trace_item
+from app.core.llm.gateway import LLMGateway
+from app.models.shared.llm import RawLLMResponse
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.models.shared.workflow import StepStatus
+from app.services.generation.generation import build_workflow_state
 from tests.fakes.llm import ScriptedLLMTransport
 from tests.fakes.evidence import (
     ScriptedEvidenceRetriever,
@@ -156,7 +156,7 @@ def test_max_iterations_counts_revisions_not_initial_generation(monkeypatch, max
 
 
 def test_review_approve_marks_resources_approved(monkeypatch):
-    result, calls = _invoke(monkeypatch, include_review=True)
+    result, calls = _invoke(monkeypatch, include_review=True, include_claim_check=False)
 
     assert calls == {"generate": 1, "review": 1}
     assert result["workflow_status"] == "completed"

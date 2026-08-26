@@ -8,7 +8,7 @@ from starlette.requests import Request
 from app import main as main_module
 from app.config import Settings
 from app.core import health as health_module
-from app.core.errors import ErrorCode
+from app.core.security.errors import ErrorCode
 from app.core.health import ComponentHealth, HealthReport, build_health_report
 
 

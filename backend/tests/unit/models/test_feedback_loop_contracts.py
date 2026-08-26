@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from app.agents.feedback_policy import decide_attempt
-from app.models.feedback_loop import (
+from app.agents.learning_agents.feedback_policy_agent import decide_attempt
+from app.models.feedback.feedback_loop import (
     FeedbackAction,
     FeedbackContext,
     KnowledgePointAttemptResult,
@@ -44,8 +44,8 @@ def _attempt(score: float, *, point_score: float | None = None) -> LearningAttem
     (0.5999, FeedbackAction.REMEDIATE),
     (0.60, FeedbackAction.PRACTICE),
     (0.70, FeedbackAction.PRACTICE),
-    (0.85, FeedbackAction.PRACTICE),
-    (0.8501, FeedbackAction.ADVANCE),
+    (0.7999, FeedbackAction.PRACTICE),
+    (0.80, FeedbackAction.ADVANCE),
     (1.00, FeedbackAction.ADVANCE),
 ])
 def test_feedback_thresholds_are_exact(score, action):

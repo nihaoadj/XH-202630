@@ -39,7 +39,7 @@
 | 业务服务层 | `backend/app/services/` | 用户资料、问卷组装、画像创建、诊断判分、资源生成、反馈处理、报告构建 |
 | 多智能体层 | `backend/app/agents/` | LangGraph 工作流及诊断、检索、规划、生成、审核、反馈等 Agent 节点 |
 | 基础设施层 | `backend/app/core/` | LLM、Embedding、向量存储、知识库读取、文件存储 |
-| 数据访问层 | `backend/app/db/` | SQLite/PostgreSQL 仓储工厂、ORM 模型、表初始化与分领域仓储 |
+| 数据访问层 | `backend/app/db/` | 当前 SQLite 仓储、ORM 模型、幂等表初始化与分领域仓储；保留的 PostgreSQL 方言分支属于未验收的可选兼容代码 |
 | 数据模型层 | `backend/app/models/` | Pydantic schema 与核心数据结构 |
 | 工具层 | `backend/app/utils/` | 项目内部复用工具函数 |
 | 脚本层 | `scripts/` | 初始化数据库、导入知识库与问卷/诊断源数据 |
@@ -101,7 +101,7 @@
 - `generation_job_service`：异步生成任务创建、状态查询、后台执行
 - `feedback_service`：学习反馈处理与画像更新
 - `learning_history_service`：学习过程时间线组装
-- `report_service`：报告组装
+- `report_service`：确定性学习报告聚合；读取正式 Attempt、规范能力投影、最终文本资源证据和持久化路径，构造全节点掌握、资源难度匹配、学习路径图等只读可视化投影，计算稳定 revision，并提供条件读取与当前快照 SSE
 
 ### 3.3 Agent 层
 
@@ -133,6 +133,7 @@
 - `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
 - `generator.py` 保留历史文件名，但只负责资源 Spec 编排、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
 - 公共资源类型词汇由 `backend/app/models/resource_types.py` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
+- 反馈闭环可额外创建专属 `个性化纠错训练包 -> CorrectionTrainingPackageAgent`。它在学习文档内部受支持，但不属于普通生成词汇；`FeedbackService` 验证强化候选和快照后才可创建，并只向 Agent 传入脱敏目标、教学策略、达标标准和冻结 Evidence。
 
 ## 4. 当前主流程调用链
 
@@ -232,8 +233,8 @@ POST /api/feedback/attemptsattempts
 -> 读取 profile_version、knowledge state、最近趋势和当前 path
 -> deterministic policy
    |- overall < 0.60 或任一点 < 0.60 -> remediate
-   |- 0.60 <= overall <= 0.85       -> practice
-   |- overall > 0.85 且无 blocker   -> advance
+   |- 0.60 <= overall < 0.80        -> practice
+   |- overall >= 0.80 且无 blocker  -> advance
 -> Transaction A
    |- learning_attempts + point_results
    |- feedback_decisions
@@ -410,6 +411,9 @@ scripts/
 - 项目本地接口基地址统一为 `http://127.0.0.1:8000`
 - Vite 前端代理应指向 `8000`
 - 文档与联调口径均以 `8000` 为准
+- 互动课件任务由 `backend/scripts/courseware_worker.py` 的独立 Durable Worker 消费；Web 生命周期不执行课件工作流
+- 当前 SQLite 拓扑只运行一个顺序 Worker，默认健康端点为 `http://127.0.0.1:8081`；`/health/ready` 表示完成过持久 outbox 轮询
+- 一键本地启动入口为 `python scripts/start_local.py`，完整操作与停机语义见 `docs/deployment.md`
 
 ### 8.4 当前实现边界
 
@@ -442,6 +446,7 @@ GenerationJobService
 架构约束：
 
 - 混合召回和精排只产生候选；候选必须经过 SQL Chunk 历史版本、KB 范围和内容哈希校验后才能成为 Evidence。
+- 有冻结目标节点时，检索保存一个全局 Evidence 快照及 `skill_node_id -> evidence_ids` 的节点命中投影；同一 Evidence 可属于多个节点。节点型测评和主动回忆清单只能读取本节点投影，讲义等普通资源仍读取全局快照。
 - `RecordedNode` 在节点副作用前创建 running Step；`DurableWorkflowRunner` 在状态合并后、checkpoint 前保存业务制品。
 - Generator 定向返工使用上一版本和结构化指令，新版本不可原地覆盖旧正文。
 - Reviewer 的模型建议必须经过确定性 policy 二次裁决。
@@ -488,4 +493,48 @@ flowchart TD
 
 `TutorPolicy` 在服务端控制 0~3 级提示，客户端不能提交 `hint_level`。`TutorContextBuilder` 只投影教学必要画像字段、相关资源片段、后端解析的题目字段、有限历史和有限 Evidence；题目答案、原始 Prompt、模型原文和 Chain-of-Thought 不进入公开契约。Evidence 顺序固定为当前 Run 的 Frozen Evidence、资源 SourceRef、Ready 知识库上的受控 Fresh Retrieval，全部不可用时返回 `evidence_insufficient` 且不调用模型自由回答。
 
-Tutor 持久化仅记录会话、轮次、教学动作、引用与脱敏调用遥测。会话源兼容单 Resource、旧 Run 和当前 Resource Batch；Batch 会话保留真实 `source_run_id` 用于证据定位，并以独立 `source_batch_id` 保证跨 Run 的批次恢复与统计不会混淆。正式状态迁移仍由 `Formal Attempt -> Feedback Policy -> ProfileVersion / Mastery / LearningPath` 完成。测评提交时，`FeedbackService` 从 Tutor Repository 统计该 Batch（旧接口为 Run）的真实 `question_help` 轮次写入现有 `hint_count`，但不改变掌握度公式或 0.60/0.85 阈值。
+Tutor 持久化仅记录会话、轮次、教学动作、引用与脱敏调用遥测。会话源兼容单 Resource、旧 Run 和当前 Resource Batch；Batch 会话保留真实 `source_run_id` 用于证据定位，并以独立 `source_batch_id` 保证跨 Run 的批次恢复与统计不会混淆。正式状态迁移仍由 `Formal Attempt -> Feedback Policy -> ProfileVersion / Mastery / LearningPath` 完成。测评提交时，`FeedbackService` 从 Tutor Repository 统计该 Batch（旧接口为 Run）的真实 `question_help` 轮次写入现有 `hint_count`，但不改变掌握度公式或 0.60/0.80 阈值。
+
+## 12. 互动课件字段级来源图
+
+互动课件在渲染前由 `core.courseware.provenance` 将冻结的
+`source_snapshot -> source_block -> generated_field -> component_property -> artifact_node`
+构造成不可执行的 `ProvenanceGraph`。标题、正文、步骤、选项、答案、反馈以及组件属性均必须至少有一条同快照来源边；未知来源块、跨快照边或覆盖率不足会进入隔离终态。通过后的图以 root hash 和脱敏 manifest 写入 HTML candidate artifact，renderer 不负责修补或推断来源。
+
+Candidate 发布由 `services.courseware.release.CandidateReleaseCoordinator` 负责：HTML、ZIP、SCORM/xAPI 均写入带 `release_id` 的不可变路径，candidate manifest 冻结 scene/snapshot/provenance 与 artifact hash；SQLite/Memory 仓储在一次提交中切换 `released_release_id`、兼容投影、任务状态和唯一发布事件。失败 candidate 只记录 `release_blocked`，下载仍解析当前 released 指针，旧 release 不被覆盖。
+
+## 13. 互动课件 R0-R5 完整性边界
+
+互动课件是单一文本学习资源的 HTML 互动版本，而不是资源聚合课程。任务冻结唯一的 `source_resource_ids[0]`，生成资源继承该源资源的 `batch_id`；多选仅是批量创建多个彼此隔离的任务。互动课件仍从课件源选择器排除，避免课件递归作为事实来源。`p0_18_courseware_batch_integrity` 只为所有来源快照明确证明同一批次的旧数据回填，其他数据保持 `NULL`。
+
+普通学习事件和 progress API 以 `released_release_id` 为边界。旧、未知、未发布或混合 release 请求在 API 层返回明确 409，批量事件在校验前不写入。组件状态以 `scene_id + component_id + component_version` 为实例边界，progress schema `2.0` 的嵌套投影和 renderer 的稳定 `data-component-id` 共同阻止同类组件互相覆盖；Viewer 切换资源/release 时更新 nonce 并丢弃迟到响应。
+
+R4 的本地候选证据必须同时包含 12-case evaluator、14 项真实进程故障矩阵、Q5 journey schema 1.1 和 browser schema 1.3 的 11×3 矩阵及 HTTP-origin/artifact restore 等检查。候选可达到 `LOCAL_READY`，但真实模型、CI、目标部署和完整发布周期仍是外部待验证项；SCORM/xAPI 仍仅为基础导出包。
+
+## 14. Learner Mastery 规范投影与闭环
+
+学习者掌握事实统一为 `knowledge_states`，稳定键为 `learner_id + knowledge_base_id + skill_node_id`。问卷答案、服务端诊断答案、正式 `LearningAttempt` 与 append-only `ability_state_events` 是证据事实；画像中的 `knowledge_states/theory_scores/weak_points/strong_points` 只是由规范表单向重建的兼容缓存，不能反向覆盖规范状态。节点关系在仓储和 API 中使用 ID，名称只用于展示。
+
+```text
+Onboarding self report (unverified, low confidence)
+  -> MasteryService / MasteryRepository
+  -> knowledge_states + ability_state_events + profile compatibility cache
+Diagnosis (server scored, verified)
+  -> same transition policy and one profile-version increment
+Run/Batch evaluation (server scored, verified)
+  -> Attempt + Decision + Ability Event + State Mutation + Learning Path + ProfileVersion
+  -> Report 3.0（事实 revision / ETag / 当前快照 SSE）+ frozen LearnerFocusSnapshotV1
+  -> next text-resource GenerationJob
+```
+
+状态策略是确定性的：只有自评时保存 `self_report_prior` 并标记 `self_reported/low`；首次客观证据为 `0.2 × prior + 0.8 × observed`（无 prior 时直接使用 observed）；后续客观证据为 `0.7 × old + 0.3 × observed`。阈值为 `<0.60 weak`、`0.60–<0.80 learning`、`>=0.80 mastered`。至少一条客观证据为 medium；至少三条且来自至少两个不同客观 source 时为 high。
+
+SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范状态、能力事件、mutation、学习路径、画像缓存和画像版本，并由 `(learner_id, idempotency_key)`、source hash、row version 与 profile version 约束重放和并发。问卷和诊断走稳定 source ID；无状态变化的重放不增加证据或版本。客户端聚合分数不是可信入口。
+
+生成任务创建时由 `MasteryService` 按 `confirmed_weak -> regressing_learning -> low_self_report -> unassessed_prerequisite` 排序，冻结 `LearnerFocusSnapshotV1` 到请求快照。显式目标覆盖 auto，off 禁用注入；创建后的画像变化不会改变既有任务。报告、ability API、生成重点和兼容缓存因此读取同一个 profile version 的规范投影。
+# 分阶学习架构
+
+`core/learning_tiers.py` 是三阶等级映射与固定难度的唯一策略面。`MasteryService` 使用其计算准入豁免、当前阶候选、前置门禁和反馈后的升降阶；`learner_tier_progress` 持久化起始阶、活动阶和最高解锁阶。文本生成任务在创建时冻结目标阶与节点，审核阶段复核资源难度，避免不同模块各自推断难度。
+# 复习清单 V2 课件适配
+
+互动课件来源快照保留 `review_practice_payload` 及其 hash。课件规划和确定性渲染将其投影为受控 review-practice 组件；模型不改写题目或答案，只能参与既有课件场景的受约束叙事补充。学习事件只保存题目 ID、答案揭示状态和三态自评，不保存学习者作答文本。

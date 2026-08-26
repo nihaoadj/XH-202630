@@ -1,18 +1,20 @@
+import hashlib
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import feedback
+from app.api.feedback import feedback
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.feedback_loop.memory import MemoryFeedbackLoopRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import DiagnosticQuestion, ExerciseItem, LearnerProfile, LearningResource
-from app.services.feedback_service import FeedbackService
-from app.services.profile_service import ProfileService
-from app.services.resource_service import ResourceService
+from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import DiagnosticQuestion, ExerciseItem, LearnerProfile, LearningResource
+from app.services.feedback.feedback import FeedbackService
+from app.services.learners.profiles import ProfileService
+from app.services.learning_documents.resources import ResourceService
 
 
 class _KnowledgeService:
@@ -90,6 +92,7 @@ def _app(*, include_resource_exercises=True, tutor_repo=None):
                     question_id="q1",
                     skill_node_id="skill_retrieval",
                     question="What does R stand for in RAG?",
+                    options=["Retrieval", "Ranking", "Routing"],
                     answer="Retrieval",
                     knowledge_point="retrieval",
                     difficulty="beginner",
@@ -98,6 +101,7 @@ def _app(*, include_resource_exercises=True, tutor_repo=None):
                     question_id="q2",
                     skill_node_id="skill_generation",
                     question="What does G stand for in RAG?",
+                    options=["Generation", "Grounding", "Graph"],
                     answer="Generation",
                     knowledge_point="generation",
                     difficulty="beginner",
@@ -151,13 +155,13 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     session_response = client.get("/api/feedback/evaluation/run/feedback_001/run_feedback_001")
     assert session_response.status_code == 200
     body = session_response.json()
-    assert body["total"] == 4
+    assert body["total"] == 2
     question_by_id = {question["question_id"]: question for question in body["questions"]}
-    assert set(question_by_id) == {"res_feedback_001:q1", "res_feedback_001:q2", "bank_q1", "bank_q2"}
+    assert set(question_by_id) == {"res_feedback_001:q1", "res_feedback_001:q2"}
     assert question_by_id["res_feedback_001:q1"]["source"] == "resource"
-    assert question_by_id["bank_q1"]["source"] == "assessment_bank"
     assert question_by_id["res_feedback_001:q1"]["skill_node_id"] == "skill_retrieval"
     assert question_by_id["res_feedback_001:q1"]["path_node_id"] == "skill_generation"
+    assert question_by_id["res_feedback_001:q1"]["options"] == ["Retrieval", "Ranking", "Routing"]
     assert "answer" not in question_by_id["res_feedback_001:q1"]
 
     submit_response = client.post(
@@ -172,8 +176,6 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
             "answers": [
                 {"question_id": "res_feedback_001:q1", "answer": "Retrieval"},
                 {"question_id": "res_feedback_001:q2", "answer": "Generation"},
-                {"question_id": "bank_q1", "answer": "Retrieval"},
-                {"question_id": "bank_q2", "answer": ["Generation", "Grounding"]},
             ],
         },
     )
@@ -182,14 +184,13 @@ def test_feedback_evaluation_session_and_run_attempt_submit():
     result = submit_response.json()
     assert result["attempt"]["overall_score"] == 1.0
     assert result["attempt"]["path_node_id"] is None
-    assert result["attempt"]["metadata"]["evaluation_source"] == "mixed"
+    assert result["attempt"]["metadata"]["evaluation_source"] == "resource"
     trace_by_id = {
         question["question_id"]: question
         for question in result["attempt"]["metadata"]["question_trace"]
     }
     assert trace_by_id["res_feedback_001:q1"]["skill_node_id"] == "skill_retrieval"
     assert result["attempt"]["metadata"]["question_trace"][0]["path_node_id"] == "skill_generation"
-    assert result["attempt"]["metadata"]["point_trace"]["skill_retrieval"]["knowledge_points"] == ["retrieval"]
     assert result["decision"]["action"] == "advance"
     assert result["profile_version"] == 2
     assert {
@@ -331,9 +332,74 @@ def test_run_evaluation_prefers_generated_questions_from_any_resource_before_ban
 
     assert {question.question_id for question in questions} == {
         "bank_q1",
-        "bank_q2",
         "resource_with_questions:generated_q1",
     }
     assert [question.skill_node_id for question in questions].count("skill_retrieval") == 1
-    assert [question.skill_node_id for question in questions].count("skill_generation") == 2
+    assert [question.skill_node_id for question in questions].count("skill_generation") == 1
     assert answer_key["resource_with_questions:generated_q1"] == "A"
+
+
+def test_batch_evaluation_prefers_latest_duplicate_structured_assessment_resource():
+    service = FeedbackService(MemoryFeedbackRepository())
+    profile = LearnerProfile(
+        learner_id="duplicate_assessment_learner",
+        learner_type="test learner",
+        education="undergraduate",
+        major="software engineering",
+        knowledge_base_id="kb-feedback",
+        learning_goal="prefer the latest assessment resource",
+    )
+
+    def structured_resource(resource_id: str, stem: str, created_at: datetime) -> LearningResource:
+        payload = {
+            "schema_version": "2.0",
+            "node_blocks": [{
+                "skill_node_id": "skill_retrieval",
+                "skill_node_name": "Retrieval",
+                "single_choice_questions": [{
+                    "question_id": "q-001",
+                    "question_type": "single_choice",
+                    "stem": stem,
+                    "options": [
+                        {"option_id": "A", "text": "Retrieval"},
+                        {"option_id": "B", "text": "Generation"},
+                    ],
+                    "answer_option_ids": ["A"],
+                    "knowledge_point_tags": ["retrieval"],
+                    "max_score": 100,
+                }],
+                "multiple_choice_questions": [],
+                "short_answer_questions": [],
+            }],
+        }
+        payload_hash = hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        return LearningResource(
+            resource_id=resource_id,
+            learner_id=profile.learner_id,
+            run_id=resource_id,
+            batch_id="duplicate-assessment-batch",
+            topic="RAG basics",
+            resource_type="assessment",
+            difficulty="beginner",
+            knowledge_points=["retrieval"],
+            source_refs=[],
+            publication_status="published",
+            created_at=created_at,
+            assessment_payload=payload,
+            assessment_payload_hash=payload_hash,
+        )
+
+    older = structured_resource("assessment-old", "Old assessment question", datetime(2026, 8, 25, tzinfo=timezone.utc))
+    newer = structured_resource("assessment-new", "Latest assessment question", datetime(2026, 8, 26, tzinfo=timezone.utc))
+
+    questions, answer_key = service._build_run_question_specs(
+        profile,
+        [older, newer],
+        _KnowledgeService(),
+    )
+
+    assert [question.question_id for question in questions] == ["q-001"]
+    assert questions[0].question == "Latest assessment question"
+    assert answer_key["q-001"]["stem"] == "Latest assessment question"

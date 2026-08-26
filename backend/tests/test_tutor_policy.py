@@ -1,12 +1,12 @@
 import pytest
 
-from app.agents.tutor_policy import (
+from app.agents.learning_agents.tutor_policy import (
     allowed_pedagogy_actions,
     decide_tutor_policy,
     max_context_turns,
     resolve_hint_level,
 )
-from app.models.tutor import TutorSessionCreateRequest, TutorTurnSubmitRequest
+from app.models.tutor.tutor import TutorSessionCreateRequest, TutorTurnSubmitRequest
 
 
 def test_first_help_is_directional_and_client_cannot_set_hint_level():

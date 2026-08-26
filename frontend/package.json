@@ -8,19 +8,27 @@
     "build": "vite build",
     "test:workflow-events": "node tests/unit/utils/workflowEvents.test.mjs",
     "test:tutor": "node tests/tutorState.test.mjs",
+    "test:learner-mastery": "node tests/learnerMastery.test.mjs",
+    "test:learning-report": "node tests/learningReport.test.mjs",
+    "test:learning-report-browser": "node tests/learningReportBrowser.test.mjs",
+    "test:courseware-browser": "node tests/coursewareBrowser.test.mjs",
+    "test:courseware-events": "node tests/coursewareEvents.test.mjs",
+    "test:courseware-journey": "node tests/coursewareUserJourney.test.mjs",
+    "test:courseware-source-policy": "node tests/coursewareSourcePolicy.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.4.27",
-    "vue-router": "^4.3.2",
-    "pinia": "^2.1.7",
-    "element-plus": "^2.7.3",
+    "axios": "^1.7.2",
     "echarts": "^5.5.0",
+    "element-plus": "^2.7.3",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.27",
     "vue-echarts": "^6.7.2",
-    "axios": "^1.7.2"
+    "vue-router": "^4.3.2"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
+    "playwright": "^1.62.1",
     "vite": "^5.2.11"
   }
 }

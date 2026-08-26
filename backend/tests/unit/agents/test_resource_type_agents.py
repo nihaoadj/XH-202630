@@ -4,19 +4,20 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.agents.generator import generate_node
-from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, ReviewChecklistAgent
+from app.agents.resource_workflows.learning_documents.generator_agent import generate_node
+from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, CorrectionTrainingPackageAgent, ReviewChecklistAgent, TextResourceAgent
 from app.agents.resource_agents.practice import PRACTICE_GUIDE_PROMPT
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
-from app.agents.resource_spec_builder import build_resource_specs
-from app.agents.reviewer import (
+from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
+from app.agents.resource_workflows.learning_documents.reviewer_agent import (
     _deterministic_practice_guide_review,
     _deterministic_resource_structure_review,
+    _normalize_node_tier_review,
     review_node,
 )
-from app.core.errors import ApplicationError, ErrorCode
-from app.models.agent_contracts import ResourceGenerationContext
-from app.models.schemas import GenerateRequest, LearnerProfile
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.models.shared.agent_contracts import ResourceGenerationContext
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
 from tests.fakes.evidence import make_evidence
 from tests.fakes.llm import ScriptedLLMGateway
 
@@ -43,6 +44,16 @@ CHECKLIST_MARKDOWN = """# 受控检索复习清单
 
 第 1 天完成必会清单，第 3 天完成自测。
 """
+
+CHECKLIST_PAYLOAD = {
+    "schema_version": "2.0", "skill_node_id": "skill-search", "skill_node_name": "skill-search", "evidence_ids": ["ev-new-resource-type"],
+    "recall_questions": [{"local_id": "recall-1", "prompt": "说明证据范围。", "reference_answer": "仅使用冻结 Evidence。", "explanation": "答案对应当前证据范围。", "evidence_ids": ["ev-new-resource-type"], "pass_criteria": "说明范围。"}],
+    "distinction_questions": [{"local_id": "distinction-1", "statement": "可使用证据外结论。", "truth_value": False, "correction": "只能使用冻结 Evidence。", "explanation": "证据外结论没有依据。", "evidence_ids": ["ev-new-resource-type"], "pass_criteria": "判断并说明。"}],
+    "example_recognition": None,
+    "omitted_slots": [{"local_id": "recall-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "recall-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "recall-4", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "distinction-4", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"}, {"local_id": "example-1", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"}, {"local_id": "example-2", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"}],
+        "knowledge_summary": "受控检索必须以冻结 Evidence 为唯一边界：先确认可用证据及其适用范围，再组织结论，并在作答前核对每项判断是否能够回连到对应证据。复习时应同时检查核心概念、关键条件和常见误区；只要结论超出证据内容、遗漏前提或无法定位来源，就应回到原文重新核对后再给出答案。",
+    "summary_evidence_ids": ["ev-new-resource-type"],
+}
 
 
 CASE_STUDY_MARKDOWN = """# 受控检索案例分析
@@ -80,12 +91,14 @@ def _inputs(resource_type: str):
         learning_plan={"learning_path": [{"topic": "检索", "order": 1}]},
         evidence=[evidence],
         target_skill_nodes=["skill-search"],
+        node_evidence_map={"skill-search": [evidence.evidence_id]},
     )
     context = ResourceGenerationContext(
         run_id="run-new-resource-type",
         batch_id="run-new-resource-type",
         topic="受控检索",
         evidence=[evidence],
+        node_evidence_map={"skill-search": [evidence.evidence_id]},
     )
     return specs[0], context, evidence
 
@@ -93,7 +106,7 @@ def _inputs(resource_type: str):
 @pytest.mark.parametrize(
     ("resource_type", "agent_type", "markdown", "required_section"),
     [
-        ("复习清单", ReviewChecklistAgent, CHECKLIST_MARKDOWN, "## 自测清单"),
+        ("复习清单", ReviewChecklistAgent, CHECKLIST_PAYLOAD, "## 自评与下一步"),
         ("案例分析", CaseStudyAgent, CASE_STUDY_MARKDOWN, "## 参考方案"),
     ],
 )
@@ -111,7 +124,93 @@ def test_new_resource_agents_generate_evidence_scoped_markdown(
     assert artifact.metadata.source_evidence_ids == spec.evidence_ids
     assert artifact.content_text.startswith("# ")
     assert required_section in artifact.content_text
+    if resource_type == "复习清单":
+        assert "### 节点知识小结" in artifact.content_text
     assert artifact.knowledge_points == spec.knowledge_points
+
+
+def test_review_checklist_uses_expanded_structured_output_budget():
+    spec, context, _ = _inputs("复习清单")
+
+    gateway = ScriptedLLMGateway([CHECKLIST_PAYLOAD])
+    ReviewChecklistAgent().generate(spec, context, llm_gateway=gateway)
+
+    assert gateway.calls[0]["options"].max_output_tokens == 16384
+
+
+def test_case_study_uses_bounded_long_form_budget(monkeypatch):
+    spec, context, _ = _inputs("案例分析")
+    monkeypatch.setattr(
+        "app.agents.resource_agents.case_study.get_settings",
+        lambda: SimpleNamespace(
+            text_resource_request_timeout_seconds=240.0,
+            llm_resource_generation_max_attempts=2,
+        ),
+    )
+    gateway = ScriptedLLMGateway([CASE_STUDY_MARKDOWN])
+
+    CaseStudyAgent().generate(spec, context, llm_gateway=gateway)
+
+    options = gateway.calls[0]["options"]
+    assert options.max_output_tokens == 16384
+    assert options.request_timeout_seconds == 300.0
+    assert options.max_attempts == 2
+
+
+def test_checklist_node_tier_difficulty_ignores_surface_complexity_only_for_checklist():
+    state = {
+        "target_skill_nodes": ["skill-high"],
+        "difficulty_preference": "高级",
+        "constraints": {"target_tier": 3},
+    }
+    raw = {
+        "decision": "revise",
+        "difficulty_match": False,
+        "issues": [{"code": "difficulty_mismatch"}],
+        "revision_instructions": [{"issue_codes": ["difficulty_mismatch"]}],
+    }
+
+    normalized = _normalize_node_tier_review(
+        raw,
+        SimpleNamespace(
+            resource_type="复习清单",
+            difficulty="高级",
+            knowledge_points=["skill-high"],
+        ),
+        state,
+    )
+    assert normalized["decision"] == "approve"
+    assert normalized["difficulty_match"] is True
+    assert normalized["issues"] == []
+
+    untouched = _normalize_node_tier_review(
+        raw,
+        SimpleNamespace(
+            resource_type="案例分析",
+            difficulty="高级",
+            knowledge_points=["skill-high"],
+        ),
+        state,
+    )
+    assert untouched is raw
+
+
+def test_text_resource_uses_bounded_long_form_timeout_and_output_budget(monkeypatch):
+    spec, context, _ = _inputs("讲义")
+    gateway = ScriptedLLMGateway(["# 受控检索讲义\n\n## 学习目标\n\n掌握证据范围。"])
+    monkeypatch.setattr(
+        "app.agents.resource_agents.text.get_settings",
+        lambda: SimpleNamespace(
+            text_resource_request_timeout_seconds=240.0,
+            text_resource_max_output_tokens=32768,
+        ),
+    )
+
+    artifact = TextResourceAgent().generate(spec, context, llm_gateway=gateway)
+
+    assert artifact.content_text.startswith("# 受控检索讲义")
+    assert gateway.calls[0]["options"].request_timeout_seconds == 240.0
+    assert gateway.calls[0]["options"].max_output_tokens == 32768
 
 
 @pytest.mark.parametrize(
@@ -135,11 +234,119 @@ def test_new_resource_types_are_registered_and_requestable():
     assert isinstance(get_resource_agent("复习清单"), ReviewChecklistAgent)
     assert isinstance(get_resource_agent("案例分析"), CaseStudyAgent)
     assert normalize_resource_type("复习清单") == "复习清单"
+    assert isinstance(get_resource_agent("个性化纠错训练包"), CorrectionTrainingPackageAgent)
     assert GenerateRequest(
         learner_id="learner-new-resource-type",
         topic="受控检索",
         resource_types=["复习清单", "案例分析"],
     ).resource_types == ["复习清单", "案例分析"]
+
+
+def test_correction_package_requires_frozen_focus_and_complete_units():
+    evidence = make_evidence(evidence_id="ev-correction")
+    focus = {"focus_snapshot_hash": "a" * 64, "difficulty": "中级", "scaffolding_level": "high", "ordered_target_nodes": [
+        {"skill_node_id": "skill-search", "name": "检索能力", "reason_codes": ["LEARNED_OBJECTIVELY_NOT_MASTERED"]}
+    ]}
+    spec = build_resource_specs(
+        run_id="run-correction", resource_types=["个性化纠错训练包"], topic="受控检索", difficulty="中级",
+        learning_plan={"correction_focus_snapshot": focus}, evidence=[evidence], target_skill_nodes=["skill-search"],
+    )[0]
+    context = ResourceGenerationContext(run_id="run-correction", batch_id="run-correction", topic="受控检索", evidence=[evidence], constraints={"correction_focus_snapshot": focus})
+    content = """# 薄弱点强化包：受控检索
+## 本次强化目标
+目标。
+## 薄弱模式概览
+概览。
+## 强化单元：检索能力
+### 错误模式
+误区。
+### 核心概念补救
+补救。
+### 正误对照
+对照。
+### 完整示例
+示例。
+### 引导式练习
+练习一。
+### 同构练习
+练习二。
+### 迁移练习
+练习三。
+## 参考答案与分层反馈
+反馈。
+## 达标标准
+标准。
+## 后续复习动作
+动作。
+## 总结
+总结。"""
+    artifact = CorrectionTrainingPackageAgent().generate(spec, context, llm_gateway=ScriptedLLMGateway([content]))
+    assert artifact.metadata.resource_type == "个性化纠错训练包"
+    assert artifact.artifact_data["correction_focus_snapshot_hash"] == "a" * 64
+
+
+def test_correction_package_uses_a_bounded_output_budget_and_repairs_format_once():
+    evidence = make_evidence(evidence_id="ev-correction-repair")
+    focus = {"focus_snapshot_hash": "b" * 64, "difficulty": "中级", "scaffolding_level": "high", "ordered_target_nodes": [
+        {"skill_node_id": "skill-search", "name": "检索能力", "reason_codes": ["LEARNED_OBJECTIVELY_NOT_MASTERED"]}
+    ]}
+    spec = build_resource_specs(
+        run_id="run-correction-repair", resource_types=["个性化纠错训练包"], topic="受控检索", difficulty="中级",
+        learning_plan={"correction_focus_snapshot": focus}, evidence=[evidence], target_skill_nodes=["skill-search"],
+    )[0]
+    context = ResourceGenerationContext(
+        run_id="run-correction-repair", batch_id="run-correction-repair", topic="受控检索", evidence=[evidence],
+        constraints={"correction_focus_snapshot": focus},
+    )
+    incomplete = "# 薄弱点强化包\n\n## 本次强化目标\n\n目标。"
+    complete = """# 薄弱点强化包：受控检索
+## 本次强化目标
+目标。
+## 薄弱模式概览
+概览。
+## 强化单元：检索能力
+### 错误模式
+误区。
+### 核心概念补救
+补救。
+### 正误对照
+对照。
+### 完整示例
+示例。
+### 引导式练习
+练习一。
+### 同构练习
+练习二。
+### 迁移练习
+练习三。
+## 参考答案与分层反馈
+反馈。
+## 达标标准
+标准。
+## 后续复习动作
+动作。
+## 总结
+总结。"""
+    gateway = ScriptedLLMGateway([incomplete, complete])
+
+    artifact = CorrectionTrainingPackageAgent().generate(spec, context, llm_gateway=gateway)
+
+    assert artifact.content_text == complete
+    assert artifact.artifact_data["format_repair_attempted"] is True
+    assert len(gateway.calls) == 2
+    assert all(call["options"].max_output_tokens == 32768 for call in gateway.calls)
+    assert all(call["options"].request_timeout_seconds == 300.0 for call in gateway.calls)
+    assert all(call["options"].max_attempts == 2 for call in gateway.calls)
+
+
+def test_correction_package_cannot_mix_with_general_resource_types():
+    evidence = make_evidence(evidence_id="ev-correction-mixed")
+    with pytest.raises(ApplicationError) as caught:
+        build_resource_specs(
+            run_id="run-correction-mixed", resource_types=["讲义", "个性化纠错训练包"], topic="受控检索",
+            difficulty="中级", learning_plan={}, evidence=[evidence], target_skill_nodes=["skill-search"],
+        )
+    assert caught.value.code == ErrorCode.WORKFLOW_CONTRACT_INVALID
 
 
 def test_practice_guide_prompt_forbids_literal_secret_examples():
@@ -148,40 +355,52 @@ def test_practice_guide_prompt_forbids_literal_secret_examples():
 
 
 def test_practice_guide_review_does_not_block_generated_secret_like_examples():
+    package = {
+        "schema_version": "3.0", "title": "受控实操",
+        "preparation": {"phase_id": "prepare", "goal": "准备环境", "items": ["准备环境"], "evidence_ids": ["ev-new-resource-type"]},
+        "practice": {"phase_id": "practice", "goal": "完成操作", "steps": [{"step_id": "step-1", "title": "执行", "instruction_text": "按步骤执行。", "code_blocks": [], "verification": "检查结果", "evidence_ids": ["ev-new-resource-type"]}]},
+        "verification": {"phase_id": "verify", "goal": "检查结果", "checklist": ["完成检查"], "evidence_ids": ["ev-new-resource-type"]},
+        "reflection": {"phase_id": "reflect", "goal": "复盘结果", "summary": "复盘结果。", "evidence_ids": ["ev-new-resource-type"]},
+    }
     placeholder = SimpleNamespace(
         resource_type="实操指南",
-        content_text="# 示例\n\n准备\n实践步骤\n检查清单\n常见问题\n复盘建议\n\nOPENAI_API_KEY=\"YOUR_API_KEY\"",
+        content_text="# 示例\n\n准备阶段\n实操阶段\n验证阶段\n复盘阶段\n\nOPENAI_API_KEY=\"YOUR_API_KEY\"",
+        practice_guide_payload=package,
     )
     real_secret = SimpleNamespace(
         resource_type="实操指南",
-        content_text="# 示例\n\n准备\n实践步骤\n检查清单\n常见问题\n复盘建议\n\napi_key=\"sk-abcdefghijklmnopqrstuvwx\"",
+        content_text="# 示例\n\n准备阶段\n实操阶段\n验证阶段\n复盘阶段\n\napi_key=\"sk-abcdefghijklmnopqrstuvwx\"",
+        practice_guide_payload=package,
     )
 
     assert _deterministic_practice_guide_review(placeholder)["decision"] == "approve"
     assert _deterministic_practice_guide_review(real_secret)["decision"] == "approve"
 
 
-def test_assessment_agent_retries_plain_text_structure_before_failing():
+def test_assessment_agent_retries_node_json_structure_before_failing():
     spec, context, evidence = _inputs("分阶测试题")
-
-    def output(prefix):
-        questions = "\n\n".join(
-            f"## q-{index:02d} · {level}\n{prefix}：说明受控检索中的关键做法。"
-            for index, level in enumerate(["基础"] * 4 + ["进阶"] * 4 + ["挑战"] * 4, 1)
-        )
-        return f"# 受控检索测试\n\n## 一、题目\n\n{questions}\n\n## 二、参考答案与解析\n\n" + "\n".join(
-            f"q-{index:02d}：依据证据回答。解析：答案应受证据约束。"
-            for index in range(1, 13)
-        )
-
-    malformed = "# 受控检索测试\n\n## 一、题目\n\n只有一题。"
-    gateway = ScriptedLLMGateway([malformed, output("正确")])
+    choice = lambda local_id, question_type, answers: {
+        "local_id": local_id, "question_type": question_type, "stem": "受控检索应如何使用冻结证据？",
+        "options": [{"option_id": key, "text": f"选项 {key}"} for key in "ABCD"],
+        "answer_option_ids": answers, "knowledge_point_tags": ["skill-search"], "evidence_ids": [evidence.evidence_id],
+    }
+    valid = {
+        "schema_version": "2.0", "skill_node_id": "skill-search", "skill_node_name": "检索能力",
+        "single_choice_questions": [choice("single-1", "single_choice", ["A"]), choice("single-2", "single_choice", ["B"])],
+        "multiple_choice_questions": [choice("multiple-1", "multiple_choice", ["A", "B"])],
+        "short_answer_questions": [
+            {"local_id": "short-1", "question_type": "short_answer", "stem": "说明依据。", "reference_answer": "依据冻结证据。", "rubric": [{"criterion": "引用证据", "points": 1}, {"criterion": "说明边界", "points": 1}], "knowledge_point_tags": ["skill-search"], "evidence_ids": [evidence.evidence_id]},
+            {"local_id": "short-2", "question_type": "short_answer", "stem": "说明边界。", "reference_answer": "不引入证据外事实。", "rubric": [{"criterion": "识别边界", "points": 1}, {"criterion": "解释原因", "points": 1}], "knowledge_point_tags": ["skill-search"], "evidence_ids": [evidence.evidence_id]},
+        ],
+    }
+    gateway = ScriptedLLMGateway([{}, valid])
     artifact = AssessmentAgent().generate(spec, context, llm_gateway=gateway)
 
     assert artifact.metadata.validation_status == "validated"
     assert len(gateway.calls) == 2
     assert artifact.mime_type == "text/markdown"
-    assert artifact.artifact_data == {}
+    assert len(artifact.artifact_data["assessment_package"]["node_blocks"]) == 1
+    assert "参考答案" not in artifact.content_text
 
 
 def test_new_resource_types_have_a_deterministic_review_structure_gate():
@@ -199,7 +418,7 @@ def test_new_resource_types_have_a_deterministic_review_structure_gate():
 
 def test_new_resource_types_flow_through_generation_and_independent_review(monkeypatch):
     monkeypatch.setattr(
-        "app.agents.generator.get_settings",
+        "app.agents.resource_workflows.learning_documents.generator_agent.get_settings",
         lambda: SimpleNamespace(resource_worker_max_concurrency=1),
     )
     learner = LearnerProfile(
@@ -220,13 +439,14 @@ def test_new_resource_types_flow_through_generation_and_independent_review(monke
         "resource_types": ["复习清单", "案例分析"],
         "target_skill_nodes": ["skill-search"],
         "retrieved_evidence": [evidence],
+        "node_evidence_map": {"skill-search": [evidence.evidence_id]},
         "learning_plan": {"learning_path": [{"topic": "检索", "order": 1}]},
         "generation_attempt": 1,
         "trace": [],
     }
     generated = generate_node(
         state,
-        llm_gateway=ScriptedLLMGateway([CHECKLIST_MARKDOWN, CASE_STUDY_MARKDOWN]),
+        llm_gateway=ScriptedLLMGateway([CHECKLIST_PAYLOAD, CASE_STUDY_MARKDOWN]),
     )
 
     assert [item.resource_type for item in generated["generated_resources"]] == ["复习清单", "案例分析"]

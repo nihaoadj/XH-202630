@@ -10,14 +10,14 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
-from app.api import runs
-from app.core.errors import ApplicationError, ErrorCode
+from app.api.runs import run_queries as runs
+from app.core.security.errors import ApplicationError, ErrorCode
 from app.db.audit.sql_repository import SQLAuditRepository
-from app.db.generation_job.memory import MemoryGenerationJobRepository
-from app.db.generation_job.sql_repository import SQLGenerationJobRepository
-from app.models.persistence import ReplayCompleteness, RunStatus, WorkflowEventType
-from app.services.run_event_stream_service import RunEventStreamService, to_public_event
-from app.services.run_query_service import RunQueryService
+from app.db.generation.memory import MemoryGenerationJobRepository
+from app.db.generation.sql_repository import SQLGenerationJobRepository
+from app.models.shared.persistence import ReplayCompleteness, RunStatus, WorkflowEventType
+from app.services.runs.events import RunEventStreamService, to_public_event
+from app.services.runs.queries import RunQueryService
 from backend.tests.fakes.persistence import create_command, memory_repository, sqlite_repository
 
 

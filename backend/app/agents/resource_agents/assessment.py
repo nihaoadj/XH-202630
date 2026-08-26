@@ -1,156 +1,199 @@
-"""Specialized Agent for a learner-facing, plain-text assessment paper."""
+"""Evidence-scoped structured assessment generation."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.core.errors import ApplicationError, ErrorCode
-from app.core.llm_gateway import LLMGateway
-from app.models.agent_contracts import (
-    AssessmentLLMOutput,
-    AssessmentQuestion,
-    GeneratedArtifact,
-    ResourceGenerationContext,
-    ResourceSpec,
-)
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.core.retrieval.knowledge_base import load_knowledge_base_manifest
+from app.core.llm.gateway import LLMGateway
+from app.models.shared.agent_contracts import AssessmentNodeBlockV2, AssessmentPackageV2, GeneratedArtifact, ResourceGenerationContext, ResourceSpec
 
 from .base import BaseResourceGenerationAgent
 
 
-ASSESSMENT_PROMPT = """你是 AssessmentAgent，专门生成给学习者直接阅读和作答的分阶测试卷。
-这份资源是展示型学习材料，不会被反馈系统解析或自动评分；请直接输出 Markdown/纯文本试卷，不要输出 JSON、代码块包裹的 JSON 或任何字段对象。
-
-硬性边界：
-1. 只使用输入中的冻结 evidence；题干、正确答案和解析不得引入证据外的事实。
-2. 只生成当前 ResourceSpec 的测试题，不生成讲义、实操指南或 HTML。
-3. 必须同时覆盖“基础、进阶、挑战”三个层级，每层至少一道题；题目 ID 使用 q-01 起的稳定顺序。
-4. 选择题的 answer 只能引用已声明 option_id；简答题 answer 给出可判定的参考答案要点。
-5. 每题必须包含 explanation、ability_node、knowledge_points 和 evidence_ids。
-6. 每题 evidence_ids 只能取自 ResourceSpec.evidence_ids；knowledge_points 只能取自 ResourceSpec.knowledge_points。
-7. 避免只考记忆：基础层检验理解，进阶层检验应用，挑战层检验分析与排错。
-8. 只输出一张完整试卷，不输出资源身份字段、JSON、内部校验说明或额外解释。
-
-稳定输出规则：
-1. 目标生成 12 题：基础 4 题、进阶 4 题、挑战 4 题；题号连续使用 q-01 至 q-12，最低不得少于 10 题。
-2. 题型必须混合：至少 4 道单选题、至少 2 道多选题、至少 2 道判断题、至少 2 道简答/分析题；不要整套只生成单选题。
-3. 难度递进：基础考理解与辨析，进阶考流程应用与故障判断，挑战考权衡、设计或排错；题目必须围绕输入知识点，不凭空增加事实。
-4. 严格按以下文本结构输出：标题；作答说明；“## 一、题目”及 q-01 至 q-08；“## 二、参考答案与解析”且该章节必须位于所有题目之后。答案章节按题号给出答案、解析、能力点和证据 ID。
-5. 每道选择题列出 A/B/C/D 选项；多选题明确“可多选”；判断题给出“正确/错误”选项；简答题写清回答要求。不要在题目章节提前泄露答案。
-6. 每题题干不超过 360 个字符，解析不超过 360 个字符；每题引用 1～3 个 evidence_id 与 1～3 个知识点。
-7. 每题只考一个主要能力节点，题干不得使用“以上、同上、资料中”等无法独立作答的指代。
-8. 全部 ResourceSpec.knowledge_points 都必须在题目或答案解析中实际覆盖；证据 ID 必须来自输入 evidence。
-9. 使用 Markdown 标题、编号列表和普通文本即可；不要使用 JSON、表格嵌套对象或 ``` 代码围栏。
+ASSESSMENT_PROMPT = """你是 AssessmentAgent。一次只能为一个能力节点生成严格 JSON 题组。
+只使用给定 evidence 和允许知识点；不得输出 Markdown、代码围栏或额外说明。
+返回 schema_version=2.0 和输入 skill_node_id，必须有 2 道 single_choice、1 道 multiple_choice、2 道 short_answer。
+难度阶段由题型固定：single_choice 为“基础”、multiple_choice 为“进阶”、short_answer 为“挑战”；题干不得越出当前能力节点。
+选择题必须有 A/B/C/D 四个选项；问答题必须有 reference_answer 和至少两项 rubric。
+知识点标签只能描述题干实际考查的概念，不能用允许标签掩盖相邻节点、评测调优、生产运维、
+资源登记或摄取管线等未列入允许知识点的内容。若输入含有返工反馈，必须逐项消除其中指出的
+越界题目和证据不足，不得复述或换一种说法保留该问题。
+每一道题的题干、正确答案、reference_answer 和 rubric 中每个可验证断言，都必须能被该题 evidence_ids
+中的冻结 excerpt 直接支持；优先只引用一条最直接的 evidence，不得依赖常识补全、相邻节点经验或未出现的产品细节。
+若证据没有明确说明某个细节，就把题目改为只考查证据明确出现的概念，而不是猜测或扩展该细节。
 """
 
 
-def _render_question(question: AssessmentQuestion) -> str:
-    lines = [
-        f"### {question.question_id} · {question.level}",
-        question.stem,
-    ]
-    if question.options:
-        lines.extend(f"- {option.option_id}. {option.text}" for option in question.options)
-    return "\n\n".join(lines)
+def _canonical_hash(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-def render_assessment_markdown(output: AssessmentLLMOutput) -> str:
-    questions = "\n\n".join(_render_question(item) for item in output.questions)
-    answers = "\n\n".join(
-        f"### {item.question_id}\n**参考答案：** {'；'.join(item.answer)}\n\n"
-        f"**解析：** {item.explanation}\n\n**能力节点：** {item.ability_node}"
-        for item in output.questions
-    )
-    return f"# {output.title}\n\n{output.instructions}\n\n## 一、题目\n\n{questions}\n\n## 二、参考答案与解析\n\n{answers}"
+def _assign_scores(rows: list[dict]) -> None:
+    weights = {"single_choice": 2, "multiple_choice": 4, "short_answer": 5}
+    total = sum(weights[item["question_type"]] for item in rows)
+    raw = [10000 * weights[item["question_type"]] / total for item in rows]
+    floors = [int(value) for value in raw]
+    for index in sorted(range(len(rows)), key=lambda item: (-(raw[item] - floors[item]), rows[item]["question_id"]))[:10000 - sum(floors)]:
+        floors[index] += 1
+    for row, cents in zip(rows, floors):
+        row["max_score"] = cents / 100
 
 
-class AssessmentAgent(BaseResourceGenerationAgent[AssessmentLLMOutput]):
+def render_assessment_markdown(package: dict) -> str:
+    lines = [f"# {package['title']}", "", package["instructions"], ""]
+    for block in package["node_blocks"]:
+        lines += [f"## 能力节点：{block['skill_node_name']}", ""]
+        for label, stage, field_name in (("单选题", "基础", "single_choice_questions"), ("多选题", "进阶", "multiple_choice_questions"), ("问答题", "挑战", "short_answer_questions")):
+            lines += [f"### {label}（{stage}）", ""]
+            for question in block[field_name]:
+                lines += [f"#### {question['question_id']}（{question['max_score']:.2f} 分）", "", question["stem"], "", f"知识点：{'、'.join(question['knowledge_point_tags'])}", ""]
+                for option in question.get("options", []):
+                    lines += [f"- {option['option_id']}. {option['text']}", ""]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+class AssessmentAgent(BaseResourceGenerationAgent[AssessmentNodeBlockV2]):
     resource_type = "分阶测试题"
     agent_name = "AssessmentAgent"
-    prompt_version = "assessment-resource-v5-plain-paper"
-    artifact_format = "markdown"
-    default_max_output_tokens = 12000
-    # Validation failures are local contract errors. Retry the Agent call
-    # before returning a failure to the workflow-level policy.
+    prompt_version = "assessment-resource-v7-evidence-grounded"
+    artifact_format = "json"
+    default_max_output_tokens = 8192
     validation_retry_attempts = 2
 
-    def build_messages(
-        self,
-        spec: ResourceSpec,
-        context: ResourceGenerationContext,
-    ):
-        payload = self.common_prompt_payload(spec, context)
-        return [
-            SystemMessage(content=ASSESSMENT_PROMPT),
-            HumanMessage(
-                content="请根据以下受控输入生成分阶测试题：\n"
-                + self.json_payload(payload)
-            ),
+    @staticmethod
+    def _node_evidence_ids(spec: ResourceSpec, node_id: str) -> list[str]:
+        """New specs must isolate node evidence; legacy specs retain their snapshot scope."""
+        if spec.node_evidence_map:
+            return list(spec.node_evidence_map.get(node_id) or [])
+        return list(spec.evidence_ids)
+
+    @staticmethod
+    def _node_descriptor(node_id: str) -> tuple[str, list[str]]:
+        """Resolve the frozen catalog label; IDs alone are too weak a model constraint."""
+        try:
+            nodes = load_knowledge_base_manifest().get("skill_nodes", [])
+        except Exception:
+            nodes = []
+        for node in nodes:
+            if isinstance(node, dict) and node.get("node_id") == node_id:
+                tags = [str(value) for value in node.get("knowledge_points", []) if str(value).strip()]
+                return str(node.get("name") or node_id), list(dict.fromkeys([node_id, *tags]))
+        return node_id, [node_id]
+
+    def _messages(self, spec: ResourceSpec, context: ResourceGenerationContext, node_id: str):
+        node_name, allowed_tags = self._node_descriptor(node_id)
+        revision_feedback = context.constraints.get("revision_feedback", {})
+        node_index = list(spec.knowledge_points).index(node_id)
+        node_question_ids = [f"q-{number:03d}" for number in range(node_index * 5 + 1, node_index * 5 + 6)]
+        feedback_issues = revision_feedback.get("issues", []) if isinstance(revision_feedback, dict) else []
+        node_feedback = [
+            item for item in feedback_issues
+            if isinstance(item, dict)
+            and (item.get("knowledge_point") in {None, node_id} or node_id in str(item.get("description") or ""))
         ]
+        rejected_question_ids = sorted({
+            question_id
+            for item in node_feedback
+            for question_id in re.findall(r"q-\d{3}", str(item.get("description") or ""))
+            if question_id in node_question_ids
+        })
+        payload = {
+            "schema_version": "2.0", "skill_node_id": node_id, "skill_node_name": node_name,
+            "allowed_knowledge_point_tags": allowed_tags, "allowed_evidence_ids": self._node_evidence_ids(spec, node_id),
+            "difficulty": spec.difficulty,
+            "server_assigned_question_ids_for_this_node": node_question_ids,
+            "evidence": [item.model_dump(mode="json") for item in context.evidence if item.evidence_id in self._node_evidence_ids(spec, node_id)],
+            # This is server-owned reviewer feedback.  Supplying it only on a
+            # revision preserves the independent reviewer/generator boundary
+            # while making a targeted regeneration genuinely corrective.
+            "revision_feedback": {
+                "rejected_question_ids": rejected_question_ids,
+                "issues": node_feedback,
+            } if context.generation_attempt > 1 else {},
+        }
+        return [SystemMessage(content=ASSESSMENT_PROMPT), HumanMessage(content=self.json_payload(payload))]
 
-    def generate(
-        self,
-        spec: ResourceSpec,
-        context: ResourceGenerationContext,
-        *,
-        llm_gateway: LLMGateway,
-        **_: object,
-    ) -> GeneratedArtifact:
-        last_error: ApplicationError | None = None
-        for _ in range(self.validation_retry_attempts):
-            result = self.invoke_plain_text(
-                spec=spec,
-                context=context,
-                llm_gateway=llm_gateway,
-                messages=self.build_messages(spec, context),
-                representation="text",
-                max_output_tokens=self.default_max_output_tokens,
-            )
-            artifact = GeneratedArtifact(
-                metadata=self.metadata(
-                    spec=spec,
-                    representation="text",
-                    source_evidence_ids=list(spec.evidence_ids),
-                ),
-                difficulty=spec.difficulty,
-                content_text=str(result.output).strip(),
-                knowledge_points=list(spec.knowledge_points),
-                artifact_data={},
-                storage_type="text",
-                mime_type="text/markdown",
-                llm_metadata=result.trace_metadata(),
-            )
-            try:
-                return self.validate(artifact, spec=spec, context=context)
-            except ApplicationError as exc:
-                if exc.code not in {
-                    ErrorCode.LLM_OUTPUT_SCHEMA_INVALID,
-                }:
-                    raise
-                last_error = exc
-        assert last_error is not None
-        raise last_error
+    @staticmethod
+    def _validate_node(block: AssessmentNodeBlockV2, spec: ResourceSpec, node_id: str) -> None:
+        if block.skill_node_id != node_id:
+            raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
+        _, allowed_tags = AssessmentAgent._node_descriptor(node_id)
+        allowed_evidence_ids = AssessmentAgent._node_evidence_ids(spec, node_id)
+        if not allowed_evidence_ids:
+            raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
+        for question in block.single_choice_questions + block.multiple_choice_questions + block.short_answer_questions:
+            if set(question.knowledge_point_tags) - set(allowed_tags) or set(question.evidence_ids) - set(allowed_evidence_ids):
+                raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
 
-    def validate(
-        self,
-        artifact: GeneratedArtifact,
-        *,
-        spec: ResourceSpec,
-        context: ResourceGenerationContext,
-    ) -> GeneratedArtifact:
+    def generate(self, spec: ResourceSpec, context: ResourceGenerationContext, *, llm_gateway: LLMGateway, **_: object) -> GeneratedArtifact:
         self._ensure_route(spec)
         self._scoped_evidence(spec, context)
-        if artifact.metadata.resource_spec_id != spec.resource_spec_id:
-            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
-        if artifact.metadata.representation != "text":
-            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
-        content = artifact.content_text.strip()
-        answer_section = content.find("参考答案")
-        question_text = content[:answer_section] if answer_section >= 0 else content
-        question_ids = re.findall(r"(?mi)^#{1,4}\s*(q-\d{2,3})\b", question_text)
-        if len(set(question_ids)) < 10 or answer_section < 0:
+        blocks: list[AssessmentNodeBlockV2] = []
+        traces: list[dict] = []
+        for index, node_id in enumerate(spec.knowledge_points, start=1):
+            node_context = context.model_copy(update={"step_id": f"{context.step_id}:node:{index}"})
+            last_error: ApplicationError | None = None
+            for _ in range(self.validation_retry_attempts):
+                try:
+                    result = self.invoke(spec=spec, context=node_context, llm_gateway=llm_gateway,
+                        messages=self._messages(spec, node_context, node_id), output_schema=AssessmentNodeBlockV2,
+                        representation="text", max_output_tokens=self.default_max_output_tokens)
+                    self._validate_node(result.output, spec, node_id)
+                    blocks.append(result.output)
+                    traces.append(result.trace_metadata())
+                    break
+                except Exception as exc:
+                    last_error = exc if isinstance(exc, ApplicationError) else ApplicationError(
+                        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422
+                    )
+            else:
+                raise last_error or ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
+        merged_blocks, rows, number = [], [], 1
+        for block in blocks:
+            merged = block.model_dump(mode="json")
+            for question_type, stage, field_name in (("single_choice", "基础", "single_choice_questions"), ("multiple_choice", "进阶", "multiple_choice_questions"), ("short_answer", "挑战", "short_answer_questions")):
+                items = merged[field_name]
+                for item in items:
+                    item.update({"question_id": f"q-{number:03d}", "question_type": question_type,
+                                 "difficulty_stage": stage})
+                    number += 1
+                    rows.append(item)
+            merged_blocks.append(merged)
+        _assign_scores(rows)
+        package = AssessmentPackageV2(schema_version="2.0", title=f"{context.topic} 分阶测试题", instructions="请独立完成全部题目；总分 100 分。", node_blocks=merged_blocks).model_dump(mode="json")
+        package["payload_hash"] = _canonical_hash(package)
+        exercises = [
+            {"question_id": item["question_id"], "question_type": item["question_type"],
+             "options": [f"{choice['option_id']}. {choice['text']}" for choice in item.get("options", [])],
+             "skill_node_id": block["skill_node_id"], "knowledge_point": item["knowledge_point_tags"][0],
+             "question": item["stem"], "difficulty": spec.difficulty}
+            for block in package["node_blocks"]
+            for field_name in ("single_choice_questions", "multiple_choice_questions", "short_answer_questions")
+            for item in block[field_name]
+        ]
+        artifact = GeneratedArtifact(metadata=self.metadata(spec=spec, representation="text", source_evidence_ids=list(spec.evidence_ids)),
+            difficulty=spec.difficulty, content_text=render_assessment_markdown(package), knowledge_points=list(spec.knowledge_points),
+            artifact_data={"assessment_package": package, "exercise_items": exercises}, storage_type="text", mime_type="text/markdown",
+            llm_metadata={"node_calls": traces})
+        return self.validate(artifact, spec=spec, context=context)
+
+    def validate(self, artifact: GeneratedArtifact, *, spec: ResourceSpec, context: ResourceGenerationContext) -> GeneratedArtifact:
+        package = artifact.artifact_data.get("assessment_package")
+        blocks = package.get("node_blocks") if isinstance(package, dict) else None
+        if not isinstance(blocks, list) or [item.get("skill_node_id") for item in blocks] != list(spec.knowledge_points):
             raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
-        if content.lower().startswith("{") or "```json" in content.lower():
+        questions = [item for block in blocks for field_name in ("single_choice_questions", "multiple_choice_questions", "short_answer_questions") for item in block.get(field_name, [])]
+        expected_stages = {"single_choice": "基础", "multiple_choice": "进阶", "short_answer": "挑战"}
+        if (len(questions) != 5 * len(spec.knowledge_points)
+                or round(sum(item.get("max_score", 0) for item in questions), 2) != 100
+                or any(item.get("difficulty_stage") != expected_stages[item["question_type"]] for item in questions)):
+            raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
+        if "参考答案" in artifact.content_text or "rubric" in artifact.content_text.lower():
             raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
         return artifact

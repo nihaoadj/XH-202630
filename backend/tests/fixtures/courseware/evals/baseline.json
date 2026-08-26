@@ -1,0 +1,27 @@
+{
+  "schema_version": "3.0",
+  "description": "Courseware 3.0 deterministic artifact hashes; browser screenshot hashes remain local computed evidence.",
+  "case_count": 20,
+  "reports": [
+    {"fixture": "single-lecture", "artifact_hash": null},
+    {"fixture": "lecture-practice-quiz", "artifact_hash": "8cb9e38cf87a18833f3bc151fd3e74680148fce9cbc7d104a6d9aab3c0d80ae2"},
+    {"fixture": "missing-quiz", "artifact_hash": "181a63a3d83810b88d4f72ce607d91fc4fc782fa9e599ef822aa4e4129eb1c2c"},
+    {"fixture": "duplicate-source", "artifact_hash": null},
+    {"fixture": "empty-source", "artifact_hash": null},
+    {"fixture": "unknown-source", "artifact_hash": null},
+    {"fixture": "unsafe-model-content", "artifact_hash": "4cb84c5b0e9f186e44e243c1d732f52ba043c880ab42ac680f26b6333e75cbb8"},
+    {"fixture": "unknown-component", "artifact_hash": null},
+    {"fixture": "unknown-source-block", "artifact_hash": null},
+    {"fixture": "scene-retry-idempotent", "artifact_hash": "e1fb31a87384a3599823a77e9fa1de933da8452731084fce4367fbfa37925d2d"},
+    {"fixture": "ai-review-revision", "artifact_hash": "7994f373894dd35de4eaacad95802faedae1250cc3b00d31a99d4d34ce4fc5f2"},
+    {"fixture": "ai-review-unresolved", "artifact_hash": "a30f48348ac82244f243418c827ca1020378b6a6ae0306d156953ad4d61fb6ba"},
+    {"fixture": "short-low-interaction", "artifact_hash": "6faed706189b8786d987ea5780684888145af07928404490446b734c687a226a"},
+    {"fixture": "medium-interaction-30m", "artifact_hash": "9c2480efcf1f5e86085fd012efbaa0167d24568cdde1537e33e20eea2ea12757"},
+    {"fixture": "high-interaction-60m", "artifact_hash": "9a88d8e6384ffc283aa0cd6242090a4f947156be54ce51ae39491c6f3f2781f0"},
+    {"fixture": "multi-resource-concept-fusion", "artifact_hash": "6389d1b6d4f2bcb177e8426d2c90c4fa405a2091daa665e6c4b5f6556303ea2d"},
+    {"fixture": "duplicate-and-complementary-sources", "artifact_hash": null},
+    {"fixture": "source-conflict-parallel", "artifact_hash": "69dfe1c6139f6870f4189b84e0d61ca255cb1381ebfe006d63a307c6e6286324"},
+    {"fixture": "constrained-interaction-quota", "artifact_hash": "acd2c387136e6fc9b23866369f9ebc3fb043e17f0894ac79a48a4655a5a2985f"},
+    {"fixture": "localized-review-repair", "artifact_hash": "411868ef5b04cf547ad7ff3b12b3d51469a46220e63a10b15e910b0f25d3f411"}
+  ]
+}

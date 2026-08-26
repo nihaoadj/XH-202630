@@ -5,8 +5,8 @@ from fastapi.testclient import TestClient
 
 from app import config as config_module
 from app import main as main_module
-from app.db import database as database_module
-from app.db.models import KnowledgeIndexStatusORM
+from app.db.shared import database as database_module
+from app.db.shared.models import KnowledgeIndexStatusORM
 
 
 def _ready_report(*_args, **_kwargs):

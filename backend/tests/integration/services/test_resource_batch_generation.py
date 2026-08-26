@@ -1,6 +1,6 @@
-from app.db.generation_job.memory import MemoryGenerationJobRepository
-from app.models.schemas import GenerateRequest, LearnerProfile
-from app.services.generation_job_service import GenerationJobService
+from app.db.generation.memory import MemoryGenerationJobRepository
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
+from app.services.generation.jobs import GenerationJobService
 
 
 class _RecordingGenerationService:

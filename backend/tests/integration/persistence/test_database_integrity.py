@@ -6,9 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
-from app.db.database import configure_sqlite_foreign_keys
-from app.db.integrity import inspect_database_integrity
-from app.db.models import (
+from app.db.shared.database import configure_sqlite_foreign_keys
+from app.db.shared.integrity import inspect_database_integrity
+from app.db.shared.models import (
     AgentStepORM,
     Base,
     ClaimJudgementORM,
@@ -34,6 +34,17 @@ def test_sqlite_foreign_keys_are_enabled_for_every_connection(tmp_path):
     for _ in range(2):
         with engine.connect() as connection:
             assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
+
+
+def test_sqlite_workflow_connections_use_wal_and_bounded_busy_timeout(tmp_path):
+    engine = _integrity_engine(tmp_path, "workflow-concurrency.db")
+
+    with engine.connect() as connection:
+        journal_mode = connection.exec_driver_sql("PRAGMA journal_mode").scalar_one()
+        busy_timeout = connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one()
+
+    assert journal_mode.lower() == "wal"
+    assert busy_timeout >= 60_000
 
 
 @pytest.mark.parametrize(

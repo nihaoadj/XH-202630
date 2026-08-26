@@ -1,15 +1,15 @@
 import pytest
 
-from app.agents import reviewer as reviewer_module
+from app.agents.resource_workflows.learning_documents import reviewer_agent as reviewer_module
 from app.config import Settings
-from app.core import errors as errors_module
-from app.core.errors import ApplicationError, ErrorCode, require_degraded_generation
+from app.core.security import errors as errors_module
+from app.core.security.errors import ApplicationError, ErrorCode, require_degraded_generation
 from app.core.health import ComponentHealth, HealthReport
-from app.core.llm_gateway import LLMGateway
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.services import generation_service as generation_module
-from app.services.generation_service import GenerationService
+from app.core.llm.gateway import LLMGateway
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.services.generation import generation as generation_module
+from app.services.generation.generation import GenerationService
 from tests.fakes.llm import ScriptedLLMTransport
 
 
@@ -128,7 +128,9 @@ def test_degraded_workflow_response_is_not_normal_success(monkeypatch):
         error_codes=["STORAGE_MEMORY_EPHEMERAL", "CFG_LLM_API_KEY_MISSING"],
     )
     monkeypatch.setattr(generation_module, "ensure_generation_ready", lambda: report)
-    service = GenerationService(MemoryResourceRepository(), workflow)
+    repo = MemoryResourceRepository()
+    repo.save(resource, "policy_001", "测试")
+    service = GenerationService(repo, workflow)
 
     response = service.generate(
         learner(),

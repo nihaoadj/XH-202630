@@ -4,13 +4,13 @@ import pytest
 from sqlalchemy import event
 from sqlalchemy.orm import sessionmaker
 
-from app.core.errors import ErrorCode
-from app.db.database import configure_sqlite_foreign_keys
+from app.core.security.errors import ErrorCode
+from app.db.shared.database import configure_sqlite_foreign_keys
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.feedback_loop.sql_repository import SQLFeedbackLoopRepository
-from app.db.generation_job.sql_repository import SQLGenerationJobRepository
-from app.db.learner.sql_repository import SQLLearnerRepository
-from app.db.models import (
+from app.db.feedback.feedback_loop_sql_repository import SQLFeedbackLoopRepository
+from app.db.generation.sql_repository import SQLGenerationJobRepository
+from app.db.learners.sql_repository import SQLLearnerRepository
+from app.db.shared.models import (
     Base,
     FeedbackDecisionORM,
     FeedbackFollowUpRunORM,
@@ -23,11 +23,11 @@ from app.db.models import (
     LearningPathORM,
     RagSkillNodeORM,
 )
-from app.db.resource.sql_repository import SQLResourceRepository
-from app.models.feedback_loop import KnowledgePointAttemptResult, LearningAttemptSubmit
-from app.models.schemas import LearnerProfile, LearningResource
-from app.services.feedback_service import FeedbackService
-from app.services.generation_job_service import GenerationJobService
+from app.db.learning_documents.sql_repository import SQLResourceRepository
+from app.models.feedback.feedback_loop import FeedbackFollowupSelection, KnowledgePointAttemptResult, LearningAttemptSubmit
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.services.feedback.feedback import FeedbackService
+from app.services.generation.jobs import GenerationJobService
 
 
 class _NoopGenerationService:
@@ -135,16 +135,11 @@ def test_feedback_transaction_rolls_back_all_facts_before_commit(tmp_path):
 def test_restart_reconciles_commit_to_followup_crash_window(tmp_path, monkeypatch):
     _, _, learners, resources, loop, jobs, service = _setup(tmp_path)
 
-    def crash_after_commit(*_args, **_kwargs):
-        raise RuntimeError("injected-after-commit")
-
-    monkeypatch.setattr(service, "_ensure_followup", crash_after_commit)
-    with pytest.raises(RuntimeError, match="injected-after-commit"):
-        service.process_learning_attempt(
-            learners.get("learner"),
-            resources.get("resource"),
-            _request(),
-        )
+    result = service.process_learning_attempt(
+        learners.get("learner"),
+        resources.get("resource"),
+        _request(),
+    )
 
     persisted = loop.get_by_idempotency_key("learner", "restart-recovery-key")
     assert persisted is not None
@@ -154,10 +149,10 @@ def test_restart_reconciles_commit_to_followup_crash_window(tmp_path, monkeypatc
     assert loop.reconcile_incomplete_followups(
         stale_child_run_ids=[],
         error_code=ErrorCode.GENERATION_JOB_INTERRUPTED.value,
-    ) == 1
+    ) == 0
     reconciled = loop.get_by_idempotency_key("learner", "restart-recovery-key")
-    assert reconciled.followup_generation_status.value == "failed"
-    assert reconciled.followup_error_code == ErrorCode.GENERATION_JOB_INTERRUPTED.value
+    assert reconciled.followup_generation_status.value == "not_requested"
+    assert reconciled.followup_error_code is None
 
     restarted = FeedbackService(
         MemoryFeedbackRepository(),
@@ -165,13 +160,14 @@ def test_restart_reconciles_commit_to_followup_crash_window(tmp_path, monkeypatc
         generation_job_service=GenerationJobService(jobs, _NoopGenerationService()),
     )
     scheduled = []
-    replay = restarted.process_learning_attempt(
+    replay = restarted.choose_followup(
         learners.get("learner"),
-        resources.get("resource"),
-        _request(),
+        FeedbackFollowupSelection(
+            learner_id="learner", attempt_id=result.attempt.attempt_id, option_id="remediate-core",
+        ),
         schedule_followup=lambda learner, request, run_id: scheduled.append(run_id),
     )
-    assert replay.idempotent_replay is True
+    assert replay.idempotent_replay is False
     assert replay.followup_generation_status.value == "queued"
     assert jobs.get(replay.followup_run_id).job_status == "queued"
     assert scheduled == [replay.followup_run_id]
@@ -183,6 +179,14 @@ def test_restart_fails_stale_job_and_idempotent_replay_requeues_it(tmp_path):
         learners.get("learner"),
         resources.get("resource"),
         _request(),
+    )
+    assert result.followup_generation_status.value == "not_requested"
+
+    result = service.choose_followup(
+        learners.get("learner"),
+        FeedbackFollowupSelection(
+            learner_id="learner", attempt_id=result.attempt.attempt_id, option_id="remediate-core",
+        ),
     )
     assert result.followup_generation_status.value == "queued"
     assert jobs.get(result.followup_run_id).job_status == "queued"
@@ -212,6 +216,14 @@ def test_restart_fails_stale_job_and_idempotent_replay_requeues_it(tmp_path):
     )
     assert replay.idempotent_replay is True
     assert replay.followup_run_id == result.followup_run_id
-    assert replay.followup_generation_status.value == "queued"
+    assert replay.followup_generation_status.value == "failed"
+    assert jobs.get(result.followup_run_id).job_status == "failed"
+    replayed_selection = restarted.choose_followup(
+        learners.get("learner"),
+        FeedbackFollowupSelection(
+            learner_id="learner", attempt_id=result.attempt.attempt_id, option_id="remediate-core",
+        ),
+    )
+    assert replayed_selection.followup_generation_status.value == "queued"
     assert jobs.get(result.followup_run_id).job_status == "queued"
     assert len(jobs.list_by_learner("learner")) == 1

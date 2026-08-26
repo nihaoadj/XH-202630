@@ -5,9 +5,9 @@ import json
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core.knowledge_base import load_knowledge_base_manifest
+from app.core.retrieval.knowledge_base import load_knowledge_base_manifest
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
-from app.db.models import (
+from app.db.shared.models import (
     Base,
     LearnerProfileORM,
     QuestionnaireAnswerORM,

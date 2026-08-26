@@ -59,26 +59,23 @@ Remove-Item Env:RUN_LIVE_LLM
 
 ### 2.4 启动服务
 
-终端 A：
+推荐在仓库根目录一键启动 Web、课件 Worker 和前端：
 
 ```powershell
-Set-Location backend
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+.\.venv\python.exe scripts\start_local.py
 ```
 
-终端 B：
-
-```powershell
-Set-Location frontend
-npm run dev
-```
+标准 Windows venv 请将 `.venv\python.exe` 替换为 `.venv\Scripts\python.exe`。互动课件演示必须确认 Worker 已就绪；仅启动 Web 与前端会让课件任务一直留在队列。
 
 检查：
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8000/health/ready
+Invoke-RestMethod http://127.0.0.1:8081/health/ready
 ```
+
+需要分终端观察日志时，使用 [部署说明](deployment.md) 的三进程命令。`/health/ready` 是 Web 就绪，`8081/health/ready` 才是课件 Worker 完成首次持久 outbox 轮询后的就绪状态。
 
 管理员全 KB health 需要有效管理员 Token；不得在投屏、日志或截图中显示 Token。
 
@@ -122,6 +119,23 @@ Invoke-RestMethod http://127.0.0.1:8000/health/ready
 | Persistence conflict | 使用 failure fixture | 返回稳定冲突语义，无 false success/重复 mutation |
 
 P0-04 的 Replay 是“重建后查询历史事实”，不是服务重启后自动从中断点 Resume。
+
+### 5.1 互动课件 Worker 故障演示
+
+互动课件使用独立 Durable Worker；SQLite 演示环境只启动一个 Worker。可在 checkpoint 前后停止进程，
+再重新启动 Worker，核对同一 `run_id` 的 checkpoint、scene `content_hash/attempt`、candidate
+`release_id` 和发布事件没有重复。重复投递只会完成已处理 outbox，不会产生第二个 released release。
+若候选包或 release commit 失败，应看到 `release_blocked`，而旧 release 仍可预览和下载。
+
+本地复现实验：
+
+```powershell
+python -m pytest backend/tests/integration/courseware/test_executor_recovery.py `
+  backend/tests/integration/courseware/test_durable_repository.py -q
+```
+
+这组测试证明 SQLite 文件锁、独立进程 claim、租约接管和 checkpoint 后恢复；它不等同于生产部署的
+kill/restart、备份恢复或 CI artifact 证据。
 
 ## 6. 浏览器人工 E2E Checklist
 

@@ -3,9 +3,9 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import users
-from app.db.user.memory import MemoryUserRepository
-from app.services.user_service import UserService
+from app.api.users import user_management as users
+from app.db.users.memory import MemoryUserRepository
+from app.services.users.users import UserService
 
 
 def _client():

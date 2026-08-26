@@ -2,7 +2,7 @@
 
 from typing import Iterable
 
-from app.models.knowledge import KnowledgeChunk, SourceLocator
+from app.models.knowledge.knowledge import KnowledgeChunk, SourceLocator
 
 
 class MemoryKnowledgeChunkRepository:

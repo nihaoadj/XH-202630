@@ -4,15 +4,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.feedback_loop.sql_repository import SQLFeedbackLoopRepository
-from app.db.generation_job.sql_repository import SQLGenerationJobRepository
-from app.db.learner.sql_repository import SQLLearnerRepository
-from app.db.models import Base
-from app.db.resource.sql_repository import SQLResourceRepository
-from app.models.feedback_loop import KnowledgePointAttemptResult, LearningAttemptSubmit
-from app.models.schemas import LearnerProfile, LearningResource
-from app.services.feedback_service import FeedbackService
-from app.services.generation_job_service import GenerationJobService
+from app.db.feedback.feedback_loop_sql_repository import SQLFeedbackLoopRepository
+from app.db.generation.sql_repository import SQLGenerationJobRepository
+from app.db.learners.sql_repository import SQLLearnerRepository
+from app.db.shared.models import Base
+from app.db.learning_documents.sql_repository import SQLResourceRepository
+from app.models.feedback.feedback_loop import KnowledgePointAttemptResult, LearningAttemptSubmit
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.services.feedback.feedback import FeedbackService
+from app.services.generation.jobs import GenerationJobService
 
 
 class _NoopGenerationService:
@@ -69,7 +69,7 @@ def test_sqlite_feedback_state_survives_repository_reconstruction(tmp_path):
             )],
         ),
     )
-    assert result.followup_generation_status == "queued"
+    assert result.followup_generation_status == "not_requested"
 
     restarted_loop = SQLFeedbackLoopRepository(sessionmaker(bind=create_engine(f"sqlite:///{tmp_path / 'restart.db'}")))
     restarted_learners = SQLLearnerRepository(restarted_loop.session_factory)
@@ -78,6 +78,6 @@ def test_sqlite_feedback_state_survives_repository_reconstruction(tmp_path):
     assert profile.profile_version == 2
     assert profile.knowledge_states["skill-a"].score == 0.4
     assert replay.attempt.attempt_id == result.attempt.attempt_id
-    assert replay.followup_run_id == result.followup_run_id
+    assert replay.followup_run_id is None
     assert restarted_loop.get_current_path("learner").path_id == result.learning_path.path_id
     assert restarted_loop.list_profile_versions("learner")[0].source_attempt_id == result.attempt.attempt_id

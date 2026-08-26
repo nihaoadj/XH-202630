@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 from langchain.schema import Document
 
-from app.core import reranker, vector_store
-from app.core.vector_store import _to_vector_candidate_metadata
+from app.core.retrieval import reranker, vector_store
+from app.core.retrieval.vector_store import _to_vector_candidate_metadata
 
 
 def test_vector_candidate_metadata_serializes_non_scalar_values_and_omits_none():

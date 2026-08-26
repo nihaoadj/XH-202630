@@ -5,15 +5,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import resources
-from app.core.file_storage import load_resource_file
-from app.db.generation_job.memory import MemoryGenerationJobRepository
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.resource.memory import MemoryResourceRepository
-from app.models.schemas import GenerateRequest, LearnerProfile, LearningResource
-from app.services.generation_job_service import GenerationJobService
-from app.services.profile_service import ProfileService
-from app.services.resource_service import ResourceService
+from app.api.learning_documents import documents as resources
+from app.core.storage.file_storage import load_resource_file
+from app.db.generation.memory import MemoryGenerationJobRepository
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learning_documents.memory import MemoryResourceRepository
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
+from app.services.generation.jobs import GenerationJobService
+from app.services.learners.profiles import ProfileService
+from app.services.learning_documents.resources import ResourceService
 
 
 def test_resource_filter_and_resource_id_download(monkeypatch):
@@ -112,6 +112,32 @@ def test_file_loader_rejects_paths_outside_generated_resources():
         load_resource_file("../.env")
 
 
+def test_resource_service_returns_published_detail_without_skill_node_validation():
+    resource_repo = MemoryResourceRepository()
+    resource_repo.save(
+        LearningResource(
+            resource_id="published-detail",
+            learner_id="resource_learner",
+            topic="RAG",
+            resource_type="个性化纠错训练包",
+            difficulty="初级",
+            content_text="# RAG · 个性化纠错训练包\n\n## 本次强化目标",
+            knowledge_points=["rag_basics"],
+            source_refs=[],
+            publication_status="published",
+            review_status="approved",
+        ),
+        "resource_learner",
+        "RAG",
+    )
+
+    detail = ResourceService(resource_repo).get_published_detail("published-detail")
+
+    assert detail is not None
+    assert detail.resource_id == "published-detail"
+    assert detail.is_published is True
+
+
 def test_batch_retry_uses_the_explicit_failed_task_request(monkeypatch):
     learner = LearnerProfile(
         learner_id="retry_learner",
@@ -143,6 +169,7 @@ def test_batch_retry_uses_the_explicit_failed_task_request(monkeypatch):
             learner_id=learner.learner_id,
             topic="实操主题",
             resource_types=["实操指南"],
+            include_claim_check=False,
             constraints={"continuation_instructions": "保留实操案例"},
         ),
         run_id="run_guide_failed",
@@ -167,6 +194,7 @@ def test_batch_retry_uses_the_explicit_failed_task_request(monkeypatch):
             "learner_id": learner.learner_id,
             "resource_types": ["实操指南"],
             "source_run_id": failed.run_id,
+            "include_claim_check": True,
             "replace_source_run": True,
             "replace_existing_types": True,
         },
@@ -179,6 +207,7 @@ def test_batch_retry_uses_the_explicit_failed_task_request(monkeypatch):
     assert created.batch_id == first.batch_id
     assert created.topic == "实操主题"
     assert created.request_payload["resource_types"] == ["实操指南"]
+    assert created.request_payload["include_claim_check"] is True
     assert created.request_payload["constraints"]["continuation_instructions"] == "保留实操案例"
     assert created.request_payload["constraints"]["replacement_resource_types"] == ["实操指南"]
     assert job_service.get_job(failed.run_id).superseded_by_run_id == created.run_id

@@ -27,7 +27,7 @@
 | Agent 编排 | LangChain + LangGraph |
 | 大模型 | 国产大模型 API（通义千问 / 文心一言 / DeepSeek 等，可配置） |
 | 向量数据库 | ChromaDB |
-| 关系数据库 | SQLite（开发）/ PostgreSQL（生产） |
+| 关系数据库 | SQLite（当前开发、演示和部署） |
 | 部署 | Docker / 直接部署 |
 
 ## 快速开始
@@ -48,15 +48,14 @@ cd ..
 python scripts/ingest_knowledge.py
 python scripts/init_db.py
 
-# 3. 启动后端
-cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 4. 启动前端（新终端）
-cd frontend
-npm install
-npm run dev
+# 3. 推荐：一键启动 Web、互动课件 Durable Worker 与前端
+# 首次安装依赖、创建本地配置时使用 --install --bootstrap；初始化数据需显式附加 --initialize
+python scripts/start_local.py
 ```
+
+启动器会等待后端 `/health` 与课件 Worker `/health/ready`，并把日志写入 `backend/logs/`。互动课件 Worker 默认在 `127.0.0.1:8081` 提供 `/health/live`、`/health/ready` 和安全的 `/metrics`；Web 进程不会自动启动它。当前 SQLite Worker 每轮只 claim 一个任务，`COURSEWARE_WORKER_BATCH_SIZE` 大于 `1` 会被安全归一为 `1`，不能作为并发或横向扩容手段。
+
+完整的一键启动、首次安装、手动三进程启动、Worker 健康检查、停机和 SQLite 数据保护方案见 [部署说明](docs/deployment.md)。
 
 知识索引异常后，可按知识库 ID 显式重新入库并对账 SQL/Chroma：
 
@@ -70,9 +69,11 @@ python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
 |---|---|---|---|
 | `development` | 默认禁止，可显式开启 | SQLite | not-ready 时保留 `/health`，生成返回 503 |
 | `demo` | 仅显式 `ALLOW_DEGRADED_GENERATION=true` | SQLite | fallback 必须标记 degraded |
-| `production` | 永远禁止 | SQLite/PostgreSQL | 核心依赖或默认 KB not-ready 时 fail-fast |
+| `production` | 永远禁止 | SQLite | 核心依赖或默认 KB not-ready 时 fail-fast；同一数据库只运行一个 Durable Worker |
 
 `scripts/check_environment.py` 不调用计费 LLM、不下载 Embedding，退出码为 0=ready、2=degraded、1=not-ready。公共 `/health` 与 `/health/ready` 只检查默认 KB 和核心依赖；其他 KB 的异常不会轻易把整个服务变成 503。全 KB 详情位于 token 保护的管理员接口，见 `docs/api.md`。
+
+当前项目不依赖 PostgreSQL。代码中保留的 PostgreSQL 方言分支仅是可选兼容基础，仓库未捆绑 PostgreSQL 驱动，也没有完成真实迁移和并发验收；以后若更换数据库，必须先单独立项并更新部署文档，不能直接把兼容分支视为已支持的生产方案。
 
 数据库迁移或比赛联调前，可在项目根目录执行只读完整性预检：
 

@@ -1,22 +1,9 @@
-import axios from 'axios'
+import { api } from './client'
 
-export const api = axios.create({
-  baseURL: '/api',
-  timeout: 120000,
-  withCredentials: true,
-})
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const isAuthPage = ['/login', '/register'].includes(window.location.pathname)
-    const isAuthRequest = String(error?.config?.url || '').startsWith('/auth/')
-    if (error?.response?.status === 401 && !isAuthPage && !isAuthRequest) {
-      window.location.assign(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
-    }
-    return Promise.reject(error)
-  },
-)
+export { api } from './client'
+export { coursewareApi } from '../features/courseware/api'
+export { knowledgeApi } from '../features/knowledge/api'
+export { resourceLibraryApi } from '../features/resource-library/api'
 
 export const authApi = {
   register: (data) => api.post('/auth/register', data),
@@ -28,6 +15,7 @@ export const authApi = {
 export const profileApi = {
   list: (params) => api.get('/profiles/', { params }),
   get: (id) => api.get(`/profiles/${id}`),
+  abilityNodes: (id) => api.get(`/profiles/${id}/ability-nodes`),
   update: (id, data) => api.patch(`/profiles/${id}`, data),
   delete: (id) => api.delete(`/profiles/${id}`),
 }
@@ -37,12 +25,6 @@ export const userApi = {
   get: (id) => api.get(`/users/${id}`),
   create: (data) => api.post('/users/', data),
   update: (id, data) => api.patch(`/users/${id}`, data),
-}
-
-export const knowledgeApi = {
-  listDomains: () => api.get('/knowledge/domains'),
-  listDirections: () => api.get('/knowledge/directions'),
-  getInfo: (learningDirectionId) => api.get('/knowledge/info', { params: { knowledge_base_id: learningDirectionId } }),
 }
 
 export const onboardingApi = {

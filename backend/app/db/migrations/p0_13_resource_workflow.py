@@ -6,7 +6,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 from app.db.migrations.p0_09 import rebuild_sqlite_generated_resources_table
-from app.db.models import Base
+from app.db.shared.models import Base
 
 
 MIGRATION_ID = "20260820_p0_13_resource_workflow"
@@ -56,8 +56,9 @@ def apply_p0_13_resource_workflow_migration(engine: Engine) -> None:
                 "WHERE resource_spec_id IS NULL OR resource_spec_id LIKE 'legacy-%'"
             ))
 
-    # These tables are additive and are created from the same ORM definitions
-    # used at runtime, keeping SQLite and PostgreSQL schemas aligned.
+    # These tables are additive and use the same ORM definitions as runtime.
+    # The current deployment and migration evidence cover SQLite; other
+    # dialect branches remain optional and require separate validation.
     Base.metadata.tables["resource_specs"].create(engine, checkfirst=True)
     Base.metadata.tables["resource_executions"].create(engine, checkfirst=True)
 

@@ -8,16 +8,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api import diagnosis, knowledge, skills
-from app.core.knowledge_base import load_knowledge_base_manifest
+from app.api.learners import diagnosis, profiles as profiles_module
+from app.api.knowledge import knowledge
+from app.api.skills import skills
+from app.core.retrieval.knowledge_base import load_knowledge_base_manifest
 from app.db.diagnosis.memory import MemoryDiagnosisRepository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.knowledge.seed_catalog import load_learning_catalog_seed
-from app.db.learner.memory import MemoryLearnerRepository
-from app.db.models import Base
-from app.models.schemas import DiagnosticAnswerSubmission, DiagnosticSubmitRequest, LearnerProfile
-from app.services.diagnosis_service import DiagnosisService
-from app.services.knowledge_service import KnowledgeService
+from app.db.learners.memory import MemoryLearnerRepository
+from app.db.learners.mastery import MemoryMasteryRepository
+from app.db.shared.models import Base
+from app.models.learning_documents.schemas import DiagnosticAnswerSubmission, DiagnosticSubmitRequest, LearnerProfile
+from app.services.learners.diagnosis import DiagnosisService
+from app.services.learners.mastery import MasteryService
+from app.services.knowledge.knowledge import KnowledgeService
 from tests.paths import KNOWLEDGE_BASE_ROOT
 
 
@@ -50,7 +54,7 @@ def _client() -> tuple[TestClient, KnowledgeService]:
         / "rag_engineering_training"
         / "diagnostic_questions.json"
     )
-    from app.models.schemas import DiagnosticQuestion
+    from app.models.learning_documents.schemas import DiagnosticQuestion
 
     catalog.upsert_knowledge_base(manifest)
     catalog.upsert_skill_nodes(manifest["skill_nodes"], manifest["knowledge_base_id"])
@@ -67,15 +71,18 @@ def _client() -> tuple[TestClient, KnowledgeService]:
             learning_goal="验证 API 诊断闭环",
         )
     )
+    mastery_service = MasteryService(MemoryMasteryRepository(learner_repo), knowledge_service)
     diagnosis_service = DiagnosisService(
         knowledge_service=knowledge_service,
         learner_repo=learner_repo,
         diagnosis_repo=MemoryDiagnosisRepository(),
+        mastery_service=mastery_service,
     )
     app = FastAPI()
     app.container = SimpleNamespace(
         knowledge_service=lambda: knowledge_service,
         diagnosis_service=lambda: diagnosis_service,
+        mastery_service=lambda: mastery_service,
     )
     app.include_router(skills.router, prefix="/api/skills")
     app.include_router(diagnosis.router, prefix="/api/diagnosis")
@@ -128,8 +135,8 @@ def test_knowledge_and_diagnosis_endpoints_keep_answers_on_server():
     )
     assert submit_response.status_code == 200
     payload = submit_response.json()
-    assert payload["ability_level"] == "进阶"
-    assert payload["strong_points"]
+    assert all(state["status"] == "needs_evidence" for state in payload["knowledge_states"].values())
+    assert not payload["strong_points"]
 
     info_response = client.get("/api/knowledge/info")
     assert info_response.status_code == 200

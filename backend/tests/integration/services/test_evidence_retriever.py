@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 import pytest
 
 from app.config import Settings
-from app.core.evidence_retriever import EvidenceRetriever
-from app.core.errors import ErrorCode
-from app.core.knowledge_ids import (
+from app.core.retrieval.retriever import EvidenceRetriever
+from app.core.security.errors import ErrorCode
+from app.core.retrieval.knowledge_ids import (
     chunk_id,
     chunking_config_hash,
     document_version_id,
@@ -13,7 +13,7 @@ from app.core.knowledge_ids import (
     sha256_hex,
 )
 from app.db.knowledge.memory import MemoryKnowledgeChunkRepository
-from app.models.knowledge import (
+from app.models.knowledge.knowledge import (
     KnowledgeChunk,
     RetrievalPolicy,
     RetrievalRequest,

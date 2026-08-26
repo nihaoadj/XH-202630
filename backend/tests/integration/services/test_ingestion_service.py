@@ -4,16 +4,16 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.db.database import configure_sqlite_foreign_keys
+from app.db.shared.database import configure_sqlite_foreign_keys
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
-from app.db.models import (
+from app.db.shared.models import (
     Base,
     KnowledgeChunkVersionORM,
     KnowledgeDocumentVersionORM,
     KnowledgeIndexStatusORM,
 )
-from app.models.knowledge import ScoreKind, VectorCandidate
-from app.services.ingestion_service import IngestionService
+from app.models.knowledge.knowledge import ScoreKind, VectorCandidate
+from app.services.knowledge.ingestion import IngestionService
 
 
 class MemoryVectorIndex:
@@ -308,7 +308,7 @@ def test_explicit_reconcile_resolves_id_and_reingests_idempotently(
     vector_index = MemoryVectorIndex()
     service = IngestionService(catalog=catalog, vector_index=vector_index)
     monkeypatch.setattr(
-        "app.services.ingestion_service.resolve_knowledge_base_dir_by_id",
+        "app.services.knowledge.ingestion.resolve_knowledge_base_dir_by_id",
         lambda knowledge_base_id: kb_dir,
     )
 

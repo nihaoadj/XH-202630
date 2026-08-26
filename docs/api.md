@@ -25,7 +25,7 @@
 -> GET /api/resources/{learner_id}?run_id={run_id}
 -> GET /api/resources/file/{resource_id}
 -> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
--> POST /api/feedback/attemptsattempts/run/submit
+-> POST /api/feedback/attempts/run/submit
 -> POST /api/feedback/attempts
 -> GET /api/feedback/attempts/{learner_id}
 -> GET /api/learning-history/{learner_id}/timeline
@@ -62,6 +62,7 @@
 | Onboarding | `POST` | `/api/onboarding/initial-profile` | 创建初始画像并返回诊断题 |
 | 画像 | `GET` | `/api/profiles/` | 查询画像列表 |
 | 画像 | `GET` | `/api/profiles/{learner_id}` | 查询单个画像 |
+| 画像 | `GET` | `/api/profiles/{learner_id}/ability-nodes` | 查询规范能力节点投影 |
 | 画像 | `PATCH` | `/api/profiles/{learner_id}` | 更新画像 |
 | 画像 | `DELETE` | `/api/profiles/{learner_id}` | 永久删除画像及其问卷、诊断、资源、反馈、审核和运行记录 |
 | 诊断 | `GET` | `/api/diagnosis/questions` | 获取诊断题 |
@@ -74,6 +75,7 @@
 | 审核 | `GET` | `/api/reviews/{resource_id}` | 查询资源审核摘要 |
 | 反馈 | `GET` | `/api/feedback/evaluation/run/{learner_id}/{run_id}` | 获取任务级测评题 |
 | 反馈 | `POST` | `/api/feedback/attempts/run/submit` | 提交任务级测评与反馈 |
+| 反馈 | `POST` | `/api/feedback/attempts/batch/submit` | 提交资源批次级测评与反馈 |
 | 反馈 | `POST` | `/api/feedback/` | 提交学习反馈 |
 | 反馈 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询反馈历史 |
 | 反馈闭环 | `POST` | `/api/feedback/attempts` | 提交幂等、版本化的正式学习 Attempt |
@@ -183,6 +185,8 @@
 - `diagnostic_node_ids`
 - `not_started_node_ids`
 - `diagnostic_questions`
+- `questionnaire_tier`：首份问卷预判的三阶阶段；服务端固定从该阶段按依赖关系选择 3 个节点。
+- `initial_diagnostic_status`：初始为 `pending`；每个节点固定返回 `concept`、`scenario`、`misconception` 三题，共 9 题。
 - `next_step`
 
 说明：
@@ -212,6 +216,9 @@
 - 强弱项
 - 知识状态
 - 推荐学习路径
+- `initial_diagnostic_status`：初诊分阶流程中为 `retest` 或 `final`。阶段得分低于 6/9 时，`retest` 会附带下一低阶段的 `next_diagnostic_questions`；完成最终轮才返回 `final_tier` 与 `initial_recommended_node_id`。
+
+初始分阶诊断由服务端以 `learner_id` 绑定当前轮次，提交必须恰好包含指定的 9 题。中间复测只保留审计答题记录，不写入客观掌握度、正式报告或资源建议；初级为最低阶段，即使未达 60% 也会完成初诊并给出一个遵循依赖关系的首轮学习节点。
 
 ## 8. 资源生成接口
 
@@ -234,6 +241,7 @@
 - `include_review`
 - `include_claim_check`
 - `max_iterations`
+- `claim_max_iterations`（默认 `0`，当前 Claim 审核只判定、不自动返工；显式传入非零值可开启有界返工）
 - `constraints`
 
 示例：
@@ -248,8 +256,9 @@
   "difficulty_preference": "从基础开始",
   "generation_mode": "standard",
   "include_review": true,
-  "include_claim_check": false,
+  "include_claim_check": true,
   "max_iterations": 2,
+  "claim_max_iterations": 1,
   "constraints": {}
 }
 ```
@@ -265,9 +274,11 @@
 说明：
 
 - 此接口只返回任务信息，不直接返回资源正文。
-- 当前支持 `讲义`、`实操指南`、`分阶测试题`、`复习清单`、`案例分析`；唯一兼容别名 `定制讲义` 会在请求校验时规范化为 `讲义`。
+- 普通生成支持 `讲义`、`实操指南`、`分阶测试题`、`复习清单`、`案例分析`；唯一兼容别名 `定制讲义` 会在请求校验时规范化为 `讲义`。
 - 未知资源类型在任务创建和任何模型调用前以 HTTP 422 拒绝，不创建失败任务占位。
+- `个性化纠错训练包` 是反馈专属的第六类内部文本资源。普通生成请求它会以 HTTP 422 `FEEDBACK_ONLY_RESOURCE_TYPE` 拒绝。
 - 路由固定为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`。
+- `复习清单` 保持同名、同请求值和同一 Markdown 读取接口；新生成版本以冻结目标节点为单位提供闭卷回忆、概念辨析和可选正反例辨认（每节点最低 `1+1+0`），答案集中在文末。自评框仅供阅读，不提交 Attempt、Mastery 或 LearningPath。
 - 当前推荐前端流程：
   提交任务 -> 轮询任务状态 -> 完成后拉取资源列表。
 
@@ -381,7 +392,7 @@
 - 它不是知识库原始文档列表，而是面向用户交付的学习资源列表。
 - 同一次生成任务产出的多个资源，会通过同一个 `run_id` 关联起来。
 - 默认资源列表只返回已经发布的资源；草稿、返工中、拒绝和人工审核资源不可预览。
-- 实操指南以审核后的 Markdown 文本形式提供阅读。
+- 实操指南以审核后的 Markdown 文本形式提供阅读；该文本由内部严格 JSON（最多 8 个连续步骤、步骤 Evidence 绑定及 hash）确定性拼接。内部 JSON 不经通用 API 暴露，并直接作为互动 HTML 的逐步骤来源；旧实操指南仍兼容 Markdown 标题解析。
 - `source_refs[].score` 是 0 到 1 的最终相关度；精排可用时为 CrossEncoder logits 经 sigmoid 映射后的分数，降级时为归一化 RRF 分数，数值越大排名越靠前。
 - `source_refs[].metadata.retrieval_method` 正常为 `hybrid_rrf_cross_encoder`，精排关闭或不可用时回退为 `hybrid_rrf`；`retrieval_channels` 标识片段来自 `vector`、`bm25` 或两路共同召回。
 - `source_refs[].metadata` 保留 `vector_rank`、`vector_score`、`lexical_rank`、`lexical_score`、`hybrid_rank`、`hybrid_score`、`rerank_rank`、`rerank_raw_score`、`rerank_score`、`reranker_model`、`rerank_latency_ms` 和 `rerank_candidate_count`，用于检索审计和消融评测。
@@ -404,6 +415,10 @@
 ### 9.4 `GET /api/resources/items/{resource_id}/preview`
 
 用途：读取已发布实操指南的安全 HTML 片段。后端会重新执行最小清洗，并验证 HTML 与规范文本的 family、源资源 ID、源版本和 hash；不一致时返回 409“互动版本正在更新”。非 HTML 或未发布资源返回 404。
+
+### 9.5 `GET /api/resource-library/{learner_id}`
+
+用途：读取文本资源与互动 HTML 课件合并后的资源书架投影。互动课件的 `resource_type` 保持为 `互动HTML课件`，其 `source_resource_type` 来自已冻结并持久化的源文本资源类型（例如 `讲义`、`实操指南`、`分阶测试题`），前端可据此显示“互动讲义”等名称，并与源文本资源相邻排列。
 
 ## 10. 学习历史接口
 
@@ -440,7 +455,8 @@
 说明：
 
 - 当前学习反馈页优先按任务而不是单个资源加载测评题。
-- 如果任务资源包含 AI 生成且可判分的 `exercise_items`，测评优先使用资源内题目。
+- 如果任务包含已发布且 hash 校验通过的结构化测试题资源，测评优先使用其完整节点题组；每个节点固定 2 道单选、1 道多选、2 道问答，响应不含答案或 rubric。
+- 若没有结构化测试题资源，兼容 AI 生成且可判分的 `exercise_items`，再回退到独立测评题库。
 - 如果资源没有可判分题目，则从独立的 `assessment_questions.json` 测评题库按能力节点抽取；不会占用初始画像使用的诊断题。
 - `questions[].source` 为 `resource`（资源内 AI 题）、`assessment_bank`（测评题库）或兼容旧知识库的 `knowledge_base`。
 - RAG 默认测评题库覆盖 13 个能力节点，每节点 10 道，并固定为简单 3 道、中等 3 道、困难 4 道。
@@ -479,60 +495,7 @@
 
 ### 11.3 `POST /api/feedback/attempts`
 
-用途：提交 P0-07 正式学习事实，并在一个本地事务中写入 Attempt、知识点结果、反馈决策、掌握度变更、画像版本和学习路径变更。补救或进阶所需的新资源在事务提交后通过现有异步生成任务入口创建。
-
-请求体核心字段：
-
-```json
-{
-  "learner_id": "learner-id",
-  "source_resource_id": "resource-id",
-  "source_resource_version": 1,
-  "source_run_id": "source-run-id",
-  "path_node_id": null,
-  "idempotency_key": "feedback-20260811-0001",
-  "expected_profile_version": 1,
-  "started_at": "2026-08-11T09:59:00+08:00",
-  "submitted_at": "2026-08-11T10:00:00+08:00",
-  "duration_ms": 60000,
-  "hint_count": 1,
-  "knowledge_point_results": [
-    {
-      "knowledge_point_id": "stable-skill-node-id",
-      "question_ids": ["q-1", "q-2"],
-      "correct_count": 1,
-      "total_count": 2,
-      "duration_ms": 60000,
-      "hint_count": 1
-    }
-  ],
-  "metadata": {"source": "web", "client_version": "1.0"}
-}
-```
-
-约束：
-
-- 服务端按所有知识点的 `sum(correct_count) / sum(total_count)` 重算 `overall_score`；客户端如传汇总分，必须完全一致。
-- `knowledge_point_id` 在正式容器中必须是当前知识库的稳定技能节点；自由文本不作为知识点 ID。
-- `(learner_id, idempotency_key)` 唯一。相同 key、相同 canonical payload 返回原结果且 `idempotent_replay=true`；相同 key、不同 payload 返回 `409 FEEDBACK_IDEMPOTENCY_CONFLICT`。
-- `expected_profile_version` 是乐观并发条件；过期版本返回 `409 LEARNER_PROFILE_VERSION_CONFLICT`。
-- `metadata` 只接受 `source`、`client_version`、`session_id` 三个标量字段；不得上传 Prompt、模型原文或自由文本答案。
-
-响应重点字段：
-
-- `attempt`、`decision.action`、`decision.reason_codes`
-- `profile_version`、`knowledge_state_updates`
-- `learning_path`、`path_mutation`
-- `feedback_status=applied`
-- `followup_generation_status=not_requested|queued|failed`
-- `followup_run_id` / `followup_job_id`
-- `idempotent_replay`
-
-`feedback_status` 与 `followup_generation_status` 必须分开解释：后续生成失败不会撤销已经成功提交的 Attempt。
-
-SQLite 服务重启发现遗留的 queued/running Job 时，Job 返回 `job_status=failed`、
-`error_message=GENERATION_JOB_INTERRUPTED`，对应 Follow-up 返回
-`followup_generation_status=failed` 和同名 `followup_error_code`。原幂等请求可安全重放并复用原 `followup_run_id`。
+该路径仅为旧客户端保留请求契约，不再是正式掌握度写入口。它接受客户端已经聚合的正确数/分数，无法证明题目来自冻结的服务端测评 session，因此稳定返回 HTTP 422 `FEEDBACK_EVIDENCE_UNVERIFIED`，不写入 Attempt、状态、事件、路径或画像版本。正式客户端必须改用 11.2 的 run 入口或 `/api/feedback/attempts/batch/submit`；幂等、CAS 和 after-commit follow-up 语义均在这两个权威入口生效。
 
 ### 11.4 P0-07 查询接口
 
@@ -541,7 +504,7 @@ SQLite 服务重启发现遗留的 queued/running Job 时，Job 返回 `job_stat
 - `GET /api/report/{learner_id}`：新增 `profile_version`、`knowledge_mastery`、`current_learning_path`、`recent_attempts`、`recent_feedback_decisions`、`recent_knowledge_state_mutations`、`recent_followup_runs`、`profile_versions`；`agent_flow` 同时聚合持久化反馈决策。
 - `GET /api/runs/{child_run_id}/timeline`：`trigger_relation` 可反查触发它的 Attempt、Decision、父 Run 和触发类型。
 
-旧 `/api/feedback/` 与 evaluation submit 写入接口已移除；新前端闭环统一使用 `/api/feedback/attempts` 或 `/api/feedback/attempts/run/submit`。
+旧 `/api/feedback/` 与 evaluation submit 写入接口已移除；新前端闭环统一使用 `/api/feedback/attempts/run/submit` 或 `/api/feedback/attempts/batch/submit`。
 
 ## 11.5 Run WorkflowEvent SSE（P0-08）
 
@@ -607,9 +570,9 @@ SSE payload 是二次 allow-list 投影，不包含 Prompt、消息、原始模�
 - 任务级测评加载：
   `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
 - 任务级测评提交：
-  `POST /api/feedback/attemptsattempts/run/submit`
+  `POST /api/feedback/attempts/run/submit`
 - 正式反馈闭环提交：
-  `POST /api/feedback/attemptsattempts`
+  `POST /api/feedback/attempts`
 - 当前学习路径：
   `GET /api/feedback/path/{learner_id}`
 - 反馈历史：
@@ -657,6 +620,7 @@ GenerationJob 预分配 run_id
 关键契约：
 
 - `max_iterations` 是最大业务返工次数，不包含首次生成；LLM 技术重试不增加该值。
+- `claim_max_iterations` 默认 `0`，当前 Claim 审核只判定、不自动返工；显式传入非零值时，才启用 Claim 审核发现事实/证据问题后的定向返工，不占用 `max_iterations`。运行状态分别记录 `revision_count` 与 `claim_revision_count`。
 - Reviewer 决策为 `approve | revise | reject | human_review`。
 - `issues` 是带 code、severity、目标资源/知识点的结构化数组。
 - `revision_instructions` 包含 issue_codes、target_resource_type、action、priority 和系统生成的 instruction_id。
@@ -665,7 +629,8 @@ GenerationJob 预分配 run_id
 - `review_status` 与 `publication_status` 分离。只有最终 approve 的当前叶子版本可以 published。
 - 默认资源列表及文件下载只暴露 published；unpublished 与不存在的下载统一返回 404。
 - 历史字符串 issues/instructions 在读取时兼容归一化，但不会补造不存在的审核事实。
-- `include_claim_check=true` 要求 `include_review=true`；否则请求校验失败。
+- `include_claim_check` 在普通审核开启时默认 `true`；它会在 Reviewer 通过后执行 Claim 提取、证据判定和定向修订。`include_review=false` 且未显式提供该字段时，系统将其有效值设为 `false`，以保留未审核草稿路径；显式 `include_claim_check=true` 仍要求 `include_review=true`，否则请求校验失败。
+- `POST /api/resources/batches/{batch_id}/continuations` 可选传入 `include_claim_check`，以覆盖源任务的 Claim 审核设置；省略时沿用源任务。前端“追加资源”默认勾选该选项。
 - `hallucination_rate` 保留为旧 Reviewer 主观分兼容字段；正式 Claim 指标使用
   `claim_hallucination_rate` 和 `claim_metric_status`。
 
@@ -766,3 +731,120 @@ Turn 请求为：
 响应包含 `turn_id`、`sequence`、`hint_level`、`pedagogy_action`、`message`、`follow_up_question`、`grounding_status`、`grounding_source`、`source_refs` 和脱敏的模型调用摘要。相同 `client_message_id` 与相同 payload 返回已持久化结果；不同 payload 返回 409 `TUTOR_IDEMPOTENCY_CONFLICT`。Evidence 不足返回 HTTP 200 和 `grounding_status=evidence_insufficient`；会话不存在为 404，关闭会话继续提交为 409，模型超时/认证/请求或结构化输出失败沿用 LLMGateway 的脱敏 503 语义。响应不包含 raw prompt、raw provider response、Chain-of-Thought、密钥或异常堆栈。
 
 当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。
+## 互动课件学习事件（向前兼容）
+
+### 互动课件按资源独立生成
+
+互动课件是文本学习资源的 HTML 互动版本，而不是跨资源拼接的整套课程。用户多选资源时，系统为每个资源创建一个独立任务、独立来源快照和独立发布资源。实操指南对应可逐步完成的操作版；测试题对应答题、即时反馈和解析版。
+
+```http
+POST /api/resources/courseware/jobs/batch
+```
+
+```json
+{
+  "learner_id": "learner-1",
+  "resource_ids": ["guide-1", "assessment-1"],
+  "expected_duration_minutes": 20,
+  "interaction_intensity": "medium"
+}
+```
+
+返回 `202` 和 `{ "jobs": [CoursewareJobResponse] }`；数组顺序与 `resource_ids` 一致。每个返回任务的 `source_resource_ids` 在持久化层恰有一个 ID。原有单任务 `POST /api/resources/courseware/jobs` 继续存在，但只接受一个 `source_resource_ids` 项；多资源请求必须使用 batch 接口。
+
+`GET /api/resources/courseware/jobs?learner_id={learner_id}` 返回当前学习者可见的互动课件任务列表，响应为 `{ "items": [CoursewareJobResponse] }`，按最近更新时间倒序。它用于资源生成页恢复课件任务、切换历史任务；单任务详情、事件流、重试与发布接口保持原路径不变。访问校验失败仍按既有防枚举语义返回 404。
+
+`POST /api/resources/courseware/items/{resource_id}/learning-events` 接收最多 100 个版本化、脱敏事件，返回 `acknowledged_event_ids`。服务端按 `occurrence_id` 幂等写入 SQLite，并按 `resource_id` 与 `release_id` 隔离投影。资源没有 `released_release_id`、事件引用旧/未知 release，或同一批次包含混合 release 时，返回 HTTP 409；错误码分别为 `COURSEWARE_RELEASE_UNAVAILABLE`、`COURSEWARE_RELEASE_NOT_CURRENT` 和 `COURSEWARE_RELEASE_BATCH_MISMATCH`，并且整批事件不写入。
+
+资源详情同时返回 `released_release_id` 当前发布指针，并在生成课件资源上返回来源批次 `batch_id`；任务响应返回冻结的 `source_batch_id`。`GET /api/resources/courseware/items/{resource_id}/learning-progress?release_id={release_id}` 只接受当前发布版本，否则同样返回上述 409，不以 `200 + 空状态` 冒充拒绝。
+
+当前进度投影的 `component_state_schema_version` 为 `2.0`，状态按 `scene_id -> component_id` 嵌套，实例值包含 `component_version` 和受控 `value`。例如：
+
+```json
+{
+  "component_state_schema_version": "2.0",
+  "component_state": {
+    "scene-1": {
+      "flashcard-1": {"component_version": "1.0", "value": {"revealed": true}}
+    }
+  }
+}
+```
+
+`component_state` 只允许 flashcard 的状态、matching 的配对 ID 集合和 ordering 的受控项目 ID 顺序；自由文本答案和未知字段会被丢弃。没有组件实例 ID 的旧事件可计入历史完成统计，但不会注入新的组件实例。
+
+课件任务响应中的 `quality_summary` 是版本化的稳定质量汇总，分开表示 `ai_full_course_success` 与 `artifact_success`，并记录 AI 场景/审核、fallback、重试、token、时延和估算成本；它不包含 Prompt、原始模型响应或凭据。
+
+## 17. Learner Mastery 2.0 API
+
+### 17.1 `GET /api/profiles/{learner_id}/ability-nodes`
+
+返回当前知识库的规范能力投影。响应 `schema_version="1.0"`，包含 `as_of_profile_version`、汇总计数、`nodes`、ID 形式的 `prerequisites/children`、`edges`、稳定排序的 `weakness_priorities` 和 `data_warnings`。每个节点的 `mastery` 使用 `AbilityMasteryStateV2`：分数为 0–1 或 `null`，状态为 `unassessed/self_reported/weak/learning/mastered`，置信度为 `none/low/medium/high`。没有知识库时返回空节点和 `KNOWLEDGE_BASE_UNAVAILABLE`；访问控制与画像详情一致。
+
+### 17.2 画像 PATCH 白名单
+
+`PATCH /api/profiles/{learner_id}` 只接受 `learner_type`、`education`、`major`、`target_domain`、`learning_goal` 和 `learning_preferences`。请求包含 `knowledge_states`、`theory_scores`、`weak_points`、`strong_points`、`skill_level`、`last_feedback_summary`、`profile_version` 或 `knowledge_base_id` 时整单返回 HTTP 422：
+
+```json
+{
+  "detail": {
+    "code": "PROFILE_SYSTEM_FIELD_READ_ONLY",
+    "illegal_fields": ["theory_scores"]
+  }
+}
+```
+
+### 17.3 正式反馈证据入口
+
+只有 `POST /api/feedback/attempts/run/submit` 与 `POST /api/feedback/attempts/batch/submit` 的服务端判分结果能更新掌握度。它们校验已发布且属于学习者的资源、冻结题目集合、当前知识库节点、幂等键和 `expected_profile_version`。相同 payload 重放返回 `idempotent_replay=true`；幂等键 payload 冲突返回 409 `FEEDBACK_IDEMPOTENCY_CONFLICT`；旧画像版本返回 409 `LEARNER_PROFILE_VERSION_CONFLICT`。
+
+旧的聚合分数入口 `POST /api/feedback/attempts` 仍保留路径兼容，但因不能证明服务端题目证据而返回 HTTP 422 `FEEDBACK_EVIDENCE_UNVERIFIED`，不会写 Attempt、能力事件或画像版本。
+
+### 17.4 生成焦点快照
+
+#### 反馈后的用户学习意图
+
+服务端判分的 run/batch feedback 响应可追加 `generation_options`。其中的候选由已发布资源的 `knowledge_points` 和规范能力投影共同计算，并携带 `snapshot_hash`：
+
+- `reinforce_weakness`：仅包含已学习、已有客观证据且尚未掌握的节点；
+- `learn_new_knowledge`：仅包含尚未被已发布资源覆盖的节点；含未学习前置节点的候选会标出 `blocked_by_node_ids`。
+- `learning_candidates`：学习方式实际可选的统一候选列表。降阶/升阶学习分别使用当前目标阶的节点，并同时开放已学习节点；候选仍受服务端知识库、先修关系和学习阶约束。
+
+学习者通过既有 `POST /api/feedback/followups/select` 确认下一批资源时，可附加 `learning_intent`、`selected_skill_node_ids`（1–2 个）、`include_claim_check`（默认 `false`）和兼容字段 `next_generation_snapshot_hash`。反馈页将 Claim 审核作为用户可选项；未勾选时不执行 Claim 审核。未选择的反馈方案不会因页面刷新、重新进入报告或快照变化而失效；服务端仍重新校验候选集合、知识库、先修关系和学习阶。意图与节点不匹配或越过未学习先修节点返回 422，不创建生成任务。确认后的选择与当时的候选投影写入 child generation job 的 `constraints`，重试复用该冻结请求。
+
+反馈结果若返回 `correction_package_option.eligible=true`，可用固定 `option_id=personalized-correction-package-v1`、`learning_intent=reinforce_weakness` 和该选项 `snapshot_hash` 创建纠错包。纠错包目标固定为本次反馈判定出的错误节点，客户端不能改选其他学习节点；请求必须省略 `resource_types` 和 `difficulty`。服务端冻结脱敏纠错快照，原题、答案、解析、原始作答、自由文本和 held-out 内容不会进入生成。
+
+`POST /api/generate/jobs` 新增可选 `profile_focus_mode: "auto" | "off"`，默认 `auto`。显式 `target_skill_nodes` 的优先级最高并形成 `focus_mode="explicit"`；`off` 不采用画像弱项；`auto` 采用稳定排序的前两个 eligible 节点。创建响应、任务状态和列表项新增 `focus_snapshot`，包括 `profile_version`、`mastery_snapshot_hash`、排序依据、`adopted_node_ids` 和带原因码的 `skipped`。任务创建后该快照冻结，重试不按新画像重算。
+
+#### 课程推进与覆盖欠债
+
+能力节点响应可附加 `curriculum_nodes` 与 `curriculum_progress`。它们是独立于掌握度的课程流程投影：节点状态为 `unplanned/scheduled/exposed/verification_pending/completed/reinforcement_due`，并包含 `wait_rounds`、已发布资源数、正式验证次数和版本号。初始跳过的低阶节点通过 `placement_exempt` 标记；高阶失败触发回退时，相关节点会附加 `placement_verification_required=true`，首次正式验证即清除豁免。掌握度仍仅以服务端客观证据为准。
+
+反馈响应的 `generation_options` 可附加 `recommended_node_ids`、`learning_candidates` 与 `curriculum_progress`。反馈报告同时给出 `next_step_recommendation` 与 `recommendations.default_learning`：低于 60% 明确推荐“降阶学习”，达到 80% 明确推荐“升阶学习”；两者都只提供建议，下面由用户在对应阶节点和已学习节点中自由搭配，最多选择 2 个。60% 至低于 80% 默认推荐纠错包。`recommendations.optional_correction_package` 始终作为用户可选路径开放，但目标仅限本次反馈错误节点。服务端只将前置满足的未覆盖节点计入等待轮数；节点连续等待会提高推荐优先级，但不会越过前置关系。创建新任务时，确认的 1–2 个节点会被锁定并写入冻结请求；反馈/测评后仅重算推荐，不会自动创建下一轮任务。
+
+### 17.5 报告 4.1 动态读取
+
+`GET /api/report/{learner_id}?window_days=7|30|90` 保持原路径、原字段和权限边界，并使用 `report_schema_version="4.1"`。新增 `report_revision`、`data_as_of`、`window`、`freshness`、`learning_activity`、`mastery_overview`、`mastery_trends`、`weakness_groups`、`resource_credibility_summary`、`recent_resource_credibility`、`report_availability` 和 `assessment_conclusions`。雷达图覆盖知识库全部能力节点，`radar.measurement_statuses` 标记未测节点，客户端必须显示“待测”而非 0 分；`report_availability.status=calibration_pending` 只表示初始诊断未完成且尚无正式反馈 Attempt。已有服务端判分的正式反馈后，报告直接使用该证据生成学习结论，无须先确认下一轮资源方案。`assessment_conclusions` 按节点返回正式测评会话数、独立题组数、三维度覆盖、评分审计状态及基线/待确认/已确认/需巩固结论。弱强项、新字段和下一批建议均来自同一规范 `knowledge_states` 投影；自评事件可显示在趋势中但不计为客观覆盖率。报告的客户端投影视图版本也纳入 `report_revision`，因此服务端升级全量雷达等展示结构时，旧 ETag 不会导致客户端继续保留旧快照。
+
+初始诊断节点只有在至少三题且覆盖 `concept`、`scenario`、`misconception` 后才具备完整三维基线；不足覆盖的提交仍保留服务端评分作为基线观察，并在 `diagnostic_measurements` 中返回答题计数和缺失维度，但不能单独形成“已掌握”结论。后续正式测评不要求每次重复三维：只要会话独立、题目不重复、评分审计有效，维度可由初诊基线或多次后测累计补齐。报告增量返回 `diagnostic_measurements`，并将其脱敏的维度追踪与正式 Attempt 合并到 `knowledge_blind_spot_map`；追踪不包含学习者答案、标准答案或解析。SSE 的 `report_changed` 仍为失效通知，客户端必须重新获取完整快照。
+
+报告 additive 返回三个版本化可视化投影：
+
+- `knowledge_blind_spot_map`：兼容旧调用者的维度证据投影；它不再作为学习报告主图，也不用于表达后续学习节点的整体掌握度。
+- `learning_node_mastery_map`：学习报告主图使用的全节点掌握投影。初始诊断节点与后续节点统一按节点展示 `mastery_score`、掌握状态、正式测评结论、独立测评次数、最近一次正式成绩、趋势、可信度和下一步动作；不使用 `concept/scenario/misconception/practice` 维度。未测节点的 `mastery_score` 为 `null`，客户端必须显示“待测”而非 0 分。
+- `resource_difficulty_curve`：每个已发布资源与稳定能力节点的 `learner_readiness_score`、`resource_difficulty_score`、`difficulty_gap` 与 `match_status`。首版 `strategy_version="declared-band/v1"` 仅标准化初级/中级/高级；未知难度或未测准备度返回 `not_measured`，不伪造分数。
+- `learning_path_graph`：知识图谱前置边与持久化学习路径/课程进度的只读图投影，节点返回角色、阻塞节点和资源建议；`placement_verification_status` 会明确标示初始豁免、待重新验证或已完成正式重新验证。它不修改路径，也不替代正式反馈决策。
+
+响应始终带 `ETag: "rpt_<sha256>"` 和 `Cache-Control: private, no-cache`。匹配的 `If-None-Match` 返回无响应体的 `304`；认证与 learner 访问校验仍先执行。`generated_at` 不影响 ETag。
+
+`GET /api/report/{learner_id}/resource-credibility?limit=20&cursor=...` 返回按 `published_at DESC, resource_id ASC` 排序的文本资源可信证据分页；cursor 无效返回 `400 REPORT_CURSOR_INVALID`。互动课件不进入该统计。
+
+`GET /api/report/{learner_id}/events?window_days=30` 是当前快照 SSE，不是 durable event ledger。它先发送 `report_snapshot`，随后只在 revision 变化时发送 `report_changed`，空闲时发送 `ping`；使用 `Last-Event-ID` 或 `after_revision` 的非法 cursor 返回 `400 REPORT_STREAM_CURSOR_INVALID`。payload 只包含 learner、revision、时间窗口和变化域等白名单摘要。资源难度投影或路径投影变化时，`changed_domains` 可包含 `resource_match`、`path`。
+# 分阶学习接口增量字段
+
+`ability_nodes[].tier` 与 `tier_label` 提供节点所属阶级。`generation_options` 额外返回 `tier_progress`（起始阶、当前阶、最高解锁阶、补救返回阶）、`tier_completion` 和 `recommendation_type`；每个候选节点都带 `tier`、`tier_label` 与 `eligibility_status`。
+
+当生成请求包含 `target_skill_nodes` 时，服务端要求节点数量不超过3且属于同一当前阶；请求中的 `difficulty_preference` 必须等于该阶的固定难度，否则以 `LEARNING_TIER_INVALID` 拒绝。`POST /api/feedback/followups/select` 在分阶处方存在时同样锁定难度，不接受客户端改写。
+# 复习清单 V2 互动课件兼容
+
+互动课件仍使用既有的创建、预览、学习事件和进度 HTTP 路径。选择含 `review_practice_payload` 的“复习清单”时，服务端自动生成 V2 主动回忆课件；学习事件只接受答案揭示与三态自评的受控状态，不新增作答提交接口。

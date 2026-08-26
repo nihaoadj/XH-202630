@@ -1,0 +1,133 @@
+name: Courseware quality gates
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "backend/app/agents/resource_workflows/interactive_courseware/**"
+      - "backend/app/core/courseware/**"
+      - "backend/app/db/courseware/**"
+      - "backend/app/services/courseware/**"
+      - "backend/tests/fixtures/courseware/**"
+      - "backend/tests/**courseware**"
+      - "backend/tests/integration/courseware/**"
+      - "backend/tests/unit/db/courseware/**"
+      - "backend/tests/migrations/**"
+      - "backend/scripts/courseware_*.py"
+      - ".github/workflows/courseware-quality.yml"
+      - "frontend/tests/coursewareBrowser.test.mjs"
+      - "frontend/package-lock.json"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+      COURSEWARE_BROWSER_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
+      - run: python backend/scripts/courseware_eval.py --manifest backend/tests/fixtures/courseware/evals/manifest.json --baseline backend/tests/fixtures/courseware/evals/baseline.json --output backend/courseware-eval-report.json
+      - run: python backend/scripts/courseware_ci_artifacts.py --manifest backend/tests/fixtures/courseware/evals/manifest.json --output backend/courseware-ci-artifacts
+      - run: python -m pytest backend/tests/migrations backend/tests/integration/courseware backend/tests/unit/db/courseware -q --junitxml=backend/courseware-junit.xml
+      - run: python -m pytest backend/tests -q --junitxml=backend/courseware-full-junit.xml
+      - run: python backend/scripts/courseware_fault_matrix.py --junit backend/courseware-full-junit.xml --output backend/courseware-fault-matrix.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: courseware-evaluation
+          path: |
+            backend/courseware-eval-report.json
+            backend/courseware-ci-artifacts
+            backend/courseware-junit.xml
+            backend/courseware-full-junit.xml
+            backend/courseware-fault-matrix.json
+          if-no-files-found: error
+
+  live-model:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    env:
+      COURSEWARE_LIVE_EVAL: "1"
+      COURSEWARE_LIVE_CONFIG: backend/config/courseware_live_model.deepseek-v4-flash.json
+      COURSEWARE_AI_ENABLED: "true"
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      COURSEWARE_LIVE_MODEL_PROVIDER: ${{ vars.COURSEWARE_LIVE_MODEL_PROVIDER }}
+      COURSEWARE_LIVE_MODEL_BASE_URL: ${{ vars.COURSEWARE_LIVE_MODEL_BASE_URL }}
+      COURSEWARE_LIVE_MODEL: ${{ vars.COURSEWARE_LIVE_MODEL }}
+      COURSEWARE_LIVE_STRUCTURED_OUTPUT_MODE: ${{ vars.COURSEWARE_LIVE_STRUCTURED_OUTPUT_MODE }}
+      COURSEWARE_LIVE_TIMEOUT_SECONDS: ${{ vars.COURSEWARE_LIVE_TIMEOUT_SECONDS }}
+      COURSEWARE_LIVE_MAX_ATTEMPTS: ${{ vars.COURSEWARE_LIVE_MAX_ATTEMPTS }}
+      COURSEWARE_LIVE_RETRY_BASE_DELAY_SECONDS: ${{ vars.COURSEWARE_LIVE_RETRY_BASE_DELAY_SECONDS }}
+      COURSEWARE_LIVE_RETRY_MAX_DELAY_SECONDS: ${{ vars.COURSEWARE_LIVE_RETRY_MAX_DELAY_SECONDS }}
+      COURSEWARE_LIVE_INPUT_PRICE_PER_1K_TOKENS: ${{ vars.COURSEWARE_LIVE_INPUT_PRICE_PER_1K_TOKENS }}
+      COURSEWARE_LIVE_OUTPUT_PRICE_PER_1K_TOKENS: ${{ vars.COURSEWARE_LIVE_OUTPUT_PRICE_PER_1K_TOKENS }}
+      COURSEWARE_LIVE_PRICE_CURRENCY: ${{ vars.COURSEWARE_LIVE_PRICE_CURRENCY }}
+      COURSEWARE_LIVE_PRICE_VERSION: ${{ vars.COURSEWARE_LIVE_PRICE_VERSION }}
+      COURSEWARE_LIVE_PRICE_EFFECTIVE_DATE: ${{ vars.COURSEWARE_LIVE_PRICE_EFFECTIVE_DATE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
+      - name: Require an explicit model credential for live acceptance
+        shell: bash
+        run: test -n "$LLM_API_KEY"
+      - name: Run bounded normal-path live workflow (fails CONFIG_MISSING rather than skipping)
+        run: >-
+          PYTHONPATH=. python backend/scripts/courseware_live_workflow_smoke.py
+          --config "$COURSEWARE_LIVE_CONFIG" --enable
+          --artifact-root backend/courseware-live-workflow-artifacts
+          --output backend/courseware-live-model.json
+      - run: PYTHONPATH=. python -m pytest backend/tests/live/test_courseware_live.py -q
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: courseware-live-model
+          path: |
+            backend/courseware-live-model.json
+            backend/courseware-live-workflow-artifacts
+          if-no-files-found: error
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:courseware-browser
+        working-directory: frontend
+        env:
+          PYTHON: python
+          COURSEWARE_BROWSER_CHANNEL: ""
+          COURSEWARE_BROWSER_REQUIRED: "1"
+      - run: npm run test:workflow-events && npm run test:tutor && npm run build
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: courseware-browser-evidence
+          path: frontend/tests/test-results/courseware-browser
+          if-no-files-found: error
+
+  required-gates:
+    if: ${{ always() }}
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject skipped or failed required jobs
+        shell: bash
+        run: |
+          test "${{ needs.backend.result }}" = success
+          test "${{ needs.frontend.result }}" = success

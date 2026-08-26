@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.config import Settings
-from app.core.knowledge_ids import query_hash, sha256_hex
-from app.models.knowledge import (
+from app.core.retrieval.knowledge_ids import query_hash, sha256_hex
+from app.models.knowledge.knowledge import (
     EvidenceBatch,
     EvidenceItem,
     KnowledgeChunk,

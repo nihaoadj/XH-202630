@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from app.models.persistence import (
+from app.models.shared.persistence import (
     RunStatus,
     WorkflowEvent,
     WorkflowEventType,
@@ -39,3 +39,18 @@ def test_event_contract_forbids_sensitive_payload_fields_and_extra_fields():
         WorkflowEvent(**common, payload={"query": "raw retrieval query"})
     with pytest.raises(ValidationError):
         WorkflowEvent(**common, payload={}, unexpected=True)
+
+
+def test_event_contract_accepts_nested_json_and_checks_sensitive_keys_recursively():
+    common = {
+        "event_id": "event-002",
+        "run_id": "run-001",
+        "event_sequence": 2,
+        "event_type": WorkflowEventType.CLAIM_JUDGEMENT_COMPLETED,
+        "occurred_at": datetime.now(timezone.utc),
+    }
+    payload = {"verdict_counts": {"supported": 2, "non_factual": 1}}
+    event = WorkflowEvent(**common, payload=payload, payload_hash=canonical_hash(payload))
+    assert event.payload == payload
+    with pytest.raises(ValidationError):
+        WorkflowEvent(**common, payload={"nested": [{"raw_response": "secret"}]}, payload_hash=canonical_hash({}))

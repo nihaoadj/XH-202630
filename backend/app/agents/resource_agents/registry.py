@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.core.errors import ApplicationError, ErrorCode
-from app.models.resource_types import (
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.models.learning_documents.types import (
     RESOURCE_TYPE_ALIASES,
     SUPPORTED_RESOURCE_TYPES,
     canonical_resource_type,
@@ -13,6 +13,7 @@ from .assessment import AssessmentAgent
 from .base import ResourceGenerationAgent
 from .case_study import CaseStudyAgent
 from .checklist import ReviewChecklistAgent
+from .correction_package import CorrectionTrainingPackageAgent
 from .practice import PracticeGuideAgent
 from .text import TextResourceAgent
 
@@ -23,6 +24,7 @@ RESOURCE_AGENT_TYPES = {
     "分阶测试题": AssessmentAgent,
     "复习清单": ReviewChecklistAgent,
     "案例分析": CaseStudyAgent,
+    "个性化纠错训练包": CorrectionTrainingPackageAgent,
 }
 
 

@@ -1,9 +1,11 @@
 from types import SimpleNamespace
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 
 import pytest
 from langchain.schema import Document
 
-from app.core import reranker
+from app.core.retrieval import reranker
 
 
 def _settings(*, enabled: bool = True, max_per_document: int = 2):
@@ -102,3 +104,24 @@ def test_disabled_reranker_returns_hybrid_fallback(monkeypatch):
     assert score == 0.75
     assert document.metadata["rerank_status"] == "disabled"
     assert document.metadata["retrieval_method"] == "hybrid_rrf"
+
+
+def test_reranker_cold_load_is_single_flight(monkeypatch):
+    calls = []
+    model = _FakeCrossEncoder([1.0])
+
+    reranker._load_reranker.cache_clear()
+
+    @lru_cache(maxsize=1)
+    def load_once():
+        calls.append(1)
+        return model
+
+    monkeypatch.setattr(reranker, "_load_reranker", load_once)
+    reranker._RERANKER_LOAD_FAILURE_AT = None
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(lambda _: reranker.get_reranker(), range(3)))
+
+    assert results == [model, model, model]
+    assert len(calls) == 1

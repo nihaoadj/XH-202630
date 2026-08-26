@@ -95,19 +95,19 @@
     }
   ],
   "skill_nodes": [
-    {"node_id": "rag_basics", "name": "RAG 基础概念", "level": "零基础", "knowledge_points": ["检索增强生成", "上下文"], "assessment_methods": ["单选题", "概念解释"]},
-    {"node_id": "document_parsing", "name": "文档解析", "level": "零基础", "prerequisites": ["RAG 基础概念"], "knowledge_points": ["格式解析", "文本清洗"], "assessment_methods": ["实操题"]},
-    {"node_id": "chunking", "name": "Chunk 切分", "level": "Python 基础", "prerequisites": ["文档解析"], "knowledge_points": ["chunk_size", "chunk_overlap"], "assessment_methods": ["参数对比题"]},
-    {"node_id": "embedding", "name": "Embedding", "level": "零基础", "prerequisites": ["RAG 基础概念"], "knowledge_points": ["向量表示", "语义相似度"], "assessment_methods": ["概念题"]},
-    {"node_id": "vector_store", "name": "向量数据库", "level": "Python 基础", "prerequisites": ["Embedding"], "knowledge_points": ["索引", "持久化"], "assessment_methods": ["实操题"]},
-    {"node_id": "similarity_retrieval", "name": "相似度检索", "level": "Python 基础", "prerequisites": ["向量数据库", "Chunk 切分"], "knowledge_points": ["Top-K", "召回率"], "assessment_methods": ["参数题"]},
-    {"node_id": "hybrid_retrieval", "name": "混合检索", "level": "进阶 RAG", "prerequisites": ["相似度检索"], "knowledge_points": ["关键词检索", "向量检索"], "assessment_methods": ["方案设计题"]},
-    {"node_id": "rerank", "name": "Rerank", "level": "进阶 RAG", "prerequisites": ["相似度检索"], "knowledge_points": ["重排序", "精排"], "assessment_methods": ["对比题"]},
-    {"node_id": "prompt_assembly", "name": "Prompt 组装", "level": "Python 基础", "prerequisites": ["相似度检索"], "knowledge_points": ["上下文窗口", "指令约束"], "assessment_methods": ["实操题"]},
-    {"node_id": "citation", "name": "引用溯源", "level": "Python 基础", "prerequisites": ["Prompt 组装"], "knowledge_points": ["source_ref", "证据片段"], "assessment_methods": ["溯源题"]},
-    {"node_id": "hallucination_control", "name": "幻觉控制", "level": "进阶 RAG", "prerequisites": ["引用溯源"], "knowledge_points": ["Claim", "证据支持"], "assessment_methods": ["审核题"]},
-    {"node_id": "rag_evaluation", "name": "RAG 评测", "level": "进阶 RAG", "prerequisites": ["幻觉控制"], "knowledge_points": ["命中率", "覆盖率", "幻觉率"], "assessment_methods": ["指标计算题"]},
-    {"node_id": "rag_tuning", "name": "RAG 调优", "level": "进阶 RAG", "prerequisites": ["RAG 评测", "混合检索", "Rerank"], "knowledge_points": ["参数调优", "消融实验"], "assessment_methods": ["综合实操题"]}
+    {"node_id": "rag_basics", "name": "RAG 基础概念", "level": "零基础", "tier": 1, "knowledge_points": ["检索增强生成", "上下文"], "assessment_methods": ["单选题", "概念解释"]},
+    {"node_id": "document_parsing", "name": "文档解析", "level": "零基础", "tier": 1, "prerequisites": ["RAG 基础概念"], "knowledge_points": ["格式解析", "文本清洗"], "assessment_methods": ["实操题"]},
+    {"node_id": "chunking", "name": "Chunk 切分", "level": "Python 基础", "tier": 2, "prerequisites": ["文档解析"], "knowledge_points": ["chunk_size", "chunk_overlap"], "assessment_methods": ["参数对比题"]},
+    {"node_id": "embedding", "name": "Embedding", "level": "零基础", "tier": 1, "prerequisites": ["RAG 基础概念"], "knowledge_points": ["向量表示", "语义相似度"], "assessment_methods": ["概念题"]},
+    {"node_id": "vector_store", "name": "向量数据库", "level": "Python 基础", "tier": 2, "prerequisites": ["Embedding"], "knowledge_points": ["索引", "持久化"], "assessment_methods": ["实操题"]},
+    {"node_id": "similarity_retrieval", "name": "相似度检索", "level": "Python 基础", "tier": 2, "prerequisites": ["向量数据库", "Chunk 切分"], "knowledge_points": ["Top-K", "召回率"], "assessment_methods": ["参数题"]},
+    {"node_id": "hybrid_retrieval", "name": "混合检索", "level": "进阶 RAG", "tier": 3, "prerequisites": ["相似度检索"], "knowledge_points": ["关键词检索", "向量检索"], "assessment_methods": ["方案设计题"]},
+    {"node_id": "rerank", "name": "Rerank", "level": "进阶 RAG", "tier": 3, "prerequisites": ["相似度检索"], "knowledge_points": ["重排序", "精排"], "assessment_methods": ["对比题"]},
+    {"node_id": "prompt_assembly", "name": "Prompt 组装", "level": "Python 基础", "tier": 2, "prerequisites": ["相似度检索"], "knowledge_points": ["上下文窗口", "指令约束"], "assessment_methods": ["实操题"]},
+    {"node_id": "citation", "name": "引用溯源", "level": "Python 基础", "tier": 2, "prerequisites": ["Prompt 组装"], "knowledge_points": ["source_ref", "证据片段"], "assessment_methods": ["溯源题"]},
+    {"node_id": "hallucination_control", "name": "幻觉控制", "level": "进阶 RAG", "tier": 3, "prerequisites": ["引用溯源"], "knowledge_points": ["Claim", "证据支持"], "assessment_methods": ["审核题"]},
+    {"node_id": "rag_evaluation", "name": "RAG 评测", "level": "进阶 RAG", "tier": 3, "prerequisites": ["幻觉控制"], "knowledge_points": ["命中率", "覆盖率", "幻觉率"], "assessment_methods": ["指标计算题"]},
+    {"node_id": "rag_tuning", "name": "RAG 调优", "level": "进阶 RAG", "tier": 3, "prerequisites": ["RAG 评测", "混合检索", "Rerank"], "knowledge_points": ["参数调优", "消融实验"], "assessment_methods": ["综合实操题"]}
   ],
   "learner_levels": ["零基础", "Python 基础", "进阶 RAG"]
 }

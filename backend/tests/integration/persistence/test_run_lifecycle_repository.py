@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.db.audit.base import PersistenceConflict
-from app.models.persistence import (
+from app.models.shared.persistence import (
     BeginStepCommand,
     CompleteStepCommand,
     RunStatus,

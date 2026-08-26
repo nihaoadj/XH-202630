@@ -2,12 +2,12 @@ from datetime import datetime, timezone
 
 from app.db.diagnosis.memory import MemoryDiagnosisRepository
 from app.db.feedback.memory import MemoryFeedbackRepository
-from app.db.generation_job.memory import MemoryGenerationJobRepository
-from app.db.learner.memory import MemoryLearnerRepository
+from app.db.generation.memory import MemoryGenerationJobRepository
+from app.db.learners.memory import MemoryLearnerRepository
 from app.db.questionnaire.memory import MemoryQuestionnaireRepository
-from app.models.schemas import FeedbackAnswer, FeedbackRecord, LearnerProfile
-from app.services.learning_history_service import LearningHistoryService
-from app.services.profile_service import ProfileService
+from app.models.learning_documents.schemas import FeedbackAnswer, FeedbackRecord, LearnerProfile
+from app.services.learners.history import LearningHistoryService
+from app.services.learners.profiles import ProfileService
 
 
 def test_learning_history_merges_initial_profile_submissions_into_one_event():
