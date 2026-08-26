@@ -28,20 +28,22 @@ def test_settings_safe_defaults():
     assert settings.debug is False
     assert settings.sql_echo is False
     assert settings.llm_workflow_timeout_seconds == 1200
-    assert settings.claim_request_timeout_seconds == 300.0
-    assert settings.claim_max_attempts == 3
+    assert settings.claim_request_timeout_seconds == 360.0
+    assert settings.claim_max_attempts == 1
     assert settings.claim_schema_repair_attempts == 2
-    assert settings.claim_max_output_tokens == 16384
+    assert settings.llm_max_output_tokens == 16384
+    assert settings.claim_max_output_tokens == 65536
+    assert settings.claim_truncated_retry_output_tokens == 65536
     assert settings.text_resource_request_timeout_seconds == 240.0
-    assert settings.text_resource_max_output_tokens == 32768
+    assert settings.text_resource_max_output_tokens == 65536
     assert settings.workflow_run_lease_seconds == 1260
-    assert settings.courseware_planner_token_budget == 8192
-    assert settings.courseware_total_llm_token_budget == 73728
+    assert settings.courseware_planner_token_budget == 16384
+    assert settings.courseware_total_llm_token_budget == 147456
     assert settings.courseware_total_run_timeout_seconds == 1050
-    assert settings.courseware_scene_composition_token_budget == 40960
+    assert settings.courseware_scene_composition_token_budget == 81920
     assert settings.courseware_scene_composition_max_seconds == 600.0
-    assert settings.courseware_quality_review_reserved_tokens == 8192
-    assert settings.courseware_revision_reserved_tokens == 16384
+    assert settings.courseware_quality_review_reserved_tokens == 16384
+    assert settings.courseware_revision_reserved_tokens == 32768
 
 
 def test_live_model_defaults_are_explicitly_non_runnable_without_metadata():
@@ -100,8 +102,8 @@ def test_settings_reject_invalid_courseware_automation_budgets(field, value):
     ("overrides", "code"),
     [
         ({"courseware_planner_token_budget": 20000}, "CFG_INVALID_COURSEWARE_STAGE_TOKEN_BUDGET"),
-        ({"courseware_quality_review_reserved_tokens": 9000}, "CFG_INVALID_COURSEWARE_REVIEW_RESERVE"),
-        ({"courseware_revision_reserved_tokens": 17000}, "CFG_INVALID_COURSEWARE_REVISION_RESERVE"),
+        ({"courseware_quality_review_reserved_tokens": 17000}, "CFG_INVALID_COURSEWARE_REVIEW_RESERVE"),
+        ({"courseware_revision_reserved_tokens": 33000}, "CFG_INVALID_COURSEWARE_REVISION_RESERVE"),
         ({"courseware_scene_call_max_tokens": 16000}, "CFG_INVALID_COURSEWARE_SCENE_CALL_LIMIT"),
         ({"courseware_total_run_timeout_seconds": 899}, "CFG_INVALID_COURSEWARE_STAGE_TIMEOUT_BUDGET"),
     ],
@@ -125,11 +127,14 @@ def test_container_gives_resource_agents_their_dedicated_recovery_budget():
     assert gateway.options_for("text_resource_agent").max_attempts == 2
     assert gateway.options_for("assessment_agent").max_attempts == 2
     assert gateway.options_for("reviewer").max_attempts == 2
-    assert gateway.options_for("claim_extractor").max_attempts == 3
+    assert gateway.options_for("claim_extractor").max_attempts == 1
     assert gateway.options_for("claim_extractor").schema_repair_attempts == 2
-    assert gateway.options_for("claim_extractor").max_output_tokens == 16384
-    assert gateway.options_for("claim_extractor").request_timeout_seconds == 300.0
-    assert gateway.options_for("claim_judge").max_attempts == 3
+    assert gateway.options_for("reviewer").max_output_tokens == 16384
+    assert gateway.options_for("assessment_scope_reviewer").max_output_tokens == 16384
+    assert gateway.options_for("claim_extractor").max_output_tokens == 65536
+    assert gateway.options_for("claim_extractor").truncated_retry_output_tokens == 65536
+    assert gateway.options_for("claim_extractor").request_timeout_seconds == 360.0
+    assert gateway.options_for("claim_judge").max_attempts == 1
 
 
 @pytest.mark.parametrize("mode", ["development", "demo", "production"])

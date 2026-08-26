@@ -32,15 +32,15 @@ class Settings(BaseSettings):
     courseware_auto_revision_max_attempts: int = Field(default=3, ge=0, le=5)
     courseware_scene_lease_seconds: int = Field(default=120, ge=30, le=900)
     courseware_auto_review_max_seconds: int = Field(default=180, ge=10, le=900)
-    courseware_total_llm_token_budget: int = Field(default=73728, ge=256, le=262144)
+    courseware_total_llm_token_budget: int = Field(default=147456, ge=256, le=262144)
     courseware_total_run_timeout_seconds: int = Field(default=1050, ge=30, le=3600)
-    courseware_planner_token_budget: int = Field(default=8192, ge=0, le=262144)
-    courseware_scene_composition_token_budget: int = Field(default=40960, ge=0, le=262144)
-    courseware_scene_call_max_tokens: int = Field(default=4096, ge=256, le=65536)
-    courseware_quality_review_token_budget: int = Field(default=8192, ge=0, le=262144)
-    courseware_revision_token_budget: int = Field(default=16384, ge=0, le=262144)
-    courseware_quality_review_reserved_tokens: int = Field(default=8192, ge=0, le=262144)
-    courseware_revision_reserved_tokens: int = Field(default=16384, ge=0, le=262144)
+    courseware_planner_token_budget: int = Field(default=16384, ge=0, le=262144)
+    courseware_scene_composition_token_budget: int = Field(default=81920, ge=0, le=262144)
+    courseware_scene_call_max_tokens: int = Field(default=8192, ge=256, le=65536)
+    courseware_quality_review_token_budget: int = Field(default=16384, ge=0, le=262144)
+    courseware_revision_token_budget: int = Field(default=32768, ge=0, le=262144)
+    courseware_quality_review_reserved_tokens: int = Field(default=16384, ge=0, le=262144)
+    courseware_revision_reserved_tokens: int = Field(default=32768, ge=0, le=262144)
     courseware_planner_max_seconds: float = Field(default=90.0, ge=0, le=3600)
     courseware_scene_composition_max_seconds: float = Field(default=600.0, ge=0, le=3600)
     courseware_quality_review_max_seconds: float = Field(default=120.0, ge=0, le=3600)
@@ -88,11 +88,11 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
     # Claim audits inspect long generated resources and need a separate,
     # bounded budget instead of inheriting the generic auxiliary-node limit.
-    claim_request_timeout_seconds: float = Field(default=300.0, gt=0, le=600)
+    claim_request_timeout_seconds: float = Field(default=360.0, gt=0, le=600)
     # Resource-oriented runs include generation and review/claim evaluation.
     llm_workflow_timeout_seconds: float = Field(default=1200.0, gt=0, le=1800)
     llm_max_attempts: int = Field(default=2, ge=1, le=3)
-    claim_max_attempts: int = Field(default=3, ge=1, le=3)
+    claim_max_attempts: int = Field(default=1, ge=1, le=3)
     claim_schema_repair_attempts: int = Field(default=2, ge=1, le=3)
     # Resource generation produces the user-facing artifact. It receives one
     # additional bounded recovery attempt for empty provider responses, while
@@ -100,13 +100,18 @@ class Settings(BaseSettings):
     llm_resource_generation_max_attempts: int = Field(default=2, ge=1, le=3)
     llm_retry_base_delay_seconds: float = Field(default=0.5, ge=0, le=30)
     llm_retry_max_delay_seconds: float = Field(default=3.0, ge=0, le=60)
-    llm_max_output_tokens: int = Field(default=4096, ge=256, le=65536)
-    claim_max_output_tokens: int = Field(default=16384, ge=2048, le=65536)
+    llm_max_output_tokens: int = Field(default=16384, ge=256, le=65536)
+    # Claim extraction/judgement starts with a larger budget because the
+    # audited resource text and evidence envelope can be substantial.
+    claim_max_output_tokens: int = Field(default=65536, ge=2048, le=65536)
+    # A length-truncated Claim call receives one bounded budget increase on
+    # its final retry; this is intentionally separate from the initial cap.
+    claim_truncated_retry_output_tokens: int = Field(default=65536, ge=2048, le=65536)
     # Kept for compatibility with existing deployments.  New resource agents
     # use the explicit per-resource settings below.
-    llm_generator_max_output_tokens: int = Field(default=8192, ge=256, le=65536)
+    llm_generator_max_output_tokens: int = Field(default=16384, ge=256, le=65536)
     llm_resource_generator_max_input_tokens: int = Field(
-        default=32768,
+        default=65536,
         ge=1024,
         le=262144,
     )
@@ -114,7 +119,7 @@ class Settings(BaseSettings):
         # Lecture and assessment DTOs have compact, product-sized caps.  This
         # budget is deliberately below the long HTML-guide budget so a model
         # that ignores the requested format reaches compact recovery promptly.
-        default=32768,
+        default=65536,
         ge=8192,
         le=65536,
     )
@@ -124,12 +129,12 @@ class Settings(BaseSettings):
     # generic long-document budget. The default preserves the deployed 32k
     # ceiling while allowing an independent lecture-specific setting later.
     text_resource_request_timeout_seconds: float = Field(default=240.0, gt=0, le=600)
-    text_resource_max_output_tokens: int = Field(default=32768, ge=4096, le=65536)
+    text_resource_max_output_tokens: int = Field(default=65536, ge=4096, le=65536)
     practice_guide_request_timeout_seconds: float = Field(default=300.0, gt=0, le=600)
-    practice_guide_max_output_tokens: int = Field(default=49152, ge=8192, le=65536)
+    practice_guide_max_output_tokens: int = Field(default=65536, ge=8192, le=65536)
     llm_structured_output_mode: str = "auto"
     tutor_llm_timeout_seconds: float = Field(default=25.0, gt=0, le=120)
-    tutor_max_output_tokens: int = Field(default=2048, ge=256, le=8192)
+    tutor_max_output_tokens: int = Field(default=4096, ge=256, le=8192)
     tutor_max_context_turns: int = Field(default=6, ge=1, le=12)
     tutor_max_evidence_items: int = Field(default=4, ge=1, le=8)
     tutor_max_hint_level: int = Field(default=3, ge=0, le=3)
@@ -164,6 +169,11 @@ class Settings(BaseSettings):
     vector_distance_metric: str = "cosine"
     db_type: str = "sqlite"  # memory | sqlite | postgresql
     database_url: str = "sqlite:///./data/domain_knowledge.db"
+    # SQLite is used by the local/demo deployment and may receive concurrent
+    # workflow writes when multiple generation jobs are submitted together.
+    # Keep the wait bounded and explicit instead of relying on SQLite's 5s
+    # driver default.
+    sqlite_busy_timeout_seconds: int = Field(default=60, ge=1, le=300)
     knowledge_base_dir: str = "../knowledge_base/rag_engineering_training"
     vector_store_dir: str = "./chroma_db"
     chroma_collection_prefix: str = "kb"
@@ -417,7 +427,7 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_COURSEWARE_REVIEW_RESERVE")
         if self.courseware_revision_reserved_tokens > self.courseware_revision_token_budget:
             raise ValueError("CFG_INVALID_COURSEWARE_REVISION_RESERVE")
-        if self.courseware_scene_call_max_tokens > 4096 or (self.courseware_scene_composition_token_budget and self.courseware_scene_call_max_tokens > self.courseware_scene_composition_token_budget):
+        if self.courseware_scene_call_max_tokens > 8192 or (self.courseware_scene_composition_token_budget and self.courseware_scene_call_max_tokens > self.courseware_scene_composition_token_budget):
             raise ValueError("CFG_INVALID_COURSEWARE_SCENE_CALL_LIMIT")
         stage_seconds = (
             self.courseware_planner_max_seconds,
