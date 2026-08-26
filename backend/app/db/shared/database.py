@@ -35,6 +35,9 @@ from app.db.migrations import (
     apply_p0_24_correction_package_batches_migration,
     apply_p0_25_practice_guide_json_migration,
     apply_p0_26_mastery_evidence_gate_migration,
+    apply_p0_27_assessment_evidence_migration,
+    apply_p0_28_placement_reverification_migration,
+    apply_p0_29_feedback_decision_tiers_migration,
     apply_tutor_migration,
 )
 
@@ -53,20 +56,26 @@ def _resolve_database_url(url: str) -> str:
     return f"sqlite:///{absolute_path.as_posix()}"
 
 
-def _set_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
-    """Enable FK enforcement for every newly-created SQLite DBAPI connection."""
+def _configure_sqlite_connection(dbapi_connection, _connection_record) -> None:
+    """Configure every SQLite connection for concurrent durable workflows."""
+    settings = get_settings()
     cursor = dbapi_connection.cursor()
     try:
         cursor.execute("PRAGMA foreign_keys = ON")
         enabled = cursor.execute("PRAGMA foreign_keys").fetchone()
         if not enabled or int(enabled[0]) != 1:
             raise RuntimeError("SQLITE_FOREIGN_KEYS_NOT_ENABLED")
+        # WAL allows readers to continue while a writer commits.  Writers are
+        # still serialized by SQLite, so the busy timeout is required as well
+        # when parallel generation jobs reach a merge boundary together.
+        cursor.execute("PRAGMA journal_mode = WAL")
+        cursor.execute(f"PRAGMA busy_timeout = {settings.sqlite_busy_timeout_seconds * 1000}")
     finally:
         cursor.close()
 
 
 def configure_sqlite_foreign_keys(engine: Engine) -> Engine:
-    """Attach the SQLite FK hook before the engine opens its first connection."""
+    """Attach SQLite durability/concurrency hooks before first connection."""
     # Configuration-only callers may replace ``create_engine`` with a simple
     # sentinel. SQLAlchemy connection events apply only to real engines.
     if not isinstance(engine, Engine):
@@ -74,9 +83,9 @@ def configure_sqlite_foreign_keys(engine: Engine) -> Engine:
     if engine.url.get_backend_name() == "sqlite" and not event.contains(
         engine,
         "connect",
-        _set_sqlite_foreign_keys,
+        _configure_sqlite_connection,
     ):
-        event.listen(engine, "connect", _set_sqlite_foreign_keys)
+        event.listen(engine, "connect", _configure_sqlite_connection)
     return engine
 
 
@@ -87,7 +96,14 @@ def get_engine():
     database_url = _resolve_database_url(settings.database_url)
     engine = create_engine(
         database_url,
-        connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {},
+        connect_args=(
+            {
+                "check_same_thread": False,
+                "timeout": settings.sqlite_busy_timeout_seconds,
+            }
+            if database_url.startswith("sqlite")
+            else {}
+        ),
         echo=settings.sql_echo,
         hide_parameters=True,
     )
@@ -145,6 +161,9 @@ def init_database():
     apply_p0_24_correction_package_batches_migration(engine)
     apply_p0_25_practice_guide_json_migration(engine)
     apply_p0_26_mastery_evidence_gate_migration(engine)
+    apply_p0_27_assessment_evidence_migration(engine)
+    apply_p0_28_placement_reverification_migration(engine)
+    apply_p0_29_feedback_decision_tiers_migration(engine)
     apply_tutor_migration(engine)
 
 

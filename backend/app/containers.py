@@ -79,6 +79,7 @@ class Container(containers.DeclarativeContainer):
         resource_generator_max_output_tokens=config.llm_resource_generator_max_output_tokens,
         claim_max_attempts=config.claim_max_attempts,
         claim_max_output_tokens=config.claim_max_output_tokens,
+        claim_truncated_retry_output_tokens=config.claim_truncated_retry_output_tokens,
         claim_request_timeout_seconds=config.claim_request_timeout_seconds,
         claim_schema_repair_attempts=config.claim_schema_repair_attempts,
     )

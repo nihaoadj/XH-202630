@@ -36,6 +36,17 @@ def test_sqlite_foreign_keys_are_enabled_for_every_connection(tmp_path):
             assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
 
 
+def test_sqlite_workflow_connections_use_wal_and_bounded_busy_timeout(tmp_path):
+    engine = _integrity_engine(tmp_path, "workflow-concurrency.db")
+
+    with engine.connect() as connection:
+        journal_mode = connection.exec_driver_sql("PRAGMA journal_mode").scalar_one()
+        busy_timeout = connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one()
+
+    assert journal_mode.lower() == "wal"
+    assert busy_timeout >= 60_000
+
+
 @pytest.mark.parametrize(
     "row",
     [

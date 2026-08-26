@@ -389,6 +389,9 @@ class FeedbackDecisionORM(Base):
     reason_codes = Column(JSON, nullable=False, default=list)
     decision_reason = Column(Text, nullable=False)
     target_knowledge_point_ids = Column(JSON, nullable=False, default=list)
+    recommended_tier = Column(Integer, nullable=True)
+    remediation_return_tier = Column(Integer, nullable=True)
+    tier_transition = Column(String(64), nullable=True)
     decision_hash = Column(String(64), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
@@ -843,6 +846,7 @@ class AbilityStateEventORM(Base):
     verified = Column(Boolean, nullable=False, default=False)
     before_state = Column(JSON, nullable=True)
     after_state = Column(JSON, nullable=False)
+    evidence_metadata = Column(JSON, nullable=False, default=dict, server_default="{}")
     occurred_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -869,6 +873,7 @@ class LearnerCurriculumNodeORM(Base):
     published_resource_count = Column(Integer, nullable=False, default=0, server_default="0")
     verified_attempt_count = Column(Integer, nullable=False, default=0, server_default="0")
     placement_exempt = Column(Boolean, nullable=False, default=False, server_default="0")
+    placement_verification_required = Column(Boolean, nullable=False, default=False, server_default="0")
     placement_evidence_id = Column(String(128), nullable=True, index=True)
     last_verified_attempt_id = Column(String(128), nullable=True, index=True)
     last_scheduled_at = Column(DateTime(timezone=True), nullable=True)

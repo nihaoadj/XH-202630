@@ -242,7 +242,9 @@ class WorkflowEvent(StrictPersistenceModel):
     step_sequence: int | None = Field(default=None, ge=1)
     node_name: str | None = Field(default=None, max_length=128)
     status: str | None = Field(default=None, max_length=32)
-    payload: dict[str, JsonScalar | list[JsonScalar]] = Field(default_factory=dict)
+    # Event payloads are JSON objects and may contain nested objects/lists;
+    # the validator below enforces the persistence boundary and size limit.
+    payload: dict[str, Any] = Field(default_factory=dict)
     payload_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     error_code: str | None = Field(default=None, max_length=128)
     occurred_at: datetime
@@ -262,7 +264,17 @@ class WorkflowEvent(StrictPersistenceModel):
             "learner_profile",
             "content_text",
         }
-        if any(key.lower() in forbidden for key in value):
+        def contains_forbidden_key(item: Any) -> bool:
+            if isinstance(item, dict):
+                return any(
+                    key.lower() in forbidden or contains_forbidden_key(child)
+                    for key, child in item.items()
+                )
+            if isinstance(item, list):
+                return any(contains_forbidden_key(child) for child in item)
+            return False
+
+        if contains_forbidden_key(value):
             raise ValueError("event payload contains a forbidden field")
         if len(canonical_json(value).encode("utf-8")) > 16_384:
             raise ValueError("event payload exceeds maximum size")
@@ -482,10 +494,12 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "include_review",
         "include_claim_check",
         "max_iterations",
+        "claim_max_iterations",
         "workflow_status",
         "current_node",
         "generation_attempt",
         "revision_count",
+        "claim_revision_count",
         "claim_check_status",
         "retrieval_status",
         "retrieval_config_hash",
@@ -503,6 +517,9 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "target_skill_nodes",
         "resource_types",
         "retrieval_query_hashes",
+        "assessment_claim_skipped_resource_ids",
+        "claim_failed_resource_ids",
+        "claim_eligible_resource_ids",
     ):
         projection[key] = list(state.get(key, []))[:100]
     constraints = dict(state.get("constraints", {}))

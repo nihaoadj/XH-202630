@@ -115,12 +115,14 @@ class WorkflowState(TypedDict, total=False):
     include_review: bool
     include_claim_check: bool
     max_iterations: int
+    claim_max_iterations: int
     constraints: Dict[str, Any]
 
     workflow_status: str
     current_node: str
     generation_attempt: int
     revision_count: int
+    claim_revision_count: int
     workflow_started_at: datetime
     workflow_deadline_at: datetime
     claim_check_status: str
@@ -147,7 +149,11 @@ class WorkflowState(TypedDict, total=False):
     extracted_claims: List[Dict[str, Any]]
     claim_judgements: List[Dict[str, Any]]
     claim_metrics: Dict[str, Dict[str, Any]]
+    assessment_claim_skipped_resource_ids: List[str]
     claim_failed_resource_ids: List[str]
+    # Current resource versions that passed ordinary review and must therefore
+    # clear the independent Claim gate before publication.
+    claim_eligible_resource_ids: List[str]
     final_decision: str
 
     trace: Annotated[List[Dict[str, Any]], operator.add]
@@ -175,12 +181,14 @@ class WorkflowStateSnapshot(BaseModel):
     include_review: bool = True
     include_claim_check: bool = False
     max_iterations: int = Field(default=1, ge=0, le=3)
+    claim_max_iterations: int = Field(default=0, ge=0, le=3)
     constraints: Dict[str, Any] = Field(default_factory=dict)
 
     workflow_status: WorkflowStatus = WorkflowStatus.RUNNING
     current_node: str = "pending"
     generation_attempt: int = Field(default=1, ge=1)
     revision_count: int = Field(default=0, ge=0)
+    claim_revision_count: int = Field(default=0, ge=0)
     workflow_started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     workflow_deadline_at: datetime
     claim_check_status: ClaimCheckStatus = ClaimCheckStatus.NOT_REQUESTED
@@ -205,7 +213,9 @@ class WorkflowStateSnapshot(BaseModel):
     extracted_claims: List[Dict[str, Any]] = Field(default_factory=list)
     claim_judgements: List[Dict[str, Any]] = Field(default_factory=list)
     claim_metrics: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    assessment_claim_skipped_resource_ids: List[str] = Field(default_factory=list)
     claim_failed_resource_ids: List[str] = Field(default_factory=list)
+    claim_eligible_resource_ids: List[str] = Field(default_factory=list)
     final_decision: str = ""
     trace: List[Dict[str, Any]] = Field(default_factory=list)
     errors: List[ErrorInfo] = Field(default_factory=list)
@@ -217,8 +227,10 @@ class WorkflowStateSnapshot(BaseModel):
             raise ValueError("learner_id must match learner.learner_id")
         if self.revision_count > self.max_iterations:
             raise ValueError("revision_count cannot exceed max_iterations")
-        if self.generation_attempt != self.revision_count + 1:
-            raise ValueError("generation_attempt must equal revision_count + 1")
+        if self.claim_revision_count > self.claim_max_iterations:
+            raise ValueError("claim_revision_count cannot exceed claim_max_iterations")
+        if self.generation_attempt != self.revision_count + self.claim_revision_count + 1:
+            raise ValueError("generation_attempt must equal total revisions + 1")
         return self
 
     def as_state(self) -> WorkflowState:
