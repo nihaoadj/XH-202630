@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -335,3 +337,69 @@ def test_run_evaluation_prefers_generated_questions_from_any_resource_before_ban
     assert [question.skill_node_id for question in questions].count("skill_retrieval") == 1
     assert [question.skill_node_id for question in questions].count("skill_generation") == 1
     assert answer_key["resource_with_questions:generated_q1"] == "A"
+
+
+def test_batch_evaluation_prefers_latest_duplicate_structured_assessment_resource():
+    service = FeedbackService(MemoryFeedbackRepository())
+    profile = LearnerProfile(
+        learner_id="duplicate_assessment_learner",
+        learner_type="test learner",
+        education="undergraduate",
+        major="software engineering",
+        knowledge_base_id="kb-feedback",
+        learning_goal="prefer the latest assessment resource",
+    )
+
+    def structured_resource(resource_id: str, stem: str, created_at: datetime) -> LearningResource:
+        payload = {
+            "schema_version": "2.0",
+            "node_blocks": [{
+                "skill_node_id": "skill_retrieval",
+                "skill_node_name": "Retrieval",
+                "single_choice_questions": [{
+                    "question_id": "q-001",
+                    "question_type": "single_choice",
+                    "stem": stem,
+                    "options": [
+                        {"option_id": "A", "text": "Retrieval"},
+                        {"option_id": "B", "text": "Generation"},
+                    ],
+                    "answer_option_ids": ["A"],
+                    "knowledge_point_tags": ["retrieval"],
+                    "max_score": 100,
+                }],
+                "multiple_choice_questions": [],
+                "short_answer_questions": [],
+            }],
+        }
+        payload_hash = hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        return LearningResource(
+            resource_id=resource_id,
+            learner_id=profile.learner_id,
+            run_id=resource_id,
+            batch_id="duplicate-assessment-batch",
+            topic="RAG basics",
+            resource_type="assessment",
+            difficulty="beginner",
+            knowledge_points=["retrieval"],
+            source_refs=[],
+            publication_status="published",
+            created_at=created_at,
+            assessment_payload=payload,
+            assessment_payload_hash=payload_hash,
+        )
+
+    older = structured_resource("assessment-old", "Old assessment question", datetime(2026, 8, 25, tzinfo=timezone.utc))
+    newer = structured_resource("assessment-new", "Latest assessment question", datetime(2026, 8, 26, tzinfo=timezone.utc))
+
+    questions, answer_key = service._build_run_question_specs(
+        profile,
+        [older, newer],
+        _KnowledgeService(),
+    )
+
+    assert [question.question_id for question in questions] == ["q-001"]
+    assert questions[0].question == "Latest assessment question"
+    assert answer_key["q-001"]["stem"] == "Latest assessment question"

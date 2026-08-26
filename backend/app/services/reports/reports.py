@@ -5,6 +5,7 @@ from app.models.learning_documents.schemas import LearnerProfile
 from app.db.feedback.feedback_loop_base import BaseFeedbackLoopRepository
 from app.services.learners.mastery import MasteryService
 from app.models.learning_documents.types import SUPPORTED_RESOURCE_TYPES
+from app.models.learners.mastery import MASTERY_CONFIRMATION_THRESHOLD
 from app.models.reviews.claims import ClaimMetricStatus, ClaimVerdict, compute_claim_metric
 from app.models.reports.contracts import ReportRevisionPartsV1
 from app.services.reports.difficulty_matching import STRATEGY_VERSION, match_difficulty
@@ -19,7 +20,7 @@ import json
 # ETag/revision so a browser cannot retain a structurally stale report after a
 # deployment (for example, the radar changing from measured nodes to the full
 # knowledge graph).
-REPORT_PROJECTION_VERSION = "4.0-full-knowledge-radar"
+REPORT_PROJECTION_VERSION = "4.1-assessment-confidence"
 
 
 class ReportSnapshotUnstable(RuntimeError):
@@ -79,6 +80,189 @@ class ReportService:
             ],
         }
 
+    @staticmethod
+    def _assessment_conclusions(events, ability_projection) -> dict[str, dict]:
+        """Expose why each node is, or is not yet, a trusted conclusion."""
+        states = {
+            node.skill_node_id: node.mastery
+            for node in (ability_projection.nodes if ability_projection else [])
+        }
+        grouped: dict[str, list] = {}
+        for event in events or []:
+            if not event.verified or event.source_type.value not in {"diagnosis", "learning_attempt"}:
+                continue
+            if not getattr(event, "evidence_eligible", True):
+                continue
+            grouped.setdefault(event.skill_node_id, []).append(event)
+        conclusions: dict[str, dict] = {}
+        for node_id, state in states.items():
+            node_events = sorted(grouped.get(node_id, []), key=lambda item: (item.occurred_at, item.evidence_id))
+            sessions = {
+                getattr(item, "assessment_session_id", None) or item.source_id
+                for item in node_events
+            }
+            forms = {
+                getattr(item, "assessment_form_id", None) or item.source_id
+                for item in node_events
+            }
+            dimensions = sorted({
+                dimension
+                for item in node_events
+                for dimension in getattr(item, "covered_dimensions", [])
+            })
+            scores = [item.observed_score for item in node_events if item.observed_score is not None]
+            high_sessions = sum(score >= MASTERY_CONFIRMATION_THRESHOLD for score in scores)
+            required_dimensions = {"concept", "scenario", "misconception"}
+            initial_calibrated = any(
+                item.source_type.value == "diagnosis"
+                and required_dimensions.issubset(set(getattr(item, "covered_dimensions", [])))
+                for item in node_events
+            )
+            cumulative_dimension_ready = required_dimensions.issubset(set(dimensions))
+            dimension_ready = initial_calibrated or cumulative_dimension_ready
+            qualified_high_events = [
+                item for item in node_events
+                if item.observed_score is not None and item.observed_score >= MASTERY_CONFIRMATION_THRESHOLD
+            ]
+            qualified_high_sessions = {
+                getattr(item, "assessment_session_id", None) or item.source_id
+                for item in qualified_high_events
+            }
+            if not node_events:
+                conclusion, trust = "unassessed", "none"
+            elif state.status.value == "mastered" and len(qualified_high_sessions) >= 2 and dimension_ready:
+                conclusion, trust = "confirmed_mastery", "high"
+            elif len(sessions) < 2:
+                conclusion, trust = "baseline_observation", "provisional"
+            elif scores and scores[-1] < MASTERY_CONFIRMATION_THRESHOLD:
+                conclusion, trust = "needs_reinforcement", "medium"
+            else:
+                conclusion, trust = "awaiting_confirmation", "medium"
+            promotion_session_ids = list(dict.fromkeys(
+                getattr(item, "assessment_session_id", None) or item.source_id
+                for item in qualified_high_events
+            ))[:2]
+            promotion_index = max(
+                (index for index, item in enumerate(node_events)
+                 if (getattr(item, "assessment_session_id", None) or item.source_id) in promotion_session_ids),
+                default=-1,
+            )
+            opposing = [
+                {"source_id": item.source_id, "score": item.observed_score, "occurred_at": item.occurred_at}
+                for item in node_events[promotion_index + 1:]
+                if item.observed_score is not None and item.observed_score < MASTERY_CONFIRMATION_THRESHOLD
+            ]
+            conclusions[node_id] = {
+                "conclusion": conclusion,
+                "trust_status": trust,
+                "formal_session_count": len(sessions),
+                "independent_form_count": len(forms),
+                "eligible_evidence_count": len(node_events),
+                "high_score_session_count": high_sessions,
+                "covered_dimensions": dimensions,
+                "required_dimensions": ["concept", "scenario", "misconception"],
+                "dimension_ready": dimension_ready,
+                "initial_calibrated": initial_calibrated,
+                "last_contradictory_evidence": opposing[-1] if opposing else None,
+                "scoring_audit_statuses": list(dict.fromkeys(
+                    getattr(item, "scoring_audit_status", "not_applicable") for item in node_events
+                )),
+            }
+        return conclusions
+
+    @staticmethod
+    def _build_learning_node_mastery_map(ability_projection, assessment_conclusions, mastery_events=()) -> dict:
+        """Build the ongoing node-level mastery view.
+
+        Initial diagnostic dimensions are intentionally not projected here.
+        This map is the stable report view for every learning node and is
+        driven by the canonical mastery projection plus eligible formal
+        assessment conclusions.
+        """
+        nodes = ReportService._ordered_ability_nodes(ability_projection.nodes if ability_projection else [])
+        priorities = {
+            item.skill_node_id: item
+            for item in (ability_projection.weakness_priorities if ability_projection else [])
+        }
+        events_by_node: dict[str, list] = {}
+        for event in mastery_events or []:
+            source_type = getattr(getattr(event, "source_type", None), "value", getattr(event, "source_type", None))
+            if (
+                getattr(event, "verified", False)
+                and getattr(event, "evidence_eligible", True)
+                and source_type in {"diagnosis", "learning_attempt"}
+            ):
+                events_by_node.setdefault(event.skill_node_id, []).append(event)
+
+        points = []
+        status_counts = {key: 0 for key in ("unassessed", "self_reported", "weak", "learning", "mastered")}
+        conclusion_counts = {key: 0 for key in (
+            "unassessed", "baseline_observation", "awaiting_confirmation", "confirmed_mastery", "needs_reinforcement"
+        )}
+        for node in nodes:
+            state = node.mastery
+            conclusion = (assessment_conclusions or {}).get(node.skill_node_id, {})
+            conclusion_name = conclusion.get("conclusion", "unassessed")
+            trust_status = conclusion.get("trust_status", "none")
+            node_events = sorted(
+                events_by_node.get(node.skill_node_id, []),
+                key=lambda item: (ReportService._utc(item.occurred_at), item.evidence_id),
+            )
+            latest_event = node_events[-1] if node_events else None
+            priority = priorities.get(node.skill_node_id)
+            if conclusion_name in {"baseline_observation", "awaiting_confirmation"}:
+                next_action = "verify"
+            elif conclusion_name == "needs_reinforcement" or state.status.value == "weak":
+                next_action = "remediate"
+            elif conclusion_name == "confirmed_mastery" or state.status.value == "mastered":
+                next_action = "maintain"
+            elif state.status.value == "learning":
+                next_action = "practice"
+            else:
+                next_action = "learn"
+            reasons = list(priority.reason_codes) if priority else []
+            if not reasons:
+                reasons = {
+                    "unassessed": ["NO_OBJECTIVE_EVIDENCE"],
+                    "baseline_observation": ["INITIAL_BASELINE_PENDING_CONFIRMATION"],
+                    "awaiting_confirmation": ["AWAITING_SECOND_FORMAL_ASSESSMENT"],
+                    "confirmed_mastery": ["TWO_INDEPENDENT_FORMAL_ASSESSMENTS"],
+                    "needs_reinforcement": ["LATEST_FORMAL_RESULT_BELOW_0_80"],
+                }.get(conclusion_name, ["MASTERY_PROJECTION"])
+            point = {
+                "skill_node_id": node.skill_node_id,
+                "name": node.name,
+                "tier": node.tier,
+                "tier_label": node.tier_label,
+                "mastery_score": state.mastery_score,
+                "mastery_status": state.status.value,
+                "conclusion": conclusion_name,
+                "trust_status": trust_status,
+                "confidence": state.confidence.value,
+                "objective_evidence_count": state.objective_evidence_count,
+                "independent_session_count": conclusion.get("formal_session_count", 0),
+                "independent_form_count": conclusion.get("independent_form_count", 0),
+                "high_score_session_count": conclusion.get("high_score_session_count", 0),
+                "latest_observed_score": latest_event.observed_score if latest_event else None,
+                "trend_delta": node.trend_delta,
+                "last_evidence_at": latest_event.occurred_at if latest_event else state.last_updated,
+                "next_action": next_action,
+                "reason_codes": reasons,
+            }
+            points.append(point)
+            status_counts[state.status.value] += 1
+            conclusion_counts[conclusion_name] += 1
+        return {
+            "schema_version": "1.0",
+            "nodes": points,
+            "summary": {
+                **{f"status_{key}_count": value for key, value in status_counts.items()},
+                **{f"conclusion_{key}_count": value for key, value in conclusion_counts.items()},
+                "total_node_count": len(points),
+                "actionable_node_count": sum(item["next_action"] != "maintain" for item in points),
+            },
+        }
+
     def _build_report_once(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> dict:
         """构建学情报告"""
         if window_days not in {7, 30, 90}:
@@ -136,10 +320,16 @@ class ReportService:
         attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10_000) if self.feedback_loop_repo else []
         diagnostic_runs = self.diagnosis_repo.list_runs_by_learner(profile.learner_id) if self.diagnosis_repo else []
         initial_flow = self._initial_diagnostic_flow(profile)
-        calibration_pending = initial_flow.get("status") in {"pending", "retest"}
+        loop_results = self.feedback_loop_repo.list_results(profile.learner_id, 10) if self.feedback_loop_repo else []
+        # A server-scored formal feedback Attempt is already a durable,
+        # learner-specific assessment fact.  It must make the report usable
+        # even if an older initial-diagnostic flow was left pending/retest.
+        calibration_pending = (
+            initial_flow.get("status") in {"pending", "retest"}
+            and not loop_results
+        )
         visible_diagnostic_runs = [] if calibration_pending else diagnostic_runs
         diagnostic_measurements = self._diagnostic_measurements(visible_diagnostic_runs, ability_projection)
-        loop_results = self.feedback_loop_repo.list_results(profile.learner_id, 10) if self.feedback_loop_repo else []
         formal_feedback = [
             {
                 "feedback_id": item.attempt.attempt_id,
@@ -167,6 +357,10 @@ class ReportService:
             self.mastery_service.repository.list_events(profile.learner_id, profile.knowledge_base_id)
             if self.mastery_service and profile.knowledge_base_id else []
         )
+        assessment_conclusions = self._assessment_conclusions(mastery_events, ability_projection)
+        learning_node_mastery_map = self._build_learning_node_mastery_map(
+            ability_projection, assessment_conclusions, mastery_events,
+        )
         priorities = ability_projection.weakness_priorities if ability_projection else []
         ability_names = {
             node.skill_node_id: node.name for node in (ability_projection.nodes if ability_projection else [])
@@ -184,7 +378,7 @@ class ReportService:
         report_revision = self._revision(revision_parts, window_days)
         data_as_of = self._data_as_of(profile, attempts, resources, mastery_events)
         return {
-            "report_schema_version": "4.0",
+            "report_schema_version": "4.1",
             "report_revision": report_revision,
             "data_as_of": data_as_of,
             "window": {
@@ -193,6 +387,10 @@ class ReportService:
                 "end": activity["window_end"],
             },
             "freshness": {"source_revisions": revision_parts, "warnings": []},
+            "report_availability": {
+                "status": "calibration_pending" if calibration_pending else "ready",
+                "message": "初始诊断尚未完成，暂不生成正式学习结论" if calibration_pending else "报告已基于正式测评证据生成",
+            },
             "learning_activity": activity,
             "mastery_overview": ability_projection.summary.model_dump(mode="json") if ability_projection else {},
             "mastery_trends": self._mastery_trends(mastery_events, ability_projection, generated_at, window_days),
@@ -361,6 +559,7 @@ class ReportService:
             "profile_versions": [item.model_dump(mode="json") for item in versions],
             "ability_nodes": ordered_nodes if ability_projection else [],
             "mastery_summary": ability_projection.summary.model_dump(mode="json") if ability_projection else {},
+            "assessment_conclusions": assessment_conclusions,
             "mastery_trend": [
                 {
                     "event_id": event.evidence_id,
@@ -399,7 +598,17 @@ class ReportService:
                 generation_options.tier_progress.model_dump(mode="json")
                 if generation_options and generation_options.tier_progress else {}
             ),
+            "current_learning_state": {
+                "active_tier": (
+                    generation_options.tier_progress.active_tier
+                    if generation_options and generation_options.tier_progress else None
+                ),
+                "current_node_ids": learning_path_graph.get("current_node_ids", []) if learning_path_graph else [],
+                "recommended_next_node_ids": learning_path_graph.get("recommended_next_node_ids", []) if learning_path_graph else [],
+                "selection_source": "confirmed_generation",
+            },
             "knowledge_blind_spot_map": blind_spot_map,
+            "learning_node_mastery_map": learning_node_mastery_map,
             "resource_difficulty_curve": resource_difficulty_curve,
             "learning_path_graph": learning_path_graph,
             "data_warnings": ability_projection.data_warnings if ability_projection else ["MASTERY_PROJECTION_UNAVAILABLE"],
@@ -474,7 +683,7 @@ class ReportService:
     def _score_status(score: float) -> str:
         if score < 0.60:
             return "verified_weak"
-        if score <= 0.85:
+        if score < MASTERY_CONFIRMATION_THRESHOLD:
             return "learning"
         return "mastered"
 
@@ -748,8 +957,13 @@ class ReportService:
         new_ids = {
             item.skill_node_id for item in (generation_options.learn_new_knowledge if generation_options else [])
         }
+        scheduled_ids = {
+            node_id for node_id, item in curriculum.items()
+            if item.progress_status.value == "scheduled"
+        }
         current_ids = {
-            node_id for node_id, item in path_nodes.items() if item.status.value == "in_progress"
+            *scheduled_ids,
+            *(node_id for node_id, item in path_nodes.items() if item.status.value == "in_progress"),
         }
 
         graph_nodes = []
@@ -802,6 +1016,12 @@ class ReportService:
                 "skill_node_id": node.skill_node_id,
                 "name": node.name,
                 "progress_status": progress.progress_status.value if progress else (path_node.status.value if path_node else "unplanned"),
+                "placement_verification_status": (
+                    "verification_required" if progress and progress.placement_verification_required
+                    else "placement_exempt" if progress and progress.placement_exempt
+                    else "formally_reverified" if progress and progress.placement_evidence_id
+                    else "not_applicable"
+                ),
                 "mastery_status": node.mastery.status.value,
                 "mastery_score": node.mastery.mastery_score,
                 "confidence": node.mastery.confidence.value,
@@ -860,6 +1080,7 @@ class ReportService:
                         "learning_goal": profile.learning_goal}
         mastery_part = [node.model_dump(mode="json") for node in sorted((ability_projection.nodes if ability_projection else []), key=lambda item: item.skill_node_id)]
         activity_part = [{"id": item.attempt_id, "submitted_at": item.submitted_at, "results": [x.model_dump(mode="json") for x in item.knowledge_point_results],
+                          "assessment": {key: item.metadata.get(key) for key in ("assessment_kind", "assessment_session_id", "assessment_form_id", "scoring_audit")},
                           "question_trace": [{key: trace.get(key) for key in ("question_id", "skill_node_id", "diagnostic_dimension")} for trace in item.metadata.get("question_trace", []) if isinstance(trace, dict)]}
                          for item in sorted(attempts, key=lambda item: (self._utc(item.submitted_at), item.attempt_id))]
         activity_part.append({"diagnostic_traces": [

@@ -49,7 +49,33 @@ def _stable_id(prefix: str, *parts: object) -> str:
     return f"{prefix}_{hashlib.sha256(value.encode()).hexdigest()[:32]}"
 
 
+def _assessment_metadata(attempt: LearningAttempt, point_id: str) -> dict:
+    metadata = attempt.metadata or {}
+    traces = [
+        item for item in metadata.get("question_trace", [])
+        if isinstance(item, dict)
+        and str(item.get("skill_node_id") or item.get("knowledge_point") or "") == point_id
+    ]
+    audit = str((metadata.get("scoring_audit") or {}).get(point_id, "single_pass"))
+    return {
+        "assessment_kind": metadata.get("assessment_kind", "learning_check"),
+        "assessment_session_id": metadata.get("assessment_session_id") or attempt.attempt_id,
+        "assessment_form_id": metadata.get("assessment_form_id") or attempt.source_resource_id,
+        "question_ids": [str(item.get("question_id")) for item in traces if item.get("question_id")],
+        "covered_dimensions": list(dict.fromkeys(
+            str(item.get("diagnostic_dimension")) for item in traces
+            if item.get("diagnostic_dimension") in {"concept", "scenario", "misconception", "practice"}
+        )),
+        "scoring_audit_status": audit,
+        "evidence_eligible": audit not in {"double_disagreement", "failed"},
+    }
+
+
 class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
+    # Ability state events and the learner-state projection are written by
+    # apply_feedback in the same SQL transaction as the attempt/decision/path.
+    stores_mastery_evidence_atomically = True
+
     def __init__(self, session_factory: Callable[[], Session]):
         self.session_factory = session_factory
 
@@ -191,6 +217,9 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                     reason_codes=decision.reason_codes,
                     decision_reason=decision.decision_reason,
                     target_knowledge_point_ids=decision.target_knowledge_point_ids,
+                    recommended_tier=decision.recommended_tier,
+                    remediation_return_tier=decision.remediation_return_tier,
+                    tier_transition=decision.tier_transition,
                     decision_hash=decision.decision_hash,
                     created_at=decision.created_at,
                 ))
@@ -290,6 +319,7 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                         verified=True,
                         before_state=before_ability.model_dump(mode="json") if before_ability else None,
                         after_state=after_ability.model_dump(mode="json"),
+                        evidence_metadata=_assessment_metadata(attempt, item.knowledge_point_id),
                         occurred_at=attempt.submitted_at,
                     ))
                     db.add(KnowledgeStateMutationORM(
@@ -618,6 +648,9 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
             reason_codes=decision_row.reason_codes or [],
             decision_reason=decision_row.decision_reason,
             target_knowledge_point_ids=decision_row.target_knowledge_point_ids or [],
+            recommended_tier=decision_row.recommended_tier,
+            remediation_return_tier=decision_row.remediation_return_tier,
+            tier_transition=decision_row.tier_transition,
             decision_hash=decision_row.decision_hash,
             created_at=decision_row.created_at,
         )

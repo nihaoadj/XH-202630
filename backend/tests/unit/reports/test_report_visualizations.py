@@ -10,6 +10,8 @@ from app.models.learners.mastery import (
     AbilityNodeProjectionV1,
     AbilityNodeSummaryV1,
     AbilityNodesResponseV1,
+    CurriculumNodeProgressV1,
+    CurriculumProgressStatus,
 )
 from app.models.learning_documents.schemas import LearningResource
 from app.services.reports import reports as reports_module
@@ -43,8 +45,64 @@ def _projection():
     )
 
 
+def test_assessment_conclusions_distinguish_baseline_from_confirmed_mastery():
+    service = ReportService(MemoryResourceRepository(), MemoryFeedbackRepository())
+    node = SimpleNamespace(skill_node_id="skill-a", mastery=_state(
+        "skill-a", score=0.9, status="learning", objective_count=1, confidence="low",
+    ))
+    projection = SimpleNamespace(nodes=[node])
+    event = SimpleNamespace(
+        verified=True, evidence_eligible=True, source_type=SimpleNamespace(value="diagnosis"),
+        skill_node_id="skill-a", source_id="diagnosis-1", evidence_id="event-1",
+        assessment_session_id="session-1", assessment_form_id="form-1",
+        question_ids=["q1", "q2", "q3"], covered_dimensions=["concept", "scenario", "misconception"],
+        scoring_audit_status="single_pass", observed_score=0.9,
+        occurred_at=datetime.now(timezone.utc),
+    )
+    baseline = service._assessment_conclusions([event], projection)["skill-a"]
+    assert baseline["conclusion"] == "baseline_observation"
+    assert baseline["formal_session_count"] == 1
+
+    confirmed_node = SimpleNamespace(skill_node_id="skill-a", mastery=_state(
+        "skill-a", score=0.9, status="mastered", objective_count=2, confidence="high",
+    ))
+    second = SimpleNamespace(**{**event.__dict__, "source_id": "attempt-1", "evidence_id": "event-2",
+                                "assessment_session_id": "session-2", "assessment_form_id": "form-2",
+                                "question_ids": ["q4", "q5", "q6"]})
+    confirmed = service._assessment_conclusions([event, second], SimpleNamespace(nodes=[confirmed_node]))["skill-a"]
+    assert confirmed["conclusion"] == "confirmed_mastery"
+    assert confirmed["independent_form_count"] == 2
+
+
 def _service():
     return ReportService(MemoryResourceRepository(), MemoryFeedbackRepository())
+
+
+def test_learning_node_mastery_map_covers_all_nodes_without_dimension_axes():
+    result = _service()._build_learning_node_mastery_map(
+        _projection(),
+        {
+            "foundation": {
+                "conclusion": "needs_reinforcement",
+                "trust_status": "medium",
+                "formal_session_count": 2,
+                "independent_form_count": 2,
+                "high_score_session_count": 0,
+            },
+            "advanced": {
+                "conclusion": "unassessed",
+                "trust_status": "none",
+            },
+        },
+    )
+
+    assert [item["skill_node_id"] for item in result["nodes"]] == ["foundation", "advanced"]
+    foundation = result["nodes"][0]
+    assert foundation["mastery_score"] == 0.4
+    assert foundation["next_action"] == "remediate"
+    assert foundation["independent_session_count"] == 2
+    assert "dimensions" not in foundation
+    assert result["summary"]["total_node_count"] == 2
 
 
 def test_blind_spot_map_only_projects_dimension_scores_with_exact_question_trace():
@@ -156,6 +214,29 @@ def test_resource_curve_and_path_graph_do_not_invent_readiness_or_prerequisites(
     assert next_node["blocked"] is True
     assert next_node["blocked_by_node_ids"] == ["foundation"]
     assert graph["edges"] == [{"source_skill_node_id": "foundation", "target_skill_node_id": "advanced", "relation": "prerequisite"}]
+
+
+def test_learning_path_graph_exposes_reverification_then_formal_reverification():
+    pending = CurriculumNodeProgressV1(
+        learner_id="learner", knowledge_base_id="kb", skill_node_id="foundation",
+        placement_exempt=True, placement_verification_required=True,
+    )
+    projection = _projection().model_copy(update={"curriculum_nodes": [pending]})
+    service = _service()
+    graph = service._build_learning_path_graph(projection, None, None)
+    node = next(item for item in graph["nodes"] if item["skill_node_id"] == "foundation")
+    assert node["placement_verification_status"] == "verification_required"
+
+    reverified = pending.model_copy(update={
+        "placement_exempt": False, "placement_verification_required": False,
+        "placement_evidence_id": "placement-evidence",
+        "progress_status": CurriculumProgressStatus.COMPLETED,
+    })
+    graph = service._build_learning_path_graph(
+        _projection().model_copy(update={"curriculum_nodes": [reverified]}), None, None,
+    )
+    node = next(item for item in graph["nodes"] if item["skill_node_id"] == "foundation")
+    assert node["placement_verification_status"] == "formally_reverified"
 
 
 def test_weakness_groups_keep_ready_and_maintained_nodes_out_of_evidence_risk_groups():

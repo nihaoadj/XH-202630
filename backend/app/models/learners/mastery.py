@@ -35,6 +35,8 @@ class LearningIntent(str, Enum):
     REINFORCE_WEAKNESS = "reinforce_weakness"
     LEARN_NEW_KNOWLEDGE = "learn_new_knowledge"
     LEARN_NEW_AND_REINFORCE = "learn_new_and_reinforce"
+    DOWNGRADE_LEARNING = "downgrade_learning"
+    UPGRADE_LEARNING = "upgrade_learning"
 
 
 class CurriculumProgressStatus(str, Enum):
@@ -59,6 +61,11 @@ class AbilityConfidence(str, Enum):
     HIGH = "high"
 
 
+# Minimum observed score for a formal result to support confirmed mastery.
+# This threshold is intentionally separate from feedback routing thresholds.
+MASTERY_CONFIRMATION_THRESHOLD = 0.80
+
+
 class AbilityEvidenceV1(StrictMasteryModel):
     schema_version: Literal["1.0"] = "1.0"
     evidence_id: str = Field(min_length=1, max_length=128)
@@ -70,6 +77,15 @@ class AbilityEvidenceV1(StrictMasteryModel):
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     observed_score: float | None = Field(default=None, ge=0.0, le=1.0)
     verified: bool
+    assessment_kind: Literal["initial_diagnosis", "learning_check", "reassessment"] | None = None
+    assessment_session_id: str | None = Field(default=None, max_length=128)
+    assessment_form_id: str | None = Field(default=None, max_length=128)
+    question_ids: list[str] = Field(default_factory=list, max_length=500)
+    covered_dimensions: list[Literal["concept", "scenario", "misconception", "practice"]] = Field(default_factory=list, max_length=8)
+    scoring_audit_status: Literal[
+        "not_applicable", "single_pass", "double_pass", "double_disagreement", "failed"
+    ] = "not_applicable"
+    evidence_eligible: bool = True
     occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -121,6 +137,7 @@ class CurriculumNodeProgressV1(StrictMasteryModel):
     published_resource_count: int = Field(default=0, ge=0)
     verified_attempt_count: int = Field(default=0, ge=0)
     placement_exempt: bool = False
+    placement_verification_required: bool = False
     placement_evidence_id: str | None = Field(default=None, max_length=128)
     last_scheduled_at: datetime | None = None
     last_published_at: datetime | None = None
@@ -192,7 +209,7 @@ class LearnerFocusSnapshotV1(StrictMasteryModel):
 class NextGenerationCandidateV1(StrictMasteryModel):
     skill_node_id: str = Field(min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=256)
-    priority_group: Literal["learned_not_mastered", "unlearned"]
+    priority_group: Literal["learned_not_mastered", "unlearned", "learned"]
     rank: int = Field(ge=1)
     reason_codes: list[str] = Field(min_length=1, max_length=8)
     mastery_score: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -214,6 +231,9 @@ class NextGenerationOptionsV1(StrictMasteryModel):
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     reinforce_weakness: list[NextGenerationCandidateV1] = Field(default_factory=list)
     learn_new_knowledge: list[NextGenerationCandidateV1] = Field(default_factory=list)
+    cross_tier_new_knowledge: list[NextGenerationCandidateV1] = Field(default_factory=list)
+    cross_tier_prerequisite_review: list[NextGenerationCandidateV1] = Field(default_factory=list)
+    learning_candidates: list[NextGenerationCandidateV1] = Field(default_factory=list)
     recommended_node_ids: list[str] = Field(default_factory=list, max_length=2)
     curriculum_progress: CurriculumProgressSummaryV1 | None = None
     tier_progress: LearnerTierProgressV1 | None = None

@@ -126,6 +126,60 @@ def test_practice_updates_state_without_unnecessary_generation():
     assert jobs.list_by_learner("learner") == []
 
 
+def test_feedback_report_separates_default_path_from_optional_correction_package():
+    correction = SimpleNamespace(eligible=True, recommended_target_ids=["old"])
+    result = SimpleNamespace(
+        decision=SimpleNamespace(action=SimpleNamespace(value="practice"), target_knowledge_point_ids=("old",)),
+    )
+    generation = SimpleNamespace(
+        learn_new_knowledge=[SimpleNamespace(skill_node_id="new", blocked_by_node_ids=[])],
+        reinforce_weakness=[SimpleNamespace(skill_node_id="old")],
+        learning_candidates=[
+            SimpleNamespace(skill_node_id="new", blocked_by_node_ids=[], priority_group="unlearned"),
+            SimpleNamespace(skill_node_id="old", blocked_by_node_ids=[], priority_group="learned"),
+        ],
+        recommended_node_ids=["new"],
+    )
+    recommendation = FeedbackService._next_step_recommendation(result, generation, correction)
+    assert recommendation["recommended_action"] == "correction_package"
+    assert recommendation["alternative_action"] == "learn_new_and_reinforce"
+
+    result.decision.action.value = "advance"
+    generation.recommendation_type = "advance"
+    recommendation = FeedbackService._next_step_recommendation(result, generation, correction)
+    assert recommendation["recommended_action"] == "upgrade_learning"
+    assert recommendation["learning_intent"] == "upgrade_learning"
+    assert recommendation["default_learning_node_ids"] == ["new"]
+    assert recommendation["default_review_node_ids"] == []
+
+    result.decision.action.value = "remediate"
+    generation.recommendation_type = "remedial"
+    recommendation = FeedbackService._next_step_recommendation(result, generation, correction)
+    assert recommendation["recommended_action"] == "downgrade_learning"
+    assert recommendation["learning_intent"] == "downgrade_learning"
+    assert recommendation["default_learning_node_ids"] == ["new"]
+
+
+def test_correction_package_only_exposes_current_feedback_targets():
+    result = SimpleNamespace(
+        decision=SimpleNamespace(target_knowledge_point_ids=("current-error",)),
+        attempt=SimpleNamespace(knowledge_point_results=[]),
+    )
+    generation = SimpleNamespace(
+        snapshot_hash="a" * 64,
+        learning_candidates=[SimpleNamespace(skill_node_id="other-node")],
+        reinforce_weakness=[],
+        learn_new_knowledge=[],
+    )
+
+    option = FeedbackService._correction_package_option(
+        generation, SimpleNamespace(skill_level="中级"), result,
+    )
+
+    assert [item["skill_node_id"] for item in option.selectable_targets] == ["current-error"]
+    assert option.recommended_target_ids == ["current-error"]
+
+
 def test_custom_followup_selection_generates_the_checked_resource_types():
     service, learners, jobs, profile, resource = _setup()
     result = service.process_learning_attempt(profile, resource, _request(0.4))

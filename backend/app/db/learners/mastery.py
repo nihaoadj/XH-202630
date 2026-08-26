@@ -20,12 +20,16 @@ from app.models.learners.mastery import (
     AbilityMasteryStateV2,
     AbilityStateEventV1,
     AbilityStatus,
+    MASTERY_CONFIRMATION_THRESHOLD,
 )
 from app.models.learning_documents.schemas import KnowledgeState
 
 
 class MasteryEvidenceConflict(ValueError):
     pass
+
+
+REQUIRED_ASSESSMENT_DIMENSIONS = frozenset({"concept", "scenario", "misconception"})
 
 
 def _stable_id(prefix: str, *parts: object) -> str:
@@ -41,21 +45,36 @@ def _confidence(count: int, distinct_sources: int, prior: float | None) -> Abili
     return AbilityConfidence.LOW if count >= 1 or prior is not None else AbilityConfidence.NONE
 
 
-def _objective_status(score: float, objective_count: int) -> AbilityStatus:
+def _objective_status(
+    score: float,
+    objective_count: int,
+    distinct_source_count: int,
+    dimension_ready: bool,
+) -> AbilityStatus:
     if score < 0.60:
         return AbilityStatus.WEAK
     # A single strong observation is useful evidence, but it is not enough to
     # claim durable mastery.  The second independent server-scored source is
     # enforced by the append-only evidence count.
-    if score <= 0.85 or objective_count < 2:
+    if (
+        score < MASTERY_CONFIRMATION_THRESHOLD
+        or objective_count < 2
+        or distinct_source_count < 2
+        or not dimension_ready
+    ):
         return AbilityStatus.LEARNING
     return AbilityStatus.MASTERED
+
+
+def _has_required_dimensions(evidence: AbilityEvidenceV1) -> bool:
+    return REQUIRED_ASSESSMENT_DIMENSIONS.issubset(set(evidence.covered_dimensions))
 
 
 def _transition(
     before: AbilityMasteryStateV2,
     evidence: AbilityEvidenceV1,
     distinct_source_count: int,
+    dimension_ready: bool,
 ) -> AbilityMasteryStateV2:
     prior = before.self_report_prior
     mastery = before.mastery_score
@@ -68,7 +87,7 @@ def _transition(
         if objective_count == 0:
             mastery = prior
             status = AbilityStatus.SELF_REPORTED if prior is not None else AbilityStatus.UNASSESSED
-    elif evidence.verified and evidence.source_type in {
+    elif evidence.verified and evidence.evidence_eligible and evidence.source_type in {
         AbilityEvidenceSource.DIAGNOSIS,
         AbilityEvidenceSource.LEARNING_ATTEMPT,
     }:
@@ -79,7 +98,14 @@ def _transition(
             mastery = 0.7 * float(mastery or 0.0) + 0.3 * observed
         mastery = round(mastery, 6)
         objective_count += 1
-        status = _objective_status(mastery, objective_count)
+        status = _objective_status(
+            mastery, objective_count, distinct_source_count, dimension_ready,
+        )
+        # A later formal result at or below the promotion threshold is an
+        # explicit contradiction. Do not let EWMA inertia keep a previously
+        # mastered node labelled mastered after a failed follow-up.
+        if before.status == AbilityStatus.MASTERED and observed < MASTERY_CONFIRMATION_THRESHOLD:
+            status = AbilityStatus.WEAK if observed < 0.60 else AbilityStatus.LEARNING
         if evidence.source_type == AbilityEvidenceSource.LEARNING_ATTEMPT:
             attempt_count += 1
 
@@ -209,6 +235,20 @@ class MemoryMasteryRepository(BaseMasteryRepository):
                     if existing.source_hash != evidence.source_hash:
                         raise MasteryEvidenceConflict("ability evidence source payload conflict")
                     continue
+                prior_events = [
+                    event for event in self._events.values()
+                    if event.learner_id == evidence.learner_id
+                    and event.knowledge_base_id == evidence.knowledge_base_id
+                    and event.skill_node_id == evidence.skill_node_id
+                    and event.verified
+                    and event.evidence_eligible
+                ]
+                if evidence.assessment_session_id and evidence.question_ids and any(
+                    evidence.assessment_session_id != event.assessment_session_id
+                    and set(evidence.question_ids).intersection(event.question_ids)
+                    for event in prior_events
+                ):
+                    evidence = evidence.model_copy(update={"evidence_eligible": False})
                 state_key = (evidence.learner_id, evidence.knowledge_base_id, evidence.skill_node_id)
                 before = self._states.get(state_key) or _empty_state(*state_key)
                 objective_sources = {
@@ -218,17 +258,54 @@ class MemoryMasteryRepository(BaseMasteryRepository):
                     and event.knowledge_base_id == evidence.knowledge_base_id
                     and event.skill_node_id == evidence.skill_node_id
                     and event.verified
+                    and event.evidence_eligible
                     and event.source_type in {
                         AbilityEvidenceSource.DIAGNOSIS,
                         AbilityEvidenceSource.LEARNING_ATTEMPT,
                     }
                 }
-                if evidence.verified and evidence.source_type in {
+                if evidence.verified and evidence.evidence_eligible and evidence.source_type in {
                     AbilityEvidenceSource.DIAGNOSIS,
                     AbilityEvidenceSource.LEARNING_ATTEMPT,
                 }:
                     objective_sources.add(evidence.source_id)
-                after = _transition(before, evidence, len(objective_sources))
+                prior_formal_events = [
+                    event for event in self._events.values()
+                    if event.learner_id == evidence.learner_id
+                    and event.knowledge_base_id == evidence.knowledge_base_id
+                    and event.skill_node_id == evidence.skill_node_id
+                    and event.verified
+                    and event.evidence_eligible
+                    and event.source_type in {
+                        AbilityEvidenceSource.DIAGNOSIS,
+                        AbilityEvidenceSource.LEARNING_ATTEMPT,
+                    }
+                ]
+                cumulative_dimensions = {
+                    dimension
+                    for event in prior_formal_events
+                    for dimension in event.covered_dimensions
+                }
+                if evidence.verified and evidence.evidence_eligible and evidence.source_type in {
+                    AbilityEvidenceSource.DIAGNOSIS,
+                    AbilityEvidenceSource.LEARNING_ATTEMPT,
+                }:
+                    cumulative_dimensions.update(evidence.covered_dimensions)
+                initial_calibrated = any(
+                    event.source_type == AbilityEvidenceSource.DIAGNOSIS
+                    and _has_required_dimensions(event)
+                    for event in prior_formal_events
+                ) or (
+                    evidence.source_type == AbilityEvidenceSource.DIAGNOSIS
+                    and evidence.verified and evidence.evidence_eligible
+                    and _has_required_dimensions(evidence)
+                )
+                dimension_ready = initial_calibrated or REQUIRED_ASSESSMENT_DIMENSIONS.issubset(
+                    cumulative_dimensions
+                )
+                after = _transition(
+                    before, evidence, len(objective_sources), dimension_ready,
+                )
                 event = AbilityStateEventV1(
                     **evidence.model_dump(), before_state=before, after_state=after
                 )
@@ -347,6 +424,19 @@ class SQLMasteryRepository(BaseMasteryRepository):
                     if existing.source_hash != evidence.source_hash:
                         raise MasteryEvidenceConflict("ability evidence source payload conflict")
                     continue
+                prior_events = db.query(AbilityStateEventORM).filter(
+                    AbilityStateEventORM.learner_id == evidence.learner_id,
+                    AbilityStateEventORM.knowledge_base_id == evidence.knowledge_base_id,
+                    AbilityStateEventORM.skill_node_id == evidence.skill_node_id,
+                    AbilityStateEventORM.verified.is_(True),
+                ).all()
+                if evidence.assessment_session_id and evidence.question_ids and any(
+                    evidence.assessment_session_id != (event.evidence_metadata or {}).get("assessment_session_id")
+                    and set(evidence.question_ids).intersection((event.evidence_metadata or {}).get("question_ids", []))
+                    for event in prior_events
+                    if (event.evidence_metadata or {}).get("evidence_eligible", True)
+                ):
+                    evidence = evidence.model_copy(update={"evidence_eligible": False})
                 row = db.query(KnowledgeStateORM).filter_by(
                     learner_id=evidence.learner_id,
                     knowledge_base_id=evidence.knowledge_base_id,
@@ -354,19 +444,64 @@ class SQLMasteryRepository(BaseMasteryRepository):
                 ).with_for_update().one()
                 before = self._to_state(row)
                 objective_sources = {
-                    value[0] for value in db.query(AbilityStateEventORM.source_id).filter_by(
+                    source_id for source_id, source_type, metadata in db.query(
+                        AbilityStateEventORM.source_id,
+                        AbilityStateEventORM.source_type,
+                        AbilityStateEventORM.evidence_metadata,
+                    ).filter_by(
                         learner_id=evidence.learner_id,
                         knowledge_base_id=evidence.knowledge_base_id,
                         skill_node_id=evidence.skill_node_id,
                         verified=True,
-                    ).distinct().all()
+                    ).all()
+                    if source_type in {"diagnosis", "learning_attempt"}
+                    and (metadata or {}).get("evidence_eligible", True)
                 }
-                if evidence.verified and evidence.source_type in {
+                if evidence.verified and evidence.evidence_eligible and evidence.source_type in {
                     AbilityEvidenceSource.DIAGNOSIS,
                     AbilityEvidenceSource.LEARNING_ATTEMPT,
                 }:
                     objective_sources.add(evidence.source_id)
-                after = _transition(before, evidence, len(objective_sources))
+                formal_rows = db.query(
+                    AbilityStateEventORM.source_id,
+                    AbilityStateEventORM.source_type,
+                    AbilityStateEventORM.evidence_metadata,
+                ).filter_by(
+                    learner_id=evidence.learner_id,
+                    knowledge_base_id=evidence.knowledge_base_id,
+                    skill_node_id=evidence.skill_node_id,
+                    verified=True,
+                ).all()
+                cumulative_dimensions = {
+                    dimension
+                    for _source_id, source_type, metadata in formal_rows
+                    if source_type in {"diagnosis", "learning_attempt"}
+                    and (metadata or {}).get("evidence_eligible", True)
+                    for dimension in (metadata or {}).get("covered_dimensions", [])
+                }
+                if evidence.verified and evidence.evidence_eligible and evidence.source_type in {
+                    AbilityEvidenceSource.DIAGNOSIS,
+                    AbilityEvidenceSource.LEARNING_ATTEMPT,
+                }:
+                    cumulative_dimensions.update(evidence.covered_dimensions)
+                initial_calibrated = any(
+                    source_type == "diagnosis"
+                    and (metadata or {}).get("evidence_eligible", True)
+                    and REQUIRED_ASSESSMENT_DIMENSIONS.issubset(
+                        set((metadata or {}).get("covered_dimensions", []))
+                    )
+                    for _source_id, source_type, metadata in formal_rows
+                ) or (
+                    evidence.source_type == AbilityEvidenceSource.DIAGNOSIS
+                    and evidence.verified and evidence.evidence_eligible
+                    and _has_required_dimensions(evidence)
+                )
+                dimension_ready = initial_calibrated or REQUIRED_ASSESSMENT_DIMENSIONS.issubset(
+                    cumulative_dimensions
+                )
+                after = _transition(
+                    before, evidence, len(objective_sources), dimension_ready,
+                )
                 row.mastery_score = after.mastery_score
                 row.self_report_prior = after.self_report_prior
                 row.status = after.status.value
@@ -393,6 +528,11 @@ class SQLMasteryRepository(BaseMasteryRepository):
                     verified=evidence.verified,
                     before_state=before.model_dump(mode="json"),
                     after_state=after.model_dump(mode="json"),
+                    evidence_metadata=evidence.model_dump(mode="json", exclude={
+                        "evidence_id", "learner_id", "knowledge_base_id", "skill_node_id",
+                        "source_type", "source_id", "source_hash", "observed_score", "verified",
+                        "occurred_at",
+                    }),
                     occurred_at=evidence.occurred_at,
                 ))
                 changed = True
@@ -442,6 +582,7 @@ class SQLMasteryRepository(BaseMasteryRepository):
                 source_hash=row.source_hash,
                 observed_score=row.observed_score,
                 verified=row.verified,
+                **(row.evidence_metadata or {}),
                 occurred_at=row.occurred_at,
                 before_state=row.before_state,
                 after_state=row.after_state,

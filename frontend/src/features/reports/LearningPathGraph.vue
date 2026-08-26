@@ -54,7 +54,8 @@ const layout = computed(() => {
 const option = computed(() => ({
   tooltip: { formatter: ({ data }) => {
     const score = typeof data?.mastery_score === 'number' ? `${Math.round(data.mastery_score * 100)}%` : '未测量'
-    return `<b>${data?.name || ''}</b><br/>第 ${data?.tier || '—'} 阶 · ${labels[data?.role] || data?.role}<br/>掌握度：${score}<br/>进度：${data?.progress_status || '—'}${data?.blocked ? `<br/>需先完成：${(data.blocked_by_node_ids || []).join('、') || '前置能力'}` : ''}`
+    const placement = { verification_required: '初始豁免待重新验证', placement_exempt: '初始豁免', formally_reverified: '已完成正式重新验证' }[data?.placement_verification_status]
+    return `<b>${data?.name || ''}</b><br/>第 ${data?.tier || '—'} 阶 · ${labels[data?.role] || data?.role}<br/>掌握度：${score}<br/>进度：${data?.progress_status || '—'}${placement ? `<br/>入门判定：${placement}` : ''}${data?.blocked ? `<br/>需先完成：${(data.blocked_by_node_ids || []).join('、') || '前置能力'}` : ''}`
   } },
   series: [{
     type: 'graph', layout: 'none', roam: true, draggable: false, left: 44, right: 36, top: 28, bottom: 18,

@@ -379,7 +379,7 @@ const submittingProfile = ref(false)
 const submittingDiagnosis = ref(false)
 const submittingGeneration = ref(false)
 const selectedResourceTypes = ref(['讲义', '实操指南', '分阶测试题'])
-const includeClaimCheck = ref(true)
+const includeClaimCheck = ref(false)
 const supplementalRequirements = ref('')
 
 const form = reactive({})

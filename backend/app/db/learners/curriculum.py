@@ -12,7 +12,11 @@ from typing import Callable
 from sqlalchemy.orm import Session
 
 from app.db.shared.models import LearnerCurriculumNodeORM
-from app.models.learners.mastery import CurriculumNodeProgressV1, CurriculumProgressStatus
+from app.models.learners.mastery import (
+    MASTERY_CONFIRMATION_THRESHOLD,
+    CurriculumNodeProgressV1,
+    CurriculumProgressStatus,
+)
 
 
 def _id(*parts: object) -> str:
@@ -27,7 +31,9 @@ def _to_model(row: LearnerCurriculumNodeORM) -> CurriculumNodeProgressV1:
         wait_rounds=row.wait_rounds or 0, scheduled_run_id=row.scheduled_run_id,
         published_resource_count=row.published_resource_count or 0,
         verified_attempt_count=row.verified_attempt_count or 0,
-        placement_exempt=bool(row.placement_exempt), placement_evidence_id=row.placement_evidence_id,
+        placement_exempt=bool(row.placement_exempt),
+        placement_verification_required=bool(row.placement_verification_required),
+        placement_evidence_id=row.placement_evidence_id,
         last_scheduled_at=row.last_scheduled_at, last_published_at=row.last_published_at,
         last_verified_at=row.last_verified_at, row_version=row.row_version or 1,
         updated_at=row.updated_at,
@@ -57,6 +63,10 @@ class BaseCurriculumRepository(ABC):
     @abstractmethod
     def set_placement_exemptions(self, learner_id: str, knowledge_base_id: str, *,
                                  node_ids: list[str], evidence_id: str, now: datetime) -> list[CurriculumNodeProgressV1]: ...
+
+    @abstractmethod
+    def require_placement_verification(self, learner_id: str, knowledge_base_id: str, *,
+                                       node_ids: list[str], now: datetime) -> list[CurriculumNodeProgressV1]: ...
 
     @abstractmethod
     def release_failed_run(self, learner_id: str, knowledge_base_id: str, *, run_id: str,
@@ -140,8 +150,10 @@ class MemoryCurriculumRepository(BaseCurriculumRepository):
                     continue
                 self._attempts.add(event_key)
                 self._update(key, verified_attempt_count=row.verified_attempt_count + 1,
-                             progress_status=(CurriculumProgressStatus.COMPLETED if score >= 0.86
+                             progress_status=(CurriculumProgressStatus.COMPLETED if score >= MASTERY_CONFIRMATION_THRESHOLD
                                               else CurriculumProgressStatus.REINFORCEMENT_DUE),
+                             placement_exempt=False if row.placement_verification_required else row.placement_exempt,
+                             placement_verification_required=False if row.placement_verification_required else row.placement_verification_required,
                              last_verified_at=now)
             return self.list_nodes(learner_id, knowledge_base_id)
 
@@ -149,8 +161,19 @@ class MemoryCurriculumRepository(BaseCurriculumRepository):
         with self._lock:
             for node_id in sorted(set(node_ids)):
                 key = (learner_id, knowledge_base_id, node_id)
-                if key in self._rows and not self._rows[key].placement_exempt:
+                if key in self._rows and not self._rows[key].placement_exempt \
+                        and self._rows[key].verified_attempt_count == 0 \
+                        and not self._rows[key].placement_verification_required:
                     self._update(key, placement_exempt=True, placement_evidence_id=evidence_id, updated_at=now)
+            return self.list_nodes(learner_id, knowledge_base_id)
+
+    def require_placement_verification(self, learner_id, knowledge_base_id, *, node_ids, now):
+        with self._lock:
+            for node_id in sorted(set(node_ids)):
+                key = (learner_id, knowledge_base_id, node_id)
+                row = self._rows.get(key)
+                if row and row.placement_exempt and not row.placement_verification_required:
+                    self._update(key, placement_verification_required=True, updated_at=now)
             return self.list_nodes(learner_id, knowledge_base_id)
 
     def release_failed_run(self, learner_id, knowledge_base_id, *, run_id, now):
@@ -233,7 +256,12 @@ class SQLCurriculumRepository(BaseCurriculumRepository):
                 if row.last_verified_attempt_id == attempt_id:
                     continue
                 row.verified_attempt_count = (row.verified_attempt_count or 0) + 1
-                row.progress_status = "completed" if score >= 0.86 else "reinforcement_due"
+                row.progress_status = (
+                    "completed" if score >= MASTERY_CONFIRMATION_THRESHOLD else "reinforcement_due"
+                )
+                if row.placement_verification_required:
+                    row.placement_exempt = False
+                    row.placement_verification_required = False
                 row.last_verified_at = now; row.last_verified_attempt_id = attempt_id; row.row_version += 1
             db.commit()
         return self.list_nodes(learner_id, knowledge_base_id)
@@ -246,8 +274,23 @@ class SQLCurriculumRepository(BaseCurriculumRepository):
                 learner_id=learner_id, knowledge_base_id=knowledge_base_id,
             ).filter(LearnerCurriculumNodeORM.skill_node_id.in_(set(node_ids))).with_for_update().all()
             for row in rows:
-                if not row.placement_exempt:
+                if not row.placement_exempt and (row.verified_attempt_count or 0) == 0 \
+                        and not row.placement_verification_required:
                     row.placement_exempt = True; row.placement_evidence_id = evidence_id
+                    row.updated_at = now; row.row_version += 1
+            db.commit()
+        return self.list_nodes(learner_id, knowledge_base_id)
+
+    def require_placement_verification(self, learner_id, knowledge_base_id, *, node_ids, now):
+        if not node_ids:
+            return self.list_nodes(learner_id, knowledge_base_id)
+        with self.session_factory() as db:
+            rows = db.query(LearnerCurriculumNodeORM).filter_by(
+                learner_id=learner_id, knowledge_base_id=knowledge_base_id,
+            ).filter(LearnerCurriculumNodeORM.skill_node_id.in_(set(node_ids))).with_for_update().all()
+            for row in rows:
+                if row.placement_exempt and not row.placement_verification_required:
+                    row.placement_verification_required = True
                     row.updated_at = now; row.row_version += 1
             db.commit()
         return self.list_nodes(learner_id, knowledge_base_id)

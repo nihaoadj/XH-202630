@@ -6,7 +6,8 @@ import pytest
 from app.db.learners.mastery import MemoryMasteryRepository
 from app.db.learners.curriculum import MemoryCurriculumRepository
 from app.db.learners.memory import MemoryLearnerRepository
-from app.models.learners.mastery import AbilityEvidenceV1
+from app.db.learners.tier_progress import MemoryTierProgressRepository
+from app.models.learners.mastery import AbilityEvidenceV1, LearnerTierProgressV1
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.services.learners.mastery import MasteryService
 
@@ -134,6 +135,8 @@ def test_next_generation_options_keep_reinforcement_and_new_knowledge_separate()
     # filled with a higher-tier node.
     assert options.learn_new_knowledge == []
     assert options.reinforce_weakness[0].priority_group == "learned_not_mastered"
+    assert [item.skill_node_id for item in options.learning_candidates] == ["skill-a"]
+    assert options.learning_candidates[0].priority_group == "learned"
 
     _, selected = service.confirm_next_generation_intent(
         current, intent="reinforce_weakness", selected_node_ids=["skill-a"],
@@ -143,6 +146,50 @@ def test_next_generation_options_keep_reinforcement_and_new_knowledge_separate()
     with pytest.raises(ValueError):
         service.confirm_next_generation_intent(
             current, intent="reinforce_weakness", selected_node_ids=["skill-b"],
+            snapshot_hash=options.snapshot_hash,
+        )
+
+
+
+def test_downgrade_intent_only_accepts_current_feedback_tier_candidates():
+    service, learner_repo = _service()
+    profile = learner_repo.get("learner")
+    service.tier_progress_repo = MemoryTierProgressRepository()
+    service.tier_progress_repo.save(LearnerTierProgressV1(
+        learner_id="learner", knowledge_base_id="kb", placement_tier=2,
+        active_tier=1, highest_unlocked_tier=2, remediation_return_tier=2,
+        profile_version=profile.profile_version,
+    ))
+    service.resource_repo = SimpleNamespace(list_by_learner=lambda _learner_id: [
+        LearningResource(
+            resource_id="published-a", learner_id="learner", topic="topic", resource_type="讲义",
+            difficulty="初级", content_text="content", knowledge_points=["skill-a"],
+            source_refs=[], publication_status="published",
+        )
+    ])
+    options = service.next_generation_options(profile)
+    assert options.recommendation_type == "remedial"
+    assert [item.skill_node_id for item in options.learning_candidates] == ["skill-a"]
+
+    _, selected = service.confirm_next_generation_intent(
+        profile, intent="downgrade_learning", selected_node_ids=["skill-a"],
+        snapshot_hash=options.snapshot_hash,
+    )
+    assert selected == ["skill-a"]
+    # Returning to an unselected feedback report later must not make the
+    # previously offered path expire merely because its UI snapshot changed.
+    _, selected_after_reload = service.confirm_next_generation_intent(
+        profile, intent="downgrade_learning", selected_node_ids=["skill-a"],
+        snapshot_hash="0" * 64,
+    )
+    assert selected_after_reload == ["skill-a"]
+    _, selected_without_snapshot = service.confirm_next_generation_intent(
+        profile, intent="downgrade_learning", selected_node_ids=["skill-a"],
+    )
+    assert selected_without_snapshot == ["skill-a"]
+    with pytest.raises(ValueError):
+        service.confirm_next_generation_intent(
+            profile, intent="downgrade_learning", selected_node_ids=["skill-b"],
             snapshot_hash=options.snapshot_hash,
         )
 
@@ -210,7 +257,7 @@ def test_curriculum_persists_all_nodes_wait_debt_and_verified_transitions():
     assert by_id["skill-a"].published_resource_count == 1
 
     service.record_curriculum_verification(
-        profile, attempt_id="attempt-1", point_scores={"skill-a": 0.9},
+        profile, attempt_id="attempt-1", point_scores={"skill-a": 0.8},
         occurred_at=datetime.now(timezone.utc),
     )
     nodes, summary = service.curriculum_progress(profile)
@@ -218,3 +265,21 @@ def test_curriculum_persists_all_nodes_wait_debt_and_verified_transitions():
     assert by_id["skill-a"].progress_status.value == "completed"
     assert by_id["skill-a"].verified_attempt_count == 1
     assert summary.completed_count == 1
+
+
+def test_tier_feedback_does_not_auto_return_from_recommendation_at_eighty_percent():
+    service, learner_repo = _service()
+    profile = learner_repo.get("learner")
+    tier_repo = MemoryTierProgressRepository()
+    service.tier_progress_repo = tier_repo
+    tier_repo.save(LearnerTierProgressV1(
+        learner_id="learner", knowledge_base_id="kb", placement_tier=2,
+        active_tier=1, highest_unlocked_tier=2, remediation_return_tier=2,
+        profile_version=profile.profile_version,
+    ))
+
+    updated = service.apply_tier_feedback(profile, point_scores={"skill-a": 0.8})
+
+    assert updated is not None
+    assert updated.active_tier == 1
+    assert updated.remediation_return_tier == 2

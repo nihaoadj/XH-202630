@@ -26,6 +26,28 @@ from app.models.feedback.feedback_loop import (
 from app.models.learning_documents.schemas import KnowledgeState
 
 
+def _assessment_metadata(attempt: LearningAttempt, point_id: str) -> dict:
+    metadata = attempt.metadata or {}
+    traces = [
+        item for item in metadata.get("question_trace", [])
+        if isinstance(item, dict)
+        and str(item.get("skill_node_id") or item.get("knowledge_point") or "") == point_id
+    ]
+    audit = str((metadata.get("scoring_audit") or {}).get(point_id, "single_pass"))
+    return {
+        "assessment_kind": metadata.get("assessment_kind", "learning_check"),
+        "assessment_session_id": metadata.get("assessment_session_id") or attempt.attempt_id,
+        "assessment_form_id": metadata.get("assessment_form_id") or attempt.source_resource_id,
+        "question_ids": [str(item.get("question_id")) for item in traces if item.get("question_id")],
+        "covered_dimensions": list(dict.fromkeys(
+            str(item.get("diagnostic_dimension")) for item in traces
+            if item.get("diagnostic_dimension") in {"concept", "scenario", "misconception", "practice"}
+        )),
+        "scoring_audit_status": audit,
+        "evidence_eligible": audit not in {"double_disagreement", "failed"},
+    }
+
+
 class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
     def __init__(
         self,
@@ -44,6 +66,7 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
         self._state_values: dict[tuple[str, str], KnowledgeStateValue] = {}
         self._lock = RLock()
         self.mastery_repository = mastery_repository
+        self.stores_mastery_evidence_atomically = mastery_repository is not None
 
     def get_context(self, learner_id: str, knowledge_point_ids: list[str]) -> FeedbackContext:
         profile = self.learner_repository.get(learner_id)
@@ -163,6 +186,7 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
                             if value.knowledge_point_id == item.knowledge_point_id
                         ),
                         verified=True,
+                        **_assessment_metadata(attempt, item.knowledge_point_id),
                         occurred_at=attempt.submitted_at,
                     ) for item in state_mutations],
                     {item.knowledge_point_id: item.knowledge_point_id for item in state_mutations},

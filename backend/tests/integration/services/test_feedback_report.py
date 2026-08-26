@@ -76,6 +76,40 @@ def test_report_reads_persisted_profile_path_attempt_and_version_history():
     assert report["profile_versions"][0]["source_attempt_id"] == report["recent_attempts"][0]["attempt_id"]
 
 
+def test_formal_feedback_makes_report_available_when_initial_calibration_is_pending():
+    learners = MemoryLearnerRepository()
+    profile = LearnerProfile(
+        learner_id="learner", learner_type="测试", education="本科", major="软件工程",
+        knowledge_base_id="kb", learning_goal="闭环",
+        learning_preferences={"metadata": {"initial_diagnostic_flow": {"status": "pending"}}},
+    )
+    learners.save(profile)
+    resources = MemoryResourceRepository()
+    resource = LearningResource(
+        resource_id="resource", learner_id="learner", topic="检索", resource_type="测试题",
+        difficulty="初级", content_text="测试", knowledge_points=["skill-a"], source_refs=[],
+        publication_status="published",
+    )
+    resources.save(resource, "learner", "检索")
+    loop = MemoryFeedbackLoopRepository(learners)
+    FeedbackService(MemoryFeedbackRepository(), feedback_loop_repo=loop).process_learning_attempt(
+        profile,
+        resource,
+        LearningAttemptSubmit(
+            learner_id="learner", source_resource_id="resource", idempotency_key="pending-calibration",
+            expected_profile_version=1, submitted_at=datetime(2026, 8, 11, tzinfo=timezone.utc),
+            knowledge_point_results=[KnowledgePointAttemptResult(
+                knowledge_point_id="skill-a", question_ids=["q1"], correct_count=7, total_count=10,
+            )],
+        ),
+    )
+
+    report = ReportService(resources, MemoryFeedbackRepository(), loop).build_report(learners.get("learner"))
+
+    assert report["report_availability"]["status"] == "ready"
+    assert report["metric_summary"]["feedback_count"] == 1
+
+
 def test_report_excludes_superseded_and_replaced_resources():
     profile = LearnerProfile(
         learner_id="learner",
@@ -254,7 +288,7 @@ def test_report_etag_is_stable_and_supports_conditional_read():
     client = TestClient(app)
     response = client.get("/api/report/learner?window_days=30")
     assert response.status_code == 200
-    assert response.json()["report_schema_version"] == "3.0"
+    assert response.json()["report_schema_version"] == "4.1"
     assert response.headers["cache-control"] == "private, no-cache"
     cached = client.get("/api/report/learner?window_days=30", headers={"If-None-Match": response.headers["etag"]})
     assert cached.status_code == 304

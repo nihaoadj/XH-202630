@@ -107,10 +107,9 @@
         </div>
         <div class="result-metrics">
         <div><span>测评得分</span><strong>{{ Number(feedbackReport.total_score || 0).toFixed(2) }} / {{ feedbackReport.max_score || 100 }}</strong></div>
-        <div><span>测评正确率</span><strong>{{ Math.round(result.attempt.overall_score * 100) }}%</strong></div>
-        <div><span>答对题数</span><strong>{{ attemptCorrectSummary }}</strong></div>
+        <div><span>测评正确率</span><strong>{{ Math.round((feedbackReport.score_rate || 0) * 100) }}%</strong></div>
         <div><span>当前建议</span><strong>{{ feedbackActionLabel(result.decision.action) }}</strong></div>
-        <div><span>下一步资源</span><strong>{{ result.followup_run_id ? '已确认' : '由你决定' }}</strong></div>
+        <div><span>下一步资源</span><strong>{{ nextStepResourceLabel }}</strong></div>
         </div>
       </header>
       <article v-if="result.analysis" class="analysis-summary">
@@ -136,17 +135,17 @@
         </div>
       </article>
       <section class="next-step-panel">
-        <div class="next-step-copy"><span class="page-kicker">NEXT STEP</span><h4>{{ nextStepRecommendation.title || '接下来怎么学，由你决定' }}</h4><p>{{ nextStepRecommendation.description || '可先针对本次已确认的薄弱点生成强化包，或继续学习新的能力节点。' }}</p><small v-if="tierProgress">当前学习阶：{{ tierProgress.active_tier }} · 已解锁至第 {{ tierProgress.highest_unlocked_tier }} 阶<span v-if="tierProgress.remediation_return_tier"> · 补救后返回第 {{ tierProgress.remediation_return_tier }} 阶</span></small></div>
+        <div class="next-step-copy"><span class="page-kicker">DEFAULT LEARNING PATH</span><h4>{{ nextStepRecommendation.title || '默认学习建议' }}</h4><p>{{ nextStepRecommendation.description || '可先学习推荐节点，也可以自主选择纠错包复习。' }}</p><small v-if="tierProgress">当前学习阶：{{ tierProgress.active_tier }} · 已解锁至第 {{ tierProgress.highest_unlocked_tier }} 阶<span v-if="tierProgress.remediation_return_tier"> · 补救后返回第 {{ tierProgress.remediation_return_tier }} 阶</span></small></div>
         <div class="next-step-actions">
           <template v-if="!result.followup_run_id">
             <section v-if="correctionPackageOption" class="correction-package-card" :class="{ 'is-disabled': !correctionPackageOption.eligible }">
-              <div><strong>强化薄弱点</strong><p>生成一份包含概念补救、对照辨析与递进练习的薄弱点强化包。</p></div>
-              <el-checkbox-group v-if="correctionPackageOption.eligible" v-model="selectedCorrectionNodes" class="resource-type-choice" :max="2">
-                <el-checkbox v-for="node in correctionPackageOption.selectable_targets" :key="node.skill_node_id" :label="node.skill_node_id">{{ node.name }}</el-checkbox>
-              </el-checkbox-group>
-              <small v-if="correctionPackageOption.eligible">系统锁定难度：{{ correctionPackageOption.recommended_difficulty }}；请选择 1–2 个目标。</small>
-              <small v-else>{{ correctionPackageOption.disabled_reason_code === 'NO_LEARNED_NOT_MASTERED_TARGET' ? '本次没有已学习但未掌握的能力节点，请选择学习新知识。' : '当前不能创建强化包。' }}</small>
-              <el-button type="primary" :loading="selectingOption === correctionPackageOption.option_id" :disabled="!correctionPackageOption.eligible || !selectedCorrectionNodes.length" @click="selectCorrectionPackage">生成薄弱点强化包</el-button>
+              <div><strong>可选：纠错包复习</strong><p>纠错包只针对本次反馈识别出的错误节点，不能改选其他节点。</p></div>
+              <div v-if="correctionPackageOption.eligible" class="fixed-correction-targets">
+                <el-tag v-for="node in correctionPackageOption.selectable_targets" :key="node.skill_node_id" type="warning" effect="plain">{{ node.name || node.skill_node_id }}</el-tag>
+              </div>
+              <small v-if="correctionPackageOption.eligible">系统锁定难度：{{ correctionPackageOption.recommended_difficulty }}；目标已由本次反馈固定。</small>
+              <small v-else>当前没有可用于纠错包的目标，请先完成有效测评。</small>
+              <el-button type="primary" :loading="selectingOption === correctionPackageOption.option_id" :disabled="!correctionPackageOption.eligible" @click="selectCorrectionPackage">生成纠错包</el-button>
             </section>
             <div v-if="curriculumProgress" class="curriculum-progress-row">
               <strong>13 节点进度：{{ curriculumProgress.completed_count }}/{{ curriculumProgress.total_count }} 已完成</strong>
@@ -154,14 +153,25 @@
             </div>
             <div v-if="generationOptions" class="intent-selection-row">
               <span>学习方式：</span>
-              <el-radio-group v-model="learningIntent" class="intent-mode-choice">
+              <el-tag v-if="isTierLearning" type="success" effect="dark">{{ learningModeLabel }}</el-tag>
+              <el-radio-group v-else v-model="learningIntent" class="intent-mode-choice">
                 <el-radio-button label="learn_new_knowledge">学习新节点</el-radio-button>
                 <el-radio-button label="reinforce_weakness">复习旧节点</el-radio-button>
                 <el-radio-button v-if="canUseMixedIntent" label="learn_new_and_reinforce">一新一旧</el-radio-button>
               </el-radio-group>
-              <small>仅显示当前学习阶的节点；每次最多选择 2 个，不跨阶补位。</small>
+              <small v-if="isTierLearning">{{ nextStepRecommendation.description }}</small>
+              <small v-else>仅显示当前学习阶的节点；每次最多选择 2 个，不跨阶补位。</small>
             </div>
-            <div v-if="generationOptions && learningIntent !== 'learn_new_and_reinforce'" class="intent-node-row">
+            <div v-if="generationOptions && isTierLearning" class="intent-node-row">
+              <span>{{ learningModeLabel }}目标（最多 2 个，可搭配已学习节点）：</span>
+              <el-checkbox-group v-model="selectedIntentNodes" class="resource-type-choice" :max="2">
+                <el-checkbox v-for="node in learningCandidates" :key="node.skill_node_id" :label="node.skill_node_id" :disabled="node.blocked_by_node_ids?.length > 0">
+                  {{ node.name }} · 第 {{ node.tier }} 阶<span v-if="node.priority_group === 'learned'">（已学习）</span><small v-if="node.blocked_by_node_ids?.length">（需先学习前置能力）</small>
+                </el-checkbox>
+              </el-checkbox-group>
+              <em v-if="!learningCandidates.length">当前没有可用于{{ learningModeLabel }}的节点。</em>
+            </div>
+            <div v-if="generationOptions && !isTierLearning && learningIntent !== 'learn_new_and_reinforce'" class="intent-node-row">
               <span>选择能力节点（最多 2 个）：</span>
               <el-checkbox-group v-model="selectedIntentNodes" class="resource-type-choice" :max="2">
                 <el-checkbox v-for="node in intentCandidates" :key="node.skill_node_id" :label="node.skill_node_id" :disabled="node.blocked_by_node_ids?.length > 0">
@@ -183,6 +193,7 @@
             <el-checkbox label="复习清单">复习清单</el-checkbox>
             <el-checkbox label="案例分析">案例分析</el-checkbox>
           </el-checkbox-group>
+          <el-checkbox v-model="includeClaimCheck" class="claim-check-choice">启用 Claim 审核</el-checkbox>
           <el-select v-if="!generationOptions" v-model="selectedDifficulty" class="difficulty-choice" aria-label="资源难度">
             <el-option label="初级" value="初级" />
             <el-option label="中级" value="中级" />
@@ -248,6 +259,7 @@ const feedbackStatus = ref('')
 const selectingOption = ref('')
 const result = ref(null)
 const selectedResourceTypes = ref([])
+const includeClaimCheck = ref(false)
 const selectedDifficulty = ref('中级')
 const learningIntent = ref('reinforce_weakness')
 const selectedIntentNodes = ref([])
@@ -345,10 +357,10 @@ const answeredCount = computed(() => evaluation.questions.reduce((count, questio
 const allQuestionsAnswered = computed(() => Boolean(evaluation.questions.length && answeredCount.value === evaluation.questions.length))
 const canSubmit = computed(() => Boolean(selectedRunId.value && allQuestionsAnswered.value))
 const weakKnowledgePoints = computed(() => (result.value?.knowledge_state_updates || []).filter((item) => item.after?.status === 'weak').map((item) => item.knowledge_point_id))
-const attemptCorrectSummary = computed(() => {
-  const points = result.value?.attempt?.knowledge_point_results || []
-  if (!points.length) return '-'
-  return `${points.reduce((sum, item) => sum + item.correct_count, 0)} / ${points.reduce((sum, item) => sum + item.total_count, 0)}`
+const nextStepResourceLabel = computed(() => {
+  if (!result.value?.followup_run_id) return '由你决定'
+  const names = feedbackReport.value?.followup_selection?.node_names || []
+  return names.length ? names.join('、') : '已确认'
 })
 const studyTimeLabel = computed(() => `${Math.floor((form.time_spent_seconds || 0) / 60)} 分钟`)
 const generationOptions = computed(() => result.value?.generation_options || null)
@@ -356,10 +368,22 @@ const tierProgress = computed(() => generationOptions.value?.tier_progress || nu
 const correctionPackageOption = computed(() => result.value?.correction_package_option || null)
 const curriculumProgress = computed(() => generationOptions.value?.curriculum_progress || null)
 const intentCandidates = computed(() => generationOptions.value?.[learningIntent.value] || [])
+const learningCandidates = computed(() => generationOptions.value?.learning_candidates || [])
+const isTierLearning = computed(() => ['downgrade_learning', 'upgrade_learning'].includes(learningIntent.value))
+const learningModeLabel = computed(() => ({
+  downgrade_learning: '降阶学习',
+  upgrade_learning: '升阶学习',
+}[learningIntent.value] || '学习方式'))
 const feedbackReport = computed(() => result.value?.feedback_report || {})
 const nextStepRecommendation = computed(() => feedbackReport.value?.next_step_recommendation || {})
-const newIntentCandidates = computed(() => generationOptions.value?.learn_new_knowledge || [])
-const reviewIntentCandidates = computed(() => generationOptions.value?.reinforce_weakness || [])
+const newIntentCandidates = computed(() => [
+  ...(generationOptions.value?.learn_new_knowledge || []),
+  ...(generationOptions.value?.cross_tier_new_knowledge || []),
+])
+const reviewIntentCandidates = computed(() => [
+  ...(generationOptions.value?.reinforce_weakness || []),
+  ...(generationOptions.value?.cross_tier_prerequisite_review || []),
+])
 const canUseMixedIntent = computed(() => newIntentCandidates.value.some((item) => !(item.blocked_by_node_ids || []).length) && reviewIntentCandidates.value.length > 0)
 const selectedNodesForFollowup = computed(() => learningIntent.value === 'learn_new_and_reinforce'
   ? [...selectedNewIntentNodes.value, ...selectedReviewIntentNodes.value]
@@ -367,7 +391,6 @@ const selectedNodesForFollowup = computed(() => learningIntent.value === 'learn_
 const canGenerateSelectedIntent = computed(() => learningIntent.value === 'learn_new_and_reinforce'
   ? selectedNewIntentNodes.value.length === 1 && selectedReviewIntentNodes.value.length === 1
   : selectedIntentNodes.value.length > 0)
-const selectedCorrectionNodes = ref([])
 
 watch(() => store.currentLearnerId, (value) => {
   if (value && value !== selectedLearnerId.value) {
@@ -385,20 +408,19 @@ watch(result, (value) => {
   if (options) {
     const recommendation = value?.feedback_report?.next_step_recommendation || {}
     const suggestedIntent = recommendation.learning_intent
-    learningIntent.value = suggestedIntent === 'learn_new_and_reinforce' && canUseMixedIntent.value
+    const supportedIntents = ['downgrade_learning', 'upgrade_learning', 'learn_new_knowledge', 'reinforce_weakness', 'learn_new_and_reinforce']
+    learningIntent.value = supportedIntents.includes(suggestedIntent)
       ? suggestedIntent
-      : suggestedIntent === 'reinforce_weakness' ? suggestedIntent : 'learn_new_knowledge'
+      : 'learn_new_knowledge'
     selectedNewIntentNodes.value = [...(recommendation.default_new_node_ids || [])].slice(0, 1)
     selectedReviewIntentNodes.value = [...(recommendation.default_review_node_ids || [])].slice(0, 1)
-    selectedIntentNodes.value = []
-    if (learningIntent.value !== 'learn_new_and_reinforce') resetIntentNodes()
+    selectedIntentNodes.value = [...(recommendation.default_learning_node_ids || recommendation.default_new_node_ids || recommendation.default_review_node_ids || [])].slice(0, 2)
+    if (learningIntent.value !== 'learn_new_and_reinforce') resetIntentNodes(selectedIntentNodes.value)
   } else {
     selectedIntentNodes.value = []
     selectedNewIntentNodes.value = []
     selectedReviewIntentNodes.value = []
   }
-  const correction = value?.correction_package_option
-  selectedCorrectionNodes.value = correction?.eligible ? [...(correction.recommended_target_ids || [])].slice(0, 2) : []
 })
 
 function hasAnswer(value) { return Array.isArray(value) ? value.length > 0 : String(value || '').trim().length > 0 }
@@ -418,11 +440,14 @@ function friendlyText(value) {
     .replaceAll('客观成绩', '测评结果')
 }
 function buildIdempotencyKey(runId, submittedAt) { return `web-${runId.slice(0, 24)}-${submittedAt.toISOString().replace(/[^0-9]/g, '')}`.slice(0, 128) }
-function resetIntentNodes() {
-  const candidates = intentCandidates.value
+function resetIntentNodes(preferredIds = []) {
+  const candidates = (isTierLearning.value ? learningCandidates.value : intentCandidates.value)
     .filter((item) => !(item.blocked_by_node_ids || []).length)
     .map((item) => item.skill_node_id)
-  selectedIntentNodes.value = learningIntent.value === 'learn_new_knowledge' ? candidates.slice(0, 1) : candidates.slice(0, 2)
+  const preferred = preferredIds.filter((id) => candidates.includes(id))
+  selectedIntentNodes.value = preferred.length
+    ? preferred.slice(0, 2)
+    : isTierLearning.value || learningIntent.value === 'learn_new_knowledge' ? candidates.slice(0, 1) : candidates.slice(0, 2)
 }
 watch(learningIntent, (intent) => {
   if (!generationOptions.value || intent === 'learn_new_and_reinforce') return
@@ -570,6 +595,7 @@ async function selectFeedbackOption(optionId) {
       attempt_id: result.value.attempt.attempt_id,
       option_id: optionId,
       resource_types: selectedResourceTypes.value,
+      include_claim_check: includeClaimCheck.value,
       ...(!generationOptions.value ? { difficulty: selectedDifficulty.value } : {}),
       ...(generationOptions.value ? {
         learning_intent: learningIntent.value,
@@ -580,7 +606,8 @@ async function selectFeedbackOption(optionId) {
     result.value = res.data
     ElMessage.success('已确认下一步资源方案，正在创建生成任务')
   } catch (error) {
-    console.error(error); ElMessage.error(error?.response?.data?.detail || '资源方案确认失败')
+    console.error(error)
+    ElMessage.error(error?.response?.data?.message || error?.response?.data?.detail || '资源方案确认失败')
   } finally { selectingOption.value = '' }
 }
 async function selectCorrectionPackage() {
@@ -591,13 +618,15 @@ async function selectCorrectionPackage() {
     const res = await feedbackApi.selectFollowup({
       learner_id: form.learner_id, attempt_id: result.value.attempt.attempt_id,
       option_id: option.option_id, learning_intent: 'reinforce_weakness',
-      selected_skill_node_ids: selectedCorrectionNodes.value,
+      include_claim_check: includeClaimCheck.value,
+      selected_skill_node_ids: option.recommended_target_ids,
       next_generation_snapshot_hash: option.snapshot_hash,
     })
     result.value = res.data
     ElMessage.success('薄弱点强化包正在创建')
   } catch (error) {
-    console.error(error); ElMessage.error(error?.response?.data?.detail || '强化包创建失败')
+    console.error(error)
+    ElMessage.error(error?.response?.data?.message || error?.response?.data?.detail || '强化包创建失败')
   } finally { selectingOption.value = '' }
 }
 function goToFollowupRun() {

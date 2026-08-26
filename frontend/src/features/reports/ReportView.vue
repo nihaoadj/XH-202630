@@ -9,9 +9,15 @@
       <div class="report-focus">
         <span><i />当前学习方向</span>
         <strong>{{ directionName }}</strong>
-        <b>能力等级 {{ report.skill_level || activeProfile?.skill_level || '待诊断' }}</b>
-        <small v-if="tierProgress.active_tier">当前学习第 {{ tierProgress.active_tier }} 阶 · 已解锁至第 {{ tierProgress.highest_unlocked_tier }} 阶</small>
+        <b>画像能力等级 {{ report.skill_level || activeProfile?.skill_level || '待诊断' }}</b>
+        <small v-if="tierProgress.active_tier">当前学习等级：{{ tierLabel(tierProgress.active_tier) }} · 当前节点：{{ currentNodeNames || '待选择' }} · 已解锁至第 {{ tierProgress.highest_unlocked_tier }} 阶</small>
       </div>
+      <el-alert
+        v-if="report.report_availability?.status === 'calibration_pending'"
+        type="warning"
+        :closable="false"
+        :title="report.report_availability.message || '初始诊断尚未完成，暂不生成正式学习结论'"
+      />
       <el-alert
         v-if="report.initial_diagnostic?.final_tier"
         type="success"
@@ -39,7 +45,7 @@
     <ReportChart :data="report" />
 
     <section class="report-visual-grid" aria-label="学情与资源匹配可视化">
-      <KnowledgeBlindSpotHeatmap :key="`blind-${report.report_revision || 'initial'}`" :data="report.knowledge_blind_spot_map" />
+      <LearningNodeMasteryChart :key="`mastery-${report.report_revision || 'initial'}`" :data="report.learning_node_mastery_map" />
       <ResourceDifficultyCurve :data="report.resource_difficulty_curve" />
       <LearningPathGraph :data="report.learning_path_graph" />
     </section>
@@ -54,8 +60,9 @@
       <div v-else class="mastery-grid" role="list">
         <article v-for="node in abilityNodes" :key="node.skill_node_id" class="mastery-card" :class="`status-${node.mastery.status}`" role="listitem" tabindex="0">
           <div class="mastery-card-head"><strong>{{ node.name }}</strong><span>{{ statusLabel(node.mastery.status) }}</span></div>
-          <div class="mastery-score"><b>{{ masteryPercent(node.mastery) }}</b><small>置信度 {{ confidenceLabel(node.mastery.confidence) }}</small></div>
-          <p v-if="diagnosticMeasurement(node).measurement_status === 'needs_evidence'">本次 {{ diagnosticMeasurement(node).correct_question_count }}/{{ diagnosticMeasurement(node).valid_question_count }} 正确，证据不足，暂不判定掌握度。</p>
+           <div class="mastery-score"><b>{{ masteryPercent(node.mastery) }}</b><small>置信度 {{ confidenceLabel(node.mastery.confidence) }}</small></div>
+           <p v-if="assessmentConclusion(node).conclusion">结论：{{ conclusionLabel(assessmentConclusion(node).conclusion) }} · {{ trustLabel(assessmentConclusion(node).trust_status) }} · {{ assessmentConclusion(node).formal_session_count || 0 }} 次正式测评</p>
+           <p v-if="diagnosticMeasurement(node).measurement_status === 'needs_evidence'">本次 {{ diagnosticMeasurement(node).correct_question_count }}/{{ diagnosticMeasurement(node).valid_question_count }} 正确，证据不足，暂不判定掌握度。</p>
           <p v-else-if="diagnosticMeasurement(node).measurement_status === 'measured'">诊断 {{ diagnosticMeasurement(node).correct_question_count }}/{{ diagnosticMeasurement(node).valid_question_count }} 正确 · 已覆盖 {{ (diagnosticMeasurement(node).covered_dimensions || []).length }} 个维度</p>
           <p v-if="relationshipLabels(node, abilityNodes).prerequisites.length">前置：{{ relationshipLabels(node, abilityNodes).prerequisites.join('、') }}</p>
           <p v-if="relationshipLabels(node, abilityNodes).children.length">后继：{{ relationshipLabels(node, abilityNodes).children.join('、') }}</p>
@@ -91,7 +98,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { knowledgeApi, profileApi } from '../../api'
 import { useAppStore } from '../../stores/app'
 import ReportChart from './ReportChart.vue'
-import KnowledgeBlindSpotHeatmap from './KnowledgeBlindSpotHeatmap.vue'
+import LearningNodeMasteryChart from './LearningNodeMasteryChart.vue'
 import ResourceDifficultyCurve from './ResourceDifficultyCurve.vue'
 import LearningPathGraph from './LearningPathGraph.vue'
 import { focusReason, masteryPercent, relationshipLabels, statusLabel } from './masteryViewModel'
@@ -111,6 +118,7 @@ const abilityNodes = computed(() => report.ability_nodes || [])
 const masterySummary = computed(() => report.mastery_summary || {})
 const weaknessPriorities = computed(() => report.weakness_priorities || [])
 const diagnosticMeasurements = computed(() => report.diagnostic_measurements || {})
+const assessmentConclusions = computed(() => report.assessment_conclusions || {})
 const generationOptions = computed(() => report.generation_options || {})
 const tierProgress = computed(() => report.tier_progress || generationOptions.value.tier_progress || {})
 const resourceCredibility = computed(() => report.resource_credibility_summary || {})
@@ -129,9 +137,14 @@ function profileDisplayName(profile) {
   return snapshot?.display_name || snapshot?.name || profile?.learner_type || '未命名画像'
 }
 function formatPercent(value) { return typeof value === 'number' ? `${Math.round(value * 100)}%` : '--' }
+function tierLabel(value) { return ({ 1: '初级', 2: '中级', 3: '高级' })[value] || `第 ${value} 阶` }
+const currentNodeNames = computed(() => (report.current_learning_state?.current_node_ids || []).map(abilityName).join('、'))
 function confidenceLabel(value) { return ({ none: '无', low: '低', medium: '中', high: '高' })[value] || value || '无' }
 function abilityName(nodeId) { return abilityNodes.value.find((item) => item.skill_node_id === nodeId)?.name || nodeId }
 function diagnosticMeasurement(node) { return diagnosticMeasurements.value[node?.skill_node_id] || {} }
+function assessmentConclusion(node) { return assessmentConclusions.value[node?.skill_node_id] || {} }
+function conclusionLabel(value) { return ({ confirmed_mastery: '已确认掌握', baseline_observation: '初始基线，待复测确认', awaiting_confirmation: '待第二次正式测评确认', needs_reinforcement: '需巩固并重新测评', unassessed: '尚未测评' })[value] || value || '待测评' }
+function trustLabel(value) { return ({ high: '高可信', medium: '中可信', provisional: '暂定', none: '无客观证据' })[value] || value || '待确认' }
 
 async function loadProfiles() {
   const [profileRes, domainRes] = await Promise.all([profileApi.list({ page: 1, page_size: 50 }), knowledgeApi.listDomains()])

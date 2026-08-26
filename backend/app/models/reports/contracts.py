@@ -90,6 +90,9 @@ class LearningPathGraphNodeV1(BaseModel):
     stable_order: int
     tier: int | None = Field(default=None, ge=1, le=3)
     prerequisite_ids: List[str] = Field(default_factory=list)
+    placement_verification_status: Literal[
+        "not_applicable", "placement_exempt", "verification_required", "formally_reverified"
+    ] = "not_applicable"
 
 
 class LearningPathGraphEdgeV1(BaseModel):
@@ -110,8 +113,39 @@ class LearningPathGraphV1(BaseModel):
     summary: Dict[str, Any] = Field(default_factory=dict)
 
 
+class LearningNodeMasteryPointV1(BaseModel):
+    """Node-level mastery projection for the ongoing learning report."""
+
+    skill_node_id: str
+    name: str
+    tier: int | None = Field(default=None, ge=1, le=3)
+    tier_label: str | None = None
+    mastery_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    mastery_status: Literal["unassessed", "self_reported", "weak", "learning", "mastered"]
+    conclusion: Literal[
+        "unassessed", "baseline_observation", "awaiting_confirmation", "confirmed_mastery", "needs_reinforcement"
+    ]
+    trust_status: Literal["none", "provisional", "medium", "high"]
+    confidence: str
+    objective_evidence_count: int = Field(ge=0)
+    independent_session_count: int = Field(ge=0)
+    independent_form_count: int = Field(ge=0)
+    high_score_session_count: int = Field(ge=0)
+    latest_observed_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    trend_delta: float | None = Field(default=None, ge=-1.0, le=1.0)
+    last_evidence_at: datetime | None = None
+    next_action: Literal["learn", "remediate", "practice", "verify", "maintain"]
+    reason_codes: List[str] = Field(default_factory=list)
+
+
+class LearningNodeMasteryMapV1(BaseModel):
+    schema_version: Literal["1.0"] = "1.0"
+    nodes: List[LearningNodeMasteryPointV1] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ReportRevisionPartsV1(BaseModel):
-    """Stable, non-sensitive revision inputs for the Report 3.0 projection."""
+    """Stable, non-sensitive revision inputs for the Report 4.1 projection."""
 
     profile: str
     mastery: str
@@ -122,9 +156,9 @@ class ReportRevisionPartsV1(BaseModel):
 
 
 class ReportResponse(BaseModel):
-    # Keep the original fields below intact: report 3.0 is deliberately an
+    # Keep the original fields below intact: report 4.1 is deliberately an
     # additive read contract for existing report consumers.
-    report_schema_version: str = "3.0"
+    report_schema_version: str = "4.1"
     report_revision: Optional[str] = None
     data_as_of: Optional[datetime] = None
     window: Dict[str, Any] = Field(default_factory=dict)
@@ -173,10 +207,14 @@ class ReportResponse(BaseModel):
     next_resource_focus: Dict[str, Any] = Field(default_factory=dict)
     generation_options: NextGenerationOptionsV1 | None = None
     tier_progress: Dict[str, Any] = Field(default_factory=dict)
+    current_learning_state: Dict[str, Any] = Field(default_factory=dict)
     knowledge_blind_spot_map: KnowledgeBlindSpotMapV1 | None = None
+    learning_node_mastery_map: LearningNodeMasteryMapV1 | None = None
     resource_difficulty_curve: ResourceDifficultyCurveV1 | None = None
     learning_path_graph: LearningPathGraphV1 | None = None
     data_warnings: List[str] = Field(default_factory=list)
+    report_availability: Dict[str, Any] = Field(default_factory=dict)
+    assessment_conclusions: Dict[str, Any] = Field(default_factory=dict)
 
 
 class EvaluationSummary(BaseModel):
@@ -192,6 +230,8 @@ __all__ = [
     "DifficultyCurveItem",
     "EvaluationSummary",
     "KnowledgeBlindSpotMapV1",
+    "LearningNodeMasteryMapV1",
+    "LearningNodeMasteryPointV1",
     "LearningPathGraphEdgeV1",
     "LearningPathGraphNodeV1",
     "LearningPathGraphV1",

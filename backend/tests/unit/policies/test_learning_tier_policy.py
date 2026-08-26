@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -65,3 +66,30 @@ def test_low_score_targets_direct_lower_tier_prerequisite_and_mixed_targets_fail
     assert (targets, tier, return_tier) == (["base"], 1, 2)
     with pytest.raises(ValueError, match="one learning tier"):
         service.validate_generation_targets(profile, ["middle", "advanced"])
+
+
+def test_low_feedback_only_recommends_prerequisite_and_does_not_auto_downgrade():
+    service, learners = _service()
+    profile = learners.get("learner")
+    service.initialize_tier_progress(profile)
+
+    downgraded = service.apply_tier_feedback(profile, point_scores={"middle": 0.59})
+    records, _ = service.curriculum_progress(profile)
+    base = next(item for item in records if item.skill_node_id == "base")
+    assert downgraded.active_tier == 2
+    assert base.placement_exempt is True
+    assert base.placement_verification_required is True
+
+    service.curriculum_repo.reconcile_exposure(
+        "learner", "kb", {"base": 1}, datetime.now(timezone.utc),
+    )
+    service.record_curriculum_verification(
+        profile, attempt_id="base-formal-attempt", point_scores={"base": 0.8},
+        occurred_at=datetime.now(timezone.utc),
+    )
+    records, _ = service.curriculum_progress(profile)
+    base = next(item for item in records if item.skill_node_id == "base")
+    assert base.progress_status.value == "completed"
+    assert base.placement_exempt is False
+    assert base.placement_verification_required is False
+    assert service.apply_tier_feedback(profile, point_scores={"base": 0.8}).active_tier == 2

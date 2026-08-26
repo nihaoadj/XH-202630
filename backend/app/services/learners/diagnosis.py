@@ -144,6 +144,7 @@ class DiagnosisService:
         raw_scores: dict[str, float] = {}
         coverage: dict[str, dict] = {}
         blind_spot_trace: list[dict] = []
+        assessment_metadata: dict[str, dict] = {}
         for node_id, node_records in by_node.items():
             dimensions = {
                 str(questions[record.question_id].metadata.get("diagnostic_dimension"))
@@ -159,6 +160,12 @@ class DiagnosisService:
                 "covered_dimensions": sorted(dimensions),
                 "latest_observed_accuracy": correct_count / len(node_records),
             }
+            assessment_metadata[node_id] = {
+                "assessment_session_id": "pending-source-id",
+                "assessment_form_id": "initial-diagnostic-v1",
+                "question_ids": [record.question_id for record in node_records],
+                "covered_dimensions": sorted(dimensions),
+            }
             for record in node_records:
                 question = questions[record.question_id]
                 dimension = question.metadata.get("diagnostic_dimension")
@@ -170,10 +177,10 @@ class DiagnosisService:
                         "correct": record.correct,
                         "measurement_status": "measured" if complete else "needs_evidence",
                     })
-            if complete:
-                # Laplace smoothing prevents a very small perfect sample from
-                # being displayed as certain 100% mastery.
-                raw_scores[node_id] = (correct_count + 1) / (len(node_records) + 2)
+            # Record every server-scored node as baseline evidence.  Coverage
+            # still controls promotion: an incomplete node remains learning
+            # and cannot satisfy the three-dimension mastery gate.
+            raw_scores[node_id] = (correct_count + 1) / (len(node_records) + 2)
 
         occurred_at = datetime.now(timezone.utc)
         source_payload = {
@@ -185,6 +192,8 @@ class DiagnosisService:
             json.dumps(source_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
         source_id = f"diagnosis_{source_hash[:32]}"
+        for item in assessment_metadata.values():
+            item["assessment_session_id"] = source_id
         learner.knowledge_base_id = knowledge_base_id
         initial_status = None
         assessed_tier = None
@@ -248,6 +257,7 @@ class DiagnosisService:
                 source_id=source_id,
                 source_hash=source_hash,
                 occurred_at=occurred_at,
+                assessment_metadata=assessment_metadata,
             )
             projected_by_id = {item.skill_node_id: item for item in projected}
             states = {

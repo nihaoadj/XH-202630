@@ -119,6 +119,10 @@ class LearningAttemptSubmit(StrictFeedbackModel):
             "total_score",
             "max_score",
             "source_batch_id",
+            "assessment_kind",
+            "assessment_session_id",
+            "assessment_form_id",
+            "scoring_audit",
         }
         if set(value) - allowed:
             raise ValueError("metadata contains unsupported keys")
@@ -297,6 +301,7 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
         default=None, min_length=1, max_length=3,
     )
     difficulty: Literal["初级", "中级", "高级"] | None = None
+    include_claim_check: bool = False
     learning_intent: LearningIntent | None = None
     selected_skill_node_ids: list[str] = Field(default_factory=list, max_length=2)
     next_generation_snapshot_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -310,10 +315,9 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
 
     @model_validator(mode="after")
     def validate_learning_intent_selection(self) -> "FeedbackFollowupSelection":
-        intent_fields = (self.learning_intent, self.next_generation_snapshot_hash, self.selected_skill_node_ids)
-        if any(item is not None and item != [] for item in intent_fields):
-            if self.learning_intent is None or self.next_generation_snapshot_hash is None:
-                raise ValueError("learning intent requires a snapshot hash")
+        if self.learning_intent is not None or self.selected_skill_node_ids:
+            if self.learning_intent is None:
+                raise ValueError("selected skill nodes require a learning intent")
             if not self.selected_skill_node_ids:
                 raise ValueError("learning intent requires selected skill nodes")
         if len(self.selected_skill_node_ids) != len(set(self.selected_skill_node_ids)):
