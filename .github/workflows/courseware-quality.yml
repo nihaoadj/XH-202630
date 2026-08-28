@@ -11,6 +11,7 @@ on:
       - "backend/tests/fixtures/courseware/**"
       - "backend/tests/**courseware**"
       - "backend/tests/integration/courseware/**"
+      - "backend/tests/integration/services/**"
       - "backend/tests/unit/db/courseware/**"
       - "backend/tests/migrations/**"
       - "backend/scripts/courseware_*.py"
