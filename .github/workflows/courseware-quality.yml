@@ -4,18 +4,10 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "backend/app/agents/resource_workflows/interactive_courseware/**"
-      - "backend/app/core/courseware/**"
-      - "backend/app/db/courseware/**"
-      - "backend/app/services/courseware/**"
-      - "backend/tests/fixtures/courseware/**"
-      - "backend/tests/**courseware**"
-      - "backend/tests/integration/courseware/**"
-      - "backend/tests/integration/services/**"
-      - "backend/tests/unit/db/courseware/**"
-      - "backend/tests/migrations/**"
-      - "backend/scripts/courseware_*.py"
-      - "backend/requirements.txt"
+      # This workflow runs the complete backend suite.  Keep its trigger scope
+      # equally complete so clean-runner dependency or collection failures
+      # cannot be hidden by a path filter.
+      - "backend/**"
       - ".github/workflows/courseware-quality.yml"
       - "frontend/tests/coursewareBrowser.test.mjs"
       - "frontend/package-lock.json"
