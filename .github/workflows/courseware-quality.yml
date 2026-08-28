@@ -14,6 +14,7 @@ on:
       - "backend/tests/unit/db/courseware/**"
       - "backend/tests/migrations/**"
       - "backend/scripts/courseware_*.py"
+      - "backend/requirements.txt"
       - ".github/workflows/courseware-quality.yml"
       - "frontend/tests/coursewareBrowser.test.mjs"
       - "frontend/package-lock.json"
@@ -97,6 +98,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
