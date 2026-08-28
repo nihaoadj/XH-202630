@@ -351,7 +351,15 @@ def test_claim_extractor_and_judge_invoke_once_per_resource():
     assert set(state["claim_metrics"]) == {"res-claim", "res-claim-second"}
 
 
-def test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes():
+def test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes(monkeypatch):
+    # This scenario verifies the explicit opt-in policy for publishing a
+    # resource whose Claim audit is incomplete.  Do not inherit a developer's
+    # local .env value: CI intentionally uses the fail-closed default.
+    monkeypatch.setattr(workflow_module, "get_settings", lambda: SimpleNamespace(
+        claim_partial_publish=True,
+        claim_user_review_enabled=True,
+        claim_user_review_min_factual_pass_rate=0.60,
+    ))
     state = _state()
     second_content = "检索结果必须绑定冻结证据。"
     second = LearningResource(
