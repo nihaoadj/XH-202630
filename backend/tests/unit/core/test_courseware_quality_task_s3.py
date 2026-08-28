@@ -41,7 +41,7 @@ def test_v2_interactive_components_are_rendered_with_accessible_controls_and_run
         decoded = html.decode()
         assert f"data-component-id=\"{component}\"" in decoded
         assert component.replace("_", "-") in decoded
-    assert RUNTIME_VERSION == "2.0"
+    assert RUNTIME_VERSION == "2.2"
     assert "branching_attempt" in SCRIPT
     assert "categorization_attempt" in SCRIPT
     assert "cloze_submitted" in SCRIPT

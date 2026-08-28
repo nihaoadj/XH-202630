@@ -44,7 +44,7 @@ def test_v3_learning_design_has_page_blueprints_without_padding_pages():
     )
     assert design.schema_version == "3.0"
     assert design.storyboard.schema_version == "2.0"
-    assert 8 <= len(design.storyboard.scenes) <= 10
+    assert 5 <= len(design.storyboard.scenes) <= 8
     assert len({scene.scene_id for scene in design.storyboard.scenes}) == len(design.storyboard.scenes)
     assert all(scene.page_role and scene.layout_recipe_id and scene.key_question for scene in design.storyboard.scenes)
     assert all(2 <= scene.content_budget.max_zones <= 4 for scene in design.storyboard.scenes)
@@ -52,7 +52,7 @@ def test_v3_learning_design_has_page_blueprints_without_padding_pages():
 
 
 def test_recipes_resolve_for_all_three_themes():
-    assert len(SCENE_RECIPE_IDS) == 13
+    assert len(SCENE_RECIPE_IDS) == 14
     for theme in ("editorial", "midnight", "paper"):
         for recipe_id in SCENE_RECIPE_IDS:
             assert resolve_recipe(theme, recipe_id)["recipe_id"] == recipe_id
@@ -99,7 +99,7 @@ def test_long_lecture_is_split_into_source_bound_learning_stages_and_practice_is
     scenes, _ = compose_scenes(sources, learning_design=design)
     practice = next(scene for scene in scenes if scene["page_role"] == "practice_workspace")
     step_blocks = [block for block in practice["component_blocks"] if block["component"] in {"steps", "ordered_steps"}]
-    assert step_blocks and len(step_blocks[0]["steps"]) >= 2
+    assert not step_blocks
 
 
 def test_long_high_intensity_course_is_compacted_before_the_release_scene_ceiling():

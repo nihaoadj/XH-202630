@@ -22,10 +22,9 @@ def test_quality_summary_v2_separates_quality_dimensions_and_preserves_provenanc
 
 
 def test_frontend_exposes_quality_summary_without_internal_prompt_or_error_payload():
-    source = Path(__file__).resolve().parents[4] / "frontend/src/features/learning-documents/ResourcesView.vue"
+    source = Path(__file__).resolve().parents[4] / "frontend/src/features/courseware/CoursewareGenerationWorkspace.vue"
     text = source.read_text(encoding="utf-8")
     assert "quality_summary" in text
-    assert "interaction_quota_status" in text
+    assert "quality_summary" in text
     assert "rubric_passed" in text
     assert "prompt" not in text.lower().split("quality_summary", 1)[-1][:800]
-

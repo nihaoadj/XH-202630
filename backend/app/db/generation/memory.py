@@ -13,6 +13,25 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         self._store: dict[str, dict[str, Any]] = {}
 
     @staticmethod
+    def _utcnow() -> datetime:
+        """Return an aware UTC timestamp for persisted in-memory records.
+
+        ``datetime.utcnow()`` returns a naive value and is deprecated on
+        current Python versions.  Keeping timestamps aware also prevents
+        accidental naive/aware comparisons when a caller supplies a cutoff.
+        """
+
+        return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _as_utc(value: datetime) -> datetime:
+        """Normalize legacy naive timestamps before comparing them."""
+
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    @staticmethod
     def _schema(record: dict[str, Any]) -> GenerationJobStatusResponse:
         snapshot = (record.get("request_payload", {}).get("constraints") or {}).get(
             "learner_focus_snapshot"
@@ -38,7 +57,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
             "resource_ids": [],
             "error_message": None,
             "superseded_by_run_id": None,
-            "created_at": datetime.utcnow(),
+            "created_at": self._utcnow(),
             "started_at": None,
             "finished_at": None,
             "request_payload": request_payload,
@@ -53,7 +72,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         if record is None:
             return None
         record["job_status"] = "running"
-        record["started_at"] = datetime.utcnow()
+        record["started_at"] = self._utcnow()
         return GenerationJobStatusResponse(**record)
 
     def mark_completed(self, run_id: str, resource_ids: list[str]) -> Optional[GenerationJobStatusResponse]:
@@ -62,7 +81,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
             return None
         record["job_status"] = "completed"
         record["resource_ids"] = resource_ids
-        record["finished_at"] = datetime.utcnow()
+        record["finished_at"] = self._utcnow()
         record["error_message"] = None
         return GenerationJobStatusResponse(**record)
 
@@ -72,7 +91,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
             return None
         record["job_status"] = "failed"
         record["error_message"] = error_message
-        record["finished_at"] = datetime.utcnow()
+        record["finished_at"] = self._utcnow()
         return GenerationJobStatusResponse(**record)
 
     def mark_queued(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
@@ -97,18 +116,18 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         return GenerationJobStatusResponse(**record)
 
     def fail_incomplete_before(self, before: datetime, error_message: str) -> list[str]:
-        cutoff = before.astimezone(timezone.utc).replace(tzinfo=None)
+        cutoff = self._as_utc(before)
         affected = []
         for run_id, record in self._store.items():
             created_at = record.get("created_at")
             if (
                 record["job_status"] in {"queued", "running"}
                 and created_at is not None
-                and created_at < cutoff
+                and self._as_utc(created_at) < cutoff
             ):
                 record["job_status"] = "failed"
                 record["error_message"] = error_message
-                record["finished_at"] = datetime.utcnow()
+                record["finished_at"] = self._utcnow()
                 affected.append(run_id)
         return affected
 
@@ -118,4 +137,10 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
             for record in self._store.values()
             if record["learner_id"] == learner_id
         ]
-        return sorted(records, key=lambda item: item.created_at or datetime.min, reverse=True)
+        return sorted(
+            records,
+            key=lambda item: self._as_utc(item.created_at)
+            if item.created_at is not None
+            else datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )

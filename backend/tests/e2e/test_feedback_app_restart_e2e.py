@@ -108,7 +108,7 @@ def test_feedback_survives_full_fastapi_lifespan_restart(monkeypatch, tmp_path):
                 node_id="skill-restart",
                 knowledge_base_id="restart-kb",
                 name="Restart skill",
-                level="beginner",
+                    level="初级",
             ))
             db.commit()
         container.learner_repository().save(LearnerProfile(

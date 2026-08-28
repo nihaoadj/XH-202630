@@ -26,8 +26,8 @@ def _source():
 def _scene():
     return {
         "kind": "explain", "title": "RAG 原理", "blocks": ["RAG 的流程。"],
-        "source_refs": ["lecture"], "source_block_ids": ["b1"],
-        "source_map": {"blocks": [["b1"]]},
+        "source_refs": ["lecture"], "source_block_ids": ["b1", "b2"],
+        "source_map": {"blocks": [["b1", "b2"]]},
     }
 
 

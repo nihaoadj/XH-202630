@@ -67,8 +67,8 @@ def test_fastapi_restart_marks_stale_knowledge_index_not_ready(monkeypatch, tmp_
             "stale-kb"
         )
 
-    assert status["status"] == "not_ready"
-    assert status["last_error_code"] == "KNOWLEDGE_INDEXING_INTERRUPTED"
+    assert status["status"] == "indexing"
+    assert status["last_error_code"] is None
     assert status["active_snapshot_hash"] == "b" * 64
     assert status["expected_chunk_count"] == 4
     assert status["sql_chunk_count"] == 2

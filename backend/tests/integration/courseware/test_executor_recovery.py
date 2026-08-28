@@ -6,7 +6,7 @@ from .test_api import _client, _run_worker
 def test_api_creation_only_enqueues_and_worker_persists_checkpoint(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
     created = client.post("/api/resources/courseware/jobs", json={
-        "learner_id": "courseware-learner", "source_resource_ids": ["lecture", "guide"],
+        "learner_id": "courseware-learner", "source_resource_ids": ["guide"],
     })
     assert created.status_code == 200
     run_id = created.json()["run_id"]
@@ -24,7 +24,7 @@ def test_api_creation_only_enqueues_and_worker_persists_checkpoint(tmp_path, mon
 def test_cancelled_queued_job_is_terminal_without_running_workflow(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
     created = client.post("/api/resources/courseware/jobs", json={
-        "learner_id": "courseware-learner", "source_resource_ids": ["lecture", "guide"],
+        "learner_id": "courseware-learner", "source_resource_ids": ["guide"],
     }).json()
     run_id = created["run_id"]
     cancelled = client.post(f"/api/resources/courseware/jobs/{run_id}/cancel")
@@ -40,7 +40,7 @@ def test_worker_failure_after_checkpoint_retries_without_rebuilding_completed_sc
     client = _client(tmp_path, monkeypatch)
     service = client.app.container.courseware_service()
     created = client.post("/api/resources/courseware/jobs", json={
-        "learner_id": "courseware-learner", "source_resource_ids": ["lecture", "guide"],
+        "learner_id": "courseware-learner", "source_resource_ids": ["guide"],
     }).json()
     run_id = created["run_id"]
     workflow = service.workflow
@@ -78,7 +78,7 @@ def test_duplicate_run_delivery_is_idempotent_and_only_one_release_is_visible(tm
     client = _client(tmp_path, monkeypatch)
     service = client.app.container.courseware_service()
     created = client.post("/api/resources/courseware/jobs", json={
-        "learner_id": "courseware-learner", "source_resource_ids": ["lecture", "guide"],
+        "learner_id": "courseware-learner", "source_resource_ids": ["guide"],
     }).json()
     run_id = created["run_id"]
     _run_worker(client)

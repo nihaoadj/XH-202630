@@ -52,11 +52,10 @@ def test_enrichment_unknown_id_is_rejected_as_candidate_not_slot_mismatch():
 
 def test_s1_budget_and_retry_limits_are_explicit():
     settings = Settings(_env_file=None)
-    assert settings.courseware_total_llm_token_budget == 49152
-    assert settings.courseware_planner_token_budget == 4096
-    assert settings.courseware_scene_composition_token_budget == 30720
-    assert settings.courseware_quality_review_token_budget == 4096
-    assert settings.courseware_revision_token_budget == 10240
-    assert settings.courseware_auto_revision_max_attempts == 2
+    assert settings.courseware_total_llm_token_budget == 147456
+    assert settings.courseware_planner_token_budget == 16384
+    assert settings.courseware_scene_composition_token_budget == 81920
+    assert settings.courseware_quality_review_token_budget == 16384
+    assert settings.courseware_revision_token_budget == 32768
+    assert settings.courseware_auto_revision_max_attempts == 3
     assert settings.llm_max_attempts == 2
-

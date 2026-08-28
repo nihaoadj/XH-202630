@@ -14,6 +14,7 @@ from app.db.learning_documents.memory import MemoryResourceRepository
 from app.db.learning_documents.models import ResourceSpecRecord
 from app.db.learning_documents.sql_repository import SQLResourceRepository
 from app.models.shared.persistence import BeginStepCommand, CreateRunCommand, RunStatus, canonical_hash
+from app.models.generation.progress import ResourceRepresentation
 from app.models.learning_documents.schemas import LearningResource
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
 from app.services.generation import generation as generation_module
@@ -49,8 +50,9 @@ def _trace(node_name, sequence):
     }
 
 
-def test_sql_finalization_uses_recorder_owned_review_and_is_idempotent(tmp_path):
+def test_sql_finalization_uses_recorder_owned_review_and_is_idempotent(tmp_path, request):
     engine = create_engine(f"sqlite:///{tmp_path / 'finalization.db'}")
+    request.addfinalizer(engine.dispose)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     audit = SQLAuditRepository(factory)
@@ -178,7 +180,7 @@ def test_reconcile_uses_materialized_review_link_for_published_revision():
         run_id="run-revision",
         audit_repo=audit,
     )
-def test_sql_recorder_persists_degraded_resource_before_execution_foreign_key(tmp_path):
+def test_sql_recorder_persists_degraded_resource_before_execution_foreign_key(tmp_path, request):
     """A degraded worker result remains reviewable instead of failing the run.
 
     This specifically protects the resource-execution FK ordering used by
@@ -189,6 +191,7 @@ def test_sql_recorder_persists_degraded_resource_before_execution_foreign_key(tm
     engine = configure_sqlite_foreign_keys(
         create_engine(f"sqlite:///{tmp_path / 'degraded-execution.db'}")
     )
+    request.addfinalizer(engine.dispose)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     audit = SQLAuditRepository(factory)
@@ -240,7 +243,7 @@ def test_sql_recorder_persists_degraded_resource_before_execution_foreign_key(tm
         topic="RAG",
         resource_spec_id=spec_id,
         resource_family_id="family-degraded",
-        representation="text",
+        representation=ResourceRepresentation.TEXT,
         review_status="human_review",
         publication_status="unpublished",
         content_text="# 待人工审核的降级资源",
@@ -318,10 +321,11 @@ def test_sql_recorder_persists_degraded_resource_before_execution_foreign_key(tm
     assert completion_event.payload["validation_status"] == "failed"
 
 
-def test_sql_reconcile_preserves_recorder_owned_resource_review_id(tmp_path):
+def test_sql_reconcile_preserves_recorder_owned_resource_review_id(tmp_path, request):
     """A human-review fallback must finalize without rewriting its review ID."""
 
     engine = create_engine(f"sqlite:///{tmp_path / 'resource-review-id.db'}")
+    request.addfinalizer(engine.dispose)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     audit = SQLAuditRepository(factory)

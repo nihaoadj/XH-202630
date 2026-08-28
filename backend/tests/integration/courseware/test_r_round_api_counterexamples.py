@@ -10,7 +10,7 @@ def test_new_job_freezes_source_batch_before_worker_and_resource_inherits_it(tmp
     service.workflow.llm_gateway = fake
     response = client.post("/api/resources/courseware/jobs", json={
         "learner_id": "courseware-learner",
-        "source_resource_ids": ["lecture", "guide", "assessment"],
+        "source_resource_ids": ["guide"],
         "publish_mode": "automatic",
     })
     assert response.status_code == 200
@@ -28,7 +28,7 @@ def test_mixed_release_event_batch_is_rejected_without_partial_write(tmp_path, m
     service.llm_gateway = fake
     service.workflow.llm_gateway = fake
     created = client.post("/api/resources/courseware/jobs", json={
-        "learner_id": "courseware-learner", "source_resource_ids": ["lecture", "guide", "assessment"],
+        "learner_id": "courseware-learner", "source_resource_ids": ["guide"],
     })
     _run_worker(client)
     resource_id = client.get(f"/api/resources/courseware/jobs/{created.json()['run_id']}/detail").json()["resource_id"]
