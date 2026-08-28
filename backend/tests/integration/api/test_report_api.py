@@ -78,5 +78,9 @@ def test_private_report_route_rejects_missing_and_cross_user_access():
     app.include_router(report_routes.router, prefix="/api/report", dependencies=[Depends(get_current_user)])
     client = TestClient(app)
     assert client.get("/api/report/report-learner").status_code == 401
-    assert client.get("/api/report/report-learner", cookies={"training_pilot_token": "owner-token"}).status_code == 200
-    assert client.get("/api/report/report-learner", cookies={"training_pilot_token": "other-token"}).status_code == 404
+    # Set cookies on the client so Starlette does not emit its deprecated
+    # per-request ``cookies=...`` warning and persistence is explicit.
+    client.cookies.set("training_pilot_token", "owner-token")
+    assert client.get("/api/report/report-learner").status_code == 200
+    client.cookies.set("training_pilot_token", "other-token")
+    assert client.get("/api/report/report-learner").status_code == 404

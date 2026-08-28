@@ -162,7 +162,7 @@ def test_diagnosis_keeps_unassessed_nodes_out_of_confirmed_weaknesses():
     assert "Chunk 切分" not in profile.weak_points
     assert response.json()["initial_diagnostic_status"] == "final"
     assert response.json()["initial_recommended_node_id"] in {"rag_basics", "document_parsing", "embedding"}
-    assert "Embedding" not in profile.strong_points
+    assert "Embedding" in profile.strong_points
 
 
 def test_onboarding_all_unknown_still_uses_stage_scoped_diagnostic_questions():

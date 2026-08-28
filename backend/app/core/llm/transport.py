@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import httpx
 from langchain_core.messages import AIMessage, BaseMessage
-from langchain_openai import ChatOpenAI
+
+if TYPE_CHECKING:
+    from langchain_openai import ChatOpenAI
+else:
+    # Import the provider adapter only when a real model client is requested.
+    # Importing it during application startup pulls in langsmith's legacy
+    # pydantic-v1 compatibility models, which emit ForwardRef deprecations on
+    # Python 3.13 even when no live LLM call is made.
+    ChatOpenAI = None
 
 from app.config import Settings, get_settings
 from app.models.shared.llm import LLMUsage, RawLLMResponse, StructuredOutputMode
@@ -24,6 +32,12 @@ def create_chat_model(
 
     SDK retries are disabled because LLMGateway owns the only retry budget.
     """
+
+    global ChatOpenAI
+    if ChatOpenAI is None:
+        from langchain_openai import ChatOpenAI as _ChatOpenAI
+
+        ChatOpenAI = _ChatOpenAI
 
     settings = settings or get_settings()
     # ``trust_env=False`` is intentional.  On Windows, httpx otherwise picks

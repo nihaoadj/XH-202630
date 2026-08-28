@@ -1,5 +1,8 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
+# Uvicorn 0.32 uses the pre-14 WebSocket protocol modules.  Newer
+# websockets releases emit deprecation warnings for that compatibility path.
+websockets>=10.4,<14
 pydantic==2.9.2
 pydantic-settings==2.5.2
 python-dotenv==1.0.1

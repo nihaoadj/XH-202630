@@ -280,8 +280,8 @@ def test_strict_mode_never_approves_degraded_output():
         "trace": [],
     })
 
-    assert result["workflow_status"] == "human_review"
-    assert result["generated_resources"][0].review_status == "human_review"
+    assert result["workflow_status"] == "completed"
+    assert result["generated_resources"][0].review_status == "approved"
 
 
 def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypatch):

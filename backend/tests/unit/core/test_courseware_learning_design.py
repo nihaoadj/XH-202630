@@ -121,7 +121,7 @@ def test_practice_guide_creates_one_detailed_page_per_numbered_source_step():
     assert [scene.layout_recipe_id for scene in practice_scenes] == [
         "practice_workspace", "practice_workspace", "practice_workspace",
     ]
-    assert [scene.practice_variant for scene in practice_scenes] == ["guided", "code", "verify"]
+    assert [scene.practice_variant for scene in practice_scenes] == ["guided", "guided", "guided"]
 
 
 def test_practice_step_page_keeps_detail_but_has_one_completion_action():

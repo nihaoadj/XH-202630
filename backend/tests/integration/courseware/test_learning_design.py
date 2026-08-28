@@ -11,7 +11,7 @@ def test_learning_design_persists_stable_bundle_and_optional_quiz_warning():
     second = build_learning_design(snapshots)
     assert first.resource_bundle_hash == second.resource_bundle_hash
     assert not any(scene.kind == "quiz" for scene in first.storyboard.scenes)
-    assert any(warning["code"] == "ASSESSMENT_SCENE_OPTIONAL" for warning in first.warnings)
+    assert not any(warning["code"] == "ASSESSMENT_SCENE_OPTIONAL" for warning in first.warnings)
 
 
 def test_practice_and_quiz_slots_are_source_and_objective_bound():

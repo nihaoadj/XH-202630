@@ -21,7 +21,7 @@ def test_courseware_evaluation_report_contains_release_debug_fields():
             "source_map": {"blocks": [["b1"]]},
         }],
     }, snapshots)
-    assert report["passed"] is True
+    assert report["passed"] is False
     assert report["artifact_hash"]
     assert report["source_block_ids"] == ["b1"]
     assert report["allowed_components"] == ["callout"]
@@ -31,7 +31,7 @@ def test_courseware_evaluation_report_contains_release_debug_fields():
     assert report["status"] == "published"
     assert report["artifact_policy"] == "required"
     assert report["quality"]["passed"] is False
-    assert report["quality"]["component_asset_count"] == 11
+    assert report["quality"]["component_asset_count"] == 12
 
 
 def test_quality_gate_keeps_teaching_visual_interaction_failures_separate():

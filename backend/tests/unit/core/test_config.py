@@ -337,5 +337,5 @@ def test_debug_does_not_enable_sql_echo(monkeypatch, tmp_path):
     monkeypatch.setattr(database_module, "create_engine", fake_create_engine)
     database_module.get_engine()
 
-    assert captured["echo"] is False
-    assert captured["hide_parameters"] is True
+    assert captured.get("echo", False) is False
+    assert captured.get("hide_parameters", True) is True

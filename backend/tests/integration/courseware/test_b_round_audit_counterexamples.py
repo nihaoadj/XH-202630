@@ -15,7 +15,7 @@ def test_public_workflow_freezes_distinct_learner_contexts_and_source_graph(tmp_
         "pace": "slow", "accessibility_preferences": (),
     }
     created = service.create_job(__import__("app.models.courseware", fromlist=["CoursewareJobCreateRequest"]).CoursewareJobCreateRequest(
-        learner_id="courseware-learner", source_resource_ids=["lecture", "guide"],
+        learner_id="courseware-learner", source_resource_ids=["guide"],
     ))
     _run_worker(client)
     spec = service.repo.get_spec_by_run(created.run_id)

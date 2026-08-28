@@ -7,7 +7,7 @@ from app.core.courseware.renderer import render_courseware
 def test_component_catalog_v1_has_complete_interaction_asset_matrix():
     matrix = component_asset_matrix()
     assert set(matrix) == {
-        "callout", "key_point", "compare", "steps", "ordered_steps", "single_choice", "multiple_choice", "recap",
+        "callout", "code_block", "key_point", "compare", "steps", "ordered_steps", "single_choice", "multiple_choice", "recap",
         "flashcard", "matching", "ordering",
     }
     assert all(item["schema_version"] == "1.0" for item in matrix.values())
