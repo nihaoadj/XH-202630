@@ -27,8 +27,10 @@
           phase="generation"
           :retrying-key="retryingResourceKey"
           :retry-enabled="retryEnabled"
+          :claim-reports="claimReports"
           @open-resource="$emit('open-resource', $event)"
           @retry-resource="$emit('retry-resource', $event)"
+          @open-claim-report="$emit('open-claim-report', $event)"
         />
       </el-collapse-item>
       <el-collapse-item name="review">
@@ -125,9 +127,10 @@ const props = defineProps({
     default: '',
   },
   retryEnabled: Boolean,
+  claimReports: { type: Object, default: () => ({}) },
 })
 
-defineEmits(['open-child-run', 'open-resource', 'retry-resource'])
+defineEmits(['open-child-run', 'open-resource', 'retry-resource', 'open-claim-report'])
 
 const expandedResourceSections = ref(['generation', 'review'])
 const progressSummary = computed(() => normalizeResourceProgressSummary(

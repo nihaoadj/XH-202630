@@ -1,4 +1,5 @@
 """内存实现的生成资源仓库"""
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from app.db.learning_documents.base import BaseResourceRepository
@@ -21,6 +22,19 @@ class MemoryResourceRepository(BaseResourceRepository):
     def get(self, resource_id: str) -> Optional[LearningResource]:
         resource = self._store.get(resource_id)
         return resource.model_copy(deep=True) if resource else None
+
+    def update_publication_decision(self, resource_id: str, *, publish: bool) -> Optional[LearningResource]:
+        resource = self._store.get(resource_id)
+        if resource is None:
+            return None
+        updated = resource.model_copy(update={
+            "publication_status": "published" if publish else "unpublished",
+            "published_at": datetime.now(timezone.utc) if publish else None,
+            "claim_publish_decision_pending": False,
+            "claim_publish_decision": "published_by_user" if publish else "rejected_by_user",
+        })
+        self._store[resource_id] = updated
+        return updated.model_copy(deep=True)
 
     def save(
         self,

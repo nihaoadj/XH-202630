@@ -7,7 +7,12 @@ from app.db.audit.base import BaseAuditRepository
 from app.db.learning_documents.base import BaseResourceRepository
 from app.db.claim.base import BaseClaimRepository
 from app.db.feedback.feedback_loop_base import BaseFeedbackLoopRepository
-from app.models.reviews.claims import ClaimMetricStatus, RunClaimsResponse, compute_claim_metric
+from app.models.reviews.claims import (
+    ClaimMetricStatus,
+    ClaimMetricSummary,
+    RunClaimsResponse,
+    compute_claim_metric,
+)
 from app.models.shared.persistence import (
     AgentRunRecord,
     PersistedEvidenceSnapshot,
@@ -114,6 +119,67 @@ class RunQueryService:
         claims = self.claim_repository.list_claims_by_run(run_id)
         judgements = self.claim_repository.list_judgements_by_run(run_id)
         if not claims:
+            # A Claim audit can fail before a Claim/Judgement is materialized,
+            # or intentionally skip generic extraction for a structured
+            # assessment.  The latest checkpoint is the durable source for
+            # that run-level outcome; do not mislabel it as a legacy run.
+            checkpoints = self.repository.list_checkpoints(run_id)
+            projection = checkpoints[-1].state_projection if checkpoints else {}
+            if projection.get("include_claim_check") is True:
+                raw_metrics = projection.get("claim_metrics", {})
+                metrics: dict[str, ClaimMetricSummary] = {}
+                if isinstance(raw_metrics, dict):
+                    for resource_id, raw_metric in raw_metrics.items():
+                        if isinstance(resource_id, str) and isinstance(raw_metric, dict):
+                            metrics[resource_id] = ClaimMetricSummary.model_validate({
+                                key: raw_metric[key]
+                                for key in ClaimMetricSummary.model_fields
+                                if key in raw_metric
+                            })
+                for resource_id in projection.get("claim_failed_resource_ids", []):
+                    if isinstance(resource_id, str):
+                        metrics.setdefault(resource_id, ClaimMetricSummary(
+                            metric_status=ClaimMetricStatus.INCOMPLETE,
+                            claim_hallucination_rate=None,
+                            claim_total=0,
+                            factual_claim_total=0,
+                            supported_claim_total=0,
+                            contradicted_claim_total=0,
+                            not_in_evidence_claim_total=0,
+                            non_factual_claim_total=0,
+                            incomplete_claim_total=1,
+                        ))
+                for resource_id in projection.get("assessment_claim_skipped_resource_ids", []):
+                    if isinstance(resource_id, str):
+                        metrics.setdefault(resource_id, ClaimMetricSummary(
+                            metric_status=ClaimMetricStatus.NOT_APPLICABLE,
+                            claim_hallucination_rate=None,
+                            claim_total=0,
+                            factual_claim_total=0,
+                            supported_claim_total=0,
+                            contradicted_claim_total=0,
+                            not_in_evidence_claim_total=0,
+                            non_factual_claim_total=0,
+                            incomplete_claim_total=0,
+                        ))
+                status = projection.get("claim_check_status")
+                if status in {"pending", "failed"} or any(
+                    metric.metric_status == ClaimMetricStatus.INCOMPLETE
+                    for metric in metrics.values()
+                ):
+                    audit_status = ClaimMetricStatus.INCOMPLETE
+                elif metrics and all(
+                    metric.metric_status == ClaimMetricStatus.NOT_APPLICABLE
+                    for metric in metrics.values()
+                ):
+                    audit_status = ClaimMetricStatus.NOT_APPLICABLE
+                else:
+                    audit_status = ClaimMetricStatus.INCOMPLETE
+                return RunClaimsResponse(
+                    run_id=run_id,
+                    audit_status=audit_status,
+                    resource_metrics=metrics,
+                )
             return RunClaimsResponse(run_id=run_id)
         resource_ids = sorted({item.resource_id for item in claims})
         metrics = {

@@ -72,7 +72,7 @@ def build_mastery_mutations(
     evidence_eligibility: dict[str, bool] | None = None,
     dimension_ready: dict[str, bool] | None = None,
 ) -> list[KnowledgeStateMutation]:
-    """Apply an explainable EWMA: new = 0.7 * old + 0.3 * attempt score.
+    """Apply an explainable EWMA: new = 0.2 * old + 0.8 * attempt score.
 
     Duration and hints remain decision/audit features in P0-07; they do not silently
     distort mastery. Replaying an attempt is stopped by repository idempotency before
@@ -98,7 +98,7 @@ def build_mastery_mutations(
             distinct_count = 1
             status = "weak" if mastery < 0.60 else "learning"
         else:
-            mastery = 0.7 * float(previous.mastery or 0.0) + 0.3 * observed
+            mastery = 0.2 * float(previous.mastery or 0.0) + 0.8 * observed
             objective_count = previous_objective_count + 1
             distinct_count = (previous.distinct_objective_source_count if previous else 0) + 1
             mastery = round(float(mastery), 6)
@@ -130,6 +130,6 @@ def build_mastery_mutations(
                     "prior blend(0.2 * self_report + 0.8 * first objective)"
                     if previous_objective_count == 0 and prior is not None
                     else "first objective score" if previous_objective_count == 0
-                    else "EWMA(0.7 * previous + 0.3 * current_attempt); hints/duration excluded"),
+                    else "EWMA(0.2 * previous + 0.8 * current_attempt); hints/duration excluded"),
         ))
     return mutations

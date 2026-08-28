@@ -26,6 +26,9 @@ from app.db.migrations.p0_26_mastery_evidence_gate import apply_p0_26_mastery_ev
 from app.db.migrations.p0_27_assessment_evidence import apply_p0_27_assessment_evidence_migration
 from app.db.migrations.p0_28_placement_reverification import apply_p0_28_placement_reverification_migration
 from app.db.migrations.p0_29_feedback_decision_tiers import apply_p0_29_feedback_decision_tiers_migration
+from app.db.migrations.p0_30_feedback_followup_multi_run import apply_p0_30_feedback_followup_multi_run_migration
+from app.db.migrations.p0_31_claim_user_publication import apply_p0_31_claim_user_publication_migration
+from app.db.migrations.p0_32_review_status import apply_p0_32_review_status_migration
 from app.db.migrations.tutor import apply_tutor_migration
 
 __all__ = [
@@ -55,5 +58,8 @@ __all__ = [
     "apply_p0_27_assessment_evidence_migration",
     "apply_p0_28_placement_reverification_migration",
     "apply_p0_29_feedback_decision_tiers_migration",
+    "apply_p0_30_feedback_followup_multi_run_migration",
+    "apply_p0_31_claim_user_publication_migration",
+    "apply_p0_32_review_status_migration",
     "apply_tutor_migration",
 ]

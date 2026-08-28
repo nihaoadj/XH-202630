@@ -226,6 +226,23 @@ def test_learning_activity_uses_question_weighting_and_keeps_empty_measurement_n
     assert empty["verified_accuracy"] is None
 
 
+def test_learning_activity_uses_feedback_weighted_score_when_available():
+    service = ReportService(MemoryResourceRepository(), MemoryFeedbackRepository())
+    now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+    attempt = SimpleNamespace(
+        source_resource_id="assessment",
+        submitted_at=now - timedelta(seconds=1),
+        metadata={"total_score": 25, "max_score": 100},
+        knowledge_point_results=[SimpleNamespace(correct_count=0, total_count=1)],
+    )
+
+    summary = service._learning_activity([attempt], now, 30)
+
+    assert summary["correct_item_count"] == 0
+    assert summary["answered_item_count"] == 1
+    assert summary["verified_accuracy"] == 0.25
+
+
 def test_resource_credibility_is_not_trusted_without_complete_evidence():
     resource = LearningResource(
         resource_id="legacy", learner_id="learner", topic="检索", resource_type="讲义", difficulty="初级",

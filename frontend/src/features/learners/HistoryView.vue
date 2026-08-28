@@ -1,80 +1,14 @@
 <template>
   <div class="history-page">
-    <section class="archive-hero">
-      <div class="archive-copy">
-        <span class="archive-kicker">LEARNING ARCHIVE</span>
-        <h2>学习历史档案</h2>
-        <p>每次创建学习方向都会形成独立学习画像，在这里回看诊断、资源生成与练习反馈的完整足迹。</p>
-      </div>
-      <div class="archive-filter">
-        <span>按能力层级筛选</span>
-        <el-select v-model="skillFilter" clearable placeholder="全部层级">
-          <el-option label="初级" value="初级" />
-          <el-option label="中级" value="中级" />
-          <el-option label="进阶" value="进阶" />
-        </el-select>
-        <b>{{ filteredProfiles.length }} 个学习画像</b>
-      </div>
-    </section>
-
     <section class="history-layout">
-      <aside class="profile-archive">
-        <div class="archive-list-head">
-          <div><span class="archive-kicker">LEARNING PROFILES</span><h3>选择学习画像</h3></div>
-          <el-button text @click="loadProfiles">刷新</el-button>
-        </div>
-        <el-empty v-if="!filteredProfiles.length" description="没有匹配的学习画像" :image-size="70" />
-        <div v-else class="profile-scroll">
-          <button v-for="profile in filteredProfiles" :key="profile.learner_id" type="button" class="profile-item" :class="{ active: activeLearnerId === profile.learner_id }" :disabled="deletingProfile" @click="selectProfile(profile)">
-            <span class="profile-state">{{ activeLearnerId === profile.learner_id ? '当前查看' : profile.skill_level || '待诊断' }}</span>
-            <strong>{{ profileDisplayName(profile) }}</strong>
-            <span class="profile-created">创建于 {{ profileCreatedAt(profile) }}</span>
-            <span class="profile-direction">{{ resolveTrackName(profile.knowledge_base_id) }}</span>
-            <span class="profile-goal">{{ profile.learning_goal || '尚未设置学习目标' }}</span>
-          </button>
-        </div>
-      </aside>
-
-      <main class="timeline-workspace">
-        <template v-if="timeline">
-          <header class="timeline-hero">
-            <div>
-              <span class="archive-kicker">LEARNING TIMELINE</span>
-              <h3>本轮学习足迹</h3>
-              <p>{{ timeline.profile.learning_goal || '本轮学习目标尚未设置' }}</p>
-            </div>
-            <div class="timeline-actions" aria-label="学习画像操作">
-              <el-button class="timeline-action timeline-action-resource" :icon="FolderOpened" @click="toResources">查看资源</el-button>
-              <el-button class="timeline-action timeline-action-progress" :icon="DataAnalysis" @click="toGenerate">生成进度</el-button>
-              <el-tooltip content="永久删除当前学习画像" placement="top">
-                <el-button class="timeline-delete-action" :icon="Delete" circle :loading="deletingProfile" aria-label="删除学习画像" @click="deleteSelectedProfile" />
-              </el-tooltip>
-            </div>
-          </header>
-
-          <section class="timeline-summary">
-            <article><span>学习者</span><strong>{{ profileDisplayName(timeline.profile) }}</strong></article>
-            <article><span>学习方向</span><strong>{{ resolveTrackName(timeline.profile.knowledge_base_id) }}</strong></article>
-            <article><span>当前层级</span><strong>{{ timeline.profile.skill_level || '待诊断' }}</strong></article>
-            <article><span>学习事件</span><strong>{{ timeline.events?.length || 0 }} 条</strong></article>
-          </section>
-
-          <section class="event-panel">
-            <div class="event-panel-head"><span class="archive-kicker">ACTIVITY TRACE</span><h4>学习进程记录</h4></div>
-            <el-empty v-if="!timeline.events?.length" description="尚未记录学习事件" :image-size="80" />
-            <div v-else class="timeline-list">
-              <article v-for="event in timeline.events" :key="event.event_id" class="timeline-item" :class="eventTone(event)">
-                <div class="timeline-rail"><i /></div>
-                <div class="timeline-content">
-                  <div class="timeline-head"><strong>{{ event.title }}</strong><span v-if="event.status" class="event-status">{{ event.status }}</span></div>
-                  <p>{{ eventDescription(event) }}</p>
-                  <time>{{ formatTime(event.occurred_at) }}</time>
-                </div>
-              </article>
-            </div>
-          </section>
-        </template>
-        <el-empty v-else class="timeline-empty" description="请选择一个学习画像查看本轮学习足迹" :image-size="96" />
+      <aside class="profile-archive"><div class="archive-list-head"><div><span class="archive-kicker">LEARNING PROFILES</span><h3>选择学习画像</h3></div><el-button text @click="loadProfiles">刷新</el-button></div><div class="profile-filter"><span>按能力层级筛选画像</span><div class="profile-filter-row"><el-select v-model="skillFilter" clearable size="small" placeholder="全部层级"><el-option label="初级" value="初级" /><el-option label="中级" value="中级" /><el-option label="进阶" value="进阶" /></el-select><b>{{ filteredProfiles.length }} 个学习画像</b></div></div><el-empty v-if="!filteredProfiles.length" description="没有匹配的学习画像" :image-size="70" /><div v-else class="profile-scroll"><div v-for="profile in filteredProfiles" :key="profile.learner_id" class="profile-item" :class="{ active: activeLearnerId === profile.learner_id }" role="button" tabindex="0" @click="selectProfile(profile)" @keydown.enter.space.prevent="selectProfile(profile)"><div class="profile-card-head"><span class="profile-state">{{ activeLearnerId === profile.learner_id ? '当前查看' : profile.skill_level || '待诊断' }}</span><el-tooltip v-if="activeLearnerId === profile.learner_id" content="永久删除当前学习画像"><el-button class="profile-delete-action" :icon="Delete" circle :loading="deletingProfile" aria-label="删除学习画像" @click.stop="deleteSelectedProfile" /></el-tooltip></div><strong>{{ profileDisplayName(profile) }}</strong><span class="profile-direction">{{ resolveTrackName(profile.knowledge_base_id) }}</span><span class="profile-goal">{{ profile.learning_goal || '尚未设置学习目标' }}</span></div></div></aside>
+      <main class="journey-workspace">
+        <template v-if="journey">
+          <section class="state-grid"><article><span>当前学习节点</span><strong>{{ nodeLabels(journey.current_state.current_nodes) || '等待学习路径生成' }}</strong></article><article><span>最近测评</span><strong>{{ scoreLabel(journey.current_state.latest_assessment) }}</strong></article><article><span>已完成节点</span><strong>{{ journey.current_state.completed_nodes.length }} 个</strong></article><article><span>下一步建议</span><strong>{{ journey.current_state.next_action || '完成当前资源学习后进行测评' }}</strong></article></section>
+          <section class="journey-panel"><div class="panel-head"><div><span class="archive-kicker">LEARNING JOURNEY</span><h4>学习进程链路</h4><p class="panel-caption">按生成批次串联资源、测评、反馈与路径变化；缺少记录的环节会明确标记为待发生。</p></div><div class="round-filters"><el-select v-model="statusFilter" clearable size="small" placeholder="全部状态"><el-option label="已完成" value="completed" /><el-option label="进行中" value="running" /><el-option label="失败" value="failed" /></el-select><el-select v-model="timeFilter" size="small"><el-option label="全部时间" value="all" /><el-option label="近 7 天" value="7" /><el-option label="近 30 天" value="30" /></el-select></div></div>
+            <el-empty v-if="!filteredRounds.length && !orderedEvents.length" description="尚未记录学习链路" :image-size="80" />
+            <div v-else class="journey-chain"><article v-for="(event, index) in orderedEvents" :key="event.event_id" class="journey-chain-item history-event"><div class="journey-chain-rail"><span>{{ index + 1 }}</span></div><div class="journey-chain-content"><div class="history-event-content"><span class="round-kicker">历史起点 · 未关联运行</span><h5>{{ event.title }}</h5><p>{{ event.description }}</p><time>{{ formatTime(event.occurred_at) }}</time></div></div></article><article v-for="(round, index) in orderedRounds" :key="round.round_id || round.batch_id || round.run_id" class="journey-chain-item" :class="[{ failed: round.status === 'failed', running: ['running', 'queued'].includes(round.status) }, { followup: round.is_followup }]" :aria-label="`${round.topic} 学习链路`"><div class="journey-chain-rail"><span>{{ orderedEvents.length + index + 1 }}</span></div><div class="journey-chain-content"><div class="round-summary"><div><span class="round-kicker">{{ round.is_followup ? '反馈后的后续学习' : '学习链路节点' }}</span><h5>{{ round.topic }}</h5><p>{{ roundStatus(round) }} · {{ formatTime(round.occurred_at) }}<span v-if="round.parent_run_id"> · 由上一轮反馈触发</span></p></div><el-button text @click="toggleRound(round.round_id || round.batch_id || round.run_id)">{{ expandedRounds.includes(round.round_id || round.batch_id || round.run_id) ? '收起详情' : '展开详情' }}</el-button></div><div class="journey-stages"><div class="journey-stage" :class="stageTone(round.status)"><span class="stage-index">1</span><div><b>资源生成</b><small>{{ roundStatus(round) }}</small></div></div><i class="stage-connector" /><div class="journey-stage" :class="round.resources.length ? 'done' : 'pending'"><span class="stage-index">2</span><div><b>资源发布</b><small>{{ round.resources.length ? `${round.resources.length} 项资源` : '尚无资源产物' }}</small></div></div><i class="stage-connector" /><div class="journey-stage" :class="round.assessment ? 'done' : 'pending'"><span class="stage-index">3</span><div><b>反馈测评</b><small>{{ scoreLabel(round.assessment) }}</small></div></div><i class="stage-connector" /><div class="journey-stage" :class="round.feedback ? 'done' : 'pending'"><span class="stage-index">4</span><div><b>反馈决策</b><small>{{ round.feedback ? round.feedback.action : '待形成反馈' }}</small></div></div><i class="stage-connector" /><div class="journey-stage" :class="round.path_change ? 'done' : 'pending'"><span class="stage-index">5</span><div><b>路径变化</b><small>{{ pathStageLabel(round.path_change) }}</small></div></div><i class="stage-connector" /><div class="journey-stage" :class="round.feedback?.followup_run_ids?.length ? 'done' : 'pending'"><span class="stage-index">6</span><div><b>后续任务</b><small>{{ round.feedback?.followup_run_ids?.length ? `${round.feedback.followup_run_ids.length} 个后续批次` : '暂无后续任务' }}</small></div></div></div><div v-if="expandedRounds.includes(round.round_id || round.batch_id || round.run_id)" class="round-detail"><ol class="chain"><li><b>生成</b><span>{{ runDetail(round) }}</span></li><li><b>资源</b><span v-if="round.resources.length">{{ round.resources.map(resourceLabel).join('、') }}</span><span v-else>尚无可展示的资源产物</span></li><li><b>测评</b><span>{{ assessmentDetail(round.assessment) }}</span></li><li><b>反馈</b><span>{{ feedbackDetail(round.feedback) }}</span></li><li><b>学习路径</b><span>{{ pathDetail(round.path_change) }}</span></li></ol><div v-if="round.path_change?.mastery_changes?.length" class="mastery-list"><span v-for="item in round.path_change.mastery_changes" :key="item.knowledge_point_id">{{ item.knowledge_point_id }}：{{ masteryLabel(item) }}</span></div><div class="round-links"><el-button size="small" @click="toResources(round.batch_id || round.run_id)">查看本轮资源</el-button><el-button size="small" @click="toGenerate(round.run_id)">查看运行进度</el-button></div></div></div></article></div><el-button v-if="journey.next_offset !== null" class="load-more" :loading="loadingMore" @click="loadMore">加载更多轮次</el-button></section>
+        </template><el-empty v-else class="timeline-empty" description="请选择一个学习画像查看学习旅程" :image-size="96" />
       </main>
     </section>
   </div>
@@ -83,103 +17,77 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { DataAnalysis, Delete, FolderOpened } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { knowledgeApi, learningHistoryApi, profileApi } from '../../api'
 import { useAppStore } from '../../stores/app'
 import { formatDateTime } from '../../utils/generationDisplay'
 
-const router = useRouter()
-const store = useAppStore()
-const profiles = ref([])
-const tracks = ref([])
-const skillFilter = ref('')
-const timeline = ref(null)
-const activeLearnerId = ref('')
-const deletingProfile = ref(false)
+const router = useRouter(); const store = useAppStore()
+const profiles = ref([]); const tracks = ref([]); const skillFilter = ref(''); const statusFilter = ref(''); const timeFilter = ref('all')
+const journey = ref(null); const activeLearnerId = ref(''); const deletingProfile = ref(false); const loadingMore = ref(false); const expandedRounds = ref([])
 const filteredProfiles = computed(() => profiles.value.filter((profile) => !skillFilter.value || profile.skill_level === skillFilter.value))
-
-function resolveTrackName(trackId) { return tracks.value.find((item) => item.track_id === trackId || item.knowledge_base_id === trackId)?.name || trackId || '未命名方向' }
+const filteredRounds = computed(() => (journey.value?.rounds || []).filter((round) => (!statusFilter.value || round.status === statusFilter.value) && withinPeriod(round.occurred_at)))
+const orderedRounds = computed(() => [...filteredRounds.value].sort((left, right) => new Date(left.occurred_at || 0).getTime() - new Date(right.occurred_at || 0).getTime()))
+const orderedEvents = computed(() => [...(journey.value?.unlinked_events || [])].sort((left, right) => new Date(left.occurred_at || 0).getTime() - new Date(right.occurred_at || 0).getTime()))
+function resolveTrackName(id) { return tracks.value.find((item) => item.track_id === id || item.knowledge_base_id === id)?.name || id || '未命名方向' }
 function profileDisplayName(profile) { const snapshot = profile?.learning_preferences?.metadata?.user_profile_snapshot; return snapshot?.display_name || snapshot?.name || profile?.learner_type || '未命名画像' }
-function profileCreatedAt(profile) { return profile?.created_at ? formatDateTime(profile.created_at) : '时间未知' }
 function formatTime(value) { return value ? formatDateTime(value) : '时间未知' }
-function eventTone(event) {
-  const text = `${event.event_type || ''} ${event.status || ''}`.toLowerCase()
-  if (text.includes('fail') || text.includes('error')) return 'warning'
-  if (text.includes('feedback') || text.includes('diagnos')) return 'mint'
-  if (text.includes('generat') || text.includes('resource')) return 'blue'
-  return 'slate'
+function withinPeriod(value) { if (timeFilter.value === 'all' || !value) return true; return Date.now() - new Date(value).getTime() <= Number(timeFilter.value) * 86400000 }
+function nodeLabels(nodes) { return (nodes || []).map((item) => item.knowledge_point_id).join('、') }
+function scoreLabel(assessment) { return assessment ? `正确率 ${Math.round((assessment.score || 0) * 100)}%` : '尚未测评' }
+function resourceLabel(item) { return `${item.resource_type}（${item.publication_status === 'published' ? '已发布' : '待发布'}）` }
+function roundStatus(round) { return ({ completed: '资源已生成', running: '正在生成', queued: '等待生成', failed: '生成失败' })[round.status] || round.status }
+function stageTone(status) { return status === 'failed' ? 'failed' : ['running', 'queued'].includes(status) ? 'active' : 'done' }
+function runDetail(round) { const run = round.run_summary || {}; return run.availability === 'available' ? `${roundStatus(round)}；运行节点：${run.current_node || '已完成'}；审核 ${run.review_count || 0} 次${run.revision_count ? `，修订 ${run.revision_count} 次` : ''}` : (run.error_message || '该历史任务未保留完整运行详情') }
+function assessmentDetail(item) { if (!item) return '完成本轮资源后可进行正式测评'; const count = Number.isInteger(item.correct_count) && Number.isInteger(item.total_count) ? `${item.correct_count}/${item.total_count} 题正确，` : ''; return `${count}正确率 ${Math.round((item.score || 0) * 100)}%，覆盖 ${item.knowledge_points.length} 个知识点` }
+function feedbackDetail(item) { return item ? `策略：${item.action}；${item.reason}${item.next_action ? `；建议：${item.next_action}` : ''}` : '尚未形成反馈决策' }
+const pathMutationLabels = Object.freeze({ insert_remedial: '纠错复习', insert_practice: '强化复习', advance: '进阶学习', hold: '保持当前路径' })
+function pathNodeItems(item, key) {
+  const detailItems = item?.[key]
+  if (Array.isArray(detailItems) && detailItems.length) return detailItems
+  const idKey = key.replace('_nodes', '_node_ids')
+  return (item?.[idKey] || []).map((nodeId) => ({ node_id: nodeId, name: nodeId }))
 }
-function eventDescription(event) {
-  const knowledgeBaseId = event?.payload?.knowledge_base_id
-  if (knowledgeBaseId && ['initial_profile_created', 'questionnaire_submitted'].includes(event?.event_type)) return `学习方向 ${resolveTrackName(knowledgeBaseId)} 的问卷已提交。`
-  return event?.description || '学习进度已更新。'
+function pathNodeNames(item, key) {
+  return pathNodeItems(item, key).map((node) => node?.name || node?.knowledge_point_id || node?.node_id).filter(Boolean).join('、')
 }
+function pathStageLabel(item) {
+  if (!item) return '等待测评结果'
+  const actualNext = (item.next_steps || []).map((step) => step.topic).filter(Boolean).join('、')
+  if (actualNext) return `下一步：${actualNext}`
+  const assessed = pathNodeNames(item, 'assessed_nodes')
+  if (assessed) return `本轮测评：${assessed}`
+  return pathMutationLabels[item.mutation_type] || '路径未变化'
+}
+function pathDetail(item) {
+  if (!item) return '测评后将据结果更新学习路径'
+  const changes = []
+  const actualNext = (item.next_steps || []).map((step) => step.topic).filter(Boolean).join('、')
+  const assessed = pathNodeNames(item, 'assessed_nodes')
+  if (actualNext) changes.push(`下一步：${actualNext}`)
+  if (assessed) changes.push(`本轮测评：${assessed}`)
+  if (!changes.length) changes.push(pathMutationLabels[item.mutation_type] || '本轮未改变节点')
+  return `路径版本 ${item.path_version_before} → ${item.path_version_after}；${changes.join('；')}`
+}
+function masteryLabel(item) { return `${item.before == null ? '未评估' : `${Math.round(item.before * 100)}%`} → ${Math.round((item.after || 0) * 100)}%（${item.status}）` }
+function toggleRound(runId) { expandedRounds.value = expandedRounds.value.includes(runId) ? expandedRounds.value.filter((id) => id !== runId) : [...expandedRounds.value, runId] }
 function applyProfile(profile) { store.resumeProfile(profile, profile.knowledge_base_id, resolveTrackName(profile.knowledge_base_id)) }
-async function loadProfiles() {
-  const [profileRes, domainRes] = await Promise.all([profileApi.list({ page: 1, page_size: 50 }), knowledgeApi.listDomains()])
-  profiles.value = profileRes.data.items || profileRes.data.profiles || []
-  tracks.value = (domainRes.data.domains || []).flatMap((domain) => domain.tracks || [])
-}
-async function loadTimeline(learnerId) { const res = await learningHistoryApi.timeline(learnerId); timeline.value = res.data }
-async function selectProfile(profile) {
-  try { activeLearnerId.value = profile.learner_id; applyProfile(profile); await loadTimeline(profile.learner_id) }
-  catch (error) { console.error(error); ElMessage.error(error?.response?.data?.message || '学习时间线加载失败') }
-}
-async function deleteSelectedProfile() {
-  const profile = timeline.value?.profile
-  if (!profile?.learner_id || deletingProfile.value) return
-
-  try {
-    await ElMessageBox.confirm(
-      `将永久删除“${profileDisplayName(profile)}”及其问卷、诊断、学习资源、练习反馈、审核记录和生成运行记录。此操作不可恢复，是否继续？`,
-      '删除学习画像',
-      {
-        type: 'warning',
-        confirmButtonText: '永久删除',
-        cancelButtonText: '取消',
-        confirmButtonClass: 'el-button--danger',
-        closeOnClickModal: false,
-      },
-    )
-  } catch {
-    return
-  }
-
-  deletingProfile.value = true
-  try {
-    const learnerId = profile.learner_id
-    const removedIndex = profiles.value.findIndex((item) => item.learner_id === learnerId)
-    await profileApi.delete(learnerId)
-    profiles.value = profiles.value.filter((item) => item.learner_id !== learnerId)
-    activeLearnerId.value = ''
-    timeline.value = null
-    if (store.currentLearnerId === learnerId) store.clearLearnerContext()
-
-    const replacement = profiles.value[removedIndex] || profiles.value[removedIndex - 1]
-    if (replacement) await selectProfile(replacement)
-    ElMessage.success('学习画像及其相关内容已永久删除')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error?.response?.data?.message || '删除学习画像失败，请稍后重试')
-  } finally {
-    deletingProfile.value = false
-  }
-}
-function toGenerate() { if (timeline.value) router.push({ path: '/generate', query: { learnerId: timeline.value.learner_id } }) }
-function toResources() { if (timeline.value) router.push({ path: '/resources', query: { learnerId: timeline.value.learner_id } }) }
-onMounted(async () => {
-  try { await loadProfiles(); const initial = profiles.value.find((item) => item.learner_id === store.currentLearnerId) || profiles.value[0]; if (initial) await selectProfile(initial) }
-  catch (error) { console.error(error); ElMessage.error('历史学习记录加载失败') }
-})
+async function loadProfiles() { const [profileRes, domainRes] = await Promise.all([profileApi.list({ page: 1, page_size: 50 }), knowledgeApi.listDomains()]); profiles.value = profileRes.data.items || profileRes.data.profiles || []; tracks.value = (domainRes.data.domains || []).flatMap((domain) => domain.tracks || []) }
+async function loadJourney(learnerId, offset = 0) { const res = await learningHistoryApi.journey(learnerId, { offset, limit: 20 }); journey.value = offset ? { ...journey.value, rounds: [...journey.value.rounds, ...res.data.rounds], next_offset: res.data.next_offset } : res.data }
+async function selectProfile(profile) { if (deletingProfile.value) return; try { activeLearnerId.value = profile.learner_id; expandedRounds.value = []; applyProfile(profile); await loadJourney(profile.learner_id) } catch (error) { console.error(error); ElMessage.error(error?.response?.data?.message || '学习旅程加载失败') } }
+async function loadMore() { if (loadingMore.value || journey.value?.next_offset == null) return; loadingMore.value = true; try { await loadJourney(journey.value.learner_id, journey.value.next_offset) } finally { loadingMore.value = false } }
+async function deleteSelectedProfile() { const profile = profiles.value.find((item) => item.learner_id === activeLearnerId.value) || journey.value?.profile; if (!profile?.learner_id || deletingProfile.value) return; try { await ElMessageBox.confirm(`将永久删除“${profileDisplayName(profile)}”及其学习记录。此操作不可恢复，是否继续？`, '删除学习画像', { type: 'warning', confirmButtonText: '永久删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger', closeOnClickModal: false }) } catch { return }; deletingProfile.value = true; try { const learnerId = profile.learner_id; const index = profiles.value.findIndex((item) => item.learner_id === learnerId); await profileApi.delete(learnerId); profiles.value = profiles.value.filter((item) => item.learner_id !== learnerId); activeLearnerId.value = ''; journey.value = null; if (store.currentLearnerId === learnerId) store.clearLearnerContext(); const replacement = profiles.value[index] || profiles.value[index - 1]; if (replacement) await selectProfile(replacement); ElMessage.success('学习画像及其相关内容已永久删除') } catch (error) { console.error(error); ElMessage.error(error?.response?.data?.message || '删除学习画像失败，请稍后重试') } finally { deletingProfile.value = false } }
+function toGenerate(runId) { if (journey.value) router.push({ path: '/generate', query: { learnerId: journey.value.learner_id, ...(runId ? { runId } : {}) } }) }
+function toResources(batchId) { if (journey.value) router.push({ path: '/resources', query: { learnerId: journey.value.learner_id, ...(batchId ? { runId: batchId } : {}) } }) }
+onMounted(async () => { try { await loadProfiles(); const initial = profiles.value.find((item) => item.learner_id === store.currentLearnerId) || profiles.value[0]; if (initial) await selectProfile(initial) } catch (error) { console.error(error); ElMessage.error('历史学习记录加载失败') } })
 </script>
 
 <style scoped>
-.history-page { --ink:#10233f; --muted:#627692; --line:#dbe6f2; height:100%; min-height:0; display:flex; flex-direction:column; gap:16px; overflow:hidden; }.archive-hero,.profile-archive,.timeline-workspace { border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.96); box-shadow:0 12px 28px rgba(24,60,96,.06); }
-.archive-hero { position:relative; flex:0 0 auto; display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,.46fr); gap:24px; align-items:center; min-height:140px; padding:22px 28px; overflow:hidden; background:radial-gradient(circle at 86% 12%,rgba(48,203,174,.18),transparent 30%),linear-gradient(115deg,#eff6ff,#fcfdff 60%,#edf4ff); }.archive-hero::after { position:absolute; right:-25px; bottom:-70px; width:200px; height:150px; border:1px solid rgba(66,172,148,.15); border-radius:50%; content:''; }.archive-copy,.archive-filter { position:relative; z-index:1; }.archive-kicker { display:block; color:#2058a7; font-size:12px; font-weight:800; letter-spacing:.09em; line-height:1; }.archive-copy h2 { margin:8px 0 0; color:var(--ink); font-size:clamp(30px,2.2vw,39px); font-weight:800; letter-spacing:-.045em; line-height:1.08; }.archive-copy p { max-width:720px; margin:10px 0 0; color:#536d8d; font-size:14px; line-height:1.55; }.archive-filter { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:9px 10px; align-items:center; padding:15px; border:1px solid rgba(255,255,255,.85); border-radius:14px; background:rgba(255,255,255,.75); backdrop-filter:blur(8px); }.archive-filter > span { grid-column:1/-1; color:#617892; font-size:12px; font-weight:700; }.archive-filter b { color:#2b715f; font-size:12px; white-space:nowrap; }
-.history-layout { flex:1; min-height:0; display:grid; grid-template-columns:278px minmax(0,1fr); gap:16px; overflow:hidden; }.profile-archive { min-height:0; display:flex; flex-direction:column; padding:18px 14px 14px; overflow:hidden; background:linear-gradient(165deg,#fbfdff,#f6f9ff); }.archive-list-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:0 5px 13px; }.archive-list-head h3,.timeline-hero h3 { margin:7px 0 0; color:var(--ink); font-size:22px; font-weight:800; letter-spacing:-.035em; line-height:1.1; }.profile-scroll { min-height:0; display:flex; flex:1; flex-direction:column; gap:9px; overflow-y:auto; padding:2px 3px; scrollbar-width:thin; }.profile-item { width:100%; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:5px; padding:13px; border:1px solid #dbe6f0; border-radius:13px; background:rgba(255,255,255,.82); color:#1b3857; text-align:left; cursor:pointer; transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease; }.profile-item:hover { border-color:#9fc8ea; box-shadow:0 8px 18px rgba(39,88,140,.08); transform:translateY(-1px); }.profile-item.active { border-color:#46a98e; background:linear-gradient(145deg,#f2fbf8,#eff7ff); box-shadow:0 0 0 3px rgba(55,174,143,.1); }.profile-state { padding:4px 7px; border-radius:999px; background:#eef4fb; color:#55728e; font-size:10px; font-weight:800; }.profile-item.active .profile-state { background:#dff5ec; color:#168168; }.profile-item strong,.profile-direction,.profile-goal { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.profile-item strong { margin-top:3px; font-size:15px; }.profile-direction { color:#386c9e; font-size:12px; font-weight:700; }.profile-goal { max-width:100%; color:#718399; font-size:12px; }
-.timeline-workspace { min-width:0; min-height:0; display:flex; flex-direction:column; overflow:hidden; }.timeline-hero { flex:0 0 auto; display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:21px 25px 18px; border-bottom:1px solid #e2eaf2; background:linear-gradient(100deg,#fff,#fbfdff); }.timeline-hero p { margin:8px 0 0; overflow:hidden; color:#617792; font-size:14px; text-overflow:ellipsis; white-space:nowrap; }.timeline-actions { display:flex; flex:0 0 auto; gap:10px; }.timeline-actions :deep(.el-button) { height:36px; border-radius:8px; font-weight:700; }
-.timeline-summary { flex:0 0 auto; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:18px 24px 0; }.timeline-summary article { min-width:0; padding:12px 13px; border:1px solid #dce8f2; border-radius:11px; background:#f8fbff; }.timeline-summary article:nth-child(2n) { border-color:#cfe2ff; background:#f5f9ff; }.timeline-summary span,.timeline-summary strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.timeline-summary span { color:#71839a; font-size:11px; }.timeline-summary strong { margin-top:6px; color:#1b3857; font-size:15px; }
-.event-panel { min-height:0; flex:1; margin:16px 24px 24px; padding:18px; overflow:auto; border:1px solid #e0e9f1; border-radius:14px; background:#fcfdff; scrollbar-width:thin; }.event-panel-head h4 { margin:7px 0 16px; color:#1a3756; font-size:18px; letter-spacing:-.02em; }.timeline-list { display:flex; flex-direction:column; }.timeline-item { display:grid; grid-template-columns:22px minmax(0,1fr); gap:12px; min-height:100px; }.timeline-rail { position:relative; display:flex; justify-content:center; }.timeline-rail::after { position:absolute; top:18px; bottom:-1px; width:1px; background:#dce7f0; content:''; }.timeline-item:last-child .timeline-rail::after { display:none; }.timeline-rail i { position:relative; z-index:1; width:12px; height:12px; margin-top:5px; border:3px solid #fff; border-radius:50%; background:#6d829a; box-shadow:0 0 0 2px #cfdae6; }.timeline-item.mint .timeline-rail i { background:#4a90ff; box-shadow:0 0 0 2px #b9d6fa; }.timeline-item.blue .timeline-rail i { background:#347fd2; box-shadow:0 0 0 2px #b9d6fa; }.timeline-item.warning .timeline-rail i { background:#cf8a29; box-shadow:0 0 0 2px #f2d7ab; }.timeline-content { min-width:0; padding:0 0 18px; }.timeline-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }.timeline-head strong { overflow:hidden; color:#1b3857; font-size:16px; text-overflow:ellipsis; white-space:nowrap; }.event-status { padding:4px 7px; border-radius:999px; background:#eef4fb; color:#55728e; font-size:10px; font-weight:700; white-space:nowrap; }.timeline-content p { margin:7px 0; color:#5d738e; font-size:13px; line-height:1.55; }.timeline-content time { color:#8190a3; font-size:12px; }.timeline-empty { height:100%; }
-@media (max-width:1100px) { .archive-hero { grid-template-columns:1fr; }.archive-filter { max-width:480px; }.history-layout { grid-template-columns:250px minmax(0,1fr); }.timeline-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } } @media (max-width:820px) { .history-page { height:auto; overflow:visible; }.history-layout { grid-template-columns:1fr; overflow:visible; }.profile-archive { max-height:320px; }.timeline-workspace { min-height:600px; }.timeline-hero { flex-direction:column; }.timeline-actions { width:100%; }.timeline-actions :deep(.el-button) { flex:1; } } @media (max-width:560px) { .archive-hero { padding:20px; }.archive-copy h2 { font-size:30px; }.archive-filter { grid-template-columns:1fr; }.archive-filter b { white-space:normal; }.timeline-hero,.event-panel { margin-left:16px; margin-right:16px; }.timeline-hero { padding-left:18px; padding-right:18px; }.timeline-summary { margin-left:16px; margin-right:16px; }.timeline-summary { grid-template-columns:1fr; }.event-panel { margin-bottom:16px; padding:16px; } }
+.history-page{--ink:#10233f;--line:#dbe6f2;height:100%;min-height:0;display:flex;flex-direction:column;gap:16px;overflow:hidden}.archive-hero,.profile-archive,.journey-workspace{border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 12px 28px rgba(24,60,96,.06)}.archive-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.46fr);gap:24px;align-items:center;padding:22px 28px;background:radial-gradient(circle at 86% 12%,rgba(48,203,174,.18),transparent 30%),linear-gradient(115deg,#eff6ff,#fcfdff 60%,#edf4ff)}.archive-kicker,.round-kicker{display:block;color:#2058a7;font-size:11px;font-weight:800;letter-spacing:.09em}.archive-copy h2{margin:8px 0 0;color:var(--ink);font-size:34px}.archive-copy p,.journey-hero p{margin:9px 0 0;color:#5c7390;font-size:14px}.archive-filter{display:grid;grid-template-columns:1fr auto;gap:9px 10px;padding:14px;border:1px solid #e0eaf4;border-radius:14px}.archive-filter>span{grid-column:1/-1;color:#617892;font-size:12px;font-weight:700}.archive-filter b{color:#2b715f;font-size:12px}.history-layout{flex:1;min-height:0;display:grid;grid-template-columns:278px minmax(0,1fr);gap:16px;overflow:hidden}.profile-archive{min-height:0;display:flex;flex-direction:column;padding:18px 14px;overflow:hidden;background:#f8fbff}.archive-list-head{display:flex;justify-content:space-between;padding:0 5px 13px}.archive-list-head h3,.journey-hero h3{margin:7px 0 0;color:var(--ink);font-size:22px}.profile-scroll{min-height:0;display:flex;flex:1;flex-direction:column;gap:9px;overflow:auto;padding:2px}.profile-item{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:13px;border:1px solid #dbe6f0;border-radius:13px;background:#fff;color:#1b3857;text-align:left;cursor:pointer}.profile-item.active{border-color:#46a98e;background:#f2fbf8;box-shadow:0 0 0 3px rgba(55,174,143,.1)}.profile-state,.round-metrics span{padding:4px 7px;border-radius:999px;background:#eef4fb;color:#55728e;font-size:10px;font-weight:800}.profile-item strong{font-size:15px}.profile-direction{color:#386c9e;font-size:12px;font-weight:700}.profile-goal{max-width:100%;overflow:hidden;color:#718399;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.journey-workspace{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}.journey-hero{display:flex;justify-content:space-between;gap:18px;padding:21px 25px 18px;border-bottom:1px solid #e2eaf2}.journey-actions{display:flex;gap:10px}.state-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 24px 0}.state-grid article{min-width:0;padding:12px 13px;border:1px solid #dce8f2;border-radius:11px;background:#f8fbff}.state-grid span,.state-grid strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.state-grid span{color:#71839a;font-size:11px}.state-grid strong{margin-top:6px;color:#1b3857;font-size:14px}.journey-panel,.legacy-panel{min-height:0;margin:16px 24px 24px;padding:18px;overflow:auto;border:1px solid #e0e9f1;border-radius:14px;background:#fcfdff}.panel-head{display:flex;justify-content:space-between;gap:12px}.panel-head h4,.legacy-panel h4{margin:7px 0 16px;color:#1a3756;font-size:18px}.round-filters{display:flex;gap:8px}.round-list{display:flex;flex-direction:column;gap:11px}.round-card{border:1px solid #dfe9f2;border-left:4px solid #4a90ff;border-radius:12px;background:#fff}.round-card.failed{border-left-color:#cf8a29}.round-card.running,.round-card.queued{border-left-color:#6d829a}.round-summary{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:14px 16px}.round-summary h5{margin:4px 0;color:#1b3857;font-size:16px}.round-summary p{margin:0;color:#718399;font-size:12px}.round-metrics{display:flex;flex-direction:column;align-items:flex-end;gap:5px;color:#2b715f;font-size:13px}.round-detail{padding:0 16px 16px;border-top:1px solid #edf2f6}.chain{display:grid;gap:10px;margin:14px 0;padding:0;list-style:none}.chain li{display:grid;grid-template-columns:56px 1fr;gap:10px;color:#58708b;font-size:13px;line-height:1.55}.chain b{color:#28517d}.mastery-list{display:flex;flex-wrap:wrap;gap:7px}.mastery-list span{padding:5px 8px;border-radius:7px;background:#eff8f5;color:#28735f;font-size:12px}.round-links{display:flex;gap:8px;margin-top:14px}.load-more{display:block;margin:16px auto 0}.legacy-panel{flex:0 0 auto;max-height:190px}.legacy-panel p{margin:7px 0;color:#60758e;font-size:13px}.timeline-empty{height:100%}@media(max-width:1100px){.archive-hero{grid-template-columns:1fr}.history-layout{grid-template-columns:250px minmax(0,1fr)}.state-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:820px){.history-page{height:auto;overflow:visible}.history-layout{grid-template-columns:1fr;overflow:visible}.profile-archive{max-height:320px}.journey-workspace{min-height:600px}.journey-hero,.round-summary{display:flex;flex-direction:column;align-items:flex-start}.journey-actions{width:100%}.journey-actions .el-button{flex:1}}@media(max-width:560px){.archive-hero{padding:20px}.state-grid{grid-template-columns:1fr}.journey-panel,.legacy-panel{margin-left:16px;margin-right:16px}.round-filters{width:100%}.round-filters .el-select{flex:1}}
+.profile-filter{margin:0 5px 14px;padding:11px 10px;border:1px solid #dce7f2;border-radius:11px;background:#fbfdff}.profile-filter>span{display:block;margin-bottom:7px;color:#71839a;font-size:11px;font-weight:700}.profile-filter-row{display:flex;align-items:center;gap:8px}.profile-filter-row .el-select{min-width:0;flex:1}.profile-filter-row b{color:#2b715f;font-size:11px;white-space:nowrap}
+.profile-card-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px}.profile-delete-action{flex:0 0 auto;width:30px;height:30px;margin:-3px -3px 0 0;border-color:#d7e1ec;color:#71839b;background:#fff}.profile-delete-action:hover{border-color:#e36b6b;color:#d94f59;background:#fff5f5}.profile-item:focus-visible{outline:2px solid #4a90ff;outline-offset:2px}
+.panel-caption{margin:5px 0 0;color:#718399;font-size:12px;line-height:1.5}.journey-chain{display:flex;flex-direction:column;gap:0}.journey-chain-item{display:grid;grid-template-columns:34px minmax(0,1fr);min-width:0}.journey-chain-rail{position:relative;display:flex;justify-content:center}.journey-chain-rail::after{position:absolute;top:31px;bottom:0;width:2px;background:#dce8f3;content:''}.journey-chain-item:last-child .journey-chain-rail::after{display:none}.journey-chain-rail span{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:25px;height:25px;margin-top:20px;border:3px solid #fff;border-radius:50%;background:#4a90ff;color:#fff;font-size:11px;font-weight:800;box-shadow:0 0 0 2px #b9d6fa}.journey-chain-item.failed .journey-chain-rail span{background:#cf8a29;box-shadow:0 0 0 2px #f2d7ab}.journey-chain-item.running .journey-chain-rail span{background:#6d829a;box-shadow:0 0 0 2px #cfdae6}.journey-chain-content{min-width:0;margin:8px 0 8px;border:1px solid #dfe9f2;border-radius:13px;background:#fff;overflow:hidden}.journey-chain-item.followup .journey-chain-content{border-color:#b8dfd2}.journey-chain-content .round-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px}.journey-stages{display:flex;align-items:stretch;padding:0 16px 15px}.journey-stage{display:flex;flex:1;min-width:0;gap:7px;align-items:center;padding:9px 8px;border:1px solid #dfe8f1;border-radius:9px;background:#f8fbff}.journey-stage .stage-index{display:flex;flex:0 0 auto;align-items:center;justify-content:center;width:21px;height:21px;border-radius:50%;background:#dfe8f1;color:#58708b;font-size:10px;font-weight:800}.journey-stage div{min-width:0}.journey-stage b,.journey-stage small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.journey-stage b{color:#355b80;font-size:12px}.journey-stage small{margin-top:3px;color:#718399;font-size:10px}.journey-stage.done{border-color:#b8dfd2;background:#f2fbf8}.journey-stage.done .stage-index{background:#46a98e;color:#fff}.journey-stage.active{border-color:#c8d6e4;background:#f5f8fb}.journey-stage.active .stage-index{background:#6d829a;color:#fff}.journey-stage.failed{border-color:#f0d4a9;background:#fffaf1}.journey-stage.failed .stage-index{background:#cf8a29;color:#fff}.journey-stage.pending{opacity:.78}.stage-connector{flex:0 0 17px;align-self:center;height:2px;background:#dce8f3}.journey-chain-content .round-detail{padding-bottom:16px}@media(max-width:980px){.journey-stages{flex-wrap:wrap;gap:7px}.journey-stage{flex:1 1 calc(33.333% - 7px)}.stage-connector{display:none}}@media(max-width:560px){.journey-chain-item{grid-template-columns:28px minmax(0,1fr)}.journey-chain-content .round-summary{align-items:flex-start;flex-direction:column}.journey-stages{padding-left:10px;padding-right:10px}.journey-stage{flex-basis:calc(50% - 7px)}}
+.history-event .journey-chain-content{background:#f8fbff}.history-event-content{padding:14px 16px}.history-event-content h5{margin:5px 0;color:#1b3857;font-size:15px}.history-event-content p{margin:0 0 7px;color:#60758e;font-size:13px;line-height:1.5}.history-event-content time{color:#8190a3;font-size:12px}
+.journey-stages > .journey-stage:nth-of-type(6),.journey-stages > .journey-stage:nth-of-type(5) + .stage-connector{display:none}
 </style>

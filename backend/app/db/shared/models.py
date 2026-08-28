@@ -123,8 +123,12 @@ class GeneratedResourceORM(Base):
     legacy_reviewer_score = Column(Float, nullable=True, comment="旧 Reviewer 主观评分")
     claim_hallucination_rate = Column(Float, nullable=True, comment="Claim 级可复核幻觉率")
     claim_metric_status = Column(String(32), nullable=True)
+    claim_factual_pass_rate = Column(Float, nullable=True)
+    claim_warning_publish = Column(Boolean, nullable=False, default=False, server_default="0")
     hallucination_rate = Column(Float, nullable=True, comment="幻觉率")
     difficulty_match = Column(Boolean, nullable=True, comment="难度是否匹配")
+    claim_publish_decision_pending = Column(Boolean, nullable=False, default=False, server_default="0")
+    claim_publish_decision = Column(String(32), nullable=True)
     version = Column(Integer, nullable=False, default=1, comment="资源版本")
     parent_resource_id = Column(
         String(64),
@@ -478,7 +482,7 @@ class FeedbackFollowUpRunORM(Base):
     __tablename__ = "feedback_followup_runs"
 
     relation_id = Column(String(128), primary_key=True)
-    attempt_id = Column(String(128), ForeignKey("learning_attempts.attempt_id"), nullable=False, unique=True, index=True)
+    attempt_id = Column(String(128), ForeignKey("learning_attempts.attempt_id"), nullable=False, index=True)
     decision_id = Column(String(128), ForeignKey("feedback_decisions.decision_id"), nullable=False, index=True)
     parent_run_id = Column(String(128), ForeignKey("agent_runs.run_id"), nullable=True, index=True)
     child_run_id = Column(String(128), ForeignKey("generation_jobs.run_id"), nullable=True, unique=True, index=True)
@@ -487,6 +491,9 @@ class FeedbackFollowUpRunORM(Base):
     error_code = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    relation_type = Column(String(32), nullable=False, default="selection", index=True)
+    source_relation_id = Column(String(128), nullable=True, index=True)
+    source_child_run_id = Column(String(128), nullable=True, index=True)
 
 
 # 以下模型承接知识库、图谱、审核和评测。JSON 仅用于可扩展负载；可查询的核心

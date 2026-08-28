@@ -79,11 +79,19 @@ class KnowledgePointAttemptResult(StrictFeedbackModel):
             raise ValueError("correct_count cannot exceed total_count")
         if len(self.question_ids) != len(set(self.question_ids)):
             raise ValueError("question_ids must be unique")
-        computed = self.correct_count / self.total_count
-        if self.score is not None and not math.isclose(self.score, computed, abs_tol=1e-9):
-            raise ValueError("score does not match correct_count / total_count")
-        self.score = computed
+        if self.score is None:
+            self.score = self.correct_count / self.total_count
         return self
+
+
+def _attempt_score(results: list[KnowledgePointAttemptResult], metadata: dict[str, Any]) -> float:
+    """Prefer the server's weighted score while retaining legacy count scoring."""
+
+    total_score = metadata.get("total_score")
+    max_score = metadata.get("max_score")
+    if isinstance(total_score, (int, float)) and isinstance(max_score, (int, float)) and max_score > 0:
+        return float(total_score) / float(max_score)
+    return sum(float(item.score if item.score is not None else item.correct_count / item.total_count) for item in results) / len(results)
 
 
 class LearningAttemptSubmit(StrictFeedbackModel):
@@ -135,9 +143,7 @@ class LearningAttemptSubmit(StrictFeedbackModel):
         point_ids = [item.knowledge_point_id for item in self.knowledge_point_results]
         if len(point_ids) != len(set(point_ids)):
             raise ValueError("knowledge_point_results must be unique by knowledge_point_id")
-        total = sum(item.total_count for item in self.knowledge_point_results)
-        correct = sum(item.correct_count for item in self.knowledge_point_results)
-        computed = correct / total
+        computed = _attempt_score(self.knowledge_point_results, self.metadata)
         if self.overall_score is not None and not math.isclose(self.overall_score, computed, abs_tol=1e-9):
             raise ValueError("overall_score does not match point result totals")
         self.overall_score = computed
@@ -335,6 +341,8 @@ class FeedbackLoopResult(StrictFeedbackModel):
     feedback_status: Literal["applied"] = "applied"
     followup_generation_status: FollowUpGenerationStatus = FollowUpGenerationStatus.NOT_REQUESTED
     followup_run_id: str | None = None
+    followup_run_ids: list[str] = Field(default_factory=list)
+    followup_relations: list[dict[str, Any]] = Field(default_factory=list)
     followup_job_id: str | None = None
     followup_error_code: str | None = None
     analysis: FeedbackAnalysis | None = None

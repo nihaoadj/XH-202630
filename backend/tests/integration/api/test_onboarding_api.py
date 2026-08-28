@@ -74,7 +74,6 @@ def _questionnaire_payload():
         "prompt_level": "会写简单提问",
         "rag_level": "听说过，但说不清流程",
         "known_rag_nodes": ["Embedding", "Rerank"],
-        "learning_focus_rag_nodes": ["Embedding"],
         "learning_modes": ["先讲概念，再做练习"],
         "weekly_time_budget": "2-4 小时",
     }
@@ -117,8 +116,7 @@ def test_onboarding_creates_stage_scoped_three_node_diagnostic_questions():
     assert "education" not in question_ids
     assert "major" not in question_ids
     assert "desired_resource_types" not in question_ids
-    focus_question = next(item for item in questionnaire.json()["questions"] if item["question_id"] == "learning_focus_rag_nodes")
-    assert focus_question["profile_mapping"]["target_path"] == "learning_preferences.focus_nodes"
+    assert "learning_focus_rag_nodes" not in question_ids
 
 
 def test_rag_questionnaire_exposes_all_ability_nodes_with_direct_diagnostic_mapping():
@@ -132,7 +130,6 @@ def test_rag_questionnaire_exposes_all_ability_nodes_with_direct_diagnostic_mapp
     assert response.status_code == 200
     questions = {item["question_id"]: item for item in response.json()["questions"]}
     known_nodes = questions["known_rag_nodes"]
-    focus_nodes = questions["learning_focus_rag_nodes"]
     expected_node_ids = [node.node_id for node in knowledge_service.list_skill_nodes("rag_engineering_training")]
     expected_node_names = [node.name for node in knowledge_service.list_skill_nodes("rag_engineering_training")]
 
@@ -141,8 +138,7 @@ def test_rag_questionnaire_exposes_all_ability_nodes_with_direct_diagnostic_mapp
         [node_id] for node_id in expected_node_ids
     ]
     assert known_nodes["options"][-1]["value"] == "都不了解"
-    assert [option["label"] for option in focus_nodes["options"][:-1]] == expected_node_names
-    assert focus_nodes["options"][-1]["value"] == "无"
+    assert "learning_focus_rag_nodes" not in questions
 
 
 def test_diagnosis_keeps_unassessed_nodes_out_of_confirmed_weaknesses():
@@ -223,17 +219,6 @@ def test_intermediate_initial_diagnosis_retests_lower_tier_before_finalizing():
     assert final.status_code == 200
     assert final.json()["initial_diagnostic_status"] == "final"
     assert final.json()["final_tier"] == 1
-
-
-def test_learning_focus_is_profile_preference_not_diagnostic_gate():
-    client, _, _ = _client()
-    payload = _questionnaire_payload()
-    payload["learning_focus_rag_nodes"] = ["无"]
-
-    response = client.post("/api/onboarding/initial-profile", json=payload)
-    assert response.status_code == 200
-    assert response.json()["screening_results"] == {}
-    assert "embedding" in response.json()["diagnostic_node_ids"]
 
 
 def test_same_direction_creates_distinct_profiles_and_histories():

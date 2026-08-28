@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
@@ -45,6 +46,17 @@ def _persistence_failure(exc: Exception) -> ApplicationError:
         else ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE
     )
     return ApplicationError(code, status_code=409 if isinstance(exc, PersistenceConflict) else 503)
+
+
+def _safe_exception_detail(exc: Exception) -> str:
+    """Return bounded diagnostic detail without persisting credentials/prompts."""
+    detail = str(exc).replace("\x00", " ").strip()
+    # Provider exceptions occasionally echo request headers or raw prompt
+    # fragments.  Keep the useful exception class/detail for the acceptance
+    # report while redacting common credential-bearing tokens.
+    if re.search(r"(?i)(api[_ -]?key|authorization|bearer|secret|password|token)", detail):
+        return "[redacted sensitive exception detail]"
+    return detail[:480]
 
 
 class RecordedNode:
@@ -116,9 +128,12 @@ class RecordedNode:
                 "status": "failed",
                 "input_summary": "节点输入已通过契约校验",
                 "output_summary": "节点执行失败",
-                "decision_reason": "节点异常终止；原始异常未持久化。",
+                "decision_reason": "节点异常终止；已持久化脱敏异常诊断。",
                 "error_code": error_code,
-                "error_message": "工作流步骤执行失败",
+                "error_message": (
+                    f"工作流步骤执行失败（{type(exc).__name__}）"
+                    + (f"：{_safe_exception_detail(exc)}" if str(exc).strip() else "")
+                )[:512],
                 "started_at": started_at.isoformat(),
                 "ended_at": ended_at.isoformat(),
                 **workflow_budget_metadata(state, started_at),

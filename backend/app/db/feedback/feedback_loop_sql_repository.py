@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -67,7 +68,9 @@ def _assessment_metadata(attempt: LearningAttempt, point_id: str) -> dict:
             if item.get("diagnostic_dimension") in {"concept", "scenario", "misconception", "practice"}
         )),
         "scoring_audit_status": audit,
-        "evidence_eligible": audit not in {"double_disagreement", "failed"},
+        # The attempt's server-derived score is authoritative for mastery;
+        # audit disagreements remain visible in scoring_audit_status.
+        "evidence_eligible": True,
     }
 
 
@@ -463,9 +466,12 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
         trigger_type: str,
         status: str,
         error_code: str | None = None,
+        relation_type: str = "selection",
+        source_relation_id: str | None = None,
+        source_child_run_id: str | None = None,
     ) -> FeedbackLoopResult:
         with self.session_factory() as db:
-            row = db.query(FeedbackFollowUpRunORM).filter_by(attempt_id=attempt_id).first()
+            row = db.query(FeedbackFollowUpRunORM).filter_by(child_run_id=child_run_id).first()
             if row:
                 if row.child_run_id != child_run_id or row.status != status:
                     retrying_failed_relation = (
@@ -476,14 +482,14 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                         and status == "queued"
                     )
                     if not retrying_failed_relation:
-                        raise FeedbackIdempotencyConflict("attempt already has another follow-up")
+                        raise FeedbackIdempotencyConflict("child run already has another follow-up")
                     row.child_run_id = child_run_id
                     row.status = status
                     row.error_code = error_code
                     db.commit()
             else:
                 db.add(FeedbackFollowUpRunORM(
-                    relation_id=_stable_id("fur", attempt_id),
+                    relation_id=_stable_id("fur", attempt_id, decision_id, trigger_type, child_run_id or "none"),
                     attempt_id=attempt_id,
                     decision_id=decision_id,
                     parent_run_id=parent_run_id,
@@ -491,6 +497,11 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                     trigger_type=trigger_type,
                     status=status,
                     error_code=error_code,
+                    relation_type=relation_type,
+                    source_relation_id=source_relation_id,
+                    source_child_run_id=source_child_run_id,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
                 ))
                 db.commit()
             return self._load_result(db, attempt_id, replay=False)
@@ -682,7 +693,8 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
             created_at=path_mutation_row.created_at,
         )
         version = db.query(LearnerProfileVersionORM).filter_by(source_attempt_id=attempt_id).one()
-        followup = db.query(FeedbackFollowUpRunORM).filter_by(attempt_id=attempt_id).first()
+        followups = db.query(FeedbackFollowUpRunORM).filter_by(attempt_id=attempt_id).order_by(FeedbackFollowUpRunORM.created_at, FeedbackFollowUpRunORM.child_run_id).all()
+        followup = followups[0] if followups else None
         return FeedbackLoopResult(
             attempt=attempt,
             decision=decision,
@@ -694,5 +706,14 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
             followup_run_id=followup.child_run_id if followup else None,
             followup_job_id=followup.child_run_id if followup else None,
             followup_error_code=followup.error_code if followup else None,
+            followup_run_ids=[item.child_run_id for item in followups if item.child_run_id],
+            followup_relations=[{
+                "relation_id": item.relation_id, "attempt_id": item.attempt_id,
+                "decision_id": item.decision_id, "parent_run_id": item.parent_run_id,
+                "child_run_id": item.child_run_id, "trigger_type": item.trigger_type,
+                "status": item.status, "error_code": item.error_code,
+                "relation_type": item.relation_type, "source_relation_id": item.source_relation_id,
+                "source_child_run_id": item.source_child_run_id,
+            } for item in followups],
             idempotent_replay=replay,
         )

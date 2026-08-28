@@ -44,7 +44,8 @@ def _assessment_metadata(attempt: LearningAttempt, point_id: str) -> dict:
             if item.get("diagnostic_dimension") in {"concept", "scenario", "misconception", "practice"}
         )),
         "scoring_audit_status": audit,
-        "evidence_eligible": audit not in {"double_disagreement", "failed"},
+        # Keep audit status without withholding a server-scored result.
+        "evidence_eligible": True,
     }
 
 
@@ -62,7 +63,7 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
         self._paths: dict[str, LearningPath] = {}
         self._path_mutations: dict[str, PathMutation] = {}
         self._versions: dict[str, list[ProfileVersionRecord]] = {}
-        self._followups: dict[str, dict] = {}
+        self._followups: dict[str, list[dict]] = {}
         self._state_values: dict[tuple[str, str], KnowledgeStateValue] = {}
         self._lock = RLock()
         self.mastery_repository = mastery_repository
@@ -207,9 +208,12 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
         trigger_type: str,
         status: str,
         error_code: str | None = None,
+        relation_type: str = "selection",
+        source_relation_id: str | None = None,
+        source_child_run_id: str | None = None,
     ) -> FeedbackLoopResult:
         with self._lock:
-            existing = self._followups.get(attempt_id)
+            existing_items = self._followups.setdefault(attempt_id, [])
             payload = {
                 "decision_id": decision_id,
                 "parent_run_id": parent_run_id,
@@ -217,18 +221,15 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
                 "trigger_type": trigger_type,
                 "status": status,
                 "error_code": error_code,
+                "relation_type": relation_type,
+                "source_relation_id": source_relation_id,
+                "source_child_run_id": source_child_run_id,
             }
-            if existing and existing != payload:
-                retrying_failed_relation = (
-                    existing.get("decision_id") == decision_id
-                    and existing.get("parent_run_id") == parent_run_id
-                    and existing.get("trigger_type") == trigger_type
-                    and existing.get("status") == "failed"
-                    and status == "queued"
-                )
-                if not retrying_failed_relation:
-                    raise FeedbackIdempotencyConflict("attempt already has another follow-up")
-            self._followups[attempt_id] = payload
+            existing = next((item for item in existing_items if item.get("child_run_id") == child_run_id), None)
+            if existing:
+                existing.update(payload)
+            else:
+                existing_items.append(payload)
             return self._result(attempt_id, replay=False)
 
     def list_attempts(self, learner_id: str, limit: int = 20) -> list[LearningAttempt]:
@@ -247,9 +248,10 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
         return [item.model_copy(deep=True) for item in reversed(self._versions.get(learner_id, []))][:limit]
 
     def get_followup_relation(self, child_run_id: str) -> dict | None:
-        for attempt_id, item in self._followups.items():
-            if item.get("child_run_id") == child_run_id:
-                return {"attempt_id": attempt_id, **item}
+        for attempt_id, items in self._followups.items():
+            for item in items:
+                if item.get("child_run_id") == child_run_id:
+                    return {"attempt_id": attempt_id, **item}
         return None
 
     def reconcile_incomplete_followups(
@@ -265,16 +267,17 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
                 if decision.action.value not in {"remediate", "advance"}:
                     continue
                 attempt = self._attempts[attempt_id]
-                relation = self._followups.get(attempt_id)
-                if relation and relation.get("child_run_id") in stale and relation.get("status") == "queued":
-                    relation["status"] = "failed"
-                    relation["error_code"] = error_code
-                    reconciled += 1
+                for relation in self._followups.get(attempt_id, []):
+                    if relation.get("child_run_id") in stale and relation.get("status") == "queued":
+                        relation["status"] = "failed"
+                        relation["error_code"] = error_code
+                        reconciled += 1
         return reconciled
 
     def _result(self, attempt_id: str, *, replay: bool) -> FeedbackLoopResult:
         attempt = self._attempts[attempt_id]
-        followup = self._followups.get(attempt_id, {})
+        followups = sorted(self._followups.get(attempt_id, []), key=lambda item: str(item.get("child_run_id") or ""))
+        followup = followups[0] if followups else {}
         status = FollowUpGenerationStatus(followup.get("status", "not_requested"))
         return FeedbackLoopResult(
             attempt=attempt.model_copy(deep=True),
@@ -293,5 +296,7 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
             followup_run_id=followup.get("child_run_id"),
             followup_job_id=followup.get("child_run_id"),
             followup_error_code=followup.get("error_code"),
+            followup_run_ids=[item.get("child_run_id") for item in followups if item.get("child_run_id")],
+            followup_relations=followups,
             idempotent_replay=replay,
         )

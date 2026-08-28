@@ -425,6 +425,12 @@ class ChromaVectorSearchBackend:
                     query_status="failed",
                     fallback_reason="hybrid_search_unavailable",
                     exception_type=type(exc).__name__,
+                    # Keep the concrete backend detail in the internal
+                    # retrieval profile so live acceptance reports can
+                    # distinguish a provider failure from a local Chroma or
+                    # embedding-runtime failure.  This is never exposed as a
+                    # public error message.
+                    exception_detail=str(exc)[:512],
                 )
             query_profile["query_total_ms"] = round(
                 (perf_counter() - query_started) * 1000, 3

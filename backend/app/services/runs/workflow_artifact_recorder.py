@@ -279,6 +279,31 @@ class WorkflowArtifactRecorder:
                 status="completed",
                 payload={"resource_metrics": state.get("claim_metrics", {})},
             )
+            for resource_id, metric in state.get("claim_metrics", {}).items():
+                resource = resources.get(str(resource_id))
+                if resource is None or not isinstance(metric, dict):
+                    continue
+                factual_total = int(metric.get("factual_claim_total", 0) or 0)
+                supported_total = int(metric.get("supported_claim_total", 0) or 0)
+                self._append(
+                    run_id,
+                    WorkflowEventType.CLAIM_METRIC_COMPUTED,
+                    f"resource:{resource_id}",
+                    trace_item,
+                    status="completed",
+                    payload={
+                        **self._resource_event_payload(resource, state, "claim_checking"),
+                        "claim_metric_status": metric.get("metric_status"),
+                        "claim_count": int(metric.get("claim_total", 0) or 0),
+                        "factual_claim_total": factual_total,
+                        "supported_claim_total": supported_total,
+                        "contradicted_claim_total": int(metric.get("contradicted_claim_total", 0) or 0),
+                        "not_in_evidence_claim_total": int(metric.get("not_in_evidence_claim_total", 0) or 0),
+                        "claim_factual_pass_rate": (
+                            supported_total / factual_total if factual_total else None
+                        ),
+                    },
+                )
             self._persist_executions(state, run_id)
             return
 
@@ -434,6 +459,12 @@ class WorkflowArtifactRecorder:
             "validation_status": execution.get("validation_status"),
             "publication_status": resource.publication_status,
             "review_id": resource.review_id,
+            "claim_metric_status": resource.claim_metric_status,
+            "claim_count": resource.claim_count,
+            "claim_factual_pass_rate": resource.claim_factual_pass_rate,
+            "claim_warning_publish": resource.claim_warning_publish,
+            "claim_publish_decision_pending": resource.claim_publish_decision_pending,
+            "claim_publish_decision": resource.claim_publish_decision,
         }
 
     def _save_resource(

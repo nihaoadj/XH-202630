@@ -1,6 +1,8 @@
 from pathlib import Path
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
+from pydantic import BaseModel
 from fastapi.responses import Response
 
 from app.api.dependencies import ensure_profile_access
@@ -17,8 +19,51 @@ from app.models.learning_documents.schemas import (
 from app.services.generation.jobs import GenerationJobService
 from app.services.learners.profiles import ProfileService
 from app.services.learning_documents.resources import ResourceService
+from app.models.shared.persistence import WorkflowEventType
 
 router = APIRouter()
+
+
+class ClaimPublicationDecisionRequest(BaseModel):
+    publish: bool
+
+
+@router.post("/items/{resource_id}/claim-publication-decision")
+def decide_claim_publication(resource_id: str, payload: ClaimPublicationDecisionRequest, request: Request):
+    service: ResourceService = request.app.container.resource_service()
+    resource = service.get(resource_id)
+    if resource is None:
+        raise HTTPException(status_code=404, detail="资源不存在")
+    profile = request.app.container.profile_service().get(resource.learner_id or "")
+    if ensure_profile_access(request, profile) is None:
+        raise HTTPException(status_code=404, detail="资源不存在")
+    if not resource.claim_publish_decision_pending:
+        if resource.claim_publish_decision == ("published_by_user" if payload.publish else "rejected_by_user"):
+            return {"resource": resource}
+        raise HTTPException(status_code=409, detail="该资源当前不处于待用户决策状态")
+    if resource.claim_metric_status != "complete":
+        raise HTTPException(status_code=409, detail="Claim 审核尚未完成")
+    if (resource.claim_factual_pass_rate is None or resource.claim_factual_pass_rate < get_settings().claim_user_review_min_factual_pass_rate):
+        raise HTTPException(status_code=409, detail="事实 Claim 通过率未达到用户决策阈值")
+    claims_response = request.app.container.run_query_service().get_claims(resource.run_id or "")
+    metric = claims_response.resource_metrics.get(resource_id)
+    if metric is None or metric.contradicted_claim_total > 0:
+        raise HTTPException(status_code=409, detail="存在矛盾事实 Claim，禁止发布")
+    updated = service.update_publication_decision(resource_id, publish=payload.publish)
+    if updated is not None and updated.run_id:
+        request.app.container.audit_repository().append_event(
+            updated.run_id,
+            WorkflowEventType.RESOURCE_PUBLICATION_DECIDED,
+            payload={
+                "resource_id": updated.resource_id,
+                "resource_type": updated.resource_type,
+                "publication_status": updated.publication_status,
+                "claim_publish_decision": updated.claim_publish_decision,
+            },
+            occurred_at=datetime.now(timezone.utc),
+            status=updated.publication_status,
+        )
+    return {"resource": updated}
 
 
 def _resource_context(resources: list) -> list[dict]:
@@ -114,6 +159,24 @@ def continue_resource_batch(
         generation_request,
         batch_id=batch_id,
     )
+    feedback_attempt_id = constraints.get("feedback_attempt_id")
+    feedback_decision_id = constraints.get("feedback_decision_id")
+    if feedback_attempt_id and feedback_decision_id:
+        relation_type = "retry" if payload.replace_existing_types and "重新生成" in (payload.instructions or "") else "continuation"
+        source_relation_id = None
+        if relation_type == "retry" and payload.source_run_id:
+            source_relation = request.app.container.feedback_service().feedback_loop_repo.get_followup_relation(
+                payload.source_run_id
+            )
+            source_relation_id = source_relation.get("relation_id") if source_relation else None
+        request.app.container.feedback_service().feedback_loop_repo.attach_followup(
+            attempt_id=str(feedback_attempt_id), decision_id=str(feedback_decision_id),
+            parent_run_id=payload.source_run_id or source_job.run_id,
+            child_run_id=job.run_id, trigger_type="resource_append",
+            status="queued", relation_type=relation_type,
+            source_relation_id=source_relation_id,
+            source_child_run_id=payload.source_run_id if relation_type == "retry" else None,
+        )
     if payload.source_run_id and payload.replace_source_run:
         generation_job_service.mark_superseded(payload.source_run_id, job.run_id)
     background_tasks.add_task(

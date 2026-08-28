@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from app.models.reviews.claims import (
     ClaimCandidate,
@@ -79,6 +80,17 @@ def test_materialize_claims_rejects_forged_evidence():
             allowed_knowledge_point_ids=set(),
             extractor_prompt_version="v1",
             extractor_model=None,
+        )
+
+
+def test_claim_source_text_is_limited_to_2000_characters():
+    with pytest.raises(ValidationError):
+        ClaimCandidate(
+            claim_text="事实",
+            claim_type=ClaimType.FACTUAL,
+            source_text="x" * 2001,
+            source_start=0,
+            source_end=2001,
         )
 
 

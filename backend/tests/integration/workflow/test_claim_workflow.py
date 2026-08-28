@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from app.agents.resource_workflows.learning_documents.claim_review_agent import claim_decide_node, claim_extract_node, claim_judge_node
+from app.agents.resource_workflows.learning_documents import workflow as workflow_module
 from app.agents.resource_workflows.learning_documents.workflow import (
     decide_node,
     prepare_claim_revision_node,
@@ -93,6 +95,32 @@ def test_supported_claim_completes_and_approves():
     assert state["review_result"]["decision"] == "approve"
     assert state["review_result"]["claim_hallucination_rate"] == 0.0
     assert state["claim_metrics"]["res-claim"]["metric_status"] == ClaimMetricStatus.COMPLETE.value
+
+
+def test_claim_extractor_uses_configured_per_resource_limit_in_prompt_and_validation():
+    state = _state()
+    content = state["generated_resources"][0].content_text
+    candidate = {
+        "claim_text": "Python 使用缩进定义代码块",
+        "claim_type": "factual",
+        "source_text": content,
+        "source_start": 0,
+        "source_end": len(content),
+        "knowledge_point_id": "skill-python",
+    }
+    extractor = ScriptedLLMGateway([{
+        "resources": [{"resource_id": "res-claim", "claims": [candidate] * 11}],
+    }])
+
+    result = claim_extract_node(
+        state,
+        llm_gateway=extractor,
+        max_claims_per_resource=10,
+    )
+
+    assert "1–10 条 Claim" in extractor.calls[0]["messages"][0].content
+    assert result["claim_check_status"] == "failed"
+    assert "configured per-resource limit (10)" in result["errors"][0]["safe_detail"]
 
 
 def test_structured_assessment_uses_internal_audit_instead_of_public_markdown_claims():
@@ -387,8 +415,9 @@ def test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes(
     assert state["review_result"]["decision"] == "human_review"
     assert by_id["res-claim"].publication_status == "published"
     assert by_id["res-claim"].review_status == "approved"
-    assert by_id["res-claim-second"].publication_status == "unpublished"
-    assert by_id["res-claim-second"].review_status == "human_review"
+    assert by_id["res-claim-second"].publication_status == "published"
+    assert by_id["res-claim-second"].claim_degraded_publish is True
+    assert by_id["res-claim-second"].review_status == "approved"
 
 
 def test_requested_claim_audit_skips_terminal_non_approved_resource():
@@ -448,6 +477,74 @@ def test_claim_enabled_publication_fails_closed_without_resource_metric():
     resource = finalized["generated_resources"][0]
     assert resource.review_status == "human_review"
     assert resource.publication_status == "unpublished"
+
+
+def test_completed_claim_audit_waits_for_user_decision_at_eighty_percent(monkeypatch):
+    state = _state()
+    state.update({
+        "resource_review_results": {"res-claim": {"decision": "approve"}},
+        "claim_eligible_resource_ids": ["res-claim"],
+        "claim_check_status": "completed",
+        "claim_metrics": {
+            "res-claim": {
+                "metric_status": "complete", "claim_total": 5,
+                "factual_claim_total": 5, "supported_claim_total": 4,
+                "contradicted_claim_total": 0, "not_in_evidence_claim_total": 1,
+                "non_factual_claim_total": 0, "incomplete_claim_total": 0,
+            },
+        },
+        "review_result": {
+            **state["review_result"],
+            "issues": [{"resource_id": "res-claim", "code": "evidence_gap"}],
+        },
+    })
+    monkeypatch.setattr(workflow_module, "get_settings", lambda: SimpleNamespace(
+        claim_partial_publish=False,
+        claim_warning_publish_enabled=True,
+        claim_warning_publish_min_factual_pass_rate=0.80,
+    ))
+
+    finalized = decide_node(state)
+
+    resource = finalized["generated_resources"][0]
+    assert resource.publication_status == "unpublished"
+    assert resource.claim_publish_decision_pending is True
+    assert resource.claim_warning_publish is False
+    assert resource.claim_factual_pass_rate == 0.80
+    assert finalized["workflow_status"] == "human_review"
+    assert finalized["final_decision"] == "Claim 审核报告待用户决定是否发布"
+
+
+def test_completed_claim_audit_never_warning_publishes_contradicted_fact(monkeypatch):
+    state = _state()
+    state.update({
+        "resource_review_results": {"res-claim": {"decision": "approve"}},
+        "claim_eligible_resource_ids": ["res-claim"],
+        "claim_check_status": "completed",
+        "claim_metrics": {
+            "res-claim": {
+                "metric_status": "complete", "claim_total": 5,
+                "factual_claim_total": 5, "supported_claim_total": 4,
+                "contradicted_claim_total": 1, "not_in_evidence_claim_total": 0,
+                "non_factual_claim_total": 0, "incomplete_claim_total": 0,
+            },
+        },
+        "review_result": {
+            **state["review_result"],
+            "issues": [{"resource_id": "res-claim", "code": "factual_risk"}],
+        },
+    })
+    monkeypatch.setattr(workflow_module, "get_settings", lambda: SimpleNamespace(
+        claim_partial_publish=False,
+        claim_warning_publish_enabled=True,
+        claim_warning_publish_min_factual_pass_rate=0.80,
+    ))
+
+    finalized = decide_node(state)
+
+    resource = finalized["generated_resources"][0]
+    assert resource.publication_status == "unpublished"
+    assert resource.claim_warning_publish is False
 
 
 def test_claim_revision_uses_its_own_budget_and_preserves_ordinary_budget():

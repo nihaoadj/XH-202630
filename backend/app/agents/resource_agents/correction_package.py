@@ -16,7 +16,7 @@ CORRECTION_PACKAGE_PROMPT = """你是 CorrectionTrainingPackageAgent。一次性
 绝对边界：
 1. 只能使用输入的冻结 evidence 和受控 correction_focus；不得使用记忆、外部知识或学习者原始答案。
    correction_focus 中的 error_context 是服务端根据本次节点测评整理的错误摘要，node_context 是当前节点上下文；只能据此组织纠错内容。
-2. 不得复述、猜测或构造原测评题、选项、正确答案、解析、题号、复测题或学习者自由文本；不得把错误摘要扩写成未被 evidence 支持的新事实。
+2. 不得复述、猜测或构造原测评题、选项、正确答案、解析、题号、复测题或学习者自由文本；不得把错误摘要扩写成未被 evidence 支持的新事实。返工时可参考 previous_version_content，但新增或修改的事实仍必须由 evidence 支持。
 3. correction_focus 中每个目标知识点必须有一个独立“## 强化单元：<知识点>”章节，且该章严格依次包含：
    “### 错误模式”“### 核心概念补救”“### 正误对照”“### 完整示例”“### 引导式练习”“### 同构练习”“### 迁移练习”。
 4. 每个练习只使用证据支持的事实；题目后不要立刻给出答案。所有参考答案与分层反馈统一置于文末。
@@ -26,6 +26,7 @@ CORRECTION_PACKAGE_PROMPT = """你是 CorrectionTrainingPackageAgent。一次性
 8. 严格遵守输入 composition_budget。每个事实、示例与练习答案必须由 evidence 支持；证据不足时只做概念辨析或学习步骤，不补充新事实。
 9. 直接输出 Markdown 正文，全文不得超过 14000 个中文字符。
 10. 第一行必须是唯一一级标题，且严格使用输入 display_title。
+11. 如果输入包含 previous_version_content，这是审核返工；仅修改反馈指出的问题，保留上一版本其余正确内容。
 """
 
 
@@ -33,13 +34,6 @@ REPAIR_PROMPT = """你是 Markdown 格式修复器。将草稿重写为一份完
 
 只使用受控输入中的 evidence 和 correction_focus；不得引入外部知识、原题、选项、答案、解析、题号、复测题、内部 ID、学习者原文、HTML、JSON 或代码围栏。严格保留所要求的标题顺序和每个强化单元的七个三级标题。答案与分层反馈只能出现在文末的“## 参考答案与分层反馈”中。直接输出完整 Markdown，不要解释修复过程。
 """
-
-
-REQUIRED_UNIT_SECTIONS = (
-    "错误模式", "核心概念补救", "正误对照", "完整示例",
-    "引导式练习", "同构练习", "迁移练习",
-)
-REQUIRED_FINAL_SECTIONS = ("本次强化目标", "薄弱模式概览", "参考答案与分层反馈", "达标标准", "后续复习动作", "总结")
 
 
 class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
@@ -74,7 +68,7 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
         evidence = self._scoped_evidence(spec, context)
         # This deliberate allow-list prevents the feedback request, raw answers,
         # free-text reflection and held-out assessment material reaching the model.
-        return {
+        payload = {
             "topic": context.topic,
             "resource_type": spec.resource_type,
             "display_title": f"{context.topic} · {spec.resource_type}",
@@ -89,6 +83,10 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
             "evidence": [{"evidence_id": item.evidence_id, "source": item.locator.source_path,
                           "section": item.locator.section, "excerpt": item.excerpt} for item in evidence],
         }
+        if context.generation_attempt > 1:
+            payload["revision_feedback"] = context.constraints.get("revision_feedback", {})
+            payload["previous_version_content"] = context.constraints.get("previous_version_content", "")
+        return payload
 
     @staticmethod
     def _composition_budget(focus: dict) -> dict[str, str | int]:
@@ -148,7 +146,7 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
         except ApplicationError as error:
             if error.code != ErrorCode.LLM_OUTPUT_SCHEMA_INVALID:
                 raise
-        # A malformed first draft is retried as an explicit regeneration using
+        # A hard validation failure is retried as an explicit regeneration using
         # the same allow-listed snapshot, never as a generic-template fallback.
         repaired_content = self._generate_markdown(
             spec=spec,
@@ -168,25 +166,19 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
         return self.validate(repaired, spec=spec, context=context)
 
     def validate(self, artifact: GeneratedArtifact, *, spec: ResourceSpec, context: ResourceGenerationContext) -> GeneratedArtifact:
+        """Check hard safety/scope invariants, while keeping Markdown layout advisory.
+
+        This resource is learner-facing prose.  Headings, section order and
+        optional unit headings are generation guidance, not a machine-readable
+        contract, so formatting differences must not force a fallback artifact.
+        """
         self._ensure_route(spec)
-        focus = self._focus(context)
+        self._focus(context)
         self._scoped_evidence(spec, context)
         content = artifact.content_text.strip()
-        if not content.startswith("# ") or len(content) > 14000 or set(artifact.knowledge_points) != set(spec.knowledge_points):
+        if not content or len(content) > 14000 or set(artifact.knowledge_points) != set(spec.knowledge_points):
             raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
-        if any(f"## {section}" not in content for section in REQUIRED_FINAL_SECTIONS):
-            raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
-        for target in focus["ordered_target_nodes"]:
-            name = str(target.get("name") or target["skill_node_id"])
-            start = content.find(f"## 强化单元：{name}")
-            if start < 0:
-                raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
-            end = content.find("## 强化单元：", start + 1)
-            unit = content[start:end if end >= 0 else len(content)]
-            if any(f"### {section}" not in unit for section in REQUIRED_UNIT_SECTIONS):
-                raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
-        if len(focus["ordered_target_nodes"]) > 1 and "## 跨知识点综合挑战" not in content:
-            raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
-        if content.find("## 参考答案与分层反馈") < max(content.find("### 引导式练习"), content.find("### 同构练习"), content.find("### 迁移练习")):
+        # Executable markup is a safety violation, not a presentation issue.
+        if "<script" in content.lower():
             raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
         return artifact

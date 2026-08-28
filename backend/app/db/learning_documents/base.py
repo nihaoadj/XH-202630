@@ -54,6 +54,11 @@ class BaseResourceRepository(ABC):
     ) -> List[LearningResource]:
         pass
 
+    @abstractmethod
+    def update_publication_decision(self, resource_id: str, *, publish: bool) -> Optional[LearningResource]:
+        """Apply an authorized user publication decision."""
+        pass
+
     def list_page_by_learner_with_filter(
         self,
         learner_id: str,

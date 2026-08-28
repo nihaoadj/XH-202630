@@ -73,7 +73,7 @@ class GenerationJobService:
     ) -> GenerationJobCreateResponse:
         feedback_only = set(req.resource_types) & set(FEEDBACK_ONLY_RESOURCE_TYPES)
         correction_followup = (
-            req.resource_types == ["个性化纠错训练包"]
+            "个性化纠错训练包" in req.resource_types
             and isinstance(req.constraints.get("correction_focus_snapshot"), dict)
         )
         selection_type = req.constraints.get("selection_type") if isinstance(req.constraints, dict) else None
@@ -106,6 +106,19 @@ class GenerationJobService:
                 mode=req.profile_focus_mode,
                 explicit_node_ids=req.target_skill_nodes,
             )
+            if auto_targets is not None and not auto_targets:
+                # No recommendation must not silently turn into an unscoped
+                # planner request. Use the first node from the same frozen
+                # auto snapshot when available; otherwise make the caller
+                # choose a node explicitly instead of expanding weak points
+                # into several resource targets.
+                auto_targets = list(focus_snapshot.adopted_node_ids[:1])
+            if auto_targets is not None and not auto_targets:
+                raise ApplicationError(
+                    ErrorCode.LEARNING_TIER_INVALID,
+                    public_message="当前没有可自动选择的学习节点，请先手动选择一个节点",
+                    status_code=422,
+                )
             if auto_targets is not None:
                 # Keep the audit snapshot honestly labelled as an automatic
                 # decision while replacing its adopted targets with the

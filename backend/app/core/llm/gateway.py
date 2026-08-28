@@ -278,6 +278,7 @@ class LLMGateway:
         claim_max_output_tokens: int | None = None,
         claim_truncated_retry_output_tokens: int | None = None,
         claim_request_timeout_seconds: float | None = None,
+        claim_retry_request_timeout_seconds: float | None = None,
         claim_schema_repair_attempts: int | None = None,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
@@ -312,7 +313,14 @@ class LLMGateway:
             claim_request_timeout_seconds
             or self.default_options.request_timeout_seconds
         )
-        self.claim_schema_repair_attempts = claim_schema_repair_attempts or 2
+        self.claim_retry_request_timeout_seconds = (
+            claim_retry_request_timeout_seconds or self.claim_request_timeout_seconds
+        )
+        self.claim_schema_repair_attempts = (
+            claim_schema_repair_attempts
+            if claim_schema_repair_attempts is not None
+            else 2
+        )
         self.sleep = sleep
         self.monotonic = monotonic
         self.wall_clock = wall_clock
@@ -362,6 +370,7 @@ class LLMGateway:
         }
         if node_name in {"claim_extractor", "claim_judge"}:
             updates["schema_repair_attempts"] = self.claim_schema_repair_attempts
+            updates["retry_request_timeout_seconds"] = self.claim_retry_request_timeout_seconds
             updates["truncated_retry_output_tokens"] = (
                 self.claim_truncated_retry_output_tokens
             )
@@ -563,6 +572,7 @@ class LLMGateway:
         call_messages = list(original_messages)
         finish_reason: str | None = None
         repair_attempts = 0
+        transport_retry_attempts = 0
         next_output_tokens = options.max_output_tokens
 
         for attempt in range(1, options.max_attempts + 1):
@@ -583,7 +593,9 @@ class LLMGateway:
                     finish_reason=finish_reason,
                 )
 
-            timeout = options.request_timeout_seconds
+            timeout = options.request_timeout_seconds if attempt == 1 else (
+                options.retry_request_timeout_seconds or options.request_timeout_seconds
+            )
             if remaining is not None:
                 timeout = min(timeout, max(0.001, remaining))
             if mode == StructuredOutputMode.TEXT:
@@ -694,7 +706,11 @@ class LLMGateway:
                 ErrorCode.LLM_OUTPUT_PARSE_FAILED,
                 ErrorCode.LLM_OUTPUT_SCHEMA_INVALID,
             }
-            can_transport_retry = failure.retryable and not output_failure
+            can_transport_retry = (
+                failure.retryable
+                and not output_failure
+                and transport_retry_attempts < 1
+            )
             if attempt >= options.max_attempts or not (
                 can_transport_retry
                 or can_text_fallback
@@ -767,6 +783,7 @@ class LLMGateway:
                     )
                 self.sleep(delay)
             else:
+                transport_retry_attempts += 1
                 delay = self._delay_for(attempt, failure.retry_after)
                 remaining = self._remaining_seconds(context)
                 if remaining is not None and delay >= remaining:
@@ -815,7 +832,9 @@ class LLMGateway:
                     context=context, attempt=attempt, started_at=started_at,
                     attempts=attempts, finish_reason=finish_reason,
                 )
-            timeout = options.request_timeout_seconds
+            timeout = options.request_timeout_seconds if attempt == 1 else (
+                options.retry_request_timeout_seconds or options.request_timeout_seconds
+            )
             if remaining is not None:
                 timeout = min(timeout, max(0.001, remaining))
             attempt_started = self.monotonic()
@@ -940,5 +959,6 @@ def default_llm_gateway() -> LLMGateway:
         claim_max_output_tokens=settings.claim_max_output_tokens,
         claim_truncated_retry_output_tokens=settings.claim_truncated_retry_output_tokens,
         claim_request_timeout_seconds=settings.claim_request_timeout_seconds,
+        claim_retry_request_timeout_seconds=settings.claim_retry_request_timeout_seconds,
         claim_schema_repair_attempts=settings.claim_schema_repair_attempts,
     )

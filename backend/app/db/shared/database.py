@@ -38,6 +38,9 @@ from app.db.migrations import (
     apply_p0_27_assessment_evidence_migration,
     apply_p0_28_placement_reverification_migration,
     apply_p0_29_feedback_decision_tiers_migration,
+    apply_p0_30_feedback_followup_multi_run_migration,
+    apply_p0_31_claim_user_publication_migration,
+    apply_p0_32_review_status_migration,
     apply_tutor_migration,
 )
 
@@ -164,6 +167,9 @@ def init_database():
     apply_p0_27_assessment_evidence_migration(engine)
     apply_p0_28_placement_reverification_migration(engine)
     apply_p0_29_feedback_decision_tiers_migration(engine)
+    apply_p0_30_feedback_followup_multi_run_migration(engine)
+    apply_p0_31_claim_user_publication_migration(engine)
+    apply_p0_32_review_status_migration(engine)
     apply_tutor_migration(engine)
 
 
@@ -273,6 +279,10 @@ def _migrate_sqlite_generated_resources(engine) -> None:
         "legacy_reviewer_score": "FLOAT",
         "claim_hallucination_rate": "FLOAT",
         "claim_metric_status": "VARCHAR(32)",
+        "claim_factual_pass_rate": "FLOAT",
+        "claim_warning_publish": "BOOLEAN NOT NULL DEFAULT 0",
+        "claim_publish_decision_pending": "BOOLEAN NOT NULL DEFAULT 0",
+        "claim_publish_decision": "VARCHAR(32)",
         "difficulty_match": "BOOLEAN",
         "run_id": "VARCHAR(128)",
         "version": "INTEGER NOT NULL DEFAULT 1",

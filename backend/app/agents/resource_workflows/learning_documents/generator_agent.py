@@ -68,8 +68,19 @@ def _specs_for_state(state: AgentState, node_input: GeneratorInput) -> list[Reso
     return specs
 
 
-def _context(node_input: GeneratorInput, state: AgentState, step_id: str) -> ResourceGenerationContext:
+def _context(
+    node_input: GeneratorInput,
+    state: AgentState,
+    step_id: str,
+    previous: LearningResource | None = None,
+) -> ResourceGenerationContext:
     learner = node_input.learner
+    constraints = dict(node_input.constraints)
+    # A revision must be able to preserve text that the reviewer did not ask
+    # to change.  Keep the previous artifact scoped to the resource worker and
+    # inject it only when a prior version exists (never on first generation).
+    if previous is not None and node_input.generation_attempt > 1:
+        constraints["previous_version_content"] = previous.content_text or ""
     return ResourceGenerationContext(
         run_id=node_input.run_id,
         batch_id=node_input.batch_id,
@@ -85,7 +96,7 @@ def _context(node_input: GeneratorInput, state: AgentState, step_id: str) -> Res
         evidence=node_input.retrieved_evidence,
         node_evidence_map=node_input.node_evidence_map,
         continuation_context=list(node_input.constraints.get("continuation_context", []))[:12],
-        constraints=node_input.constraints,
+        constraints=constraints,
         generation_attempt=node_input.generation_attempt,
         workflow_deadline_at=state.get("workflow_deadline_at"),
     )
@@ -138,6 +149,23 @@ def _materialize(
         practice_guide_payload=data.get("practice_guide_package"),
         practice_guide_payload_hash=(data.get("practice_guide_package") or {}).get("payload_hash"),
     )
+
+
+def _validate_artifact_scope(artifact: GeneratedArtifact, spec: ResourceSpec,
+                             target_skill_nodes: list[str]) -> None:
+    """Reject model-added knowledge nodes outside the request's hard scope."""
+    allowed = {str(item).strip() for item in target_skill_nodes if str(item).strip()}
+    if not allowed:
+        return
+    artifact_nodes = {str(item).strip() for item in artifact.knowledge_points if str(item).strip()}
+    spec_nodes = {str(item).strip() for item in spec.knowledge_points if str(item).strip()}
+    out_of_scope = (artifact_nodes | spec_nodes) - allowed
+    if out_of_scope:
+        raise ApplicationError(
+            ErrorCode.WORKFLOW_CONTRACT_INVALID,
+            "资源包含当前目标节点之外的知识点。",
+            status_code=422,
+        )
 
 
 def _fallback(spec: ResourceSpec, node_input: GeneratorInput, previous: LearningResource | None) -> LearningResource:
@@ -234,7 +262,12 @@ def generate_node(
             spec,
             get_resource_agent(spec.resource_type),
             previous.get((spec.resource_spec_id, "text")),
-            _context(node_input, state, _worker_step_id(node_input, spec, "text")),
+            _context(
+                node_input,
+                state,
+                _worker_step_id(node_input, spec, "text"),
+                previous.get((spec.resource_spec_id, "text")),
+            ),
         )
         for spec in specs
         if spec.resource_type in active_types
@@ -290,6 +323,7 @@ def generate_node(
                 raise worker_error
             if artifact is None:
                 artifact = agent.generate(spec, context, llm_gateway=llm_gateway)
+            _validate_artifact_scope(artifact, spec, node_input.target_skill_nodes)
             resource = _materialize(artifact, node_input, old, spec)
             llm_metadata = artifact.llm_metadata
             execution = _execution(spec, resource, agent, attempt=node_input.generation_attempt,

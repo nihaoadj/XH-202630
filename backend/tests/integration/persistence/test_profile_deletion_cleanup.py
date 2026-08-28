@@ -11,6 +11,7 @@ from app.db.shared import extended_models  # noqa: F401 - registers diagnostic_r
 from app.db.shared.database import configure_sqlite_foreign_keys
 from app.db.learners.sql_repository import SQLLearnerRepository
 from app.db.shared.models import (
+    AbilityStateEventORM,
     AgentRunORM,
     AgentStepORM,
     ClaimEvidenceORM,
@@ -28,6 +29,8 @@ from app.db.shared.models import (
     KnowledgeStateORM,
     LearnerProfileORM,
     LearnerProfileVersionORM,
+    LearnerCurriculumNodeORM,
+    LearnerTierProgressORM,
     LearningAttemptORM,
     LearningAttemptPointResultORM,
     LearningPathMutationORM,
@@ -42,6 +45,8 @@ from app.db.shared.models import (
     ResourceReviewORM,
     ResourceSpecORM,
     RetrievalEvidenceSnapshotORM,
+    TutorSessionORM,
+    TutorTurnORM,
     WorkflowCheckpointORM,
     WorkflowEventORM,
     Base,
@@ -129,6 +134,32 @@ def test_sql_profile_delete_removes_all_learner_artifacts_and_resource_files(tmp
                 learner_id=learner_id,
                 knowledge_base_id="kb",
                 skill_node_id="node",
+            ),
+            AbilityStateEventORM(
+                event_id="ability_event",
+                learner_id=learner_id,
+                knowledge_base_id="kb",
+                skill_node_id="node",
+                source_type="diagnostic",
+                source_id="diagnostic_run",
+                source_hash="ability-hash",
+                after_state={},
+                occurred_at=now,
+            ),
+            LearnerCurriculumNodeORM(
+                curriculum_node_id="curriculum_node",
+                learner_id=learner_id,
+                knowledge_base_id="kb",
+                skill_node_id="node",
+                progress_status="unplanned",
+            ),
+            LearnerTierProgressORM(
+                tier_progress_id="tier_progress",
+                learner_id=learner_id,
+                knowledge_base_id="kb",
+                placement_tier=1,
+                active_tier=1,
+                highest_unlocked_tier=1,
             ),
             QuestionnaireSubmissionORM(
                 submission_id="submission",
@@ -229,6 +260,14 @@ def test_sql_profile_delete_removes_all_learner_artifacts_and_resource_files(tmp
                 agent_name="TextResourceAgent",
                 prompt_version="v1",
                 artifact_format="markdown",
+            ),
+            TutorSessionORM(
+                session_id="tutor_session",
+                learner_id=learner_id,
+                source_type="resource",
+                context_type="resource",
+                created_at=now,
+                updated_at=now,
             ),
             ResourceReviewORM(
                 review_id="review",
@@ -331,6 +370,20 @@ def test_sql_profile_delete_removes_all_learner_artifacts_and_resource_files(tmp
                 judge_prompt_version="v1",
                 created_at=now,
             ),
+            TutorTurnORM(
+                turn_id="tutor_turn",
+                session_id="tutor_session",
+                sequence=1,
+                client_message_id="client-message",
+                request_hash="request-hash",
+                user_message="question",
+                assistant_message="answer",
+                pedagogy_action="explain",
+                hint_level=0,
+                grounding_status="grounded",
+                grounding_source="resource",
+                created_at=now,
+            ),
             LearnerProfileVersionORM(
                 version_id="profile_version",
                 learner_id=learner_id,
@@ -380,15 +433,17 @@ def test_sql_profile_delete_removes_all_learner_artifacts_and_resource_files(tmp
         assert db.get(KnowledgeBaseORM, "kb") is not None
         assert db.get(QuestionnaireTemplateORM, "questionnaire") is not None
         for model in (
-            AgentRunORM, AgentStepORM, ClaimEvidenceORM, ClaimJudgementORM,
+            AbilityStateEventORM, AgentRunORM, AgentStepORM, ClaimEvidenceORM, ClaimJudgementORM,
             ContestEvalResultORM, DiagnosticAnswerORM, DiagnosticRunORM,
             FeedbackDecisionORM, FeedbackFollowUpRunORM, FeedbackRecordORM,
             GeneratedResourceORM, GenerationJobORM, KnowledgeStateMutationORM,
-            KnowledgeStateORM, LearnerProfileVersionORM, LearningAttemptORM,
+            KnowledgeStateORM, LearnerCurriculumNodeORM, LearnerProfileVersionORM,
+            LearnerTierProgressORM, LearningAttemptORM,
             LearningAttemptPointResultORM, LearningPathMutationORM,
             LearningPathNodeORM, LearningPathORM, QuestionnaireAnswerORM,
             QuestionnaireSubmissionORM, ResourceClaimORM, ResourceExecutionORM,
             ResourceReviewORM, ResourceSpecORM, RetrievalEvidenceSnapshotORM,
+            TutorSessionORM, TutorTurnORM,
             WorkflowCheckpointORM, WorkflowEventORM,
         ):
             assert db.query(model).count() == 0, model.__tablename__

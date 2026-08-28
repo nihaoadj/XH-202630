@@ -31,7 +31,7 @@ def _metadata(session_id, question_ids, dimensions, audit="single_pass"):
     }
 
 
-def test_single_high_diagnosis_is_baseline_and_two_independent_sessions_confirm_mastery():
+def test_single_passing_diagnosis_marks_mastery_regardless_of_evidence_count():
     service, learners = _service()
     now = datetime.now(timezone.utc)
     service.apply_diagnosis(
@@ -42,7 +42,7 @@ def test_single_high_diagnosis_is_baseline_and_two_independent_sessions_confirm_
         )},
     )
     state = service.repository.list_states("learner", "kb")[0]
-    assert state.status.value == "learning"
+    assert state.status.value == "mastered"
     assert state.objective_evidence_count == 1
 
     service.apply_learning_attempt(
@@ -73,6 +73,9 @@ def test_mastery_threshold_is_inclusive_at_eighty_percent():
         occurred_at=now,
         assessment_metadata={"skill-a": _metadata("session-80-1", ["q1", "q2", "q3"], dimensions)},
     )
+    # Status follows the first eligible server-scored result; a second
+    # assessment may increase confidence but is not a mastery prerequisite.
+    assert service.repository.list_states("learner", "kb")[0].status.value == "mastered"
     service.apply_learning_attempt(
         learners.get("learner"), attempt_id="attempt-80", point_scores={"skill-a": 0.8},
         occurred_at=now + timedelta(minutes=1),
@@ -87,7 +90,7 @@ def test_mastery_threshold_is_inclusive_at_eighty_percent():
     assert service.repository.list_states("learner", "kb")[0].status.value == "mastered"
 
 
-def test_repeated_question_set_and_failed_llm_audit_do_not_add_objective_evidence():
+def test_repeated_question_set_is_rejected_but_scoring_audit_disagreement_keeps_score():
     service, learners = _service()
     now = datetime.now(timezone.utc)
     service.apply_diagnosis(
@@ -112,7 +115,7 @@ def test_repeated_question_set_and_failed_llm_audit_do_not_add_objective_evidenc
     )
     state = service.repository.list_states("learner", "kb")[0]
     assert state.objective_evidence_count == 1
-    assert state.status.value == "learning"
+    assert state.status.value == "mastered"
     assert service.repository.list_events("learner", "kb")[-1].evidence_eligible is False
 
     service.apply_learning_attempt(
@@ -130,8 +133,10 @@ def test_repeated_question_set_and_failed_llm_audit_do_not_add_objective_evidenc
         },
     )
     state = service.repository.list_states("learner", "kb")[0]
-    assert state.objective_evidence_count == 1
+    assert state.objective_evidence_count == 2
+    assert state.status.value == "mastered"
     assert service.repository.list_events("learner", "kb")[-1].scoring_audit_status == "double_disagreement"
+    assert service.repository.list_events("learner", "kb")[-1].evidence_eligible is True
 
 
 def test_later_assessment_can_promote_after_initial_calibration_without_repeating_dimensions():

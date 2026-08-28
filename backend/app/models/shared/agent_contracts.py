@@ -17,6 +17,7 @@ from app.core.security.errors import (
 )
 from app.models.knowledge.knowledge import EvidenceItem, RetrievalStatus
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.models.shared.assessment import ASSESSMENT_QUESTION_QUOTAS
 from app.models.shared.workflow import (
     ErrorInfo,
     StepStatus,
@@ -539,16 +540,25 @@ class AssessmentNodeBlockV2(StrictLLMOutput):
     schema_version: Literal["2.0"] = "2.0"
     skill_node_id: str = Field(min_length=1, max_length=128)
     skill_node_name: str = Field(min_length=1, max_length=160)
-    single_choice_questions: List[AssessmentChoiceQuestionV2] = Field(min_length=2, max_length=2)
-    multiple_choice_questions: List[AssessmentChoiceQuestionV2] = Field(min_length=1, max_length=1)
-    short_answer_questions: List[AssessmentShortAnswerQuestionV2] = Field(min_length=2, max_length=2)
+    single_choice_questions: List[AssessmentChoiceQuestionV2] = Field(
+        min_length=ASSESSMENT_QUESTION_QUOTAS["single_choice"],
+        max_length=ASSESSMENT_QUESTION_QUOTAS["single_choice"],
+    )
+    multiple_choice_questions: List[AssessmentChoiceQuestionV2] = Field(
+        min_length=ASSESSMENT_QUESTION_QUOTAS["multiple_choice"],
+        max_length=ASSESSMENT_QUESTION_QUOTAS["multiple_choice"],
+    )
+    short_answer_questions: List[AssessmentShortAnswerQuestionV2] = Field(
+        min_length=ASSESSMENT_QUESTION_QUOTAS["short_answer"],
+        max_length=ASSESSMENT_QUESTION_QUOTAS["short_answer"],
+    )
 
     @model_validator(mode="after")
     def validate_fixed_quota(self) -> "AssessmentNodeBlockV2":
         if any(item.question_type != "single_choice" for item in self.single_choice_questions):
             raise ValueError("single_choice_questions must contain only single_choice")
-        if self.multiple_choice_questions[0].question_type != "multiple_choice":
-            raise ValueError("multiple_choice_questions must contain one multiple_choice")
+        if any(item.question_type != "multiple_choice" for item in self.multiple_choice_questions):
+            raise ValueError("multiple_choice_questions must contain only multiple_choice")
         local_ids = [item.local_id for item in self.single_choice_questions + self.multiple_choice_questions + self.short_answer_questions]
         if len(local_ids) != len(set(local_ids)):
             raise ValueError("node-local question IDs must be unique")
@@ -563,7 +573,7 @@ class AssessmentPackageV2(StrictLLMOutput):
 
 
 class AssessmentShortAnswerGradeV1(StrictLLMOutput):
-    score: float = Field(ge=0.0)
+    score: float = Field(ge=0.0, le=15.0)
     feedback: str = Field(min_length=1, max_length=600)
 
 

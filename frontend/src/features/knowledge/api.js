@@ -6,5 +6,7 @@ export const knowledgeApi = {
   getInfo: (learningDirectionId) => api.get('/knowledge/info', {
     params: { knowledge_base_id: learningDirectionId },
   }),
+  listNodes: (learningDirectionId) => api.get('/skills/nodes', {
+    params: { knowledge_base_id: learningDirectionId },
+  }),
 }
-

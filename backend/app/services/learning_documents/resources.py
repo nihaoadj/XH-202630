@@ -18,6 +18,9 @@ class ResourceService:
     def get(self, resource_id: str) -> LearningResource | None:
         return self.repo.get(resource_id)
 
+    def update_publication_decision(self, resource_id: str, *, publish: bool) -> LearningResource | None:
+        return self.repo.update_publication_decision(resource_id, publish=publish)
+
     def list_by_learner_with_filter(
         self,
         learner_id: str,

@@ -18,6 +18,12 @@ from app.models.shared.agent_contracts import (
     start_step,
 )
 from app.models.shared.llm import LLMCallContext
+from app.models.shared.assessment import (
+    ASSESSMENT_QUESTION_QUOTAS,
+    ASSESSMENT_SCORE_BY_TYPE,
+    ASSESSMENT_SCORE_DECIMAL_PLACES,
+    ASSESSMENT_TOTAL_SCORE,
+)
 from app.models.shared.workflow import ResourceStatus, ReviewDecision, StepStatus
 from app.agents.shared.policies import decide_review, locked_human_review_resource_ids
 from app.agents.shared.validators import revision_instructions_are_valid
@@ -36,11 +42,13 @@ REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习�
    不能因为其包含回忆题或辨析题就判定高级节点“不够高级”。其他资源沿用其既有的难度审核口径。
 4. 内容是否完整覆盖目标知识点。
 
-资源类型解释：当 resource_type 为“分阶测试题”时，V2 固定结构是每个能力节点恰有 2 道单选（基础）、1 道多选（进阶）、2 道问答（挑战）。应同时审核题型配额、题型与难度阶段映射、可判定性、证据范围和知识点覆盖。
+资源类型解释：当 resource_type 为“分阶测试题”时，V2 固定结构是每个能力节点恰有 2 道单选（基础）、2 道多选（进阶）、2 道问答（挑战）。应同时审核题型配额、题型与难度阶段映射、可判定性、证据范围和知识点覆盖。
 当输入含有“内部结构化题卷”时，逐题范围与证据审核已经由独立专用审核器完成。你只做包级补充审核：
 不得复述题干、选项、正确答案、参考答案、rubric、evidence 或逐题清单；不得重新解释已通过的逐题范围结论。
 复习清单标题是服务端按批次主题生成的展示标题；审核内容是否匹配时，以当前目标能力节点和 Evidence 为准，
-不要仅因标题比当前节点更宽泛就提出覆盖或结构问题。若没有新的包级事实、结构或难度问题，直接输出 approve 和空 issues；每个字段使用最短必要中文。
+不要仅因标题比当前节点更宽泛就提出覆盖或结构问题。
+对于“个性化纠错训练包”，Markdown 标题、章节顺序、章节拆分和小节命名仅是生成建议；不要仅因这些排版差异提出 structure_quality 或要求返工。仍需审核事实、Evidence 范围、知识点覆盖、难度和练习内容是否可用。
+若没有新的包级事实、结构或难度问题，直接输出 approve 和空 issues；每个字段使用最短必要中文。
 
 请用 JSON 格式输出：
 {
@@ -144,27 +152,47 @@ def _normalize_node_tier_review(raw: dict, resource, state: AgentState) -> dict:
 
 
 def _deterministic_resource_structure_review(resource) -> dict | None:
-    """Reject malformed specialized Markdown before an advisory LLM review."""
+    """Apply hard specialized safety checks before the advisory LLM review."""
 
     if resource.resource_type == "分阶测试题" and resource.assessment_payload is not None:
         blocks = resource.assessment_payload.get("node_blocks", [])
         expected_fields = ("single_choice_questions", "multiple_choice_questions", "short_answer_questions")
+        questions = [
+            question
+            for block in blocks
+            for field_name in expected_fields
+            for question in block.get(field_name, [])
+        ] if isinstance(blocks, list) else []
+        score_valid = (
+            round(sum(float(item.get("max_score", 0)) for item in questions), ASSESSMENT_SCORE_DECIMAL_PLACES) == ASSESSMENT_TOTAL_SCORE
+            and all(
+                round(
+                    sum(float(item.get("max_score", 0)) for item in questions if item.get("question_type") == question_type),
+                    ASSESSMENT_SCORE_DECIMAL_PLACES,
+                ) == ASSESSMENT_SCORE_BY_TYPE[question_type] * quota
+                for question_type, quota in ASSESSMENT_QUESTION_QUOTAS.items()
+            )
+            and all(
+                round(float(item.get("max_score", 0)), ASSESSMENT_SCORE_DECIMAL_PLACES) == float(item.get("max_score", 0))
+                for item in questions
+            )
+        )
         valid = bool(blocks) and all(
-            len(block.get("single_choice_questions", [])) == 2
-            and len(block.get("multiple_choice_questions", [])) == 1
-            and len(block.get("short_answer_questions", [])) == 2
+            len(block.get("single_choice_questions", [])) == ASSESSMENT_QUESTION_QUOTAS["single_choice"]
+            and len(block.get("multiple_choice_questions", [])) == ASSESSMENT_QUESTION_QUOTAS["multiple_choice"]
+            and len(block.get("short_answer_questions", [])) == ASSESSMENT_QUESTION_QUOTAS["short_answer"]
             and all(item.get("difficulty_stage") == "基础" for item in block.get("single_choice_questions", []))
             and all(item.get("difficulty_stage") == "进阶" for item in block.get("multiple_choice_questions", []))
             and all(item.get("difficulty_stage") == "挑战" for item in block.get("short_answer_questions", []))
             and all(block.get(field_name) for field_name in expected_fields)
             for block in blocks
-        )
+        ) and score_valid
         if valid and all(f"### {title}" in (resource.content_text or "") for title in ("单选题（基础）", "多选题（进阶）", "问答题（挑战）")):
             return None
         return {
             "decision": "revise", "hallucination_score": 0.0,
             "issues": [{"code": "structure_quality", "severity": "high", "resource_type": resource.resource_type,
-                        "knowledge_point": None, "description": "结构化测试题必须每节点含 2 基础单选、1 进阶多选、2 挑战问答，并按题型与阶段渲染。"}],
+                        "knowledge_point": None, "description": "结构化测试题必须每节点含 2 基础单选、2 进阶多选、2 挑战问答，并按题型与阶段渲染。"}],
             "difficulty_match": True, "coverage_rate": 0.0, "suggestion": "按固定 V2 题组结构重建。",
             "revision_instructions": [{"issue_codes": ["structure_quality"], "target_resource_type": resource.resource_type,
                                         "action": "恢复每节点固定题型配额、题型阶段映射及 Markdown 分类。", "priority": 1}],
@@ -188,6 +216,34 @@ def _deterministic_resource_structure_review(resource) -> dict | None:
         if valid and "### 节点知识小结" in content and content.find("## 答案与证据解释") > content.find("## 节点") and "<script" not in content.lower():
             return None
         return {"decision": "revise", "hallucination_score": 0.0, "issues": [{"code": "structure_quality", "severity": "high", "resource_type": resource.resource_type, "knowledge_point": None, "description": "主动回忆清单必须满足每节点最低 1+1+0、带证据的节点知识小结、缺省槽位可审计，且答案统一位于文末。"}], "difficulty_match": True, "coverage_rate": 0.0, "suggestion": "按 V3 主动回忆结构重建。", "revision_instructions": [{"issue_codes": ["structure_quality"], "target_resource_type": resource.resource_type, "action": "恢复节点题组、知识小结、缺省原因和文末答案区。", "priority": 1}]}
+    # Correction packages are prose-first. Their Markdown headings and order
+    # are advisory and must not block ordinary or Claim review. Keep the script
+    # check as a safety boundary, not a formatting requirement.
+    if resource.resource_type == "个性化纠错训练包":
+        content = (resource.content_text or "").strip()
+        if "<script" not in content.lower():
+            return None
+        return {
+            "decision": "revise",
+            "hallucination_score": 0.0,
+            "issues": [{
+                "code": "structure_quality",
+                "severity": "high",
+                "resource_type": resource.resource_type,
+                "knowledge_point": None,
+                "description": "检测到脚本标记，资源只能包含安全的 Markdown 文本。",
+            }],
+            "difficulty_match": True,
+            "coverage_rate": 0.0,
+            "suggestion": "删除脚本标记后再审核。",
+            "revision_instructions": [{
+                "issue_codes": ["structure_quality"],
+                "target_resource_type": resource.resource_type,
+                "action": "删除 HTML/script 标记，仅保留安全的学习文本。",
+                "priority": 1,
+            }],
+        }
+
     required_sections = STRUCTURED_MARKDOWN_SECTIONS.get(resource.resource_type)
     if not required_sections:
         return None

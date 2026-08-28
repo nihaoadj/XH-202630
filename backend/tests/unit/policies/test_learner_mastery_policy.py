@@ -47,7 +47,7 @@ def test_prior_first_objective_ewma_confidence_and_replay():
         _evidence("diagnosis", "bbb", 1.0, verified=True, at=now + timedelta(seconds=1))
     ], names, increment_profile_version=True)
     state = next(item for item in states if item.skill_node_id == "skill-a")
-    assert (state.mastery_score, state.status.value, state.confidence.value) == (0.85, "learning", "low")
+    assert (state.mastery_score, state.status.value, state.confidence.value) == (0.85, "mastered", "low")
     assert version == 2 and changed is True
 
     replay_states, replay_version, replay_changed = service.repository.apply_evidence([
@@ -63,9 +63,57 @@ def test_prior_first_objective_ewma_confidence_and_replay():
         _evidence("learning_attempt", "ddd", 0.0, verified=True, at=now + timedelta(seconds=3)),
     ], names, increment_profile_version=True)
     state = next(item for item in states if item.skill_node_id == "skill-a")
-    assert state.mastery_score == 0.4165
+    assert state.mastery_score == 0.034
     assert state.status.value == "weak"
     assert state.confidence.value == "high"
+
+
+def test_full_self_report_is_confirmed_by_one_passing_objective_assessment():
+    service, _ = _service()
+    names = {"skill-a": "A", "skill-b": "B"}
+    now = datetime.now(timezone.utc)
+    service.repository.ensure_states("learner", "kb", names)
+    service.repository.apply_evidence([
+        _evidence("onboarding_self_report", "aaa", 1.0, verified=False, at=now)
+    ], names, increment_profile_version=False)
+
+    states, _, _ = service.repository.apply_evidence([
+        AbilityEvidenceV1(
+            evidence_id="event-diagnosis-pass", learner_id="learner", knowledge_base_id="kb",
+            skill_node_id="skill-a", source_type="diagnosis", source_id="diagnosis-pass",
+            source_hash="b" * 64, observed_score=0.8, verified=True, occurred_at=now + timedelta(seconds=1),
+            covered_dimensions=["concept", "scenario", "misconception"],
+        )
+    ], names, increment_profile_version=True)
+
+    state = next(item for item in states if item.skill_node_id == "skill-a")
+    assert state.mastery_score == 0.84
+    assert state.status.value == "mastered"
+    assert state.confidence.value == "high"
+    assert state.objective_evidence_count == 1
+
+
+def test_onboarding_diagnostic_scope_does_not_write_self_report_mastery():
+    service, learner_repo = _service()
+    profile = learner_repo.get("learner")
+    questions = {
+        "rag_level": {"options": [{
+            "value": "做过调优或评测", "self_report_score": 100,
+            "diagnostic_scope_add": ["skill-a", "skill-b"],
+        }]},
+        "known_nodes": {"options": [{"value": "了解 A", "diagnostic_scope_add": ["skill-a"]}]},
+    }
+
+    states, _, changed = service.apply_onboarding_answers(
+        profile, questions, {"rag_level": "做过调优或评测", "known_nodes": ["了解 A"]},
+    )
+
+    assert changed is False
+    by_id = {state.skill_node_id: state for state in states}
+    assert by_id["skill-a"].mastery_score is None
+    assert by_id["skill-a"].status.value == "unassessed"
+    assert by_id["skill-b"].mastery_score is None
+    assert by_id["skill-b"].status.value == "unassessed"
 
 
 def test_focus_snapshot_auto_off_and_explicit_are_deterministic():
@@ -148,6 +196,53 @@ def test_next_generation_options_keep_reinforcement_and_new_knowledge_separate()
             current, intent="reinforce_weakness", selected_node_ids=["skill-b"],
             snapshot_hash=options.snapshot_hash,
         )
+
+
+def test_unlocked_tier_only_recommends_completed_nodes_direct_successors():
+    learner_repo = MemoryLearnerRepository()
+    learner_repo.save(LearnerProfile(
+        learner_id="learner", learner_type="test", education="本科", major="软件",
+        knowledge_base_id="kb", learning_goal="learn",
+    ))
+    nodes = [
+        SimpleNamespace(node_id="root-a", name="根节点 A", tier=1, prerequisites=[], children=[]),
+        SimpleNamespace(node_id="root-b", name="根节点 B", tier=1, prerequisites=[], children=[]),
+        SimpleNamespace(node_id="root-c", name="根节点 C", tier=1, prerequisites=[], children=[]),
+        SimpleNamespace(node_id="next-a", name="后继节点 A", tier=2, prerequisites=["root-a"], children=[]),
+        SimpleNamespace(node_id="next-b", name="后继节点 B", tier=2, prerequisites=["root-b"], children=[]),
+        SimpleNamespace(node_id="blocked", name="更后继节点", tier=2, prerequisites=["next-a"], children=[]),
+    ]
+    learner = learner_repo.get("learner")
+    resources = [LearningResource(
+        resource_id=f"published-{node_id}", learner_id="learner", topic="topic", resource_type="讲义",
+        difficulty="初级", content_text="content", knowledge_points=[node_id],
+        source_refs=[], publication_status="published",
+    ) for node_id in ("root-a", "root-b", "root-c")]
+    service = MasteryService(
+        MemoryMasteryRepository(learner_repo),
+        SimpleNamespace(list_skill_nodes=lambda _kb: nodes),
+        resource_repo=SimpleNamespace(list_by_learner=lambda _learner_id: resources),
+        curriculum_repo=MemoryCurriculumRepository(),
+        tier_progress_repo=MemoryTierProgressRepository(),
+    )
+    service.tier_progress_repo.save(LearnerTierProgressV1(
+        learner_id="learner", knowledge_base_id="kb", placement_tier=1,
+        active_tier=2, highest_unlocked_tier=2, profile_version=learner.profile_version,
+    ))
+    service.record_curriculum_verification(
+        learner, attempt_id="attempt-root-a",
+        point_scores={"root-a": 1.0, "root-b": 1.0, "root-c": 1.0},
+        occurred_at=datetime.now(timezone.utc),
+    )
+
+    options = service.next_generation_options(learner)
+
+    assert [item.skill_node_id for item in options.learn_new_knowledge] == ["next-a", "next-b"]
+    _, selected = service.confirm_next_generation_intent(
+        learner, intent="upgrade_learning", selected_node_ids=["next-a"],
+        snapshot_hash=options.snapshot_hash,
+    )
+    assert selected == ["next-a"]
 
 
 
@@ -265,6 +360,46 @@ def test_curriculum_persists_all_nodes_wait_debt_and_verified_transitions():
     assert by_id["skill-a"].progress_status.value == "completed"
     assert by_id["skill-a"].verified_attempt_count == 1
     assert summary.completed_count == 1
+
+
+def test_preview_tier_unlock_includes_the_current_passing_assessment():
+    service, learner_repo = _service()
+    profile = learner_repo.get("learner")
+    service.knowledge_service = SimpleNamespace(list_skill_nodes=lambda _kb: [
+        SimpleNamespace(node_id="skill-a", name="A", description=None, level="L1", prerequisites=[], children=[]),
+        SimpleNamespace(node_id="skill-b", name="B", description=None, level="L1", prerequisites=[], children=[]),
+    ])
+    service.tier_progress_repo = MemoryTierProgressRepository()
+    service.tier_progress_repo.save(LearnerTierProgressV1(
+        learner_id="learner", knowledge_base_id="kb", placement_tier=1,
+        active_tier=1, highest_unlocked_tier=1, profile_version=profile.profile_version,
+    ))
+    published = [
+        LearningResource(
+            resource_id="published-a", learner_id="learner", topic="topic", resource_type="讲义",
+            difficulty="初级", content_text="content", knowledge_points=["skill-a"],
+            source_refs=[], publication_status="published",
+        ),
+        LearningResource(
+            resource_id="published-b", learner_id="learner", topic="topic", resource_type="讲义",
+            difficulty="初级", content_text="content", knowledge_points=["skill-b"],
+            source_refs=[], publication_status="published",
+        ),
+    ]
+    service.resource_repo = SimpleNamespace(list_by_learner=lambda _learner_id: published)
+    service.record_curriculum_verification(
+        profile, attempt_id="attempt-a", point_scores={"skill-a": 0.8},
+        occurred_at=datetime.now(timezone.utc),
+    )
+
+    assert service.preview_tier_unlock(profile, point_scores={"skill-b": 0.8}) == (1, 2)
+    service.record_curriculum_verification(
+        profile, attempt_id="attempt-b", point_scores={"skill-b": 0.8},
+        occurred_at=datetime.now(timezone.utc),
+    )
+    updated = service.apply_tier_feedback(profile, point_scores={"skill-b": 0.8})
+    assert updated.active_tier == 2
+    assert updated.highest_unlocked_tier == 2
 
 
 def test_tier_feedback_does_not_auto_return_from_recommendation_at_eighty_percent():

@@ -19,7 +19,7 @@ from app.models.learners.mastery import AbilityNodeProjectionV1, NextGenerationO
 class ReportRadar(BaseModel):
     dimensions: List[str]
     values: List[float]
-    measurement_statuses: List[Literal["measured", "unassessed"]] = Field(default_factory=list)
+    measurement_statuses: List[Literal["measured", "self_reported", "unassessed"]] = Field(default_factory=list)
 
 
 class DifficultyCurveItem(BaseModel):
@@ -57,6 +57,11 @@ class ResourceDifficultyPointV1(BaseModel):
     resource_id: str
     skill_node_id: str
     skill_name: str
+    point_type: Literal["resource", "batch_average"] = "resource"
+    batch_id: str | None = None
+    resource_name: str | None = None
+    resource_count: int = Field(default=1, ge=1)
+    default_resource_difficulty_score: float | None = Field(default=None, ge=0.0, le=1.0)
     learner_readiness_score: float | None = Field(default=None, ge=0.0, le=1.0)
     resource_difficulty_score: float | None = Field(default=None, ge=0.0, le=1.0)
     difficulty_gap: float | None = Field(default=None, ge=-1.0, le=1.0)
@@ -66,6 +71,13 @@ class ResourceDifficultyPointV1(BaseModel):
     resource_type: str
     resource_ids: List[str] = Field(default_factory=list)
     reason_codes: List[str] = Field(default_factory=list)
+    feedback_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    feedback_count: int = Field(default=0, ge=0)
+    difficulty_adjustment: float = Field(default=0.0, ge=0.0, le=1.0)
+    credibility_score: float | None = Field(default=None, ge=0.0, le=100.0)
+    credibility_level: str | None = None
+    credibility_grade: str | None = None
+    credibility_score_breakdown: Dict[str, Any] | None = None
 
 
 class ResourceDifficultyCurveV1(BaseModel):
@@ -83,6 +95,7 @@ class LearningPathGraphNodeV1(BaseModel):
     mastery_score: float | None = Field(default=None, ge=0.0, le=1.0)
     confidence: str
     role: Literal["prerequisite", "current", "remedial", "next", "challenge", "verification"]
+    is_current_batch: bool = False
     blocked: bool
     blocked_by_node_ids: List[str] = Field(default_factory=list)
     recommended_resource_types: List[str] = Field(default_factory=list)

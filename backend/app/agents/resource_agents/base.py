@@ -91,6 +91,10 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         context: ResourceGenerationContext,
     ) -> dict[str, Any]:
         evidence = self._scoped_evidence(spec, context)
+        prompt_constraints = dict(context.constraints)
+        # The prior artifact is exposed in its own clearly delimited field;
+        # do not duplicate a potentially large document inside constraints.
+        prompt_constraints.pop("previous_version_content", None)
         payload = {
             "topic": context.topic,
             "resource_spec_id": spec.resource_spec_id,
@@ -102,7 +106,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
             "learner_profile_summary": context.learner_profile_summary,
             "learning_path": context.learning_path,
             "continuation_context": context.continuation_context,
-            "constraints": context.constraints,
+            "constraints": prompt_constraints,
             "evidence": [
                 {
                     "evidence_id": item.evidence_id,
@@ -116,8 +120,12 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         revision_feedback = context.constraints.get("revision_feedback")
         if revision_feedback:
             payload["revision_feedback"] = revision_feedback
+            payload["previous_version_content"] = context.constraints.get(
+                "previous_version_content", ""
+            )
             payload["revision_guidance"] = (
-                "这是一次审核返工。仅修改审核反馈指出的问题，保留其余正确内容；"
+                "这是一次审核返工。以下 previous_version_content 是上一版本原文；"
+                "仅修改审核反馈指出的问题，保留其余正确内容；"
                 "必须逐条落实 revision_instructions，并重新检查对应知识点覆盖。"
             )
         return payload

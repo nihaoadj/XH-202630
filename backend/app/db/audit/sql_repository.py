@@ -38,6 +38,7 @@ from app.models.shared.persistence import (
     canonical_hash,
     require_run_transition,
 )
+from app.models.shared.workflow import normalize_review_status, review_status_is_approved
 from app.models.knowledge.knowledge import SourceLocator, SourceType
 from app.models.learning_documents.schemas import ResourceClaim, ReviewSummary, SourceRef
 
@@ -877,18 +878,23 @@ class SQLAuditRepository(BaseAuditRepository):
         # the workflow state.  Do not rewrite it with the resource ID: doing so
         # makes finalization compare two different IDs for the same review.
         review_id = requested_id or legacy_batch_id or str(uuid.uuid4())
-        status = review.get("status") or ("passed" if review.get("passed") else "needs_review")
+        status = normalize_review_status(review.get("status"), passed=bool(review.get("passed")))
         claims = [_as_dict(claim) for claim in review.get("claims", [])]
         claim_total = review.get("claim_total", len(claims))
         claim_supported = review.get("claim_supported", sum(bool(claim.get("supported")) for claim in claims))
         claim_unsupported = review.get("claim_unsupported", max(0, claim_total - claim_supported))
         hallucination_rate = review.get("hallucination_rate", review.get("hallucination_score", 0.0))
         payload = {"resource_id": resource_id, "run_id": run_id, **review}
-        review_hash = canonical_hash(payload)
+        canonical_payload = {**payload, "status": status}
+        review_hash = canonical_hash(canonical_payload)
+        legacy_review_hash = canonical_hash(payload)
         with self.session_factory() as db:
             existing = db.get(ResourceReviewORM, review_id)
             if existing is not None:
-                if existing.review_hash and existing.review_hash != review_hash:
+                # Accept an existing pre-normalization hash during an
+                # idempotent retry; all newly persisted rows use the
+                # canonical hash and status.
+                if existing.review_hash and existing.review_hash not in {review_hash, legacy_review_hash}:
                     raise PersistenceConflict("review payload conflict")
                 return review_id
             db.add(
@@ -907,7 +913,7 @@ class SQLAuditRepository(BaseAuditRepository):
                     claim_metric_status=review.get("claim_metric_status"),
                     review_pass_rate=review.get(
                         "review_pass_rate",
-                        1.0 if status in {"approve", "approved", "passed"} else 0.0,
+                        1.0 if review_status_is_approved(status) else 0.0,
                     ),
                     revision_count=review.get("revision_count", 0),
                     issues=review.get("issues", []),
@@ -951,7 +957,7 @@ class SQLAuditRepository(BaseAuditRepository):
                     "review_id": review.review_id,
                     "resource_id": review.resource_id,
                     "run_id": review.run_id,
-                    "status": review.status,
+                    "status": normalize_review_status(review.status),
                     "hallucination_rate": review.hallucination_rate,
                     "legacy_reviewer_score": review.legacy_reviewer_score,
                     "claim_hallucination_rate": review.claim_hallucination_rate,
@@ -989,7 +995,7 @@ class SQLAuditRepository(BaseAuditRepository):
             return ReviewSummary(
                 review_id=review.review_id,
                 resource_id=review.resource_id,
-                status=review.status,
+                status=normalize_review_status(review.status),
                 claim_total=review.claim_total,
                 claim_supported=review.claim_supported,
                 claim_unsupported=review.claim_unsupported,

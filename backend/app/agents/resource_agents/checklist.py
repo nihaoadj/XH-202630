@@ -15,12 +15,55 @@ REVIEW_PRACTICE_PROMPT = """你是 ReviewChecklistAgent。一次只能为一个�
 本清单的标题由服务端按批次主题生成；当前节点内容只需准确覆盖输入的 skill_node_id、skill_node_name 和 allowed_knowledge_points，
 不要因为清单标题包含更宽的批次主题而扩展内容，也不要因此判定当前节点内容与标题不匹配。
 目标配额是 4 道闭卷回忆、4 道概念辨析和 2 道正反例辨认；正反例放入 example_recognition_questions 数组。
-证据不足时可以减量，但每个未生成槽位
-必须写入 omitted_slots，原因只能是 INSUFFICIENT_DISTINCT_EVIDENCE 或 NO_EXPLICIT_CONCEPT_BOUNDARY；闭卷回忆
+证据不足时可以减量，但每个未生成槽位必须写入 omitted_slots，原因只能是 INSUFFICIENT_DISTINCT_EVIDENCE 或 NO_EXPLICIT_CONCEPT_BOUNDARY；闭卷回忆
 和概念辨析各至少保留一道。概念辨析有两道以上时必须同时含真、假陈述；错误陈述和反例只可违反 Evidence
 明确支持的一个关键边界。每题必须绑定至少一个当前节点 Evidence。还必须输出 knowledge_summary：用 3—5 句、至少 100 字综合概括
 本节点的核心概念、作用、关键边界和可执行的复习提醒，不得新增 Evidence 未支持的事实；summary_evidence_ids 必须列出
-该小结所依据的当前节点 Evidence，且必须是 evidence_ids 的子集。不要输出 Markdown、代码围栏或额外文字。"""
+该小结所依据的当前节点 Evidence，且必须是 evidence_ids 的子集。
+JSON 示例（仅示意字段与嵌套结构；实际值必须来自输入白名单）：
+{
+  "schema_version": "2.0",
+  "skill_node_id": "node-001",
+  "skill_node_name": "示例节点",
+  "recall_questions": [
+    {
+      "local_id": "recall-1",
+      "prompt": "说明 Evidence 明确支持的概念。",
+      "reference_answer": "Evidence 中的原文结论。",
+      "explanation": "依据该 Evidence 核对。",
+      "evidence_ids": ["ev-001"],
+      "pass_criteria": "能准确复述核心结论。"
+    }
+  ],
+  "distinction_questions": [
+    {
+      "local_id": "distinction-1",
+      "statement": "Evidence 明确支持的陈述。",
+      "truth_value": true,
+      "correction": "无需纠正。",
+      "explanation": "与 Evidence 一致。",
+      "evidence_ids": ["ev-001"],
+      "pass_criteria": "能判断并说明依据。"
+    }
+  ],
+  "example_recognition_questions": [],
+  "omitted_slots": [
+    {"local_id": "recall-2", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"},
+    {"local_id": "recall-3", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"},
+    {"local_id": "recall-4", "reason": "INSUFFICIENT_DISTINCT_EVIDENCE"},
+    {"local_id": "distinction-2", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"},
+    {"local_id": "distinction-3", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"},
+    {"local_id": "distinction-4", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"},
+    {"local_id": "example-1", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"},
+    {"local_id": "example-2", "reason": "NO_EXPLICIT_CONCEPT_BOUNDARY"}
+  ],
+  "knowledge_summary": "这里填入不少于 100 字的综合概括，只总结当前节点 Evidence 已明确支持的核心概念、作用、关键边界、适用条件、常见误区和可执行的复习提醒，不引入任何 Evidence 未出现的事实，也不扩展到相邻能力节点。",
+  "summary_evidence_ids": ["ev-001"],
+  "evidence_ids": ["ev-001"]
+}
+不要输出 Markdown、代码围栏或额外文字。"""
+
+
 
 def _canonical_hash(value: object) -> str:
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -80,7 +123,15 @@ class ReviewChecklistAgent(BaseResourceGenerationAgent[ReviewPracticeNodeBlockV2
     def _messages(self, spec: ResourceSpec, context: ResourceGenerationContext, node_id: str):
         name, points = self._node_descriptor(node_id); evidence_ids = self._node_evidence_ids(spec, node_id)
         if not evidence_ids: raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
-        return [SystemMessage(content=REVIEW_PRACTICE_PROMPT), HumanMessage(content=self.json_payload({"schema_version":"2.0", "skill_node_id":node_id, "skill_node_name":name, "allowed_knowledge_points":[node_id,*points], "allowed_evidence_ids":evidence_ids, "evidence":[item.model_dump(mode="json") for item in context.evidence if item.evidence_id in evidence_ids], "difficulty":spec.difficulty}))]
+        payload = {"schema_version":"2.0", "skill_node_id":node_id, "skill_node_name":name,
+                   "allowed_knowledge_points":[node_id,*points], "allowed_evidence_ids":evidence_ids,
+                   "evidence":[item.model_dump(mode="json") for item in context.evidence if item.evidence_id in evidence_ids],
+                   "difficulty":spec.difficulty}
+        if context.generation_attempt > 1:
+            payload["revision_feedback"] = context.constraints.get("revision_feedback", {})
+            payload["previous_version_content"] = context.constraints.get("previous_version_content", "")
+            payload["revision_guidance"] = "这是一次审核返工；仅修改反馈指出的问题，保留上一版本其余正确内容。"
+        return [SystemMessage(content=REVIEW_PRACTICE_PROMPT), HumanMessage(content=self.json_payload(payload))]
     def _validate_block(self, block: ReviewPracticeNodeBlockV2, spec: ResourceSpec, node_id: str) -> None:
         allowed = set(self._node_evidence_ids(spec, node_id))
         examples = list(block.example_recognition_questions)

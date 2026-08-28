@@ -203,9 +203,11 @@
           :resource-progress-summary="selectedJob?.resource_progress_summary || timelineState.resourceProgressSummary"
           :retrying-resource-key="retryingResourceKey"
           :retry-enabled="['completed', 'failed'].includes(selectedJob.job_status)"
+          :claim-reports="claimReports"
           @open-child-run="openChildRun"
           @open-resource="openGeneratedResource"
           @retry-resource="retryResource"
+          @open-claim-report="openClaimReport"
         />
       </div>
 
@@ -301,13 +303,116 @@
         <el-button type="primary" :loading="appendingResources" @click="confirmAppendResources">开始追加</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="claimReportVisible" class="claim-report-dialog" width="min(760px, calc(100vw - 32px))">
+      <template #header>
+        <div class="claim-report-header">
+          <div class="claim-report-heading">
+            <span class="claim-report-icon" aria-hidden="true"><DocumentChecked /></span>
+            <div>
+              <span class="claim-report-eyebrow">CLAIM QUALITY CHECK</span>
+              <h3>资源 Claim 审核报告</h3>
+              <p>核对生成内容中的事实陈述，确保每一条都能被知识来源支持。</p>
+            </div>
+          </div>
+          <div
+            v-if="selectedClaimReport"
+            class="claim-report-status"
+            :class="claimReportStatusClass(selectedClaimReport.metric_status)"
+          >
+            <CircleCheck v-if="selectedClaimReport.metric_status === 'complete'" />
+            <WarningFilled v-else />
+            <span>{{ claimReportStatusLabel(selectedClaimReport.metric_status) }}</span>
+          </div>
+        </div>
+      </template>
+      <template v-if="selectedClaimReport">
+        <section class="claim-report-overview" aria-label="审核概览">
+          <div class="claim-rate-panel" :style="claimRateStyle(selectedClaimReport)">
+            <div class="claim-rate-ring" aria-hidden="true">
+              <div class="claim-rate-ring-inner">
+                <strong>{{ claimPassRateLabel(selectedClaimReport) }}</strong>
+                <span>事实通过率</span>
+              </div>
+            </div>
+            <div class="claim-rate-copy">
+              <span class="claim-report-eyebrow">AUDIT SUMMARY</span>
+              <strong>{{ claimIssueCount(selectedClaimReport) ? '发现需要关注的事实' : '事实核验全部通过' }}</strong>
+              <p>
+                共检查 {{ selectedClaimReport.factual_claim_total || 0 }} 条事实 Claim，
+                {{ selectedClaimReport.supported_claim_total || 0 }} 条获得证据支持。
+              </p>
+            </div>
+          </div>
+
+          <div class="claim-metrics-grid">
+            <article class="claim-metric is-total">
+              <span class="claim-metric-icon"><DocumentChecked /></span>
+              <div><small>事实 Claim</small><strong>{{ selectedClaimReport.factual_claim_total || 0 }}</strong></div>
+            </article>
+            <article class="claim-metric is-supported">
+              <span class="claim-metric-icon"><CircleCheck /></span>
+              <div><small>已支持</small><strong>{{ selectedClaimReport.supported_claim_total || 0 }}</strong></div>
+            </article>
+            <article class="claim-metric is-unverified">
+              <span class="claim-metric-icon"><WarningFilled /></span>
+              <div><small>无证据</small><strong>{{ selectedClaimReport.not_in_evidence_claim_total || 0 }}</strong></div>
+            </article>
+            <article class="claim-metric is-conflict">
+              <span class="claim-metric-icon"><WarningFilled /></span>
+              <div><small>矛盾</small><strong>{{ selectedClaimReport.contradicted_claim_total || 0 }}</strong></div>
+            </article>
+          </div>
+        </section>
+
+        <el-alert v-if="selectedClaimReport.claim_warning_publish" title="该资源达到发布阈值，已带 Claim 警告发布。" type="warning" :closable="false" show-icon class="claim-report-alert" />
+        <el-alert v-if="selectedClaimReport.claim_publish_decision_pending" title="该资源满足用户审核阈值，请查看报告后决定是否发布。" type="warning" :closable="false" show-icon class="claim-report-alert" />
+        <section class="claim-issues-section" aria-label="事实问题">
+          <div class="claim-section-heading">
+            <div>
+              <span class="claim-report-eyebrow">REVIEW NOTES</span>
+              <h4>需要关注的事实</h4>
+            </div>
+            <span class="claim-issue-count">{{ claimIssueCount(selectedClaimReport) }} 条</span>
+          </div>
+
+          <div v-if="!claimIssueCount(selectedClaimReport)" class="claim-report-empty">
+            <span class="claim-empty-icon" aria-hidden="true"><CircleCheck /></span>
+            <div><strong>事实核验通过</strong><p>没有需要提示的事实 Claim，当前内容可以继续使用。</p></div>
+          </div>
+          <div v-else class="claim-issue-list">
+            <article v-for="(issue, index) in selectedClaimReport.issues" :key="issue.claim_id" class="claim-issue-card">
+              <div class="claim-issue-marker">{{ String(index + 1).padStart(2, '0') }}</div>
+              <div class="claim-issue-content">
+                <div class="claim-issue-topline">
+                  <el-tag :type="issue.verdict === 'contradicted' ? 'danger' : 'warning'" size="small" effect="plain">
+                    {{ issue.verdict === 'contradicted' ? '证据矛盾' : '未获证据支持' }}
+                  </el-tag>
+                  <span>事实 Claim</span>
+                </div>
+                <p>{{ issue.claim_text }}</p>
+                <small>{{ issue.reason || '未提供审核原因' }}</small>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <div v-if="selectedClaimReport.claim_publish_decision_pending" class="claim-report-actions">
+          <div><strong>准备好决定资源去向了吗？</strong><span>你可以发布当前版本，或先保留资源继续处理。</span></div>
+          <div class="claim-report-action-buttons">
+            <el-button :loading="claimDecisionLoading" @click="decideClaimPublication(false)">暂不发布</el-button>
+            <el-button type="primary" :loading="claimDecisionLoading" @click="decideClaimPublication(true)">确认发布</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, Clock, Delete, Plus, Reading, Refresh, RefreshRight } from '@element-plus/icons-vue'
+import { ArrowRight, CircleCheck, Clock, Delete, DocumentChecked, Plus, Reading, Refresh, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { generateApi, knowledgeApi, profileApi, resourceApi, runApi } from '../../api'
 import { coursewareApi } from '../courseware/api'
@@ -319,7 +424,6 @@ import AgentVisualization from './AgentVisualization.vue'
 import { useAppStore } from '../../stores/app'
 import {
   formatDateTime,
-  formatResourceLabel,
   formatSupplementalRequirements,
   formatTaskLabel,
 } from '../../utils/generationDisplay'
@@ -361,6 +465,7 @@ const loadingJobs = ref(false)
 const loadingResources = ref(false)
 const resourcesLoaded = ref(false)
 const resources = ref([])
+const nodeTiers = ref({})
 const retrying = ref(false)
 const retryingResourceKey = ref('')
 const appendingResources = ref(false)
@@ -376,6 +481,10 @@ const tracks = ref([])
 const coursewareJobs = ref([])
 const timelineState = ref(createInitialTimelineState())
 const connectionStatus = ref('idle')
+const claimReports = ref({})
+const claimReportVisible = ref(false)
+const claimDecisionLoading = ref(false)
+const selectedClaimReportId = ref('')
 let streamClient = null
 let streamGeneration = 0
 let publishedResourceRefreshTimer = null
@@ -413,6 +522,7 @@ const taskResourceCount = computed(() => selectedCoursewareJob.value ? (selected
 const selectedResource = computed(
   () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
 )
+const selectedClaimReport = computed(() => claimReports.value[selectedClaimReportId.value] || null)
 const retryableResourceTypes = computed(() => {
   const retryableStates = new Set(['failed', 'human_review', 'revision_requested'])
   const types = (timelineState.value.resourceExecutions || [])
@@ -477,6 +587,20 @@ function taskStatusLabel(task) {
   }[task?.job_status] || '未开始')
 }
 
+function apiErrorMessage(error, fallback) {
+  const data = error?.response?.data || {}
+  const detail = data.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => (typeof item === 'string' ? item : item?.msg))
+      .filter(Boolean)
+    if (messages.length) return messages.join('；')
+  }
+  if (typeof data.message === 'string' && data.message.trim()) return data.message
+  return fallback
+}
+
 function resolveTrackName(trackId) {
   return tracks.value.find((item) => item.track_id === trackId)?.name || trackId || '未命名方向'
 }
@@ -514,7 +638,36 @@ function persistSelectedJob() {
 }
 
 function resourceLabel(resource) {
-  return formatResourceLabel(resource, resolveTrackName(activeProfile.value?.knowledge_base_id))
+  const resourceName = String(resource?.resource_type || '学习资源').trim()
+  const nodes = [...new Set((resource?.knowledge_points || [])
+    .map((point) => String(point || '').trim())
+    .filter(Boolean))]
+  const tierLabel = resource?.tier_label || resourceTierLabel(resource)
+  return [resourceName, nodes.join('、'), tierLabel].filter(Boolean).join(' · ')
+}
+
+function resourceTierLabel(resource) {
+  const tiers = [...new Set((resource?.knowledge_points || [])
+    .map((point) => nodeTiers.value[String(point || '').trim()])
+    .filter((tier) => Number.isInteger(tier)))]
+  return tiers.length ? tiers.map((tier) => `第 ${tier} 阶`).join('、') : ''
+}
+
+async function loadNodeTiers() {
+  const knowledgeBaseId = activeProfile.value?.knowledge_base_id
+  if (!knowledgeBaseId) {
+    nodeTiers.value = {}
+    return
+  }
+  try {
+    const nodesRes = await knowledgeApi.listNodes(knowledgeBaseId)
+    nodeTiers.value = Object.fromEntries((nodesRes.data?.nodes || nodesRes.data || [])
+      .map((node) => [node.node_id, node.tier])
+      .filter(([, tier]) => Number.isInteger(tier)))
+  } catch (error) {
+    nodeTiers.value = {}
+    console.warn('学习节点阶级加载失败，标题将隐藏阶级信息', error)
+  }
 }
 
 function stopPolling() {
@@ -609,6 +762,7 @@ async function startRealtime(runId) {
       if (generation !== streamGeneration) return
       connectionStatus.value = 'terminal'
       await refreshStatus()
+      await loadClaimReports(runId)
       // The durable Run event can be observed immediately before the
       // background task marks its GenerationJob completed. Keep a short
       // fallback poll only for that hand-off window so the UI cannot remain
@@ -729,6 +883,7 @@ async function loadResourcesForSelectedJob() {
 
   loadingResources.value = true
   try {
+    await loadNodeTiers()
     const res = await resourceApi.listByLearner(selectedLearnerId.value, {
       // This page is scoped to the selected task Run. Cross-run aggregation
       // belongs to the learner-facing Learning Resources page.
@@ -736,7 +891,10 @@ async function loadResourcesForSelectedJob() {
       page: 1,
       page_size: 100,
     })
-    resources.value = res.data.resources || []
+    resources.value = (res.data.resources || []).map((resource) => ({
+      ...resource,
+      tier_label: resource.tier_label || resourceTierLabel(resource),
+    }))
     resourcesLoaded.value = true
     if (!resources.value.length) {
       selectedResourceId.value = ''
@@ -760,11 +918,15 @@ async function loadCoursewareSourceResources() {
   }
   loadingResources.value = true
   try {
+    await loadNodeTiers()
     const response = await resourceLibraryApi.listByLearner(selectedLearnerId.value)
     resources.value = (response.data || []).filter((resource) => (
       resource.resource_kind !== 'interactive_courseware'
       && resource.batch_id === batchId
-    ))
+    )).map((resource) => ({
+      ...resource,
+      tier_label: resource.tier_label || resourceTierLabel(resource),
+    }))
     resourcesLoaded.value = true
   } catch (error) {
     console.error(error)
@@ -773,6 +935,87 @@ async function loadCoursewareSourceResources() {
     ElMessage.error(error?.response?.data?.message || '课件来源资源加载失败')
   } finally {
     loadingResources.value = false
+  }
+}
+
+async function loadClaimReports(runId = selectedRunId.value) {
+  if (!runId) return
+  try {
+    const response = await runApi.claims(runId)
+    const payload = response.data || {}
+    const judgements = new Map((payload.judgements || []).map((item) => [item.claim_id, item]))
+    const next = {}
+    for (const [resourceId, metric] of Object.entries(payload.resource_metrics || {})) {
+      const factual = Number(metric.factual_claim_total || 0)
+      const supported = Number(metric.supported_claim_total || 0)
+      next[resourceId] = {
+        ...metric,
+        claim_factual_pass_rate: factual ? supported / factual : null,
+        claim_warning_publish: Boolean(
+          timelineState.value.resourceExecutions.find((item) => item.resource_id === resourceId)?.claim_warning_publish
+          ?? resources.value.find((item) => item.resource_id === resourceId)?.claim_warning_publish
+        ),
+        claim_publish_decision_pending: Boolean(
+          timelineState.value.resourceExecutions.find((item) => item.resource_id === resourceId)?.claim_publish_decision_pending
+          ?? resources.value.find((item) => item.resource_id === resourceId)?.claim_publish_decision_pending
+        ),
+        issues: (payload.claims || []).filter((claim) => {
+          const verdict = judgements.get(claim.claim_id)?.verdict
+          return claim.resource_id === resourceId && claim.claim_type === 'factual' && ['not_in_evidence', 'contradicted'].includes(verdict)
+        }).map((claim) => ({
+          claim_id: claim.claim_id,
+          claim_text: claim.claim_text,
+          verdict: judgements.get(claim.claim_id)?.verdict,
+          reason: judgements.get(claim.claim_id)?.reason,
+        })),
+      }
+    }
+    claimReports.value = next
+  } catch (error) {
+    if (error?.response?.status !== 404) console.error(error)
+  }
+}
+
+function openClaimReport(resourceId) {
+  selectedClaimReportId.value = resourceId
+  claimReportVisible.value = true
+}
+
+function claimPassRateLabel(report) {
+  return report.claim_factual_pass_rate == null ? '不适用' : `${(report.claim_factual_pass_rate * 100).toFixed(1)}%`
+}
+
+function claimIssueCount(report) {
+  return Array.isArray(report?.issues) ? report.issues.length : 0
+}
+
+function claimReportStatusLabel(status) {
+  return ({ complete: '审核完成', incomplete: '需要关注', not_applicable: '不适用' }[status] || status || '待审核')
+}
+
+function claimReportStatusClass(status) {
+  return status === 'complete' ? 'is-complete' : 'is-attention'
+}
+
+function claimRateStyle(report) {
+  const rate = Math.max(0, Math.min(1, Number(report?.claim_factual_pass_rate) || 0))
+  return { '--claim-rate': `${rate * 100}%` }
+}
+
+async function decideClaimPublication(publish) {
+  const resourceId = selectedClaimReportId.value
+  if (!resourceId || claimDecisionLoading.value) return
+  claimDecisionLoading.value = true
+  try {
+    await resourceApi.decideClaimPublication(resourceId, publish)
+    ElMessage.success(publish ? '资源已发布。' : '资源已保留为未发布。')
+    claimReportVisible.value = false
+    await refreshStatus()
+    await loadClaimReports(selectedRunId.value)
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || '发布决定提交失败')
+  } finally {
+    claimDecisionLoading.value = false
   }
 }
 
@@ -789,6 +1032,7 @@ async function refreshStatus() {
     if (nextJob.job_status === 'completed') {
       stopPolling()
       await loadResourcesForSelectedJob()
+      await loadClaimReports(nextJob.run_id)
     } else if (hasPublishedResources) {
       await loadResourcesForSelectedJob()
     } else if (nextJob.job_status === 'failed') {
@@ -829,6 +1073,7 @@ async function handleTaskChange() {
   if (!selectedJob.value) return
   if (selectedJob.value.job_status === 'completed' || selectedJob.value.resource_progress_summary?.published) {
     await loadResourcesForSelectedJob()
+    await loadClaimReports(selectedRunId.value)
   } else {
     resourcesLoaded.value = true
   }
@@ -997,7 +1242,7 @@ async function regeneratePendingResources() {
     const batchId = sourceJob.batch_id || sourceJob.run_id
     const response = await generateApi.continueBatch(batchId, {
       learner_id: sourceJob.learner_id,
-      resource_types: resourceTypes,
+      resource_types: appendIncludeClaimCheck.value ? [resourceTypes[0]] : resourceTypes,
       source_run_id: sourceJob.run_id,
       replace_existing_types: true,
       instructions: `统一重新生成本任务中未通过审核的资源：${resourceTypes.join('、')}。`,
@@ -1028,13 +1273,18 @@ async function confirmAppendResources() {
   appendingResources.value = true
   try {
     const batchId = sourceJob.batch_id || sourceJob.run_id
-    const response = await generateApi.continueBatch(batchId, {
-      learner_id: sourceJob.learner_id,
-      resource_types: resourceTypes,
-      instructions: '追加指定类型的学习资源，并与本批次已有资源保持衔接。',
-      source_run_id: sourceJob.run_id,
-      include_claim_check: appendIncludeClaimCheck.value,
-    })
+    const requestResourceTypes = appendIncludeClaimCheck.value
+      ? resourceTypes.map((type) => [type])
+      : [resourceTypes]
+    const responses = await Promise.all(requestResourceTypes.map((types) =>
+      generateApi.continueBatch(batchId, {
+        learner_id: sourceJob.learner_id, resource_types: types,
+        instructions: '追加指定类型的学习资源，并与本批次已有资源保持衔接。',
+        source_run_id: sourceJob.run_id,
+        include_claim_check: appendIncludeClaimCheck.value,
+      })
+    ))
+    const response = responses[0]
     selectedRunId.value = response.data.run_id
     localStorage.setItem('current_generation_run_id', selectedRunId.value)
     resources.value = []
@@ -1046,7 +1296,7 @@ async function confirmAppendResources() {
     ElMessage.success(`已追加：${resourceTypes.join('、')}`)
   } catch (error) {
     console.error(error)
-    ElMessage.error(error?.response?.data?.detail || '追加资源失败')
+    ElMessage.error(apiErrorMessage(error, '追加资源失败'))
   } finally {
     appendingResources.value = false
   }
@@ -1564,8 +1814,18 @@ onBeforeUnmount(() => {
 .resource-toolbar strong {
   display: block;
   margin-top: 4px;
-  font-size: 18px;
-  color: #172033;
+  font-size: 26px;
+  font-weight: 850;
+  color: #0b2f63;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.resource-toolbar .eyebrow {
+  color: #155db2;
+  font-size: 15px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
 }
 
 .resource-select {
@@ -1627,6 +1887,311 @@ onBeforeUnmount(() => {
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* Claim report: a focused audit surface with a clear score-to-action hierarchy. */
+:deep(.claim-report-dialog) {
+  overflow: hidden;
+  border: 1px solid #dbe8f2;
+  border-radius: 22px;
+  background: #f8fbfd;
+  box-shadow: 0 28px 80px rgba(22, 55, 82, .2);
+}
+
+:deep(.claim-report-dialog .el-dialog__header) {
+  margin: 0;
+  padding: 26px 28px 21px;
+  border-bottom: 1px solid #e4edf3;
+  background: linear-gradient(135deg, #ffffff 0%, #f4fbfa 100%);
+}
+
+:deep(.claim-report-dialog .el-dialog__headerbtn) {
+  top: 21px;
+  right: 22px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  transition: background .18s ease;
+}
+
+:deep(.claim-report-dialog .el-dialog__headerbtn:hover) {
+  background: #eaf4f3;
+}
+
+:deep(.claim-report-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: #78909e;
+  font-size: 17px;
+}
+
+:deep(.claim-report-dialog .el-dialog__body) {
+  padding: 22px 28px 28px;
+  background: #f8fbfd;
+}
+
+.claim-report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-right: 28px;
+}
+
+.claim-report-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.claim-report-icon {
+  display: grid;
+  width: 43px;
+  height: 43px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #cce8e2;
+  border-radius: 13px;
+  background: #e8f7f3;
+  color: #1c9a87;
+  font-size: 21px;
+}
+
+.claim-report-eyebrow {
+  display: block;
+  color: #2b8b7d;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .13em;
+  line-height: 1.2;
+}
+
+.claim-report-heading h3 {
+  margin: 5px 0 0;
+  color: #17324a;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -.035em;
+  line-height: 1.2;
+}
+
+.claim-report-heading p {
+  margin: 6px 0 0;
+  color: #718697;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.claim-report-status {
+  display: inline-flex;
+  width: max-content;
+  height: 31px;
+  min-height: 31px;
+  min-width: max-content;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  padding: 0 11px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 750;
+  flex-wrap: nowrap;
+  box-sizing: border-box;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.claim-report-status.is-complete {
+  border-color: #bfe5dc;
+  background: #edfaf6;
+  color: #218875;
+}
+
+.claim-report-status.is-attention {
+  border-color: #f1d7a8;
+  background: #fff8e9;
+  color: #a87322;
+}
+
+.claim-report-status svg {
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px;
+  font-size: 15px;
+}
+.claim-report-status span { white-space: nowrap; }
+
+.claim-report-overview {
+  display: grid;
+  grid-template-columns: minmax(260px, .9fr) minmax(0, 1.1fr);
+  gap: 12px;
+}
+
+.claim-rate-panel {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 17px;
+  padding: 16px 18px;
+  border: 1px solid #cfe8e2;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eaf9f5 0%, #f5fcfb 100%);
+}
+
+.claim-rate-ring {
+  display: grid;
+  width: 96px;
+  height: 96px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(#23a58f var(--claim-rate), #d7ebe8 0);
+  box-shadow: 0 7px 16px rgba(31, 151, 132, .12);
+}
+
+.claim-rate-ring-inner {
+  display: flex;
+  width: 76px;
+  height: 76px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f2fbf9;
+}
+
+.claim-rate-ring-inner strong {
+  color: #176f64;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.claim-rate-ring-inner span {
+  margin-top: 6px;
+  color: #6c938e;
+  font-size: 10px;
+}
+
+.claim-rate-copy { min-width: 0; }
+.claim-rate-copy > strong { display: block; margin-top: 7px; color: #1a5f59; font-size: 15px; line-height: 1.35; }
+.claim-rate-copy p { margin: 6px 0 0; color: #648681; font-size: 11px; line-height: 1.55; }
+
+.claim-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.claim-metric {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e0e9ef;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.claim-metric-icon {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  font-size: 15px;
+}
+
+.claim-metric small, .claim-metric strong { display: block; }
+.claim-metric small { color: #7890a1; font-size: 10px; line-height: 1.2; }
+.claim-metric strong { margin-top: 3px; color: #26455d; font-size: 20px; line-height: 1; }
+.claim-metric.is-total .claim-metric-icon { background: #edf4ff; color: #4d82cd; }
+.claim-metric.is-supported .claim-metric-icon { background: #eaf8f3; color: #27a17f; }
+.claim-metric.is-unverified .claim-metric-icon { background: #fff6e5; color: #d79537; }
+.claim-metric.is-conflict .claim-metric-icon { background: #fff0ef; color: #df7169; }
+
+.claim-report-alert {
+  margin-top: 12px;
+  border: 1px solid #f1dcae;
+  border-radius: 11px;
+  background: #fff9ed;
+}
+
+.claim-report-alert :deep(.el-alert__title) { color: #99702c; font-size: 12px; font-weight: 700; line-height: 1.45; }
+
+.claim-issues-section {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #e1eaf0;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.claim-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.claim-section-heading h4 { margin: 5px 0 0; color: #21405a; font-size: 16px; line-height: 1.25; }
+.claim-issue-count { padding: 4px 9px; border-radius: 999px; background: #f0f5f8; color: #718697; font-size: 11px; font-weight: 700; }
+
+.claim-report-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 1px dashed #c9e5dc;
+  border-radius: 12px;
+  background: #f7fcfa;
+}
+
+.claim-empty-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #e2f5ee; color: #219779; font-size: 17px; }
+.claim-report-empty strong { color: #246c5d; font-size: 13px; }
+.claim-report-empty p { margin: 3px 0 0; color: #77958d; font-size: 11px; line-height: 1.45; }
+
+.claim-issue-list { display: grid; gap: 9px; }
+
+.claim-issue-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 13px;
+  border: 1px solid #f1dfbf;
+  border-radius: 12px;
+  background: #fffaf3;
+}
+
+.claim-issue-marker { padding-top: 2px; color: #c68a3b; font-size: 11px; font-weight: 850; letter-spacing: .04em; }
+.claim-issue-content { min-width: 0; flex: 1; }
+.claim-issue-topline { display: flex; align-items: center; gap: 8px; }
+.claim-issue-topline > span { color: #a18a6a; font-size: 10px; }
+.claim-issue-content p { margin: 8px 0 0; color: #3d4d5d; font-size: 13px; line-height: 1.55; }
+.claim-issue-content small { display: block; margin-top: 6px; color: #9a8c7a; font-size: 11px; line-height: 1.45; }
+
+.claim-report-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #d8e4ed;
+  border-radius: 14px;
+  background: #edf4f8;
+}
+
+.claim-report-actions > div:first-child { min-width: 0; }
+.claim-report-actions strong, .claim-report-actions span { display: block; }
+.claim-report-actions strong { color: #26465d; font-size: 12px; }
+.claim-report-actions span { margin-top: 3px; color: #718697; font-size: 11px; line-height: 1.4; }
+.claim-report-action-buttons { display: flex; flex: 0 0 auto; gap: 8px; }
+.claim-report-action-buttons :deep(.el-button) { height: 34px; margin: 0; border-radius: 9px; font-weight: 700; }
+.claim-report-action-buttons :deep(.el-button--primary) { border: 0; background: #1c9a87; box-shadow: 0 6px 12px rgba(28, 154, 135, .2); }
+.claim-report-action-buttons :deep(.el-button--primary:hover) { background: #167c6d; }
 
 @media (max-width: 1200px) {
   .generate-page.is-courseware-workspace {
@@ -1690,5 +2255,33 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
+  :deep(.claim-report-dialog .el-dialog__header) { padding: 22px 22px 18px; }
+  :deep(.claim-report-dialog .el-dialog__body) { padding: 18px 22px 22px; }
+  .claim-report-overview { grid-template-columns: 1fr; }
+  .claim-report-actions { align-items: flex-start; flex-direction: column; }
+  .claim-report-action-buttons { width: 100%; }
+  .claim-report-action-buttons :deep(.el-button) { flex: 1; }
+
+}
+
+@media (max-width: 560px) {
+  :deep(.claim-report-dialog) { border-radius: 17px; }
+  :deep(.claim-report-dialog .el-dialog__header) { padding: 18px 17px 16px; }
+  :deep(.claim-report-dialog .el-dialog__body) { padding: 15px 17px 18px; }
+  .claim-report-header { padding-right: 21px; }
+  .claim-report-heading { gap: 10px; }
+  .claim-report-icon { width: 36px; height: 36px; border-radius: 10px; font-size: 18px; }
+  .claim-report-heading h3 { font-size: 18px; }
+  .claim-report-heading p { display: none; }
+  .claim-report-status { width: max-content; height: 30px; min-width: 96px; margin-top: 0; padding: 0 8px; font-size: 10px; }
+  .claim-report-status svg { width: 16px !important; height: 16px !important; flex-basis: 16px; }
+  .claim-rate-panel { align-items: flex-start; padding: 14px; }
+  .claim-rate-ring { width: 82px; height: 82px; }
+  .claim-rate-ring-inner { width: 66px; height: 66px; }
+  .claim-rate-ring-inner strong { font-size: 15px; }
+  .claim-metric { padding: 9px 10px; }
+  .claim-metric strong { font-size: 18px; }
+  .claim-issues-section { padding: 14px; }
+  .claim-report-actions { padding: 12px; }
 }
 </style>

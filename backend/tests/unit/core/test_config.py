@@ -28,11 +28,14 @@ def test_settings_safe_defaults():
     assert settings.debug is False
     assert settings.sql_echo is False
     assert settings.llm_workflow_timeout_seconds == 1200
-    assert settings.claim_request_timeout_seconds == 360.0
-    assert settings.claim_max_attempts == 1
-    assert settings.claim_schema_repair_attempts == 2
+    assert settings.claim_request_timeout_seconds == 240.0
+    assert settings.claim_max_attempts == 3
+    assert settings.claim_schema_repair_attempts == 1
+    assert settings.claim_max_claims_per_resource == 10
+    assert settings.claim_warning_publish_enabled is False
+    assert settings.claim_warning_publish_min_factual_pass_rate == 0.80
     assert settings.llm_max_output_tokens == 16384
-    assert settings.claim_max_output_tokens == 65536
+    assert settings.claim_max_output_tokens == 32768
     assert settings.claim_truncated_retry_output_tokens == 65536
     assert settings.text_resource_request_timeout_seconds == 240.0
     assert settings.text_resource_max_output_tokens == 65536
@@ -127,14 +130,23 @@ def test_container_gives_resource_agents_their_dedicated_recovery_budget():
     assert gateway.options_for("text_resource_agent").max_attempts == 2
     assert gateway.options_for("assessment_agent").max_attempts == 2
     assert gateway.options_for("reviewer").max_attempts == 2
-    assert gateway.options_for("claim_extractor").max_attempts == 1
-    assert gateway.options_for("claim_extractor").schema_repair_attempts == 2
+    assert gateway.options_for("claim_extractor").max_attempts == 3
+    assert gateway.options_for("claim_extractor").schema_repair_attempts == 1
     assert gateway.options_for("reviewer").max_output_tokens == 16384
     assert gateway.options_for("assessment_scope_reviewer").max_output_tokens == 16384
-    assert gateway.options_for("claim_extractor").max_output_tokens == 65536
+    assert gateway.options_for("claim_extractor").max_output_tokens == 32768
     assert gateway.options_for("claim_extractor").truncated_retry_output_tokens == 65536
-    assert gateway.options_for("claim_extractor").request_timeout_seconds == 360.0
-    assert gateway.options_for("claim_judge").max_attempts == 1
+    assert gateway.options_for("claim_extractor").request_timeout_seconds == 240.0
+    assert gateway.options_for("claim_extractor").retry_request_timeout_seconds == 300.0
+    assert gateway.options_for("claim_judge").max_attempts == 3
+
+
+def test_claim_schema_repair_can_be_explicitly_disabled():
+    settings = make_settings(claim_schema_repair_attempts=0)
+    container = Container()
+    container.config.from_dict(settings.model_dump(mode="python"))
+
+    assert container.llm_gateway().options_for("claim_extractor").schema_repair_attempts == 0
 
 
 @pytest.mark.parametrize("mode", ["development", "demo", "production"])

@@ -9,6 +9,7 @@ from app.core.storage.file_storage import stage_learner_resource_directories
 from app.db.shared.extended_models import DiagnosticRunORM
 from app.db.learners.base import BaseLearnerRepository
 from app.db.shared.models import (
+    AbilityStateEventORM,
     AgentRunORM,
     AgentStepORM,
     ClaimEvidenceORM,
@@ -24,6 +25,8 @@ from app.db.shared.models import (
     KnowledgeStateORM,
     LearnerProfileORM,
     LearnerProfileVersionORM,
+    LearnerCurriculumNodeORM,
+    LearnerTierProgressORM,
     LearningAttemptORM,
     LearningAttemptPointResultORM,
     LearningPathMutationORM,
@@ -36,6 +39,8 @@ from app.db.shared.models import (
     ResourceReviewORM,
     ResourceSpecORM,
     RetrievalEvidenceSnapshotORM,
+    TutorSessionORM,
+    TutorTurnORM,
     WorkflowCheckpointORM,
     WorkflowEventORM,
 )
@@ -265,6 +270,11 @@ class SQLLearnerRepository(BaseLearnerRepository):
                     .filter(_matches_ids(ResourceSpecORM.run_id, run_ids))
                     .all()
                 )
+                tutor_session_ids = _ids(
+                    db.query(TutorSessionORM.session_id)
+                    .filter_by(learner_id=learner_id)
+                    .all()
+                )
 
                 # Claim and review descendants must disappear before their
                 # resources, evidence snapshots, or workflow runs.
@@ -335,6 +345,18 @@ class SQLLearnerRepository(BaseLearnerRepository):
                     learner_id=learner_id
                 ).delete(synchronize_session=False)
 
+                # Durable learner projections not reachable through a Run or
+                # Attempt still reference the profile directly.
+                db.query(AbilityStateEventORM).filter_by(
+                    learner_id=learner_id
+                ).delete(synchronize_session=False)
+                db.query(LearnerCurriculumNodeORM).filter_by(
+                    learner_id=learner_id
+                ).delete(synchronize_session=False)
+                db.query(LearnerTierProgressORM).filter_by(
+                    learner_id=learner_id
+                ).delete(synchronize_session=False)
+
                 # Questionnaire and diagnosis history is profile-owned.
                 db.query(QuestionnaireAnswerORM).filter(
                     _matches_ids(QuestionnaireAnswerORM.submission_id, submission_ids)
@@ -357,6 +379,12 @@ class SQLLearnerRepository(BaseLearnerRepository):
                     _matches_ids(ResourceExecutionORM.run_id, run_ids)
                     | _matches_ids(ResourceExecutionORM.resource_spec_id, spec_ids)
                     | _matches_ids(ResourceExecutionORM.resource_id, resource_ids)
+                ).delete(synchronize_session=False)
+                db.query(TutorTurnORM).filter(
+                    _matches_ids(TutorTurnORM.session_id, tutor_session_ids)
+                ).delete(synchronize_session=False)
+                db.query(TutorSessionORM).filter(
+                    _matches_ids(TutorSessionORM.session_id, tutor_session_ids)
                 ).delete(synchronize_session=False)
                 db.query(GeneratedResourceORM).filter(
                     _matches_ids(GeneratedResourceORM.parent_resource_id, resource_ids)

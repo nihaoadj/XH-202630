@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from app.db.generation.memory import MemoryGenerationJobRepository
 from app.db.learners.mastery import MemoryMasteryRepository
 from app.db.learners.memory import MemoryLearnerRepository
+from app.core.security.errors import ApplicationError
 from app.models.learners.mastery import AbilityEvidenceV1
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningPreferences
 from app.services.generation.jobs import GenerationJobService
@@ -118,3 +121,18 @@ def test_later_generation_returns_to_automatic_recommendation_after_publication(
 
     assert request.target_skill_nodes == ["weak"]
     assert created.focus_snapshot.adopted_node_ids == ["weak"]
+
+
+def test_auto_generation_does_not_fall_back_to_unscoped_multi_node_plan():
+    jobs, profile = _fixture()
+    original_focus_snapshot = jobs.mastery_service.focus_snapshot
+    jobs.mastery_service.next_generation_options = lambda _profile: SimpleNamespace(recommended_node_ids=[])
+
+    def empty_focus_snapshot(*args, **kwargs):
+        return original_focus_snapshot(*args, **kwargs).model_copy(update={"adopted_node_ids": []})
+
+    jobs.mastery_service.focus_snapshot = empty_focus_snapshot
+
+    with pytest.raises(ApplicationError) as exc_info:
+        jobs.create_job(profile, _request(), run_id="run-no-auto-target")
+    assert exc_info.value.public_message == "当前没有可自动选择的学习节点，请先手动选择一个节点"
