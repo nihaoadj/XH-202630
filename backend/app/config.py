@@ -88,12 +88,33 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
     # Claim audits inspect long generated resources and need a separate,
     # bounded budget instead of inheriting the generic auxiliary-node limit.
-    claim_request_timeout_seconds: float = Field(default=360.0, gt=0, le=600)
+    claim_request_timeout_seconds: float = Field(default=240.0, gt=0, le=600)
+    claim_retry_request_timeout_seconds: float = Field(default=300.0, gt=0, le=600)
     # Resource-oriented runs include generation and review/claim evaluation.
     llm_workflow_timeout_seconds: float = Field(default=1200.0, gt=0, le=1800)
     llm_max_attempts: int = Field(default=2, ge=1, le=3)
-    claim_max_attempts: int = Field(default=1, ge=1, le=3)
-    claim_schema_repair_attempts: int = Field(default=2, ge=1, le=3)
+    # Initial call + one transport retry + one schema-repair turn.
+    claim_max_attempts: int = Field(default=3, ge=1, le=3)
+    claim_schema_repair_attempts: int = Field(default=1, ge=0, le=2)
+    # Explicit opt-in for publishing resources whose Claim audit is partial.
+    # Such resources retain an ``incomplete`` metric and are never represented
+    # as a complete Claim pass.
+    claim_partial_publish: bool = False
+    # Deprecated compatibility switch. Completed Claim audits with evidence
+    # gaps now wait for an explicit user publication decision.
+    claim_warning_publish_enabled: bool = False
+    claim_warning_publish_min_factual_pass_rate: float = Field(
+        default=0.80, ge=0.0, le=1.0,
+    )
+    # Completed Claim audits with evidence gaps are eligible for user review
+    # once the factual pass rate reaches this threshold.
+    claim_user_review_enabled: bool = True
+    claim_user_review_min_factual_pass_rate: float = Field(
+        default=0.60, ge=0.0, le=1.0,
+    )
+    # Per-resource Claim extraction target.  The model prompt and the
+    # workflow's deterministic envelope check both consume this value.
+    claim_max_claims_per_resource: int = Field(default=10, ge=1, le=20)
     # Resource generation produces the user-facing artifact. It receives one
     # additional bounded recovery attempt for empty provider responses, while
     # supporting nodes (review/diagnosis/claim checks) retain the global limit.
@@ -103,7 +124,7 @@ class Settings(BaseSettings):
     llm_max_output_tokens: int = Field(default=16384, ge=256, le=65536)
     # Claim extraction/judgement starts with a larger budget because the
     # audited resource text and evidence envelope can be substantial.
-    claim_max_output_tokens: int = Field(default=65536, ge=2048, le=65536)
+    claim_max_output_tokens: int = Field(default=32768, ge=2048, le=65536)
     # A length-truncated Claim call receives one bounded budget increase on
     # its final retry; this is intentionally separate from the initial cap.
     claim_truncated_retry_output_tokens: int = Field(default=65536, ge=2048, le=65536)
@@ -305,6 +326,7 @@ class Settings(BaseSettings):
     @field_validator(
         "llm_request_timeout_seconds",
         "claim_request_timeout_seconds",
+        "claim_retry_request_timeout_seconds",
         "llm_workflow_timeout_seconds",
         "tutor_llm_timeout_seconds",
         mode="before",
@@ -318,6 +340,7 @@ class Settings(BaseSettings):
         maximum = {
             "llm_request_timeout_seconds": 300,
             "claim_request_timeout_seconds": 600,
+            "claim_retry_request_timeout_seconds": 600,
             "llm_workflow_timeout_seconds": 1800,
             "tutor_llm_timeout_seconds": 120,
         }[info.field_name]
@@ -399,6 +422,8 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_LLM_TIMEOUT")
         if self.llm_retry_max_delay_seconds < self.llm_retry_base_delay_seconds:
             raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
+        if self.claim_schema_repair_attempts > self.claim_max_attempts - 1:
+            raise ValueError("CFG_INVALID_CLAIM_RETRY_POLICY")
         if self.retrieval_min_evidence > self.retrieval_max_evidence:
             raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
         if self.workflow_sse_heartbeat_seconds <= self.workflow_sse_poll_interval_seconds:

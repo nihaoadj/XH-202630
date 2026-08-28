@@ -141,7 +141,10 @@ function resourceTitle(resource) {
   const knowledgePoints = [...new Set((resource?.knowledge_points || [])
     .map((point) => String(point || '').trim())
     .filter(Boolean))]
-  return knowledgePoints.length ? `${type} · ${knowledgePoints.join('、')}` : type
+  const tierLabel = resource?.tier_label || (Number.isInteger(resource?.tier) ? `第 ${resource.tier} 阶` : '')
+  return [...(knowledgePoints.length ? [`${type} · ${knowledgePoints.join('、')}`] : [type]), tierLabel]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function contentWithResourceTitle(resource) {
@@ -180,6 +183,8 @@ function normalizeMarkdown(text) {
     .replace(/^(\s*)\\(?=---+\s*$)/gm, '$1')
     .replace(/^(\s*\d+)\\\.(?=\s)/gm, '$1.')
     .replace(/^(\s*)\\([-*])(?=\s)/gm, '$1$2')
+    .replace(/^(\s*)\\(?=#)/gm, '$1')
+    .replace(/^(\s*)\\(?=\x60{3})/gm, '$1')
     .replace(/(?<=\|)\\(?=\n|$)/g, '')
     .replace(/^\s*\\?<!--\s*(?:section|step|code|checklist|quiz):[a-z][a-z0-9-]{1,63}\s*-->\s*$/gmi, '')
 }
@@ -230,9 +235,18 @@ function renderMarkdown(text) {
       const items = []
       while (index < lines.length) {
         const item = lines[index].match(matcher)
-        if (!item) break
-        items.push(`<li>${renderInlineMarkdown(item[1])}</li>`)
-        index += 1
+        if (item) {
+          items.push(`<li>${renderInlineMarkdown(item[1])}</li>`)
+          index += 1
+          continue
+        }
+        // Markdown permits a blank line between items. Keep those items in
+        // the same list so ordered numbering continues instead of restarting.
+        if (!lines[index].trim() && lines[index + 1]?.match(matcher)) {
+          index += 1
+          continue
+        }
+        break
       }
       blocks.push(`<${ordered ? 'ol' : 'ul'}>${items.join('')}</${ordered ? 'ol' : 'ul'}>`)
       continue
@@ -412,4 +426,15 @@ function askTutorAboutSelection() {
   .learning-progress, .reader-actions :deep(.el-tag) { display: none; }
   .reader-content, .reader-footer { padding-right: 23px; padding-left: 23px; }
 }
+.resource-content :deep(ul), .resource-content :deep(ol) { padding-left: 28px; }
+
+/* Keep document headings prominent in both the library and generation pages. */
+.content-label { gap: 9px; margin-bottom: 21px; color: #1d5aa8; font-size: 16px; }
+.content-label span { width: 5px; height: 20px; background: #1d5aa8; }
+.resource-content :deep(h1), .resource-content :deep(h2), .resource-content :deep(h3), .resource-content :deep(h4) { color: #102d56; font-weight: 800; line-height: 1.3; }
+.resource-content :deep(h1) { font-size: 31px; }
+.resource-content :deep(h2) { font-size: 25px; }
+.resource-content :deep(h3) { font-size: 21px; }
+.resource-content :deep(h4) { font-size: 19px; }
+.resource-content :deep(p), .resource-content :deep(ul), .resource-content :deep(ol), .resource-content :deep(pre) { margin-bottom: 16px; }
 </style>

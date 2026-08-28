@@ -11,6 +11,8 @@
 
 本地配置、SQLite、Chroma、日志和生成物都是运行时数据，不能提交。配置统一从 `backend/.env` 读取；相对数据库、向量库和资源路径均相对 `backend/` 解释。
 
+Claim 审核完成但存在无证据事实时，`CLAIM_USER_REVIEW_ENABLED=true` 且事实通过率达到 `CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE`（默认 `0.60`）会等待用户在审核报告中决定是否发布；旧 `CLAIM_WARNING_PUBLISH_*` 配置不再触发自动发布。
+
 ## 2. 一键启动（推荐）
 
 仓库提供跨 Windows、Linux 和 macOS 的标准库启动器：[scripts/start_local.py](../scripts/start_local.py)。它根据自身位置定位仓库，不依赖开发者的用户名或绝对路径，并分别启动：

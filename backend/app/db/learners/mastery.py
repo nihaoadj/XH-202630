@@ -37,7 +37,17 @@ def _stable_id(prefix: str, *parts: object) -> str:
     return f"{prefix}_{hashlib.sha256(value.encode()).hexdigest()[:32]}"
 
 
-def _confidence(count: int, distinct_sources: int, prior: float | None) -> AbilityConfidence:
+def _confidence(
+    count: int,
+    distinct_sources: int,
+    prior: float | None,
+    status: AbilityStatus,
+) -> AbilityConfidence:
+    # A full self-report followed by one passing objective assessment is an
+    # explicitly verified placement assertion and is high confidence under the
+    # placement policy, even though it has only one objective event.
+    if count >= 1 and prior is not None and prior >= 1.0 and status == AbilityStatus.MASTERED:
+        return AbilityConfidence.HIGH
     if count >= 3 and distinct_sources >= 2:
         return AbilityConfidence.HIGH
     if count >= 2:
@@ -45,25 +55,22 @@ def _confidence(count: int, distinct_sources: int, prior: float | None) -> Abili
     return AbilityConfidence.LOW if count >= 1 or prior is not None else AbilityConfidence.NONE
 
 
-def _objective_status(
-    score: float,
-    objective_count: int,
-    distinct_source_count: int,
-    dimension_ready: bool,
-) -> AbilityStatus:
+def _objective_status(score: float) -> AbilityStatus:
+    """Derive the learner-facing status from the server-scored result.
+
+    Evidence counts and dimension coverage remain useful provenance and
+    confidence signals, but must not keep a passing score in ``learning``.
+    The learning path and report use this status to choose the next action,
+    so making mastery contingent on a second source made an 85% assessment
+    appear as a remediation task.
+    """
     if score < 0.60:
         return AbilityStatus.WEAK
-    # A single strong observation is useful evidence, but it is not enough to
-    # claim durable mastery.  The second independent server-scored source is
-    # enforced by the append-only evidence count.
-    if (
-        score < MASTERY_CONFIRMATION_THRESHOLD
-        or objective_count < 2
-        or distinct_source_count < 2
-        or not dimension_ready
-    ):
-        return AbilityStatus.LEARNING
-    return AbilityStatus.MASTERED
+    return (
+        AbilityStatus.MASTERED
+        if score >= MASTERY_CONFIRMATION_THRESHOLD
+        else AbilityStatus.LEARNING
+    )
 
 
 def _has_required_dimensions(evidence: AbilityEvidenceV1) -> bool:
@@ -95,12 +102,12 @@ def _transition(
         if objective_count == 0:
             mastery = observed if prior is None else 0.2 * prior + 0.8 * observed
         else:
-            mastery = 0.7 * float(mastery or 0.0) + 0.3 * observed
+            # Recent formal assessments should dominate the running mastery
+            # estimate while retaining a small amount of historical context.
+            mastery = 0.2 * float(mastery or 0.0) + 0.8 * observed
         mastery = round(mastery, 6)
         objective_count += 1
-        status = _objective_status(
-            mastery, objective_count, distinct_source_count, dimension_ready,
-        )
+        status = _objective_status(mastery)
         # A later formal result at or below the promotion threshold is an
         # explicit contradiction. Do not let EWMA inertia keep a previously
         # mastered node labelled mastered after a failed follow-up.
@@ -113,7 +120,7 @@ def _transition(
         "mastery_score": mastery,
         "self_report_prior": prior,
         "status": status,
-        "confidence": _confidence(objective_count, distinct_source_count, prior),
+        "confidence": _confidence(objective_count, distinct_source_count, prior, status),
         "objective_evidence_count": objective_count,
         "distinct_objective_source_count": distinct_source_count,
         "attempt_count": attempt_count,

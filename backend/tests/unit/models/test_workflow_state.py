@@ -55,7 +55,7 @@ def test_generate_request_maps_every_control_field_to_workflow_state():
         knowledge_base_id="request-kb",
         diagnostic_result_id="diag-001",
         target_skill_nodes=["node-a", "node-b"],
-        resource_types=["讲义", "实操指南"],
+        resource_types=["讲义"],
         difficulty_preference="中级",
         generation_mode="strict",
         include_review=True,
@@ -75,7 +75,7 @@ def test_generate_request_maps_every_control_field_to_workflow_state():
     assert state["knowledge_base_id"] == "request-kb"
     assert state["diagnostic_result_id"] == "diag-001"
     assert state["target_skill_nodes"] == ["node-a", "node-b"]
-    assert state["resource_types"] == ["讲义", "实操指南"]
+    assert state["resource_types"] == ["讲义"]
     assert state["difficulty_preference"] == "中级"
     assert state["generation_mode"] == "strict"
     assert state["include_review"] is True
@@ -100,11 +100,12 @@ def test_claim_check_requires_resource_review():
         )
 
 
-def test_claim_check_defaults_to_enabled_with_review_and_is_disabled_for_explicit_drafts():
+def test_claim_check_defaults_to_disabled_and_remains_disabled_for_explicit_drafts():
     reviewed = GenerateRequest(learner_id="contract_001", topic="工业视觉")
     draft = GenerateRequest(learner_id="contract_001", topic="工业视觉", include_review=False)
 
-    assert reviewed.include_claim_check is True
+    assert reviewed.include_claim_check is False
+    assert reviewed.max_iterations == 2
     assert reviewed.claim_max_iterations == 0
     assert draft.include_claim_check is False
 

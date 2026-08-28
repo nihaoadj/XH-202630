@@ -52,7 +52,7 @@ def test_low_score_inserts_one_reusable_remedial_node():
     assert len([item for item in repeated_path.nodes if item.node_type == PathNodeType.REMEDIAL]) == 1
 
 
-def test_high_score_completes_current_and_unlocks_challenge():
+def test_high_score_completes_current_and_unlocks_the_next_node():
     attempt = _attempt(0.4, "a1")
     path, _ = mutate_learning_path(
         attempt=attempt,
@@ -67,7 +67,24 @@ def test_high_score_completes_current_and_unlocks_challenge():
         decision_id="d2",
         policy=decide_attempt(high, FeedbackContext(learner_id="learner", profile_version=2)),
         existing=path,
+        advance_knowledge_point_id="skill-b",
     )
     assert current.node_id in mutation.completed_node_ids
     assert mutation.unlocked_node_ids
-    assert any(item.node_type == PathNodeType.CHALLENGE for item in advanced.nodes)
+    challenge = next(item for item in advanced.nodes if item.node_type == PathNodeType.CHALLENGE)
+    assert challenge.knowledge_point_id == "skill-b"
+
+
+def test_high_score_does_not_create_a_challenge_for_the_completed_node():
+    attempt = _attempt(0.95, "a1")
+
+    path, mutation = mutate_learning_path(
+        attempt=attempt,
+        decision_id="d1",
+        policy=decide_attempt(attempt, FeedbackContext(learner_id="learner", profile_version=1)),
+        existing=None,
+    )
+
+    assert mutation.completed_node_ids
+    assert mutation.unlocked_node_ids == []
+    assert not any(item.node_type == PathNodeType.CHALLENGE for item in path.nodes)

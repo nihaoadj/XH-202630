@@ -62,8 +62,9 @@ def test_questionnaire_source_sync_is_idempotent(tmp_path):
     loaded = repository.get_questionnaire_template("rag_engineering_initial_profile_v1")
     assert loaded is not None
     assert loaded["track_id"] == "rag_engineering_training"
-    assert [question["question_id"] for question in loaded["questions"]][-1] == "learning_focus_rag_nodes"
-    assert loaded["questions"][-1]["profile_mapping"]["target_path"] == "learning_preferences.focus_nodes"
+    loaded_question_ids = [question["question_id"] for question in loaded["questions"]]
+    assert loaded_question_ids[-1] == "known_rag_nodes"
+    assert "learning_focus_rag_nodes" not in loaded_question_ids
 
     common_loaded = repository.get_questionnaire_template("common_initial_profile_v1")
     common_question_ids = [question["question_id"] for question in common_loaded["questions"]]
@@ -92,11 +93,10 @@ def test_questionnaire_source_sync_is_idempotent(tmp_path):
         answers={
             "rag_level": "听说过，但说不清流程",
             "known_rag_nodes": ["Embedding"],
-            "learning_focus_rag_nodes": ["Embedding"],
         },
-        profile_updates={"learning_preferences": {"focus_nodes": ["Embedding"]}},
+        profile_updates={},
     )
 
     with factory() as db:
         assert db.query(QuestionnaireSubmissionORM).filter_by(submission_id=submission_id).count() == 1
-        assert db.query(QuestionnaireAnswerORM).filter_by(submission_id=submission_id).count() == 3
+        assert db.query(QuestionnaireAnswerORM).filter_by(submission_id=submission_id).count() == 2

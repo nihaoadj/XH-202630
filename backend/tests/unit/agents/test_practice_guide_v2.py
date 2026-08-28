@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.agents.resource_agents.practice import PracticeGuideAgent, render_practice_guide_markdown
+from app.agents.resource_agents.practice import PRACTICE_GUIDE_PROMPT, PracticeGuideAgent, render_practice_guide_markdown
 from app.core.security.errors import ApplicationError
 from app.models.shared.agent_contracts import ResourceGenerationContext, ResourceRepresentationSpec, ResourceSpec
 from tests.fakes.evidence import make_evidence
@@ -36,6 +36,17 @@ def _package(steps=2):
         "verification": {"phase_id": "verify", "goal": "验证操作结果。", "checklist": ["确认结果。"], "evidence_ids": ["ev-practice"]},
         "reflection": {"phase_id": "reflect", "goal": "复盘操作。", "summary": "复盘每一步的证据依据和验证结果。", "evidence_ids": ["ev-practice"]},
     }
+
+
+def test_practice_guide_prompt_explicitly_reinforces_v3_shape():
+    for fragment in (
+        "practice 阶段本身没有 evidence_ids",
+        "所有对象都不得包含未列出的字段",
+        "steps 必须为 1 至 8 步",
+        "只返回 JSON 对象",
+        "previous_version_content",
+    ):
+        assert fragment in PRACTICE_GUIDE_PROMPT
 
 
 def test_practice_guide_generates_json_then_deterministic_markdown(monkeypatch):

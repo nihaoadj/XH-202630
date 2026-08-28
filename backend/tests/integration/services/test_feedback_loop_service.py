@@ -126,6 +126,23 @@ def test_practice_updates_state_without_unnecessary_generation():
     assert jobs.list_by_learner("learner") == []
 
 
+def test_advance_uses_the_graph_successor_instead_of_repeating_the_assessed_node():
+    service, _, _, profile, resource = _setup()
+    service.knowledge_catalog = SimpleNamespace(list_skill_nodes=lambda _kb: [
+        SimpleNamespace(node_id="skill-a", name="A", children=["skill-b"], prerequisites=[]),
+        SimpleNamespace(node_id="skill-b", name="B", children=[], prerequisites=["skill-a"]),
+    ])
+
+    result = service.process_learning_attempt(profile, resource, _request(0.95))
+
+    inserted = [
+        node for node in result.learning_path.nodes
+        if node.node_id in result.path_mutation.inserted_node_ids
+    ]
+    assert result.path_mutation.completed_node_ids
+    assert [node.knowledge_point_id for node in inserted] == ["skill-b"]
+
+
 def test_feedback_report_separates_default_path_from_optional_correction_package():
     correction = SimpleNamespace(eligible=True, recommended_target_ids=["old"])
     result = SimpleNamespace(
@@ -144,6 +161,17 @@ def test_feedback_report_separates_default_path_from_optional_correction_package
     assert recommendation["recommended_action"] == "correction_package"
     assert recommendation["alternative_action"] == "learn_new_and_reinforce"
 
+    recommendation = FeedbackService._next_step_recommendation(
+        result,
+        generation,
+        correction,
+        downgrade_candidates=[SimpleNamespace(skill_node_id="prerequisite", blocked_by_node_ids=[])],
+    )
+    assert recommendation["recommended_action"] == "correction_package"
+    assert recommendation["alternative_action"] == "downgrade_learning"
+    assert recommendation["alternative_learning_intent"] == "downgrade_learning"
+    assert recommendation["alternative_learning_node_ids"] == ["prerequisite"]
+
     result.decision.action.value = "advance"
     generation.recommendation_type = "advance"
     recommendation = FeedbackService._next_step_recommendation(result, generation, correction)
@@ -152,12 +180,41 @@ def test_feedback_report_separates_default_path_from_optional_correction_package
     assert recommendation["default_learning_node_ids"] == ["new"]
     assert recommendation["default_review_node_ids"] == []
 
+    recommendation = FeedbackService._next_step_recommendation(
+        result, generation, correction, tier_unlock=(1, 2),
+    )
+    assert recommendation["title"] == "已解锁第 2 阶：升阶学习"
+    assert "完成第 1 阶全部能力节点" in recommendation["description"]
+
     result.decision.action.value = "remediate"
     generation.recommendation_type = "remedial"
-    recommendation = FeedbackService._next_step_recommendation(result, generation, correction)
+    recommendation = FeedbackService._next_step_recommendation(
+        result, generation, correction, downgrade_candidates=[generation.learning_candidates[0]],
+    )
     assert recommendation["recommended_action"] == "downgrade_learning"
     assert recommendation["learning_intent"] == "downgrade_learning"
     assert recommendation["default_learning_node_ids"] == ["new"]
+
+
+def test_advance_with_two_new_nodes_defaults_to_one_node():
+    result = SimpleNamespace(
+        decision=SimpleNamespace(action=SimpleNamespace(value="advance"), target_knowledge_point_ids=()),
+    )
+    generation = SimpleNamespace(
+        learn_new_knowledge=[
+            SimpleNamespace(skill_node_id="new-1", blocked_by_node_ids=[]),
+            SimpleNamespace(skill_node_id="new-2", blocked_by_node_ids=[]),
+        ],
+        reinforce_weakness=[],
+        learning_candidates=[],
+        recommended_node_ids=[],
+    )
+
+    recommendation = FeedbackService._next_step_recommendation(result, generation, None)
+
+    assert recommendation["title"] == "默认建议：一个新节点"
+    assert recommendation["default_new_node_ids"] == ["new-1"]
+    assert recommendation["can_choose_two_new_nodes"] is True
 
 
 def test_correction_package_only_exposes_current_feedback_targets():
@@ -203,6 +260,23 @@ def test_custom_followup_selection_generates_the_checked_resource_types():
     assert "must_include_citations" not in followup_job.request_payload["constraints"]
     relation = service.feedback_loop_repo.get_followup_relation(selected.followup_run_id)
     assert relation["parent_run_id"] == "source-run"
+
+
+def test_claim_followup_splits_multiple_resource_types_into_independent_runs():
+    service, learners, jobs, profile, resource = _setup()
+    result = service.process_learning_attempt(profile, resource, _request(0.4))
+    selected = service.choose_followup(
+        learners.get("learner"),
+        FeedbackFollowupSelection(
+            learner_id="learner", attempt_id=result.attempt.attempt_id,
+            option_id="custom-selection", resource_types=["讲义", "分阶测试题"],
+            include_claim_check=True,
+        ),
+    )
+    assert len(selected.followup_run_ids) == 2
+    assert selected.followup_run_id == selected.followup_run_ids[0]
+    assert sorted(jobs.get(run_id).request_payload["resource_types"] for run_id in selected.followup_run_ids) == [["分阶测试题"], ["讲义"]]
+    assert all(service.feedback_loop_repo.get_followup_relation(run_id)["relation_type"] == "selection" for run_id in selected.followup_run_ids)
 
 
 def test_same_idempotency_key_replays_without_second_profile_update_or_job():
@@ -303,7 +377,7 @@ def test_feedback_intent_only_accepts_server_returned_reinforcement_nodes():
     )
     assert jobs.get(selected.followup_run_id).request_payload["target_skill_nodes"] == ["skill-a"]
     payload = jobs.get(selected.followup_run_id).request_payload
-    assert payload["resource_types"] == ["个性化纠错训练包"]
+    assert payload["resource_types"] == ["个性化纠错训练包", "分阶测试题"]
     assert payload["constraints"]["correction_focus_snapshot"]["ordered_target_nodes"][0]["skill_node_id"] == "skill-a"
     assert "must_include_citations" not in payload["constraints"]
     assert jobs.get(selected.followup_run_id).batch_id == "source-batch"

@@ -269,7 +269,9 @@ class EvidenceRetriever:
                         if isinstance(item, dict)
                     ]
                     partial_failures = int(backend_profile.get("partial_failure_count", 0))
-            except Exception:
+            except Exception as exc:
+                logger.warning("Vector retrieval search_many failed kb=%s queries=%s type=%s detail=%s",
+                               request.knowledge_base_id, len(queries), type(exc).__name__, str(exc)[:256])
                 partial_failures = len(queries)
         else:
             for query in queries:
@@ -282,7 +284,9 @@ class EvidenceRetriever:
                     backend_profile = getattr(self.backend, "last_profile", None)
                     if isinstance(backend_profile, dict):
                         query_profiles.append(dict(backend_profile))
-                except Exception:
+                except Exception as exc:
+                    logger.warning("Vector retrieval search failed kb=%s query=%s type=%s detail=%s",
+                                   request.knowledge_base_id, query[:120], type(exc).__name__, str(exc)[:256])
                     partial_failures += 1
 
         retrieval_profile = {

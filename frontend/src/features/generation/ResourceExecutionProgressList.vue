@@ -18,14 +18,28 @@
           <span v-if="item.attempt">第 {{ item.attempt }} 次尝试</span>
           <span v-if="item.agent_name">{{ item.agent_name }}</span>
           <span v-if="item.validation_status">校验 {{ item.validation_status }}</span>
+          <span v-if="item.claim_metric_status">Claim {{ claimStatusLabel(item.claim_metric_status) }}</span>
+          <span v-if="item.claim_factual_pass_rate != null">事实通过 {{ percent(item.claim_factual_pass_rate) }}</span>
+          <span v-if="item.claim_publish_decision_pending" class="claim-pending">待用户决定发布</span>
         </div>
+        <el-alert
+          v-if="item.claim_warning_publish"
+          title="已带 Claim 警告发布"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="claim-warning"
+        />
         <p v-if="item.error_message || item.error_code" class="execution-error">
           {{ item.error_message || `处理失败（${item.error_code}）` }}
         </p>
 
-        <div v-if="canOpen(item) || canRetry(item)" class="execution-actions">
+        <div v-if="canOpen(item) || canRetry(item) || canShowClaimReport(item)" class="execution-actions">
           <el-button v-if="canOpen(item)" text type="primary" @click="$emit('open-resource', item)">
             查看已发布资源
+          </el-button>
+          <el-button v-if="canShowClaimReport(item)" text type="primary" @click="$emit('open-claim-report', item.resource_id)">
+            查看审核报告
           </el-button>
           <el-button
             v-if="canRetry(item)"
@@ -54,9 +68,10 @@ const props = defineProps({
   phase: { type: String, default: 'all' },
   retryingKey: { type: String, default: '' },
   retryEnabled: { type: Boolean, default: true },
+  claimReports: { type: Object, default: () => ({}) },
 })
 
-defineEmits(['open-resource', 'retry-resource'])
+defineEmits(['open-resource', 'retry-resource', 'open-claim-report'])
 
 function logicalState(items) {
   const states = items.map((item) => item.resource_execution_state)
@@ -108,7 +123,10 @@ function phaseMeta(item) {
     if (['generated', 'reviewing', 'claim_checking', 'approved'].includes(state)) {
       return { label: '生成完成', type: 'success' }
     }
-    if (state === 'human_review') return { label: '已生成，待人工复核', type: 'warning' }
+    if (state === 'human_review') {
+      if (item.claim_publish_decision_pending) return { label: 'Claim 审核报告待你决定', type: 'warning' }
+      return { label: '已生成，待人工复核', type: 'warning' }
+    }
     if (state === 'revision_requested') return { label: props.retryEnabled ? '等待重新生成' : '重新生成中', type: 'warning' }
   }
   if (props.phase === 'review') {
@@ -131,6 +149,18 @@ function canRetry(item) {
   return props.retryEnabled
     && Boolean(item.resource_spec_id)
     && ['failed', 'human_review', 'revision_requested'].includes(item.resource_execution_state)
+}
+
+function canShowClaimReport(item) {
+  return Boolean(item.resource_id && props.claimReports[item.resource_id])
+}
+
+function percent(value) {
+  return `${(Number(value) * 100).toFixed(1)}%`
+}
+
+function claimStatusLabel(status) {
+  return ({ complete: '已完成', incomplete: '未完成', not_applicable: '不适用' }[status] || status)
 }
 </script>
 

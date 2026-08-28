@@ -107,8 +107,12 @@ def _orm_to_pydantic(orm: GeneratedResourceORM) -> LearningResource:
         legacy_reviewer_score=orm.legacy_reviewer_score,
         claim_hallucination_rate=orm.claim_hallucination_rate,
         claim_metric_status=orm.claim_metric_status,
+        claim_factual_pass_rate=orm.claim_factual_pass_rate,
+        claim_warning_publish=bool(orm.claim_warning_publish),
         hallucination_rate=orm.hallucination_rate,
         difficulty_match=orm.difficulty_match,
+        claim_publish_decision_pending=bool(orm.claim_publish_decision_pending),
+        claim_publish_decision=orm.claim_publish_decision,
         version=orm.version or 1,
         parent_resource_id=orm.parent_resource_id,
         created_at=orm.created_at,
@@ -164,6 +168,10 @@ def _pydantic_to_orm(
         claim_metric_status=resource.claim_metric_status,
         hallucination_rate=resource.hallucination_rate,
         difficulty_match=resource.difficulty_match,
+        claim_factual_pass_rate=resource.claim_factual_pass_rate,
+        claim_warning_publish=resource.claim_warning_publish,
+        claim_publish_decision_pending=resource.claim_publish_decision_pending,
+        claim_publish_decision=resource.claim_publish_decision,
         version=resource.version,
         parent_resource_id=resource.parent_resource_id,
         exercise_items=[item.model_dump() for item in resource.exercise_items],
@@ -271,6 +279,10 @@ class SQLResourceRepository(BaseResourceRepository):
                     orm.legacy_reviewer_score = resource.legacy_reviewer_score
                     orm.claim_hallucination_rate = resource.claim_hallucination_rate
                     orm.claim_metric_status = resource.claim_metric_status
+                    orm.claim_factual_pass_rate = resource.claim_factual_pass_rate
+                    orm.claim_warning_publish = resource.claim_warning_publish
+                    orm.claim_publish_decision_pending = resource.claim_publish_decision_pending
+                    orm.claim_publish_decision = resource.claim_publish_decision
                     orm.hallucination_rate = resource.hallucination_rate
                     orm.difficulty_match = resource.difficulty_match
                 else:
@@ -342,6 +354,20 @@ class SQLResourceRepository(BaseResourceRepository):
                 db.commit()
                 return True
             return False
+
+    def update_publication_decision(self, resource_id: str, *, publish: bool) -> Optional[LearningResource]:
+        from datetime import datetime, timezone
+        with self.session_factory() as db:
+            orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource_id).first()
+            if orm is None:
+                return None
+            orm.publication_status = "published" if publish else "unpublished"
+            orm.published_at = datetime.now(timezone.utc) if publish else None
+            orm.claim_publish_decision_pending = False
+            orm.claim_publish_decision = "published_by_user" if publish else "rejected_by_user"
+            db.commit()
+            db.refresh(orm)
+            return _orm_to_pydantic(orm)
 
     def list_by_learner_with_filter(
         self,

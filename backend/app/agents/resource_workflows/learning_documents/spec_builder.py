@@ -38,7 +38,9 @@ def build_resource_specs(
     normalized = [normalize_resource_type(item) for item in resource_types]
     if len(normalized) != len(set(normalized)):
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
-    if "个性化纠错训练包" in normalized and normalized != ["个性化纠错训练包"]:
+    if "个性化纠错训练包" in normalized and set(normalized) not in (
+        {"个性化纠错训练包"}, {"个性化纠错训练包", "分阶测试题"},
+    ):
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
 
     requirements = learning_plan.get("resource_requirements") or {}
@@ -48,7 +50,7 @@ def build_resource_specs(
         if isinstance(item, dict) and str(item.get("topic") or "").strip()
     ]
     correction_focus = learning_plan.get("correction_focus_snapshot") or {}
-    is_correction_package = normalized == ["个性化纠错训练包"]
+    is_correction_package = "个性化纠错训练包" in normalized
     if is_correction_package:
         focus_targets = correction_focus.get("ordered_target_nodes") if isinstance(correction_focus, dict) else None
         if not isinstance(focus_targets, list) or not 1 <= len(focus_targets) <= 2:

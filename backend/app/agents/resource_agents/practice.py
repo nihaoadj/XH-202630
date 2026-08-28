@@ -17,7 +17,7 @@ from .base import BaseResourceGenerationAgent
 
 PRACTICE_GUIDE_PROMPT = """你是 PracticeGuideAgent。你的输出只能是一个可解析的 JSON 对象；不要输出 Markdown、代码围栏、HTML、脚本、说明文字或任何额外字段。
 
-唯一允许的顶层格式如下。必须保留所有键名、层级和 phase_id 的字面值；不得增删、改名、合并、调换阶段，也不得输出 payload_hash（该字段由服务端计算）。
+唯一允许的顶层格式如下。必须保留所有键名、层级和 phase_id 的字面值；不得增删、改名、合并、调换阶段，也不得输出 payload_hash（该字段由服务端计算）。示例中的尖括号仅是占位符，必须替换为真实内容，不能原样输出。
 {
   "schema_version": "3.0",
   "title": "<实操指南标题>",
@@ -62,11 +62,15 @@ PRACTICE_GUIDE_PROMPT = """你是 PracticeGuideAgent。你的输出只能是一�
   }
 }
 
-严格字段规则：preparation 只能有 phase_id、goal、items、evidence_ids；practice 只能有 phase_id、goal、steps；verification 只能有 phase_id、goal、checklist、evidence_ids；reflection 只能有 phase_id、goal、summary、evidence_ids。每个实操步骤只能有 step_id、title、instruction_text、code_blocks、verification、evidence_ids，其中学习内容只有三项：instruction_text、code_blocks、verification。不得把代码合并到 instruction_text；没有代码时 code_blocks 必须为 []。
+严格字段规则：preparation 只能有 phase_id、goal、items、evidence_ids；practice 只能有 phase_id、goal、steps（practice 阶段本身没有 evidence_ids）；verification 只能有 phase_id、goal、checklist、evidence_ids；reflection 只能有 phase_id、goal、summary、evidence_ids。每个实操步骤只能有 step_id、title、instruction_text、code_blocks、verification、evidence_ids，其中学习内容只有三项：instruction_text、code_blocks、verification。不得把代码合并到 instruction_text；没有代码时 code_blocks 必须为 []。所有对象都不得包含未列出的字段，不得使用 null、空字符串或空数组替代必填值。
 
-只使用输入的冻结 evidence。每个阶段、步骤、代码块和验证都必须填写 evidence_ids，且只能引用输入中存在的 ID。steps 必须为 1 至 8 步，并严格从 step-1 连续编号到 step-N。
+只使用输入的冻结 evidence。preparation、verification、reflection 三个阶段、每个 step、每个 code_block 都必须填写 evidence_ids，且只能引用输入中存在的 ID；practice 阶段通过其 steps 间接绑定 Evidence。所有 evidence_ids 必须非空、去重。steps 必须为 1 至 8 步，并严格从 step-1 连续编号到 step-N；不要为了凑数拆分步骤，优先用最少但足够完成目标的步骤。
+长度与数量也必须满足：title 1–160 字符；各阶段 goal 1–400 字符；items、checklist 各 1–6/8 项；每个 step 的 title 1–120、instruction_text 1–1200、verification 1–500 字符，最多 3 个 code_blocks；每个 code_block 的 language 1–40、code 1–8000、purpose 1–400 字符。所有列表元素必须是非空且不重复的字符串。
 禁止把分阶测试题、复习清单、案例分析或讲义的题目、答案、学习任务、下一步安排写入任何阶段；这些属于其他资源，不能作为实操内容。
-不得展示、编造或硬编码密钥；尤其禁止 api_key="..."。若需要说明认证，只写“通过部署环境预先注入 OPENAI_API_KEY”，代码仅可使用 os.getenv("OPENAI_API_KEY") 读取，绝不提供带引号的环境变量赋值示例。"""
+不得展示、编造或硬编码密钥；尤其禁止 api_key="..."。若需要说明认证，只写“通过部署环境预先注入 OPENAI_API_KEY”，代码仅可使用 os.getenv("OPENAI_API_KEY") 读取，绝不提供带引号的环境变量赋值示例。
+如果输入包含 revision_feedback 和 previous_version_content，这是审核返工：只修改反馈明确指出的问题，保留上一版本其他正确字段和内容；不要把 previous_version_content 当作新的 Evidence，也不要输出内部 ID、审核字段或 payload_hash。
+
+输出前只在内部逐项检查：顶层 5 个键完全匹配；四个 phase_id 正确；step_id 连续；所有必填字符串和数组非空；所有 Evidence ID 来自输入；没有额外键、Markdown 围栏、解释文字、密钥或其他资源类型。检查完成后只返回 JSON 对象，不要返回检查清单。"""
 
 
 def _canonical_hash(value: object) -> str:
@@ -96,7 +100,7 @@ def render_practice_guide_markdown(package: dict) -> str:
 class PracticeGuideAgent(BaseResourceGenerationAgent[PracticeGuidePackageV3]):
     resource_type = "实操指南"
     agent_name = "PracticeGuideAgent"
-    prompt_version = "practice-guide-v3-fixed-phases"
+    prompt_version = "practice-guide-v3-fixed-phases-clarified"
     artifact_format = "json"
     default_max_output_tokens = 49152
 

@@ -7,6 +7,7 @@ import re
 from dataclasses import replace
 from collections.abc import Callable
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 
 from app.agents.learning_agents.feedback_agent import apply_feedback_decision, decide_feedback
 from app.db.feedback.base import BaseFeedbackRepository
@@ -53,6 +54,12 @@ from app.models.learning_documents.schemas import (
 )
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.llm import LLMCallContext
+from app.models.shared.assessment import (
+    ASSESSMENT_QUESTION_QUOTAS,
+    ASSESSMENT_SCORE_BY_TYPE,
+    ASSESSMENT_SCORE_DECIMAL_PLACES,
+    ASSESSMENT_TOTAL_SCORE,
+)
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.services.knowledge.knowledge import KnowledgeService
 from app.services.generation.jobs import GenerationJobService
@@ -61,10 +68,46 @@ from app.models.learning_documents.schemas import GenerateRequest
 from app.agents.learning_agents.feedback_policy_agent import build_mastery_mutations, decide_attempt
 from app.services.feedback.learning_path_policy import mutate_learning_path
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
+from app.db.learning_documents.base import BaseResourceRepository
 from app.core.learning_tiers import difficulty_for_tier
 
 
 logger = logging.getLogger(__name__)
+
+
+def _round_assessment_score(value: float) -> float:
+    """Round learner-facing assessment scores with decimal half-up semantics."""
+
+    quantum = Decimal("1").scaleb(-ASSESSMENT_SCORE_DECIMAL_PLACES)
+    return float(Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP))
+
+
+def _weighted_point_scores(question_results: list[dict[str, object]]) -> dict[str, float]:
+    """Aggregate question scores by point using each question's maximum score.
+
+    ``correct_count`` is reserved for fully correct questions. It must not be
+    used as the point score because partial answers still earn score.
+    """
+
+    totals: dict[str, float] = {}
+    maximums: dict[str, float] = {}
+    for item in question_results:
+        point_id = item.get("skill_node_id") or item.get("knowledge_point") or "综合能力"
+        try:
+            score = float(item.get("score") or 0.0)
+            maximum = float(item.get("max_score") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if maximum <= 0:
+            continue
+        point_id = str(point_id)
+        totals[point_id] = totals.get(point_id, 0.0) + score
+        maximums[point_id] = maximums.get(point_id, 0.0) + maximum
+    return {
+        point_id: total / maximums[point_id]
+        for point_id, total in totals.items()
+        if maximums.get(point_id, 0.0) > 0
+    }
 
 
 class FeedbackService:
@@ -80,6 +123,7 @@ class FeedbackService:
         llm_gateway: LLMGateway | None = None,
         tutor_repo: BaseTutorRepository | None = None,
         mastery_service: MasteryService | None = None,
+        resource_repo: BaseResourceRepository | None = None,
     ):
         self.feedback_repo = feedback_repo
         self.feedback_loop_repo = feedback_loop_repo
@@ -89,6 +133,7 @@ class FeedbackService:
         self.llm_gateway = llm_gateway
         self.tutor_repo = tutor_repo
         self.mastery_service = mastery_service
+        self.resource_repo = resource_repo
 
     def process_learning_attempt(
         self,
@@ -165,12 +210,21 @@ class FeedbackService:
         policy = decide_attempt(attempt, context)
         tier_target = None
         remediation_return_tier = None
+        point_scores = {
+            item.knowledge_point_id: item.score
+            for item in attempt.knowledge_point_results
+        }
+        tier_unlock = None
         if self.mastery_service is not None and profile.knowledge_base_id:
             targets, tier_target, remediation_return_tier = self.mastery_service.recommend_feedback_targets(
                 profile,
                 action=policy.action.value,
-                point_scores={item.knowledge_point_id: item.score for item in attempt.knowledge_point_results},
+                point_scores=point_scores,
             )
+            if policy.action.value == "advance":
+                tier_unlock = self.mastery_service.preview_tier_unlock(
+                    profile, point_scores=point_scores,
+                )
             if targets:
                 policy = replace(
                     policy,
@@ -193,7 +247,8 @@ class FeedbackService:
             "remediation_return_tier": remediation_return_tier,
             "tier_transition": (
                 "downgrade" if policy.action.value == "remediate" and remediation_return_tier else
-                "reinforce" if policy.action.value == "practice" else "unlock" if policy.action.value == "advance" else None
+                "reinforce" if policy.action.value == "practice" else
+                "tier_unlock" if tier_unlock else "advance" if policy.action.value == "advance" else None
             ),
         }
         decision = FeedbackDecision(
@@ -223,12 +278,17 @@ class FeedbackService:
         attempt = attempt.model_copy(update={
             "metadata": {**attempt.metadata, "llm_analysis": analysis.model_dump(mode="json")},
         })
+        advance_knowledge_point_id = (
+            self._next_path_node_id(profile, point_ids, context.learning_path)
+            if policy.action.value == "advance" else None
+        )
         try:
             learning_path, path_mutation = mutate_learning_path(
                 attempt=attempt,
                 decision_id=decision_id,
                 policy=policy,
                 existing=context.learning_path,
+                advance_knowledge_point_id=advance_knowledge_point_id,
             )
         except ValueError as exc:
             raise ApplicationError(ErrorCode.LEARNING_PATH_MUTATION_INVALID, status_code=422) from exc
@@ -314,6 +374,52 @@ class FeedbackService:
         material = "\x1f".join(str(part) for part in parts)
         return f"{prefix}_{hashlib.sha256(material.encode()).hexdigest()[:32]}"
 
+    def _next_path_node_id(
+        self,
+        profile: LearnerProfile,
+        assessed_node_ids: list[str],
+        existing_path=None,
+    ) -> str | None:
+        """Return an immediately reachable graph successor for an advance.
+
+        The path mutation itself only knows the nodes already placed on a
+        learner's path.  When an assessment covers a single terminal path node,
+        using that assessed node again as a "challenge" falsely reports an
+        advance to the same topic.  A successor is safe to add only when all of
+        its graph prerequisites are already complete (including this assessed
+        step); otherwise the path remains completed until a valid next node is
+        selected.
+        """
+        if self.knowledge_catalog is None or not profile.knowledge_base_id:
+            return None
+        completed_or_assessed = {str(node_id) for node_id in assessed_node_ids if node_id}
+        completed_or_assessed.update(
+            str(node.knowledge_point_id)
+            for node in (getattr(existing_path, "nodes", None) or [])
+            if getattr(getattr(node, "status", None), "value", getattr(node, "status", None)) == "completed"
+            and getattr(node, "knowledge_point_id", None)
+        )
+        if not completed_or_assessed:
+            return None
+        try:
+            nodes = self.knowledge_catalog.list_skill_nodes(profile.knowledge_base_id)
+        except Exception:
+            logger.warning("Unable to resolve the next learning-path node", exc_info=True)
+            return None
+        by_id = {node.node_id: node for node in nodes}
+        candidates: list[str] = []
+        for node_id in sorted(str(node_id) for node_id in assessed_node_ids if node_id):
+            node = by_id.get(node_id)
+            if node is None:
+                continue
+            for child_id in sorted(node.children):
+                child = by_id.get(child_id)
+                if child is None or child_id in completed_or_assessed:
+                    continue
+                if set(child.prerequisites) <= completed_or_assessed:
+                    candidates.append(child_id)
+        return min(candidates) if candidates else None
+
     def _profile_patch(self, profile, attempt, decision, mutations) -> dict:
         weak = self._display_skill_node_names(profile, profile.weak_points)
         strong = self._display_skill_node_names(profile, profile.strong_points)
@@ -388,13 +494,26 @@ class FeedbackService:
         )
         if self.llm_gateway is None:
             return fallback
+        total_score = request.metadata.get("total_score", request.overall_score * ASSESSMENT_TOTAL_SCORE)
+        max_score = request.metadata.get("max_score", ASSESSMENT_TOTAL_SCORE)
+        score_rate = float(total_score) / float(max_score) if float(max_score) > 0 else 0.0
         payload = {
             "objective_scores": {
                 "overall_score": request.overall_score,
+                "total_score": total_score,
+                "max_score": max_score,
+                "score_rate": score_rate,
+                "scoring_rule": "按每道题的实际得分汇总，部分得分计入总分；correct_count 仅表示完全正确题数",
                 "decision": policy.action.value,
                 "reason": policy.decision_reason,
                 "knowledge_points": [
-                    {"id": item.knowledge_point_id, "score": item.score}
+                    {
+                        "id": item.knowledge_point_id,
+                        "score": item.score,
+                        "score_is_weighted": True,
+                        "correct_count": item.correct_count,
+                        "total_count": item.total_count,
+                    }
                     for item in request.knowledge_point_results
                 ],
             },
@@ -486,12 +605,49 @@ class FeedbackService:
         generation_options = None
         if profile is not None and self.mastery_service is not None and profile.knowledge_base_id:
             generation_options = self.mastery_service.next_generation_options(profile)
+        tier_unlock = None
+        if (
+            result.decision.tier_transition == "tier_unlock"
+            and result.decision.recommended_tier is not None
+        ):
+            from_tier = result.decision.recommended_tier
+            tier_unlock = (from_tier, from_tier + 1)
+            if generation_options is not None:
+                # The learner's active tier has already advanced. Preserve the
+                # transition type so the upgrade intent remains selectable.
+                generation_options = generation_options.model_copy(update={
+                    "recommendation_type": "advance",
+                })
         question_results = list(result.attempt.metadata.get("question_results") or [])
         total = len(question_results) or sum(item.total_count for item in result.attempt.knowledge_point_results)
         correct = sum(1 for item in question_results if item.get("correct")) if question_results else sum(item.correct_count for item in result.attempt.knowledge_point_results)
         total_score = float(result.attempt.metadata.get("total_score", result.attempt.overall_score * 100))
         max_score = float(result.attempt.metadata.get("max_score", 100))
         score_rate = total_score / max_score if max_score > 0 else 0.0
+        weighted_point_scores = _weighted_point_scores(question_results)
+        corrected_point_results = [
+            item.model_copy(update={"score": weighted_point_scores.get(item.knowledge_point_id, item.score)})
+            for item in result.attempt.knowledge_point_results
+        ]
+        score_needs_repair = bool(
+            question_results
+            and abs(float(result.attempt.overall_score) - score_rate) > 1e-9
+        )
+        if score_needs_repair and analysis is not None:
+            analysis = analysis.model_copy(update={
+                "summary": (
+                    f"本次测评总分为{total_score:.1f}分（满分{max_score:.1f}分），"
+                    "其中已计入部分得分；知识点得分按各题实际分值汇总，不能只按完全正确题数计算。"
+                ),
+                "analysis_status": "fallback",
+            })
+        normalized_attempt = result.attempt
+        if score_needs_repair:
+            normalized_attempt = result.attempt.model_copy(update={
+                "overall_score": score_rate,
+                "knowledge_point_results": corrected_point_results,
+            })
+        normalized_result = result.model_copy(update={"attempt": normalized_attempt})
         followup_selection = {"node_ids": [], "node_names": [], "selection_type": None}
         if result.followup_run_id and self.generation_job_service is not None:
             followup_job = self.generation_job_service.get_job(result.followup_run_id)
@@ -508,13 +664,17 @@ class FeedbackService:
                 "node_names": [names.get(node_id, node_id) for node_id in node_ids],
                 "selection_type": (payload.get("constraints") or {}).get("selection_type"),
             }
-        correction_option = self._correction_package_option(generation_options, profile, result)
+        correction_option = self._correction_package_option(generation_options, profile, normalized_result)
+        downgrade_candidates = self._downgrade_learning_candidates(
+            normalized_result, profile, generation_options,
+        )
         next_step_recommendation = self._next_step_recommendation(
-            result, generation_options, correction_option,
+            normalized_result, generation_options, correction_option, downgrade_candidates,
+            tier_unlock=tier_unlock,
         )
         feedback_report = {
             "schema_version": "1.0",
-            "attempt_id": result.attempt.attempt_id,
+            "attempt_id": normalized_result.attempt.attempt_id,
             "objective_summary": {
                 "answered_count": total,
                 "correct_count": correct,
@@ -541,7 +701,7 @@ class FeedbackService:
                     ),
                     "evidence_label": "服务端正式测评",
                 }
-                for item in result.attempt.knowledge_point_results
+                for item in normalized_result.attempt.knowledge_point_results
             ],
             "reflection": result.attempt.metadata.get("learning_reflection", {}),
             "reflection_insight": analysis.reflection_insight if analysis else None,
@@ -551,20 +711,51 @@ class FeedbackService:
             "unlearned_candidates": [
                 item.model_dump(mode="json") for item in (generation_options.learn_new_knowledge if generation_options else [])
             ],
+            "downgrade_learning_candidates": [
+                item.model_dump(mode="json") for item in downgrade_candidates
+            ],
             "correction_package_option": correction_option.model_dump(mode="json") if correction_option else None,
+            "tier_unlock": (
+                {"from_tier": tier_unlock[0], "to_tier": tier_unlock[1]}
+                if tier_unlock else None
+            ),
             "next_step_recommendation": next_step_recommendation,
             "recommendations": {
                 "default_learning": next_step_recommendation,
                 "optional_correction_package": correction_option.model_dump(mode="json") if correction_option else None,
             },
         }
-        return result.model_copy(update={
+        return normalized_result.model_copy(update={
             "analysis": analysis,
-            "resource_options": self._resource_options(result, profile),
+            "resource_options": self._resource_options(normalized_result, profile),
             "correction_package_option": correction_option,
             "generation_options": generation_options,
             "feedback_report": feedback_report,
         })
+
+    @staticmethod
+    def _correction_target_ids(result: FeedbackLoopResult) -> list[str]:
+        """Keep a review pack available for any non-perfect assessed attempt.
+
+        The pack remains scoped to the knowledge points covered by this attempt;
+        it is not a generic remediation selector. A perfect attempt has no
+        correction target and therefore does not expose this option.
+        """
+        attempt_results = list(result.attempt.knowledge_point_results)
+        if attempt_results:
+            non_perfect_results = [
+                item for item in attempt_results if (item.score or 0.0) < 1.0
+            ]
+            if not non_perfect_results:
+                return []
+            ordered = sorted(
+                non_perfect_results,
+                key=lambda item: ((item.score if item.score is not None else 0.0), item.knowledge_point_id),
+            )
+            return list(dict.fromkeys(item.knowledge_point_id for item in ordered))[:2]
+        # Preserve legacy attempts that predate per-point results. Their
+        # feedback decision remains the only durable scope available.
+        return list(dict.fromkeys(result.decision.target_knowledge_point_ids))[:2]
 
     @staticmethod
     def _correction_package_option(
@@ -576,18 +767,8 @@ class FeedbackService:
             return None
         # Correction is scoped to the node(s) assessed in this attempt. The
         # feedback decision may rewrite its targets to lower-tier prerequisites
-        # for downgrade learning; those are valid downgrade targets, but they
-        # must never become correction-package targets.
-        attempt_results = list(result.attempt.knowledge_point_results)
-        if attempt_results:
-            target_ids = list(dict.fromkeys(
-                item.knowledge_point_id for item in attempt_results
-                if (item.score or 0.0) < MASTERY_CONFIRMATION_THRESHOLD
-            ))[:2]
-        else:
-            # Persisted attempts always carry point results by schema contract;
-            # this keeps old in-memory result fixtures readable.
-            target_ids = list(dict.fromkeys(result.decision.target_knowledge_point_ids))[:2]
+        # for downgrade learning; those must never become review-pack targets.
+        target_ids = FeedbackService._correction_target_ids(result)
         if not target_ids:
             return None
         difficulty = profile.skill_level if profile and profile.skill_level in {"初级", "中级", "高级"} else "中级"
@@ -627,11 +808,48 @@ class FeedbackService:
             recommended_difficulty=difficulty, snapshot_hash=generation_options.snapshot_hash,
         )
 
+    def _downgrade_source_node_ids(self, result: FeedbackLoopResult) -> list[str]:
+        if result.attempt.source_run_id and self.generation_job_service is not None:
+            job = self.generation_job_service.get_job(result.attempt.source_run_id)
+            payload = job.request_payload if job is not None else {}
+            targets = payload.get("target_skill_nodes") if isinstance(payload, dict) else None
+            if isinstance(targets, list) and targets:
+                return [str(node_id) for node_id in targets if str(node_id)]
+        return [
+            item.knowledge_point_id for item in result.attempt.knowledge_point_results
+        ]
+
+    def _downgrade_learning_candidates(
+        self, result: FeedbackLoopResult, profile: LearnerProfile | None,
+        generation_options,
+    ) -> list:
+        """Return the foundations available after a low-score recommendation.
+
+        "Downgrade learning" is a recommendation surface, not an automatic
+        tier mutation: for remediation/practice feedback it offers the
+        directly lower tier identified by the feedback decision and
+        same-tier prerequisites of the assessed node.
+        The active tier changes only if the learner later chooses a lower-tier
+        candidate and confirms generation.
+        """
+        if (
+            generation_options is None
+            or result.decision.action.value not in {"remediate", "practice"}
+            or profile is None
+            or self.mastery_service is None
+        ):
+            return []
+        return self.mastery_service.feedback_downgrade_candidates(
+            profile, source_node_ids=self._downgrade_source_node_ids(result),
+        )
+
     @staticmethod
     def _next_step_recommendation(
         result: FeedbackLoopResult,
         generation_options,
         correction_option: CorrectionPackageOptionV1 | None,
+        downgrade_candidates: list | None = None,
+        tier_unlock: tuple[int, int] | None = None,
     ) -> dict[str, object]:
         """Return an explainable default without taking the next step for the learner."""
         if generation_options is None:
@@ -653,13 +871,33 @@ class FeedbackService:
                 item.skill_node_id for item in learning_candidates
                 if not item.blocked_by_node_ids
             ][:2]
-        if action == "remediate" and getattr(generation_options, "recommendation_type", None) == "remedial":
+        if tier_unlock:
+            from_tier, to_tier = tier_unlock
+            return {
+                "recommended_action": "upgrade_learning",
+                "learning_mode": "upgrade_learning",
+                "learning_intent": LearningIntent.UPGRADE_LEARNING.value,
+                "title": f"已解锁第 {to_tier} 阶：升阶学习",
+                "description": (
+                    f"恭喜你，已完成第 {from_tier} 阶全部能力节点，"
+                    f"现已解锁第 {to_tier} 阶学习。下一步可以选择第 {to_tier} 阶节点继续学习。"
+                ),
+                "default_learning_node_ids": default_learning_ids,
+                "default_new_node_ids": default_learning_ids,
+                "default_review_node_ids": [],
+                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
+            }
+        if action == "remediate" and downgrade_candidates:
+            default_learning_ids = [
+                item.skill_node_id for item in downgrade_candidates
+                if not item.blocked_by_node_ids
+            ][:2]
             return {
                 "recommended_action": "downgrade_learning",
                 "learning_mode": "downgrade_learning",
                 "learning_intent": LearningIntent.DOWNGRADE_LEARNING.value,
                 "title": "默认建议：降阶学习",
-                "description": "优先学习当前所在阶的下一低阶节点，也可以搭配已经学习过的节点；这里只提供建议，不会自动生成。",
+                "description": "本次建议来自本轮学习目标的未掌握前置链：可选同阶前置、低阶前置及其前置；系统优先推荐距离目标最近的节点。仅确认低阶节点后才会调整当前学习阶。",
                 "default_learning_node_ids": default_learning_ids,
                 "default_new_node_ids": default_learning_ids,
                 "default_review_node_ids": [],
@@ -683,20 +921,66 @@ class FeedbackService:
             default_nodes = (downgrade_nodes or new_nodes)[:2]
             return {
                 "recommended_action": "learn_new", "learning_intent": LearningIntent.LEARN_NEW_KNOWLEDGE.value,
-                "title": "默认建议：降级学习",
-                "description": "先学习系统根据依赖关系推荐的低阶节点；纠错包是可选的另一条复习路径。",
+                "title": "默认建议：补强学习",
+                "description": "当前没有可用的降级学习候选，请从当前阶的可学节点中继续补强；纠错包仍可用于本次错题复习。",
                 "default_new_node_ids": [item.skill_node_id for item in default_nodes],
                 "default_review_node_ids": [],
                 "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
             }
         if action == "practice" and correction_option and correction_option.eligible:
+            alternative_intent = None
+            alternative_node_ids = []
+            alternative_new_node_ids = []
+            alternative_review_node_ids = []
+            alternative_title = None
+            alternative_description = None
+            alternative = {
+                "alternative_action": "learn_new_and_reinforce" if new_nodes and review_nodes else "learn_new" if new_nodes else None,
+            }
+            if downgrade_candidates:
+                downgrade_ids = [
+                    item.skill_node_id for item in downgrade_candidates
+                    if not item.blocked_by_node_ids
+                ][:2]
+                alternative = {
+                    "alternative_action": "downgrade_learning",
+                }
+                alternative_intent = LearningIntent.DOWNGRADE_LEARNING.value
+                alternative_node_ids = downgrade_ids
+                alternative_title = "降阶学习"
+                alternative_description = "从本轮目标的未掌握前置链补基础，可选同阶前置、低阶前置及其前置；只有确认低阶节点后才会调整当前学习阶。"
+            elif new_nodes and review_nodes:
+                alternative_intent = LearningIntent.LEARN_NEW_AND_REINFORCE.value
+                alternative_new_node_ids = [new_nodes[0].skill_node_id]
+                alternative_review_node_ids = [review_nodes[0].skill_node_id]
+                alternative_node_ids = alternative_new_node_ids + alternative_review_node_ids
+                alternative_title = "一新一旧学习"
+                alternative_description = "兼顾推进与巩固：学习一个新节点，同时复习一个已学习但未完全掌握的节点。"
+            elif new_nodes:
+                alternative_intent = LearningIntent.LEARN_NEW_KNOWLEDGE.value
+                alternative_node_ids = [new_nodes[0].skill_node_id]
+                alternative_title = "学习新节点"
+                alternative_description = "从当前学习阶的可学节点中选择一个继续推进。"
+            if alternative_intent:
+                alternative.update({
+                    "alternative_learning_intent": alternative_intent,
+                    "alternative_learning_node_ids": alternative_node_ids,
+                    "alternative_new_node_ids": alternative_new_node_ids,
+                    "alternative_review_node_ids": alternative_review_node_ids,
+                    "alternative_learning_title": alternative_title,
+                    "alternative_learning_description": alternative_description,
+                })
             return {
                 "recommended_action": "correction_package",
-                "title": "默认建议：纠错包复习",
-                "description": "本轮处于强化区间，默认先用纠错包复习本次薄弱点；你也可以自行选择可学习节点。",
+                "title": "默认建议：纠错包巩固",
+                "description": (
+                    "本轮处于强化区间，默认先用纠错包巩固本次薄弱点；你也可以选择降阶学习补齐前置。"
+                    if downgrade_candidates else
+                    "本轮处于强化区间，默认先用纠错包巩固本次薄弱点；也可以从当前学习阶选择可学习节点。"
+                ),
                 "default_new_node_ids": [],
                 "default_review_node_ids": correction_option.recommended_target_ids,
-                "alternative_action": "learn_new_and_reinforce" if new_nodes and review_nodes else "learn_new" if new_nodes else None,
+                **alternative,
             }
         if action == "advance" and new_nodes and review_nodes:
             return {
@@ -711,8 +995,8 @@ class FeedbackService:
         if action == "advance" and len(new_nodes) >= 2:
             return {
                 "recommended_action": "learn_new", "learning_intent": LearningIntent.LEARN_NEW_KNOWLEDGE.value,
-                "title": "默认建议：两个新节点", "description": "本轮没有需要优先巩固的旧节点，默认推荐两个可学习的新节点。",
-                "default_new_node_ids": [item.skill_node_id for item in new_nodes[:2]], "default_review_node_ids": [],
+                "title": "默认建议：一个新节点", "description": "本轮没有需要优先巩固的旧节点，默认推荐一个可学习的新节点；你也可以改选两个新节点。",
+                "default_new_node_ids": [new_nodes[0].skill_node_id], "default_review_node_ids": [],
                 "can_choose_two_new_nodes": True,
                 "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
             }
@@ -727,8 +1011,8 @@ class FeedbackService:
         if action == "remediate":
             return {
                 "recommended_action": "correction_package" if correction_option and correction_option.eligible else "learn_new",
-                "title": "默认建议：纠错包复习" if not new_nodes else "默认建议：降级学习",
-                "description": "纠错包始终开放，你可以直接复习本次失败点；也可以选择低阶节点学习。" if new_nodes else "当前优先使用纠错包复习本次失败点。",
+                "title": "默认建议：纠错包巩固" if not new_nodes else "默认建议：降级学习",
+                "description": "纠错包始终开放，你可以直接巩固本次失败点；也可以选择低阶节点学习。" if new_nodes else "当前优先使用纠错包巩固本次失败点。",
                 "default_new_node_ids": [item.skill_node_id for item in new_nodes[:2]],
                 "default_review_node_ids": [item.skill_node_id for item in review_nodes[:2]],
                 "alternative_action": "learn_new" if new_nodes else None,
@@ -753,7 +1037,7 @@ class FeedbackService:
         target_points: list[str],
         difficulty: str,
     ) -> dict[str, object]:
-        """Build an allow-listed snapshot for the current failed nodes only.
+        """Build an allow-listed snapshot for the current assessed nodes.
 
         The model receives score/error dimensions and graph context, never the
         learner's raw answers or answer keys.  This also keeps a lower-tier
@@ -879,13 +1163,13 @@ class FeedbackService:
             if self.mastery_service is None:
                 raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
             try:
+                correction_target_ids = self._correction_target_ids(result)
+                if not correction_target_ids:
+                    raise ValueError("correction package is not available for a perfect attempt")
                 intent_options, target_points = self.mastery_service.confirm_correction_targets(
                     profile, selected_node_ids=selection.selected_skill_node_ids,
                     snapshot_hash=selection.next_generation_snapshot_hash,
-                    allowed_target_ids=list(dict.fromkeys(
-                        item.knowledge_point_id for item in result.attempt.knowledge_point_results
-                        if (item.score or 0.0) < MASTERY_CONFIRMATION_THRESHOLD
-                    )),
+                    allowed_target_ids=correction_target_ids,
                 )
             except ValueError as exc:
                 raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422) from exc
@@ -920,17 +1204,27 @@ class FeedbackService:
                 profile, result, intent_options, target_points, difficulty,
             )
             option = FeedbackResourceOption(option_id=selection.option_id, title="薄弱点强化包",
-                description="根据正式反馈生成的个性化强化材料。", resource_types=["讲义"],
+                description="根据正式反馈生成纠错包，并配套生成一份不同题干的新分阶测评。", resource_types=["讲义"],
                 difficulty=difficulty, target_knowledge_point_ids=target_points)
         elif selection.learning_intent is not None:
             if self.mastery_service is None:
                 raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
             try:
+                if selection.learning_intent == LearningIntent.DOWNGRADE_LEARNING:
+                    allowed_downgrade_ids = {
+                        item.skill_node_id
+                        for item in self._downgrade_learning_candidates(
+                            result, profile, self.mastery_service.next_generation_options(profile),
+                        )
+                    }
+                    if not allowed_downgrade_ids or set(selection.selected_skill_node_ids) - allowed_downgrade_ids:
+                        raise ValueError("selected nodes are not available for downgrade learning")
                 intent_options, target_points = self.mastery_service.confirm_next_generation_intent(
                     profile,
                     intent=selection.learning_intent,
                     selected_node_ids=selection.selected_skill_node_ids,
                     snapshot_hash=selection.next_generation_snapshot_hash,
+                    downgrade_source_node_ids=self._downgrade_source_node_ids(result),
                 )
             except ValueError as exc:
                 raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422) from exc
@@ -970,6 +1264,9 @@ class FeedbackService:
         if self.generation_job_service is None:
             raise ApplicationError(ErrorCode.FOLLOWUP_GENERATION_FAILED, status_code=503)
         resource_types = ["个性化纠错训练包"] if is_correction_package else (selection.resource_types or option.resource_types)
+        historical_assessment_questions = self._historical_assessment_questions(result, option.target_knowledge_point_ids)
+        if is_correction_package:
+            resource_types = ["个性化纠错训练包", "分阶测试题"]
         # A user may choose resource types, but may not override the server's
         # node-tier difficulty contract.
         if self.mastery_service is not None and selection.difficulty is not None and not correction_snapshot and selection.difficulty != option.difficulty:
@@ -984,15 +1281,19 @@ class FeedbackService:
             resource_types=resource_types,
             difficulty_preference=difficulty,
             profile_focus_mode="off", generation_mode="standard", include_review=True,
-            include_claim_check=selection.include_claim_check,
-            max_iterations=1,
+            # The request contract is one resource per Claim run.  For a
+            # multi-resource Claim selection we build a neutral base request
+            # first, then enable Claim on each single-resource copy below.
+            include_claim_check=selection.include_claim_check and len(resource_types) == 1,
+            max_iterations=2,
             # Provenance is enforced by retrieval, the evidence gate, and scoped
             # source_refs in the normal generation workflow.  Do not add a
             # presentation-level citation requirement here: it makes reviewers
             # expect raw internal evidence IDs in learner-facing content.
              constraints={"feedback_attempt_id": result.attempt.attempt_id,
                          "source_attempt_id": result.attempt.attempt_id,
-                          "feedback_option_id": option.option_id,
+                             "feedback_option_id": option.option_id,
+                             "feedback_decision_id": result.decision.decision_id,
                           "feedback_resource_types": resource_types,
                            "feedback_difficulty": difficulty,
                             **({"selection_type": "correction_package"} if correction_snapshot else {}),
@@ -1000,6 +1301,9 @@ class FeedbackService:
                                profile, option.target_knowledge_point_ids, intent=selection.learning_intent,
                            )[0]} if self.mastery_service and not correction_snapshot else {}),
                           **({"correction_focus_snapshot": correction_snapshot} if correction_snapshot else {}),
+                          **({"historical_assessment_questions": historical_assessment_questions,
+                              "historical_assessment_questions_status": "available" if historical_assessment_questions else "unavailable"}
+                             if is_correction_package else {}),
                           **({"learning_intent": selection.learning_intent.value,
                               "next_generation_options": intent_options.model_dump(mode="json"),
                               "next_generation_snapshot_hash": selection.next_generation_snapshot_hash}
@@ -1018,18 +1322,27 @@ class FeedbackService:
             if is_correction_package else None
         )
         try:
-            job = self.generation_job_service.create_job(
-                profile,
-                request,
-                run_id=run_id,
-                batch_id=source_batch_id or None,
-                retry_failed=True,
-            )
-            updated = self.feedback_loop_repo.attach_followup(
-                attempt_id=result.attempt.attempt_id, decision_id=result.decision.decision_id,
-                parent_run_id=result.attempt.source_run_id, child_run_id=job.run_id,
-                trigger_type=option.option_id, status=FollowUpGenerationStatus.QUEUED.value,
-            )
+            requests = []
+            if selection.include_claim_check and len(resource_types) > 1:
+                for resource_type in resource_types:
+                    requests.append(request.model_copy(update={"resource_types": [resource_type], "include_claim_check": True}))
+            else:
+                requests = [request]
+            jobs = []
+            for index, item_request in enumerate(requests):
+                item_run_id = run_id if len(requests) == 1 else self._stable_id("run", run_id, item_request.resource_types[0])
+                jobs.append(self.generation_job_service.create_job(
+                    profile, item_request, run_id=item_run_id,
+                    batch_id=source_batch_id or None, retry_failed=True,
+                ))
+            updated = None
+            for job in jobs:
+                updated = self.feedback_loop_repo.attach_followup(
+                    attempt_id=result.attempt.attempt_id, decision_id=result.decision.decision_id,
+                    parent_run_id=result.attempt.source_run_id, child_run_id=job.run_id,
+                    trigger_type=option.option_id, status=FollowUpGenerationStatus.QUEUED.value,
+                    relation_type="selection",
+                )
             self._append_event(
                 result.attempt.source_run_id,
                 WorkflowEventType.FOLLOWUP_GENERATION_CREATED,
@@ -1041,16 +1354,57 @@ class FeedbackService:
                     "resource_types": resource_types,
                     "difficulty": difficulty,
                     "child_run_id": job.run_id,
+                    "child_run_ids": [item.run_id for item in jobs],
                 },
                 "queued",
             )
             if schedule_followup:
-                schedule_followup(profile.model_copy(deep=True), request, job.run_id)
+                for job, item_request in zip(jobs, requests):
+                    schedule_followup(profile.model_copy(deep=True), item_request, job.run_id)
+            if updated is not None and len(jobs) > 1:
+                updated = updated.model_copy(update={"followup_run_ids": [item.run_id for item in jobs]})
             return self._with_analysis_and_options(updated, profile)
         except ApplicationError:
             raise
         except Exception as exc:
             raise ApplicationError(ErrorCode.FOLLOWUP_GENERATION_FAILED, status_code=503) from exc
+
+    def _historical_assessment_questions(self, result: FeedbackLoopResult, target_ids: list[str]) -> list[dict[str, object]]:
+        """Return answer-free question stems from the triggering assessment."""
+        target_set = set(target_ids)
+        traces = result.attempt.metadata.get("question_trace", []) if result.attempt.metadata else []
+        rows: list[dict[str, object]] = []
+        for item in traces:
+            if not isinstance(item, dict) or not str(item.get("question_text") or "").strip():
+                continue
+            point_id = str(item.get("skill_node_id") or item.get("knowledge_point") or "")
+            if target_set and point_id not in target_set:
+                continue
+            rows.append({
+                "question_id": str(item.get("question_id") or ""),
+                "question_type": str(item.get("question_type") or "short_answer"),
+                "skill_node_id": point_id,
+                "question_text": str(item["question_text"]).strip(),
+            })
+        if rows:
+            return rows[:100]
+        # Older attempts did not persist question text. Recover it from the
+        # immutable structured assessment artifact when available.
+        if self.resource_repo is not None:
+            resource = self.resource_repo.get(result.attempt.source_resource_id)
+            package = resource.assessment_payload if resource is not None else None
+            for block in (package or {}).get("node_blocks", []) if isinstance(package, dict) else []:
+                point_id = str(block.get("skill_node_id") or "")
+                if target_set and point_id not in target_set:
+                    continue
+                for field_name in ("single_choice_questions", "multiple_choice_questions", "short_answer_questions"):
+                    for item in block.get(field_name, []):
+                        stem = str(item.get("stem") or "").strip()
+                        if stem:
+                            rows.append({"question_id": str(item.get("question_id") or ""),
+                                         "question_type": str(item.get("question_type") or field_name),
+                                         "skill_node_id": point_id, "question_text": stem})
+        return rows[:100]
 
     def _record_feedback_events(self, result: FeedbackLoopResult) -> None:
         run_id = result.attempt.source_run_id
@@ -1225,6 +1579,8 @@ class FeedbackService:
         submitted_answers = {item.question_id: item.answer for item in payload.answers}
         point_results: dict[str, dict[str, object]] = {}
         score_ratios_by_point: dict[str, list[float]] = {}
+        score_totals_by_point: dict[str, float] = {}
+        max_scores_by_point: dict[str, float] = {}
         short_answer_questions_by_point: dict[str, list[ResourceEvaluationQuestion]] = {}
         question_results: list[dict[str, object]] = []
         tutor_hint_count = payload.hint_count
@@ -1287,20 +1643,29 @@ class FeedbackService:
                 question.question_type,
                 answer_key.get(question.question_id),
                 submitted_answers.get(question.question_id),
+                options=question.options,
             )
             score_ratios_by_point.setdefault(knowledge_point_id, []).append(score_ratio)
             if question.question_type == "short_answer":
                 short_answer_questions_by_point.setdefault(knowledge_point_id, []).append(question)
             expected = answer_key.get(question.question_id)
             maximum = float(expected.get("max_score", 1.0)) if isinstance(expected, dict) else 1.0
+            score_totals_by_point[knowledge_point_id] = (
+                score_totals_by_point.get(knowledge_point_id, 0.0) + score_ratio * maximum
+            )
+            max_scores_by_point[knowledge_point_id] = (
+                max_scores_by_point.get(knowledge_point_id, 0.0) + maximum
+            )
             correct_threshold = 0.6 if question.question_type == "short_answer" else 1.0
             if score_ratio >= correct_threshold:
                 result["correct_count"] += 1
             question_results.append({
                 "question_id": question.question_id, "question_type": question.question_type,
                 "skill_node_id": question.skill_node_id, "knowledge_point": question.knowledge_point,
-                "correct": score_ratio >= correct_threshold, "score": round(score_ratio * maximum, 2),
-                "max_score": maximum, "grading_method": "llm" if question.question_type == "short_answer" else "deterministic",
+                "correct": score_ratio >= correct_threshold,
+                "score": _round_assessment_score(score_ratio * maximum),
+                "max_score": _round_assessment_score(maximum),
+                "grading_method": "llm" if question.question_type == "short_answer" else "deterministic",
             })
 
         # A short-answer grade can participate in mastery only when a possible
@@ -1323,6 +1688,7 @@ class FeedbackService:
                     question.question_type,
                     answer_key.get(question.question_id),
                     submitted_answers.get(question.question_id),
+                    options=question.options,
                 )
                 if abs(first_score - second_score) > 0.10:
                     disagreements = True
@@ -1355,8 +1721,8 @@ class FeedbackService:
                     for knowledge_point_id, values in point_results.items()
                 },
                 "question_results": question_results,
-                "total_score": round(sum(float(item["score"]) for item in question_results), 2),
-                "max_score": round(sum(float(item["max_score"]) for item in question_results), 2),
+                "total_score": _round_assessment_score(sum(float(item["score"]) for item in question_results)),
+                "max_score": _round_assessment_score(sum(float(item["max_score"]) for item in question_results)),
             }
         )
 
@@ -1378,6 +1744,7 @@ class FeedbackService:
                     "question_ids": values["question_ids"],
                     "correct_count": values["correct_count"],
                     "total_count": values["total_count"],
+                    "score": score_totals_by_point[knowledge_point_id] / max_scores_by_point[knowledge_point_id],
                     "hint_count": sum(
                         tutor_hints_by_question.get(question_id, 0)
                         for question_id in values["question_ids"]
@@ -1411,11 +1778,19 @@ class FeedbackService:
         feedback_answers: list[FeedbackAnswer] = []
         wrong_points: list[str] = []
         correct_count = 0
+        total_score = 0.0
+        max_score = 0.0
 
         for question in questions:
             actual_answer = submitted_answers.get(question.question_id)
             expected_answer = answer_key.get(question.question_id)
-            is_correct = self._answer_score(question.question_type, expected_answer, actual_answer) >= 1.0
+            score_ratio = self._answer_score(
+                question.question_type, expected_answer, actual_answer, options=question.options,
+            )
+            question_max_score = self._question_max_score(expected_answer)
+            total_score += _round_assessment_score(score_ratio * question_max_score)
+            max_score += question_max_score
+            is_correct = score_ratio >= 1.0
             if is_correct:
                 correct_count += 1
             elif question.knowledge_point:
@@ -1432,10 +1807,14 @@ class FeedbackService:
                 )
             )
 
-        correct_rate = correct_count / len(questions)
+        total_score = _round_assessment_score(total_score)
+        max_score = _round_assessment_score(max_score)
+        correct_rate = total_score / max_score if max_score > 0 else 0.0
         practice_result = dict(payload.practice_result or {})
         practice_result["evaluation_total"] = len(questions)
         practice_result["evaluation_correct"] = correct_count
+        practice_result["evaluation_score"] = total_score
+        practice_result["evaluation_max_score"] = max_score
         practice_result["resource_topic"] = resource.topic
 
         feedback_response = self.process_feedback(
@@ -1479,11 +1858,19 @@ class FeedbackService:
         feedback_answers: list[FeedbackAnswer] = []
         wrong_points: list[str] = []
         correct_count = 0
+        total_score = 0.0
+        max_score = 0.0
 
         for question in questions:
             actual_answer = submitted_answers.get(question.question_id)
             expected_answer = answer_key.get(question.question_id)
-            is_correct = self._answer_score(question.question_type, expected_answer, actual_answer) >= 1.0
+            score_ratio = self._answer_score(
+                question.question_type, expected_answer, actual_answer, options=question.options,
+            )
+            question_max_score = self._question_max_score(expected_answer)
+            total_score += _round_assessment_score(score_ratio * question_max_score)
+            max_score += question_max_score
+            is_correct = score_ratio >= 1.0
             if is_correct:
                 correct_count += 1
             elif question.knowledge_point:
@@ -1500,11 +1887,15 @@ class FeedbackService:
                 )
             )
 
-        correct_rate = correct_count / len(questions)
+        total_score = _round_assessment_score(total_score)
+        max_score = _round_assessment_score(max_score)
+        correct_rate = total_score / max_score if max_score > 0 else 0.0
         primary_resource = resources[0]
         practice_result = dict(payload.practice_result or {})
         practice_result["evaluation_total"] = len(questions)
         practice_result["evaluation_correct"] = correct_count
+        practice_result["evaluation_score"] = total_score
+        practice_result["evaluation_max_score"] = max_score
         practice_result["resource_topic"] = self._merge_topics(resources)
         practice_result["run_id"] = run_id
         practice_result["evaluated_resource_ids"] = [resource.resource_id for resource in resources]
@@ -1681,12 +2072,40 @@ class FeedbackService:
         actual_hash = hashlib.sha256(json.dumps(actual_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         if not expected_hash or expected_hash != actual_hash:
             raise ValueError("结构化测试题资源校验失败")
+        blocks = payload.get("node_blocks", [])
+        if not isinstance(blocks, list) or not blocks:
+            raise ValueError("结构化测试题资源内容不完整")
         rows = []
-        for block in payload.get("node_blocks", []):
+        for block in blocks:
+            if not isinstance(block, dict):
+                raise ValueError("结构化测试题资源题型配额无效")
+            for field_name, quota in (
+                ("single_choice_questions", ASSESSMENT_QUESTION_QUOTAS["single_choice"]),
+                ("multiple_choice_questions", ASSESSMENT_QUESTION_QUOTAS["multiple_choice"]),
+                ("short_answer_questions", ASSESSMENT_QUESTION_QUOTAS["short_answer"]),
+            ):
+                values = block.get(field_name)
+                if not isinstance(values, list) or len(values) != quota:
+                    raise ValueError("结构化测试题资源题型配额无效")
             for field_name in ("single_choice_questions", "multiple_choice_questions", "short_answer_questions"):
                 for question in block.get(field_name, []):
                     rows.append({**question, "skill_node_id": block.get("skill_node_id"), "skill_node_name": block.get("skill_node_name")})
-        if not rows or round(sum(float(item.get("max_score", 0)) for item in rows), 2) != 100:
+        type_totals = {
+            question_type: round(
+                sum(float(item.get("max_score", 0)) for item in rows if item.get("question_type") == question_type),
+                ASSESSMENT_SCORE_DECIMAL_PLACES,
+            )
+            for question_type in ASSESSMENT_QUESTION_QUOTAS
+        }
+        expected_type_totals = {
+            question_type: ASSESSMENT_SCORE_BY_TYPE[question_type] * quota
+            for question_type, quota in ASSESSMENT_QUESTION_QUOTAS.items()
+        }
+        if (
+            not rows
+            or round(sum(float(item.get("max_score", 0)) for item in rows), ASSESSMENT_SCORE_DECIMAL_PLACES) != ASSESSMENT_TOTAL_SCORE
+            or type_totals != expected_type_totals
+        ):
             raise ValueError("结构化测试题资源内容不完整")
         return rows
 
@@ -1748,13 +2167,27 @@ class FeedbackService:
             "difficulty": question.difficulty,
             "diagnostic_dimension": question.diagnostic_dimension,
             "source": question.source,
+            "question_text": question.question,
         }
 
-    def _answer_score(self, question_type: str | None, expected: object, actual: object) -> float:
+    def _answer_score(
+        self,
+        question_type: str | None,
+        expected: object,
+        actual: object,
+        *,
+        options: list[str] | None = None,
+    ) -> float:
         normalized_type = (question_type or "").lower()
         if isinstance(expected, dict) and normalized_type == "short_answer":
             return self._short_answer_score(expected, actual)
+        declared_options = options or []
         if isinstance(expected, dict) and "answer_option_ids" in expected:
+            declared_options = [
+                str(item.get("option_id"))
+                for item in expected.get("options", [])
+                if isinstance(item, dict) and item.get("option_id")
+            ] or declared_options
             expected = expected["answer_option_ids"]
         if normalized_type == "single_choice":
             return 1.0 if self._normalize_answer_set(expected) == self._normalize_answer_set(actual) else 0.0
@@ -1762,11 +2195,27 @@ class FeedbackService:
             expected_values = self._normalize_answer_set(expected)
             actual_values = self._normalize_answer_set(actual)
             if not expected_values:
-                return 1.0 if not actual_values else 0.0
-            if actual_values == expected_values:
-                return 1.0
-            return 0.5 if actual_values and actual_values < expected_values else 0.0
+                return 0.0
+            correct_selected = len(actual_values & expected_values)
+            wrong_selected = len(actual_values - expected_values)
+            option_values = self._normalize_answer_set(declared_options)
+            wrong_option_total = len(option_values - expected_values)
+            if wrong_option_total <= 0:
+                wrong_option_total = max(1, wrong_selected)
+            ratio = (
+                correct_selected / len(expected_values)
+                - wrong_selected / wrong_option_total
+            )
+            return max(0.0, min(1.0, ratio))
         return 1.0 if self._answers_match(expected, actual) else 0.0
+
+    @staticmethod
+    def _question_max_score(expected: object) -> float:
+        if isinstance(expected, dict):
+            value = float(expected.get("max_score") or 0.0)
+            if value > 0:
+                return value
+        return 1.0
 
     def _short_answer_score(self, question: dict, actual: object) -> float:
         if self.llm_gateway is None:
@@ -1774,18 +2223,32 @@ class FeedbackService:
         maximum = float(question.get("max_score") or 0)
         if maximum <= 0:
             raise ApplicationError(ErrorCode.FEEDBACK_ATTEMPT_INVALID, status_code=422)
-        prompt = {"question": question.get("stem"), "learner_answer": str(actual or ""),
-                  "reference_answer": question.get("reference_answer"), "rubric": question.get("rubric"), "max_score": maximum}
+        prompt = {
+            "question": question.get("stem"),
+            "learner_answer": str(actual or ""),
+            "reference_answer": question.get("reference_answer"),
+            "rubric": question.get("rubric"),
+            "max_score": maximum,
+            "scoring_rules": [
+                "仅依据 reference_answer、rubric 和冻结题目证据评分，不补充证据外事实。",
+                "逐项判断 rubric，得分范围为 0 到 max_score；空答案必须为 0 分。",
+                "得分保留 1 位小数，反馈简短说明失分或得分依据。",
+            ],
+        }
         try:
             result = self.llm_gateway.invoke_structured(
-                messages=[SystemMessage(content="按参考答案和 rubric 给问答题评分，只返回结构化得分和简短反馈。"), HumanMessage(content=json.dumps(prompt, ensure_ascii=False))],
+                messages=[SystemMessage(content=(
+                    "你是分阶测试反馈评分 Agent。按参考答案和 rubric 逐项评分，只返回结构化得分和简短反馈。"
+                    "分数必须在 0 到 max_score 之间；空答案必须得 0 分；不要因表达方式不同而重复扣分。"
+                )), HumanMessage(content=json.dumps(prompt, ensure_ascii=False))],
                 output_schema=AssessmentShortAnswerGradeV1,
                 context=LLMCallContext(run_id="feedback-grading", step_id=str(question.get("question_id")), node_name="short_answer_grader", schema_name="AssessmentShortAnswerGradeV1"),
                 options=self.llm_gateway.options_for("feedback_agent", temperature=0.0),
             )
         except Exception as exc:
             raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=503) from exc
-        return max(0.0, min(maximum, result.output.score)) / maximum
+        score = _round_assessment_score(max(0.0, min(maximum, result.output.score)))
+        return score / maximum
 
     @staticmethod
     def _normalize_answer_set(value: object) -> set[str]:
@@ -1841,7 +2304,7 @@ class FeedbackService:
         seen_question_ids: set[str] = set()
         structured_resources = self._latest_structured_resources(resources)
         # A published v2 assessment is authoritative for its batch.  Do not
-        # silently mix it with bank items or truncate its fixed 5-question
+        # silently mix it with bank items or truncate its fixed 6-question
         # node blocks; a corrupt payload is rejected by _build_question_specs.
         if structured_resources:
             for resource in structured_resources:

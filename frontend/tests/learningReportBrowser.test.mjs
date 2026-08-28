@@ -20,7 +20,11 @@ const report = {
   weakness_groups: { verified_weak: [], regressing_learning: [], needs_evidence: [] }, resource_credibility_summary: { total_count: 0, trusted_count: 0 }, recent_resource_credibility: [],
   ability_nodes: [], mastery_summary: {}, weakness_priorities: [], recent_resources: [], recent_feedback: [], next_suggestions: [], window: { window_days: 30 }, freshness: { source_revisions: {} },
   knowledge_blind_spot_map: { schema_version: '1.0', dimensions: [], nodes: [], cells: [], summary: {} },
-  resource_difficulty_curve: { schema_version: '1.0', strategy_version: 'declared-band/v1', points: [], summary: {} },
+  resource_difficulty_curve: {
+    schema_version: '1.0', strategy_version: 'declared-band/v1',
+    points: [{ resource_id: 'resource', skill_node_id: 'node', skill_name: '测试节点', resource_type: '讲义', resource_ids: ['resource'], learner_readiness_score: .6, resource_difficulty_score: .6, difficulty_gap: 0, match_status: 'matched', confidence: 'medium', difficulty_source: 'declared_band', reason_codes: [], credibility_score: 80, credibility_level: 'good', credibility_grade: 'trusted', credibility_score_breakdown: { publication_review_score: 40, source_traceability_score: 50, claim_review_score: 0, claim_review_passed: false, score_ceiling: 80, ceiling_applied: true } }],
+    summary: { total_point_count: 1, measured_point_count: 1, credibility_scored_count: 1, average_credibility_score: 80, claim_review_passed_count: 0, claim_ceiling_applied_count: 1 },
+  },
   learning_path_graph: { schema_version: '1.0', nodes: [], edges: [], current_node_ids: [], recommended_next_node_ids: [], summary: {} },
 }
 const server = createServer((req, res) => {
@@ -43,11 +47,11 @@ try {
   const port = server.address().port
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   await page.goto(`http://127.0.0.1:${port}/report`, { waitUntil: 'domcontentloaded' })
-  await assert.doesNotReject(() => page.getByRole('heading', { name: '真实学习活动' }).waitFor())
-  assert.equal(await page.getByText('当前窗口没有服务端验证题目；正确率保持未测量，不以 0 代替。').count(), 1)
+  await assert.doesNotReject(() => page.getByRole('heading', { name: '学习报告', level: 2 }).waitFor())
   assert.equal(await page.getByRole('heading', { name: '文本资源可信证据' }).count(), 1)
-  assert.equal(await page.getByRole('heading', { name: '知识盲区定位' }).count(), 1)
   assert.equal(await page.getByRole('heading', { name: '资源难度匹配曲线' }).count(), 1)
+  assert.equal(await page.getByLabel('学习者准备度、资源难度与资源可信度对比曲线').count(), 1)
+  await assert.doesNotReject(() => page.getByText('平均可信度 80 / 100 · 已量化 1 · Claim 通过 0 · 受 80 分上限约束 1').waitFor())
   assert.equal(await page.getByRole('heading', { name: '学习路径规划图' }).count(), 1)
   assert.equal(await page.getByRole('combobox', { name: '报告时间窗口' }).count(), 1)
   await page.emulateMedia({ reducedMotion: 'reduce' })

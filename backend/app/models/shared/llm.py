@@ -38,6 +38,7 @@ class LLMCallOptions(BaseModel):
     # exhausted the first output-token budget. Other nodes leave this unset.
     truncated_retry_output_tokens: Optional[int] = Field(default=None, ge=1)
     request_timeout_seconds: float = Field(default=30.0, gt=0)
+    retry_request_timeout_seconds: Optional[float] = Field(default=None, gt=0)
     max_attempts: int = Field(default=2, ge=1, le=3)
     structured_output_mode: StructuredOutputMode = StructuredOutputMode.AUTO
     allow_text_fallback: bool = True
@@ -45,7 +46,7 @@ class LLMCallOptions(BaseModel):
     # Most nodes use one repair turn; Claim nodes may use a second bounded
     # repair because long audits can expose a different validation error after
     # the first correction.
-    schema_repair_attempts: int = Field(default=1, ge=1, le=3)
+    schema_repair_attempts: int = Field(default=1, ge=0, le=3)
 
 
 class LLMUsage(BaseModel):

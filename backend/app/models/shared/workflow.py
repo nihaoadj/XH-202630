@@ -43,6 +43,43 @@ class ReviewDecision(str, Enum):
     HUMAN_REVIEW = "human_review"
 
 
+# Review decisions are used inside the workflow, while persisted review
+# records and report projections use resource lifecycle statuses.  Keep the
+# alias mapping in one place so a raw workflow decision cannot be mistaken for
+# an unmeasured review later in the read path.
+REVIEW_STATUS_ALIASES = {
+    "approve": "approved",
+    "approved": "approved",
+    "passed": "approved",
+    "revise": "revision_requested",
+    "revision_required": "revision_requested",
+    "revision_requested": "revision_requested",
+    "reject": "rejected",
+    "rejected": "rejected",
+    "human_review": "human_review",
+    "needs_review": "human_review",
+    "pending_review": "pending_review",
+    "not_requested": "not_requested",
+}
+
+
+def normalize_review_status(status: str | None, *, passed: bool = False) -> str:
+    """Return the canonical persisted/reporting status for a review value."""
+
+    if isinstance(status, Enum):
+        status = status.value
+    value = str(status).strip().lower() if status is not None else ""
+    if not value:
+        return "approved" if passed else "human_review"
+    return REVIEW_STATUS_ALIASES.get(value, value)
+
+
+def review_status_is_approved(status: str | None, *, passed: bool = False) -> bool:
+    """Whether a review status represents an approved publication review."""
+
+    return normalize_review_status(status, passed=passed) == "approved"
+
+
 class ClaimCheckStatus(str, Enum):
     NOT_REQUESTED = "not_requested"
     UNAVAILABLE = "unavailable"
@@ -180,7 +217,7 @@ class WorkflowStateSnapshot(BaseModel):
     generation_mode: Literal["draft", "standard", "strict"] = "standard"
     include_review: bool = True
     include_claim_check: bool = False
-    max_iterations: int = Field(default=1, ge=0, le=3)
+    max_iterations: int = Field(default=2, ge=0, le=3)
     claim_max_iterations: int = Field(default=0, ge=0, le=3)
     constraints: Dict[str, Any] = Field(default_factory=dict)
 

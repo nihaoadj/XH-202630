@@ -25,6 +25,7 @@ from app.models.shared.persistence import (
     canonical_hash,
     require_run_transition,
 )
+from app.models.shared.workflow import normalize_review_status
 from app.models.learning_documents.schemas import ResourceClaim, ReviewSummary, SourceRef
 
 
@@ -745,10 +746,12 @@ class MemoryAuditRepository(BaseAuditRepository):
     def save_review(self, resource_id: str, review: dict[str, Any], run_id: Optional[str]) -> str:
         review_id = review.get("review_ids", {}).get(resource_id) or review.get("review_id") or str(uuid.uuid4())
         payload = {"resource_id": resource_id, "run_id": run_id, **review}
+        payload["status"] = normalize_review_status(payload.get("status"), passed=bool(payload.get("passed")))
         review_hash = canonical_hash(payload)
         existing = self.reviews.get(review_id)
         if existing is not None:
-            if existing.get("review_hash") != review_hash:
+            legacy_payload = {"resource_id": resource_id, "run_id": run_id, **review}
+            if existing.get("review_hash") not in {review_hash, canonical_hash(legacy_payload)}:
                 raise PersistenceConflict("review payload conflict")
             return review_id
         self.reviews[review_id] = {
@@ -760,7 +763,7 @@ class MemoryAuditRepository(BaseAuditRepository):
 
     def list_reviews_by_run(self, run_id: str) -> list[dict[str, Any]]:
         return [
-            dict(review)
+            {**review, "status": normalize_review_status(review.get("status"), passed=bool(review.get("passed")))}
             for _, review in sorted(self.reviews.items())
             if review.get("run_id") == run_id
         ]
@@ -794,7 +797,7 @@ class MemoryAuditRepository(BaseAuditRepository):
                 )
                 for claim in review.get("claims", [])
             ]
-            status = review.get("status") or ("passed" if review.get("passed") else "needs_review")
+            status = normalize_review_status(review.get("status"), passed=bool(review.get("passed")))
             return ReviewSummary(
                 review_id=review_id,
                 resource_id=resource_id,

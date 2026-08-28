@@ -5,7 +5,7 @@
   "knowledge_base_id": "rag_engineering_training",
   "name": "RAG 工程链路初始画像问卷",
   "description": "用于 RAG 工程链路培训方向的领域特定画像采集，收集学习者对 Python、大模型 API、Prompt、RAG 环节的自述水平，并据此建议后续测评范围。问卷不直接判定真实掌握情况。",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "enabled": true,
   "questions": [
     {
@@ -82,48 +82,21 @@
       "hint": "只用于建议后续测评范围；自称了解不等于真实掌握。",
       "validation": {"exclusive_option_values": ["都不了解"]},
       "options": [
-        {"label": "RAG 基础概念", "value": "RAG 基础概念", "diagnostic_scope_add": ["rag_basics"]},
-        {"label": "文档解析", "value": "文档解析", "diagnostic_scope_add": ["document_parsing"]},
-        {"label": "Chunk 切分", "value": "Chunk 切分", "diagnostic_scope_add": ["chunking"]},
-        {"label": "Embedding", "value": "Embedding", "diagnostic_scope_add": ["embedding"]},
-        {"label": "向量数据库", "value": "向量数据库", "diagnostic_scope_add": ["vector_store"]},
-        {"label": "相似度检索", "value": "相似度检索", "diagnostic_scope_add": ["similarity_retrieval"]},
-        {"label": "混合检索", "value": "混合检索", "diagnostic_scope_add": ["hybrid_retrieval"]},
-        {"label": "Rerank", "value": "Rerank", "diagnostic_scope_add": ["rerank"]},
-        {"label": "Prompt 组装", "value": "Prompt 组装", "diagnostic_scope_add": ["prompt_assembly"]},
-        {"label": "引用溯源", "value": "引用溯源", "diagnostic_scope_add": ["citation"]},
-        {"label": "幻觉控制", "value": "幻觉控制", "diagnostic_scope_add": ["hallucination_control"]},
-        {"label": "RAG 评测", "value": "RAG 评测", "diagnostic_scope_add": ["rag_evaluation"]},
-        {"label": "RAG 调优", "value": "RAG 调优", "diagnostic_scope_add": ["rag_tuning"]},
+          {"label": "RAG 基础概念", "value": "RAG 基础概念", "diagnostic_scope_add": ["rag_basics"]},
+          {"label": "文档解析", "value": "文档解析", "diagnostic_scope_add": ["document_parsing"]},
+          {"label": "Chunk 切分", "value": "Chunk 切分", "diagnostic_scope_add": ["chunking"]},
+          {"label": "Embedding", "value": "Embedding", "diagnostic_scope_add": ["embedding"]},
+          {"label": "向量数据库", "value": "向量数据库", "diagnostic_scope_add": ["vector_store"]},
+          {"label": "相似度检索", "value": "相似度检索", "diagnostic_scope_add": ["similarity_retrieval"]},
+          {"label": "混合检索", "value": "混合检索", "diagnostic_scope_add": ["hybrid_retrieval"]},
+          {"label": "Rerank", "value": "Rerank", "diagnostic_scope_add": ["rerank"]},
+          {"label": "Prompt 组装", "value": "Prompt 组装", "diagnostic_scope_add": ["prompt_assembly"]},
+          {"label": "引用溯源", "value": "引用溯源", "diagnostic_scope_add": ["citation"]},
+          {"label": "幻觉控制", "value": "幻觉控制", "diagnostic_scope_add": ["hallucination_control"]},
+          {"label": "RAG 评测", "value": "RAG 评测", "diagnostic_scope_add": ["rag_evaluation"]},
+          {"label": "RAG 调优", "value": "RAG 调优", "diagnostic_scope_add": ["rag_tuning"]},
         {"label": "都不了解", "value": "都不了解", "diagnostic_scope_add": []}
       ]
-    },
-    {
-      "question_id": "learning_focus_rag_nodes",
-      "field_key": "learning_focus_rag_nodes",
-      "title": "以下 13 个 RAG 能力节点中，你希望重点学习哪些？",
-      "type": "multiple_choice",
-      "required": false,
-      "sort_order": 60,
-      "hint": "用于构建画像中的学习重点，不代表真实掌握情况；如暂无明确侧重可选择“无”。",
-      "validation": {"exclusive_option_values": ["无"]},
-      "options": [
-        {"label": "RAG 基础概念", "value": "RAG 基础概念"},
-        {"label": "文档解析", "value": "文档解析"},
-        {"label": "Chunk 切分", "value": "Chunk 切分"},
-        {"label": "Embedding", "value": "Embedding"},
-        {"label": "向量数据库", "value": "向量数据库"},
-        {"label": "相似度检索", "value": "相似度检索"},
-        {"label": "混合检索", "value": "混合检索"},
-        {"label": "Rerank", "value": "Rerank"},
-        {"label": "Prompt 组装", "value": "Prompt 组装"},
-        {"label": "引用溯源", "value": "引用溯源"},
-        {"label": "幻觉控制", "value": "幻觉控制"},
-        {"label": "RAG 评测", "value": "RAG 评测"},
-        {"label": "RAG 调优", "value": "RAG 调优"},
-        {"label": "无", "value": "无"}
-      ],
-      "profile_mapping": {"target_path": "learning_preferences.focus_nodes", "transform": "answer"}
     }
   ]
 }

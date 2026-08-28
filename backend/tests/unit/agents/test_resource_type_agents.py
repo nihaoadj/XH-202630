@@ -285,7 +285,7 @@ def test_correction_package_requires_frozen_focus_and_complete_units():
     assert artifact.artifact_data["correction_focus_snapshot_hash"] == "a" * 64
 
 
-def test_correction_package_uses_a_bounded_output_budget_and_repairs_format_once():
+def test_correction_package_does_not_fail_only_for_markdown_format():
     evidence = make_evidence(evidence_id="ev-correction-repair")
     focus = {"focus_snapshot_hash": "b" * 64, "difficulty": "中级", "scaffolding_level": "high", "ordered_target_nodes": [
         {"skill_node_id": "skill-search", "name": "检索能力", "reason_codes": ["LEARNED_OBJECTIVELY_NOT_MASTERED"]}
@@ -299,44 +299,38 @@ def test_correction_package_uses_a_bounded_output_budget_and_repairs_format_once
         constraints={"correction_focus_snapshot": focus},
     )
     incomplete = "# 薄弱点强化包\n\n## 本次强化目标\n\n目标。"
-    complete = """# 薄弱点强化包：受控检索
-## 本次强化目标
-目标。
-## 薄弱模式概览
-概览。
-## 强化单元：检索能力
-### 错误模式
-误区。
-### 核心概念补救
-补救。
-### 正误对照
-对照。
-### 完整示例
-示例。
-### 引导式练习
-练习一。
-### 同构练习
-练习二。
-### 迁移练习
-练习三。
-## 参考答案与分层反馈
-反馈。
-## 达标标准
-标准。
-## 后续复习动作
-动作。
-## 总结
-总结。"""
-    gateway = ScriptedLLMGateway([incomplete, complete])
+    gateway = ScriptedLLMGateway([incomplete])
 
     artifact = CorrectionTrainingPackageAgent().generate(spec, context, llm_gateway=gateway)
 
-    assert artifact.content_text == complete
-    assert artifact.artifact_data["format_repair_attempted"] is True
-    assert len(gateway.calls) == 2
+    assert artifact.content_text == incomplete
+    assert "format_repair_attempted" not in artifact.artifact_data
+    assert len(gateway.calls) == 1
     assert all(call["options"].max_output_tokens == 32768 for call in gateway.calls)
     assert all(call["options"].request_timeout_seconds == 300.0 for call in gateway.calls)
     assert all(call["options"].max_attempts == 2 for call in gateway.calls)
+
+
+def test_correction_package_structure_review_is_advisory():
+    resource = SimpleNamespace(
+        resource_type="个性化纠错训练包",
+        content_text="# 标题\n\n只有正文，没有固定章节。",
+    )
+
+    assert _deterministic_resource_structure_review(resource) is None
+
+
+def test_correction_package_structure_review_still_blocks_script_markup():
+    resource = SimpleNamespace(
+        resource_type="个性化纠错训练包",
+        content_text="# 标题\n\n<script>alert(1)</script>",
+    )
+
+    result = _deterministic_resource_structure_review(resource)
+
+    assert result is not None
+    assert result["decision"] == "revise"
+    assert result["issues"][0]["code"] == "structure_quality"
 
 
 def test_correction_package_cannot_mix_with_general_resource_types():
@@ -387,7 +381,7 @@ def test_assessment_agent_retries_node_json_structure_before_failing():
     valid = {
         "schema_version": "2.0", "skill_node_id": "skill-search", "skill_node_name": "检索能力",
         "single_choice_questions": [choice("single-1", "single_choice", ["A"]), choice("single-2", "single_choice", ["B"])],
-        "multiple_choice_questions": [choice("multiple-1", "multiple_choice", ["A", "B"])],
+        "multiple_choice_questions": [choice("multiple-1", "multiple_choice", ["A", "B"]), choice("multiple-2", "multiple_choice", ["C", "D"])],
         "short_answer_questions": [
             {"local_id": "short-1", "question_type": "short_answer", "stem": "说明依据。", "reference_answer": "依据冻结证据。", "rubric": [{"criterion": "引用证据", "points": 1}, {"criterion": "说明边界", "points": 1}], "knowledge_point_tags": ["skill-search"], "evidence_ids": [evidence.evidence_id]},
             {"local_id": "short-2", "question_type": "short_answer", "stem": "说明边界。", "reference_answer": "不引入证据外事实。", "rubric": [{"criterion": "识别边界", "points": 1}, {"criterion": "解释原因", "points": 1}], "knowledge_point_tags": ["skill-search"], "evidence_ids": [evidence.evidence_id]},

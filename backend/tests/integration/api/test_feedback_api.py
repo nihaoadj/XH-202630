@@ -254,6 +254,37 @@ def test_batch_evaluation_uses_resource_batch_and_stably_shuffles_options():
     assert submit_response.json()["attempt"]["metadata"]["session_id"] == "batch_feedback_001"
 
 
+def test_batch_attempt_counts_partial_credit_in_point_score():
+    client, _ = _app(include_resource_exercises=False)
+
+    submit_response = client.post(
+        "/api/feedback/attempts/batch/submit",
+        json={
+            "learner_id": "feedback_001",
+            "batch_id": "batch_feedback_001",
+            "source_resource_id": "res_feedback_001",
+            "idempotency_key": "frontend-batch-partial-attempt",
+            "expected_profile_version": 1,
+            "submitted_at": datetime(2026, 8, 13, tzinfo=timezone.utc).isoformat(),
+            "answers": [
+                {"question_id": "bank_q1", "answer": "Retrieval"},
+                {"question_id": "bank_q2", "answer": ["Generation"]},
+            ],
+        },
+    )
+
+    assert submit_response.status_code == 200
+    body = submit_response.json()
+    assert body["attempt"]["overall_score"] == 0.75
+    point_scores = {
+        item["knowledge_point_id"]: item["score"]
+        for item in body["attempt"]["knowledge_point_results"]
+    }
+    assert point_scores == {"skill_retrieval": 1.0, "skill_generation": 0.5}
+    assert body["feedback_report"]["total_score"] == 1.5
+    assert body["feedback_report"]["score_rate"] == 0.75
+
+
 def test_batch_attempt_uses_server_side_tutor_hint_counts_without_changing_score():
     client, _ = _app(
         include_resource_exercises=False,
@@ -363,13 +394,70 @@ def test_batch_evaluation_prefers_latest_duplicate_structured_assessment_resourc
                     "options": [
                         {"option_id": "A", "text": "Retrieval"},
                         {"option_id": "B", "text": "Generation"},
+                        {"option_id": "C", "text": "Ranking"},
+                        {"option_id": "D", "text": "Routing"},
                     ],
                     "answer_option_ids": ["A"],
                     "knowledge_point_tags": ["retrieval"],
-                    "max_score": 100,
+                    "max_score": 15,
+                }, {
+                    "question_id": "q-002",
+                    "question_type": "single_choice",
+                    "stem": "Which capability retrieves context?",
+                    "options": [
+                        {"option_id": "A", "text": "Retrieval"},
+                        {"option_id": "B", "text": "Generation"},
+                        {"option_id": "C", "text": "Ranking"},
+                        {"option_id": "D", "text": "Routing"},
+                    ],
+                    "answer_option_ids": ["A"],
+                    "knowledge_point_tags": ["retrieval"],
+                    "max_score": 15,
                 }],
-                "multiple_choice_questions": [],
-                "short_answer_questions": [],
+                "multiple_choice_questions": [{
+                    "question_id": "q-003",
+                    "question_type": "multiple_choice",
+                    "stem": "Which steps are part of retrieval?",
+                    "options": [
+                        {"option_id": "A", "text": "Retrieve"},
+                        {"option_id": "B", "text": "Ground"},
+                        {"option_id": "C", "text": "Invent"},
+                        {"option_id": "D", "text": "Ignore context"},
+                    ],
+                    "answer_option_ids": ["A", "B"],
+                    "knowledge_point_tags": ["retrieval"],
+                    "max_score": 20,
+                }, {
+                    "question_id": "q-004",
+                    "question_type": "multiple_choice",
+                    "stem": "Which sources should be checked?",
+                    "options": [
+                        {"option_id": "A", "text": "Evidence"},
+                        {"option_id": "B", "text": "Snapshot"},
+                        {"option_id": "C", "text": "Guess"},
+                        {"option_id": "D", "text": "Rumor"},
+                    ],
+                    "answer_option_ids": ["A", "B"],
+                    "knowledge_point_tags": ["retrieval"],
+                    "max_score": 20,
+                }],
+                "short_answer_questions": [{
+                    "question_id": "q-005",
+                    "question_type": "short_answer",
+                    "stem": "Explain retrieval.",
+                    "reference_answer": "Use evidence to retrieve context.",
+                    "rubric": [{"criterion": "state the core idea", "points": 5}],
+                    "knowledge_point_tags": ["retrieval"],
+                    "max_score": 15,
+                }, {
+                    "question_id": "q-006",
+                    "question_type": "short_answer",
+                    "stem": "Explain the evidence boundary.",
+                    "reference_answer": "Do not add unsupported facts.",
+                    "rubric": [{"criterion": "state the boundary", "points": 5}],
+                    "knowledge_point_tags": ["retrieval"],
+                    "max_score": 15,
+                }],
             }],
         }
         payload_hash = hashlib.sha256(
@@ -400,6 +488,6 @@ def test_batch_evaluation_prefers_latest_duplicate_structured_assessment_resourc
         _KnowledgeService(),
     )
 
-    assert [question.question_id for question in questions] == ["q-001"]
+    assert [question.question_id for question in questions] == ["q-001", "q-002", "q-003", "q-004", "q-005", "q-006"]
     assert questions[0].question == "Latest assessment question"
     assert answer_key["q-001"]["stem"] == "Latest assessment question"

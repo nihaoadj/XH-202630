@@ -86,8 +86,20 @@ assert.equal(refreshedProgress.approved, 1, 'concrete execution state must overr
 assert.equal(refreshedProgress.published, 0, 'review approval must not be presented as publication')
 
 state = reduceWorkflowEvent(state, {
-  event_id: 'evt-5',
-  sequence: 5,
+  event_id: 'claim-metric-1', sequence: 6, event_type: 'claim_metric_computed',
+  payload: {
+    resource_spec_id: 'spec-1', representation: 'text', resource_id: 'resource-1',
+    resource_execution_state: 'claim_checking', claim_metric_status: 'complete',
+    factual_claim_total: 5, supported_claim_total: 4, not_in_evidence_claim_total: 1,
+    claim_factual_pass_rate: 0.8,
+  },
+})
+assert.equal(state.resourceExecutions[0].claim_factual_pass_rate, 0.8)
+assert.equal(state.resourceExecutions[0].not_in_evidence_claim_total, 1)
+
+state = reduceWorkflowEvent(state, {
+  event_id: 'evt-7',
+  sequence: 7,
   event_type: 'followup_generation_created',
   status: 'queued',
   payload: { child_run_id: 'child-run', attempt_id: 'attempt-1' },

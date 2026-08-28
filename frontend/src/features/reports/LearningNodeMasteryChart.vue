@@ -49,7 +49,7 @@ const conclusionLabels = Object.freeze({
   confirmed_mastery: '已确认掌握',
   needs_reinforcement: '需巩固并重新测评',
 })
-const actionLabels = Object.freeze({ learn: '学习节点', remediate: '降阶巩固', practice: '纠错包复习', verify: '继续测评确认', maintain: '保持与复习' })
+const actionLabels = Object.freeze({ learn: '学习节点', remediate: '降阶巩固', practice: '纠错包巩固', verify: '继续测评确认', maintain: '保持与复习' })
 const legend = Object.freeze(Object.entries(labels).map(([status, label]) => ({ status, label, color: colors[status] })))
 const measuredCount = computed(() => nodes.value.filter((node) => typeof node.mastery_score === 'number').length)
 

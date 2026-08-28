@@ -10,6 +10,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.learning_documents.state import AgentState
+from app.config import get_settings
 from app.core.security.errors import ErrorCode
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.agent_contracts import build_trace_item, make_error_info, start_step
@@ -29,16 +30,20 @@ from app.models.shared.llm import LLMCallContext
 from app.models.shared.workflow import ClaimCheckStatus, ReviewDecision, StepStatus
 
 
-EXTRACTOR_PROMPT_VERSION = "p0-06-extract-v2"
+EXTRACTOR_PROMPT_VERSION = "p0-06-extract-v3"
 JUDGE_PROMPT_VERSION = "p0-06-judge-v1"
 
-EXTRACTOR_PROMPT = """你是独立 Claim 抽取器。仅从给定资源原文抽取可单独判断的陈述。
+def extractor_prompt(max_claims_per_resource: int) -> str:
+    """Build the prompt from the same environment-backed Claim cap we enforce."""
+    return f"""你是独立 Claim 抽取器。仅从给定资源原文抽取可单独判断的陈述。
 resource_id 必须从输入中原样选择；source_text 必须是资源原文的连续精确子串。
 source_start/source_end 请按 Python 字符下标填写且 end 为开区间；服务端会以精确 source_text
 重新校验并确定最终位置。复习清单中的题干、选项和提示语不是 factual Claim；如需保留，
 请标 instructional 或 non_factual。事实陈述标 factual，
 教学动作标 instructional，主观/过渡表达标 non_factual。evidence_id 和 knowledge_point_id
-只能从输入白名单选择，不能创造 ID。每个非空资源至少输出一个 Claim，不要输出解释。"""
+只能从输入白名单选择，不能创造 ID。严格输出限制：每个非空资源输出 1–{max_claims_per_resource} 条 Claim；
+claim_text 必须是单条简洁陈述；每条 source_text 必须是足以支持 Claim 的最短连续原文片段，且不得超过 200 字符。
+优先保留可由冻结 Evidence 独立验证的核心事实。只输出一个满足 schema 的 JSON 对象；禁止输出思考过程、解释、标题、Markdown、重复 Claim、重复 source_text 或任何 schema 外字段。"""
 
 JUDGE_PROMPT = """你是独立 Claim 证据判定器。逐条且仅依据本次冻结 Evidence 判定。
 每个 claim_id 必须恰好出现一次。事实 Claim 只能判 supported、contradicted、not_in_evidence；
@@ -197,9 +202,19 @@ def _failure(
     }
 
 
-def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str, Any]:
+def claim_extract_node(
+    state: AgentState,
+    *,
+    llm_gateway: LLMGateway,
+    max_claims_per_resource: int | None = None,
+) -> dict[str, Any]:
     # HTML is a presentation derived from the canonical practice-guide text;
     # claim review, like normal review, assesses only canonical text.
+    max_claims_per_resource = (
+        max_claims_per_resource
+        if max_claims_per_resource is not None
+        else get_settings().claim_max_claims_per_resource
+    )
     eligible_resource_ids = claim_eligible_resource_ids(state)
     all_resources = [
         item for item in state.get("generated_resources", [])
@@ -262,7 +277,10 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
                 }],
             }
             result = llm_gateway.invoke_structured(
-                messages=[SystemMessage(content=EXTRACTOR_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))],
+                messages=[
+                    SystemMessage(content=extractor_prompt(max_claims_per_resource)),
+                    HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
+                ],
                 output_schema=ClaimExtractionLLMOutput,
                 context=LLMCallContext(
                     run_id=state.get("run_id", "direct-node-call"),
@@ -279,6 +297,11 @@ def claim_extract_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
                 raise ValueError("extractor resource boundary mismatch")
             if not batches[0].claims:
                 raise ValueError("each non-empty resource requires at least one claim")
+            if len(batches[0].claims) > max_claims_per_resource:
+                raise ValueError(
+                    "claim count exceeds configured per-resource limit "
+                    f"({max_claims_per_resource})"
+                )
             claims.extend(materialize_claims(
                 candidates=batches[0].claims,
                 resource_content=resource.content_text or "",

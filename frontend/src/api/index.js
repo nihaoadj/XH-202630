@@ -38,6 +38,15 @@ export const diagnosisApi = {
 
 export const generateApi = {
   createJob: (data) => api.post('/generate/jobs', data),
+  createJobsForClaim: (data) => {
+    const types = [...new Set(data?.resource_types || [])]
+    if (data?.include_claim_check && types.length > 1) {
+      return Promise.all(types.map((resource_type) => api.post('/generate/jobs', {
+        ...data, resource_types: [resource_type],
+      })))
+    }
+    return Promise.all([api.post('/generate/jobs', data)])
+  },
   listJobs: (learnerId) => api.get('/generate/jobs', { params: { learner_id: learnerId } }),
   getJobStatus: (runId) => api.get(`/generate/jobs/${runId}`),
   continueBatch: (batchId, data) => api.post(`/resources/batches/${batchId}/continuations`, data),
@@ -56,6 +65,7 @@ export const runApi = {
 
 export const learningHistoryApi = {
   timeline: (learnerId) => api.get(`/learning-history/${learnerId}/timeline`),
+  journey: (learnerId, params = {}) => api.get(`/learning-history/${learnerId}/journey`, { params }),
 }
 
 export const resourceApi = {
@@ -63,6 +73,10 @@ export const resourceApi = {
   get: (resourceId) => api.get(`/resources/items/${encodeURIComponent(resourceId)}`),
   getPreview: (resourceId) => api.get(`/resources/items/${encodeURIComponent(resourceId)}/preview`),
   downloadUrl: (resourceId) => `/api/resources/file/${resourceId}`,
+  decideClaimPublication: (resourceId, publish) => api.post(
+    `/resources/items/${encodeURIComponent(resourceId)}/claim-publication-decision`,
+    { publish },
+  ),
 }
 
 export const feedbackApi = {

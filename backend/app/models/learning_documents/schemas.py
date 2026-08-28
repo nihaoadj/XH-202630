@@ -232,9 +232,9 @@ class GenerateRequest(BaseModel):
         description="生成模式：draft | standard | strict",
     )
     include_review: bool = Field(default=True, description="是否进入审核")
-    include_claim_check: bool = Field(default=True, description="是否进行 Claim 级审核；普通审核开启时默认开启")
-    # Initial generation plus one revision means at most two visible attempts.
-    max_iterations: int = Field(default=1, ge=0, le=3, description="最大业务返工次数")
+    include_claim_check: bool = Field(default=False, description="是否进行 Claim 级审核；开启后建议每任务只生成一个资源")
+    # Initial generation plus two revisions means at most three visible attempts.
+    max_iterations: int = Field(default=2, ge=0, le=3, description="最大业务返工次数")
     claim_max_iterations: int = Field(
         default=0, ge=0, le=3, description="Claim 审核专用最大返工次数；当前默认不返工"
     )
@@ -279,6 +279,8 @@ class GenerateRequest(BaseModel):
                 self.include_claim_check = False
                 return self
             raise ValueError("include_claim_check requires include_review=true")
+        if self.include_claim_check and len(self.resource_types) != 1:
+            raise ValueError("include_claim_check requires one resource_type per request")
         return self
 
 
@@ -436,6 +438,11 @@ class LearningResource(BaseModel):
     legacy_reviewer_score: Optional[float] = None
     claim_hallucination_rate: Optional[float] = None
     claim_metric_status: Optional[str] = None
+    claim_degraded_publish: bool = False
+    claim_factual_pass_rate: Optional[float] = None
+    claim_warning_publish: bool = False
+    claim_publish_decision_pending: bool = False
+    claim_publish_decision: Literal["pending", "published_by_user", "rejected_by_user"] | None = None
     hallucination_rate: Optional[float] = None
     difficulty_match: Optional[bool] = None
     version: int = 1

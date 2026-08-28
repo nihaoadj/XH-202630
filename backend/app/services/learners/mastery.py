@@ -212,6 +212,14 @@ class MasteryService:
         tiers = {self._node_tier(nodes[node_id]) for node_id in selected_node_ids}
         state = self._tier_progress(profile)
         active = state.active_tier if state else tier_for_level(profile.skill_level)
+        if intent == LearningIntent.DOWNGRADE_LEARNING:
+            if any(tier > active for tier in tiers):
+                raise ValueError("selected nodes are outside the current learning tier")
+            target_tier = min(tiers)
+            return (
+                "lower_tier_selection" if target_tier < active else "same_tier_prerequisite",
+                target_tier,
+            )
         if len(tiers) == 1:
             target_tier = int(next(iter(tiers)))
             if target_tier == active:
@@ -462,6 +470,47 @@ class MasteryService:
             for node in tier_nodes
         )
 
+    def preview_tier_unlock(
+        self, profile: LearnerProfile, *, point_scores: dict[str, float],
+    ) -> tuple[int, int] | None:
+        """Return the tier transition this attempt will complete, if any.
+
+        The preview includes the current attempt's scores because curriculum
+        verification is recorded immediately before the tier transition is
+        applied.  Keeping this deterministic fact on the feedback decision
+        lets a later replay render the same unlock notice instead of inferring
+        it from the learner's already-advanced current tier.
+        """
+        state = self._tier_progress(profile)
+        if state is None or not profile.knowledge_base_id or not point_scores:
+            return None
+        graph = {node.node_id: node for node in self._nodes(profile.knowledge_base_id)}
+        assessed_tiers = {self._node_tier(graph[node_id]) for node_id in point_scores if node_id in graph}
+        if len(assessed_tiers) != 1 or any(
+            score < MASTERY_CONFIRMATION_THRESHOLD for score in point_scores.values()
+        ):
+            return None
+        assessed_tier = int(next(iter(assessed_tiers)))
+        if assessed_tier != state.active_tier or assessed_tier >= MAX_TIER:
+            return None
+
+        records, _ = self.curriculum_progress(profile)
+        by_id = {item.skill_node_id: item for item in records}
+        tier_nodes = [node for node in graph.values() if self._node_tier(node) == assessed_tier]
+        if not tier_nodes or not all(
+            by_id.get(node.node_id)
+            and (
+                by_id[node.node_id].progress_status == CurriculumProgressStatus.COMPLETED
+                or (
+                    node.node_id in point_scores
+                    and point_scores[node.node_id] >= MASTERY_CONFIRMATION_THRESHOLD
+                )
+            )
+            for node in tier_nodes
+        ):
+            return None
+        return assessed_tier, assessed_tier + 1
+
     def record_curriculum_verification(
         self, profile: LearnerProfile, *, attempt_id: str, point_scores: dict[str, float], occurred_at: datetime,
     ) -> None:
@@ -522,7 +571,10 @@ class MasteryService:
                 if not option:
                     continue
                 score = self.normalize_self_report_score(option.get("self_report_score"))
-                node_ids = [item for item in option.get("diagnostic_scope_add", []) if item in names]
+                # Diagnostic scope only selects coverage for the initial
+                # assessment. It must not create self-report evidence for
+                # every node in that scope.
+                node_ids = [item for item in option.get("self_report_node_ids", []) if item in names]
                 if score is None:
                     continue
                 for node_id in node_ids:
@@ -630,11 +682,10 @@ class MasteryService:
                 if item.get("diagnostic_dimension") in {"concept", "scenario", "misconception", "practice"}
             )),
             scoring_audit_status=str(scoring_audit.get(node_id, "single_pass")),
-            # Later formal attempts remain valid evidence even when their
-            # question blueprint covers only one dimension. Dimension
-            # coverage is accumulated for promotion instead of rejecting the
-            # entire attempt.
-            evidence_eligible=str(scoring_audit.get(node_id, "single_pass")) not in {"double_disagreement", "failed"},
+            # Server-scored results always update mastery.  A second-pass
+            # grading disagreement remains audit metadata; it must not erase
+            # an otherwise valid learner result from the mastery projection.
+            evidence_eligible=True,
             occurred_at=occurred_at,
         ) for node_id, score in sorted(point_scores.items())]
         return self.repository.apply_evidence(evidence, names, increment_profile_version=False)
@@ -654,12 +705,14 @@ class MasteryService:
                 key = str(item.get("skill_node_id") or item.get("knowledge_point") or "")
                 traces.setdefault(key, []).append(item)
         session_id = metadata.get("assessment_session_id") or metadata.get("source_run_id")
-        audit = metadata.get("scoring_audit", {}) if isinstance(metadata, dict) else {}
         result = {}
         for point_id in point_ids:
             # Dimension coverage is not an eligibility gate for later
             # attempts. It is evaluated cumulatively by assessment_dimension_ready.
-            eligible = str(audit.get(point_id, "single_pass")) not in {"double_disagreement", "failed"}
+            # The server-derived score is the source of truth for mastery.
+            # Scoring-audit disagreements are retained for observability but
+            # no longer suppress the learner's measured result.
+            eligible = True
             question_ids = {str(item.get("question_id")) for item in traces.get(point_id, []) if item.get("question_id")}
             if eligible and session_id and question_ids:
                 for event in self.repository.list_events(profile.learner_id, profile.knowledge_base_id or ""):
@@ -1031,24 +1084,39 @@ class MasteryService:
             -(curriculum_nodes.get(node.node_id).wait_rounds if node.node_id in curriculum_nodes else 0),
             bool(prerequisite_blockers(node)), node.node_id))
         learned_nodes = [node for node in nodes if node.node_id in exposed]
-        if downgrade_selection:
-            learned_nodes = [node for node in learned_nodes if self._node_tier(node) == active_tier]
+        # A normal learning selection stays inside the active tier. Lower
+        # tiers remain visible in mastery/history views, but are not offered
+        # as new-tier recommendations after promotion.
+        learned_nodes = [node for node in learned_nodes if self._node_tier(node) == active_tier]
         learned_nodes.sort(key=lambda node: (
             state_by_id[node.node_id].status not in {AbilityStatus.WEAK, AbilityStatus.LEARNING},
             state_by_id[node.node_id].mastery_score is None,
             state_by_id[node.node_id].mastery_score if state_by_id[node.node_id].mastery_score is not None else 1.0,
             self._node_tier(node), node.node_id,
         ))
+        completed_node_ids = {
+            item.skill_node_id for item in curriculum_nodes.values()
+            if item.placement_exempt or item.progress_status == CurriculumProgressStatus.COMPLETED
+        }
+        # A newly unlocked tier must start at the graph frontier. Do not
+        # offer every unexposed node in the tier: a node is selectable only
+        # when all of its direct prerequisites have been completed.
+        next_tier_nodes = [
+            node for node in new_nodes
+            if node.prerequisites and set(node.prerequisites) <= completed_node_ids
+        ]
+        if active_tier == 1:
+            next_tier_nodes = [node for node in new_nodes if not node.prerequisites]
         learning_nodes = []
         seen_learning_ids: set[str] = set()
         downgrade_nodes = [node for node in nodes if self._node_tier(node) in {active_tier, active_tier - 1}]
-        for node in ([*downgrade_nodes] if downgrade_selection else [*new_nodes, *learned_nodes]):
+        for node in ([*downgrade_nodes] if downgrade_selection else [*next_tier_nodes, *learned_nodes]):
             if node.node_id in seen_learning_ids:
                 continue
             seen_learning_ids.add(node.node_id)
             learning_nodes.append(node)
         recommended_reinforcement = [node.node_id for node in reinforce_nodes[:1]]
-        recommended_new = [node.node_id for node in new_nodes if not candidate(node, "unlearned", 1).blocked_by_node_ids]
+        recommended_new = [node.node_id for node in next_tier_nodes if not candidate(node, "unlearned", 1).blocked_by_node_ids]
         # Do not use another tier to fill the remaining slots; one or two nodes is valid.
         recommended = [*recommended_reinforcement, *recommended_new[:max(0, 2 - len(recommended_reinforcement))]]
         tier_completed = self._is_tier_completed(profile, active_tier)
@@ -1097,7 +1165,7 @@ class MasteryService:
             reinforce_weakness=[candidate(node, "learned_not_mastered", index)
                                 for index, node in enumerate(reinforce_nodes, start=1)],
             learn_new_knowledge=[candidate(node, "unlearned", index)
-                                 for index, node in enumerate(new_nodes, start=1)],
+                                 for index, node in enumerate(next_tier_nodes, start=1)],
             cross_tier_new_knowledge=[candidate(node, "unlearned", index)
                                       for index, node in enumerate(cross_new_nodes, start=1)],
             cross_tier_prerequisite_review=[candidate(
@@ -1114,6 +1182,71 @@ class MasteryService:
             recommendation_type=recommendation_type,
         )
 
+    def feedback_downgrade_candidates(
+        self, profile: LearnerProfile, *, source_node_ids: list[str],
+    ) -> list[NextGenerationCandidateV1]:
+        """Return all unmastered prerequisite ancestors for low-score repair.
+
+        A downgrade recommendation can include same-tier prerequisites as well
+        as lower-tier prerequisites and their own prerequisites.  It never
+        offers a node already objectively mastered.
+        """
+        if not profile.knowledge_base_id:
+            return []
+        tier_state = self._tier_progress(profile)
+        active_tier = tier_state.active_tier if tier_state else tier_for_level(profile.skill_level)
+        nodes = {node.node_id: node for node in self._nodes(profile.knowledge_base_id)}
+        states = {
+            state.skill_node_id: state
+            for state in self.repository.ensure_states(
+                profile.learner_id, profile.knowledge_base_id,
+                {node_id: node.name for node_id, node in nodes.items()},
+            )
+        }
+        exposed = {
+            node_id for node_id, count in self._published_node_counts(
+                profile.learner_id, {node_id: node.name for node_id, node in nodes.items()},
+            ).items() if count > 0
+        }
+        queue = [(node_id, 0) for node_id in dict.fromkeys(source_node_ids) if node_id in nodes]
+        visited = {node_id for node_id, _ in queue}
+        ancestors: list[tuple[str, int]] = []
+        while queue:
+            node_id, distance = queue.pop(0)
+            for prerequisite_id in nodes[node_id].prerequisites:
+                if prerequisite_id in visited or prerequisite_id not in nodes:
+                    continue
+                visited.add(prerequisite_id)
+                queue.append((prerequisite_id, distance + 1))
+                ancestors.append((prerequisite_id, distance + 1))
+        eligible = [
+            (node_id, distance) for node_id, distance in ancestors
+            if self._node_tier(nodes[node_id]) <= active_tier
+            and states[node_id].status != AbilityStatus.MASTERED
+        ]
+        eligible.sort(key=lambda item: (item[1], -self._node_tier(nodes[item[0]]), item[0]))
+        return [
+            NextGenerationCandidateV1(
+                skill_node_id=node_id,
+                name=nodes[node_id].name,
+                priority_group="learned" if node_id in exposed else "unlearned",
+                rank=index,
+                reason_codes=[
+                    "SAME_TIER_PREREQUISITE" if self._node_tier(nodes[node_id]) == active_tier
+                    else "LOWER_TIER_PREREQUISITE",
+                    f"PREREQUISITE_DISTANCE_{distance}",
+                ],
+                mastery_score=states[node_id].mastery_score,
+                confidence=states[node_id].confidence,
+                prerequisite_ids=list(nodes[node_id].prerequisites),
+                blocked_by_node_ids=[],
+                tier=self._node_tier(nodes[node_id]),
+                tier_label=label_for_tier(self._node_tier(nodes[node_id])),
+                eligibility_status="available",
+            )
+            for index, (node_id, distance) in enumerate(eligible, start=1)
+        ]
+
     def confirm_next_generation_intent(
         self,
         profile: LearnerProfile,
@@ -1121,6 +1254,7 @@ class MasteryService:
         intent: LearningIntent,
         selected_node_ids: list[str],
         snapshot_hash: str | None = None,
+        downgrade_source_node_ids: list[str] | None = None,
     ) -> tuple[NextGenerationOptionsV1, list[str]]:
         options = self.next_generation_options(profile)
         # A feedback decision remains actionable until the learner selects a
@@ -1138,9 +1272,23 @@ class MasteryService:
             if intent == LearningIntent.DOWNGRADE_LEARNING:
                 if not options.learning_candidates:
                     raise ValueError("selected tier learning intent is not available")
-            elif options.recommendation_type != expected_type:
+            elif options.recommendation_type != expected_type and not (
+                intent == LearningIntent.UPGRADE_LEARNING
+                and options.recommendation_type == "current_tier"
+            ):
                 raise ValueError("selected tier learning intent is not available")
-            allowed = {item.skill_node_id: item for item in options.learning_candidates}
+            allowed_source = (
+                options.learn_new_knowledge
+                if intent == LearningIntent.UPGRADE_LEARNING
+                else options.learning_candidates
+            )
+            allowed = {item.skill_node_id: item for item in allowed_source}
+            if intent == LearningIntent.DOWNGRADE_LEARNING and downgrade_source_node_ids is not None:
+                allowed = {
+                    item.skill_node_id: item for item in self.feedback_downgrade_candidates(
+                        profile, source_node_ids=downgrade_source_node_ids,
+                    )
+                }
             if set(selected) - set(allowed):
                 raise ValueError("selected tier learning nodes are not available")
             blocked = [node_id for node_id in selected if allowed[node_id].blocked_by_node_ids]

@@ -10,9 +10,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.db.database import get_session_factory, init_database
+from app.db.shared.database import get_session_factory, init_database
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
-from app.services.ingestion_service import ChromaKnowledgeVectorIndex, IngestionService
+from app.services.knowledge.ingestion import ChromaKnowledgeVectorIndex, IngestionService
 
 
 def main(

@@ -103,6 +103,7 @@ class WorkflowEventType(str, Enum):
     FOLLOWUP_GENERATION_CREATED = "followup_generation_created"
     FOLLOWUP_GENERATION_FAILED = "followup_generation_failed"
     RESOURCE_PUBLISHED = "resource_published"
+    RESOURCE_PUBLICATION_DECIDED = "resource_publication_decided"
     RESOURCE_EXECUTION_QUEUED = "resource_execution_queued"
     RESOURCE_GENERATION_STARTED = "resource_generation_started"
     RESOURCE_GENERATED = "resource_generated"

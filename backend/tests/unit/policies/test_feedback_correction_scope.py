@@ -11,7 +11,7 @@ from app.services.feedback.feedback import FeedbackService
 from app.services.learners.mastery import MasteryService
 
 
-def test_correction_option_uses_current_node_score_and_80_percent_gate():
+def test_correction_option_is_available_for_every_non_perfect_current_node_score():
     generation = SimpleNamespace(
         snapshot_hash="a" * 64,
         learning_candidates=[],
@@ -35,6 +35,14 @@ def test_correction_option_uses_current_node_score_and_80_percent_gate():
     assert option is not None
     assert option.recommended_target_ids == ["current-node"]
     assert option.selectable_targets[0]["reason_codes"] == ["CURRENT_FEEDBACK_TARGET"]
+
+    result.attempt.knowledge_point_results[0] = KnowledgePointAttemptResult(
+        knowledge_point_id="current-node", question_ids=["q1"],
+        correct_count=19, total_count=20,
+    )
+    assert FeedbackService._correction_package_option(
+        generation, SimpleNamespace(skill_level="中级"), result,
+    ) is not None
 
     result.attempt.knowledge_point_results[0] = KnowledgePointAttemptResult(
         knowledge_point_id="current-node", question_ids=["q1"],

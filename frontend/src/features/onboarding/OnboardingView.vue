@@ -311,6 +311,17 @@
                   <p>{{ (diagnosisResult.strong_points || []).join('、') || '暂无明确优势点' }}</p>
                 </section>
               </div>
+
+              <div v-if="initialRecommendedNodeId" class="initial-node-recommendation">
+                <span class="initial-node-recommendation__kicker">首次学习建议</span>
+                <strong>
+                  根据初始问卷和初始测评，系统已为您选择首个学习节点：
+                  <span class="initial-node-recommendation__node">
+                    {{ initialRecommendedNodeLoading ? '正在读取节点名称…' : initialRecommendedNodeLabel }}
+                  </span>
+                </strong>
+                <p>此节点处于{{ initialRecommendedNodeTier }}。本次资源将先围绕该节点生成；完成学习和后续测评后，系统会再为您更新学习路径。</p>
+              </div>
             </div>
           </el-card>
 
@@ -381,6 +392,8 @@ const submittingGeneration = ref(false)
 const selectedResourceTypes = ref(['讲义', '实操指南', '分阶测试题'])
 const includeClaimCheck = ref(false)
 const supplementalRequirements = ref('')
+const initialRecommendedNodeName = ref('')
+const initialRecommendedNodeLoading = ref(false)
 
 const form = reactive({})
 const diagnosticAnswers = reactive({})
@@ -396,6 +409,13 @@ const selectedDomainDocumentCount = computed(() =>
 const currentProfile = computed(() => store.currentProfile)
 const diagnosticQuestions = computed(() => store.pendingDiagnosticQuestions || [])
 const diagnosisResult = computed(() => store.diagnosisResult)
+const initialRecommendedNodeId = computed(() => String(diagnosisResult.value?.initial_recommended_node_id || '').trim())
+const initialRecommendedNodeLabel = computed(() => initialRecommendedNodeName.value || initialRecommendedNodeId.value)
+const initialRecommendedNodeTier = computed(() => ({
+  1: '第一阶',
+  2: '第二阶',
+  3: '第三阶',
+}[diagnosisResult.value?.final_tier || diagnosisResult.value?.assessed_tier || diagnosisResult.value?.questionnaire_tier] || '当前学习阶'))
 const questionnaireCompleted = computed(() => Boolean(currentProfile.value && selectedDirectionId.value))
 const learnerId = computed(() => {
   if (!currentUser.value?.user_id || !selectedDirectionId.value) return ''
@@ -553,6 +573,8 @@ function selectDomain(item) {
   store.setCurrentProfile(null)
   store.setPendingDiagnosis([])
   store.setDiagnosisResult(null)
+  initialRecommendedNodeName.value = ''
+  initialRecommendedNodeLoading.value = false
 }
 
 function selectDirection(item) {
@@ -562,6 +584,8 @@ function selectDirection(item) {
   store.setCurrentProfile(null)
   store.setPendingDiagnosis([])
   store.setDiagnosisResult(null)
+  initialRecommendedNodeName.value = ''
+  initialRecommendedNodeLoading.value = false
 }
 
 async function loadDomains() {
@@ -583,6 +607,26 @@ async function prepareQuestionnaire() {
   if (!selectedDirectionId.value) return
   await loadQuestions()
   stepStage.value = 'questionnaire'
+}
+
+async function loadInitialRecommendedNodeName(result = diagnosisResult.value) {
+  const nodeId = String(result?.initial_recommended_node_id || '').trim()
+  initialRecommendedNodeName.value = ''
+  initialRecommendedNodeLoading.value = false
+  if (!nodeId || !selectedDirectionId.value) return
+
+  initialRecommendedNodeLoading.value = true
+  try {
+    const res = await knowledgeApi.listNodes(selectedDirectionId.value)
+    const nodes = Array.isArray(res.data?.nodes) ? res.data.nodes : []
+    const matchedNode = nodes.find((node) => String(node.node_id || '').trim() === nodeId)
+    initialRecommendedNodeName.value = matchedNode?.name || ''
+  } catch (error) {
+    // 节点名称只是展示增强，接口不可用时仍保留节点 ID 作为可识别的兜底。
+    console.warn('加载初始推荐节点名称失败', error)
+  } finally {
+    initialRecommendedNodeLoading.value = false
+  }
 }
 
 async function submitQuestionnaire() {
@@ -654,8 +698,18 @@ async function submitDiagnosis() {
         ...(res.data.knowledge_states || {}),
       },
     })
+
+    if (res.data.initial_diagnostic_status === 'retest') {
+      store.setPendingDiagnosis(res.data.next_diagnostic_questions || [])
+      initDiagnosticAnswers()
+      stepStage.value = 'diagnosis'
+      ElMessage.info('本阶段校准未通过，已自动进入下一阶段复测')
+      return
+    }
+
     store.setPendingDiagnosis([])
     stepStage.value = 'review'
+    await loadInitialRecommendedNodeName(res.data)
     ElMessage.success('诊断已完成')
   } catch (error) {
     console.error(error)
@@ -689,7 +743,9 @@ async function submitGeneration() {
       },
     }
     localStorage.setItem('last_generation_request', JSON.stringify(payload))
-    const res = await generateApi.createJob(payload)
+    const responses = await generateApi.createJobsForClaim(payload)
+    const res = responses[0]
+    localStorage.setItem('current_generation_run_ids', JSON.stringify(responses.map((item) => item.data?.run_id).filter(Boolean)))
     router.push({
       path: '/generate',
       query: {
@@ -716,6 +772,8 @@ onMounted(async () => {
     store.setCurrentProfile(null)
     store.setPendingDiagnosis([])
     store.setDiagnosisResult(null)
+    initialRecommendedNodeName.value = ''
+    initialRecommendedNodeLoading.value = false
     await loadDomains()
   } catch (error) {
     console.error(error)
@@ -1606,6 +1664,38 @@ onMounted(async () => {
   color: #1b385a;
   line-height: 1.65;
   overflow-wrap: anywhere;
+}
+
+.initial-node-recommendation {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid #b9dfd3;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f2fbf8, #f7fcff);
+}
+
+.initial-node-recommendation__kicker {
+  color: #19866f;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.initial-node-recommendation strong {
+  color: #163b53;
+  line-height: 1.6;
+}
+
+.initial-node-recommendation__node {
+  color: #0d806a;
+}
+
+.initial-node-recommendation p {
+  margin: 0;
+  color: #5d738e;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .resource-selection-form {

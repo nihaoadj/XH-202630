@@ -65,6 +65,9 @@ class BaseFeedbackLoopRepository(ABC):
         trigger_type: str,
         status: str,
         error_code: str | None = None,
+        relation_type: str = "selection",
+        source_relation_id: str | None = None,
+        source_child_run_id: str | None = None,
     ) -> FeedbackLoopResult:
         pass
 

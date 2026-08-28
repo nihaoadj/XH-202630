@@ -39,6 +39,7 @@
             <span class="resource-item-copy"><strong>{{ resourceShelfTypeLabel(resource) }}</strong><small>{{ resource.difficulty || '待分级' }} · {{ knowledgePointSummary(resource) }}</small></span>
             <span class="resource-arrow">→</span>
           </button>
+          <el-button class="resource-feedback-button" @click="goToFeedback">反馈测评</el-button>
           <div class="shelf-footnote"><span class="footnote-dot"></span>按顺序完成本批次学习</div>
         </aside>
 
@@ -122,6 +123,7 @@ const loading = ref(false)
 const profiles = ref([])
 const tracks = ref([])
 const generationJobs = ref([])
+const nodeTiers = ref({})
 const resourceDetails = ref({})
 let detailRequestGeneration = 0
 const tutorOpen = ref(false)
@@ -266,6 +268,13 @@ async function loadSelectedResourceDetail() {
   }
 }
 
+function resourceTierLabel(resource) {
+  const tiers = [...new Set((resource?.knowledge_points || [])
+    .map((point) => nodeTiers.value[String(point || '').trim()])
+    .filter((tier) => Number.isInteger(tier)))]
+  return tiers.length ? tiers.map((tier) => `第 ${tier} 阶`).join('、') : ''
+}
+
 function openCoursewareGeneration() {
   router.push({
     path: '/generate',
@@ -274,6 +283,12 @@ function openCoursewareGeneration() {
       runId: activeTask.value?.batchId || undefined,
     },
   })
+}
+
+function goToFeedback() {
+  const batchId = activeTask.value?.batchId || activeTask.value?.runId
+  if (!selectedLearnerId.value || !batchId) return
+  router.push({ path: '/feedback', query: { learnerId: selectedLearnerId.value, batchId } })
 }
 
 function askTutorAboutSelection(selectedText) {
@@ -325,6 +340,18 @@ async function loadResources() {
   }
   loading.value = true
   try {
+    const knowledgeBaseId = activeProfile.value?.knowledge_base_id
+    if (knowledgeBaseId) {
+      try {
+        const nodesRes = await knowledgeApi.listNodes(knowledgeBaseId)
+        nodeTiers.value = Object.fromEntries((nodesRes.data?.nodes || nodesRes.data || [])
+          .map((node) => [node.node_id, node.tier])
+          .filter(([, tier]) => Number.isInteger(tier)))
+      } catch (error) {
+        nodeTiers.value = {}
+        console.warn('学习节点阶级加载失败，标题将隐藏阶级信息', error)
+      }
+    }
     const [res, jobsRes] = await Promise.all([
       resourceLibraryApi.listByLearner(selectedLearnerId.value),
       generateApi.listJobs(selectedLearnerId.value),
@@ -335,6 +362,7 @@ async function loadResources() {
       ...item,
       resource_id: item.id,
       created_at: item.created_at || item.published_at,
+      tier_label: resourceTierLabel(item),
     }))
     generationJobs.value = jobsRes.data.items || []
     loaded.value = true
@@ -467,6 +495,8 @@ onMounted(async () => {
 .resource-item .resource-item-copy strong { font-size: 13px; }
 .resource-item .resource-item-copy small { font-size: 10px; }
 .resource-item .resource-arrow { font-size: 14px; }
+.resource-feedback-button { flex:0 0 auto; min-width: 110px; height: 54px; margin: 0 0 0 4px; padding: 0 16px; border-color: #b4d1ee; border-radius: 12px; background: linear-gradient(100deg, #f1f7ff, #f7fbff); color: #2058a7; font-size: 16px; font-weight: 750; box-shadow: 0 5px 12px rgba(53, 110, 157, .06); }
+.resource-feedback-button:hover, .resource-feedback-button:focus-visible { border-color: #78aee3; background: linear-gradient(100deg, #eaf4ff, #eef7ff); color: #174f99; box-shadow: 0 7px 15px rgba(53, 110, 157, .1); }
 .shelf-footnote { display: none; }
 .reading-stage { width: 100%; min-width: 0; min-height: 0; align-self: stretch; }
 .reading-stage :deep(.reader-card) {

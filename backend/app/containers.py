@@ -81,6 +81,7 @@ class Container(containers.DeclarativeContainer):
         claim_max_output_tokens=config.claim_max_output_tokens,
         claim_truncated_retry_output_tokens=config.claim_truncated_retry_output_tokens,
         claim_request_timeout_seconds=config.claim_request_timeout_seconds,
+        claim_retry_request_timeout_seconds=config.claim_retry_request_timeout_seconds,
         claim_schema_repair_attempts=config.claim_schema_repair_attempts,
     )
 
@@ -264,6 +265,7 @@ class Container(containers.DeclarativeContainer):
         llm_gateway=llm_gateway,
         tutor_repo=tutor_repository,
         mastery_service=mastery_service,
+        resource_repo=resource_repository,
     )
     report_service = providers.Singleton(
         ReportService,
@@ -339,6 +341,10 @@ class Container(containers.DeclarativeContainer):
         diagnosis_repo=diagnosis_repository,
         generation_job_repo=generation_job_repository,
         feedback_repo=feedback_repository,
+        feedback_loop_repo=feedback_loop_repository,
+        resource_repo=resource_repository,
+        audit_repo=audit_repository,
+        knowledge_service=knowledge_service,
     )
 
 

@@ -250,12 +250,12 @@ def route_after_review(state: AgentState) -> str:
         )
         for item in state.get("resource_executions", [])
     )
-    if retryable_generation_failure and state.get("revision_count", 0) < state.get("max_iterations", 1):
+    if retryable_generation_failure and state.get("revision_count", 0) < state.get("max_iterations", 2):
         # Generation/contract failures are transient and safe to retry. They
         # previously went straight to human review, so one malformed test
         # response could also prevent its sibling lecture from being retried.
         return "prepare_revision"
-    if decision == ReviewDecision.REVISE and state.get("revision_count", 0) < state.get("max_iterations", 1):
+    if decision == ReviewDecision.REVISE and state.get("revision_count", 0) < state.get("max_iterations", 2):
         return "prepare_revision"
     # Claim audit is an explicitly requested independent evidence check.  It
     # must not disappear merely because the ordinary reviewer concludes
@@ -283,7 +283,7 @@ def route_after_claim_decide(state: AgentState) -> str:
     ):
         return "prepare_claim_revision"
     if _review_decision(state) == ReviewDecision.REVISE and (
-        state.get("revision_count", 0) < state.get("max_iterations", 1)
+        state.get("revision_count", 0) < state.get("max_iterations", 2)
     ):
         return "prepare_revision"
     return "finalize"
@@ -294,7 +294,7 @@ def decide_next(state: AgentState) -> str:
     if _review_decision(state) != ReviewDecision.REVISE:
         return "decide"
     revision_count = state.get("revision_count", state.get("iteration", 0))
-    return "generate" if revision_count < state.get("max_iterations", 1) else "decide"
+    return "generate" if revision_count < state.get("max_iterations", 2) else "decide"
 
 
 def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, Any]:
@@ -349,7 +349,7 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
         status=StepStatus.SUCCESS,
         input_summary=(
             f"Claim 已返工：{claim_revision_count - 1}/{state.get('claim_max_iterations', 1)}"
-            if claim_only else f"普通审核已返工：{revision_count - 1}/{state.get('max_iterations', 1)}"
+            if claim_only else f"普通审核已返工：{revision_count - 1}/{state.get('max_iterations', 2)}"
         ),
         output_summary=(
             f"进入第 {generation_attempt} 次生成（第 {claim_revision_count} 次 Claim 返工）"
@@ -481,6 +481,10 @@ def decide_node(state: AgentState) -> dict[str, Any]:
         if isinstance(item, dict) and item.get("resource_id")
     }
     now = datetime.now(timezone.utc)
+    allow_partial_claim_publish = bool(get_settings().claim_partial_publish)
+    settings = get_settings()
+    allow_claim_user_review = bool(getattr(settings, "claim_user_review_enabled", True))
+    claim_user_review_threshold = float(getattr(settings, "claim_user_review_min_factual_pass_rate", 0.60))
 
     resources = []
     for resource in state.get("generated_resources", []):
@@ -499,7 +503,33 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             item_status = ResourceStatus.HUMAN_REVIEW
         elif strict_with_degradation:
             item_status = ResourceStatus.HUMAN_REVIEW
-        elif canonical_id in claim_problem_ids:
+        metric = claim_metrics.get(canonical_id, {})
+        factual_total = int(metric.get("factual_claim_total", 0) or 0)
+        supported_total = int(metric.get("supported_claim_total", 0) or 0)
+        contradicted_total = int(metric.get("contradicted_claim_total", 0) or 0)
+        not_in_evidence_total = int(metric.get("not_in_evidence_claim_total", 0) or 0)
+        factual_pass_rate = (supported_total / factual_total) if factual_total else None
+        user_review_allowed = (
+            allow_claim_user_review
+            and item_decision == ReviewDecision.APPROVE.value
+            and canonical_id in claim_eligible_ids
+            and metric.get("metric_status") == ClaimMetricStatus.COMPLETE.value
+            and factual_pass_rate is not None
+            and factual_pass_rate >= claim_user_review_threshold
+            and contradicted_total == 0
+            and not_in_evidence_total > 0
+        )
+        partial_problem_allowed = (
+            allow_partial_claim_publish
+            and item_decision == ReviewDecision.APPROVE.value
+            and canonical_id in claim_eligible_ids
+            and metric.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value
+        )
+        if canonical_id in locked_resource_ids:
+            item_status = ResourceStatus.HUMAN_REVIEW
+        elif canonical_id in claim_problem_ids and not partial_problem_allowed and not user_review_allowed:
+            item_status = ResourceStatus.HUMAN_REVIEW
+        elif user_review_allowed:
             item_status = ResourceStatus.HUMAN_REVIEW
         else:
             item_status = {
@@ -512,7 +542,6 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             state.get("include_claim_check", False)
             and item_status == ResourceStatus.APPROVED
         ):
-            metric = claim_metrics.get(canonical_id, {})
             claim_gate_passed = (
                 canonical_id in claim_eligible_ids
                 and canonical_id not in claim_failed_ids
@@ -523,12 +552,30 @@ def decide_node(state: AgentState) -> dict[str, Any]:
                 }
             )
             if not claim_gate_passed:
-                item_status = ResourceStatus.HUMAN_REVIEW
+                partial_allowed = (
+                    allow_partial_claim_publish
+                    and canonical_id in claim_eligible_ids
+                    and item_decision == ReviewDecision.APPROVE.value
+                    and metric.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value
+                )
+                if not partial_allowed and not user_review_allowed:
+                    item_status = ResourceStatus.HUMAN_REVIEW
         publish = item_status == ResourceStatus.APPROVED
+        claim_decision_pending = bool(user_review_allowed)
         resources.append(resource.model_copy(update={
             "review_status": item_status.value,
             "publication_status": "published" if publish else "unpublished",
             "published_at": resource.published_at or now if publish else None,
+            "claim_degraded_publish": bool(
+                publish
+                and allow_partial_claim_publish
+                and claim_metrics.get(canonical_id, {}).get("metric_status")
+                == ClaimMetricStatus.INCOMPLETE.value
+            ),
+            "claim_factual_pass_rate": factual_pass_rate,
+            "claim_warning_publish": False,
+            "claim_publish_decision_pending": claim_decision_pending,
+            "claim_publish_decision": "pending" if claim_decision_pending else resource.claim_publish_decision,
         }))
     review_ids = review.get("review_ids", {})
     metrics = claim_metrics
@@ -541,10 +588,19 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             "legacy_reviewer_score": review.get("hallucination_score"),
             "claim_hallucination_rate": metric.get("claim_hallucination_rate"),
             "claim_metric_status": metric.get("metric_status"),
+            "claim_factual_pass_rate": resource.claim_factual_pass_rate,
+            "claim_warning_publish": resource.claim_warning_publish,
             "hallucination_rate": review.get("hallucination_rate", review.get("hallucination_score")),
             "difficulty_match": review.get("difficulty_match"),
         }))
     resources = enriched_resources
+    if any(item.claim_publish_decision_pending for item in resources):
+        workflow_status = WorkflowStatus.HUMAN_REVIEW
+        final_decision = "Claim 审核报告待用户决定是否发布"
+    if resources and not locked_resource_ids and all(item.publication_status == "published" for item in resources):
+        workflow_status = WorkflowStatus.COMPLETED
+        if any(item.claim_warning_publish for item in resources):
+            final_decision = "审核通过，部分资源带 Claim 警告发布"
     executions = []
     status_by_resource_id = {
         resource.resource_id: resource.review_status
@@ -578,7 +634,7 @@ def decide_node(state: AgentState) -> dict[str, Any]:
         action="协同决策",
         status=trace_status,
         input_summary=(
-            f"审核决策：{decision.value}；普通返工：{state.get('revision_count', 0)}/{state.get('max_iterations', 1)}；"
+        f"审核决策：{decision.value}；普通返工：{state.get('revision_count', 0)}/{state.get('max_iterations', 2)}；"
             f"Claim 返工：{state.get('claim_revision_count', 0)}/{state.get('claim_max_iterations', 1)}"
         ),
         output_summary=f"最终决策：{final_decision}",

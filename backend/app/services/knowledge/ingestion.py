@@ -317,10 +317,11 @@ class IngestionService:
             error = _error(failure)
         except Exception as exc:
             logger.error(
-                "Knowledge ingestion failed knowledge_base_id=%s stage=%s exception_type=%s",
+                "Knowledge ingestion failed knowledge_base_id=%s stage=%s exception_type=%s detail=%s",
                 knowledge_base_id,
                 stage,
                 type(exc).__name__,
+                str(exc)[:256],
             )
             error = _error(_IngestionFailure(
                 ErrorCode.KNOWLEDGE_INGESTION_FAILED,

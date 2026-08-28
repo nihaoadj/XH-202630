@@ -13,6 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 CLAIM_SCHEMA_VERSION = "2.0"
+# Bound the audit envelope per resource so extraction remains reviewable and
+# cannot consume the entire workflow budget on an unusually verbose response.
+MAX_CLAIMS_PER_RESOURCE = 20
 
 
 class ClaimType(str, Enum):
@@ -54,7 +57,7 @@ class StrictClaimModel(BaseModel):
 class ClaimCandidate(StrictClaimModel):
     claim_text: str = Field(min_length=1, max_length=4000)
     claim_type: ClaimType
-    source_text: str = Field(min_length=1, max_length=4000)
+    source_text: str = Field(min_length=1, max_length=2000)
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
     knowledge_point_id: Optional[str] = Field(default=None, max_length=256)
@@ -71,7 +74,10 @@ class ClaimCandidate(StrictClaimModel):
 
 class ResourceClaimCandidates(StrictClaimModel):
     resource_id: str = Field(min_length=1)
-    claims: list[ClaimCandidate] = Field(default_factory=list, max_length=200)
+    claims: list[ClaimCandidate] = Field(
+        default_factory=list,
+        max_length=MAX_CLAIMS_PER_RESOURCE,
+    )
 
 
 class ClaimExtractionLLMOutput(StrictClaimModel):
@@ -88,7 +94,7 @@ class ClaimRecord(StrictClaimModel):
     claim_index: int = Field(ge=0)
     claim_text: str = Field(min_length=1, max_length=4000)
     claim_type: ClaimType
-    source_text: str = Field(min_length=1, max_length=4000)
+    source_text: str = Field(min_length=1, max_length=2000)
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
     source_text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
