@@ -34,7 +34,32 @@ jobs:
       - run: python backend/scripts/courseware_eval.py --manifest backend/tests/fixtures/courseware/evals/manifest.json --baseline backend/tests/fixtures/courseware/evals/baseline.json --output backend/courseware-eval-report.json
       - run: python backend/scripts/courseware_ci_artifacts.py --manifest backend/tests/fixtures/courseware/evals/manifest.json --output backend/courseware-ci-artifacts
       - run: python -m pytest backend/tests/migrations backend/tests/integration/courseware backend/tests/unit/db/courseware -q --junitxml=backend/courseware-junit.xml
-      - run: python -m pytest backend/tests -q --junitxml=backend/courseware-full-junit.xml
+      - name: Run full backend tests
+        id: full-backend-tests
+        shell: bash
+        run: |
+          set +e
+          python -m pytest backend/tests -q --junitxml=backend/courseware-full-junit.xml 2>&1 | tee backend/courseware-full-pytest.log
+          status=${PIPESTATUS[0]}
+          if test -f backend/courseware-full-junit.xml; then
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path("backend/courseware-full-junit.xml")
+          root = ET.parse(report).getroot()
+          for case in root.iter("testcase"):
+              for kind in ("failure", "error"):
+                  detail = case.find(kind)
+                  if detail is None:
+                      continue
+                  message = (detail.get("message") or detail.text or "").strip().splitlines()
+                  summary = message[-1][:500] if message else kind
+                  name = f"{case.get('classname', '')}.{case.get('name', '')}".strip(".")
+                  print(f"::error title=pytest {kind}::{name}: {summary}")
+          PY
+          fi
+          exit "$status"
       - run: python backend/scripts/courseware_fault_matrix.py --junit backend/courseware-full-junit.xml --output backend/courseware-fault-matrix.json
       - uses: actions/upload-artifact@v4
         if: always()
@@ -45,6 +70,7 @@ jobs:
             backend/courseware-ci-artifacts
             backend/courseware-junit.xml
             backend/courseware-full-junit.xml
+            backend/courseware-full-pytest.log
             backend/courseware-fault-matrix.json
           if-no-files-found: error
 
