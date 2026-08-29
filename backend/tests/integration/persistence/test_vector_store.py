@@ -104,7 +104,7 @@ def test_multi_query_search_dedupes_bounds_and_calls_reranker_once(monkeypatch):
     backend = vector_store.ChromaVectorSearchBackend(settings)
     calls = {"rerank": 0, "hybrid_top_k": []}
 
-    def fake_hybrid(query, top_k, knowledge_base_id, profile):
+    def fake_hybrid(query, top_k, knowledge_base_id, profile, allowed_chunk_ids=None):
         calls["hybrid_top_k"].append(top_k)
         shared = _document("shared", f"shared {query}")
         unique = _document(f"{query}-unique", f"unique {query}")

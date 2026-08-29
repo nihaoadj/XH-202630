@@ -13,6 +13,17 @@ def apply_p0_30_feedback_followup_multi_run_migration(engine: Engine) -> None:
     with engine.begin() as conn:
         if "schema_migrations" in tables and conn.execute(text("SELECT 1 FROM schema_migrations WHERE migration_id=:id"), {"id": MIGRATION_ID}).first():
             return
+        existing_columns = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(feedback_followup_runs)"))
+        }
+        # ``Base.metadata.create_all`` may have already created the current
+        # schema on a brand-new database. In that case the table is present,
+        # but there is no legacy table to rename; only record the marker.
+        if {"relation_type", "source_relation_id", "source_child_run_id"} <= existing_columns:
+            if "schema_migrations" in tables:
+                conn.execute(text("INSERT INTO schema_migrations (migration_id) VALUES (:id)"), {"id": MIGRATION_ID})
+            return
         # A prior interrupted/partially-applied run may have created the new
         # table but not recorded the marker.  Do not rename the source table a
         # second time; just reconcile the marker and let startup continue.

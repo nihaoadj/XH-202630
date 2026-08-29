@@ -21,7 +21,7 @@ def apply_p0_26_mastery_evidence_gate_migration(engine: Engine) -> None:
         # Later formal attempts remain authoritative, while the original
         # answer/event rows are retained for audit.
         dimension_count = (
-            "COUNT(DISTINCT json_extract(q.extra_metadata, '$.diagnostic_dimension'))"
+            "COUNT(DISTINCT json_extract(q.metadata, '$.diagnostic_dimension'))"
             if engine.url.get_backend_name() == "sqlite" else "COUNT(DISTINCT q.question_id)"
         )
         connection.execute(text(f"""

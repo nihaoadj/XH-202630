@@ -39,3 +39,32 @@ def test_followup_migration_removes_attempt_singleton_and_preserves_rows(tmp_pat
             VALUES ('f2','a1','d1',NULL,'r2','selection','queued','selection')"""))
         assert conn.execute(text("SELECT created_at IS NOT NULL AND updated_at IS NOT NULL FROM feedback_followup_runs WHERE relation_id='f2' ")).scalar_one() == 1
         assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations WHERE migration_id=:id"), {"id": MIGRATION_ID}).scalar_one() == 1
+
+
+def test_followup_migration_accepts_current_schema_created_by_orm(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'current-followups.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE schema_migrations (migration_id VARCHAR(128) PRIMARY KEY)"))
+        conn.execute(text("""CREATE TABLE feedback_followup_runs (
+            relation_id VARCHAR(128) PRIMARY KEY, attempt_id VARCHAR(128) NOT NULL,
+            decision_id VARCHAR(128) NOT NULL, parent_run_id VARCHAR(128),
+            child_run_id VARCHAR(128) UNIQUE, trigger_type VARCHAR(32) NOT NULL,
+            status VARCHAR(32) NOT NULL, error_code VARCHAR(128),
+            relation_type VARCHAR(32) NOT NULL DEFAULT 'selection',
+            source_relation_id VARCHAR(128), source_child_run_id VARCHAR(128),
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )"""))
+        conn.execute(text("CREATE INDEX ix_feedback_followup_runs_attempt_id ON feedback_followup_runs(attempt_id)"))
+        conn.execute(text("CREATE INDEX ix_feedback_followup_runs_relation_type ON feedback_followup_runs(relation_type)"))
+
+    apply_p0_30_feedback_followup_multi_run_migration(engine)
+
+    with engine.begin() as conn:
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM schema_migrations WHERE migration_id=:id"
+        ), {"id": MIGRATION_ID}).scalar_one() == 1
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' "
+            "AND name='ix_feedback_followup_runs_attempt_id'"
+        )).scalar_one() == 1
