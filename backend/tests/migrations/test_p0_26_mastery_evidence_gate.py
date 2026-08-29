@@ -9,7 +9,9 @@ def test_single_question_diagnosis_state_is_downgraded_without_deleting_evidence
         connection.execute(text("CREATE TABLE knowledge_states (learner_id TEXT, knowledge_base_id TEXT, skill_node_id TEXT, mastery_score FLOAT, status TEXT, confidence TEXT, objective_evidence_count INTEGER, distinct_objective_source_count INTEGER, last_evidence_type TEXT, last_evidence_id TEXT, row_version INTEGER)"))
         connection.execute(text("CREATE TABLE ability_state_events (learner_id TEXT, knowledge_base_id TEXT, skill_node_id TEXT, source_type TEXT, verified BOOLEAN)"))
         connection.execute(text("CREATE TABLE diagnostic_answers (learner_id TEXT, knowledge_base_id TEXT, question_id TEXT)"))
-        connection.execute(text("CREATE TABLE diagnostic_questions (question_id TEXT, skill_node_id TEXT, extra_metadata JSON)"))
+        # ``DiagnosticQuestionORM.extra_metadata`` maps to the physical
+        # ``metadata`` column; keep this fixture aligned with the real schema.
+        connection.execute(text("CREATE TABLE diagnostic_questions (question_id TEXT, skill_node_id TEXT, metadata JSON)"))
         connection.execute(text("INSERT INTO knowledge_states VALUES ('learner','kb','node',1.0,'mastered','medium',1,1,'diagnosis','event',1)"))
         connection.execute(text("INSERT INTO ability_state_events VALUES ('learner','kb','node','diagnosis',1)"))
         connection.execute(text("INSERT INTO diagnostic_answers VALUES ('learner','kb','question')"))

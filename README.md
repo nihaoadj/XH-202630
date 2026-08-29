@@ -14,6 +14,7 @@
 - 反馈真实闭环：正式 Attempt 会原子更新知识点掌握度、画像版本和持久化学习路径；补救或进阶决策复用异步生成任务，并保留父子 Run 来源关系。
 - 实时 Agent 轨迹：生成页通过 SSE 只读持久化 WorkflowEvent，支持 queued snapshot、断线续传、事件去重、terminal close 与轮询降级。
 - 幻觉防控：引入冻结 Evidence、独立 Claim 抽取/判定、审核纠偏与可复核指标。
+- 节点优先检索：带能力目标的请求先在模块级 Chunk—节点映射范围内执行向量、BM25 与精排；无映射或证据不足时自动回退全库检索，底层故障保持原有错误语义。
 - 个性化适配：基于学习者画像动态匹配资源难度、生成学习路径与分阶测试。
 - 可视化决策：提供 Agent 调度过程、学情报告、资源难度匹配曲线等可视化能力。
 - 可回放运行记录：Run 在模型调用前建档，节点 Step/Event/Evidence/Checkpoint 持续落库，可跨进程只读查询并识别中断。
@@ -91,69 +92,16 @@ python scripts/check_database_integrity.py
 
 ```text
 backend/
-├── app/                          # 后端应用核心代码
-│   ├── api/                      # HTTP 路由层：仅负责请求校验、协议转换与响应组装
-│   │   ├── onboarding.py         # 初始画像问卷接口
-│   │   ├── admin.py              # Token 保护的全 KB 运行状态接口
-│   │   ├── users.py              # 用户基础资料接口
-│   │   ├── profiles.py           # 学习者画像接口
-│   │   ├── knowledge.py          # 领域、方向与知识库目录接口
-│   │   ├── skills.py             # 技能图谱接口
-│   │   ├── diagnosis.py          # 诊断接口
-│   │   ├── generate.py           # 资源生成接口
-│   │   ├── learning_history.py   # 学习历史时间线接口
-│   │   ├── resources.py          # 资源历史与文件下载接口
-│   │   ├── reviews.py            # 审核摘要接口
-│   │   ├── feedback.py           # 学习反馈接口
-│   │   ├── report.py             # 学情报告接口
-│   │   └── evaluation.py         # 评测摘要接口
-│   ├── services/                 # 业务逻辑层：封装完整业务用例
-│   │   ├── knowledge_service.py
-│   │   ├── onboarding_service.py
-│   │   ├── profile_service.py
-│   │   ├── user_service.py
-│   │   ├── diagnosis_service.py
-│   │   ├── generation_service.py
-│   │   ├── generation_job_service.py
-│   │   ├── learning_history_service.py
-│   │   ├── resource_service.py
-│   │   ├── review_service.py
-│   │   ├── feedback_service.py
-│   │   └── report_service.py
-│   ├── agents/                   # 多智能体层：LangGraph 工作流与各 Agent 节点
-│   │   ├── workflow.py           # 工作流状态机编排
-│   │   ├── state.py              # 多智能体共享状态定义
-│   │   ├── diagnosis.py          # 学情诊断 Agent
-│   │   ├── retriever.py          # 知识库检索 Agent
-│   │   ├── planner.py            # 学习路径规划 Agent
-│   │   ├── generator.py          # 个性化资源生成 Agent
-│   │   ├── reviewer.py           # 内容审核与幻觉检测 Agent
-│   │   └── feedback.py           # 反馈决策 Agent
-│   ├── core/                     # 基础设施层：封装底层技术能力
-│   │   ├── llm.py                # 大模型客户端封装
-│   │   ├── llm_gateway.py        # 超时、重试、deadline、错误映射与调用遥测
-│   │   ├── structured_output.py  # 统一 JSON 提取与严格结构校验
-│   │   ├── embeddings.py         # 中文 Embedding 模型加载
-│   │   ├── vector_store.py       # ChromaDB 向量存储
-│   │   ├── knowledge_base.py     # 知识库文档加载与切片
-│   │   ├── file_storage.py       # 生成资源文件存储（支持文本与多媒体）
-│   │   ├── health.py             # 脱敏运行时健康检查与 readiness 聚合
-│   │   └── errors.py             # 稳定错误码与显式 degraded 策略
-│   ├── db/                       # 数据访问层：按实体划分子包
-│   │   ├── learner/              # 画像仓储
-│   │   ├── questionnaire/        # 问卷仓储
-│   │   ├── diagnosis/            # 诊断仓储
-│   │   ├── resource/             # 资源仓储
-│   │   ├── feedback/             # 反馈仓储
-│   │   ├── knowledge/            # 学习目录与知识库仓储
-│   │   ├── audit/                # Agent/审核相关仓储
-│   │   ├── models.py             # SQLAlchemy ORM 模型（共享）
-│   │   └── database.py           # 数据库引擎与会话管理（共享）
-│   ├── models/                   # 数据模型层：Pydantic 数据结构与共享状态
-│   │   └── schemas.py
-│   ├── utils/                    # 通用工具函数层：项目内部复用工具
-│   ├── config.py                 # 应用配置（从 .env 加载）
-│   └── main.py                   # FastAPI 应用入口
+├── app/
+│   ├── api/<domain>/              # HTTP 路由、认证依赖、请求解析与响应映射
+│   ├── services/<domain>/         # 用例编排、事务边界和领域门面
+│   ├── agents/                    # 学习 Agent、资源工作流和共享 Agent 能力
+│   ├── core/                      # 课件运行时、LLM、事件、检索、安全和存储等基础能力
+│   ├── db/<domain>/               # SQL/内存仓储、迁移和共享数据库能力
+│   ├── models/<domain>/           # DTO、领域契约和共享枚举
+│   ├── utils/                     # 通用内部工具
+│   ├── config.py                  # 应用配置
+│   └── main.py                    # FastAPI 入口
 ├── tests/                        # 分层测试套件
 │   ├── unit/                    # Agent、核心组件、模型契约与纯策略
 │   ├── integration/             # API、持久化、服务与工作流集成
@@ -183,6 +131,8 @@ version1/
 │   │   ├── api/                 # axios 接口封装
 │   │   ├── assets/
 │   │   ├── components/          # 可复用组件
+│   │   ├── composables/         # 跨页面组合逻辑
+│   │   ├── features/<domain>/   # 按领域组织的页面与交互逻辑
 │   │   ├── router/              # Vue Router 路由配置
 │   │   ├── stores/              # Pinia 全局状态
 │   │   ├── styles/
@@ -245,11 +195,20 @@ $env:RUN_LIVE_LLM = "1"
 python -m pytest -m live_llm
 ```
 
-前端工作流事件测试：
+互动课件改动还应执行冻结评测、浏览器质量门和前端构建：
 
 ```powershell
+python backend/scripts/courseware_eval.py `
+  --manifest backend/tests/fixtures/courseware/evals/manifest.json `
+  --baseline backend/tests/fixtures/courseware/evals/baseline.json `
+  --output backend/courseware-eval-report.json
+npm --prefix frontend run test:courseware-browser
 npm --prefix frontend run test:workflow-events
+npm --prefix frontend run test:tutor
+npm --prefix frontend run build
 ```
+
+`backend/courseware-eval-report.json` 等评测报告和浏览器证据为本地产物，不应提交。`pytest-asyncio` 已列入 `backend/requirements.txt`，以确保全新环境能收集异步报告流测试。
 
 ## 核心指标
 

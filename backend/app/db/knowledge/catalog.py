@@ -13,6 +13,7 @@ from app.db.shared.models import (
     DiagnosticQuestionORM,
     KnowledgeBaseORM,
     KnowledgeChunkORM,
+    KnowledgeChunkSkillNodeMappingORM,
     KnowledgeChunkVersionORM,
     KnowledgeDocumentORM,
     KnowledgeDocumentVersionORM,
@@ -679,6 +680,80 @@ class KnowledgeCatalogRepository:
                     for key, value in values.items():
                         setattr(row, key, value)
             db.commit()
+
+    def sync_chunk_skill_node_mappings(
+        self,
+        chunks: Iterable,
+        *,
+        knowledge_base_id: str,
+    ) -> int:
+        """Persist deterministic module-level mappings for a staged snapshot."""
+
+        chunks = list(chunks)
+        with self.session_factory() as db:
+            node_ids_by_name = {
+                str(row.name).strip(): row.node_id
+                for row in db.query(RagSkillNodeORM).filter_by(
+                    knowledge_base_id=knowledge_base_id,
+                ).all()
+                if str(row.name).strip()
+            }
+            created = 0
+            for chunk in chunks:
+                metadata = chunk.metadata
+                if metadata.get("knowledge_base_id") != knowledge_base_id:
+                    raise ValueError("Chunk 所属 knowledge_base_id 不一致")
+                for point in sorted({
+                    str(value).strip()
+                    for value in metadata.get("knowledge_points", [])
+                    if str(value).strip()
+                }):
+                    skill_node_id = node_ids_by_name.get(point)
+                    if skill_node_id is None:
+                        continue
+                    chunk_id = str(metadata["chunk_id"])
+                    mapping_id = _stable_id("chunk_skill", knowledge_base_id, chunk_id, skill_node_id)
+                    if db.get(KnowledgeChunkSkillNodeMappingORM, mapping_id) is None:
+                        db.add(KnowledgeChunkSkillNodeMappingORM(
+                            mapping_id=mapping_id,
+                            knowledge_base_id=knowledge_base_id,
+                            document_id=str(metadata["document_id"]),
+                            document_version=str(metadata["document_version"]),
+                            chunk_id=chunk_id,
+                            skill_node_id=skill_node_id,
+                            mapping_source="module_knowledge_points_v1",
+                        ))
+                        created += 1
+            db.commit()
+        return created
+
+    def get_active_chunk_ids_for_skill_nodes(
+        self,
+        knowledge_base_id: str,
+        skill_node_ids: list[str],
+    ) -> list[str]:
+        """Return active mapped Chunk IDs for the union of target nodes."""
+
+        node_ids = sorted({str(node_id).strip() for node_id in skill_node_ids if str(node_id).strip()})
+        if not node_ids:
+            return []
+        with self.session_factory() as db:
+            rows = (
+                db.query(KnowledgeChunkSkillNodeMappingORM.chunk_id)
+                .join(
+                    KnowledgeChunkVersionORM,
+                    KnowledgeChunkVersionORM.chunk_id == KnowledgeChunkSkillNodeMappingORM.chunk_id,
+                )
+                .filter(
+                    KnowledgeChunkSkillNodeMappingORM.knowledge_base_id == knowledge_base_id,
+                    KnowledgeChunkSkillNodeMappingORM.skill_node_id.in_(node_ids),
+                    KnowledgeChunkVersionORM.knowledge_base_id == knowledge_base_id,
+                    KnowledgeChunkVersionORM.active.is_(True),
+                )
+                .order_by(KnowledgeChunkSkillNodeMappingORM.chunk_id)
+                .all()
+            )
+        return list(dict.fromkeys(str(row[0]) for row in rows))
 
     def upsert_assessment_questions(self, questions: Iterable[DiagnosticQuestion]) -> None:
         """同步版本化测评题库到 SQL 运行时投影。"""

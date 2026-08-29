@@ -262,6 +262,10 @@ class IngestionService:
             }))
             stage = "sql_staging"
             self.catalog.upsert_knowledge_base(manifest)
+            self.catalog.upsert_skill_nodes(
+                manifest.get("skill_nodes", []),
+                knowledge_base_id,
+            )
             self.catalog.set_index_status(
                 knowledge_base_id,
                 status="indexing",
@@ -275,6 +279,10 @@ class IngestionService:
                 chunks,
                 knowledge_base_id=knowledge_base_id,
                 activate=False,
+            )
+            self.catalog.sync_chunk_skill_node_mappings(
+                chunks,
+                knowledge_base_id=knowledge_base_id,
             )
             stage = "vector_synchronize"
             self.vector_index.synchronize(

@@ -5,7 +5,7 @@ import time
 from types import SimpleNamespace
 
 import pytest
-import requests
+import httpx
 import uvicorn
 from fastapi import FastAPI
 
@@ -66,21 +66,20 @@ def test_report_stream_over_real_http_emits_snapshot_then_changed():
     while not server.started and time.monotonic() < deadline:
         time.sleep(0.02)
     assert server.started
-    response = requests.get(f"http://127.0.0.1:{port}/api/report/learner/events", stream=True, timeout=8)
     try:
-        lines = []
-        for line in response.iter_lines(decode_unicode=True):
-            if line:
-                lines.append(line)
-            if (any("event: report_snapshot" in item for item in lines)
-                    and any("event: report_changed" in item for item in lines)
-                    and any(item.startswith("data:") and "changed_domains" in item for item in lines)):
-                break
-        assert "event: report_snapshot" in lines
-        assert "event: report_changed" in lines
-        assert any(item.startswith("data:") and "changed_domains" in item for item in lines)
+        with httpx.stream("GET", f"http://127.0.0.1:{port}/api/report/learner/events", timeout=8) as response:
+            lines = []
+            for line in response.iter_lines():
+                if line:
+                    lines.append(line)
+                if (any("event: report_snapshot" in item for item in lines)
+                        and any("event: report_changed" in item for item in lines)
+                        and any(item.startswith("data:") and "changed_domains" in item for item in lines)):
+                    break
+            assert "event: report_snapshot" in lines
+            assert "event: report_changed" in lines
+            assert any(item.startswith("data:") and "changed_domains" in item for item in lines)
     finally:
-        response.close()
         server.should_exit = True
         thread.join(timeout=5)
         assert not thread.is_alive()

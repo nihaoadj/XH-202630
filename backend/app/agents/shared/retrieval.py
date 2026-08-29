@@ -85,7 +85,51 @@ def retrieve_node(
         query_node_ids=query_node_ids,
         policy=policy,
     )
-    batch = evidence_retriever.retrieve(request)
+    target_nodes = list(dict.fromkeys(node_input.target_skill_nodes[:3]))
+    allowed_chunk_ids = (
+        evidence_retriever.get_active_chunk_ids_for_skill_nodes(
+            knowledge_base_id,
+            target_nodes,
+        )
+        if target_nodes and hasattr(evidence_retriever, "get_active_chunk_ids_for_skill_nodes")
+        else []
+    )
+    fallback_reason: str | None = None
+    if allowed_chunk_ids:
+        scoped_request = request.model_copy(update={
+            "allowed_chunk_ids": allowed_chunk_ids,
+            "retrieval_scope": "node_scoped",
+        })
+        scoped_batch = evidence_retriever.retrieve(scoped_request)
+        if scoped_batch.status in {
+            RetrievalStatus.NO_HIT,
+            RetrievalStatus.EVIDENCE_INSUFFICIENT,
+        }:
+            fallback_reason = scoped_batch.status.value
+            batch = evidence_retriever.retrieve(request)
+        else:
+            batch = scoped_batch
+    else:
+        if target_nodes:
+            fallback_reason = "node_mapping_missing"
+        batch = evidence_retriever.retrieve(request)
+
+    profile = dict(batch.retrieval_profile)
+    if batch.status == RetrievalStatus.EVIDENCE_INSUFFICIENT:
+        final_retrieval_source = "evidence_insufficient"
+    elif batch.retrieval_scope == "node_scoped":
+        final_retrieval_source = "node_scoped"
+    elif fallback_reason:
+        final_retrieval_source = "global_fallback"
+    else:
+        final_retrieval_source = "global"
+    profile.update({
+        "final_retrieval_source": final_retrieval_source,
+        "node_mapped_chunk_count": len(allowed_chunk_ids),
+    })
+    if fallback_reason:
+        profile["node_scope_fallback_reason"] = fallback_reason
+    batch = batch.model_copy(update={"retrieval_profile": profile})
 
     error = batch.error
     if batch.status == RetrievalStatus.RETRIEVAL_ERROR and error is not None:
@@ -125,7 +169,7 @@ def retrieve_node(
         ),
         output_summary=(
             f"混合候选 {batch.candidate_count} 条；有效证据 {len(batch.evidence)} 条；"
-            f"状态：{batch.status.value}"
+            f"状态：{batch.status.value}；来源：{profile['final_retrieval_source']}"
         ),
         decision_reason=(
             "候选先经向量/BM25 融合与可选 CrossEncoder 精排，再经知识库边界、"
@@ -145,6 +189,8 @@ def retrieve_node(
             "retrieval_evidence_count": len(batch.evidence),
             "retrieval_dropped_count": batch.dropped_candidate_count,
             "retrieval_profile": batch.retrieval_profile,
+            "final_retrieval_source": profile["final_retrieval_source"],
+            "node_scope_fallback_reason": fallback_reason,
         },
     )
     return {
@@ -158,6 +204,7 @@ def retrieve_node(
         "retrieval_candidate_count": batch.candidate_count,
         "retrieval_dropped_candidate_count": batch.dropped_candidate_count,
         "retrieval_partial_failure_count": batch.partial_failure_count,
+        "retrieval_profile": batch.retrieval_profile,
         "current_node": "retriever",
         "trace": [trace_item],
         "errors": [error.model_dump(mode="json")] if error else [],

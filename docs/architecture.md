@@ -2,9 +2,17 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：2.2
-> 文档更新时间：2026-08-20
+> 文档版本：2.4
+> 文档更新时间：2026-08-29
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
+
+## 0. 整体架构总览
+
+![系统整体架构图](assets/系统整体架构图.svg)
+
+图中蓝色箭头表示主调用或数据流，绿色箭头表示可信知识/发布链路，虚线表示持久化
+审计与反馈关系。它描述当前本地 SQLite + Chroma 部署的实际代码边界，不表示已完成
+分布式队列、生产级 PostgreSQL、高可用或自动恢复承诺。
 
 ## 1. 架构目标
 
@@ -49,22 +57,12 @@
 
 ### 3.1 API 路由
 
-`backend/app/api/` 当前真实文件为：
-
-- `admin.py`
-- `diagnosis.py`
-- `evaluation.py`
-- `feedback.py`
-- `generate.py`
-- `knowledge.py`
-- `learning_history.py`
-- `onboarding.py`
-- `profiles.py`
-- `report.py`
-- `resources.py`
-- `reviews.py`
-- `skills.py`
-- `users.py`
+`backend/app/api/` 按领域包组织。路由实现位于
+`admin/`、`auth/`、`courseware/`、`feedback/`、`generation/`、
+`knowledge/`、`learners/`、`learning_documents/`、`onboarding/`、
+`reports/`、`resource_library/`、`reviews/`、`runs/`、`skills/`、
+`tutor/` 和 `users/`；跨路由认证与访问控制依赖位于
+`api/dependencies.py`。
 
 说明：
 
@@ -74,65 +72,35 @@
 
 ### 3.2 服务层
 
-`backend/app/services/` 当前真实文件为：
-
-- `knowledge_service.py`
-- `onboarding_service.py`
-- `profile_service.py`
-- `user_service.py`
-- `diagnosis_service.py`
-- `generation_service.py`
-- `generation_job_service.py`
-- `resource_service.py`
-- `review_service.py`
-- `feedback_service.py`
-- `report_service.py`
-- `evaluation_service.py`
-- `learning_history_service.py`
+`backend/app/services/` 同样按领域包组织，包含 `auth`、`courseware`、
+`feedback`、`generation`、`knowledge`、`learners`、`learning_documents`、
+`onboarding`、`reports`、`resource_library`、`reviews`、`runs`、`tutor`
+和 `users`。每个包只暴露该领域的用例编排与查询门面。
 
 职责划分：
 
-- `knowledge_service`：学习目录、知识库信息、技能图谱、诊断题选择
-- `onboarding_service`：问卷组装、问卷提交、初始画像创建
-- `user_service`：用户资料创建、查询、局部更新
-- `profile_service`：画像查询、分页、局部更新、删除
-- `diagnosis_service`：诊断判分与画像回写
-- `generation_service`：生成工作流和资源落库
-- `generation_job_service`：异步生成任务创建、状态查询、后台执行
-- `feedback_service`：学习反馈处理与画像更新
-- `learning_history_service`：学习过程时间线组装
-- `report_service`：确定性学习报告聚合；读取正式 Attempt、规范能力投影、最终文本资源证据和持久化路径，构造全节点掌握、资源难度匹配、学习路径图等只读可视化投影，计算稳定 revision，并提供条件读取与当前快照 SSE
+- `knowledge`、`onboarding`、`learners` 和 `users`：目录、问卷、画像、诊断和用户资料用例。
+- `generation`、`learning_documents`、`reviews` 和 `runs`：文本学习文档的任务、发布、审核与运行记录。
+- `courseware`：互动课件任务、恢复、发布和 Worker 执行门面。
+- `feedback`、`tutor`、`reports` 与 `resource_library`：生成后的学习闭环、只读聚合和资源路由。
 
 ### 3.3 Agent 层
 
-`backend/app/agents/` 当前真实文件为：
+`backend/app/agents/` 保持以下边界：
 
-- `workflow.py`
-- `state.py`
-- `diagnosis.py`
-- `retriever.py`
-- `planner.py`
-- `generator.py`
-- `reviewer.py`
-- `feedback.py`
-- `resource_spec_builder.py`
-- `resource_agents/base.py`
-- `resource_agents/text.py`
-- `resource_agents/practice.py`
-- `resource_agents/assessment.py`
-- `resource_agents/checklist.py`
-- `resource_agents/case_study.py`
-- `resource_agents/registry.py`
+- `resource_workflows/learning_documents/`：五类文本学习文档的工作流和节点。
+- `resource_workflows/interactive_courseware/`：互动课件工作流、状态、专用 Agent 与 Worker。
+- `learning_agents/`：诊断、反馈策略与 Tutor 等学习闭环 Agent。
+- `resource_agents/`：五类文本资源与纠错训练包的专用生成 Agent。
+- `shared/`：不依赖具体资源领域的纯共享能力。
 
 当前代码含义：
 
 - Agent 负责协同推理和多步生成。
 - 服务层负责把 Agent 与数据库、画像、资源记录串起来。
-- `backend/app/models/workflow.py` 定义版本化 `WorkflowState`、状态枚举和脱敏 `ErrorInfo`
-- `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 结构
-- `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
-- `generator.py` 保留历史文件名，但只负责资源 Spec 编排、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
-- 公共资源类型词汇由 `backend/app/models/resource_types.py` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
+- 版本化工作流状态、Agent 契约和共享枚举位于 `models/shared/`；资源领域 DTO 位于各自的 `models/<domain>/`。
+- 文本资源工作流仅编排 Spec、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
+- 公共资源类型词汇由 `models/learning_documents/` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
 - 反馈闭环可额外创建专属 `个性化纠错训练包 -> CorrectionTrainingPackageAgent`。它在学习文档内部受支持，但不属于普通生成词汇；`FeedbackService` 验证强化候选和快照后才可创建，并只向 Agent 传入脱敏目标、教学策略、达标标准和冻结 Evidence。
 
 ## 4. 当前主流程调用链
@@ -370,11 +338,12 @@ frontend/
   src/
     api/
     components/
+    composables/
+    features/<domain>/
     router/
     stores/
     styles/
     utils/
-    views/
 
 knowledge_base/
   learning_catalog_seed.json
@@ -433,7 +402,9 @@ GenerationJobService
   -> GenerationService.generate_with_run_id
        -> AgentRun / AgentStep / WorkflowEvent
        -> EvidenceRetriever
-            -> hybrid vector + BM25
+            -> target_skill_nodes ? node-scoped hybrid : global hybrid
+            -> no_hit / evidence_insufficient ? global hybrid fallback
+            -> vector + BM25
             -> optional CrossEncoder rerank
             -> KB / Chunk version / content hash validation
        -> Generator
@@ -445,14 +416,47 @@ GenerationJobService
 
 架构约束：
 
+- 只要请求带有冻结的 `target_skill_nodes`，Retriever 先通过 SQL 的活动 Chunk—节点映射缩小候选范围；请求未带目标节点时保持原有全库混合检索。目标节点来自已确认的学习目标/诊断结果，不在 Retriever 内额外调用模型分类。
+- 节点范围检索将同一知识库、多个目标节点对应的活动 `chunk_id` 取并集，并将这一份白名单同时传给 Chroma 向量召回、BM25 和 CrossEncoder 精排；不会先全库召回、再在末尾过滤。
+- 节点范围没有有效映射，或其结果为 `no_hit` / `evidence_insufficient` 时，系统用相同查询和既有 policy 执行一次全库混合检索。节点范围发生 `retrieval_error` 时保留原有错误/降级语义，不用全库回退掩盖基础设施故障。
 - 混合召回和精排只产生候选；候选必须经过 SQL Chunk 历史版本、KB 范围和内容哈希校验后才能成为 Evidence。
-- 有冻结目标节点时，检索保存一个全局 Evidence 快照及 `skill_node_id -> evidence_ids` 的节点命中投影；同一 Evidence 可属于多个节点。节点型测评和主动回忆清单只能读取本节点投影，讲义等普通资源仍读取全局快照。
+- 每次检索只保存一个不可变 Evidence snapshot；`skill_node_id -> evidence_ids` 是该快照的节点命中投影，同一 Evidence 可属于多个节点。节点范围成功时 snapshot 来自节点范围；发生回退时 snapshot 来自全库，资源来源结构与前端展示均不变。
+- 检索 profile 与 Workflow trace 记录最终来源：`node_scoped`、`global_fallback`、`global` 或 `evidence_insufficient`，并记录节点映射候选数和回退原因，供运行审计而非对外 API 契约使用。
 - `RecordedNode` 在节点副作用前创建 running Step；`DurableWorkflowRunner` 在状态合并后、checkpoint 前保存业务制品。
 - Generator 定向返工将上一版本原文作为 `previous_version_content` 与结构化指令一并传入；仅重生成命中的资源类型，新版本不可原地覆盖旧正文。
 - Reviewer 的模型建议必须经过确定性 policy 二次裁决。
 - Resource 的 `run_id` 单一关联 AgentRun；GenerationJob 以同值关联，避免 ORM 中出现两个竞争的 run_id 字段。
 - `review_status` 描述审核状态，`publication_status` 描述分发状态；只有最终批准叶子版本发布。
 - Run 回放只读数据库，不重新执行模型；P0-08 已增加基于持久化 WorkflowEvent 的 SSE replay/live tail，自动 resume 与取消仍不在 P0 范围。
+
+### 9.1 模块级节点优先检索与全库回退
+
+![模块级节点优先检索与全库回退](assets/模块级节点优先检索与全库回退.svg)
+
+当前第一阶段采用模块级映射，而非人工逐 Chunk 标注：一个模块内的所有 Chunk
+映射到该模块在 `metadata.json` 中声明、且与 `rag_skill_nodes.name` 精确匹配的
+能力节点。映射的职责只是缩小候选范围；范围内仍由语义相似度、关键词、RRF 和精排
+判断哪一段内容最相关。因此它不会承诺“每个 Chunk 只属于一个节点”，也不替代
+Evidence 的来源、版本和哈希校验。
+
+当前请求最多取前三个去重后的目标节点，避免在既有查询预算之外隐式扩大调用；运行顺序如下：
+
+```text
+target_skill_nodes 非空
+  -> 查询活动 Chunk—节点映射并取多节点并集
+  -> 在该 Chunk 白名单内执行向量 + BM25 + RRF + CrossEncoder
+  -> 通过现有相关度、证据数量和来源校验？
+       是：冻结 node_scoped Evidence
+       否（无映射 / no_hit / evidence_insufficient）：执行一次原全库检索
+  -> 全库结果仍不足：沿用 Evidence Gate，停止事实型生成
+
+target_skill_nodes 为空
+  -> 直接执行一次原全库检索
+```
+
+`min_evidence_count`、归一化相关度和最大 Evidence 数仍由既有 retrieval policy
+控制，本次更新不引入资源类型差异化阈值、先修节点扩展或新的环境开关。多份文档
+仍可同时构成同一资源的 Evidence；节点范围不是“前端只能显示一份来源文档”的限制。
 
 ## 10. P0-09 验收层
 

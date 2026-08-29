@@ -17,6 +17,9 @@ huggingface-hub==0.36.2
 pypdf==5.1.0
 pdfplumber==0.11.4
 pytest==8.3.3
+# Required by the async report-stream integration test; declare it so a clean
+# CI runner collects the test suite the same way as local development.
+pytest-asyncio==0.24.0
 httpx==0.27.2
 dependency-injector==4.42.0
 pwdlib[argon2]==0.3.0

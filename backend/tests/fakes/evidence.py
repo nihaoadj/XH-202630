@@ -157,10 +157,15 @@ class ScriptedEvidenceRetriever:
         self,
         batches: list[EvidenceBatch],
         settings: Settings | None = None,
+        mapped_chunk_ids: list[str] | None = None,
     ):
         self.batches = list(batches)
         self.settings = settings or Settings(_env_file=None)
+        self.mapped_chunk_ids = list(mapped_chunk_ids or [])
         self.calls: list[RetrievalRequest] = []
+
+    def get_active_chunk_ids_for_skill_nodes(self, knowledge_base_id, skill_node_ids):
+        return list(self.mapped_chunk_ids)
 
     def retrieve(self, request: RetrievalRequest) -> EvidenceBatch:
         self.calls.append(request)

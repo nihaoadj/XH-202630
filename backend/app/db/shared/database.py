@@ -41,6 +41,7 @@ from app.db.migrations import (
     apply_p0_30_feedback_followup_multi_run_migration,
     apply_p0_31_claim_user_publication_migration,
     apply_p0_32_review_status_migration,
+    apply_p0_33_chunk_skill_node_mappings_migration,
     apply_tutor_migration,
 )
 
@@ -170,6 +171,7 @@ def init_database():
     apply_p0_30_feedback_followup_multi_run_migration(engine)
     apply_p0_31_claim_user_publication_migration(engine)
     apply_p0_32_review_status_migration(engine)
+    apply_p0_33_chunk_skill_node_mappings_migration(engine)
     apply_tutor_migration(engine)
 
 

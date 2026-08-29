@@ -1,8 +1,8 @@
 # 知识库与数据库实现说明
 
 > 项目编号：XH-202630
-> 文档版本：2.1
-> 文档更新时间：2026-08-16
+> 文档版本：2.2
+> 文档更新时间：2026-08-29
 > 文档定位：说明当前项目中知识库源文件、SQLite 数据库、问卷、诊断、画像与资源的真实落库方式。
 
 ## 1. 当前运行方式
@@ -13,13 +13,13 @@
 
 ```env
 DB_TYPE=sqlite
-DATABASE_URL=sqlite:///./data/domain_knowledge.db
+DATABASE_URL=sqlite:///./data/domain_knowledge_writable_probe.db
 ```
 
 数据库文件位置：
 
 ```text
-backend/data/domain_knowledge.db
+backend/data/domain_knowledge_writable_probe.db
 ```
 
 初始化与导入脚本：
@@ -170,8 +170,10 @@ knowledge_base/<track_id>/
 | 表 | 作用 |
 |---|---|
 | `knowledge_bases` | 知识库主表 |
-| `knowledge_documents` | 文档记录 |
-| `knowledge_chunks` | 切片记录 |
+| `knowledge_documents` / `knowledge_chunks` | 当前文档与切片的稳定身份投影 |
+| `knowledge_document_versions` / `knowledge_chunk_versions` | 不可变文档/Chunk 版本；`is_current`、`active` 决定当前可检索快照 |
+| `knowledge_chunk_skill_node_mappings` | Chunk 版本与能力节点的可审计多对多映射 |
+| `knowledge_index_status` | SQL/Chroma 快照计数、smoke 结果和索引状态 |
 
 同时向量索引位于：
 
@@ -181,8 +183,14 @@ backend/chroma_db/
 
 关系数据库与向量库分工：
 
-- SQLite：保存业务事实、文档映射、切片映射、元数据
+- SQLite：保存业务事实、文档/Chunk 版本、Chunk—节点映射和可审计元数据
 - Chroma：保存向量与语义检索索引
+
+`knowledge_chunk_skill_node_mappings` 不是第二个向量库：它只保存
+`knowledge_base_id`、文档/版本、`chunk_id`、`skill_node_id`、映射来源和创建时间，
+用于先确定允许参与检索的 Chunk。表以 `(chunk_id, skill_node_id)` 去重，并建立
+`(knowledge_base_id, skill_node_id)` 与 `chunk_id` 索引；实际查询还会联结
+`knowledge_chunk_versions.active = true`，因此历史映射可以保留但不会重新进入当前检索。
 
 ### 3.6 技能图谱与诊断
 
@@ -484,6 +492,7 @@ knowledge_base/rag_engineering_training/
 - 向量切片：84 个，已经写入该知识库独立的 Chroma 集合
 - 在线检索：多查询扩展后分别执行 BM25 关键词召回与 Chroma 向量召回，按 `chunk_id` 去重并使用 RRF 融合，再由 `BAAI/bge-reranker-base` CrossEncoder 对候选精排
 - 能力节点：13 个
+- 模块级 Chunk—节点映射：当前 84 个活动 Chunk 依据模块 `knowledge_points` 生成 182 条映射记录；映射表迁移在应用初始化时幂等回填
 - 诊断题：39 道
 - 学习后测评题：130 道；每个能力节点 10 道，难度分布为简单 3、中等 3、困难 4
 - 方向问卷题：5 道
@@ -504,6 +513,33 @@ knowledge_base/rag_engineering_training/metadata.json
 ```
 
 6 个模块共同覆盖 13 个能力节点；一个模块可以承载多个紧密相关的节点，但每个节点只指定一个主模块，避免检索时反复召回内容相似的卡片和参考文档。诊断题仍按 13 个细粒度能力节点组织，不因资料合并而降低诊断粒度。
+
+当前模块级映射如下。这里的“映射 Chunk 数”是活动快照中该模块的所有 Chunk 数；
+每一个 Chunk 映射到本行列出的全部节点，因此映射记录总数大于 Chunk 总数。
+
+| 模块文档 | 活动 Chunk | 映射能力节点 |
+|---|---:|---|
+| `module_rag_foundations` | 13 | `rag_basics`（RAG 基础概念） |
+| `module_ingestion_chunking` | 14 | `document_parsing`（文档解析）、`chunking`（Chunk 切分） |
+| `module_embeddings_vector_retrieval` | 13 | `embedding`、`vector_store`、`similarity_retrieval` |
+| `module_hybrid_rerank` | 14 | `hybrid_retrieval`、`rerank` |
+| `module_context_citation_grounding` | 14 | `prompt_assembly`、`citation`、`hallucination_control` |
+| `module_evaluation_tuning` | 16 | `rag_evaluation`、`rag_tuning` |
+
+映射只使用 `knowledge_chunk_versions.knowledge_points` 与
+`rag_skill_nodes.name` 的精确字符串匹配，不调用 LLM 推断标签。若模块声明了未知
+知识点，该知识点不会生成映射，后续请求会走全库回退，而不是猜测节点归属。
+
+### 7.1 入库、重切分与版本失效范围
+
+入库顺序为：读取 manifest 和模块文档 → 切分 Chunk → upsert 知识库与能力节点 →
+暂存 SQL 文档/Chunk 版本及模块级映射 → 同步 Chroma → 对账与 smoke → 激活当前
+快照。映射和 Chunk 使用稳定 ID；重复入库不会产生重复映射。
+
+修改或重切分某份文档时，新 Chunk 会获得新的版本/映射；旧 Chunk 和旧映射保留作
+审计，但因为不再 `active` 而不会进入节点范围检索。未变化文档的 Chunk ID 与映射
+保持可查询，完整快照重新激活后不需要重新标注。新增模块同样只需在 manifest 中声明
+文档 `knowledge_points` 和对应能力节点，无需为每段文本另行人工打标签。
 
 学习后测评题独立保存在：
 
@@ -573,13 +609,27 @@ python -m pytest backend/tests -q
 
 ## 10. 可信检索与运行时证据
 
-当前知识链路采用“候选排序”和“证据认定”分层：
+当前知识链路采用“候选范围 → 候选排序 → 证据认定”三层：
 
-1. 在按 knowledge_base_id 隔离的 collection 内执行向量召回与 BM25 融合。
-2. 可选 CrossEncoder 对候选精排，并保留 hybrid/rerank 元数据。
-3. EvidenceRetriever 根据 SQL 中的 active Chunk、document_version、KB 范围和 text_hash 做最终校验。
-4. 只有校验通过的候选生成稳定 Evidence ID，并在 Agent Run 中保存不可变 snapshot。
-5. Generator 的 SourceRef 只从 Evidence 代码侧绑定，不接受模型或 legacy chunk 自行声明来源。
+1. 请求含 `target_skill_nodes` 时，先从 `knowledge_chunk_skill_node_mappings` 查询同一知识库、活动 Chunk 的映射并取多节点并集；不含目标节点时直接从全库开始。
+2. 节点范围内的 Chroma 向量召回和 BM25 关键词召回共享同一 `chunk_id` 白名单，RRF 融合与可选 CrossEncoder 也只处理这一范围内的候选。
+3. 节点范围没有映射，或结果为 `no_hit` / `evidence_insufficient` 时，用相同查询和既有 policy 执行一次全库混合检索；节点范围发生底层检索错误时不回退，避免把故障误报为正常结果。
+4. EvidenceRetriever 根据 SQL 中的 active Chunk、document_version、KB 范围和 text_hash 做最终校验。全库回退仍不足时，沿用 Evidence Gate，事实型生成不会继续。
+5. 只有校验通过的候选生成稳定 Evidence ID，并在 Agent Run 中保存不可变 snapshot；Generator 的 SourceRef 只从 Evidence 代码侧绑定，不接受模型或 legacy chunk 自行声明来源。
+
+检索 profile 与 trace 记录 `node_scoped`、`global_fallback`、`global` 或
+`evidence_insufficient`，并保留映射候选数和回退原因。它们用于运行审计；公共资源
+API、前端资源来源展示和 Evidence/Claim 的多文档结构没有变化。
+
+模块级映射是候选范围优化，不是“知识越多越不会幻觉”的保证。它减少无关上下文混入
+的机会，但最终可靠性仍依赖证据数量/相关度门槛、版本与哈希校验、Claim 审核和发布
+门禁。
+
+本地真实链路验证（2026-08-29）以当前 SQLite 快照的副本回填映射、读取现有 84 条
+Chroma 索引，依次测试了 13 个真实能力节点：13/13 返回 `available` 且最终来源为
+`node_scoped`，每次得到 6 个候选和 1～6 条有效 Evidence，CrossEncoder 均可用。
+另以无映射目标验证了 `global_fallback`，得到 6 个候选和 4 条有效 Evidence。该结果
+证明当前本地数据链路可用，不等同于对真实用户问题、生产并发或长期幻觉率的统计承诺。
 
 `CHROMA_COLLECTION_NAME` 兼容期只解释为前缀；创建、写入、查询、删除和 health
 统一通过 `_collection_name(kb_id)` 定位集合。公共 readiness 仅以默认 KB 和核心依赖

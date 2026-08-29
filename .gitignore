@@ -32,17 +32,26 @@ backend/logs/*.log
 # Testing
 .pytest_cache/
 **/.pytest_cache/
+.pytest-*/
+**/.pytest-*/
 .tmp_pytest/
+.tmp_pytest_*/
 .tmp-pytest/
 backend/.pytest-tmp*/
 .pytest-tmp*/
 backend/.local-eval-artifacts/
 .tmp-pytest-*/
+.real-chain-pytest-temp/
+.test-tmp-pytest/
+.tmp-ci-*/
+.tmp-full-latest/
+backend/.tmp-courseware-*
 frontend/tests/test-results/
 
 # Browser/e2e runtime profiles and local review artifacts
 .tmp-edge-courseware*
 backend/.test-tmp*
+backend/.tmp-node-scope-pytest/
 backend/assessment-live-eval*.log.err
 backend/data/*.db-wal
 backend/data/*.db-shm

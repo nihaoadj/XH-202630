@@ -128,3 +128,88 @@ def test_partial_provider_failure_is_visible_on_available_batch(monkeypatch):
     assert result["retrieved_evidence"] == [evidence]
     assert result["trace"][0]["status"] == "degraded"
     assert result["trace"][0]["retrieval_partial_failure_count"] == 1
+
+
+def test_target_node_uses_scoped_retrieval_when_mapped_evidence_is_sufficient(monkeypatch):
+    demo = _settings()
+    monkeypatch.setattr(errors_module, "get_settings", lambda: demo)
+    evidence = make_evidence(chunk_id="mapped-chunk")
+    retriever = ScriptedEvidenceRetriever(
+        [make_available_batch([evidence]).model_copy(update={"retrieval_scope": "node_scoped"})],
+        demo,
+        mapped_chunk_ids=["mapped-chunk"],
+    )
+
+    result = retrieve_node(
+        _state(target_skill_nodes=["node-a"]),
+        evidence_retriever=retriever,
+    )
+
+    assert len(retriever.calls) == 1
+    assert retriever.calls[0].retrieval_scope == "node_scoped"
+    assert retriever.calls[0].allowed_chunk_ids == ["mapped-chunk"]
+    assert result["retrieval_profile"]["final_retrieval_source"] == "node_scoped"
+
+
+def test_insufficient_node_scope_reuses_existing_global_retrieval(monkeypatch):
+    demo = _settings()
+    monkeypatch.setattr(errors_module, "get_settings", lambda: demo)
+    insufficient = _failed_batch(RetrievalStatus.EVIDENCE_INSUFFICIENT)
+    global_evidence = make_evidence(chunk_id="global-chunk")
+    retriever = ScriptedEvidenceRetriever(
+        [insufficient, make_available_batch([global_evidence])],
+        demo,
+        mapped_chunk_ids=["mapped-chunk"],
+    )
+
+    result = retrieve_node(
+        _state(target_skill_nodes=["node-a"]),
+        evidence_retriever=retriever,
+    )
+
+    assert [item.retrieval_scope for item in retriever.calls] == ["node_scoped", "global"]
+    assert retriever.calls[1].allowed_chunk_ids is None
+    assert result["retrieved_evidence"] == [global_evidence]
+    assert result["retrieval_profile"]["final_retrieval_source"] == "global_fallback"
+    assert result["retrieval_profile"]["node_scope_fallback_reason"] == "evidence_insufficient"
+
+
+def test_final_evidence_insufficiency_is_recorded_after_global_fallback(monkeypatch):
+    demo = _settings()
+    monkeypatch.setattr(errors_module, "get_settings", lambda: demo)
+    retriever = ScriptedEvidenceRetriever(
+        [
+            _failed_batch(RetrievalStatus.EVIDENCE_INSUFFICIENT),
+            _failed_batch(RetrievalStatus.EVIDENCE_INSUFFICIENT),
+        ],
+        demo,
+        mapped_chunk_ids=["mapped-chunk"],
+    )
+
+    result = retrieve_node(
+        _state(target_skill_nodes=["node-a"]),
+        evidence_retriever=retriever,
+    )
+
+    assert [item.retrieval_scope for item in retriever.calls] == ["node_scoped", "global"]
+    assert result["retrieval_status"] == "evidence_insufficient"
+    assert result["retrieval_profile"]["final_retrieval_source"] == "evidence_insufficient"
+
+
+def test_node_scope_error_keeps_existing_error_semantics_without_global_retry(monkeypatch):
+    demo = _settings()
+    monkeypatch.setattr(errors_module, "get_settings", lambda: demo)
+    retriever = ScriptedEvidenceRetriever(
+        [_failed_batch()],
+        demo,
+        mapped_chunk_ids=["mapped-chunk"],
+    )
+
+    result = retrieve_node(
+        _state(target_skill_nodes=["node-a"]),
+        evidence_retriever=retriever,
+    )
+
+    assert len(retriever.calls) == 1
+    assert retriever.calls[0].retrieval_scope == "node_scoped"
+    assert result["retrieval_status"] == "retrieval_error"

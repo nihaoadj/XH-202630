@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960" role="img" aria-labelledby="title desc">
+  <title id="title">基于知识节点的受限混合检索</title>
+  <desc id="desc">系统先将学习目标识别为能力节点，再通过节点、模块和知识片段的关系限定范围，在范围内执行混合检索；证据不足时自动扩大到全库检索。</desc>
+  <defs>
+    <style>
+      text { font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif; fill:#17324d; }
+      .title{font-size:34px;font-weight:700}.sub{font-size:18px;fill:#54708b}.box{stroke-width:2}.blue{fill:#eaf5ff;stroke:#90c7e9}.green{fill:#edf8f0;stroke:#8fd1a2}.orange{fill:#fff6e5;stroke:#ecc16f}.purple{fill:#f3efff;stroke:#b8a5e7}.h{font-size:21px;font-weight:700}.p{font-size:17px;fill:#49657e}.small{font-size:15px;fill:#49657e}.arrow{stroke:#4f91bf;stroke-width:3;fill:none;marker-end:url(#a)}.fallback{stroke:#d98524;stroke-width:3;fill:none;marker-end:url(#b)}
+    </style>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#4f91bf"/></marker>
+    <marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#d98524"/></marker>
+  </defs>
+  <rect width="1600" height="960" fill="#f8fbfe"/>
+  <text x="800" y="60" text-anchor="middle" class="title">基于知识节点的受限混合检索</text>
+  <text x="800" y="94" text-anchor="middle" class="sub">先从学习目标关联的知识范围中检索，再保留全库兜底能力</text>
+
+  <g transform="translate(55,180)"><rect class="box blue" width="330" height="160" rx="18"/><text x="165" y="52" text-anchor="middle" class="h">1. 学习资源请求</text><text x="165" y="92" text-anchor="middle" class="p">学习主题 + 能力目标</text><text x="165" y="124" text-anchor="middle" class="small">可同时包含多个能力目标</text></g>
+  <path class="arrow" d="M385 260L425 260"/>
+  <g transform="translate(425,180)"><rect class="box blue" width="330" height="160" rx="18"/><text x="165" y="52" text-anchor="middle" class="h">2. 识别能力节点</text><text x="165" y="92" text-anchor="middle" class="p">将学习目标对应到知识节点</text><text x="165" y="124" text-anchor="middle" class="small">节点表示“要学习的能力”</text></g>
+  <path class="arrow" d="M755 260L795 260"/>
+  <g transform="translate(795,180)"><rect class="box green" width="360" height="160" rx="18"/><text x="180" y="42" text-anchor="middle" class="h">3. 节点级知识库范围</text><text x="180" y="76" text-anchor="middle" class="p">每个 Chunk 与知识节点建立对应关系</text><text x="180" y="106" text-anchor="middle" class="small">按目标节点直接读取关联 Chunk 作为候选范围</text><text x="180" y="132" text-anchor="middle" class="small">多节点时合并对应 Chunk；映射由模块统一维护</text></g>
+  <path class="arrow" d="M1155 260L1195 260"/>
+  <g transform="translate(1195,180)"><rect class="box purple" width="350" height="160" rx="18"/><text x="175" y="42" text-anchor="middle" class="h">4. 混合检索与排序</text><text x="175" y="76" text-anchor="middle" class="p">向量检索 + BM25 + Rerank</text><text x="175" y="106" text-anchor="middle" class="small">只在候选范围内检索和排序</text><text x="175" y="132" text-anchor="middle" class="small">选出与问题最匹配的证据</text></g>
+
+  <path class="arrow" d="M1370 340L1370 415"/>
+  <g transform="translate(1135,415)"><rect class="box orange" width="410" height="145" rx="18"/><text x="205" y="43" text-anchor="middle" class="h">证据门禁</text><text x="205" y="77" text-anchor="middle" class="p">检查相关度、证据数量和来源一致性</text><text x="205" y="110" text-anchor="middle" class="small">证据充分才允许进入事实型生成</text></g>
+  <text x="1405" y="590" text-anchor="middle" font-size="16" font-weight="700" fill="#3d7faf">证据充分</text>
+  <path class="arrow" d="M1370 560L1370 635"/>
+  <g transform="translate(1075,635)"><rect class="box green" width="470" height="135" rx="18"/><text x="235" y="44" text-anchor="middle" class="h">生成可信学习资源</text><text x="235" y="78" text-anchor="middle" class="p">使用有来源支撑的内容</text><text x="235" y="106" text-anchor="middle" class="small">后续仍经过资源审核与 Claim 审核</text></g>
+
+  <text x="850" y="510" text-anchor="middle" font-size="18" font-weight="700" fill="#b46d18">没有匹配内容，或证据不足</text>
+  <path class="fallback" d="M1135 487C1015 487 995 565 995 635L925 635"/>
+  <g transform="translate(180,635)"><rect class="box orange" width="745" height="135" rx="18"/><text x="372" y="42" text-anchor="middle" class="h">自动扩大范围：全库混合检索</text><text x="372" y="76" text-anchor="middle" class="p">用同一个问题，在全部知识内容中重新检索</text><text x="372" y="106" text-anchor="middle" class="small">重新执行向量检索、BM25、Rerank 和同一套证据门禁，避免因范围限制遗漏可用证据</text></g>
+  <path class="fallback" d="M925 702L1075 702"/>
+
+  <rect x="135" y="830" width="1330" height="88" rx="16" fill="#edf5fb" stroke="#b8d7eb" stroke-width="2"/>
+  <text x="800" y="866" text-anchor="middle" font-size="21" font-weight="700">作用：先过滤无关上下文、再寻找证据，降低“无关信息诱发幻觉”的风险。</text>
+  <text x="800" y="898" text-anchor="middle" class="p">它不承诺模型永不出错；而是用“节点优先检索 + 全库兜底 + 证据门禁”让生成更可靠。</text>
+</svg>

@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1430" viewBox="0 0 1800 1430" role="img" aria-labelledby="title desc">
+  <title id="title">领域知识个性化生成系统整体架构图</title>
+  <desc id="desc">展示 Vue 前端、FastAPI 领域路由、服务层、文本资源和互动课件工作流、节点优先检索、SQLite、Chroma、审核发布、Tutor 和反馈学习闭环之间的关系。</desc>
+  <defs>
+    <style>
+      text { font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif; fill:#17324d; }
+      .title { font-size:36px; font-weight:700; }
+      .sub { font-size:18px; fill:#54708b; }
+      .zone-title { font-size:20px; font-weight:700; fill:#315f82; }
+      .box { stroke-width:2; }
+      .h { font-size:19px; font-weight:700; }
+      .p { font-size:15px; fill:#49657e; }
+      .small { font-size:13px; fill:#607a91; }
+      .tiny { font-size:12px; fill:#607a91; }
+      .blue { fill:#eaf5ff; stroke:#90c7e9; }
+      .green { fill:#edf8f0; stroke:#8fd1a2; }
+      .purple { fill:#f3efff; stroke:#b8a5e7; }
+      .orange { fill:#fff6e5; stroke:#ecc16f; }
+      .slate { fill:#edf3f8; stroke:#afc7d9; }
+      .line { stroke:#4f91bf; stroke-width:3; fill:none; marker-end:url(#arrow); }
+      .line-green { stroke:#499869; stroke-width:3; fill:none; marker-end:url(#arrowGreen); }
+      .line-orange { stroke:#d98524; stroke-width:3; fill:none; marker-end:url(#arrowOrange); }
+      .audit { stroke:#738aa0; stroke-width:2.4; stroke-dasharray:8 6; fill:none; marker-end:url(#arrowAudit); }
+      .divider { stroke:#c9dcea; stroke-width:2; stroke-dasharray:5 5; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#4f91bf"/></marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#499869"/></marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#d98524"/></marker>
+    <marker id="arrowOrangeFlush" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#d98524"/></marker>
+    <marker id="arrowAudit" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#738aa0"/></marker>
+  </defs>
+
+  <rect width="1800" height="1430" fill="#f8fbfe"/>
+  <text x="900" y="58" text-anchor="middle" class="title">领域知识个性化生成与多智能体协同决策系统</text>
+  <text x="900" y="91" text-anchor="middle" class="sub">当前代码实现：可信检索、异步资源生产、自动审核发布、Tutor 与学习反馈闭环</text>
+
+  <!-- Presentation and API -->
+  <rect x="35" y="125" width="1730" height="205" rx="22" fill="#f2f8fd" stroke="#c6deee" stroke-width="2"/>
+  <text x="65" y="157" class="zone-title">访问与应用入口</text>
+
+  <g transform="translate(75,185)">
+    <rect class="box blue" width="330" height="112" rx="16"/>
+    <text x="165" y="33" text-anchor="middle" class="h">学习者与 Vue 3 前端</text>
+    <text x="165" y="61" text-anchor="middle" class="p">领域选择 · 问卷 · 诊断 · 生成</text>
+    <text x="165" y="85" text-anchor="middle" class="p">资源库 · 反馈 · 报告 · SSE 轨迹</text>
+  </g>
+  <path class="line" d="M405 241L465 241"/>
+  <g transform="translate(465,170)">
+    <rect class="box blue" width="455" height="142" rx="16"/>
+    <text x="227" y="34" text-anchor="middle" class="h">FastAPI 领域路由与访问控制</text>
+    <text x="227" y="63" text-anchor="middle" class="p">auth · users · onboarding · learners · knowledge</text>
+    <text x="227" y="88" text-anchor="middle" class="p">generation · learning_documents · reviews · courseware</text>
+    <text x="227" y="113" text-anchor="middle" class="p">feedback · tutor · reports · resource_library · runs</text>
+  </g>
+  <path class="line" d="M920 241L980 241"/>
+  <g transform="translate(980,170)">
+    <rect class="box slate" width="405" height="142" rx="16"/>
+    <text x="202" y="34" text-anchor="middle" class="h">服务层：用例与事务边界</text>
+    <text x="202" y="64" text-anchor="middle" class="p">用户 / 画像 / 诊断 / 知识库</text>
+    <text x="202" y="89" text-anchor="middle" class="p">生成任务 / 发布 / 反馈 / Tutor / 报告</text>
+    <text x="202" y="114" text-anchor="middle" class="small">API 不直接执行 SQL、模型调用或工作流节点</text>
+  </g>
+  <path class="line" d="M1385 241L1445 241"/>
+  <g transform="translate(1445,185)">
+    <rect class="box green" width="275" height="112" rx="16"/>
+    <text x="137" y="33" text-anchor="middle" class="h">异步运行入口</text>
+    <text x="137" y="61" text-anchor="middle" class="p">GenerationJob</text>
+    <text x="137" y="85" text-anchor="middle" class="p">BackgroundTasks</text>
+  </g>
+
+  <!-- Agent workflows -->
+  <rect x="35" y="365" width="1040" height="535" rx="22" fill="#faf8ff" stroke="#d6c9ee" stroke-width="2"/>
+  <text x="65" y="397" class="zone-title">Agent 与资源生产工作流</text>
+  <g transform="translate(75,430)">
+    <rect class="box purple" width="445" height="175" rx="16"/>
+    <text x="222" y="34" text-anchor="middle" class="h">文本学习文档工作流</text>
+    <text x="222" y="64" text-anchor="middle" class="p">诊断 → 检索 → 规划 → 专用资源 Agent</text>
+    <text x="222" y="91" text-anchor="middle" class="p">讲义 · 实操指南 · 分阶测试 · 清单 · 案例</text>
+    <text x="222" y="119" text-anchor="middle" class="p">Reviewer → Claim Extract / Judge → 发布决策</text>
+    <text x="222" y="147" text-anchor="middle" class="small">Evidence 不足时停止事实型生成；返工受次数/预算约束</text>
+  </g>
+  <g transform="translate(570,430)">
+    <rect class="box purple" width="445" height="175" rx="16"/>
+    <text x="222" y="34" text-anchor="middle" class="h">互动课件工作流</text>
+    <text x="222" y="64" text-anchor="middle" class="p">冻结来源快照 → 规格/场景结构化生成</text>
+    <text x="222" y="91" text-anchor="middle" class="p">规则硬门 → 教学质量审核 → 定向修订</text>
+    <text x="222" y="119" text-anchor="middle" class="p">确定性渲染 / 安全检查 / 打包 / 自动发布</text>
+    <text x="222" y="147" text-anchor="middle" class="small">模型不能直接生成或控制 HTML、CSS、JavaScript</text>
+  </g>
+
+  <g transform="translate(75,650)">
+    <rect class="box slate" width="940" height="110" rx="16"/>
+    <text x="470" y="32" text-anchor="middle" class="h">共享运行能力与可追溯执行</text>
+    <text x="470" y="59" text-anchor="middle" class="p">LLM Gateway · Prompt / DTO 校验 · 失败策略 · 幂等键 · 超时与预算 · 资源注册表</text>
+    <text x="470" y="84" text-anchor="middle" class="p">AgentRun / AgentStep / WorkflowEvent / checkpoint：记录状态、Evidence、审核、Claim 与发布轨迹</text>
+  </g>
+
+  <g transform="translate(75,795)">
+    <rect class="box green" width="445" height="70" rx="15"/>
+    <text x="222" y="30" text-anchor="middle" class="h">已发布资源与课件</text>
+    <text x="222" y="54" text-anchor="middle" class="p">Markdown / HTML / ZIP / SCORM / xAPI</text>
+  </g>
+  <g transform="translate(570,795)">
+    <rect class="box orange" width="445" height="70" rx="15"/>
+    <text x="222" y="30" text-anchor="middle" class="h">发布边界</text>
+    <text x="222" y="54" text-anchor="middle" class="p">审核、Claim、来源、Hash 与安全门禁全部通过</text>
+  </g>
+  <path class="line-green" d="M297 605L297 650"/>
+  <path class="line-green" d="M792 605L792 650"/>
+  <path class="line-green" d="M297 760L297 795"/>
+  <path class="line-orange" d="M792 760L792 795"/>
+
+  <!-- Trusted retrieval plane -->
+  <rect x="1105" y="365" width="660" height="535" rx="22" fill="#f6fbf8" stroke="#b9dfc4" stroke-width="2"/>
+  <text x="1135" y="397" class="zone-title">可信检索与 Evidence 边界</text>
+  <g transform="translate(1145,430)">
+    <rect class="box green" width="270" height="105" rx="16"/>
+    <text x="135" y="32" text-anchor="middle" class="h">学习目标</text>
+    <text x="135" y="60" text-anchor="middle" class="p">topic + target_skill_nodes</text>
+    <text x="135" y="84" text-anchor="middle" class="small">最多前三个去重目标节点</text>
+  </g>
+  <path class="line-green" d="M1415 482L1465 482"/>
+  <g transform="translate(1465,430)">
+    <rect class="box green" width="260" height="105" rx="16"/>
+    <text x="130" y="32" text-anchor="middle" class="h">节点范围</text>
+    <text x="130" y="60" text-anchor="middle" class="p">活动 Chunk—节点映射</text>
+    <text x="130" y="84" text-anchor="middle" class="small">多节点 Chunk 并集白名单</text>
+  </g>
+
+  <path class="line-green" d="M1595 535L1595 590"/>
+  <g transform="translate(1145,590)">
+    <rect class="box blue" width="580" height="112" rx="16"/>
+    <text x="290" y="32" text-anchor="middle" class="h">范围内混合检索与精排</text>
+    <text x="290" y="60" text-anchor="middle" class="p">Chroma 向量召回 + BM25 关键词召回 → RRF 融合 → CrossEncoder</text>
+    <text x="290" y="87" text-anchor="middle" class="small">三条路径共享 allowed_chunk_ids；不先全库召回再末端丢弃</text>
+  </g>
+  <path class="line" d="M1435 702L1435 745"/>
+  <g transform="translate(1145,745)">
+    <rect class="box orange" width="580" height="115" rx="16"/>
+    <text x="290" y="32" text-anchor="middle" class="h">Evidence 校验与冻结快照</text>
+    <text x="290" y="60" text-anchor="middle" class="p">相关度 / 数量门槛 + KB 范围 + active Chunk + 版本 + text_hash</text>
+    <text x="290" y="87" text-anchor="middle" class="small">成功：node_scoped；无映射、no_hit、evidence_insufficient：全库回退一次</text>
+  </g>
+  <path class="line-orange" d="M1145 802C1095 802 1090 660 1145 650" marker-end="url(#arrowOrangeFlush)"/>
+  <text x="1116" y="700" text-anchor="end" class="tiny">回退：同查询、同 policy</text>
+
+  <!-- Durable data plane -->
+  <rect x="35" y="935" width="1730" height="275" rx="22" fill="#f5faf7" stroke="#c7dfcf" stroke-width="2"/>
+  <text x="65" y="967" class="zone-title">知识、业务数据与运行时存储</text>
+
+  <g transform="translate(75,1000)">
+    <rect class="box slate" width="315" height="160" rx="16"/>
+    <text x="157" y="33" text-anchor="middle" class="h">知识源与入库</text>
+    <text x="157" y="61" text-anchor="middle" class="p">metadata.json · 6 个模块文档</text>
+    <text x="157" y="86" text-anchor="middle" class="p">Chunk 切分 · 版本快照 · smoke</text>
+    <text x="157" y="111" text-anchor="middle" class="p">能力节点与题库</text>
+    <text x="157" y="137" text-anchor="middle" class="small">新增或重切分仅使对应旧 Chunk 退出 active</text>
+  </g>
+  <path class="line-green" d="M390 1080L455 1080"/>
+  <g transform="translate(455,990)">
+    <rect class="box green" width="450" height="180" rx="16"/>
+    <text x="225" y="34" text-anchor="middle" class="h">SQLite：业务事实与审计源</text>
+    <text x="225" y="63" text-anchor="middle" class="p">知识库 / 文档版本 / Chunk 版本 / Chunk—节点映射</text>
+    <text x="225" y="88" text-anchor="middle" class="p">学习者 / 画像 / 诊断 / Attempt / LearningPath</text>
+    <text x="225" y="113" text-anchor="middle" class="p">GenerationJob / AgentRun / Event / Resource / Review / Claim</text>
+    <text x="225" y="142" text-anchor="middle" class="small">迁移、唯一约束、事务、活动快照与可回放状态</text>
+  </g>
+  <path class="line-green" d="M390 1115C420 1115 425 1115 455 1115"/>
+  <path class="line-green" d="M905 1080L970 1080"/>
+  <g transform="translate(970,1000)">
+    <rect class="box blue" width="310" height="160" rx="16"/>
+    <text x="155" y="33" text-anchor="middle" class="h">Chroma：向量索引</text>
+    <text x="155" y="61" text-anchor="middle" class="p">按 knowledge_base_id 分 collection</text>
+    <text x="155" y="86" text-anchor="middle" class="p">84 个当前 Chunk 向量</text>
+    <text x="155" y="111" text-anchor="middle" class="p">仅语义候选，不保存业务真相</text>
+    <text x="155" y="137" text-anchor="middle" class="small">SQL 与 Chroma 计数对账</text>
+  </g>
+  <path class="line" d="M1280 1080L1345 1080"/>
+  <g transform="translate(1345,1000)">
+    <rect class="box slate" width="375" height="160" rx="16"/>
+    <text x="187" y="33" text-anchor="middle" class="h">文件与产物存储</text>
+    <text x="187" y="61" text-anchor="middle" class="p">生成 Markdown / 课件 artifact / 发布包</text>
+    <text x="187" y="86" text-anchor="middle" class="p">来源 snapshot / hash / release manifest</text>
+    <text x="187" y="111" text-anchor="middle" class="p">旧资源版本与课件 release 不原地覆盖</text>
+    <text x="187" y="137" text-anchor="middle" class="small">运行时文件不进入 Git</text>
+  </g>
+
+  <!-- Feedback closure -->
+  <rect x="35" y="1245" width="1730" height="145" rx="22" fill="#fffaf1" stroke="#ecd39a" stroke-width="2"/>
+  <text x="65" y="1277" class="zone-title">发布后的学习闭环与可观测性</text>
+  <g transform="translate(75,1300)">
+    <rect class="box orange" width="355" height="58" rx="14"/>
+    <text x="177" y="25" text-anchor="middle" class="h">资源阅读 / 测评 / Tutor 导学</text>
+    <text x="177" y="47" text-anchor="middle" class="small">Frozen Evidence → SourceRef → 受控 Fresh Retrieval</text>
+  </g>
+  <path class="line-orange" d="M430 1329L490 1329"/>
+  <g transform="translate(490,1300)">
+    <rect class="box orange" width="355" height="58" rx="14"/>
+    <text x="177" y="25" text-anchor="middle" class="h">Formal Attempt 与反馈决策</text>
+    <text x="177" y="47" text-anchor="middle" class="small">服务端判分、幂等写入、掌握度与路径状态</text>
+  </g>
+  <path class="line-orange" d="M845 1329L905 1329"/>
+  <g transform="translate(905,1300)">
+    <rect class="box green" width="355" height="58" rx="14"/>
+    <text x="177" y="25" text-anchor="middle" class="h">补救 / 练习 / 进阶</text>
+    <text x="177" y="47" text-anchor="middle" class="small">确定性 policy 选择目标，再创建后续 GenerationJob</text>
+  </g>
+  <path class="line-orange" d="M1260 1329L1320 1329"/>
+  <g transform="translate(1320,1300)">
+    <rect class="box slate" width="400" height="58" rx="14"/>
+    <text x="200" y="25" text-anchor="middle" class="h">可回放运行与前端观察</text>
+    <text x="200" y="47" text-anchor="middle" class="small">WorkflowEvent SSE · Timeline · 报告只读投影</text>
+  </g>
+
+  <!-- Cross-plane arrows and legend -->
+  <path class="line" d="M1582 297L1582 365"/>
+  <path class="line" d="M1075 532L1145 482"/>
+  <text x="1092" y="505" text-anchor="middle" class="tiny">检索请求</text>
+  <path class="line-green" d="M1450 935L1450 860"/>
+  <path class="audit" d="M680 900L680 990"/>
+  <path class="audit" d="M1160 1160L1160 1300"/>
+  <path class="audit" d="M520 1300C430 1250 340 1220 340 1160"/>
+  <text x="705" y="955" class="tiny">状态、事件、Evidence、审核与 Claim 持久化</text>
+  <text x="1180" y="1230" class="tiny">资源/题目/来源读取与审计</text>
+  <text x="255" y="1228" class="tiny">学习事实写入</text>
+
+  <g transform="translate(1170,1412)">
+    <line x1="0" y1="0" x2="46" y2="0" class="line"/><text x="60" y="5" class="tiny">主调用/数据流</text>
+    <line x1="205" y1="0" x2="251" y2="0" class="line-green"/><text x="265" y="5" class="tiny">可信数据与发布流</text>
+    <line x1="435" y1="0" x2="481" y2="0" class="audit"/><text x="495" y="5" class="tiny">持久化审计/反馈关系</text>
+  </g>
+</svg>
