@@ -169,6 +169,7 @@ class WorkflowState(TypedDict, total=False):
     retrieval_candidate_count: int
     retrieval_dropped_candidate_count: int
     retrieval_partial_failure_count: int
+    retrieval_profile: Dict[str, Any]
 
     diagnosis: Dict[str, Any]
     retrieved_evidence: List[EvidenceItem]
@@ -235,6 +236,7 @@ class WorkflowStateSnapshot(BaseModel):
     retrieval_candidate_count: int = Field(default=0, ge=0)
     retrieval_dropped_candidate_count: int = Field(default=0, ge=0)
     retrieval_partial_failure_count: int = Field(default=0, ge=0)
+    retrieval_profile: Dict[str, Any] = Field(default_factory=dict)
 
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)

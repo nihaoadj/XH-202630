@@ -35,6 +35,7 @@ from app.db.shared.models import (
     DiagnosticAnswerORM,
     GeneratedResourceORM,
     KnowledgeChunkORM,
+    KnowledgeChunkSkillNodeMappingORM,
     KnowledgeDocumentORM,
     KnowledgeStateORM,
     LearnerProfileORM,
@@ -145,6 +146,43 @@ def test_hybrid_search_fuses_vector_and_bm25_with_rrf(monkeypatch):
     assert 0 < results[1][1] < exact_score <= 1
 
 
+def test_hybrid_search_constrains_dense_and_bm25_to_allowed_chunks(monkeypatch):
+    allowed = Document(
+        page_content="允许片段包含 exact phrase。",
+        metadata={"chunk_id": "allowed", "knowledge_base_id": "kb-scoped"},
+    )
+    excluded = Document(
+        page_content="排除片段也包含 exact phrase。",
+        metadata={"chunk_id": "excluded", "knowledge_base_id": "kb-scoped"},
+    )
+    filters = []
+
+    class FakeStore:
+        def similarity_search_with_score(self, query, k, filter=None):
+            filters.append(filter)
+            return [(allowed, 0.1)] if filter else [(excluded, 0.01), (allowed, 0.1)]
+
+        def get(self, include):
+            return {
+                "ids": ["allowed", "excluded"],
+                "documents": [allowed.page_content, excluded.page_content],
+                "metadatas": [allowed.metadata, excluded.metadata],
+            }
+
+    vector_store._LEXICAL_INDEX_CACHE.clear()
+    monkeypatch.setattr(vector_store, "get_vector_store", lambda knowledge_base_id: FakeStore())
+
+    results = vector_store.hybrid_search(
+        "exact phrase",
+        top_k=2,
+        knowledge_base_id="kb-scoped",
+        allowed_chunk_ids={"allowed"},
+    )
+
+    assert filters == [{"chunk_id": {"$in": ["allowed"]}}]
+    assert [document.metadata["chunk_id"] for document, _ in results] == ["allowed"]
+
+
 def test_collection_name_is_kb_scoped_and_uses_compatible_prefix():
     settings = Settings(
         _env_file=None,
@@ -208,6 +246,7 @@ def test_catalog_sync_is_idempotent_and_preserves_graph(tmp_path):
     repository.upsert_knowledge_base(manifest)
     repository.sync_documents(documents, chunks)
     repository.upsert_skill_nodes(manifest["skill_nodes"], manifest["knowledge_base_id"])
+    repository.sync_chunk_skill_node_mappings(chunks, knowledge_base_id=manifest["knowledge_base_id"])
     questions_path = (
         KNOWLEDGE_BASE_ROOT
         / "rag_engineering_training"
@@ -232,16 +271,35 @@ def test_catalog_sync_is_idempotent_and_preserves_graph(tmp_path):
     # 重复同步不应产生文档、切片或节点的重复行。
     repository.sync_documents(documents, chunks)
     repository.upsert_skill_nodes(manifest["skill_nodes"], manifest["knowledge_base_id"])
+    repository.sync_chunk_skill_node_mappings(chunks, knowledge_base_id=manifest["knowledge_base_id"])
 
     with sessionmaker(bind=engine)() as db:
         assert db.query(KnowledgeDocumentORM).count() == len(documents)
         assert db.query(KnowledgeChunkORM).count() == len(chunks)
+        assert db.query(KnowledgeChunkSkillNodeMappingORM).count() == sum(
+            len(item.metadata["knowledge_points"]) for item in chunks
+        )
         assert db.query(DiagnosticQuestionORM).count() == 39
         assert db.query(AssessmentQuestionORM).count() == 130
     nodes = repository.list_skill_nodes(manifest["knowledge_base_id"])
     assert len(nodes) == 13
     assert next(node for node in nodes if node.name == "Chunk 切分").prerequisites == ["document_parsing"]
     assert next(node for node in nodes if node.name == "文档解析").children == ["chunking"]
+    chunking_ids = repository.get_active_chunk_ids_for_skill_nodes(
+        manifest["knowledge_base_id"], ["chunking"],
+    )
+    assert len(chunking_ids) == sum(
+        1 for item in chunks if "Chunk 切分" in item.metadata["knowledge_points"]
+    )
+    multi_node_ids = repository.get_active_chunk_ids_for_skill_nodes(
+        manifest["knowledge_base_id"],
+        ["chunking", "embedding"],
+    )
+    assert set(multi_node_ids) == {
+        item.metadata["chunk_id"]
+        for item in chunks
+        if {"Chunk 切分", "Embedding"} & set(item.metadata["knowledge_points"])
+    }
     assert len(KnowledgeService(catalog=repository).load_assessment_questions(manifest["knowledge_base_id"])) == 130
 
 

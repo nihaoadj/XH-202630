@@ -9,6 +9,7 @@ from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.shared.models import (
     Base,
     KnowledgeChunkVersionORM,
+    KnowledgeChunkSkillNodeMappingORM,
     KnowledgeDocumentVersionORM,
     KnowledgeIndexStatusORM,
 )
@@ -193,6 +194,40 @@ def test_ingestion_retains_old_version_but_only_new_chunks_are_active(tmp_path):
         assert sum(item.is_current for item in versions) == 1
         assert len(chunks) == 2
         assert sum(item.active for item in chunks) == 1
+
+
+def test_ingestion_maps_rechunked_module_to_current_node_scope_only(tmp_path):
+    kb_dir = _kb(tmp_path)
+    metadata_path = kb_dir / "metadata.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["skill_nodes"] = [{
+        "node_id": "node-evidence",
+        "name": "证据基础",
+        "knowledge_base_id": "kb-ingestion",
+        "level": "零基础",
+        "tier": 1,
+    }]
+    metadata["documents"][0]["knowledge_points"] = ["证据基础"]
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+    catalog, factory = _catalog(tmp_path)
+    service = IngestionService(catalog=catalog, vector_index=MemoryVectorIndex())
+
+    assert service.ingest(str(kb_dir)).status == "ready"
+    first_active = catalog.get_active_chunk_ids_for_skill_nodes("kb-ingestion", ["node-evidence"])
+    assert len(first_active) == 1
+
+    (kb_dir / "active.md").write_text(
+        "# Evidence\n\nfixed smoke query and updated trusted content",
+        encoding="utf-8",
+    )
+    assert service.ingest(str(kb_dir)).status == "ready"
+    second_active = catalog.get_active_chunk_ids_for_skill_nodes("kb-ingestion", ["node-evidence"])
+
+    assert len(second_active) == 1
+    assert second_active != first_active
+    with factory() as db:
+        # Mapping history is retained, while the query above joins only active Chunk versions.
+        assert db.query(KnowledgeChunkSkillNodeMappingORM).count() == 2
 
 
 def test_count_mismatch_is_not_ready_and_does_not_activate_sql_snapshot(tmp_path):

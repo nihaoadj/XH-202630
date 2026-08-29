@@ -22,3 +22,9 @@ class KnowledgeChunkRepository(Protocol):
         document_version: str,
         chunk_id: str,
     ) -> SourceLocator | None: ...
+
+    def get_active_chunk_ids_for_skill_nodes(
+        self,
+        knowledge_base_id: str,
+        skill_node_ids: list[str],
+    ) -> list[str]: ...

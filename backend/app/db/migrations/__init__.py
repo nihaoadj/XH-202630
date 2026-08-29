@@ -29,6 +29,7 @@ from app.db.migrations.p0_29_feedback_decision_tiers import apply_p0_29_feedback
 from app.db.migrations.p0_30_feedback_followup_multi_run import apply_p0_30_feedback_followup_multi_run_migration
 from app.db.migrations.p0_31_claim_user_publication import apply_p0_31_claim_user_publication_migration
 from app.db.migrations.p0_32_review_status import apply_p0_32_review_status_migration
+from app.db.migrations.p0_33_chunk_skill_node_mappings import apply_p0_33_chunk_skill_node_mappings_migration
 from app.db.migrations.tutor import apply_tutor_migration
 
 __all__ = [
@@ -61,5 +62,6 @@ __all__ = [
     "apply_p0_30_feedback_followup_multi_run_migration",
     "apply_p0_31_claim_user_publication_migration",
     "apply_p0_32_review_status_migration",
+    "apply_p0_33_chunk_skill_node_mappings_migration",
     "apply_tutor_migration",
 ]

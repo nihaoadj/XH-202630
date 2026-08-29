@@ -372,11 +372,13 @@ class ChromaVectorSearchBackend:
         query: str,
         top_k: int,
         knowledge_base_id: str,
+        allowed_chunk_ids: set[str] | None = None,
     ) -> list[VectorCandidate]:
         return self.search_many(
             queries=[query],
             top_k=top_k,
             knowledge_base_id=knowledge_base_id,
+            allowed_chunk_ids=allowed_chunk_ids,
         )
 
     def search_many(
@@ -385,6 +387,7 @@ class ChromaVectorSearchBackend:
         queries: list[str],
         top_k: int,
         knowledge_base_id: str,
+        allowed_chunk_ids: set[str] | None = None,
     ) -> list[VectorCandidate]:
         """Fuse per-query candidates, then execute one bounded CrossEncoder batch."""
 
@@ -408,6 +411,7 @@ class ChromaVectorSearchBackend:
                     top_k=per_query_k,
                     knowledge_base_id=knowledge_base_id,
                     profile=query_profile,
+                    allowed_chunk_ids=allowed_chunk_ids,
                 )
                 for hybrid_rank, (document, score) in enumerate(results, start=1):
                     key = _result_key(document)
@@ -443,6 +447,7 @@ class ChromaVectorSearchBackend:
         )[: self.settings.rerank_candidate_k]
         profile: dict[str, object] = {
             "query_count": len(queries),
+            "allowed_chunk_count": len(allowed_chunk_ids or ()),
             "query_profiles": query_profiles,
             "partial_failure_count": partial_failures,
             "unique_candidate_count": len(merged),
@@ -523,6 +528,7 @@ def hybrid_search(
     knowledge_base_id: Optional[str] = None,
     *,
     profile: dict[str, object] | None = None,
+    allowed_chunk_ids: set[str] | None = None,
 ):
     """Fuse dense vector retrieval and lexical BM25 ranking with RRF.
 
@@ -536,6 +542,7 @@ def hybrid_search(
         raise ValueError("top_k 必须大于 0")
 
     kb_id = _resolve_knowledge_base_id(knowledge_base_id)
+    allowed_chunk_ids = set(allowed_chunk_ids or ())
     total_started = perf_counter()
     store = get_vector_store(kb_id)
     candidate_k = max(20, top_k * 4)
@@ -544,7 +551,10 @@ def hybrid_search(
 
     try:
         dense_started = perf_counter()
-        vector_results = store.similarity_search_with_score(query, k=candidate_k)
+        dense_kwargs = {"k": candidate_k}
+        if allowed_chunk_ids:
+            dense_kwargs["filter"] = {"chunk_id": {"$in": sorted(allowed_chunk_ids)}}
+        vector_results = store.similarity_search_with_score(query, **dense_kwargs)
         vector_results = [
             (_restore_retrieved_metadata(document), float(score))
             for document, score in vector_results
@@ -558,8 +568,15 @@ def hybrid_search(
 
     try:
         lexical_index = _load_lexical_index(store, kb_id, profile=profile)
+        lexical_documents = (
+            [
+                document for document in lexical_index.documents
+                if _result_key(document) in allowed_chunk_ids
+            ]
+            if allowed_chunk_ids else lexical_index
+        )
         bm25_started = perf_counter()
-        lexical_results = _bm25_search(query, lexical_index, candidate_k)
+        lexical_results = _bm25_search(query, lexical_documents, candidate_k)
         if profile is not None:
             profile["bm25_query_ms"] = round((perf_counter() - bm25_started) * 1000, 3)
     except Exception as exc:
@@ -638,6 +655,7 @@ def hybrid_search(
         )
         results.append((document, normalized_score))
     if profile is not None:
+        profile["allowed_chunk_count"] = len(allowed_chunk_ids)
         profile["hybrid_fusion_ms"] = round((perf_counter() - fusion_started) * 1000, 3)
         profile["hybrid_candidate_count"] = len(results)
         profile["hybrid_total_ms"] = round((perf_counter() - total_started) * 1000, 3)

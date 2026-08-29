@@ -158,6 +158,28 @@ def test_candidates_below_threshold_are_evidence_insufficient():
     assert result.evidence == []
 
 
+def test_allowed_chunk_ids_are_forwarded_and_enforced_before_evidence():
+    allowed = _chunk(document_id="doc-allowed", text="允许证据")
+    excluded = _chunk(document_id="doc-excluded", text="范围外证据")
+    backend = ScriptedVectorSearchBackend({
+        "query-one": [
+            _candidate(excluded, "query-one", 0.1),
+            _candidate(allowed, "query-one", 0.2, query_rank=2),
+        ],
+    })
+    retriever = _retriever(backend, [allowed, excluded])
+    request = _request().model_copy(update={
+        "allowed_chunk_ids": [allowed.chunk_id],
+        "retrieval_scope": "node_scoped",
+    })
+
+    result = retriever.retrieve(request)
+
+    assert backend.calls[0]["allowed_chunk_ids"] == {allowed.chunk_id}
+    assert result.retrieval_scope == "node_scoped"
+    assert [item.chunk_id for item in result.evidence] == [allowed.chunk_id]
+
+
 def test_cross_kb_candidate_fails_closed():
     chunk = _chunk()
     backend = ScriptedVectorSearchBackend({

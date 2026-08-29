@@ -757,6 +757,39 @@ class SkillNodeRelationORM(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class KnowledgeChunkSkillNodeMappingORM(Base):
+    """Auditable module-level mapping from an immutable Chunk to a skill node."""
+
+    __tablename__ = "knowledge_chunk_skill_node_mappings"
+    __table_args__ = (
+        UniqueConstraint("chunk_id", "skill_node_id", name="uq_chunk_skill_node_mapping"),
+        Index("ix_chunk_skill_node_mapping_kb_node", "knowledge_base_id", "skill_node_id"),
+        Index("ix_chunk_skill_node_mapping_chunk", "chunk_id"),
+    )
+
+    mapping_id = Column(String(128), primary_key=True)
+    knowledge_base_id = Column(
+        String(128),
+        ForeignKey("knowledge_bases.knowledge_base_id"),
+        nullable=False,
+        index=True,
+    )
+    document_id = Column(String(128), nullable=False, index=True)
+    document_version = Column(String(128), nullable=False, index=True)
+    chunk_id = Column(
+        String(128),
+        ForeignKey("knowledge_chunk_versions.chunk_id"),
+        nullable=False,
+    )
+    skill_node_id = Column(
+        String(128),
+        ForeignKey("rag_skill_nodes.node_id"),
+        nullable=False,
+    )
+    mapping_source = Column(String(64), nullable=False, default="module_knowledge_points_v1")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class DiagnosticQuestionORM(Base):
     __tablename__ = "diagnostic_questions"
 

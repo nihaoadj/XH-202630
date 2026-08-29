@@ -43,6 +43,7 @@ class VectorSearchBackend(Protocol):
         query: str,
         top_k: int,
         knowledge_base_id: str,
+        allowed_chunk_ids: set[str] | None = None,
     ) -> list[VectorCandidate]: ...
 
 
@@ -78,11 +79,17 @@ def retrieval_policy_from_settings(
     )
 
 
-def _config_payload(settings: Settings, policy: RetrievalPolicy) -> dict:
+def _config_payload(
+    settings: Settings,
+    policy: RetrievalPolicy,
+    *,
+    retrieval_scope: str,
+) -> dict:
     return {
         "schema_version": "1.0",
         "collection_resolver_version": "kb-hash-v1",
         "embedding_model": settings.embedding_model,
+        "retrieval_scope": retrieval_scope,
         **policy.model_dump(mode="json"),
     }
 
@@ -111,6 +118,18 @@ class EvidenceRetriever:
         self.chunk_repository = chunk_repository
         self.settings = settings or get_settings()
         self.clock = clock
+
+    def get_active_chunk_ids_for_skill_nodes(
+        self,
+        knowledge_base_id: str,
+        skill_node_ids: list[str],
+    ) -> list[str]:
+        """Read the optional persistent node mapping without widening scope."""
+
+        resolver = getattr(self.chunk_repository, "get_active_chunk_ids_for_skill_nodes", None)
+        if not callable(resolver):
+            return []
+        return list(resolver(knowledge_base_id, skill_node_ids))
 
     @staticmethod
     def _normalize_score(candidate: VectorCandidate) -> float:
@@ -230,6 +249,7 @@ class EvidenceRetriever:
         return EvidenceBatch(
             status=status,
             knowledge_base_id=request.knowledge_base_id,
+            retrieval_scope=request.retrieval_scope,
             evidence=[],
             query_hashes=query_hashes,
             query_count=len(query_hashes),
@@ -247,8 +267,13 @@ class EvidenceRetriever:
         queries = request.queries[: policy.max_query_count]
         query_hashes = [query_hash(query) for query in queries]
         config_hash = retrieval_config_hash(
-            _config_payload(self.settings, policy)
+            _config_payload(
+                self.settings,
+                policy,
+                retrieval_scope=request.retrieval_scope,
+            )
         )
+        allowed_chunk_ids = set(request.allowed_chunk_ids or [])
         candidates: list[VectorCandidate] = []
         partial_failures = 0
         query_profiles: list[dict[str, object]] = []
@@ -260,6 +285,7 @@ class EvidenceRetriever:
                     queries=queries,
                     top_k=policy.top_k_per_query,
                     knowledge_base_id=request.knowledge_base_id,
+                    allowed_chunk_ids=allowed_chunk_ids or None,
                 ))
                 backend_profile = getattr(self.backend, "last_profile", None)
                 if isinstance(backend_profile, dict):
@@ -280,6 +306,7 @@ class EvidenceRetriever:
                         query=query,
                         top_k=policy.top_k_per_query,
                         knowledge_base_id=request.knowledge_base_id,
+                        allowed_chunk_ids=allowed_chunk_ids or None,
                     ))
                     backend_profile = getattr(self.backend, "last_profile", None)
                     if isinstance(backend_profile, dict):
@@ -291,6 +318,8 @@ class EvidenceRetriever:
 
         retrieval_profile = {
             "query_count": len(queries),
+            "retrieval_scope": request.retrieval_scope,
+            "allowed_chunk_count": len(allowed_chunk_ids),
             "query_profiles": query_profiles,
             "total_retrieval_ms": round((perf_counter() - retrieval_started) * 1000, 3),
         }
@@ -316,6 +345,7 @@ class EvidenceRetriever:
             return EvidenceBatch(
                 status=RetrievalStatus.NO_HIT,
                 knowledge_base_id=request.knowledge_base_id,
+                retrieval_scope=request.retrieval_scope,
                 evidence=[],
                 query_hashes=query_hashes,
                 query_count=len(queries),
@@ -333,6 +363,11 @@ class EvidenceRetriever:
         node_validated: dict[str, dict[str, tuple[VectorCandidate, object, float]]] = {}
         try:
             for candidate in candidates:
+                if allowed_chunk_ids and candidate.chunk_id not in allowed_chunk_ids:
+                    # The backend receives the same constraint, but retain a
+                    # deterministic defense-in-depth boundary before a hit
+                    # can become immutable Evidence.
+                    continue
                 chunk = self._validate_candidate(candidate, request)
                 normalized_score = self._normalize_score(candidate)
                 if normalized_score < policy.min_normalized_score:
@@ -485,6 +520,7 @@ class EvidenceRetriever:
         return EvidenceBatch(
             status=RetrievalStatus.AVAILABLE,
             knowledge_base_id=request.knowledge_base_id,
+            retrieval_scope=request.retrieval_scope,
             evidence=evidence,
             node_evidence_map=node_evidence_map,
             query_hashes=query_hashes,

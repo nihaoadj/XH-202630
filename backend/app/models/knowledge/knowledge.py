@@ -158,6 +158,8 @@ class RetrievalRequest(StrictKnowledgeModel):
     # records which node-scoped query produced a hit so the result can expose
     # a safe, many-to-many node -> evidence projection after global dedupe.
     query_node_ids: Dict[str, str] = Field(default_factory=dict)
+    allowed_chunk_ids: Optional[List[str]] = Field(default=None, max_length=10000)
+    retrieval_scope: Literal["global", "node_scoped"] = "global"
     policy: RetrievalPolicy = Field(default_factory=RetrievalPolicy)
 
     @field_validator("queries")
@@ -177,6 +179,16 @@ class RetrievalRequest(StrictKnowledgeModel):
         unknown = set(self.query_node_ids) - set(self.queries)
         if unknown or any(not str(node_id).strip() for node_id in self.query_node_ids.values()):
             raise ValueError("query_node_ids must reference non-empty request queries")
+        if self.allowed_chunk_ids is not None:
+            self.allowed_chunk_ids = list(dict.fromkeys(
+                str(chunk_id).strip()
+                for chunk_id in self.allowed_chunk_ids
+                if str(chunk_id).strip()
+            ))
+            if not self.allowed_chunk_ids:
+                raise ValueError("allowed_chunk_ids cannot be empty when provided")
+        if self.retrieval_scope == "node_scoped" and self.allowed_chunk_ids is None:
+            raise ValueError("node_scoped retrieval requires allowed_chunk_ids")
         return self
 
 
@@ -240,6 +252,7 @@ class EvidenceItem(StrictKnowledgeModel):
 class EvidenceBatch(StrictKnowledgeModel):
     status: RetrievalStatus
     knowledge_base_id: str = Field(min_length=1, max_length=128)
+    retrieval_scope: Literal["global", "node_scoped"] = "global"
     evidence: List[EvidenceItem] = Field(default_factory=list)
     # This is a classification of the one immutable evidence snapshot, not a
     # second evidence store.  One evidence ID may appear under multiple nodes.

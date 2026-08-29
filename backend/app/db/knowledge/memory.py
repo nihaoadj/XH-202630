@@ -45,3 +45,11 @@ class MemoryKnowledgeChunkRepository:
             document_version=document_version,
         )
         return chunk.locator if chunk else None
+
+    def get_active_chunk_ids_for_skill_nodes(
+        self,
+        knowledge_base_id: str,
+        skill_node_ids: list[str],
+    ) -> list[str]:
+        # Offline evidence tests do not model persistent node mappings.
+        return []
