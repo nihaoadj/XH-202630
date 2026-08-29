@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">RAG 工程训练知识库的模块级知识节点划分</title>
+  <desc id="desc">学习资源知识库按主题模块和能力节点组织，模块内容映射到对应的能力节点。</desc>
+  <defs>
+    <style>
+      text { font-family: 'Microsoft YaHei', 'Noto Sans CJK SC', Arial, sans-serif; fill: #17324d; }
+      .title { font-size: 34px; font-weight: 700; } .sub { font-size: 18px; fill:#54708b; }
+      .module { fill:#fff; stroke:#b9d5ea; stroke-width:2; } .header { fill:#eaf5ff; }
+      .module-title { font-size:20px; font-weight:700; } .count { font-size:16px; fill:#0e7490; font-weight:700; }
+      .node { fill:#f2f7fb; stroke:#d6e4ef; stroke-width:1; } .node-t { font-size:16px; }
+      .arrow { stroke:#63a7d5; stroke-width:3; fill:none; marker-end:url(#arrow); }
+      .note { font-size:16px; fill:#4d677e; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#63a7d5"/></marker>
+  </defs>
+  <rect width="1600" height="980" fill="#f8fbfe"/>
+  <text x="800" y="62" text-anchor="middle" class="title">学习资源知识库：模块级知识节点划分</text>
+  <text x="800" y="94" text-anchor="middle" class="sub">按学习主题组织内容，再映射到对应的能力节点</text>
+
+  <rect x="540" y="126" width="520" height="84" rx="18" fill="#0f5e8c"/>
+  <text x="800" y="160" text-anchor="middle" font-size="25" font-weight="700" fill="white">学习资源知识库</text>
+  <text x="800" y="190" text-anchor="middle" font-size="17" fill="#dcefff">每个学习模块被切分为多个可检索的 Chunk（知识片段）</text>
+
+  <path class="arrow" d="M800 210 L800 252"/>
+  <text x="800" y="241" text-anchor="middle" class="note">同一模块的 Chunk（知识片段），统一关联到该模块覆盖的能力节点</text>
+
+  <!-- row 1 -->
+  <g transform="translate(60,290)">
+    <rect class="module" width="470" height="235" rx="16"/><rect class="header" width="470" height="67" rx="16"/>
+    <text x="24" y="40" class="module-title">1. RAG 基础</text>
+    <rect class="node" x="24" y="94" width="150" height="44" rx="12"/><text x="99" y="122" text-anchor="middle" class="node-t">RAG 基础概念</text>
+    <text x="24" y="178" class="note">能力范围：检索增强生成、上下文</text>
+    <text x="24" y="208" class="note">相关 Chunk 可作为该节点的检索候选</text>
+  </g>
+  <g transform="translate(565,290)">
+    <rect class="module" width="470" height="235" rx="16"/><rect class="header" width="470" height="67" rx="16"/>
+    <text x="24" y="40" class="module-title">2. 文档入库与切分</text>
+    <rect class="node" x="24" y="94" width="132" height="44" rx="12"/><text x="90" y="122" text-anchor="middle" class="node-t">文档解析</text>
+    <rect class="node" x="170" y="94" width="132" height="44" rx="12"/><text x="236" y="122" text-anchor="middle" class="node-t">Chunk 切分</text>
+    <text x="24" y="178" class="note">同一模块可映射多个能力节点</text>
+    <text x="24" y="208" class="note">检索阶段再用相关性选择具体 Chunk</text>
+  </g>
+  <g transform="translate(1070,290)">
+    <rect class="module" width="470" height="235" rx="16"/><rect class="header" width="470" height="67" rx="16"/>
+    <text x="24" y="40" class="module-title">3. 向量化与语义检索</text>
+    <rect class="node" x="24" y="94" width="112" height="44" rx="12"/><text x="80" y="122" text-anchor="middle" class="node-t">Embedding</text>
+    <rect class="node" x="148" y="94" width="128" height="44" rx="12"/><text x="212" y="122" text-anchor="middle" class="node-t">向量数据库</text>
+    <rect class="node" x="288" y="94" width="150" height="44" rx="12"/><text x="363" y="122" text-anchor="middle" class="node-t">相似度检索</text>
+  </g>
+
+  <!-- row 2 -->
+  <g transform="translate(60,565)">
+    <rect class="module" width="470" height="235" rx="16"/><rect class="header" width="470" height="67" rx="16"/>
+    <text x="24" y="40" class="module-title">4. 混合检索与精排</text>
+    <rect class="node" x="24" y="94" width="132" height="44" rx="12"/><text x="90" y="122" text-anchor="middle" class="node-t">混合检索</text>
+    <rect class="node" x="170" y="94" width="110" height="44" rx="12"/><text x="225" y="122" text-anchor="middle" class="node-t">Rerank</text>
+    <text x="24" y="178" class="note">向量召回 + BM25 + 精排</text>
+  </g>
+  <g transform="translate(565,565)">
+    <rect class="module" width="470" height="235" rx="16"/><rect class="header" width="470" height="67" rx="16"/>
+    <text x="24" y="40" class="module-title">5. 上下文、引用与事实约束</text>
+    <rect class="node" x="24" y="94" width="128" height="44" rx="12"/><text x="88" y="122" text-anchor="middle" class="node-t">Prompt 组装</text>
+    <rect class="node" x="164" y="94" width="128" height="44" rx="12"/><text x="228" y="122" text-anchor="middle" class="node-t">引用溯源</text>
+    <rect class="node" x="304" y="94" width="130" height="44" rx="12"/><text x="369" y="122" text-anchor="middle" class="node-t">幻觉控制</text>
+  </g>
+  <g transform="translate(1070,565)">
+    <rect class="module" width="470" height="235" rx="16"/><rect class="header" width="470" height="67" rx="16"/>
+    <text x="24" y="40" class="module-title">6. 评测与调优</text>
+    <rect class="node" x="24" y="94" width="128" height="44" rx="12"/><text x="88" y="122" text-anchor="middle" class="node-t">RAG 评测</text>
+    <rect class="node" x="164" y="94" width="128" height="44" rx="12"/><text x="228" y="122" text-anchor="middle" class="node-t">RAG 调优</text>
+    <text x="24" y="178" class="note">评测指标、参数调优、消融实验</text>
+  </g>
+
+  <rect x="150" y="845" width="1300" height="88" rx="14" fill="#eef8f2" stroke="#a6d8b5" stroke-width="2"/>
+  <text x="800" y="881" text-anchor="middle" font-size="20" font-weight="700" fill="#17643a">设计含义：能力节点先确定“应该优先查哪一类知识”，再从中挑选最相关的内容。</text>
+  <text x="800" y="914" text-anchor="middle" class="note">节点负责缩小范围；系统仍会通过语义、关键词和相关性排序，判断具体哪个 Chunk 最适合回答问题。</text>
+</svg>

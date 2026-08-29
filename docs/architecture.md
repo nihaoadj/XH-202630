@@ -2,8 +2,8 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：2.2
-> 文档更新时间：2026-08-20
+> 文档版本：2.3
+> 文档更新时间：2026-08-29
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 1. 架构目标
@@ -49,22 +49,12 @@
 
 ### 3.1 API 路由
 
-`backend/app/api/` 当前真实文件为：
-
-- `admin.py`
-- `diagnosis.py`
-- `evaluation.py`
-- `feedback.py`
-- `generate.py`
-- `knowledge.py`
-- `learning_history.py`
-- `onboarding.py`
-- `profiles.py`
-- `report.py`
-- `resources.py`
-- `reviews.py`
-- `skills.py`
-- `users.py`
+`backend/app/api/` 按领域包组织。路由实现位于
+`admin/`、`auth/`、`courseware/`、`feedback/`、`generation/`、
+`knowledge/`、`learners/`、`learning_documents/`、`onboarding/`、
+`reports/`、`resource_library/`、`reviews/`、`runs/`、`skills/`、
+`tutor/` 和 `users/`；跨路由认证与访问控制依赖位于
+`api/dependencies.py`。
 
 说明：
 
@@ -74,65 +64,35 @@
 
 ### 3.2 服务层
 
-`backend/app/services/` 当前真实文件为：
-
-- `knowledge_service.py`
-- `onboarding_service.py`
-- `profile_service.py`
-- `user_service.py`
-- `diagnosis_service.py`
-- `generation_service.py`
-- `generation_job_service.py`
-- `resource_service.py`
-- `review_service.py`
-- `feedback_service.py`
-- `report_service.py`
-- `evaluation_service.py`
-- `learning_history_service.py`
+`backend/app/services/` 同样按领域包组织，包含 `auth`、`courseware`、
+`feedback`、`generation`、`knowledge`、`learners`、`learning_documents`、
+`onboarding`、`reports`、`resource_library`、`reviews`、`runs`、`tutor`
+和 `users`。每个包只暴露该领域的用例编排与查询门面。
 
 职责划分：
 
-- `knowledge_service`：学习目录、知识库信息、技能图谱、诊断题选择
-- `onboarding_service`：问卷组装、问卷提交、初始画像创建
-- `user_service`：用户资料创建、查询、局部更新
-- `profile_service`：画像查询、分页、局部更新、删除
-- `diagnosis_service`：诊断判分与画像回写
-- `generation_service`：生成工作流和资源落库
-- `generation_job_service`：异步生成任务创建、状态查询、后台执行
-- `feedback_service`：学习反馈处理与画像更新
-- `learning_history_service`：学习过程时间线组装
-- `report_service`：确定性学习报告聚合；读取正式 Attempt、规范能力投影、最终文本资源证据和持久化路径，构造全节点掌握、资源难度匹配、学习路径图等只读可视化投影，计算稳定 revision，并提供条件读取与当前快照 SSE
+- `knowledge`、`onboarding`、`learners` 和 `users`：目录、问卷、画像、诊断和用户资料用例。
+- `generation`、`learning_documents`、`reviews` 和 `runs`：文本学习文档的任务、发布、审核与运行记录。
+- `courseware`：互动课件任务、恢复、发布和 Worker 执行门面。
+- `feedback`、`tutor`、`reports` 与 `resource_library`：生成后的学习闭环、只读聚合和资源路由。
 
 ### 3.3 Agent 层
 
-`backend/app/agents/` 当前真实文件为：
+`backend/app/agents/` 保持以下边界：
 
-- `workflow.py`
-- `state.py`
-- `diagnosis.py`
-- `retriever.py`
-- `planner.py`
-- `generator.py`
-- `reviewer.py`
-- `feedback.py`
-- `resource_spec_builder.py`
-- `resource_agents/base.py`
-- `resource_agents/text.py`
-- `resource_agents/practice.py`
-- `resource_agents/assessment.py`
-- `resource_agents/checklist.py`
-- `resource_agents/case_study.py`
-- `resource_agents/registry.py`
+- `resource_workflows/learning_documents/`：五类文本学习文档的工作流和节点。
+- `resource_workflows/interactive_courseware/`：互动课件工作流、状态、专用 Agent 与 Worker。
+- `learning_agents/`：诊断、反馈策略与 Tutor 等学习闭环 Agent。
+- `resource_agents/`：五类文本资源与纠错训练包的专用生成 Agent。
+- `shared/`：不依赖具体资源领域的纯共享能力。
 
 当前代码含义：
 
 - Agent 负责协同推理和多步生成。
 - 服务层负责把 Agent 与数据库、画像、资源记录串起来。
-- `backend/app/models/workflow.py` 定义版本化 `WorkflowState`、状态枚举和脱敏 `ErrorInfo`
-- `backend/app/models/agent_contracts.py` 定义各节点 Input/Output DTO、`NodeResult` 与统一 trace 结构
-- `backend/app/agents/state.py` 仅保留兼容导出，所有 LangGraph channel 以 `WorkflowState 1.0` 为准
-- `generator.py` 保留历史文件名，但只负责资源 Spec 编排、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
-- 公共资源类型词汇由 `backend/app/models/resource_types.py` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
+- 版本化工作流状态、Agent 契约和共享枚举位于 `models/shared/`；资源领域 DTO 位于各自的 `models/<domain>/`。
+- 文本资源工作流仅编排 Spec、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
+- 公共资源类型词汇由 `models/learning_documents/` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
 - 反馈闭环可额外创建专属 `个性化纠错训练包 -> CorrectionTrainingPackageAgent`。它在学习文档内部受支持，但不属于普通生成词汇；`FeedbackService` 验证强化候选和快照后才可创建，并只向 Agent 传入脱敏目标、教学策略、达标标准和冻结 Evidence。
 
 ## 4. 当前主流程调用链
@@ -370,11 +330,12 @@ frontend/
   src/
     api/
     components/
+    composables/
+    features/<domain>/
     router/
     stores/
     styles/
     utils/
-    views/
 
 knowledge_base/
   learning_catalog_seed.json
