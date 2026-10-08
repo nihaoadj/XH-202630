@@ -1,0 +1,72 @@
+{
+  "suite_id": "p0-09-demo-suite",
+  "suite_version": "v1",
+  "fixture_version": "v1",
+  "knowledge": {
+    "knowledge_base_id": "p0-09-rag-fixture",
+    "document_id": "doc-p0-09-rag-ground-truth",
+    "document_version": "dv_9c3d3e3534e22ff72944548f",
+    "chunk_ids": ["chk_f1a818ab0f38775464944a89"],
+    "knowledge_point_ids": ["kp-rrf", "kp-evidence-gate", "kp-claim-audit"],
+    "supported_fact": "RRF 使用排名倒数进行融合",
+    "contradicted_claim": "RRF 直接累加各检索器的原始分数",
+    "not_in_evidence_claim": "RRF 使用量子计算优化排序"
+  },
+  "learners": [
+    {
+      "learner_id": "p009-beginner",
+      "profile": "beginner",
+      "baseline_skill": "beginner",
+      "target_knowledge_points": ["kp-rrf"],
+      "expected_difficulty": "初级",
+      "predicted_difficulty": "初级"
+    },
+    {
+      "learner_id": "p009-intermediate",
+      "profile": "intermediate",
+      "baseline_skill": "intermediate",
+      "target_knowledge_points": ["kp-evidence-gate"],
+      "expected_difficulty": "中级",
+      "predicted_difficulty": "中级"
+    },
+    {
+      "learner_id": "p009-advanced",
+      "profile": "advanced",
+      "baseline_skill": "advanced",
+      "target_knowledge_points": ["kp-claim-audit"],
+      "expected_difficulty": "高级",
+      "predicted_difficulty": "高级"
+    }
+  ],
+  "resource_types": ["教程", "实操指南", "阶段性测试"],
+  "attempts": [
+    {"id": "attempt-low", "overall": 0.4, "point_scores": {"kp-rrf": 0.4}, "expected_action": "remediate"},
+    {"id": "attempt-mid", "overall": 0.7, "point_scores": {"kp-evidence-gate": 0.7}, "expected_action": "practice"},
+    {"id": "attempt-high", "overall": 0.95, "point_scores": {"kp-claim-audit": 0.95}, "expected_action": "advance"},
+    {"id": "attempt-high-blocker", "overall": 0.9, "point_scores": {"kp-rrf": 1.0, "kp-evidence-gate": 0.5}, "expected_action": "remediate"}
+  ],
+  "review_cases": ["approve", "revise", "reject", "human_review", "invalid_output"],
+  "claim_cases": ["all_supported", "contradicted", "not_in_evidence", "non_factual", "mixed"],
+  "sse_phases": ["queued", "running", "revision", "claim_audit", "terminal"],
+  "failure_injections": [
+    "llm_timeout",
+    "llm_schema_invalid",
+    "reviewer_failure",
+    "claim_judge_failure",
+    "retriever_no_hit",
+    "retriever_infrastructure_error",
+    "persistence_conflict",
+    "sse_disconnect",
+    "stale_profile_version",
+    "duplicate_idempotency_key"
+  ],
+  "metric_fixture": {
+    "minimum_official_sample_count": 50,
+    "published_leaf_claims": [
+      {"knowledge_point_id": "kp-rrf", "claim_type": "factual", "verdict": "supported"},
+      {"knowledge_point_id": "kp-evidence-gate", "claim_type": "factual", "verdict": "supported"},
+      {"knowledge_point_id": "kp-claim-audit", "claim_type": "factual", "verdict": "supported"},
+      {"knowledge_point_id": null, "claim_type": "non_factual", "verdict": "non_factual"}
+    ]
+  }
+}

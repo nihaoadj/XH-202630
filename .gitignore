@@ -2,19 +2,32 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.env
 venv/
 .venv/
 
+# Local environment files; keep distributable examples
+.env
+.env.*
+!.env.example
+!.env.*.example
+
 # Database
 *.db
+*.sqlite
 *.sqlite3
-backend/data/*.db
-backend/data/generated_resources/*
-!backend/data/generated_resources/
-!backend/data/generated_resources/.gitkeep
-!backend/data/generated_resources/*/
-!backend/data/generated_resources/*/.gitkeep
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+/backend/data/generated_resources/**/*
+!/backend/data/generated_resources/**/
+!/backend/data/generated_resources/**/.gitkeep
+backend/data/models/
 
 # Vector store
 backend/chroma_db/*
@@ -27,13 +40,59 @@ backend/logs/*.log
 
 # Testing
 .pytest_cache/
+.pytest-*/
+.tmp_pytest/
+.tmp_pytest_*/
+.tmp-pytest/
+backend/.pytest-tmp*/
+.pytest-tmp*/
+backend/.local-eval-artifacts/
+.tmp-pytest-*/
+.real-chain-pytest-temp/
+.test-tmp-pytest/
+.tmp-ci-*/
+.tmp-full-latest/
+backend/.tmp-courseware-*
+frontend/tests/test-results/
 
-# Codex / local agent workspace
+# Browser/e2e runtime profiles and local review artifacts
+.tmp-edge-courseware*
+backend/.test-tmp*
+backend/.tmp-node-scope-pytest/
+backend/assessment-live-eval*.log.err
+backend/competition-eval-report.json
+backend/competition-eval-report-live.json
+backend/courseware-eval-report.json
+backend/courseware-ci-artifacts/
+backend/courseware-live-workflow-artifacts/
+backend/courseware-live-model.json
+output/test-runs/
+frontend/test-results/
+backend/logs/local-dev-processes.json
+/.live-claim-runs/
+/wzx/out/
+
+# Generated exports/previews; retain source scripts and authored documents
+/deliverables/ai-beginner-profile-artifacts-*
+/deliverables/review-*.png
+/deliverables/review-*.html
+/deliverables/debug-review-cover.png
+/deliverables/taskbook-render/
+
+# Local update plans and skills
+/docs/update_plan/
+/skills/
+/.skills/
+
+# Codex / local agent workspace (includes .agents/skills and .codex/skills)
 .agents/
+.codex/
+.codex_tmp/
 
 # Frontend
 node_modules/
 dist/
+frontend/.tmp-dist-*/
 *.log
 
 # IDE
@@ -46,3 +105,7 @@ Thumbs.db
 
 # Temporary extraction
 __extracted_pdf.txt
+
+# Local startup helpers
+scripts/local-*.ps1
+**/.codex-run-*.ps1

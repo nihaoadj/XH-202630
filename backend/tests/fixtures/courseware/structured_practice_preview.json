@@ -1,0 +1,50 @@
+{
+  "title": "复盘与小结",
+  "schema_version": "3.0",
+  "preparation": {
+    "phase_id": "prepare",
+    "goal": "完成环境准备、资料整理、依赖确认和数据读取检查，并记录后续实操需要复现的关键参数与验证条件；同时核对运行环境、资料版本、模型配置、检索设置、验证路径和异常处理方式，确保后续每一步都能够独立、稳定、可追溯地完成。",
+    "items": [
+      "创建 Python 虚拟环境，并确认解释器版本、依赖安装位置以及后续运行脚本使用的是同一个环境；同时检查环境变量、工作目录、启动命令、依赖锁定文件和运行日志是否一致，确保后续排查问题时能够准确复现当前环境。",
+      "安装课件依赖，包括文本切分、向量化和页面预览所需的基础包。",
+      "准备测试文档，确保内容包含可用于切分、检索和验证的完整段落。",
+      "确认数据可以读取，并记录导入结果、文档数量以及异常提示。",
+      "记录关键参数，包括 chunk_size、chunk_overlap、模型名称和检索数量。",
+      "检查预览页面可以正常打开，并确认准备项目、阶段目标和后续步骤之间的对应关系。"
+    ],
+    "evidence_ids": ["ev-preview-1"]
+  },
+  "practice": {
+    "phase_id": "practice",
+    "goal": "完成预览",
+    "steps": [
+      {
+        "step_id": "step-1",
+        "title": "生成结构化复盘页面",
+        "instruction_text": "使用生产渲染器读取结构化字段，并检查页面布局。",
+        "code_blocks": [
+          {
+            "language": "python",
+            "code": "render_courseware(document)",
+            "purpose": "将结构化课件数据渲染为安全的 HTML 页面。",
+            "evidence_ids": ["ev-preview-1"]
+          }
+        ],
+        "verification": "页面显示代码用途、代码内容，并可勾选完成验证。",
+        "evidence_ids": ["ev-preview-1"]
+      }
+    ]
+  },
+  "verification": {
+    "phase_id": "verify",
+    "goal": "检查页面",
+    "checklist": ["确认字段映射"],
+    "evidence_ids": ["ev-preview-1"]
+  },
+  "reflection": {
+    "phase_id": "reflect",
+    "goal": "梳理本次实操中已验证的流程，并明确下一次独立复现时的检查重点。",
+    "summary": "你已经完成了从准备环境、执行核心步骤到最终验证的完整练习。复盘时，请先回顾每一步的输入、预期结果与验证依据；若结果不符合预期，再回到对应步骤检查配置、数据和证据引用。把本次发现的关键条件记录下来，下一次可以用新的样例独立复现整个流程。",
+    "evidence_ids": ["ev-preview-1"]
+  }
+}

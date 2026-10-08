@@ -2,16 +2,22 @@
 
 > 提交代码前，请先仔细阅读 [`git-workflow.md`](./git-workflow.md)，并按其中的分支、提交信息和协作规范操作。
 
-题目编号：XH-202630
+题目编号：XH-202630  
+文档版本：2.0
 
 本项目面向多领域技能学习者，构建“学习者画像输入 → 能力诊断 → 多 Agent 协同决策 → 个性化资源生成 → 审核纠偏与知识溯源 → 学情报告 → 学习反馈 → 动态调整学习路径”的领域知识个性化生成系统。RAG 工程训练是当前示例知识库和比赛分工中的一个方向，实际生成方向由用户输入的学习主题、学习者画像和所接入的知识库共同决定。
 
 ## 项目亮点
 
 - 多智能体协同：基于 LangGraph 实现学情诊断、知识库检索、学习路径规划、个性化资源生成、审核纠偏、反馈决策等 Agent 的协同闭环。
-- 幻觉防控：引入知识库约束、审核纠偏、知识溯源等机制。
+- 证据约束 Tutor：已发布资源与测评题支持多轮启发式导学；提示等级由服务端递进，回答按 Frozen Evidence、SourceRef、受控检索顺序取证，证据不足时安全拒答。
+- 反馈真实闭环：正式 Attempt 会原子更新知识点掌握度、画像版本和持久化学习路径；补救或进阶决策复用异步生成任务，并保留父子 Run 来源关系。
+- 实时 Agent 轨迹：生成页通过 SSE 只读持久化 WorkflowEvent，支持 queued snapshot、断线续传、事件去重、terminal close 与轮询降级。
+- 幻觉防控：引入冻结 Evidence、独立 Claim 抽取/判定、审核纠偏与可复核指标。
+- 节点优先检索：带能力目标的请求先在模块级 Chunk—节点映射范围内执行向量、BM25 与精排；无映射或证据不足时自动回退全库检索，底层故障保持原有错误语义。
 - 个性化适配：基于学习者画像动态匹配资源难度、生成学习路径与分阶测试。
 - 可视化决策：提供 Agent 调度过程、学情报告、资源难度匹配曲线等可视化能力。
+- 可回放运行记录：Run 在模型调用前建档，节点 Step/Event/Evidence/Checkpoint 持续落库，可跨进程只读查询并识别中断。
 
 ## 技术栈
 
@@ -22,14 +28,14 @@
 | Agent 编排 | LangChain + LangGraph |
 | 大模型 | 国产大模型 API（通义千问 / 文心一言 / DeepSeek 等，可配置） |
 | 向量数据库 | ChromaDB |
-| 关系数据库 | SQLite（开发）/ PostgreSQL（生产） |
+| 关系数据库 | SQLite（当前开发、演示和部署） |
 | 部署 | Docker / 直接部署 |
 
 ## 快速开始
 
-> 当前项目仍处于基础架构阶段，仅支持后端框架导入、接口文档访问、单元测试和基础 service 链路验证；不支持完整业务运行或生产部署。
+> 当前后端已经形成从证据检索、审核返工、Claim 审计、发布到反馈闭环和 SSE 回放的可执行 P0 链路，但尚未通过 P0-09 全部比赛 Gate，不能宣称生产就绪。正式演示前请先执行 `docs/demo-runbook.md` 中的离线、runtime、数据库和前端验收。
 
-配置文件默认读取 `backend/.env`，运行时数据统一落在 `backend/data/` 和 `backend/chroma_db/`。
+配置文件默认读取 `backend/.env`，运行时数据统一落在 `backend/data/` 和 `backend/chroma_db/`。  
 默认 `KNOWLEDGE_BASE_DIR` 指向 RAG 工程训练示例知识库；接入其他领域时，将该配置改为对应知识库目录即可，后端 Agent 不会把生成方向固定为 RAG。
 
 ```bash
@@ -43,75 +49,70 @@ cd ..
 python scripts/ingest_knowledge.py
 python scripts/init_db.py
 
-# 3. 启动后端
-cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 4. 启动前端（新终端）
-cd frontend
-npm install
-npm run dev
+# 3. 推荐：一键启动 Web、互动课件 Durable Worker 与前端
+# 首次安装依赖、创建本地配置时使用 --install --bootstrap；初始化数据需显式附加 --initialize
+python scripts/start_local.py
 ```
+
+启动器会等待后端 `/health` 与课件 Worker `/health/ready`，并把日志写入 `backend/logs/`。互动课件 Worker 默认在 `127.0.0.1:8081` 提供 `/health/live`、`/health/ready` 和安全的 `/metrics`；Web 进程不会自动启动它。当前 SQLite Worker 每轮只 claim 一个任务，`COURSEWARE_WORKER_BATCH_SIZE` 大于 `1` 会被安全归一为 `1`，不能作为并发或横向扩容手段。
+
+完整的一键启动、首次安装、手动三进程启动、Worker 健康检查、停机和 SQLite 数据保护方案见 [部署说明](docs/deployment.md)。
+
+知识索引异常后，可按知识库 ID 显式重新入库并对账 SQL/Chroma：
+
+```bash
+python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
+```
+
+运行模式和退出语义：
+
+| 模式 | degraded fallback | 存储建议 | 启动/生成语义 |
+|---|---|---|---|
+| `development` | 默认禁止，可显式开启 | SQLite | not-ready 时保留 `/health`，生成返回 503 |
+| `demo` | 仅显式 `ALLOW_DEGRADED_GENERATION=true` | SQLite | fallback 必须标记 degraded |
+| `production` | 永远禁止 | SQLite | 核心依赖或默认 KB not-ready 时 fail-fast；同一数据库只运行一个 Durable Worker |
+
+`scripts/check_environment.py` 不调用计费 LLM、不下载 Embedding，退出码为 0=ready、2=degraded、1=not-ready。公共 `/health` 与 `/health/ready` 只检查默认 KB 和核心依赖；其他 KB 的异常不会轻易把整个服务变成 503。全 KB 详情位于 token 保护的管理员接口，见 `docs/api.md`。
+
+当前项目不依赖 PostgreSQL。代码中保留的 PostgreSQL 方言分支仅是可选兼容基础，仓库未捆绑 PostgreSQL 驱动，也没有完成真实迁移和并发验收；以后若更换数据库，必须先单独立项并更新部署文档，不能直接把兼容分支视为已支持的生产方案。
+
+数据库迁移或比赛联调前，可在项目根目录执行只读完整性预检：
+
+```powershell
+python scripts/check_database_integrity.py
+```
+
+该脚本检查 SQLite 外键开关、现有 FK 违规、资源版本重复/NULL、数据库唯一约束和 Resource 到 Run、Step、父版本的真实外键。退出码为 0=ready、2=约束缺失警告、1=存在阻塞迁移的数据问题；脚本不会修改或删除数据。
+
+`LLM_STRUCTURED_OUTPUT_MODE=auto` 会先尝试 function calling。若所用 OpenAI-compatible 服务明确不支持该能力，请在本地 `.env` 显式设为 `text`，避免每个 Agent 固定产生一次 BAD_REQUEST 后再回退；不要提交真实 `.env` 或 API Key。
+
+生成 Agent 与独立交互式 Tutor 统一通过可注入的 `LLMGateway` 调用模型。Tutor 不进入资源生成 LangGraph，也不直接修改画像、掌握度、路径或资源。默认 Tutor 请求预算为 25 秒、最近上下文 6 轮、Evidence 4 条、最高提示等级 3。结构化输出和 Evidence ID 子集均会严格校验。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
 
 ## 后端目录说明
 
 ```text
 backend/
-├── app/                          # 后端应用核心代码
-│   ├── api/                      # HTTP 路由层：仅负责请求校验、协议转换与响应组装
-│   │   ├── learner.py            # 学习者画像接口
-│   │   ├── generate.py           # 资源生成接口
-│   │   ├── resources.py          # 资源历史接口
-│   │   ├── feedback.py           # 学习反馈接口
-│   │   └── report.py             # 学情报告接口
-│   ├── services/                 # 业务逻辑层：封装完整业务用例
-│   │   ├── learner_service.py    # 学习者画像业务
-│   │   ├── generation_service.py # 个性化资源生成业务
-│   │   ├── resource_service.py   # 生成资源查询业务
-│   │   ├── feedback_service.py   # 反馈处理与画像更新业务
-│   │   └── report_service.py     # 学情报告构建业务
-│   ├── agents/                   # 多智能体层：LangGraph 工作流与各 Agent 节点
-│   │   ├── workflow.py           # 工作流状态机编排
-│   │   ├── state.py              # 多智能体共享状态定义
-│   │   ├── diagnosis.py          # 学情诊断 Agent
-│   │   ├── retriever.py          # 知识库检索 Agent
-│   │   ├── planner.py            # 学习路径规划 Agent
-│   │   ├── generator.py          # 个性化资源生成 Agent
-│   │   ├── reviewer.py           # 内容审核与幻觉检测 Agent
-│   │   └── feedback.py           # 反馈决策 Agent
-│   ├── core/                     # 基础设施层：封装底层技术能力
-│   │   ├── llm.py                # 大模型客户端封装
-│   │   ├── embeddings.py         # 中文 Embedding 模型加载
-│   │   ├── vector_store.py       # ChromaDB 向量存储
-│   │   ├── knowledge_base.py     # 知识库文档加载与切片
-│   │   └── file_storage.py       # 生成资源文件存储（支持文本与多媒体）
-│   ├── db/                       # 数据访问层：按实体划分子包
-│   │   ├── models.py             # SQLAlchemy ORM 模型（共享）
-│   │   ├── database.py           # 数据库引擎与会话管理（共享）
-│   │   ├── learner/              # 学习者画像仓库
-│   │   │   ├── base.py           # 抽象接口
-│   │   │   ├── memory.py         # 内存实现
-│   │   │   ├── sql_repository.py # SQLAlchemy 实现
-│   │   │   └── repository.py     # 仓库工厂（按配置自动选择实现）
-│   │   ├── resource/             # 生成资源仓库
-│   │   │   ├── base.py           # 抽象接口
-│   │   │   ├── memory.py         # 内存实现
-│   │   │   ├── sql_repository.py # SQLAlchemy 实现
-│   │   │   └── repository.py     # 仓库工厂（按配置自动选择实现）
-│   │   └── feedback/             # 学习反馈仓库
-│   │       ├── base.py           # 抽象接口
-│   │       ├── memory.py         # 内存实现
-│   │       ├── sql_repository.py # SQLAlchemy 实现
-│   │       └── repository.py     # 仓库工厂（按配置自动选择实现）
-│   ├── models/                   # 数据模型层：Pydantic 数据结构与共享状态
-│   │   └── schemas.py
-│   ├── utils/                    # 通用工具函数层：项目内部复用工具
-│   ├── config.py                 # 应用配置（从 .env 加载）
-│   └── main.py                   # FastAPI 应用入口
-├── tests/                        # 单元测试与集成测试
+├── app/
+│   ├── api/<domain>/              # HTTP 路由、认证依赖、请求解析与响应映射
+│   ├── services/<domain>/         # 用例编排、事务边界和领域门面
+│   ├── agents/                    # 学习 Agent、资源工作流和共享 Agent 能力
+│   ├── core/                      # 课件运行时、LLM、事件、检索、安全和存储等基础能力
+│   ├── db/<domain>/               # SQL/内存仓储、迁移和共享数据库能力
+│   ├── models/<domain>/           # DTO、领域契约和共享枚举
+│   ├── utils/                     # 通用内部工具
+│   ├── config.py                  # 应用配置
+│   └── main.py                    # FastAPI 入口
+├── tests/                        # 分层测试套件
+│   ├── unit/                    # Agent、核心组件、模型契约与纯策略
+│   ├── integration/             # API、持久化、服务与工作流集成
+│   ├── migrations/              # 数据库迁移与历史兼容性
+│   ├── e2e/                     # 生命周期、重启、恢复与回放
+│   ├── live/                    # 显式启用的真实 Provider 冒烟测试
+│   ├── fakes/                   # 共享测试替身
+│   └── fixtures/                # 固定验收数据
 ├── data/                         # 运行时数据目录（自动生成，不进入版本控制）
 │   ├── domain_knowledge.db       # SQLite 数据库文件
-│   ├── generated_resources/      # 生成的资源文件（文本/PPT/视频/PDF/音频/图片）
+│   ├── generated_resources/      # 生成的资源文件
 │   └── .gitkeep
 ├── chroma_db/                    # ChromaDB 向量索引目录（自动生成，不进入版本控制）
 ├── logs/                         # 应用日志目录（不进入版本控制）
@@ -124,38 +125,41 @@ backend/
 ```text
 version1/
 ├── .venv/                       # 本地 Python 虚拟环境（不进入版本控制）
-├── backend/                      # FastAPI 后端与多智能体核心实现
-├── frontend/                     # Vue3 前端可视化界面
+├── backend/                     # FastAPI 后端与多智能体核心实现
+├── frontend/                    # Vue3 前端可视化界面
 │   ├── src/
-│   │   ├── api/                  # axios 接口封装
-│   │   ├── components/           # 可复用组件（Agent 轨迹、报告图表、资源查看器）
-│   │   ├── views/                # 页面视图（首页、生成、反馈、报告）
-│   │   ├── router/               # Vue Router 路由配置
-│   │   ├── stores/               # Pinia 全局状态
-│   │   ├── App.vue
-│   │   └── main.js
+│   │   ├── api/                 # axios 接口封装
+│   │   ├── assets/
+│   │   ├── components/          # 可复用组件
+│   │   ├── composables/         # 跨页面组合逻辑
+│   │   ├── features/<domain>/   # 按领域组织的页面与交互逻辑
+│   │   ├── router/              # Vue Router 路由配置
+│   │   ├── stores/              # Pinia 全局状态
+│   │   ├── styles/
+│   │   ├── utils/
+│   │   └── views/               # 首页、学习方向、诊断、资源、历史等页面
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
-├── knowledge_base/               # 领域知识库原文档与元数据
-│   └── rag_engineering_training/
-│       ├── metadata.json         # 知识库元数据
-│       └── raw/                  # 原始 Markdown 文档
-├── examples/                     # 示例学习者画像等示例数据（仅用于初始化演示）
-│   ├── learner_profiles/         # 学习者画像 JSON 示例
-│   └── generated_samples/        # 生成资源样例目录
-├── docs/                         # 设计实现方案、部署说明、API 文档
-│   ├── architecture.md           # 总体架构、模块边界、协作规则
-│   ├── RAG链路匠学_六人分工任务书.md # 六人分工、阶段任务与验收标准
-│   ├── requirements.md           # 需求分析文档
-│   ├── features.md               # 功能文档
-│   ├── api.md                    # API 接口文档
-│   └── deployment.md             # 部署说明文档
-├── scripts/                      # 初始化与辅助脚本
-│   ├── ingest_knowledge.py       # 知识库文档切片并写入向量库
-│   └── init_db.py                # 初始化数据库表并导入示例数据
-├── Dockerfile                    # Docker 镜像构建文件
-├── git-workflow.md               # Git 分支、提交和协作规范
+├── knowledge_base/              # 领域知识库原文档与元数据
+│   ├── learning_catalog_seed.json
+│   ├── questionnaire_common.json
+│   ├── rag_engineering_training/
+│   └── demo_industrial_internet/
+├── examples/                    # 示例学习者画像等示例数据（仅用于初始化演示）
+│   ├── learner_profiles/
+│   └── generated_samples/
+├── docs/                        # 设计实现方案、部署说明、API 文档
+│   ├── architecture.md
+│   ├── knowledge_base_database.md
+│   ├── api.md
+│   └── ...
+├── scripts/                     # 初始化与辅助脚本
+│   ├── ingest_knowledge.py
+│   ├── init_db.py
+│   └── check_environment.py      # 只读、脱敏的运行环境检查
+├── Dockerfile
+├── git-workflow.md
 ├── README.md
 └── .gitignore
 ```
@@ -172,6 +176,52 @@ version1/
 | `examples/` | 示例学习者画像等静态示例数据 | 是 |
 | `knowledge_base/` | 领域知识库原文档 | 是 |
 
+## 测试运行
+
+完整的层级、功能覆盖矩阵、数据/证据规范见 [项目测试方案](docs/testing/README.md)，比赛54用例、来源快照与三指标口径见 [比赛评测方案](docs/testing/competition.md)。统一入口按套件运行，默认关闭真实模型调用，每次输出独立日志、JUnit 和 JSON/Markdown 摘要：
+
+```powershell
+python scripts/run_tests.py --list
+python scripts/run_tests.py --profile quick
+python scripts/run_tests.py --profile regression
+python scripts/run_tests.py --profile acceptance
+python scripts/run_tests.py --suite backend-api --suite backend-migration
+```
+
+`quick` 用于快速定位；`regression` 包括后端全量、比赛金标、课件冻结评测、前端八项单元与构建；`acceptance` 追加两项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
+
+后端测试按执行层级分类，并由 `backend/tests/conftest.py` 自动添加 pytest marker：
+
+```powershell
+python -m pytest
+python -m pytest -m unit
+python -m pytest -m integration
+python -m pytest -m migration
+python -m pytest -m e2e
+```
+
+真实 LLM 测试默认跳过，必须显式启用：
+
+```powershell
+$env:RUN_LIVE_LLM = "1"
+python -m pytest -m live_llm
+```
+
+互动课件改动还应执行冻结评测、浏览器质量门和前端构建：
+
+```powershell
+python backend/scripts/courseware_eval.py `
+  --manifest backend/tests/fixtures/courseware/evals/manifest.json `
+  --baseline backend/tests/fixtures/courseware/evals/baseline.json `
+  --output backend/courseware-eval-report.json
+npm --prefix frontend run test:courseware-browser
+npm --prefix frontend run test:workflow-events
+npm --prefix frontend run test:tutor
+npm --prefix frontend run build
+```
+
+`backend/courseware-eval-report.json` 等评测报告和浏览器证据为本地产物，不应提交。`pytest-asyncio` 已列入 `backend/requirements.txt`，以确保全新环境能收集异步报告流测试。
+
 ## 核心指标
 
 - 专业知识幻觉率 < 5%
@@ -180,9 +230,22 @@ version1/
 
 ## 协作开发入口
 
-当前处于架构搭建与并行开发准备阶段，分发任务时优先阅读：
+当前处于 P0 比赛级收敛与验收阶段，分发任务时优先阅读：
 
-- `docs/architecture.md`：统一系统分层、模块职责、运行时路径和 API 状态口径。
-- `docs/RAG链路匠学_六人分工任务书.md`：六人分工、阶段任务、核心模块和验收标准。
-- `docs/api.md`：接口契约；其中标明接口建设状态，当前状态仅作为开发参考，不锁定最终实现。
+- `docs/architecture.md`：统一系统分层、模块职责、运行时路径和主流程口径。
+- `docs/api.md`：当前真实接口契约。
+- `docs/knowledge_base_database.md`：当前知识库、问卷、诊断与数据库落库说明。
 - `git-workflow.md`：Git 分支、提交信息、禁止提交内容和文档同步规则。
+- `docs/demo-runbook.md`：P0-09 固定 fixture、分层 Gate、主 Demo、故障恢复与浏览器 checklist。
+
+## P0-09 比赛验收
+
+默认离线验收不访问公网、不调用收费 Provider：
+
+```powershell
+python scripts/p0_09_preflight.py --output wzx/out/p0-09-preflight.json
+python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-manifest.json
+python scripts/run_p0_09_acceptance.py --runtime --output wzx/out/p0-09-runtime-manifest.json
+```
+
+状态只使用 `PASS`、`FAIL`、`SKIP`、`NOT_MEASURABLE`；小型 fixture 的实际值不等于正式统计达标。Live Provider 测试必须显式设置 `RUN_LIVE_LLM=1`，并与 deterministic offline 结果分开报告。

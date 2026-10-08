@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from app.models.schemas import FeedbackRecord
+from app.models.learning_documents.schemas import FeedbackRecord
 
 
 class BaseFeedbackRepository(ABC):

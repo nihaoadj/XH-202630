@@ -1,0 +1,585 @@
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+from app.agents.resource_workflows.learning_documents.claim_review_agent import claim_decide_node, claim_extract_node, claim_judge_node
+from app.agents.resource_workflows.learning_documents import workflow as workflow_module
+from app.agents.resource_workflows.learning_documents.workflow import (
+    decide_node,
+    prepare_claim_revision_node,
+    route_after_claim_decide,
+    route_after_review,
+)
+from app.core.security.errors import ErrorCode
+from app.core.llm.gateway import LLMGatewayError
+from app.models.shared.agent_contracts import make_error_info
+from app.models.reviews.claims import ClaimMetricStatus
+from app.models.learning_documents.schemas import LearningResource
+from app.models.shared.workflow import ReviewDecision
+from tests.fakes.evidence import make_evidence
+from tests.fakes.llm import ScriptedLLMGateway
+
+
+def _state():
+    content = "Python 使用缩进定义代码块。"
+    resource = LearningResource(
+        resource_id="res-claim",
+        resource_type="讲义",
+        difficulty="初级",
+        content_text=content,
+        knowledge_points=["skill-python"],
+        source_refs=[],
+        run_id="run-claim",
+        version=1,
+    )
+    return {
+        "schema_version": "1.0",
+        "run_id": "run-claim",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 1,
+        "workflow_deadline_at": None,
+        "target_skill_nodes": ["skill-python"],
+        "retrieved_evidence": [make_evidence(evidence_id="ev-claim")],
+        "generated_resources": [resource],
+        "review_result": {
+            "decision": "approve",
+            "status": "approve",
+            "review_ids": {"res-claim": "review-claim"},
+            "issues": [],
+            "revision_instructions": [],
+            "hallucination_score": 0.1,
+        },
+        "include_review": True,
+        "include_claim_check": True,
+        "claim_check_status": "pending",
+        "trace": [],
+        "errors": [],
+    }
+
+
+def test_supported_claim_completes_and_approves():
+    state = _state()
+    content = state["generated_resources"][0].content_text
+    extractor = ScriptedLLMGateway([{
+        "resources": [{
+            "resource_id": "res-claim",
+            "claims": [{
+                "claim_text": "Python 使用缩进定义代码块",
+                "claim_type": "factual",
+                "source_text": content,
+                "source_start": 0,
+                "source_end": len(content),
+                "knowledge_point_id": "skill-python",
+                "source_evidence_ids": ["ev-claim"],
+            }],
+        }],
+    }])
+    extracted = claim_extract_node(state, llm_gateway=extractor)
+    state.update(extracted)
+    claim_id = state["extracted_claims"][0]["claim_id"]
+    judge = ScriptedLLMGateway([{
+        "judgements": [{
+            "claim_id": claim_id,
+            "verdict": "supported",
+            "evidence_ids": ["ev-claim"],
+            "reason": "冻结证据支持该陈述",
+            "confidence": 0.95,
+        }],
+    }])
+    state.update(claim_judge_node(state, llm_gateway=judge))
+    state.update(claim_decide_node(state))
+
+    assert state["claim_check_status"] == "completed"
+    assert state["review_result"]["decision"] == "approve"
+    assert state["review_result"]["claim_hallucination_rate"] == 0.0
+    assert state["claim_metrics"]["res-claim"]["metric_status"] == ClaimMetricStatus.COMPLETE.value
+
+
+def test_claim_extractor_uses_configured_per_resource_limit_in_prompt_and_validation():
+    state = _state()
+    content = state["generated_resources"][0].content_text
+    candidate = {
+        "claim_text": "Python 使用缩进定义代码块",
+        "claim_type": "factual",
+        "source_text": content,
+        "source_start": 0,
+        "source_end": len(content),
+        "knowledge_point_id": "skill-python",
+    }
+    extractor = ScriptedLLMGateway([{
+        "resources": [{"resource_id": "res-claim", "claims": [candidate] * 11}],
+    }])
+
+    result = claim_extract_node(
+        state,
+        llm_gateway=extractor,
+        max_claims_per_resource=10,
+    )
+
+    assert "1–10 条 Claim" in extractor.calls[0]["messages"][0].content
+    assert result["claim_check_status"] == "failed"
+    assert "configured per-resource limit (10)" in result["errors"][0]["safe_detail"]
+
+
+def test_structured_assessment_uses_internal_audit_instead_of_public_markdown_claims():
+    state = _state()
+    assessment = LearningResource(
+        resource_id="res-assessment", resource_type="分阶测试题", difficulty="初级",
+        content_text="# 测评\n\n### 单选题（基础）\n\n题干不含答案。",
+        knowledge_points=["skill-python"], source_refs=[], run_id="run-claim", version=1,
+        assessment_payload={
+            "schema_version": "2.0", "title": "内部题卷", "instructions": "内部审核使用",
+            "node_blocks": [{"skill_node_id": "skill-python", "skill_node_name": "Python",
+                "single_choice_questions": [{"answer_option_ids": ["A"], "evidence_ids": ["ev-claim"]}],
+                "multiple_choice_questions": [], "short_answer_questions": []}],
+        },
+    )
+    state["generated_resources"] = [assessment]
+    state["review_result"]["review_ids"] = {assessment.resource_id: "review-assessment"}
+
+    extracted = claim_extract_node(state, llm_gateway=ScriptedLLMGateway([]))
+    state.update(extracted)
+    assert state["extracted_claims"] == []
+    assert state["assessment_claim_skipped_resource_ids"] == [assessment.resource_id]
+
+    state.update(claim_judge_node(state, llm_gateway=ScriptedLLMGateway([])))
+    state.update(claim_decide_node(state))
+    assert state["claim_check_status"] == "completed"
+    assert state["review_result"]["decision"] == "approve"
+    assert state["claim_metrics"][assessment.resource_id]["metric_status"] == ClaimMetricStatus.NOT_APPLICABLE.value
+    assert state["claim_metrics"][assessment.resource_id]["audit_mode"] == "structured_assessment_internal"
+
+
+def test_checklist_claim_extractor_uses_canonical_text_for_source_spans():
+    state = _state()
+    content = "# 复习清单\n\n#### 题目 1\n请判断证据是否充分。\n\n## 答案与证据解释\n证据必须来自冻结来源。"
+    checklist = LearningResource(
+        resource_id="res-checklist",
+        resource_type="复习清单",
+        difficulty="初级",
+        content_text=content,
+        knowledge_points=["skill-python"],
+        source_refs=[],
+        run_id="run-claim",
+        version=1,
+        review_practice_payload={"schema_version": "2.0"},
+    )
+    state["generated_resources"] = [checklist]
+    state["review_result"]["review_ids"] = {checklist.resource_id: "review-checklist"}
+    extractor = ScriptedLLMGateway([{
+        "resources": [{"resource_id": checklist.resource_id, "claims": [{
+            "claim_text": "证据必须来自冻结来源",
+            "claim_type": "factual",
+            "source_text": "证据必须来自冻结来源。",
+            "source_start": content.index("证据必须来自冻结来源。"),
+            "source_end": content.index("证据必须来自冻结来源。") + len("证据必须来自冻结来源。"),
+            "knowledge_point_id": "skill-python",
+            "source_evidence_ids": ["ev-claim"],
+        }]}],
+    }])
+
+    result = claim_extract_node(state, llm_gateway=extractor)
+    payload = json.loads(extractor.calls[0]["messages"][-1].content)
+
+    assert payload["resources"][0]["content_text"] == content
+    assert result["extracted_claims"][0]["source_text"] == "证据必须来自冻结来源。"
+
+
+def test_not_in_evidence_generates_claim_targeted_revision():
+    state = _state()
+    content = state["generated_resources"][0].content_text
+    extracted = claim_extract_node(state, llm_gateway=ScriptedLLMGateway([{
+        "resources": [{"resource_id": "res-claim", "claims": [{
+            "claim_text": "Python 使用缩进定义代码块",
+            "claim_type": "factual",
+            "source_text": content,
+            "source_start": 0,
+            "source_end": len(content),
+            "knowledge_point_id": "skill-python",
+            "source_evidence_ids": [],
+        }]}],
+    }]))
+    state.update(extracted)
+    claim_id = state["extracted_claims"][0]["claim_id"]
+    state.update(claim_judge_node(state, llm_gateway=ScriptedLLMGateway([{
+        "judgements": [{
+            "claim_id": claim_id,
+            "verdict": "not_in_evidence",
+            "evidence_ids": [],
+            "reason": "冻结证据没有覆盖该事实",
+            "confidence": 0.8,
+        }],
+    }])))
+    state.update(claim_decide_node(state))
+
+    assert state["review_result"]["decision"] == "revise"
+    assert state["review_result"]["claim_hallucination_rate"] == 1.0
+    assert state["review_result"]["revision_instructions"][-1]["target_claim_ids"] == [claim_id]
+
+
+def test_judge_normalizes_non_factual_evidence_shape_without_factual_support():
+    state = _state()
+    content = state["generated_resources"][0].content_text
+    state["generated_resources"][0] = state["generated_resources"][0].model_copy(
+        update={"content_text": content + "\n请先观察示例。"}
+    )
+    extracted = claim_extract_node(state, llm_gateway=ScriptedLLMGateway([{
+        "resources": [{"resource_id": "res-claim", "claims": [{
+            "claim_text": "请先观察示例。",
+            "claim_type": "instructional",
+            "source_text": "请先观察示例。",
+            "source_start": len(content) + 1,
+            "source_end": len(content) + 8,
+            "knowledge_point_id": None,
+            "source_evidence_ids": [],
+        }]}],
+    }]))
+    state.update(extracted)
+    claim_id = state["extracted_claims"][0]["claim_id"]
+    state.update(claim_judge_node(state, llm_gateway=ScriptedLLMGateway([{
+        "judgements": [{
+            "claim_id": claim_id,
+            "verdict": "supported",
+            "evidence_ids": ["ev-claim"],
+            "reason": "模型错误地带入了证据",
+            "confidence": 0.9,
+        }],
+    }])))
+
+    assert state["claim_check_status"] == "completed"
+    assert state["claim_judgements"][0]["verdict"] == "non_factual"
+    assert state["claim_judgements"][0]["evidence_ids"] == []
+
+
+def test_forged_evidence_fails_closed_without_leaking_claim_text():
+    state = _state()
+    content = state["generated_resources"][0].content_text
+    result = claim_extract_node(state, llm_gateway=ScriptedLLMGateway([{
+        "resources": [{"resource_id": "res-claim", "claims": [{
+            "claim_text": "Python 使用缩进定义代码块",
+            "claim_type": "factual",
+            "source_text": content,
+            "source_start": 0,
+            "source_end": len(content),
+            "knowledge_point_id": "skill-python",
+            "source_evidence_ids": ["forged-evidence"],
+        }]}],
+    }]))
+
+    assert result["claim_check_status"] == "failed"
+    assert result["review_result"]["decision"] == "human_review"
+    assert "Python" not in json.dumps(result["trace"], ensure_ascii=False)
+    assert any("unknown evidence" in (item.get("safe_detail") or "") for item in result["errors"])
+
+
+def test_claim_extractor_and_judge_invoke_once_per_resource():
+    state = _state()
+    second_content = "检索结果必须绑定冻结证据。"
+    second = LearningResource(
+        resource_id="res-claim-second",
+        resource_type="实操指南",
+        difficulty="初级",
+        content_text=second_content,
+        knowledge_points=["skill-python"],
+        source_refs=[],
+        run_id="run-claim",
+        version=1,
+    )
+    state["generated_resources"].append(second)
+    state["review_result"]["review_ids"][second.resource_id] = "review-claim-second"
+    first_content = state["generated_resources"][0].content_text
+    extractor = ScriptedLLMGateway([
+        {"resources": [{"resource_id": "res-claim", "claims": [{
+            "claim_text": "Python 使用缩进定义代码块",
+            "claim_type": "factual",
+            "source_text": first_content,
+            "source_start": 0,
+            "source_end": len(first_content),
+            "knowledge_point_id": "skill-python",
+            "source_evidence_ids": ["ev-claim"],
+        }]}]},
+        {"resources": [{"resource_id": "res-claim-second", "claims": [{
+            "claim_text": "检索结果必须绑定冻结证据",
+            "claim_type": "factual",
+            "source_text": second_content,
+            "source_start": 0,
+            "source_end": len(second_content),
+            "knowledge_point_id": "skill-python",
+            "source_evidence_ids": ["ev-claim"],
+        }]}]},
+    ])
+    state.update(claim_extract_node(state, llm_gateway=extractor))
+
+    assert len(extractor.calls) == 2
+    extractor_payloads = [
+        json.loads(call["messages"][-1].content)
+        for call in extractor.calls
+    ]
+    assert [len(item["resources"]) for item in extractor_payloads] == [1, 1]
+    assert [item["resources"][0]["resource_id"] for item in extractor_payloads] == [
+        "res-claim",
+        "res-claim-second",
+    ]
+
+    claim_ids = {
+        item["resource_id"]: item["claim_id"]
+        for item in state["extracted_claims"]
+    }
+    judge = ScriptedLLMGateway([
+        {"judgements": [{
+            "claim_id": claim_ids["res-claim"],
+            "verdict": "supported",
+            "evidence_ids": ["ev-claim"],
+            "reason": "证据支持",
+            "confidence": 0.9,
+        }]},
+        {"judgements": [{
+            "claim_id": claim_ids["res-claim-second"],
+            "verdict": "supported",
+            "evidence_ids": ["ev-claim"],
+            "reason": "证据支持",
+            "confidence": 0.9,
+        }]},
+    ])
+    state.update(claim_judge_node(state, llm_gateway=judge))
+
+    assert len(judge.calls) == 2
+    judge_payloads = [json.loads(call["messages"][-1].content) for call in judge.calls]
+    assert [len({claim["resource_id"] for claim in item["claims"]}) for item in judge_payloads] == [1, 1]
+    assert set(state["claim_metrics"]) == {"res-claim", "res-claim-second"}
+
+
+def test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes(monkeypatch):
+    # This scenario verifies the explicit opt-in policy for publishing a
+    # resource whose Claim audit is incomplete.  Do not inherit a developer's
+    # local .env value: CI intentionally uses the fail-closed default.
+    monkeypatch.setattr(workflow_module, "get_settings", lambda: SimpleNamespace(
+        claim_partial_publish=True,
+        claim_user_review_enabled=True,
+        claim_user_review_min_factual_pass_rate=0.60,
+    ))
+    state = _state()
+    second_content = "检索结果必须绑定冻结证据。"
+    second = LearningResource(
+        resource_id="res-claim-second",
+        resource_type="实操指南",
+        difficulty="初级",
+        content_text=second_content,
+        knowledge_points=["skill-python"],
+        source_refs=[],
+        run_id="run-claim",
+        version=1,
+    )
+    state["generated_resources"].append(second)
+    state["review_result"]["review_ids"][second.resource_id] = "review-claim-second"
+    state["resource_review_results"] = {
+        "res-claim": {"decision": "approve"},
+        "res-claim-second": {"decision": "approve"},
+    }
+    first_content = state["generated_resources"][0].content_text
+    gateway_error = LLMGatewayError(
+        error=make_error_info(
+            ErrorCode.LLM_UPSTREAM_UNAVAILABLE,
+            source="claim_extractor",
+            category="upstream",
+        ),
+        call_id="claim-extract-second-failed",
+        retry_count=1,
+        latency_ms=10,
+        attempts=[],
+    )
+    extracted = claim_extract_node(state, llm_gateway=ScriptedLLMGateway([
+        {"resources": [{"resource_id": "res-claim", "claims": [{
+            "claim_text": "Python 使用缩进定义代码块",
+            "claim_type": "factual",
+            "source_text": first_content,
+            "source_start": 0,
+            "source_end": len(first_content),
+            "knowledge_point_id": "skill-python",
+            "source_evidence_ids": ["ev-claim"],
+        }]}]},
+        gateway_error,
+    ]))
+    state.update(extracted)
+    assert state["claim_failed_resource_ids"] == ["res-claim-second"]
+    assert "resource_id=res-claim-second" in extracted["errors"][0]["safe_detail"]
+    assert "resource_id=res-claim-second" in extracted["trace"][0]["error_message"]
+    claim_id = state["extracted_claims"][0]["claim_id"]
+    state.update(claim_judge_node(state, llm_gateway=ScriptedLLMGateway([{
+        "judgements": [{
+            "claim_id": claim_id,
+            "verdict": "supported",
+            "evidence_ids": ["ev-claim"],
+            "reason": "冻结证据支持",
+            "confidence": 0.9,
+        }],
+    }])))
+    state.update(claim_decide_node(state))
+    finalized = decide_node(state)
+
+    by_id = {item.resource_id: item for item in finalized["generated_resources"]}
+    assert state["review_result"]["decision"] == "human_review"
+    assert by_id["res-claim"].publication_status == "published"
+    assert by_id["res-claim"].review_status == "approved"
+    assert by_id["res-claim-second"].publication_status == "published"
+    assert by_id["res-claim-second"].claim_degraded_publish is True
+    assert by_id["res-claim-second"].review_status == "approved"
+
+
+def test_requested_claim_audit_skips_terminal_non_approved_resource():
+    state = _state()
+    state["review_result"]["decision"] = ReviewDecision.HUMAN_REVIEW.value
+    state["resource_review_results"] = {"res-claim": {"decision": "human_review"}}
+
+    assert route_after_review(state) == "finalize"
+
+
+def test_claim_audit_selects_only_ordinary_review_approved_resources():
+    state = _state()
+    held = LearningResource(
+        resource_id="res-held", resource_type="案例分析", difficulty="初级",
+        content_text="该资源仍需普通审核修订。", knowledge_points=["skill-python"],
+        source_refs=[], run_id="run-claim", version=1,
+    )
+    state["generated_resources"].append(held)
+    state["generated_resources"][0] = state["generated_resources"][0].model_copy(
+        update={"review_id": "review-claim"}
+    )
+    state["review_result"].update({
+        "decision": "revise",
+        # A targeted re-review only returns new review IDs. The approved
+        # sibling keeps its durable review ID on the current resource version.
+        "review_ids": {"res-held": "review-held"},
+    })
+    state["revision_count"] = state["max_iterations"]
+    state["resource_review_results"] = {
+        "res-claim": {"decision": "approve"},
+        "res-held": {"decision": "revise"},
+    }
+    content = state["generated_resources"][0].content_text
+    extractor = ScriptedLLMGateway([{
+        "resources": [{"resource_id": "res-claim", "claims": [{
+            "claim_text": "Python 使用缩进定义代码块", "claim_type": "factual",
+            "source_text": content, "source_start": 0, "source_end": len(content),
+            "knowledge_point_id": "skill-python", "source_evidence_ids": ["ev-claim"],
+        }]}],
+    }])
+
+    result = claim_extract_node(state, llm_gateway=extractor)
+
+    assert result["claim_eligible_resource_ids"] == ["res-claim"]
+    assert len(extractor.calls) == 1
+    assert route_after_review(state) == "claim_extract"
+
+
+def test_claim_enabled_publication_fails_closed_without_resource_metric():
+    state = _state()
+    state["resource_review_results"] = {"res-claim": {"decision": "approve"}}
+    state["claim_eligible_resource_ids"] = ["res-claim"]
+    state["claim_check_status"] = "failed"
+
+    finalized = decide_node(state)
+
+    resource = finalized["generated_resources"][0]
+    assert resource.review_status == "human_review"
+    assert resource.publication_status == "unpublished"
+
+
+def test_completed_claim_audit_waits_for_user_decision_at_eighty_percent(monkeypatch):
+    state = _state()
+    state.update({
+        "resource_review_results": {"res-claim": {"decision": "approve"}},
+        "claim_eligible_resource_ids": ["res-claim"],
+        "claim_check_status": "completed",
+        "claim_metrics": {
+            "res-claim": {
+                "metric_status": "complete", "claim_total": 5,
+                "factual_claim_total": 5, "supported_claim_total": 4,
+                "contradicted_claim_total": 0, "not_in_evidence_claim_total": 1,
+                "non_factual_claim_total": 0, "incomplete_claim_total": 0,
+            },
+        },
+        "review_result": {
+            **state["review_result"],
+            "issues": [{"resource_id": "res-claim", "code": "evidence_gap"}],
+        },
+    })
+    monkeypatch.setattr(workflow_module, "get_settings", lambda: SimpleNamespace(
+        claim_partial_publish=False,
+        claim_warning_publish_enabled=True,
+        claim_warning_publish_min_factual_pass_rate=0.80,
+    ))
+
+    finalized = decide_node(state)
+
+    resource = finalized["generated_resources"][0]
+    assert resource.publication_status == "unpublished"
+    assert resource.claim_publish_decision_pending is True
+    assert resource.claim_warning_publish is False
+    assert resource.claim_factual_pass_rate == 0.80
+    assert finalized["workflow_status"] == "human_review"
+    assert finalized["final_decision"] == "Claim 审核报告待用户决定是否发布"
+
+
+def test_completed_claim_audit_never_warning_publishes_contradicted_fact(monkeypatch):
+    state = _state()
+    state.update({
+        "resource_review_results": {"res-claim": {"decision": "approve"}},
+        "claim_eligible_resource_ids": ["res-claim"],
+        "claim_check_status": "completed",
+        "claim_metrics": {
+            "res-claim": {
+                "metric_status": "complete", "claim_total": 5,
+                "factual_claim_total": 5, "supported_claim_total": 4,
+                "contradicted_claim_total": 1, "not_in_evidence_claim_total": 0,
+                "non_factual_claim_total": 0, "incomplete_claim_total": 0,
+            },
+        },
+        "review_result": {
+            **state["review_result"],
+            "issues": [{"resource_id": "res-claim", "code": "factual_risk"}],
+        },
+    })
+    monkeypatch.setattr(workflow_module, "get_settings", lambda: SimpleNamespace(
+        claim_partial_publish=False,
+        claim_warning_publish_enabled=True,
+        claim_warning_publish_min_factual_pass_rate=0.80,
+    ))
+
+    finalized = decide_node(state)
+
+    resource = finalized["generated_resources"][0]
+    assert resource.publication_status == "unpublished"
+    assert resource.claim_warning_publish is False
+
+
+def test_claim_revision_uses_its_own_budget_and_preserves_ordinary_budget():
+    state = _state()
+    state.update({
+        "revision_count": 1,
+        "max_iterations": 1,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "review_result": {
+            **state["review_result"],
+            "decision": "revise",
+            "issues": [{"resource_type": "讲义", "claim_ids": ["claim-1"]}],
+            "revision_instructions": [{
+                "target_resource_type": "讲义",
+                "target_claim_ids": ["claim-1"],
+                "action": "删除无证据事实。",
+            }],
+        },
+    })
+
+    assert route_after_claim_decide(state) == "prepare_claim_revision"
+    prepared = prepare_claim_revision_node(state)
+
+    assert prepared["revision_count"] == 1
+    assert prepared["claim_revision_count"] == 1
+    assert prepared["generation_attempt"] == 3
+    assert prepared["constraints"]["revision_feedback"]["revision_instructions"] == [
+        state["review_result"]["revision_instructions"][0]
+    ]

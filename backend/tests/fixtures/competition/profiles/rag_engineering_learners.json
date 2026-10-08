@@ -1,0 +1,205 @@
+{
+  "fixture_version": "v1",
+  "knowledge_base_id": "rag_engineering_training",
+  "annotation_protocol": {
+    "skill_level_labels": ["零基础", "Python 基础", "进阶 RAG"],
+    "tier_mapping": {"零基础": 1, "Python 基础": 2, "进阶 RAG": 3},
+    "background_dimensions": ["role", "education", "major", "years_of_experience", "prior_ai_experience"],
+    "difficulty_annotation_rules": [
+      "expected_difficulty 基准值 = 目标能力节点 tier 对应的难度（初级/中级/高级）",
+      "修正规则 A（背景提级）：prior_ai_experience 为 ml_basics 且目标节点 tier 为 1 时，expected_difficulty 标注为中级——该画像已具备数学与建模基础，tier1 概念性资源应按中级供给",
+      "修正规则 B（新手保持）：其余画像不做难度修正，避免无依据降档"
+    ],
+    "predicted_difficulty_source": "系统策略：difficulty_for_tier(目标能力节点 tier)，与 GenerationJobService 的 expected_difficulty 链路一致"
+  },
+  "backgrounds": [
+    {
+      "background_id": "student",
+      "role": "应届计算机专业学生",
+      "education": "本科",
+      "major": "计算机科学与技术",
+      "years_of_experience": 0,
+      "prior_ai_experience": "none"
+    },
+    {
+      "background_id": "backend",
+      "role": "转岗后端工程师",
+      "education": "本科",
+      "major": "软件工程",
+      "years_of_experience": 5,
+      "prior_ai_experience": "none"
+    },
+    {
+      "background_id": "data",
+      "role": "数据工程师",
+      "education": "硕士",
+      "major": "数据科学与大数据",
+      "years_of_experience": 3,
+      "prior_ai_experience": "ml_basics"
+    }
+  ],
+  "learners": [
+    {
+      "learner_id": "gold-student-t1-basics",
+      "background_id": "student",
+      "skill_level": "零基础",
+      "tier": 1,
+      "learning_goal": "理解 RAG 的基本概念与系统边界",
+      "target_skill_nodes": ["rag_basics"],
+      "expected_difficulty": "初级"
+    },
+    {
+      "learner_id": "gold-student-t1-embed",
+      "background_id": "student",
+      "skill_level": "零基础",
+      "tier": 1,
+      "learning_goal": "建立语义向量表示的直观认识",
+      "target_skill_nodes": ["embedding"],
+      "expected_difficulty": "初级"
+    },
+    {
+      "learner_id": "gold-student-t2-chunking",
+      "background_id": "student",
+      "skill_level": "Python 基础",
+      "tier": 2,
+      "learning_goal": "掌握文档切片参数的实验方法",
+      "target_skill_nodes": ["chunking"],
+      "expected_difficulty": "中级"
+    },
+    {
+      "learner_id": "gold-student-t2-retrieval",
+      "background_id": "student",
+      "skill_level": "Python 基础",
+      "tier": 2,
+      "learning_goal": "理解 Top-K 检索与候选排序的基本机制",
+      "target_skill_nodes": ["similarity_retrieval"],
+      "expected_difficulty": "中级"
+    },
+    {
+      "learner_id": "gold-student-t3-eval",
+      "background_id": "student",
+      "skill_level": "进阶 RAG",
+      "tier": 3,
+      "learning_goal": "学会构建 RAG 评测集并分层计算指标",
+      "target_skill_nodes": ["rag_evaluation"],
+      "expected_difficulty": "高级"
+    },
+    {
+      "learner_id": "gold-student-t3-tuning",
+      "background_id": "student",
+      "skill_level": "进阶 RAG",
+      "tier": 3,
+      "learning_goal": "通过单变量消融实验定位 RAG 收益来源",
+      "target_skill_nodes": ["rag_tuning"],
+      "expected_difficulty": "高级"
+    },
+    {
+      "learner_id": "gold-backend-t1-parsing",
+      "background_id": "backend",
+      "skill_level": "零基础",
+      "tier": 1,
+      "learning_goal": "从工程视角理解文档解析的完整入库链路",
+      "target_skill_nodes": ["document_parsing"],
+      "expected_difficulty": "初级"
+    },
+    {
+      "learner_id": "gold-backend-t1-basics",
+      "background_id": "backend",
+      "skill_level": "零基础",
+      "tier": 1,
+      "learning_goal": "弄清 RAG 与自己熟悉的 CRUD 系统的边界差异",
+      "target_skill_nodes": ["rag_basics"],
+      "expected_difficulty": "初级"
+    },
+    {
+      "learner_id": "gold-backend-t2-vector",
+      "background_id": "backend",
+      "skill_level": "Python 基础",
+      "tier": 2,
+      "learning_goal": "为业务系统选型并正确使用向量数据库",
+      "target_skill_nodes": ["vector_store"],
+      "expected_difficulty": "中级"
+    },
+    {
+      "learner_id": "gold-backend-t2-prompt",
+      "background_id": "backend",
+      "skill_level": "Python 基础",
+      "tier": 2,
+      "learning_goal": "把证据包组装约束接入现有服务的 Prompt 模板",
+      "target_skill_nodes": ["prompt_assembly"],
+      "expected_difficulty": "中级"
+    },
+    {
+      "learner_id": "gold-backend-t3-hybrid",
+      "background_id": "backend",
+      "skill_level": "进阶 RAG",
+      "tier": 3,
+      "learning_goal": "在生产服务中落地混合检索方案",
+      "target_skill_nodes": ["hybrid_retrieval"],
+      "expected_difficulty": "高级"
+    },
+    {
+      "learner_id": "gold-backend-t3-rerank",
+      "background_id": "backend",
+      "skill_level": "进阶 RAG",
+      "tier": 3,
+      "learning_goal": "在延迟预算内引入 Cross-Encoder 重排",
+      "target_skill_nodes": ["rerank"],
+      "expected_difficulty": "高级"
+    },
+    {
+      "learner_id": "gold-data-t1-embed",
+      "background_id": "data",
+      "skill_level": "零基础",
+      "tier": 1,
+      "learning_goal": "把现有数据建模经验迁移到语义向量表示",
+      "target_skill_nodes": ["embedding"],
+      "expected_difficulty": "中级"
+    },
+    {
+      "learner_id": "gold-data-t1-basics",
+      "background_id": "data",
+      "skill_level": "零基础",
+      "tier": 1,
+      "learning_goal": "从数据管道视角理解 RAG 离线与在线链路",
+      "target_skill_nodes": ["rag_basics"],
+      "expected_difficulty": "中级"
+    },
+    {
+      "learner_id": "gold-data-t2-retrieval",
+      "background_id": "data",
+      "skill_level": "Python 基础",
+      "tier": 2,
+      "learning_goal": "掌握 Top-K 与阈值的校准方法",
+      "target_skill_nodes": ["similarity_retrieval"],
+      "expected_difficulty": "中级"
+    },
+    {
+      "learner_id": "gold-data-t2-citation",
+      "background_id": "data",
+      "skill_level": "Python 基础",
+      "tier": 2,
+      "learning_goal": "让分析结论可追溯到数据片段，建立引用规范",
+      "target_skill_nodes": ["citation"],
+      "expected_difficulty": "中级"
+    },
+    {
+      "learner_id": "gold-data-t3-hallucination",
+      "background_id": "data",
+      "skill_level": "进阶 RAG",
+      "tier": 3,
+      "learning_goal": "为生成链路建立 Claim 级幻觉控制机制",
+      "target_skill_nodes": ["hallucination_control"],
+      "expected_difficulty": "高级"
+    },
+    {
+      "learner_id": "gold-data-t3-tuning",
+      "background_id": "data",
+      "skill_level": "进阶 RAG",
+      "tier": 3,
+      "learning_goal": "用消融实验规范评估检索与生成组件改动",
+      "target_skill_nodes": ["rag_tuning"],
+      "expected_difficulty": "高级"
+    }
+  ]
+}

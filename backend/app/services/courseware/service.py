@@ -1,0 +1,167 @@
+"""Application facade for the interactive-courseware resource domain."""
+
+from __future__ import annotations
+
+from typing import Any
+import hashlib
+import json
+
+from app.agents.resource_workflows.interactive_courseware.workflow import (
+    InteractiveCoursewareWorkflow,
+)
+from app.db.audit.base import BaseAuditRepository
+from app.core.storage.file_storage import load_resource_file
+from app.models.courseware import (
+    CoursewareBatchCreateRequest,
+    CoursewareBatchJobResponse,
+    CoursewareJobCreateRequest,
+    CoursewareJobDetail,
+    CoursewareJobResponse,
+    CoursewareResourceDetail,
+)
+from app.models.shared.resource_library import ResourceLibraryItem
+from app.services.learning_documents.resources import ResourceService
+from app.services.courseware.source import CoursewareAdmissionError
+from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import (
+    compose_courseware_scene,
+)
+
+
+class CoursewareService:
+    """Coordinate dependencies and expose the HTTP-facing courseware facade.
+
+    Generation nodes, prompts, model calls, validation and artifact production
+    belong to :class:`InteractiveCoursewareWorkflow`; this class only wires
+    the workflow and delegates task/query/publication operations.
+    """
+
+    def __init__(
+        self,
+        repo,
+        resource_service: ResourceService,
+        audit_repo: BaseAuditRepository,
+        llm_gateway: Any | None = None,
+        workflow: InteractiveCoursewareWorkflow | None = None,
+        learner_context_provider: Any | None = None,
+    ):
+        self.repo = repo
+        self.resource_service = resource_service
+        self.audit_repo = audit_repo
+        self.llm_gateway = llm_gateway
+        self.workflow = workflow or InteractiveCoursewareWorkflow(
+            repo,
+            resource_service,
+            audit_repo,
+            llm_gateway,
+            learner_context_provider=learner_context_provider,
+        )
+        # Preserve the existing integration seam while the loader remains a
+        # dependency of the workflow instead of service business logic.
+        self.workflow.file_loader = load_resource_file
+        # Resolve the provider through this module so existing integration
+        # seams can be replaced without moving orchestration back into service.
+        self.workflow.scene_composer = lambda *args, **kwargs: compose_courseware_scene(*args, **kwargs)
+
+    def create_job(self, request: CoursewareJobCreateRequest) -> CoursewareJobResponse:
+        return self.workflow.create_job(request)
+
+    def create_jobs_for_resources(self, request: CoursewareBatchCreateRequest) -> CoursewareBatchJobResponse:
+        """Fan out a user selection into isolated source-scoped jobs."""
+        jobs = []
+        for index, resource_id in enumerate(request.resource_ids):
+            jobs.append(self.create_job(CoursewareJobCreateRequest(
+                learner_id=request.learner_id,
+                source_resource_ids=[resource_id],
+                learning_goal=request.learning_goal,
+                expected_duration_minutes=request.expected_duration_minutes,
+                interaction_intensity=request.interaction_intensity,
+                visual_style_id=request.visual_style_id,
+                idempotency_key=(f"{request.idempotency_key}:{index}" if request.idempotency_key else None),
+            )))
+        return CoursewareBatchJobResponse(jobs=jobs)
+
+    def get_job(self, run_id: str) -> CoursewareJobResponse | None:
+        return self.workflow.get_job(run_id)
+
+    def list_jobs(self, learner_id: str) -> list[CoursewareJobResponse]:
+        jobs: list[CoursewareJobResponse] = []
+        for row in self.repo.list_jobs(learner_id):
+            run_id = row.get("run_id")
+            if not run_id:
+                continue
+            job = self.workflow.get_job(run_id)
+            if job is not None:
+                jobs.append(job)
+        return jobs
+
+    def get_job_detail(self, run_id: str) -> CoursewareJobDetail | None:
+        return self.workflow.get_job_detail(run_id)
+
+    def events(self, run_id: str, after_sequence: int = 0) -> list[dict[str, Any]]:
+        return self.workflow.events(run_id, after_sequence)
+
+    def run_job(self, run_id: str) -> CoursewareJobResponse | None:
+        return self.workflow.run(run_id)
+
+    def retry(self, run_id: str) -> CoursewareJobResponse | None:
+        return self.workflow.retry(run_id)
+
+    def cancel(self, run_id: str) -> CoursewareJobResponse | None:
+        return self.workflow.cancel(run_id)
+
+    def retry_scene(self, run_id: str, scene_id: str, *, enqueue_only: bool = False) -> CoursewareJobResponse | None:
+        return self.workflow.retry_scene(run_id, scene_id, enqueue_only=enqueue_only)
+
+    def process_scene_outbox(self, run_id: str | None = None, limit: int = 10) -> dict[str, int]:
+        return self.workflow.process_scene_outbox(run_id=run_id, limit=limit)
+
+    def publish(self, run_id: str) -> CoursewareJobResponse | None:
+        return self.workflow.publish(run_id)
+
+    def get_resource(self, resource_id: str) -> CoursewareResourceDetail | None:
+        return self.workflow.get_resource(resource_id)
+
+    def artifact(self, resource_id: str) -> tuple[dict[str, Any], bytes] | None:
+        return self.workflow.artifact(resource_id)
+
+    def packaged_artifact(
+        self,
+        resource_id: str,
+        package_format: str,
+    ) -> tuple[dict[str, Any], bytes] | None:
+        return self.workflow.packaged_artifact(resource_id, package_format)
+
+    def list_library_items(self, learner_id: str) -> list[ResourceLibraryItem]:
+        return self.workflow.list_library_items(learner_id)
+
+    def ingest_learning_events(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return self.repo.ingest_learning_events(events)
+
+    def learning_progress(self, resource_id: str, release_id: str) -> dict[str, Any]:
+        return self.repo.learning_progress(resource_id=resource_id, release_id=release_id)
+
+    def review_practice_self_reports(self, resource_id: str, release_id: str) -> tuple[str, dict[str, float]]:
+        """Derive only complete node scores from persisted bounded events."""
+        resource = self.repo.get_resource(resource_id) or {}
+        job = self.repo.get_job(resource.get("run_id")) if resource.get("run_id") else None
+        snapshot = next((item for item in (job or {}).get("source_snapshots") or []
+                         if isinstance(item.get("review_practice_payload"), dict)), None)
+        package = (snapshot or {}).get("review_practice_payload") or {}
+        if package.get("schema_version") != "2.0":
+            return "", {}
+        ratings: dict[str, str] = {}
+        for event in self.repo.list_learning_events(resource_id=resource_id, release_id=release_id):
+            value = (((event.get("state") or {}).get("component_state") or {}).get(event.get("scene_id") or "") or {})
+            for entry in value.values():
+                review = ((entry or {}).get("value") or {}).get("review_practice") or {}
+                if review.get("revealed") and review.get("self_rating") in {"known", "uncertain", "not_known"}:
+                    ratings[str(review.get("question_id"))] = str(review["self_rating"])
+        scores: dict[str, float] = {}
+        values = {"known": 1.0, "uncertain": 0.5, "not_known": 0.0}
+        for node in package.get("node_blocks") or []:
+            questions = [*node.get("recall_questions", []), *node.get("distinction_questions", []), node.get("example_recognition")]
+            ids = [str(item.get("question_id")) for item in questions if isinstance(item, dict) and item.get("question_id")]
+            if ids and all(item in ratings for item in ids):
+                scores[str(node.get("skill_node_id"))] = round(sum(values[ratings[item]] for item in ids) / len(ids), 6)
+        source_id = hashlib.sha256(json.dumps({"resource_id": resource_id, "release_id": release_id, "payload_hash": package.get("payload_hash"), "scores": scores}, sort_keys=True).encode()).hexdigest()
+        return source_id, scores

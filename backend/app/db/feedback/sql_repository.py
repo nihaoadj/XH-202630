@@ -4,8 +4,8 @@ from typing import Callable, List, Optional
 from sqlalchemy.orm import Session
 
 from app.db.feedback.base import BaseFeedbackRepository
-from app.db.models import FeedbackRecordORM
-from app.models.schemas import FeedbackAnswer, FeedbackRecord, KnowledgeState
+from app.db.shared.models import FeedbackRecordORM
+from app.models.learning_documents.schemas import FeedbackAnswer, FeedbackRecord, KnowledgeState
 
 
 def _orm_to_pydantic(orm: FeedbackRecordORM) -> FeedbackRecord:

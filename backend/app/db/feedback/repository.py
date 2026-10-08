@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import Callable
 
 from app.config import get_settings
-from app.db.database import get_session_factory
+from app.db.shared.database import get_session_factory
 from app.db.feedback.base import BaseFeedbackRepository
 from app.db.feedback.memory import MemoryFeedbackRepository
 from app.db.feedback.sql_repository import SQLFeedbackRepository

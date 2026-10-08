@@ -1,0 +1,32 @@
+{
+  "suite_id": "rag-competition-gold-suite",
+  "suite_version": "v1",
+  "fixture_version": "v1",
+  "knowledge_base_id": "rag_engineering_training",
+  "mode": "offline_gold",
+  "competition_thresholds": {
+    "hallucination_rate_max": 0.05,
+    "difficulty_match_accuracy_min": 0.85,
+    "knowledge_coverage_min": 0.90,
+    "minimum_case_count": 50
+  },
+  "files": {
+    "profiles": "profiles/rag_engineering_learners.json",
+    "cases": "cases/rag_engineering_cases.json",
+    "claims": "claims/rag_engineering_claims.json",
+    "sources": "sources.json"
+  },
+  "evaluation_notes": "离线金标模式：Claim verdict 为人工依据知识库原文标注，用于校验指标管线与作为真实模型评测（RUN_LIVE_LLM=1）的参照基线；难度适配的 predicted_difficulty 由系统策略 difficulty_for_tier 计算，不调用大模型。",
+  "metric_definitions": {
+    "hallucination_rate": "(contradicted + not_in_evidence) / factual_claim_total，仅统计最终发布叶子资源上的事实 Claim",
+    "difficulty_match_accuracy": "expected_difficulty == predicted_difficulty 的用例数 / 总用例数，附混淆矩阵",
+    "knowledge_coverage_rate": "被 supported 事实 Claim 覆盖的目标能力节点数 / 目标能力节点总数"
+  },
+  "live_mode": {
+    "enabled_by": "RUN_LIVE_LLM=1 且 LLM_API_KEY 为真实凭据",
+    "generation_path": "GenerationJobService 生产生成链路（含 Review 与 Claim 审核）",
+    "verdict_source": "Claim 审核管线对冻结 Evidence 的真实判定，不使用金标标注",
+    "predicted_difficulty_source": "生成资源自身的 difficulty 字段（系统策略产出）",
+    "status": "通路已实现，暂未执行真实 API 验证；未就绪时调用方必须显式 SKIP 而非静默降级"
+  }
+}

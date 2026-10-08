@@ -109,6 +109,8 @@ git push origin feature/<name>
 | 日志 | `backend/logs/*.log`, `*.log` |
 | 依赖目录 | `node_modules/`, `venv/`, `.venv/` |
 | 缓存 | `__pycache__/`, `.pytest_cache/` |
+| 本地更新计划和 skills | `docs/update_plan/`, `.agents/`, `.codex/`, `skills/`, `.skills/` |
+| 评测与预览产物 | `output/test-runs/`, `frontend/tests/test-results/`, 课件评测报告与 CI/live 产物、`deliverables/` 内的生成预览 |
 
 允许提交的占位文件：
 
@@ -118,6 +120,8 @@ git push origin feature/<name>
 - `backend/chroma_db/.gitkeep`
 - `backend/logs/.gitkeep`
 
+环境文件变体（如 `.env.local`）也不提交，`.env.example` 与 `.env.*.example` 作为可分发示例保留。生成资源目录各层 `.gitkeep`、交付构建脚本和需保留的文档不应被产物规则误忽略。`.gitignore` 只影响未跟踪文件，已经跟踪的文件不会自动从版本管理中移除。
+
 ## 6. 文档同步规则
 
 | 修改内容 | 需要同步的文档 |
@@ -125,7 +129,7 @@ git push origin feature/<name>
 | API 字段、路径、状态码变化 | `docs/api.md` |
 | 架构分层、路径、模块边界变化 | `docs/architecture.md` |
 | 功能范围、页面能力变化 | `docs/features.md` |
-| 小组职责、任务、交付物变化 | `docs/RAG链路匠学_六人分工任务书.md` |
+| 小组职责、任务、交付物变化 | 在对应的议题、项目管理工具或 Pull Request 中维护；仓库不再保存阶段性分工文档 |
 | 启动方式、部署路径变化 | `README.md`, `docs/deployment.md` |
 
 ## 7. 冲突处理
@@ -141,5 +145,5 @@ git push origin feature/<name>
 - 修改 API 时已同步 `docs/api.md` 和 `backend/app/models/schemas.py`。
 - 修改路径时已同步 `README.md`、`docs/deployment.md` 和 `.env.example`。
 - 修改功能范围时已同步 `docs/features.md`。
-- 修改分工或职责时已同步 `docs/RAG链路匠学_六人分工任务书.md`。
+- 修改分工或职责时已同步对应的协作记录或 Pull Request。
 - 能运行的测试已运行；不能运行时，在提交说明或沟通中说明原因。

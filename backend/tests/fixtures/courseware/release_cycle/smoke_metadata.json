@@ -1,0 +1,13 @@
+{
+  "observation_mode": "SMOKE_ONLY",
+  "started_at": "2026-08-23T00:00:00Z",
+  "ended_at": "2026-08-23T00:05:00Z",
+  "timezone": "UTC",
+  "build_version": "local-smoke",
+  "config_version": "courseware-c1",
+  "environment": "local",
+  "evidence_export_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "evidence_paths": ["backend/tests/fixtures/courseware/release_cycle/smoke_events.json"],
+  "metrics": {"success_rate": 1.0, "fallback_rate": 0.0, "retry_count": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost": 0.0, "latency_ms": {"p50": 1, "p95": 1}, "recovery": {"recovered": 0}},
+  "learning_documents_regression": {"text": "passed", "practice": "passed", "assessment": "passed", "case_study": "passed", "checklist": "passed"}
+}

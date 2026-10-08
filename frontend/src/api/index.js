@@ -1,26 +1,95 @@
-import axios from 'axios'
+import { api } from './client'
 
-const api = axios.create({
-  baseURL: '/api',
-  timeout: 120000,
-})
+export { api } from './client'
+export { coursewareApi } from '../features/courseware/api'
+export { knowledgeApi } from '../features/knowledge/api'
+export { resourceLibraryApi } from '../features/resource-library/api'
 
-export const learnerApi = {
-  createProfile: (data) => api.post('/learner/profile', data),
-  getProfile: (id) => api.get(`/learner/profile/${id}`),
+export const authApi = {
+  register: (data) => api.post('/auth/register', data),
+  login: (data) => api.post('/auth/login', data),
+  me: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
+}
+
+export const profileApi = {
+  list: (params) => api.get('/profiles/', { params }),
+  get: (id) => api.get(`/profiles/${id}`),
+  abilityNodes: (id) => api.get(`/profiles/${id}/ability-nodes`),
+  update: (id, data) => api.patch(`/profiles/${id}`, data),
+  delete: (id) => api.delete(`/profiles/${id}`),
+}
+
+export const userApi = {
+  list: () => api.get('/users/'),
+  get: (id) => api.get(`/users/${id}`),
+  create: (data) => api.post('/users/', data),
+  update: (id, data) => api.patch(`/users/${id}`, data),
+}
+
+export const onboardingApi = {
+  getQuestions: (learningDirectionId) => api.get('/onboarding/questions', { params: { learning_direction_id: learningDirectionId } }),
+  createInitialProfile: (data) => api.post('/onboarding/initial-profile', data),
+}
+
+export const diagnosisApi = {
+  submit: (data) => api.post('/diagnosis/submit', data),
 }
 
 export const generateApi = {
-  generate: (data) => api.post('/generate/', data),
+  createJob: (data) => api.post('/generate/jobs', data),
+  createJobsForClaim: (data) => {
+    const types = [...new Set(data?.resource_types || [])]
+    if (data?.include_claim_check && types.length > 1) {
+      return Promise.all(types.map((resource_type) => api.post('/generate/jobs', {
+        ...data, resource_types: [resource_type],
+      })))
+    }
+    return Promise.all([api.post('/generate/jobs', data)])
+  },
+  listJobs: (learnerId) => api.get('/generate/jobs', { params: { learner_id: learnerId } }),
+  getJobStatus: (runId) => api.get(`/generate/jobs/${runId}`),
+  continueBatch: (batchId, data) => api.post(`/resources/batches/${batchId}/continuations`, data),
+  retryResourceRepresentation: (runId, resourceSpecId, representation) => api.post(
+    `/generate/jobs/${encodeURIComponent(runId)}/resource-specs/${encodeURIComponent(resourceSpecId)}`
+      + `/representations/${encodeURIComponent(representation)}/retry`,
+  ),
+}
+
+export const runApi = {
+  get: (runId) => api.get(`/runs/${runId}`),
+  timeline: (runId, params = {}) => api.get(`/runs/${runId}/timeline`, { params }),
+  evidence: (runId) => api.get(`/runs/${runId}/evidence`),
+  claims: (runId) => api.get(`/runs/${runId}/claims`),
+}
+
+export const learningHistoryApi = {
+  timeline: (learnerId) => api.get(`/learning-history/${learnerId}/timeline`),
+  journey: (learnerId, params = {}) => api.get(`/learning-history/${learnerId}/journey`, { params }),
 }
 
 export const resourceApi = {
-  listByLearner: (learnerId) => api.get(`/resources/${learnerId}`),
+  listByLearner: (learnerId, params = {}) => api.get(`/resources/${learnerId}`, { params }),
+  get: (resourceId) => api.get(`/resources/items/${encodeURIComponent(resourceId)}`),
+  getPreview: (resourceId) => api.get(`/resources/items/${encodeURIComponent(resourceId)}/preview`),
+  downloadUrl: (resourceId) => `/api/resources/file/${resourceId}`,
+  decideClaimPublication: (resourceId, publish) => api.post(
+    `/resources/items/${encodeURIComponent(resourceId)}/claim-publication-decision`,
+    { publish },
+  ),
 }
 
 export const feedbackApi = {
-  submit: (data) => api.post('/feedback/', data),
-  history: (learnerId) => api.get(`/feedback/history/${learnerId}`),
+  getEvaluationSession: (learnerId, resourceId) => api.get(`/feedback/evaluation/${learnerId}/${resourceId}`),
+  getRunEvaluationSession: (learnerId, runId) => api.get(`/feedback/evaluation/run/${learnerId}/${runId}`),
+  getBatchEvaluationSession: (learnerId, batchId) => api.get(`/feedback/evaluation/batch/${learnerId}/${batchId}`),
+  submitAttempt: (data) => api.post('/feedback/attempts', data),
+  submitRunAttempt: (data) => api.post('/feedback/attempts/run/submit', data),
+  submitBatchAttempt: (data) => api.post('/feedback/attempts/batch/submit', data),
+  selectFollowup: (data) => api.post('/feedback/followups/select', data),
+  listResults: (learnerId, params = {}) => api.get(`/feedback/results/${learnerId}`, { params }),
+  listAttempts: (learnerId, params = {}) => api.get(`/feedback/attempts/${learnerId}`, { params }),
+  getPath: (learnerId) => api.get(`/feedback/path/${learnerId}`),
 }
 
 export const reportApi = {

@@ -2,7 +2,7 @@
 from typing import Dict, List, Optional
 
 from app.db.feedback.base import BaseFeedbackRepository
-from app.models.schemas import FeedbackRecord
+from app.models.learning_documents.schemas import FeedbackRecord
 
 
 class MemoryFeedbackRepository(BaseFeedbackRepository):

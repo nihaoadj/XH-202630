@@ -1,0 +1,16 @@
+{
+  "config_version": 1,
+  "provider": "deepseek",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-v4-flash",
+  "structured_output_mode": "json_mode",
+  "timeout_seconds": 120,
+  "max_attempts": 2,
+  "retry_base_delay_seconds": 0.5,
+  "retry_max_delay_seconds": 1,
+  "input_price_per_1k_tokens": 0.001,
+  "output_price_per_1k_tokens": 0.002,
+  "price_currency": "CNY",
+  "price_version": "deepseek-v4-flash-public-pricing-2026-04-24",
+  "price_effective_date": "2026-04-24"
+}

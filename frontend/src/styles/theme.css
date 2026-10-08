@@ -1,0 +1,501 @@
+﻿:root {
+  color-scheme: light;
+  --rag-ink: #10233f;
+  --rag-ink-soft: #39526f;
+  --rag-muted: #5f738f;
+  --rag-line: #d9e6f4;
+  --rag-line-strong: #b8cde3;
+  --rag-surface: #ffffff;
+  --rag-surface-alt: #f6f9fe;
+  --rag-surface-soft: #edf4ff;
+  --rag-blue-950: #0f2749;
+  --rag-blue-900: #123360;
+  --rag-blue-800: #17447e;
+  --rag-blue-700: #2058a7;
+  --rag-blue-600: #2f78dc;
+  --rag-blue-500: #4a90ff;
+  --rag-blue-200: #cfe2ff;
+  --rag-blue-100: #e8f1ff;
+  --rag-blue-50: #f5f9ff;
+  --rag-shadow: 0 14px 36px rgba(15, 35, 60, 0.08);
+  --rag-shadow-soft: 0 8px 22px rgba(15, 35, 60, 0.06);
+  --rag-radius: 8px;
+}
+
+html,
+body {
+  background:
+    radial-gradient(circle at top left, rgba(74, 144, 255, 0.1), transparent 28%),
+    linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
+  color: var(--rag-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  letter-spacing: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+  letter-spacing: 0 !important;
+}
+
+html {
+  scrollbar-color: #a9c9ee #edf4ff;
+  scrollbar-width: thin;
+}
+
+body::-webkit-scrollbar,
+.content-area::-webkit-scrollbar,
+.landing-page::-webkit-scrollbar,
+.auth-page::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+body::-webkit-scrollbar-track,
+.content-area::-webkit-scrollbar-track,
+.landing-page::-webkit-scrollbar-track,
+.auth-page::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #edf4ff;
+}
+
+body::-webkit-scrollbar-thumb,
+.content-area::-webkit-scrollbar-thumb,
+.landing-page::-webkit-scrollbar-thumb,
+.auth-page::-webkit-scrollbar-thumb {
+  border: 2px solid #edf4ff;
+  border-radius: 999px;
+  background: #a9c9ee;
+}
+
+body::-webkit-scrollbar-thumb:hover,
+.content-area::-webkit-scrollbar-thumb:hover,
+.landing-page::-webkit-scrollbar-thumb:hover,
+.auth-page::-webkit-scrollbar-thumb:hover {
+  background: #83b1e3;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.el-button {
+  border-radius: var(--rag-radius);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.el-button--primary {
+  border-color: var(--rag-blue-700);
+  background: var(--rag-blue-700);
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus-visible {
+  border-color: var(--rag-blue-800);
+  background: var(--rag-blue-800);
+}
+
+.el-button.is-plain {
+  border-color: var(--rag-line-strong);
+  background: var(--rag-surface);
+  color: var(--rag-blue-800);
+}
+
+.el-tag {
+  border-radius: 999px;
+  letter-spacing: 0;
+}
+
+.el-card,
+.el-empty,
+.el-alert,
+.el-collapse,
+.el-descriptions,
+.el-table,
+.el-dialog {
+  border-radius: var(--rag-radius);
+}
+
+.el-card {
+  border-color: var(--rag-line);
+  box-shadow: var(--rag-shadow-soft);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: var(--rag-radius);
+  box-shadow: 0 0 0 1px var(--rag-line) inset;
+  background: var(--rag-surface);
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 2px rgba(74, 144, 255, 0.18);
+}
+
+.el-input__wrapper:hover,
+.el-select__wrapper:hover,
+.el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px var(--rag-blue-200) inset;
+}
+
+.el-select-dropdown,
+.el-popper {
+  border-radius: var(--rag-radius);
+}
+
+.el-menu {
+  border-right: 0;
+}
+
+.el-empty__description {
+  color: var(--rag-muted);
+}
+
+.blue-shell-page {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--rag-line);
+  border-radius: var(--rag-radius);
+  background: var(--rag-surface);
+  box-shadow: var(--rag-shadow);
+}
+
+.page-band {
+  border: 1px solid var(--rag-line);
+  border-radius: var(--rag-radius);
+  background: var(--rag-surface);
+  box-shadow: var(--rag-shadow-soft);
+}
+
+.page-kicker,
+.section-kicker,
+.eyebrow,
+.report-kicker,
+.archive-kicker,
+.analysis-kicker,
+.knowledge-label,
+.page-label {
+  display: block;
+  color: var(--rag-blue-700);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-primary-button {
+  border-color: var(--rag-blue-700) !important;
+  background: var(--rag-blue-700) !important;
+  color: #fff !important;
+}
+
+.app-primary-button:hover,
+.app-primary-button:focus-visible {
+  border-color: var(--rag-blue-800) !important;
+  background: var(--rag-blue-800) !important;
+}
+
+.app-secondary-button {
+  border-color: var(--rag-line-strong) !important;
+  background: var(--rag-surface) !important;
+  color: var(--rag-blue-800) !important;
+}
+
+.app-secondary-button:hover,
+.app-secondary-button:focus-visible {
+  border-color: var(--rag-blue-500) !important;
+  background: var(--rag-blue-50) !important;
+}
+
+.panel-surface {
+  border: 1px solid var(--rag-line);
+  border-radius: var(--rag-radius);
+  background: var(--rag-surface);
+  box-shadow: var(--rag-shadow-soft);
+}
+
+.panel-surface-strong {
+  border: 1px solid #cdddf1;
+  border-radius: var(--rag-radius);
+  background: linear-gradient(180deg, #fff 0%, #f7fbff 100%);
+  box-shadow: var(--rag-shadow);
+}
+
+.info-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--rag-blue-50);
+  color: var(--rag-blue-800);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.surface-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.surface-grid.tight {
+  gap: 10px;
+}
+
+.surface-title {
+  color: var(--rag-ink);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.surface-copy {
+  color: var(--rag-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.status-soft-blue {
+  background: var(--rag-blue-50);
+  color: var(--rag-blue-700);
+}
+
+.status-soft-ink {
+  background: #eef4ff;
+  color: var(--rag-ink);
+}
+
+.status-soft-line {
+  background: #f5f8fc;
+  color: var(--rag-ink-soft);
+}
+
+.status-soft-success {
+  background: #eef8ff;
+  color: var(--rag-blue-800);
+}
+
+.card-shell {
+  border: 1px solid var(--rag-line);
+  border-radius: var(--rag-radius);
+  background: var(--rag-surface);
+  box-shadow: var(--rag-shadow-soft);
+}
+
+/* Shared page rhythm for the existing feature views. */
+.generate-page,
+.resources-page,
+.report-page,
+.history-page,
+.feedback-page,
+.onboarding-page,
+.user-profile-page {
+  --page-gap: 14px;
+  color: var(--rag-ink) !important;
+}
+
+.generate-page,
+.report-page,
+.feedback-page,
+.onboarding-page,
+.user-profile-page {
+  gap: var(--page-gap) !important;
+}
+
+.generate-page > section,
+.report-page > section,
+.history-page > section,
+.feedback-page > section,
+.onboarding-page > section,
+.user-profile-page > section,
+.resources-page > header,
+.resources-page > section {
+  border-radius: var(--rag-radius) !important;
+  border-color: var(--rag-line) !important;
+  box-shadow: var(--rag-shadow-soft) !important;
+}
+
+.generate-page h2,
+.generate-page h3,
+.resources-page h2,
+.resources-page h3,
+.report-page h2,
+.report-page h3,
+.history-page h2,
+.history-page h3,
+.feedback-page h2,
+.feedback-page h3,
+.onboarding-page h2,
+.onboarding-page h3,
+.user-profile-page h2,
+.user-profile-page h3 {
+  color: var(--rag-ink) !important;
+  letter-spacing: 0 !important;
+}
+
+.generate-page .eyebrow,
+.resources-page .eyebrow,
+.report-page .report-kicker,
+.history-page .archive-kicker,
+.feedback-page .page-kicker,
+.onboarding-page .page-kicker,
+.onboarding-page .card-kicker {
+  color: var(--rag-blue-700) !important;
+}
+
+.generate-page .control-panel,
+.generate-page .process-panel,
+.generate-page .resources-panel,
+.generate-page .empty-studio,
+.resources-page .learning-toolbar,
+.resources-page .resource-shelf,
+.report-page .report-hero,
+.report-page .report-section,
+.report-page .next-round-panel,
+.history-page .archive-hero,
+.history-page .profile-archive,
+.history-page .timeline-workspace,
+.feedback-page .feedback-hero,
+.feedback-page .evaluation-panel,
+.feedback-page .reflection-panel,
+.feedback-page .result-panel,
+.onboarding-page .user-bar,
+.onboarding-page .work-card,
+.user-profile-page .header-band,
+.user-profile-page .profile-card {
+  border-radius: var(--rag-radius) !important;
+  border-color: var(--rag-line) !important;
+  background: var(--rag-surface) !important;
+  box-shadow: var(--rag-shadow-soft) !important;
+}
+
+.generate-page .primary-action,
+.generate-page .learning-mode-action,
+.generate-page .app-primary-button,
+.resources-page .el-button--primary,
+.report-page .report-refresh-button,
+.feedback-page .start-evaluation-button,
+.feedback-page .submit-feedback-button,
+.onboarding-page .el-button--primary,
+.user-profile-page .el-button--primary {
+  border-color: var(--rag-blue-700) !important;
+  background: var(--rag-blue-700) !important;
+  color: #fff !important;
+}
+
+.generate-page .primary-action:hover,
+.generate-page .learning-mode-action:hover,
+.resources-page .el-button--primary:hover,
+.report-page .report-refresh-button:hover,
+.feedback-page .start-evaluation-button:hover,
+.feedback-page .submit-feedback-button:hover,
+.onboarding-page .el-button--primary:hover,
+.user-profile-page .el-button--primary:hover {
+  border-color: var(--rag-blue-800) !important;
+  background: var(--rag-blue-800) !important;
+}
+
+.generate-page .task-selector,
+.resources-page .toolbar-fields,
+.report-page .report-selector-row,
+.feedback-page .task-selection,
+.onboarding-page .overview-strip,
+.user-profile-page .form-grid {
+  gap: 12px !important;
+}
+
+.generate-page .selector-field,
+.generate-page .job-summary,
+.resources-page .learning-toolbar,
+.report-page .profile-selector,
+.feedback-page .task-panel,
+.onboarding-page .overview-chip,
+.user-profile-page .profile-card {
+  border-color: var(--rag-line) !important;
+  background: var(--rag-surface-alt) !important;
+}
+
+.generate-page .selector-field .el-select__wrapper,
+.resources-page .el-select__wrapper,
+.report-page .el-select__wrapper,
+.feedback-page .el-select__wrapper,
+.onboarding-page .el-select__wrapper,
+.user-profile-page .el-input__wrapper,
+.user-profile-page .el-input-number,
+.user-profile-page .el-textarea__inner {
+  border-radius: var(--rag-radius) !important;
+}
+
+.resources-page .resource-item:hover,
+.resources-page .resource-item.is-active,
+.history-page .profile-item:hover,
+.history-page .profile-item.active,
+.feedback-page .question-card:hover,
+.onboarding-page .choice-card:hover:not(:disabled),
+.onboarding-page .choice-card.selected {
+  border-color: var(--rag-blue-500) !important;
+  background: var(--rag-blue-50) !important;
+  box-shadow: 0 0 0 3px rgba(74, 144, 255, 0.1) !important;
+}
+
+.report-page .summary-metric,
+.report-page .resource-item,
+.report-page .feedback-item,
+.history-page .timeline-summary article,
+.feedback-page .task-stats div,
+.feedback-page .question-card,
+.feedback-page .submit-box {
+  border-color: var(--rag-line) !important;
+  background: var(--rag-surface-alt) !important;
+}
+
+.onboarding-page .progress-panel {
+  border-color: var(--rag-line) !important;
+  border-radius: var(--rag-radius) !important;
+  background: var(--rag-surface-alt) !important;
+  box-shadow: var(--rag-shadow-soft) !important;
+}
+
+.onboarding-page .progress-card.active {
+  box-shadow: inset 4px 0 0 var(--rag-blue-600) !important;
+  background: var(--rag-blue-50) !important;
+}
+
+.history-page .timeline-rail i,
+.history-page .timeline-item.mint .timeline-rail i,
+.history-page .timeline-item.blue .timeline-rail i {
+  background: var(--rag-blue-600) !important;
+  box-shadow: 0 0 0 2px var(--rag-blue-200) !important;
+}
+
+@media (max-width: 720px) {
+  .generate-page,
+  .resources-page,
+  .report-page,
+  .history-page,
+  .feedback-page,
+  .onboarding-page,
+  .user-profile-page {
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .surface-title {
+    font-size: 18px;
+  }
+}

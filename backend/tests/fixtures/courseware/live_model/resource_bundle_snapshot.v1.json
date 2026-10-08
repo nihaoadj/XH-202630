@@ -1,0 +1,21 @@
+{
+  "fixture_version": "resource-bundle-snapshot-v1",
+  "source_type": "redacted_training_fixture",
+  "resources": [
+    {
+      "resource_id": "fixture-lecture",
+      "resource_type": "text",
+      "version": 1,
+      "content_hash": "fixture-lecture-content-v1",
+      "blocks": [{"block_id": "block-1", "text": "函数把输入映射到确定的输出。"}]
+    },
+    {
+      "resource_id": "fixture-practice",
+      "resource_type": "practice",
+      "version": 1,
+      "content_hash": "fixture-practice-content-v1",
+      "blocks": [{"block_id": "block-1", "text": "根据给定输入判断输出。"}]
+    }
+  ],
+  "learner_context": {"level": "intermediate", "pace": "steady", "language": "zh-CN", "accessibility": ["reduced_motion"]}
+}
