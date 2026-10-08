@@ -109,6 +109,8 @@ git push origin feature/<name>
 | 日志 | `backend/logs/*.log`, `*.log` |
 | 依赖目录 | `node_modules/`, `venv/`, `.venv/` |
 | 缓存 | `__pycache__/`, `.pytest_cache/` |
+| 本地更新计划和 skills | `docs/update_plan/`, `.agents/`, `.codex/`, `skills/`, `.skills/` |
+| 评测与预览产物 | `output/test-runs/`, `frontend/tests/test-results/`, 课件评测报告与 CI/live 产物、`deliverables/` 内的生成预览 |
 
 允许提交的占位文件：
 
@@ -117,6 +119,8 @@ git push origin feature/<name>
 - `backend/data/generated_resources/*/.gitkeep`
 - `backend/chroma_db/.gitkeep`
 - `backend/logs/.gitkeep`
+
+环境文件变体（如 `.env.local`）也不提交，`.env.example` 与 `.env.*.example` 作为可分发示例保留。生成资源目录各层 `.gitkeep`、交付构建脚本和需保留的文档不应被产物规则误忽略。`.gitignore` 只影响未跟踪文件，已经跟踪的文件不会自动从版本管理中移除。
 
 ## 6. 文档同步规则
 

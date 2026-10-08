@@ -20,12 +20,19 @@ def main() -> int:
         return 1
     root = ET.parse(args.junit).getroot()
     cases = []
+    process_cases = []
     for case in root.iter("testcase"):
-        cases.append({
+        item = {
             "name": f"{case.attrib.get('classname', '')}.{case.attrib.get('name', '')}",
             "status": "failed" if case.find("failure") is not None or case.find("error") is not None
             else "skipped" if case.find("skipped") is not None else "passed",
-        })
+        }
+        cases.append(item)
+        # The shared runner supplies full-backend JUnit. Only this exact
+        # module may establish process evidence; unrelated skips/failures
+        # remain the responsibility of the full-backend suite's own gate.
+        if "test_c1_process_fault_matrix" in case.attrib.get("classname", "").split("."):
+            process_cases.append(item)
     # C1 categories are deliberately explicit.  A test name is not process
     # evidence: only the dedicated process suite can contribute, and each
     # case must eventually attach its durable-state evidence separately.
@@ -51,7 +58,7 @@ def main() -> int:
     }
     result = {
         name: {
-            "matched": [item for item in cases if any(token in item["name"] for token in tokens)],
+            "matched": [item for item in process_cases if any(token in item["name"] for token in tokens)],
             "required": True,
             "evidence_type": "process" if tokens else "missing",
             "evidence": [],
@@ -72,7 +79,9 @@ def main() -> int:
         if not item["evidence"]:
             category_failures.append(f"{name}:evidence_missing")
     payload = {"schema_version": "1.1", "case_count": len(cases),
-               "passed": bool(cases) and not category_failures and all(item["status"] == "passed" for item in cases),
+               "process_case_count": len(process_cases),
+               "ignored_case_count": len(cases) - len(process_cases),
+               "passed": bool(process_cases) and not category_failures and all(item["status"] == "passed" for item in process_cases),
                "categories": result, "category_failures": category_failures}
     args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return 0 if payload["passed"] else 1

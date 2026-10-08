@@ -7,6 +7,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { chromium } from 'playwright'
+import { browserOptions } from './browserOptions.mjs'
 
 const frontendDir = path.dirname(fileURLToPath(import.meta.url))
 const backendDir = path.resolve(frontendDir, '..', '..', 'backend')
@@ -97,9 +98,7 @@ function recipeArtifactFor(recipe, theme) {
 let browser
 let viewerServer
 try {
-  const launchOptions = { headless: true }
-  if (!Object.prototype.hasOwnProperty.call(process.env, 'COURSEWARE_BROWSER_CHANNEL')) launchOptions.channel = 'msedge'
-  else if (process.env.COURSEWARE_BROWSER_CHANNEL) launchOptions.channel = process.env.COURSEWARE_BROWSER_CHANNEL
+  const launchOptions = browserOptions('COURSEWARE_BROWSER_CHANNEL')
   browser = await chromium.launch(launchOptions)
 } catch (error) {
   const message = `courseware browser test unavailable: ${error.message.split('\n')[0]}`

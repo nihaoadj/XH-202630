@@ -178,6 +178,18 @@ version1/
 
 ## 测试运行
 
+完整的层级、功能覆盖矩阵、数据/证据规范见 [项目测试方案](docs/testing/README.md)，比赛54用例、来源快照与三指标口径见 [比赛评测方案](docs/testing/competition.md)。统一入口按套件运行，默认关闭真实模型调用，每次输出独立日志、JUnit 和 JSON/Markdown 摘要：
+
+```powershell
+python scripts/run_tests.py --list
+python scripts/run_tests.py --profile quick
+python scripts/run_tests.py --profile regression
+python scripts/run_tests.py --profile acceptance
+python scripts/run_tests.py --suite backend-api --suite backend-migration
+```
+
+`quick` 用于快速定位；`regression` 包括后端全量、比赛金标、课件冻结评测、前端八项单元与构建；`acceptance` 追加两项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
+
 后端测试按执行层级分类，并由 `backend/tests/conftest.py` 自动添加 pytest marker：
 
 ```powershell

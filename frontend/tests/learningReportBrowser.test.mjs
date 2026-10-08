@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { browserOptions } from './browserOptions.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const dist = path.join(root, 'dist')
 if (!existsSync(path.join(dist, 'index.html'))) throw new Error('run npm --prefix frontend run build before browser test')
 let browser
-try { browser = await chromium.launch({ headless: true, channel: process.env.LEARNING_REPORT_BROWSER_CHANNEL || 'msedge' }) }
-catch (error) { console.log(`learning report browser unavailable: ${error.message.split('\n')[0]} (skipped)`); process.exit(0) }
+browser = await chromium.launch(browserOptions('LEARNING_REPORT_BROWSER_CHANNEL'))
 
 const report = {
   report_schema_version: '3.0', report_revision: `rpt_${'a'.repeat(64)}`, learner_id: 'learner', generated_at: new Date().toISOString(),
@@ -46,15 +46,26 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 try {
   const port = server.address().port
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  const pageErrors = []
+  page.on('pageerror', error => pageErrors.push(error.message))
   await page.goto(`http://127.0.0.1:${port}/report`, { waitUntil: 'domcontentloaded' })
   await assert.doesNotReject(() => page.getByRole('heading', { name: '学习报告', level: 2 }).waitFor())
-  assert.equal(await page.getByRole('heading', { name: '文本资源可信证据' }).count(), 1)
+  // Current ReportView displays the node mastery chart and credibility within the difficulty curve.
+  assert.equal(await page.getByRole('heading', { name: '学习节点掌握图' }).count(), 1)
   assert.equal(await page.getByRole('heading', { name: '资源难度匹配曲线' }).count(), 1)
+  await page.getByLabel('学习者准备度、资源难度与资源可信度对比曲线').waitFor()
   assert.equal(await page.getByLabel('学习者准备度、资源难度与资源可信度对比曲线').count(), 1)
   await assert.doesNotReject(() => page.getByText('平均可信度 80 / 100 · 已量化 1 · Claim 通过 0 · 受 80 分上限约束 1').waitFor())
   assert.equal(await page.getByRole('heading', { name: '学习路径规划图' }).count(), 1)
   assert.equal(await page.getByRole('combobox', { name: '报告时间窗口' }).count(), 1)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   assert.equal(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), true)
+  assert.deepEqual(pageErrors, [])
+  const evidenceDir = path.join(root, 'tests/test-results/learning-report')
+  mkdirSync(evidenceDir, { recursive: true })
+  await page.screenshot({ path: path.join(evidenceDir, 'report-phone.png'), fullPage: true })
+  writeFileSync(path.join(evidenceDir, 'summary.json'), JSON.stringify({ status: 'PASS', evidence_type: 'browser_fixture',
+    viewport: { width: 390, height: 844 }, page_errors: pageErrors,
+    checks: ['node mastery', 'difficulty and credibility chart', 'credibility ceiling', 'learning path', 'window selector', 'reduced motion'] }, null, 2))
   await page.close()
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)) }

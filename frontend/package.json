@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node tests/run.mjs unit",
+    "test:unit": "node tests/run.mjs unit",
+    "test:browser": "node tests/run.mjs browser",
+    "test:resource-shelf": "node tests/resourceShelfOrder.test.mjs",
     "test:workflow-events": "node tests/unit/utils/workflowEvents.test.mjs",
     "test:tutor": "node tests/tutorState.test.mjs",
     "test:learner-mastery": "node tests/learnerMastery.test.mjs",

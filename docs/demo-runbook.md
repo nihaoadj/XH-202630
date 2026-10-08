@@ -1,5 +1,7 @@
 # P0-09 比赛 Demo Runbook
 
+工程验收先按 [统一测试方案](testing/README.md) 执行 `python scripts/run_tests.py --profile acceptance`。三背景/54用例、冻结专业来源、三指标定义与正式质量证据见 [比赛评测方案](testing/competition.md)。后端工作流回放输出54组固定输入/协同/输出示例，离线金标与回放均不计作真实模型完成样本；缺实际生成或独立质量复核时正式质量门保留 `NOT_MEASURABLE`。
+
 > 适用基线：`feature/multi-AGENTS`，fixture `p0-09-demo-suite/v1`。本 Runbook 区分“确定性离线验收”和“真实运行时演示”；fixture/replay 不冒充实时大模型结果。
 
 ## 1. 放行原则

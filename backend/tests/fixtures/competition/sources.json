@@ -1,0 +1,763 @@
+{
+  "schema_version": "1.0",
+  "knowledge_base_id": "rag_engineering_training",
+  "knowledge_base_version": "2.3.0",
+  "hash_normalization": "utf8-lf",
+  "provenance": "local_curated_modules_with_primary_source_links; online/independent review not certified",
+  "files": {
+    "metadata.json": "af010e30e0d691597464bcd40b32d77f0f93afc6edffc95a8064d71f1cf11ed0",
+    "modules/01_rag_foundations_and_system_contracts.md": "4d63d68b2167875f456e8922f70e9129939d14a0544882e34020ccf1ae41c8ba",
+    "modules/02_ingestion_parsing_and_chunking.md": "ab8740f939660be2e990058602d61f1734af56dc23a0e7e11592f708d16b8893",
+    "modules/03_embeddings_vector_store_and_retrieval.md": "e196c8a3d5376138e9cc1e87c26e1fb84ed1e4f3dc032daff8cc1e515af0f61d",
+    "modules/04_query_hybrid_retrieval_and_rerank.md": "42fed6a68a411ee662eb660c986ed00c7addad2cc29633cba6d4668da9314291",
+    "modules/05_context_citation_and_grounded_generation.md": "714f54154f474f0dfde7bbbdd2ff84704b0d5521eb3e7c5a35f196d2d18d927b",
+    "modules/06_evaluation_ablation_and_operations.md": "3c01f7d4985f7eb4fb213799e4a3228860e5a19c9b0323561fd7b366dc161bcf",
+    "questionnaire.json": "92640053e11057ba1db4e75b764bde8ddb8ade6dccbb1fc1132a9949097ec172",
+    "diagnostic_questions.json": "572bbbb96b9d68f0f5256c0f5369edc1bace07a02bb11ca69eed4c5efb84ad3c",
+    "assessment_questions.json": "694e0a2ee711b1c92614ede075a70a774fd77dd4bd3a69041421aca71cb06132"
+  },
+  "evidence": {
+    "ev-mod01-sec1": {
+      "document_id": "module_rag_foundations",
+      "file": "modules/01_rag_foundations_and_system_contracts.md",
+      "section": "## 1. RAG 解决的核心矛盾",
+      "start_line": 10,
+      "end_line": 19,
+      "section_sha256": "00efea417beb8818ce7bce71074040a2eee397a31b52b489c85d638918eea654",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2004.04906",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/oss/python/langchain/retrieval"
+      ]
+    },
+    "ev-mod01-sec2": {
+      "document_id": "module_rag_foundations",
+      "file": "modules/01_rag_foundations_and_system_contracts.md",
+      "section": "## 2. 从经典 RAG 到模块化流水线",
+      "start_line": 20,
+      "end_line": 36,
+      "section_sha256": "d6a69f3d15d2b9dd4a2618c034099484125941b897205c831a0ceadb961ea16d",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2004.04906",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/oss/python/langchain/retrieval"
+      ]
+    },
+    "ev-mod01-sec3": {
+      "document_id": "module_rag_foundations",
+      "file": "modules/01_rag_foundations_and_system_contracts.md",
+      "section": "## 3. DPR 提供的稠密检索直觉",
+      "start_line": 37,
+      "end_line": 47,
+      "section_sha256": "9b2d7550a7113d8887805507e61b8247b6a232bac954d654d76a0aab2d957968",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2004.04906",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/oss/python/langchain/retrieval"
+      ]
+    },
+    "ev-mod01-sec7": {
+      "document_id": "module_rag_foundations",
+      "file": "modules/01_rag_foundations_and_system_contracts.md",
+      "section": "## 7. 项目验收清单",
+      "start_line": 89,
+      "end_line": 97,
+      "section_sha256": "c68b7f497ab540132dcc35927bf5c7f02c2562564652a0a3bd87c59351faa309",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2004.04906",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/oss/python/langchain/retrieval"
+      ]
+    },
+    "ev-mod02-sec10": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 10. PDF、表格与 OCR 的专项处理",
+      "start_line": 133,
+      "end_line": 145,
+      "section_sha256": "3994044384caa91c3e20d64c56053f9fa8a88da6e437d8b8309384a5818240fd",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod02-sec3": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 3. 不同格式的解析重点",
+      "start_line": 35,
+      "end_line": 48,
+      "section_sha256": "c0272bc35be7c8064555505cb1b3c185d669b482e4692b168e5da16f4097852c",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod02-sec2": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 2. 来源登记与版本治理",
+      "start_line": 22,
+      "end_line": 34,
+      "section_sha256": "f94f495b4dfa2a139e94ccdac631c5098c127b20d9651e850c10425ff1744653",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod02-sec4": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 4. 清洗原则",
+      "start_line": 49,
+      "end_line": 52,
+      "section_sha256": "a4f21e86241f013ed763cecb5ced805e28a7966219c7417ee52265f7a99450ef",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod03-sec1": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 1. Embedding 的职责",
+      "start_line": 10,
+      "end_line": 15,
+      "section_sha256": "9af1480dd5e72e8b9c1d5c3b42644948df227af401dd3bcc2ee76231581197cb",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec2": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 2. 对称与非对称检索",
+      "start_line": 16,
+      "end_line": 22,
+      "section_sha256": "e03020da6b5b64d68d5d9d2e02979b3e75251e53d359ca28c3a58adc7f4caa11",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec10": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 10. 相似度计算与分数方向",
+      "start_line": 85,
+      "end_line": 98,
+      "section_sha256": "5a8a10703bc9a4808ce58e5516a3369d562718b7eca61794bdc58552ef80f662",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec3": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 3. 相似度与归一化",
+      "start_line": 23,
+      "end_line": 37,
+      "section_sha256": "3f6b26e22996a1ea0e7f709915b2743f31c67921d9a585bffd99e5e7c9c2b038",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec11": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 11. 查询与文档编码的选择",
+      "start_line": 99,
+      "end_line": 106,
+      "section_sha256": "e3d70287e5918721d40eee9f16b69cd11c9c77ebd1a3e90635d93bbef3e4ea4c",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec4": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 4. 批量编码与异常处理",
+      "start_line": 38,
+      "end_line": 43,
+      "section_sha256": "cde3584c7c23209275ce3e29bd3f3990af8ac5d324dc13ca9b4847a11db1aa73",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod02-sec5": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 5. Chunk 策略",
+      "start_line": 53,
+      "end_line": 70,
+      "section_sha256": "9deabeffafa01818e03bacc7a9384e9a26a87ce6a683bb20804f8745a5c38857",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod02-sec9": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 9. 可执行的中文切片基线",
+      "start_line": 107,
+      "end_line": 132,
+      "section_sha256": "ffab4f05cce9f48b8cafed630b71075f8fde39cbb037b0682622bd173c69bf07",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod02-sec6": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 6. chunk_size 与 overlap 怎么选",
+      "start_line": 71,
+      "end_line": 87,
+      "section_sha256": "ece2cefc506c95ec006bbb93ccdd2b0bf4653e9cd1aad89043dc4d5296516d30",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod02-sec11": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 11. 稳定 ID、版本和增量更新实例",
+      "start_line": 146,
+      "end_line": 159,
+      "section_sha256": "8cdc872232f73a33b5151d217ee7866836e311a249df3ca3301f52980d372323",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod02-sec7": {
+      "document_id": "module_ingestion_chunking",
+      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "section": "## 7. 稳定 ID 与增量更新",
+      "start_line": 88,
+      "end_line": 96,
+      "section_sha256": "bcf661f0d0459ad8f884be7f75a07c679af9a6aab7c6f3df01a220981d1d3a0d",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ]
+    },
+    "ev-mod03-sec5": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 5. Collection 是隔离边界",
+      "start_line": 44,
+      "end_line": 49,
+      "section_sha256": "81bc7cb8c4b327e212dbd788aee38039507b91623bd8d432dcabe477c0f3b937",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec7": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 7. query、get 与元数据过滤",
+      "start_line": 56,
+      "end_line": 63,
+      "section_sha256": "d8176909412fca1fa2861aed47312aa44747cd360c87bd74ed2d90d0caf62b89",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec9": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 9. 安全和运维",
+      "start_line": 77,
+      "end_line": 84,
+      "section_sha256": "c517ca5410e545c065e9ba57dcea1ff97aa1ff6d2c84c4acb7f1aafdb2eb210b",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec6": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 6. 写入字段与幂等",
+      "start_line": 50,
+      "end_line": 55,
+      "section_sha256": "6eacbd69f2254265adc8a9890587612d1681b0af226a597f219faf086ec51e2e",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec8": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 8. Top-K 与阈值",
+      "start_line": 64,
+      "end_line": 76,
+      "section_sha256": "8ffc1900c79128086cbcddc3806dc8ff8472b309b56c29f22d8386fe95e883a4",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod03-sec13": {
+      "document_id": "module_embeddings_vector_retrieval",
+      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "section": "## 13. Top-K 与阈值的校准",
+      "start_line": 132,
+      "end_line": 146,
+      "section_sha256": "80befd68f02b9cfa72ecf8bfba434d2359357d14afbe36affefef3eb5a4db5de",
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ]
+    },
+    "ev-mod05-sec1": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 1. 检索结果不能直接拼接",
+      "start_line": 10,
+      "end_line": 23,
+      "section_sha256": "1f6c9cb12ce63f8682a058e1f5a03849822aa780497143f1b6ca3e1172464417",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod05-sec3": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 3. 证据格式和 Prompt 约束",
+      "start_line": 30,
+      "end_line": 42,
+      "section_sha256": "26c97725f8a9139c7b4ef43e52bdffec2f61456727c0993569811e55e02af975",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod05-sec2": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 2. Token 预算",
+      "start_line": 24,
+      "end_line": 29,
+      "section_sha256": "105a2397e17277e25d02ca961eb33edb452834b0f379533da0a9dfe6ed96a143",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod05-sec9": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 9. 证据包的数据结构",
+      "start_line": 104,
+      "end_line": 128,
+      "section_sha256": "966d0ed81a3301bbf6bdaa5d52ac016f377bee92ee1c27dceadbda4921072eed",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod05-sec10": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 10. 受证据约束的 Prompt 模板",
+      "start_line": 129,
+      "end_line": 156,
+      "section_sha256": "15c7d1a57820b5c162c053fef6afbd7493827d0a4c2d81ea8b0133f73d6728ce",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod05-sec4": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 4. Claim 级引用",
+      "start_line": 43,
+      "end_line": 56,
+      "section_sha256": "87b710883aa84ed587c027ec4fc6c845122a79aaa1cb2541749282a32fb10c26",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod05-sec5": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 5. 证据不足与冲突",
+      "start_line": 57,
+      "end_line": 70,
+      "section_sha256": "46baa28d403e0339540bc90089d4284cc343ed8f9d9a22bfd2d1432a0e3ac874",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod04-sec1": {
+      "document_id": "module_hybrid_rerank",
+      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "section": "## 1. 为什么单路向量检索不够",
+      "start_line": 10,
+      "end_line": 15,
+      "section_sha256": "501c8e0563d9cbfb2a90c348c310607e4915d3eaf1fb91d194986a7dc7b7a270",
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ]
+    },
+    "ev-mod04-sec4": {
+      "document_id": "module_hybrid_rerank",
+      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "section": "## 4. 稀疏、稠密和融合",
+      "start_line": 35,
+      "end_line": 46,
+      "section_sha256": "8ab3ce8b06b522572ac30387d284bfa09c2aeeee9f611c067aae1fff8f535710",
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ]
+    },
+    "ev-mod04-sec3": {
+      "document_id": "module_hybrid_rerank",
+      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "section": "## 3. HyDE 的机制和边界",
+      "start_line": 27,
+      "end_line": 34,
+      "section_sha256": "90c1e1577b6c3d01d0ca7a62394de864eaa255b67f4ab567734ed0a3b8d69864",
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ]
+    },
+    "ev-mod04-sec2": {
+      "document_id": "module_hybrid_rerank",
+      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "section": "## 2. 查询处理分层",
+      "start_line": 16,
+      "end_line": 26,
+      "section_sha256": "f13a92c7b359c810fdffd484b610ea0cc6bcd1cc39d7d38848e9d9a8d81b5b4e",
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ]
+    },
+    "ev-mod04-sec10": {
+      "document_id": "module_hybrid_rerank",
+      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "section": "## 10. 查询改写的输入输出契约",
+      "start_line": 79,
+      "end_line": 99,
+      "section_sha256": "c4e014f87bf693fc80305c5925031b342f72fe1f772eac6cb639b02f06662f7f",
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ]
+    },
+    "ev-mod05-sec11": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 11. Claim 拆分与审核实例",
+      "start_line": 157,
+      "end_line": 169,
+      "section_sha256": "c07425b58ba67428b7c2e5c9c54067d7b776a994d95a4fa3ddb6c8186babce06",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod04-sec5": {
+      "document_id": "module_hybrid_rerank",
+      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "section": "## 5. Retrieve & Re-Rank",
+      "start_line": 47,
+      "end_line": 56,
+      "section_sha256": "c74887790cd06ca372e5166ffca6239e5df300f65dfbeea776caa4b40b80efe3",
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ]
+    },
+    "ev-mod04-sec12": {
+      "document_id": "module_hybrid_rerank",
+      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "section": "## 12. CrossEncoder 重排实现骨架",
+      "start_line": 119,
+      "end_line": 139,
+      "section_sha256": "7c0c2f582df7eec41bcf5c3b6d6c8c7e089dfcdb002ba44b4f778bfdf77eead8",
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ]
+    },
+    "ev-mod04-sec14": {
+      "document_id": "module_hybrid_rerank",
+      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "section": "## 14. 常见症状—原因—验证方法",
+      "start_line": 146,
+      "end_line": 156,
+      "section_sha256": "dc1c00d1e2c512f954c43ce5b8508d367f4aa39719f41c75623cedc65b83670e",
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ]
+    },
+    "ev-mod05-sec12": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 12. 审核状态与数据库记录",
+      "start_line": 170,
+      "end_line": 181,
+      "section_sha256": "0bf1ff85dbf1fe42db663b1f3bba9d45a1c8e5c667c793b28bd4a37f2ded5f63",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod05-sec13": {
+      "document_id": "module_context_citation_grounding",
+      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "section": "## 13. 间接提示注入防护",
+      "start_line": 182,
+      "end_line": 193,
+      "section_sha256": "49b11951f3b90bf64049883d63cd55dff197610e90a2d581775f472c2f3e08c4",
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ]
+    },
+    "ev-mod06-sec3": {
+      "document_id": "module_evaluation_tuning",
+      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "section": "## 3. 检索指标",
+      "start_line": 27,
+      "end_line": 35,
+      "section_sha256": "34ade53d8f155fdeb36d4e3b8c380e1d9ee96b263e526728f1a38dc7672d04b9",
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ]
+    },
+    "ev-mod06-sec4": {
+      "document_id": "module_evaluation_tuning",
+      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "section": "## 4. 生成与 Claim 指标",
+      "start_line": 36,
+      "end_line": 54,
+      "section_sha256": "9a172cadd2960aeea2b1ce23175aae1a08054343dbb5a6a74d2f5e7fbff5a1d2",
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ]
+    },
+    "ev-mod06-sec5": {
+      "document_id": "module_evaluation_tuning",
+      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "section": "## 5. LLM-as-judge 的可靠性",
+      "start_line": 55,
+      "end_line": 58,
+      "section_sha256": "94c0de825cc47dbbcf244699e1819509a9e54990265a9f6a140e05fddb0366ce",
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ]
+    },
+    "ev-mod06-sec10": {
+      "document_id": "module_evaluation_tuning",
+      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "section": "## 10. 评测集的可执行样例",
+      "start_line": 89,
+      "end_line": 112,
+      "section_sha256": "924312df7137e0ae1899fa9348ce4a7c2b6d990067e409d4e0d27a4375eaa99d",
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ]
+    },
+    "ev-mod06-sec6": {
+      "document_id": "module_evaluation_tuning",
+      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "section": "## 6. 消融实验",
+      "start_line": 59,
+      "end_line": 72,
+      "section_sha256": "c2dcfba8e529302cd330c3ab78bdaf98937718f87dcd86a3472f705879bfc70c",
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ]
+    },
+    "ev-mod06-sec14": {
+      "document_id": "module_evaluation_tuning",
+      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "section": "## 14. 单变量消融实验实例",
+      "start_line": 163,
+      "end_line": 175,
+      "section_sha256": "4fdc92a20d3d469f6a17839670b52dc03a7628e58633113ad6add96d82def6d2",
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ]
+    },
+    "ev-mod06-sec7": {
+      "document_id": "module_evaluation_tuning",
+      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "section": "## 7. 在线监控",
+      "start_line": 73,
+      "end_line": 78,
+      "section_sha256": "6c2e75140e2fa40c446042711e3e250265b5521baa99c470f53ca2f426af2c10",
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ]
+    },
+    "ev-mod06-sec15": {
+      "document_id": "module_evaluation_tuning",
+      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "section": "## 15. 线上监控和反馈闭环",
+      "start_line": 176,
+      "end_line": 181,
+      "section_sha256": "4d6183daaf9ebb47753dfa78c6650b8c7f47058e687cc68f37324513fe222ac2",
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ]
+    }
+  }
+}

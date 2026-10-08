@@ -1,0 +1,80 @@
+{
+  "fixture_version": "v1",
+  "knowledge_base_id": "rag_engineering_training",
+  "resource_types": ["讲义", "实操指南", "分阶测试题"],
+  "case_count": 54,
+  "design_note": "18 个画像（3 背景 × 3 水平 × 2 目标节点）× 3 类资源 = 54 组用例，满足比赛要求的至少 50 组；expected_difficulty 按套件标注协议生成，predicted_difficulty 由系统策略在评测时计算，不预置。",
+  "cases": [
+    {"case_id": "gold-student-t1-basics-text", "learner_id": "gold-student-t1-basics", "resource_type": "讲义", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "初级"},
+    {"case_id": "gold-student-t1-basics-practice", "learner_id": "gold-student-t1-basics", "resource_type": "实操指南", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "初级"},
+    {"case_id": "gold-student-t1-basics-assessment", "learner_id": "gold-student-t1-basics", "resource_type": "分阶测试题", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "初级"},
+
+    {"case_id": "gold-student-t1-embed-text", "learner_id": "gold-student-t1-embed", "resource_type": "讲义", "target_skill_nodes": ["embedding"], "expected_difficulty": "初级"},
+    {"case_id": "gold-student-t1-embed-practice", "learner_id": "gold-student-t1-embed", "resource_type": "实操指南", "target_skill_nodes": ["embedding"], "expected_difficulty": "初级"},
+    {"case_id": "gold-student-t1-embed-assessment", "learner_id": "gold-student-t1-embed", "resource_type": "分阶测试题", "target_skill_nodes": ["embedding"], "expected_difficulty": "初级"},
+
+    {"case_id": "gold-student-t2-chunking-text", "learner_id": "gold-student-t2-chunking", "resource_type": "讲义", "target_skill_nodes": ["chunking"], "expected_difficulty": "中级"},
+    {"case_id": "gold-student-t2-chunking-practice", "learner_id": "gold-student-t2-chunking", "resource_type": "实操指南", "target_skill_nodes": ["chunking"], "expected_difficulty": "中级"},
+    {"case_id": "gold-student-t2-chunking-assessment", "learner_id": "gold-student-t2-chunking", "resource_type": "分阶测试题", "target_skill_nodes": ["chunking"], "expected_difficulty": "中级"},
+
+    {"case_id": "gold-student-t2-retrieval-text", "learner_id": "gold-student-t2-retrieval", "resource_type": "讲义", "target_skill_nodes": ["similarity_retrieval"], "expected_difficulty": "中级"},
+    {"case_id": "gold-student-t2-retrieval-practice", "learner_id": "gold-student-t2-retrieval", "resource_type": "实操指南", "target_skill_nodes": ["similarity_retrieval"], "expected_difficulty": "中级"},
+    {"case_id": "gold-student-t2-retrieval-assessment", "learner_id": "gold-student-t2-retrieval", "resource_type": "分阶测试题", "target_skill_nodes": ["similarity_retrieval"], "expected_difficulty": "中级"},
+
+    {"case_id": "gold-student-t3-eval-text", "learner_id": "gold-student-t3-eval", "resource_type": "讲义", "target_skill_nodes": ["rag_evaluation"], "expected_difficulty": "高级"},
+    {"case_id": "gold-student-t3-eval-practice", "learner_id": "gold-student-t3-eval", "resource_type": "实操指南", "target_skill_nodes": ["rag_evaluation"], "expected_difficulty": "高级"},
+    {"case_id": "gold-student-t3-eval-assessment", "learner_id": "gold-student-t3-eval", "resource_type": "分阶测试题", "target_skill_nodes": ["rag_evaluation"], "expected_difficulty": "高级"},
+
+    {"case_id": "gold-student-t3-tuning-text", "learner_id": "gold-student-t3-tuning", "resource_type": "讲义", "target_skill_nodes": ["rag_tuning"], "expected_difficulty": "高级"},
+    {"case_id": "gold-student-t3-tuning-practice", "learner_id": "gold-student-t3-tuning", "resource_type": "实操指南", "target_skill_nodes": ["rag_tuning"], "expected_difficulty": "高级"},
+    {"case_id": "gold-student-t3-tuning-assessment", "learner_id": "gold-student-t3-tuning", "resource_type": "分阶测试题", "target_skill_nodes": ["rag_tuning"], "expected_difficulty": "高级"},
+
+    {"case_id": "gold-backend-t1-parsing-text", "learner_id": "gold-backend-t1-parsing", "resource_type": "讲义", "target_skill_nodes": ["document_parsing"], "expected_difficulty": "初级"},
+    {"case_id": "gold-backend-t1-parsing-practice", "learner_id": "gold-backend-t1-parsing", "resource_type": "实操指南", "target_skill_nodes": ["document_parsing"], "expected_difficulty": "初级"},
+    {"case_id": "gold-backend-t1-parsing-assessment", "learner_id": "gold-backend-t1-parsing", "resource_type": "分阶测试题", "target_skill_nodes": ["document_parsing"], "expected_difficulty": "初级"},
+
+    {"case_id": "gold-backend-t1-basics-text", "learner_id": "gold-backend-t1-basics", "resource_type": "讲义", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "初级"},
+    {"case_id": "gold-backend-t1-basics-practice", "learner_id": "gold-backend-t1-basics", "resource_type": "实操指南", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "初级"},
+    {"case_id": "gold-backend-t1-basics-assessment", "learner_id": "gold-backend-t1-basics", "resource_type": "分阶测试题", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "初级"},
+
+    {"case_id": "gold-backend-t2-vector-text", "learner_id": "gold-backend-t2-vector", "resource_type": "讲义", "target_skill_nodes": ["vector_store"], "expected_difficulty": "中级"},
+    {"case_id": "gold-backend-t2-vector-practice", "learner_id": "gold-backend-t2-vector", "resource_type": "实操指南", "target_skill_nodes": ["vector_store"], "expected_difficulty": "中级"},
+    {"case_id": "gold-backend-t2-vector-assessment", "learner_id": "gold-backend-t2-vector", "resource_type": "分阶测试题", "target_skill_nodes": ["vector_store"], "expected_difficulty": "中级"},
+
+    {"case_id": "gold-backend-t2-prompt-text", "learner_id": "gold-backend-t2-prompt", "resource_type": "讲义", "target_skill_nodes": ["prompt_assembly"], "expected_difficulty": "中级"},
+    {"case_id": "gold-backend-t2-prompt-practice", "learner_id": "gold-backend-t2-prompt", "resource_type": "实操指南", "target_skill_nodes": ["prompt_assembly"], "expected_difficulty": "中级"},
+    {"case_id": "gold-backend-t2-prompt-assessment", "learner_id": "gold-backend-t2-prompt", "resource_type": "分阶测试题", "target_skill_nodes": ["prompt_assembly"], "expected_difficulty": "中级"},
+
+    {"case_id": "gold-backend-t3-hybrid-text", "learner_id": "gold-backend-t3-hybrid", "resource_type": "讲义", "target_skill_nodes": ["hybrid_retrieval"], "expected_difficulty": "高级"},
+    {"case_id": "gold-backend-t3-hybrid-practice", "learner_id": "gold-backend-t3-hybrid", "resource_type": "实操指南", "target_skill_nodes": ["hybrid_retrieval"], "expected_difficulty": "高级"},
+    {"case_id": "gold-backend-t3-hybrid-assessment", "learner_id": "gold-backend-t3-hybrid", "resource_type": "分阶测试题", "target_skill_nodes": ["hybrid_retrieval"], "expected_difficulty": "高级"},
+
+    {"case_id": "gold-backend-t3-rerank-text", "learner_id": "gold-backend-t3-rerank", "resource_type": "讲义", "target_skill_nodes": ["rerank"], "expected_difficulty": "高级"},
+    {"case_id": "gold-backend-t3-rerank-practice", "learner_id": "gold-backend-t3-rerank", "resource_type": "实操指南", "target_skill_nodes": ["rerank"], "expected_difficulty": "高级"},
+    {"case_id": "gold-backend-t3-rerank-assessment", "learner_id": "gold-backend-t3-rerank", "resource_type": "分阶测试题", "target_skill_nodes": ["rerank"], "expected_difficulty": "高级"},
+
+    {"case_id": "gold-data-t1-embed-text", "learner_id": "gold-data-t1-embed", "resource_type": "讲义", "target_skill_nodes": ["embedding"], "expected_difficulty": "中级"},
+    {"case_id": "gold-data-t1-embed-practice", "learner_id": "gold-data-t1-embed", "resource_type": "实操指南", "target_skill_nodes": ["embedding"], "expected_difficulty": "中级"},
+    {"case_id": "gold-data-t1-embed-assessment", "learner_id": "gold-data-t1-embed", "resource_type": "分阶测试题", "target_skill_nodes": ["embedding"], "expected_difficulty": "中级"},
+
+    {"case_id": "gold-data-t1-basics-text", "learner_id": "gold-data-t1-basics", "resource_type": "讲义", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "中级"},
+    {"case_id": "gold-data-t1-basics-practice", "learner_id": "gold-data-t1-basics", "resource_type": "实操指南", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "中级"},
+    {"case_id": "gold-data-t1-basics-assessment", "learner_id": "gold-data-t1-basics", "resource_type": "分阶测试题", "target_skill_nodes": ["rag_basics"], "expected_difficulty": "中级"},
+
+    {"case_id": "gold-data-t2-retrieval-text", "learner_id": "gold-data-t2-retrieval", "resource_type": "讲义", "target_skill_nodes": ["similarity_retrieval"], "expected_difficulty": "中级"},
+    {"case_id": "gold-data-t2-retrieval-practice", "learner_id": "gold-data-t2-retrieval", "resource_type": "实操指南", "target_skill_nodes": ["similarity_retrieval"], "expected_difficulty": "中级"},
+    {"case_id": "gold-data-t2-retrieval-assessment", "learner_id": "gold-data-t2-retrieval", "resource_type": "分阶测试题", "target_skill_nodes": ["similarity_retrieval"], "expected_difficulty": "中级"},
+
+    {"case_id": "gold-data-t2-citation-text", "learner_id": "gold-data-t2-citation", "resource_type": "讲义", "target_skill_nodes": ["citation"], "expected_difficulty": "中级"},
+    {"case_id": "gold-data-t2-citation-practice", "learner_id": "gold-data-t2-citation", "resource_type": "实操指南", "target_skill_nodes": ["citation"], "expected_difficulty": "中级"},
+    {"case_id": "gold-data-t2-citation-assessment", "learner_id": "gold-data-t2-citation", "resource_type": "分阶测试题", "target_skill_nodes": ["citation"], "expected_difficulty": "中级"},
+
+    {"case_id": "gold-data-t3-hallucination-text", "learner_id": "gold-data-t3-hallucination", "resource_type": "讲义", "target_skill_nodes": ["hallucination_control"], "expected_difficulty": "高级"},
+    {"case_id": "gold-data-t3-hallucination-practice", "learner_id": "gold-data-t3-hallucination", "resource_type": "实操指南", "target_skill_nodes": ["hallucination_control"], "expected_difficulty": "高级"},
+    {"case_id": "gold-data-t3-hallucination-assessment", "learner_id": "gold-data-t3-hallucination", "resource_type": "分阶测试题", "target_skill_nodes": ["hallucination_control"], "expected_difficulty": "高级"},
+
+    {"case_id": "gold-data-t3-tuning-text", "learner_id": "gold-data-t3-tuning", "resource_type": "讲义", "target_skill_nodes": ["rag_tuning"], "expected_difficulty": "高级"},
+    {"case_id": "gold-data-t3-tuning-practice", "learner_id": "gold-data-t3-tuning", "resource_type": "实操指南", "target_skill_nodes": ["rag_tuning"], "expected_difficulty": "高级"},
+    {"case_id": "gold-data-t3-tuning-assessment", "learner_id": "gold-data-t3-tuning", "resource_type": "分阶测试题", "target_skill_nodes": ["rag_tuning"], "expected_difficulty": "高级"}
+  ]
+}
