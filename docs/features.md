@@ -290,8 +290,20 @@ Chroma 向量召回、BM25、RRF 和精排；多个目标节点取 Chunk 并集�
 - `p0-09-demo-suite/v1` 固定 KB、稳定 DocumentVersion/Chunk/knowledge point，以及三档 learner、Attempt、Review、Claim、SSE 和 failure injection。
 - acceptance runner 分开执行 deterministic offline、local runtime 与显式 opt-in live smoke，manifest 不保存 Key、Prompt、模型原始响应或完整画像。
 - 比赛方案数值阈值为幻觉率 `<5%`、难度适配准确率 `>=85%`、核心知识点覆盖率 `>=90%`；正式口径不用 Reviewer 自评分。
-- 当前 fixture 只有 3 个 learner，未达到比赛高分测试计划所要求的至少 50 组用例，因此三项 fixture 实际值只作管线校验，正式结论为 `NOT_MEASURABLE`。
+- P0-09 fixture 只有 3 个 learner，仅作管线校验；比赛口径的样本量由 14.1 的金标套件满足。
 - SQLite 外键 hook、资源版本唯一约束和迁移演练脚本已同步；当前 runtime Gate 仍会因前端 Claim/Evidence、SourceRef V2 和画像/路径报告缺口而 `FAIL`。公共 health ready 不能替代比赛 Gate。
+
+## 14.1 比赛金标评测套件（RAG 工程领域）
+
+- 套件位于 `backend/tests/fixtures/competition/`：`suite.json`（阈值与标注协议）、`profiles/`（3 背景 × 3 水平 × 2 目标节点 = 18 个画像）、`cases/`（18 画像 × 3 资源类型 = 54 组用例，满足比赛至少 50 组）、`claims/`（74 条事实 Claim + 4 条非事实 Claim，13 个能力节点全覆盖）。
+- 学习者背景覆盖应届学生、转岗后端工程师、数据工程师三类画像；`expected_difficulty` 按套件内声明的标注协议生成（含 ml_basics 背景 tier1 提级规则），`predicted_difficulty` 由系统策略 `difficulty_for_tier` 计算。
+- 评测服务 `app/services/reports/competition_suite.py` 复用 `compute_competition_claim_metrics` 与 `evaluate_difficulty_fixtures`：幻觉率口径为最终发布叶子资源上事实 Claim 的 `(contradicted + not_in_evidence) / factual_total`，难度适配输出准确率与混淆矩阵，覆盖率统计被 supported Claim 覆盖的目标节点比例。
+- 离线执行入口 `backend/scripts/competition_eval.py`：不调用大模型，金标 Claim verdict 为已有人工整理标注；离线基线为幻觉率3/74≈4.1%、难度适配48/54≈88.9%、覆盖率13/13=100%。这些是数据/策略回归数值，`gates` PASS 不表示真实生成达标；报告 `completed_generation_count=0`，`official_gates` 均为 `NOT_MEASURABLE`，独立质量复核未运行。
+- Live 评测通路已实现，但本轮未执行真实模型：生产生成/Claim审核后记录每例输入、run_id、事件hash、来源快照、Claim与资源hash；异常记安全类型与失败阶段并继续，失败保留在难度分母。要求显式开关/有效凭据/隔离环境；未就绪退出2。至少50完整完成、三背景/三类型、冻结来源与完整事实判定才可给运行指标结论，小样本为 `NOT_MEASURABLE`，失败退出1。系统自审仍不替代独立质量复核；`--require-official` 在缺正式证据时退出2。
+- 回归入口：`backend/tests/unit/reports/test_competition_suite.py`（结构、标注协议与 live 计划映射校验）、`backend/tests/integration/workflow/test_competition_metrics.py`（三项指标与混淆矩阵端到端）与 `backend/tests/live/test_competition_live.py`（live 就绪门禁与小批量真实执行，默认跳过）。
+- 领域泛化与可迁移能力有可执行证明：评测代码不绑定任何领域特定逻辑，`load_suite`/`validate_suite`/`evaluate_competition_metrics` 支持注入领域套件自身的 suite_id 与知识库根目录；`test_evaluation_pipeline_transfers_to_new_domain_without_code_changes` 用合成第二领域（仅新增数据文件：知识库 manifest + 套件四文件）跑通加载、校验与三项指标计算全链路，证明迁移到新领域零代码改动。
+- 来源快照冻结现有KB的10份文件与51个证据章节，按UTF-8/LF hash校验，引用/版本/正文漂移拒绝加载；本地模块附论文/官方文档来源，但未认证在线核验或独立专家复核。54例通过实际工作流/Claim/发布控制配合 Scripted Agent 回放，报告完整输入/trace/最终资源，明确 `live_generation_count=0`。
+- 完整层级、功能映射与报告规范见 [测试方案](testing/README.md)，比赛数据/指标/正式证据流程见 [比赛评测方案](testing/competition.md)。统一 `scripts/run_tests.py` 提供 quick/regression/acceptance 与领域专项，聚合10份前端测试并保留原入口，必需浏览器不能以缺环境冒充通过；CI复用同一目录并保留课件硬门与手动live边界。
 
 ## 15. 证据约束 Tutor 导学
 

@@ -2,22 +2,31 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.env
-**/.env
 venv/
 .venv/
 
+# Local environment files; keep distributable examples
+.env
+.env.*
+!.env.example
+!.env.*.example
+
 # Database
 *.db
+*.sqlite
 *.sqlite3
-backend/data/*.db
-backend/data/generated_resources/*
-!backend/data/generated_resources/
-!backend/data/generated_resources/.gitkeep
-!backend/data/generated_resources/*/
-!backend/data/generated_resources/*/.gitkeep
-backend/data/generated_resources/**/*
-!backend/data/generated_resources/**/.gitkeep
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+/backend/data/generated_resources/**/*
+!/backend/data/generated_resources/**/
+!/backend/data/generated_resources/**/.gitkeep
 backend/data/models/
 
 # Vector store
@@ -31,9 +40,7 @@ backend/logs/*.log
 
 # Testing
 .pytest_cache/
-**/.pytest_cache/
 .pytest-*/
-**/.pytest-*/
 .tmp_pytest/
 .tmp_pytest_*/
 .tmp-pytest/
@@ -53,15 +60,33 @@ frontend/tests/test-results/
 backend/.test-tmp*
 backend/.tmp-node-scope-pytest/
 backend/assessment-live-eval*.log.err
-backend/data/*.db-wal
-backend/data/*.db-shm
+backend/competition-eval-report.json
+backend/competition-eval-report-live.json
+backend/courseware-eval-report.json
+backend/courseware-ci-artifacts/
+backend/courseware-live-workflow-artifacts/
+backend/courseware-live-model.json
+output/test-runs/
+frontend/test-results/
 backend/logs/local-dev-processes.json
-deliverables/
+/.live-claim-runs/
+/wzx/out/
 
-# Codex / local agent workspace
+# Generated exports/previews; retain source scripts and authored documents
+/deliverables/ai-beginner-profile-artifacts-*
+/deliverables/review-*.png
+/deliverables/review-*.html
+/deliverables/debug-review-cover.png
+/deliverables/taskbook-render/
+
+# Local update plans and skills
+/docs/update_plan/
+/skills/
+/.skills/
+
+# Codex / local agent workspace (includes .agents/skills and .codex/skills)
 .agents/
 .codex/
-.codex_tmp/
 .codex_tmp/
 
 # Frontend
