@@ -1,5 +1,7 @@
 # 本地启动与部署说明
 
+> 文档核对日期：2026-10-09。
+
 > 当前可验证的部署拓扑是 SQLite：一个 FastAPI Web 进程、一个独立互动课件 Durable Worker 和一个 Vite 前端。它适用于开发、演示和本地验收；不应描述为多 Worker 或多实例的生产集群。
 
 ## 1. 运行前提
@@ -29,9 +31,9 @@ Windows PowerShell：
 
 ```powershell
 py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe scripts\start_local.py --install --bootstrap
+.\.venv\Scripts\python.exe scripts\start_local.py --install --bootstrap --check
 # 编辑 backend\.env，填写 LLM_API_KEY 等本机配置
-.\.venv\Scripts\python.exe scripts\start_local.py --bootstrap --initialize
+.\.venv\Scripts\python.exe scripts\start_local.py --initialize --check
 ```
 
 当前仓库若已使用便携式 `.venv\python.exe`，将上面两处 `.venv\Scripts\python.exe` 替换为 `.venv\python.exe`；启动器会自动识别这两种 Windows 布局和 Linux/macOS 的 `.venv/bin/python`。
@@ -40,12 +42,14 @@ Linux/macOS：
 
 ```bash
 python3.11 -m venv .venv
-.venv/bin/python scripts/start_local.py --install --bootstrap
+.venv/bin/python scripts/start_local.py --install --bootstrap --check
 # 编辑 backend/.env，填写 LLM_API_KEY 等本机配置
-.venv/bin/python scripts/start_local.py --bootstrap --initialize
+.venv/bin/python scripts/start_local.py --initialize --check
 ```
 
 `--initialize` 会显式执行知识入库和示例数据库初始化，可能耗时；不要把它当作每次启动步骤。已有真实数据时，先备份 SQLite 文件，并只在确认需要时初始化。
+
+上述准备命令通过 `--check` 在完成指定操作后退出，不启动 Web / Worker / 前端；准备完成后再执行下一节的日常启动命令。`--check` 本身只校验虚拟环境、本地配置、Uvicorn 和前端依赖存在，不执行 readiness、模型连接或数据库完整性检查；与 `--install` / `--initialize` 组合时，这些显式操作仍会执行。模型文件须在入库前准备，默认不会在线下载。
 
 ### 2.2 日常一键启动
 
@@ -159,6 +163,16 @@ COURSEWARE_WORKER_HEALTH_PORT=8081
 
 课件 AI-first 链路的预算、总时限和审核策略由 `COURSEWARE_*` 环境变量控制，完整受约束模板见 [backend/.env.example](../backend/.env.example)。AI 审核不可用、预算耗尽或硬门失败会按策略降级、隔离或拒绝，不能把失败当作发布成功。
 
+代码内建默认值与分发模板有以下差异，最终值以进程环境和 `backend/.env` 为准：
+
+| 配置项 | `Settings` 内建默认 | `.env.example` | 影响 |
+|---|---|---|---|
+| `LLM_STRUCTURED_OUTPUT_MODE` | `auto` | `json_mode` | 新建本地配置使用模板值；`auto` 才先尝试 function calling |
+| `CLAIM_PARTIAL_PUBLISH` | `false` | `true` | 模板显式允许符合策略的 partial Claim 发布，保留 `incomplete` 指标；不能计作完整事实审核 |
+| `LLM_BASE_URL` / `LLM_MODEL` | DashScope / Qwen | DeepSeek 示例 | 示例 Provider 选择可覆盖；真实运行必须填写对应凭据 |
+
+讲义默认输出上限 65536 token / 240 秒，实操指南默认 65536 token / 300 秒；通用资源输出预算由 `LLM_RESOURCE_GENERATOR_MAX_OUTPUT_TOKENS` 控制，普通审核和 Claim 使用独立的重试 / 超时配置。以上是调用预算，实际内容受 DTO、Evidence 和整 Run 时限约束。完整字段以 [配置源码](../backend/app/config.py) 和模板为准。
+
 启动前的只读检查不会调用计费 LLM、下载 Embedding 或创建 collection：
 
 ```powershell
@@ -205,4 +219,14 @@ git diff --check
 
 SSE 路由须关闭代理缓冲，read timeout 必须大于 `WORKFLOW_SSE_HEARTBEAT_SECONDS`，并保留 `Cache-Control: no-cache`、`Connection: keep-alive`、`X-Accel-Buffering: no`。反向代理、HTTPS、密钥管理、备份恢复演练和真实浏览器/CI 证据均属于目标部署环境的额外责任；本地测试通过不能替代它们。
 
+报告当前快照流 `/api/report/{learner_id}/events` 使用独立的 `REPORT_SSE_*` 间隔，也需要关闭缓冲；它是 revision 失效通知，客户端重新拉取带 ETag 的报告。课件事件流和文本 Run SSE 是各自的持久任务流，不能混用游标。
+
 课件本地故障矩阵、浏览器验证和发布候选证据以当前代码、测试目录和本部署文档为准；课件工作流的公开入口与启动方式由 `backend/scripts/courseware_worker.py` 和 [API 文档](api.md) 维护。
+
+## 8. Docker 与前端静态部署边界
+
+当前 `Dockerfile` 安装 Python 依赖并启动端口 8000 的 Uvicorn Web；不构建前端、不启动课件 Worker，也没有配套 Compose 编排。容器方式仍须单独运行 Worker，并共享数据库、资源根目录和模型 / 索引配置；前端生产构建为 `frontend/dist`，由目标环境的静态服务器提供。
+
+当前仓库没有 `.dockerignore`，`Dockerfile` 会复制整个 `backend/`；可分发镜像应从不含真实 `.env`、数据库、模型缓存和生成物的干净构建目录制作，运行配置和数据由部署环境注入。Git 忽略规则不会自动排除 Docker 构建上下文。
+
+`vite.config.js` 中的 `/api`、`/health` 代理只在开发服务器生效。静态部署需在同源反向代理中配置这些后端路径，并对 `/dashboard`、`/learning/new`、`/learning/history`、`/user/profile` 等 Vue Router history URL 回退到 `index.html`，确保刷新和直达可用。课件预览路径及认证 Cookie / SSE 契约保持 [API 文档](api.md) 的约束。

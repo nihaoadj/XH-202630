@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1570" viewBox="0 0 1800 1570" role="img" aria-labelledby="title desc">
+  <title id="title">文本学习资源生产工作流</title>
+  <desc id="desc">文本资源从请求、学情诊断、知识点节点映射、按节点预筛选和证据约束生成，到第一重普通审核和第二重 Claim 审核的清晰分层流程。</desc>
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#52647a"/></marker>
+    <linearGradient id="headerBg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ffffff"/><stop offset="62%" stop-color="#f8fbff"/><stop offset="100%" stop-color="#eef6ff"/></linearGradient>
+    <filter id="headerShadow" x="-5%" y="-20%" width="110%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#64748b" flood-opacity="0.12"/></filter>
+    <style>
+      text{font-family:"Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif;fill:#172033}.t{font-size:34px;font-weight:700;letter-spacing:.5px}.st{font-size:17px;fill:#5d6b7e}.lane{font-size:22px;font-weight:700}.h{font-size:18px;font-weight:700}.p{font-size:14px;fill:#405167}.n{font-size:12.5px;fill:#5d6b7e}.tag{font-size:13px;font-weight:700}
+      .f{fill:none;stroke:#52647a;stroke-width:2.5;marker-end:url(#a)}.b{fill:none;stroke:#2563eb;stroke-width:2.7;marker-end:url(#a)}.v{fill:none;stroke:#7c3aed;stroke-width:2.7;marker-end:url(#a)}.o{fill:none;stroke:#d97706;stroke-width:2.7;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect width="1800" height="1570" fill="#f8fafc"/>
+  <rect x="32" y="24" width="1736" height="104" rx="18" fill="url(#headerBg)" stroke="#cfe0f5" filter="url(#headerShadow)"/>
+  <text x="900" y="78" text-anchor="middle" class="t"><tspan fill="#13233a">文本学习资源</tspan><tspan fill="#2563eb">生产工作流</tspan></text>
+  <path d="M810 98H990" stroke="#93c5fd" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="900" cy="98" r="4.5" fill="#2563eb"/>
+
+  <!-- 1: evidence -->
+  <rect x="32" y="154" width="1736" height="390" rx="20" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="66" y="195" class="lane" fill="#1d4ed8">1. 任务创建、诊断与证据门禁</text>
+  <g fill="#fff" stroke="#60a5fa" stroke-width="2">
+    <rect x="70" y="240" width="210" height="104" rx="14"/><rect x="330" y="240" width="260" height="104" rx="14"/>
+    <rect x="640" y="240" width="230" height="104" rx="14"/><rect x="920" y="240" width="380" height="104" rx="14"/>
+    <rect x="1350" y="240" width="240" height="104" rx="14"/>
+  </g>
+  <text x="175" y="272" text-anchor="middle" class="h">生成请求</text><text x="175" y="299" text-anchor="middle" class="p">主题、资源类型、画像</text><text x="175" y="322" text-anchor="middle" class="p">节点、难度、审核开关</text>
+  <text x="460" y="272" text-anchor="middle" class="h">创建并执行任务</text><text x="460" y="299" text-anchor="middle" class="p">校验请求并冻结任务输入</text><text x="460" y="322" text-anchor="middle" class="p">进入后台生成流程</text>
+  <text x="755" y="272" text-anchor="middle" class="h">学情诊断</text><text x="755" y="299" text-anchor="middle" class="p">识别盲点与目标知识点</text><text x="755" y="322" text-anchor="middle" class="p">输出检索目标与难度</text>
+  <text x="1110" y="265" text-anchor="middle" class="h">检索范围选择</text><text x="1110" y="290" text-anchor="middle" class="p">目标知识点 → 图谱 node_id</text><text x="1110" y="313" text-anchor="middle" class="p">映射成功：按 node_id 预筛选候选 Chunk</text><text x="1110" y="336" text-anchor="middle" class="p">无映射：使用请求知识库范围</text>
+  <text x="1470" y="272" text-anchor="middle" class="h">混合检索</text><text x="1470" y="299" text-anchor="middle" class="p">向量 + BM25 + 精排</text><text x="1470" y="322" text-anchor="middle" class="p">版本 / 哈希 / KB 校验</text>
+  <path d="M280 292H330M590 292H640M870 292H920M1300 292H1350M1590 292H1620" class="b"/>
+  <polygon points="1690,225 1760,292 1690,359 1620,292" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
+  <text x="1690" y="284" text-anchor="middle" class="h">Evidence</text><text x="1690" y="307" text-anchor="middle" class="h">通过？</text><path d="M1610 292H1620" class="b"/>
+  <rect x="1350" y="394" width="310" height="92" rx="14" fill="#fff" stroke="#f59e0b" stroke-width="2"/>
+  <text x="1505" y="425" text-anchor="middle" class="h">全库兜底检索并复判</text><text x="1505" y="451" text-anchor="middle" class="p">移除 node_id 过滤，在请求知识库重检</text><text x="1505" y="474" text-anchor="middle" class="p">重新执行混合检索与 Evidence 门禁</text>
+  <rect x="930" y="394" width="330" height="92" rx="14" fill="#fff" stroke="#f59e0b" stroke-width="2"/>
+  <text x="1095" y="425" text-anchor="middle" class="h">全库检索后仍证据不足</text><text x="1095" y="451" text-anchor="middle" class="p">记录 EVIDENCE_INSUFFICIENT；资源为空</text><text x="1095" y="474" text-anchor="middle" class="p">终止生成并保持未发布</text>
+  <path d="M1690 359V375H1505V394" class="o"/><text x="1705" y="376" class="tag" fill="#b45309">否</text>
+  <path d="M1350 440H1260" class="o"/><text x="1305" y="426" text-anchor="middle" class="tag" fill="#b45309">仍不足</text>
+  <path d="M1660 440H1778" class="b"/><text x="1672" y="429" class="tag" fill="#1d4ed8">复判通过</text>
+  <text x="70" y="518" class="n">检索规则：先将目标知识点映射为 node_id，并在混合检索前过滤候选 Chunk；证据不足时移除节点过滤，在请求知识库全库重检一次，仍不足才终止。</text>
+
+  <!-- 2: generation -->
+  <rect x="32" y="572" width="1736" height="284" rx="20" fill="#f5f3ff" stroke="#ddd6fe"/>
+  <text x="66" y="613" class="lane" fill="#6d28d9">2. 规划、ResourceSpec 冻结与文本生成</text>
+  <path d="M1760 292H1778V704H1600" class="b"/><text x="1763" y="280" class="tag" fill="#1d4ed8">是</text>
+  <g fill="#fff" stroke="#a78bfa" stroke-width="2">
+    <rect x="1360" y="650" width="240" height="108" rx="14"/><rect x="1060" y="650" width="250" height="108" rx="14"/>
+    <rect x="760" y="650" width="250" height="108" rx="14"/><rect x="460" y="650" width="250" height="108" rx="14"/>
+    <rect x="120" y="650" width="290" height="108" rx="14"/>
+  </g>
+  <text x="1480" y="684" text-anchor="middle" class="h">学习计划 Planner</text><text x="1480" y="711" text-anchor="middle" class="p">诊断 + 冻结 Evidence + 目标节点</text><text x="1480" y="734" text-anchor="middle" class="p">资源要求、学习路径、难度</text>
+  <text x="1185" y="684" text-anchor="middle" class="h">ResourceSpec Builder</text><text x="1185" y="711" text-anchor="middle" class="p">类型、family、目标、知识点</text><text x="1185" y="734" text-anchor="middle" class="p">Evidence ID、难度、text 表示</text>
+  <text x="885" y="684" text-anchor="middle" class="h">专用 Generator</text><text x="885" y="711" text-anchor="middle" class="p">每个 Spec 独立 worker_step</text><text x="885" y="734" text-anchor="middle" class="p">当前最多并发 2 个调用</text>
+  <text x="585" y="684" text-anchor="middle" class="h">逐资源执行投影</text><text x="585" y="711" text-anchor="middle" class="p">结构化契约、版本、失败/降级</text><text x="585" y="734" text-anchor="middle" class="p">成功项不被同批失败项覆盖</text>
+  <text x="265" y="684" text-anchor="middle" class="h">持久化合并边界</text><text x="265" y="711" text-anchor="middle" class="p">Spec、资源、执行、事件</text><text x="265" y="734" text-anchor="middle" class="p">Review/Claim 记录幂等写入</text>
+  <path d="M1360 704H1310M1060 704H1010M760 704H710M460 704H410" class="v"/>
+  <text x="70" y="803" class="n">每个 Spec 只生成 representation=text；资源版本、审核记录和执行投影可分别追溯。</text>
+
+  <!-- 3: two separated rows -->
+  <rect x="32" y="884" width="1736" height="634" rx="20" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="66" y="925" class="lane" fill="#c2410c">3. 两重审核：先审核资源整体质量，再校验 Claim 与证据的一致性</text>
+  <rect x="56" y="950" width="1688" height="240" rx="16" fill="#fffaf3" stroke="#fdba74"/>
+  <rect x="56" y="1210" width="1688" height="278" rx="16" fill="#fffaf3" stroke="#fdba74"/>
+  <text x="82" y="980" class="h" fill="#c2410c">第一重：普通资源审核</text>
+  <text x="82" y="1240" class="h" fill="#c2410c">第二重：Claim 审核（仅 include_claim_check=true 时进入）</text>
+
+  <!-- ordinary row -->
+  <rect x="82" y="1004" width="245" height="122" rx="14" fill="#fff" stroke="#fb923c" stroke-width="2"/>
+  <text x="204" y="1036" text-anchor="middle" class="h">普通资源审核</text><text x="204" y="1060" text-anchor="middle" class="p">内容、覆盖、难度</text><text x="204" y="1084" text-anchor="middle" class="p">approve / revise</text><text x="204" y="1108" text-anchor="middle" class="p">reject / 未发布</text>
+  <path d="M265 758V860H42V1065H82" class="v"/>
+  <polygon points="445,998 520,1065 445,1132 370,1065" fill="#fff" stroke="#d97706" stroke-width="2.5"/>
+  <text x="445" y="1057" text-anchor="middle" class="h">普通审核</text><text x="445" y="1081" text-anchor="middle" class="h">结论？</text><path d="M327 1065H370" class="o"/>
+  <rect x="570" y="995" width="300" height="126" rx="14" fill="#fff" stroke="#f59e0b" stroke-width="2"/>
+  <text x="720" y="1024" text-anchor="middle" class="h">普通审核定向返工</text><text x="720" y="1049" text-anchor="middle" class="p">只返工命中资源</text><text x="720" y="1073" text-anchor="middle" class="p">携带 revision_feedback</text><text x="720" y="1097" text-anchor="middle" class="n">存在可返工项且有普通额度</text><text x="720" y="1116" text-anchor="middle" class="n">↺ 返回 Generator，不重跑无关资源</text>
+  <path d="M520 1065H570" class="o"/><text x="527" y="1047" class="tag" fill="#b45309">revise</text>
+  <rect x="570" y="1136" width="330" height="48" rx="10" fill="#fff3cd" stroke="#f59e0b"/>
+  <text x="735" y="1155" text-anchor="middle" class="n">普通审核未通过 / 额度耗尽</text><text x="735" y="1175" text-anchor="middle" class="n">保留发布阻断结论，继续独立审计</text>
+  <path d="M445 1132V1160H570" class="o"/><text x="457" y="1150" class="tag" fill="#b45309">不通过</text>
+  <rect x="930" y="1010" width="245" height="110" rx="14" fill="#fff" stroke="#fb923c" stroke-width="2"/>
+  <text x="1052" y="1044" text-anchor="middle" class="h">普通审核已收束</text><text x="1052" y="1071" text-anchor="middle" class="p">保留每份资源的审核结论</text><text x="1052" y="1094" text-anchor="middle" class="p">再判断是否需要 Claim 审核</text>
+  <path d="M445 998V985H1052V1010" class="o"/><text x="700" y="977" class="tag" fill="#c2410c">无可执行普通返工</text>
+  <path d="M900 1160H1052V1120" class="o"/>
+  <polygon points="1285,998 1360,1065 1285,1132 1210,1065" fill="#fff" stroke="#d97706" stroke-width="2.5"/>
+  <text x="1285" y="1057" text-anchor="middle" class="h">开启 Claim</text><text x="1285" y="1081" text-anchor="middle" class="h">审核？</text><path d="M1175 1065H1210" class="o"/>
+  <rect x="1440" y="1010" width="270" height="110" rx="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="1575" y="1044" text-anchor="middle" class="h">不做 Claim 审核</text><text x="1575" y="1071" text-anchor="middle" class="p">直接交最终逐资源决策</text><text x="1575" y="1094" text-anchor="middle" class="n">普通审核通过不等于必然发布</text>
+  <path d="M1360 1065H1440" class="f"/><text x="1372" y="1047" class="tag" fill="#52647a">否</text>
+
+  <!-- Claim row: clean right-to-left flow, directly below the switch -->
+  <rect x="1090" y="1265" width="255" height="110" rx="14" fill="#fff" stroke="#fb923c" stroke-width="2"/>
+  <text x="1217" y="1299" text-anchor="middle" class="h">Claim 抽取</text><text x="1217" y="1326" text-anchor="middle" class="p">eligible 资源逐个抽取</text><text x="1217" y="1349" text-anchor="middle" class="p">Claim / Evidence / 节点白名单</text>
+  <path d="M1285 1132V1265" class="o"/><text x="1300" y="1197" class="tag" fill="#c2410c">是</text>
+  <rect x="790" y="1265" width="245" height="110" rx="14" fill="#fff" stroke="#fb923c" stroke-width="2"/>
+  <text x="912" y="1299" text-anchor="middle" class="h">冻结 Evidence Claim 判定</text><text x="912" y="1326" text-anchor="middle" class="p">同一 Evidence 逐项 judge</text><text x="912" y="1349" text-anchor="middle" class="p">支持 / 矛盾 / 无证据</text>
+  <path d="M1090 1320H1035" class="o"/>
+  <rect x="495" y="1265" width="240" height="110" rx="14" fill="#fff" stroke="#fb923c" stroke-width="2"/>
+  <text x="615" y="1299" text-anchor="middle" class="h">Claim 确定性决策</text><text x="615" y="1326" text-anchor="middle" class="p">完整性、指标、问题 Claim</text><text x="615" y="1349" text-anchor="middle" class="p">失败指标一律 incomplete</text>
+  <path d="M790 1320H735" class="o"/>
+  <polygon points="305,1253 380,1320 305,1387 230,1320" fill="#fff" stroke="#d97706" stroke-width="2.5"/>
+  <text x="305" y="1312" text-anchor="middle" class="h">Claim 门禁</text><text x="305" y="1336" text-anchor="middle" class="h">通过？</text><path d="M495 1320H380" class="o"/>
+  <rect x="72" y="1265" width="110" height="110" rx="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="127" y="1300" text-anchor="middle" class="h">通过</text><text x="127" y="1327" text-anchor="middle" class="p">交最终</text><text x="127" y="1350" text-anchor="middle" class="p">逐资源决策</text>
+  <path d="M230 1320H182" class="o"/><text x="190" y="1302" class="tag" fill="#15803d">是</text>
+  <rect x="440" y="1394" width="520" height="78" rx="12" fill="#fff" stroke="#f59e0b" stroke-width="2"/>
+  <text x="700" y="1420" text-anchor="middle" class="h">Claim 定向返工或策略收束</text><text x="700" y="1444" text-anchor="middle" class="n">问题 Claim 且有 Claim 额度：只返工命中资源</text><text x="700" y="1464" text-anchor="middle" class="n">其余交最终决策：阻断 / 用户决定 / 显式降级</text>
+  <path d="M305 1387V1433H440" class="o"/><text x="320" y="1416" class="tag" fill="#b45309">否</text>
+  <rect x="1030" y="1394" width="680" height="78" rx="12" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="1370" y="1420" text-anchor="middle" class="h">发布判定说明</text><text x="1370" y="1444" text-anchor="middle" class="n">关闭普通审核仅存草稿；finalizer 逐资源决策</text><text x="1370" y="1464" text-anchor="middle" class="n">发布例外：用户明确决定 / Claim 不完整策略降级</text>
+</svg>

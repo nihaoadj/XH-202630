@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1735" viewBox="0 0 1800 1735" role="img" aria-labelledby="title desc">
+  <title id="title">项目代码架构目录树</title>
+  <desc id="desc">以 personalized-learning-resource-system 项目根目录展开，展示 frontend、backend、knowledge_base、scripts、docs 等受版本控制目录的真实层级，以及关键职责和依赖边界。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#f8fbff"/><stop offset="1" stop-color="#f2f7fb"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#294966" flood-opacity=".12"/></filter>
+    <style>.title{font:700 36px 'Microsoft YaHei',sans-serif;fill:#244f70}.sub{font:18px 'Microsoft YaHei',sans-serif;fill:#244f70}.head{font:700 21px 'Microsoft YaHei',sans-serif;fill:#244f70}.lv1{font:700 18px Consolas,'Microsoft YaHei',monospace;fill:#244f70}.lv2{font:700 17px Consolas,'Microsoft YaHei',monospace;fill:#244f70}.lv3{font:600 16px Consolas,'Microsoft YaHei',monospace;fill:#244f70}.lv4{font:600 15.5px Consolas,'Microsoft YaHei',monospace;fill:#244f70}.lv5{font:600 15px Consolas,'Microsoft YaHei',monospace;fill:#244f70}.file{font:16px Consolas,'Microsoft YaHei',monospace;fill:#244f70}.desc{font:16px 'Microsoft YaHei',sans-serif;fill:#244f70}.small{font:14px 'Microsoft YaHei',sans-serif;fill:#244f70}.tree{stroke:#9ab8cf;stroke-width:2;fill:none}.sep{stroke:#c7ddec;stroke-width:2}.tag{font:700 14px 'Microsoft YaHei',sans-serif;fill:#244f70}.note{font:16px 'Microsoft YaHei',sans-serif;fill:#244f70}</style>
+  </defs>
+
+  <rect width="1800" height="1735" fill="url(#bg)"/>
+  <text x="900" y="58" text-anchor="middle" class="title">项目代码架构：目录与职责边界</text>
+  <text x="900" y="91" text-anchor="middle" class="sub">按当前仓库中受版本控制的真实结构展开；左侧定位代码，右侧说明职责、依赖和运行边界</text>
+
+  <rect x="38" y="120" width="1724" height="1500" rx="18" fill="#fff" stroke="#c7ddec" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="38" y="120" width="1724" height="54" rx="18" fill="#e7f3fc"/>
+  <text x="70" y="155" class="head">personalized-learning-resource-system/</text>
+  <text x="600" y="155" class="head">代码与资料目录树</text>
+  <line x1="1190" y1="190" x2="1190" y2="1590" class="sep"/>
+  <text x="1230" y="220" class="head">关键职责与边界</text>
+
+  <!-- repository tree -->
+  <path d="M105 211V1568M105 216H135M105 600H135M105 1213H135M105 1258H135M105 1303H135M105 1348H135M105 1393H135M105 1438H135M105 1483H135M105 1528H135M105 1568H135" class="tree"/>
+
+  <!-- frontend -->
+  <text x="150" y="221" class="lv1">frontend/</text><text x="680" y="221" class="small">Vue 3 + Vite 前端工程</text>
+  <path d="M170 231V548M170 258H195M170 514H195M170 548H195" class="tree"/>
+  <text x="205" y="263" class="lv2">src/</text><text x="680" y="263" class="small">前端源码</text>
+  <path d="M235 273V474M235 294H260M235 324H260M235 354H260M235 384H260M235 414H260M235 444H260M235 474H260" class="tree"/>
+  <text x="270" y="299" class="lv3">main.js · App.vue</text><text x="680" y="299" class="desc">应用入口与全局页面壳</text>
+  <text x="270" y="329" class="lv3">features/&lt;domain&gt;/</text><text x="680" y="329" class="desc">learners、generation、courseware、tutor 等业务特性</text>
+  <text x="270" y="359" class="lv3">router/</text><text x="680" y="359" class="desc">路由与认证守卫</text>
+  <text x="270" y="389" class="lv3">stores/</text><text x="680" y="389" class="desc">Pinia 全局状态</text>
+  <text x="270" y="419" class="lv3">api/</text><text x="680" y="419" class="desc">HTTP 客户端与接口封装</text>
+  <text x="270" y="449" class="lv3">components/ · ui/ · utils/</text><text x="680" y="449" class="desc">共享准备面板、公共动效与通用工具</text>
+  <text x="270" y="479" class="lv3">styles/</text><text x="680" y="479" class="desc">全局样式</text>
+  <text x="205" y="519" class="lv2">tests/</text><text x="680" y="519" class="desc">前端专项、浏览器与用户旅程测试</text>
+  <text x="205" y="553" class="lv2">package.json · vite.config.js</text><text x="680" y="553" class="desc">依赖、脚本与前端构建配置</text>
+
+  <!-- backend -->
+  <text x="150" y="605" class="lv1">backend/</text><text x="680" y="605" class="small">Python + FastAPI 后端工程</text>
+  <path d="M170 615V1166M170 642H195M170 1101H195M170 1136H195M170 1166H195" class="tree"/>
+  <text x="205" y="647" class="lv2">app/</text><text x="680" y="647" class="small">后端主代码包</text>
+  <path d="M235 652V1061M235 677H260M235 707H260M235 737H260M235 941H260M235 971H260M235 1001H260M235 1031H260M235 1061H260" class="tree"/>
+  <text x="270" y="682" class="lv3">api/&lt;domain&gt;/</text><text x="680" y="682" class="desc">HTTP 路由、认证依赖、请求/响应映射；不直接写 SQL 或 Prompt</text>
+  <text x="270" y="712" class="lv3">services/&lt;domain&gt;/</text><text x="680" y="712" class="desc">用例编排、事务边界、仓储调用与工作流协调</text>
+  <text x="270" y="742" class="lv3">agents/</text><text x="680" y="742" class="desc">模型调用、Agent 节点与工作流编排</text>
+  <path d="M300 749V906M300 767H326M300 850H326M300 878H326M300 906H326" class="tree"/>
+  <text x="330" y="772" class="lv4">resource_workflows/</text><text x="680" y="772" class="small">文本资源与互动课件工作流的共同父目录</text>
+  <path d="M360 779V820M360 794H386M360 820H386" class="tree"/>
+  <text x="390" y="799" class="lv5">learning_documents/</text><text x="680" y="799" class="small">五类文本学习文档工作流</text>
+  <text x="390" y="825" class="lv5">interactive_courseware/</text><text x="680" y="825" class="small">互动课件工作流、状态与 Worker</text>
+  <text x="330" y="855" class="lv4">learning_agents/</text><text x="680" y="855" class="small">诊断、反馈策略与 Tutor 等学习闭环 Agent</text>
+  <text x="330" y="883" class="lv4">resource_agents/</text><text x="680" y="883" class="small">五类文本资源与纠错训练包的专用生成 Agent</text>
+  <text x="330" y="911" class="lv4">shared/</text><text x="680" y="911" class="small">不依赖具体资源领域的共享能力</text>
+  <text x="270" y="946" class="lv3">core/</text><text x="680" y="946" class="desc">检索、LLM、课件运行时、安全、事件与存储</text>
+  <text x="270" y="976" class="lv3">db/</text><text x="680" y="976" class="desc">会话、仓储、SQLAlchemy 模型、迁移与审计持久化</text>
+  <text x="270" y="1006" class="lv3">models/</text><text x="680" y="1006" class="desc">跨层 DTO、共享枚举与领域契约</text>
+  <text x="270" y="1036" class="lv3">utils/</text><text x="680" y="1036" class="desc">后端内部复用工具；不承载领域编排</text>
+  <text x="270" y="1066" class="lv3">config.py · containers.py · main.py</text><text x="680" y="1066" class="desc">配置、依赖注入组合根与 FastAPI 入口</text>
+  <text x="205" y="1106" class="lv2">tests/</text><text x="680" y="1106" class="desc">后端测试目录；图中不再展开内部测试类型</text>
+  <text x="205" y="1141" class="lv2">scripts/</text><text x="680" y="1141" class="desc">Worker 与后端评测脚本</text>
+  <text x="205" y="1171" class="lv2">requirements.txt</text><text x="680" y="1171" class="desc">Python 依赖清单</text>
+
+  <!-- repository-level supporting directories -->
+  <text x="150" y="1218" class="lv1">knowledge_base/</text><text x="680" y="1218" class="desc">可导入的目录、问卷、诊断题与知识源文件；不是运行中的向量库</text>
+  <text x="150" y="1263" class="lv1">scripts/</text><text x="680" y="1263" class="desc">本地启动、数据库初始化、知识入库、环境预检与验收入口</text>
+  <text x="150" y="1308" class="lv1">docs/</text><text x="680" y="1308" class="desc">架构、部署、API、功能说明及图示资产</text>
+  <text x="150" y="1353" class="lv1">examples/</text><text x="680" y="1353" class="desc">示例材料；不属于应用运行时代码</text>
+  <text x="150" y="1398" class="lv1">deliverables/</text><text x="680" y="1398" class="desc">项目交付材料；不属于应用运行时代码</text>
+  <text x="150" y="1443" class="lv1">.github/</text><text x="680" y="1443" class="desc">GitHub 工作流与仓库自动化配置</text>
+  <text x="150" y="1488" class="lv1">Dockerfile · pytest.ini</text><text x="680" y="1488" class="desc">容器构建与测试配置</text>
+  <text x="150" y="1533" class="lv1">README.md · git-workflow.md · AGENTS.md</text><text x="680" y="1533" class="desc">项目说明、Git 规范与仓库协作约束</text>
+  <text x="150" y="1573" class="lv1">.gitignore</text><text x="680" y="1573" class="desc">排除数据库、向量索引、日志、密钥与临时生成物</text>
+
+  <!-- responsibilities -->
+  <rect x="1230" y="250" width="490" height="190" rx="14" fill="#eaf5ff" stroke="#91c3e6" stroke-width="2"/>
+  <text x="1260" y="286" class="head">1. 前端按业务特性组织</text>
+  <text x="1260" y="318" class="note">业务页面进入 features/&lt;domain&gt;/，按领域封装视图与状态。</text>
+  <text x="1260" y="348" class="note">router、stores、api 保持公共基础能力，不直接访问后端存储。</text>
+  <text x="1260" y="380" class="note">跨资源 resource-library 只做只读聚合与路由选择，</text>
+  <text x="1260" y="408" class="note">不承载资源生成逻辑。</text>
+
+  <rect x="1230" y="480" width="490" height="210" rx="14" fill="#eaf8f1" stroke="#8acbaa" stroke-width="2"/>
+  <text x="1260" y="516" class="head">2. 后端依赖方向</text>
+  <text x="1260" y="550" class="note">api → services</text>
+  <text x="1260" y="582" class="note">services → agents / core / db</text>
+  <text x="1260" y="614" class="note">models 提供共享契约；containers.py 统一装配依赖。</text>
+  <text x="1260" y="646" class="note">core 与 agents/shared 不反向依赖具体业务领域。</text>
+
+  <rect x="1230" y="730" width="490" height="280" rx="14" fill="#fff6e9" stroke="#e5bf7d" stroke-width="2"/>
+  <text x="1260" y="766" class="head">3. 资源生成相关代码的位置</text>
+  <text x="1260" y="800" class="note">文本学习文档工作流：</text>
+  <text x="1260" y="826" class="file">agents/resource_workflows/learning_documents/</text>
+  <text x="1260" y="858" class="note">专用文本生成 Agent：</text>
+  <text x="1260" y="884" class="file">agents/resource_agents/</text>
+  <text x="1260" y="916" class="note">互动课件工作流：</text>
+  <text x="1260" y="942" class="file">agents/resource_workflows/interactive_courseware/</text>
+  <text x="1260" y="968" class="small">服务层进入两类工作流；文本工作流再按 resource_type</text>
+  <text x="1260" y="992" class="small">调用 resource_agents/，工作流编排与正文生成职责分离。</text>
+
+  <rect x="1230" y="1040" width="490" height="250" rx="14" fill="#f4f0ff" stroke="#c4a6e2" stroke-width="2"/>
+  <text x="1260" y="1076" class="head">4. 运行数据与源资料</text>
+  <text x="1260" y="1110" class="note">backend/data/domain_knowledge.db：SQLite 业务数据库。</text>
+  <text x="1260" y="1142" class="note">backend/data/generated_resources/：生成资源文件。</text>
+  <text x="1260" y="1174" class="note">backend/chroma_db/：Chunk 向量索引。</text>
+  <text x="1260" y="1206" class="note">knowledge_base/：可导入源资料，不是运行中的向量库。</text>
+  <text x="1260" y="1246" class="small">当前开发和演示使用 SQLite + Chroma；不据此承诺生产级</text>
+  <text x="1260" y="1270" class="small">PostgreSQL、分布式队列或高可用部署。</text>
+
+  <rect x="1230" y="1330" width="490" height="230" rx="14" fill="#eef8f8" stroke="#8bc7c7" stroke-width="2"/>
+  <text x="1260" y="1366" class="head">5. 测试与脚本边界</text>
+  <text x="1260" y="1400" class="note">frontend/tests/：前端专项、浏览器与用户旅程测试。</text>
+  <text x="1260" y="1432" class="note">backend/tests/：后端分层回归，目录树不展开内部类型。</text>
+  <text x="1260" y="1464" class="note">根 scripts/：本地启动、初始化、知识入库、预检与验收。</text>
+  <text x="1260" y="1496" class="note">backend/scripts/：Worker 与后端评测脚本。</text>
+  <text x="1260" y="1528" class="small">真实模型测试仅在显式提供预期凭据时启用。</text>
+
+  <rect x="70" y="1650" width="1660" height="50" rx="12" fill="#eef6fb" stroke="#c7ddec"/>
+  <text x="100" y="1682" class="tag">图示范围</text>
+  <text x="230" y="1682" class="note">仅展示受版本控制的代码、配置和源资料；.venv、node_modules、dist、日志、数据库、向量索引及临时产物不属于代码架构。</text>
+</svg>

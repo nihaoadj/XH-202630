@@ -1,20 +1,34 @@
 # API 文档
 
 > 项目编号：XH-202630
-> 文档版本：2.2
-> 文档更新时间：2026-08-20
+> 文档版本：2.3
+> 文档更新时间：2026-10-09
 > 说明：本文档以当前代码实现为准，覆盖 `backend/app/api` 中已经启用的核心接口。
 
 ## 1. 基本信息
 
 - 服务地址：`http://127.0.0.1:8000`
 - API 前缀：`/api`
-- 当前资源生成模式：异步任务模式`
+- 当前资源生成模式：异步任务模式；文本任务由 Web `BackgroundTasks` 执行，互动课件由独立 Durable Worker 执行
+
+### 1.1 认证与访问边界
+
+账号入口为 `/api/auth/register`、`/login`、`/me`、`/logout`。注册和登录返回 `{ "user": UserProfile }` 并写入 HttpOnly JWT Cookie；Cookie 名默认 `training_pilot_token`，`SameSite=lax`，有效期默认 480 分钟，`Secure` 由配置决定。前端 axios 使用 `withCredentials=true`，EventSource 使用同源 Cookie。
+
+| 方法 / 路径 | 当前契约 |
+|---|---|
+| `POST /api/auth/register` | 必填 `username`、`password`、`confirm_password`；可选身份、学历、专业、岗位、经验。成功 201；重名 409；字段 / 密码确认非法 422 |
+| `POST /api/auth/login` | 用户名和密码；成功 200；凭据错误 401；停用账号 403 |
+| `GET /api/auth/me` | 读取当前用户；未登录或无效会话 401 |
+| `POST /api/auth/logout` | 清除 Cookie，返回成功状态 |
+
+用户名去空白并转小写，长度 2–64；密码长度 8–128，确认密码必须相同；经验为 0–50 或 `null`。主应用对 onboarding、profiles、users、generation、resources、resource-library、feedback、tutor、report、diagnosis、reviews、evaluation、runs、learning-history 挂载认证依赖。用户只能访问本人资料与画像；跨用户详情按现有防枚举语义返回 404。知识目录和技能节点读取是公开接口；管理员 KB 接口另受 `X-Admin-Token` 保护。
 
 ## 2. 当前主流程
 
 ```text
-创建用户资料
+POST /api/auth/register 或 POST /api/auth/login
+-> PATCH /api/users/{user_id}（按需）
 -> 选择学习方向
 -> GET /api/onboarding/questions
 -> POST /api/onboarding/initial-profile
@@ -24,15 +38,15 @@
 -> GET /api/generate/jobs/{run_id}
 -> GET /api/resources/{learner_id}?run_id={run_id}
 -> GET /api/resources/file/{resource_id}
--> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
--> POST /api/feedback/attempts/run/submit
--> POST /api/feedback/attempts
+-> GET /api/feedback/evaluation/batch/{learner_id}/{batch_id}
+-> POST /api/feedback/attempts/batch/submit
+-> POST /api/feedback/followups/select（学习者确认后）
 -> GET /api/feedback/attempts/{learner_id}
--> GET /api/learning-history/{learner_id}/timeline
+-> GET /api/learning-history/{learner_id}/journey
 -> GET /api/report/{learner_id}
 ```
 
-## 3. 本次变更要点
+## 3. 当前契约要点
 
 - 用户基础信息已经从问卷中拆出，改由 `users` 相关接口维护。
 - `user_id` 由后端自动生成，前端不应再要求用户手填。
@@ -41,8 +55,10 @@
 - 异步资源生成已经成为唯一对外生成入口。
 - 生成任务列表接口已经提供，前端可默认展示当前任务并切换查看历史任务。
 - 资源列表支持按 `run_id` 过滤查看某一次生成任务的结果。
-- 学习反馈已支持按生成任务聚合测评，并可基于选中的历史反馈主动发起重新生成。
-- 学习历史时间线接口已提供统一查看问卷、诊断、生成任务的入口。
+- 学习反馈优先按批次聚合测评，纠错包再次验证使用独立 Run；服务端判分后返回下一步候选，确认选择才创建后续资源。
+- 旧聚合分数 `/api/feedback/attempts` 保留路径但返回 422，不再作为正式掌握度写入口。
+- 学习历史以 `journey` 返回轮次与当前学情，`timeline` 保留兼容；报告 4.1 使用 ETag 和独立报告 SSE。
+- 文本追加 / 重试走批次 continuation；互动 HTML 通过独立课件 API 读取，旧文本 `items/{resource_id}/preview` 未挂载。
 
 ## 4. 接口总览
 
@@ -51,9 +67,13 @@
 | 系统 | `GET` | `/` | 服务信息 |
 | 系统 | `GET` | `/health` | 健康检查 |
 | 系统 | `GET` | `/health/ready` | 就绪检查 |
-| 用户资料 | `GET` | `/api/users/` | 查询用户列表 |
+| 认证 | `POST` | `/api/auth/register` | 注册并建立 Cookie 会话 |
+| 认证 | `POST` | `/api/auth/login` | 登录 |
+| 认证 | `GET` | `/api/auth/me` | 当前登录用户 |
+| 认证 | `POST` | `/api/auth/logout` | 清除会话 Cookie |
+| 用户资料 | `GET` | `/api/users/` | 主应用中只返回当前用户 |
 | 用户资料 | `GET` | `/api/users/{user_id}` | 查询单个用户 |
-| 用户资料 | `POST` | `/api/users/` | 创建用户，`user_id` 自动生成 |
+| 用户资料 | `POST` | `/api/users/` | 兼容路由；主应用已登录调用返回 403，创建账号使用注册 |
 | 用户资料 | `PATCH` | `/api/users/{user_id}` | 更新用户资料 |
 | 知识目录 | `GET` | `/api/knowledge/domains` | 查询领域及学习方向 |
 | 知识目录 | `GET` | `/api/knowledge/directions` | 查询学习方向列表 |
@@ -72,18 +92,37 @@
 | 资源生成 | `GET` | `/api/generate/jobs/{run_id}` | 查询生成任务状态 |
 | 资源 | `GET` | `/api/resources/{learner_id}` | 查询资源列表 |
 | 资源 | `GET` | `/api/resources/file/{resource_id}` | 下载资源文件 |
+| 资源 | `GET` | `/api/resources/items/{resource_id}` | 已发布文本详情 |
+| 资源 | `POST` | `/api/resources/items/{resource_id}/claim-publication-decision` | 待决策资源的发布 / 拒绝 |
+| 资源 | `POST` | `/api/resources/batches/{batch_id}/continuations` | 同批次追加或重试文本资源 |
+| 资源库 | `GET` | `/api/resource-library/{learner_id}` | 文本与课件只读书架 |
 | 审核 | `GET` | `/api/reviews/{resource_id}` | 查询资源审核摘要 |
 | 反馈 | `GET` | `/api/feedback/evaluation/run/{learner_id}/{run_id}` | 获取任务级测评题 |
+| 反馈 | `GET` | `/api/feedback/evaluation/{learner_id}/{resource_id}` | 获取资源级测评题 |
+| 反馈 | `GET` | `/api/feedback/evaluation/batch/{learner_id}/{batch_id}` | 获取批次级测评题 |
 | 反馈 | `POST` | `/api/feedback/attempts/run/submit` | 提交任务级测评与反馈 |
 | 反馈 | `POST` | `/api/feedback/attempts/batch/submit` | 提交资源批次级测评与反馈 |
-| 反馈 | `POST` | `/api/feedback/` | 提交学习反馈 |
-| 反馈 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询反馈历史 |
-| 反馈闭环 | `POST` | `/api/feedback/attempts` | 提交幂等、版本化的正式学习 Attempt |
+| 反馈 | `POST` | `/api/feedback/followups/select` | 确认下一步节点 / 纠错方案并创建任务 |
+| 反馈 | `GET` | `/api/feedback/results/{learner_id}` | 查询可恢复的反馈报告 |
+| 反馈闭环 | `POST` | `/api/feedback/attempts` | 旧聚合分数契约，返回 422 `FEEDBACK_EVIDENCE_UNVERIFIED` |
 | 反馈闭环 | `GET` | `/api/feedback/attempts/{learner_id}` | 查询持久化 Attempt |
 | 反馈闭环 | `GET` | `/api/feedback/path/{learner_id}` | 查询当前持久化学习路径 |
 | Run 实时流 | `GET` | `/api/runs/{run_id}/events` | WorkflowEvent 的 SSE replay + live tail |
+| Run 回放 | `GET` | `/api/runs/{run_id}` | 脱敏摘要 |
+| Run 回放 | `GET` | `/api/runs/{run_id}/timeline` | 持久化时间线 |
+| Run 回放 | `GET` | `/api/runs/{run_id}/evidence` | 冻结证据详情 |
+| Run 回放 | `GET` | `/api/runs/{run_id}/claims` | Claim 报告与指标 |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/timeline` | 查询学习过程时间线 |
+| 学习历史 | `GET` | `/api/learning-history/{learner_id}/journey` | 按批次组织学习轮次 |
 | 报告 | `GET` | `/api/report/{learner_id}` | 查询学习报告 |
+| 报告 | `GET` | `/api/report/{learner_id}/resource-credibility` | 文本可信度证据分页 |
+| 报告 | `GET` | `/api/report/{learner_id}/events` | 当前报告快照的失效通知 SSE |
+| 技能 | `GET` | `/api/skills/nodes` | 能力节点 |
+| 评测 | `GET` | `/api/evaluation/summary` | 评测摘要 |
+| 管理员 | `GET` | `/api/admin/knowledge-bases/health` | 全 KB 脱敏健康详情 |
+| 管理员 | `POST` | `/api/admin/knowledge-bases/{knowledge_base_id}/reconcile` | 显式重入库与对账 |
+
+Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/app/main.py` 和各领域 `APIRouter` 为准。
 
 ## 5. 用户资料接口
 
@@ -91,10 +130,10 @@
 
 用途：
 
-- 创建用户资料。
-- 后端自动生成 `user_id`。
+- 保留旧资料创建 DTO，后端内部创建时自动生成 `user_id`。
+- 主应用已为 `/api/users` 挂载登录依赖：未登录为 401，已登录调用本接口为 403“请通过注册功能创建用户”。产品注册流程使用 1.1 的注册接口。
 
-请求体：
+旧资料 DTO 请求体（不能作为公开注册请求）：
 
 ```json
 {
@@ -132,6 +171,7 @@
 说明：
 
 - 至少提交一个待更新字段。
+- 只允许更新本人资料；空更新返回 400，其他用户返回 404。当前资料页用本接口保存选填字段，用户名只读。
 
 ## 6. Onboarding 接口
 
@@ -234,7 +274,7 @@
 - `topic`
 - `knowledge_base_id`
 - `diagnostic_result_id`
-- `target_skill_nodes`
+- `target_skill_nodes`（公开 DTO 最多两个同阶目标节点）
 - `resource_types`
 - `difficulty_preference`
 - `generation_mode`
@@ -252,7 +292,7 @@
   "topic": "RAG 基础概念与文档解析",
   "knowledge_base_id": "rag_engineering_training",
   "target_skill_nodes": ["rag_basics", "document_parsing"],
-  "resource_types": ["讲义", "实操指南", "分阶测试题", "复习清单", "案例分析"],
+  "resource_types": ["讲义"],
   "difficulty_preference": "从基础开始",
   "generation_mode": "standard",
   "include_review": true,
@@ -266,6 +306,7 @@
 返回字段：
 
 - `run_id`
+- `batch_id`
 - `learner_id`
 - `topic`
 - `knowledge_base_id`
@@ -279,8 +320,8 @@
 - `个性化纠错训练包` 是反馈专属的第六类内部文本资源。普通生成请求它会以 HTTP 422 `FEEDBACK_ONLY_RESOURCE_TYPE` 拒绝。
 - 路由固定为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`。
 - `复习清单` 保持同名、同请求值和同一 Markdown 读取接口；新生成版本以冻结目标节点为单位提供闭卷回忆、概念辨析和可选正反例辨认（每节点最低 `1+1+0`），答案集中在文末。自评框仅供阅读，不提交 Attempt、Mastery 或 LearningPath。
-- 当前推荐前端流程：
-  提交任务 -> 轮询任务状态 -> 完成后拉取资源列表。
+- 当前前端流程：提交任务 -> 恢复持久化 timeline 并订阅 SSE -> 同步已发布资源；连续连接错误后才降级为任务 / timeline 轮询。普通审核关闭时仅保存未发布草稿。
+- 新建方向页通过 `createJobsForClaim` 将开启 Claim 的多类型选择拆为多个请求；该拆分是前端请求编排，不能把多个 Run 的状态合成一个虚构 Run。
 
 ### 8.2 `GET /api/generate/jobs/{run_id}`
 
@@ -354,6 +395,7 @@
 查询参数：
 
 - `run_id`：可选，仅查看某一次生成任务的结果
+- `batch_id`：可选，查看同一学习批次下的资源；Run 和 Batch 是不同查询边界
 - `resource_type`：可选
 - `difficulty`：可选
 - `page`：可选，传入后启用分页，从 1 开始
@@ -412,13 +454,21 @@
 
 用途：读取一个已发布资源的完整正文、执行信息与审核摘要。未发布资源统一返回 404，避免草稿被预览。
 
-### 9.4 `GET /api/resources/items/{resource_id}/preview`
+### 9.4 `POST /api/resources/items/{resource_id}/claim-publication-decision`
 
-用途：读取已发布实操指南的安全 HTML 片段。后端会重新执行最小清洗，并验证 HTML 与规范文本的 family、源资源 ID、源版本和 hash；不一致时返回 409“互动版本正在更新”。非 HTML 或未发布资源返回 404。
+请求体为 `{ "publish": true|false }`。资源须属于本人且处于待决策状态，Claim 指标完整、通过率达到配置阈值且无矛盾事实；服务端重新校验后返回 `{ "resource": Resource }`。同一已完成决定可幂等返回，不符合当前状态或门禁返回 409，资源不可访问返回 404。它只决定符合条件的文本资源是否分发。
+
+旧文本 `GET /api/resources/items/{resource_id}/preview` 当前没有注册路由。互动课件使用 `/api/resources/courseware/items/{resource_id}/preview`；文本仍使用 9.3 的 Markdown 详情。
 
 ### 9.5 `GET /api/resource-library/{learner_id}`
 
 用途：读取文本资源与互动 HTML 课件合并后的资源书架投影。互动课件的 `resource_type` 保持为 `互动HTML课件`，其 `source_resource_type` 来自已冻结并持久化的源文本资源类型（例如 `讲义`、`实操指南`、`分阶测试题`），前端可据此显示“互动讲义”等名称，并与源文本资源相邻排列。
+
+### 9.6 `POST /api/resources/batches/{batch_id}/continuations`
+
+创建同一批次的新文本 Run，用于追加、全批重试或单资源重试。必填 `learner_id` 和 `resource_types`；可选 `instructions`、`include_claim_check`、`source_run_id`、`replace_source_run`、`replace_existing_types`。返回 `GenerationJobCreateResponse`，包含新 `run_id` 和沿用的 `batch_id`。追加不覆盖旧审计记录；完整重试可标记源 Run 被替代，单项重试仅替换对应类型的学习者可见投影。
+
+服务端从源任务冻结请求继承知识库、目标、难度和约束，验证源 Run 归属，再附加有界 continuation 摘要；省略 Claim 选项时沿用源请求，显式开启仍要求普通审核。源任务 / 批次不可访问为 404，冻结请求不可用为 409，输入非法为 422，依赖未就绪为 503。生成页的重试使用本路径；当前没有独立的 `resource-specs/.../representations/.../retry` 文本 API。
 
 ## 10. 学习历史接口
 
@@ -467,14 +517,14 @@
 
 说明：
 
-- 当前学习反馈页优先按任务而不是单个资源加载测评题。
- - 如果任务包含已发布且 hash 校验通过的结构化测试题资源，测评优先使用其完整节点题组；每个节点固定 2 道基础单选、2 道进阶多选、2 道挑战问答，单节点题组分值分别为 15、15、20、20、15、15 分，响应不含答案或 rubric。多节点试卷保持总分 100 分，按节点数等比例归一化题目分值。
+- 该接口保留任务级测评。当前学习反馈页优先使用 `GET /api/feedback/evaluation/batch/{learner_id}/{batch_id}`；纠错包的再次验证按独立 Run 调用本接口。
+- 如果任务包含已发布且 hash 校验通过的结构化测试题资源，测评优先使用其完整节点题组；每个节点固定 2 道基础单选、2 道进阶多选、2 道挑战问答，单节点题组分值分别为 15、15、20、20、15、15 分，响应不含答案或 rubric。多节点试卷保持总分 100 分，按节点数等比例归一化题目分值。
 - 若没有结构化测试题资源，兼容 AI 生成且可判分的 `exercise_items`，再回退到独立测评题库。
 - 如果资源没有可判分题目，则从独立的 `assessment_questions.json` 测评题库按能力节点抽取；不会占用初始画像使用的诊断题。
 - `questions[].source` 为 `resource`（资源内 AI 题）、`assessment_bank`（测评题库）或兼容旧知识库的 `knowledge_base`。
 - RAG 默认测评题库覆盖 13 个能力节点，每节点 10 道，并固定为简单 3 道、中等 3 道、困难 4 道。
- - API 不返回标准答案和解析，提交后由服务端按会话使用的答案键判分。
- - 多选题得分为 `max(0, 正确选中数/正确选项数 - 错误选中数/错误选项数) × 题目满分`，分数保留 1 位小数；简答题按 reference_answer 与 rubric 由 Feedback Agent 评分。
+- API 不返回标准答案和解析，提交后由服务端按会话使用的答案键判分。
+- 多选题得分为 `max(0, 正确选中数/正确选项数 - 错误选中数/错误选项数) × 题目满分`，分数保留 1 位小数；简答题按 reference_answer 与 rubric 由 Feedback Agent 评分。
 
 ### 11.2 `POST /api/feedback/attempts/run/submit`
 
@@ -487,25 +537,27 @@
 - `learner_id`
 - `run_id`
 - `answers`
-- `completed`
-- `time_spent_seconds`
-- `self_rating`
-- `practice_result`
+- `idempotency_key`：8–128 字符
+- `expected_profile_version`：当前画像版本，至少 1
+- `submitted_at`：提交时间
+- `source_resource_id`、`path_node_id`：可选
+- `started_at`、`duration_ms`、`hint_count`：可选审计字段
+- `metadata`：可选；前端反思保存在 `metadata.learning_reflection`，不接受客户端聚合成绩替代服务端判分
+
+批次提交使用同一契约的 `/api/feedback/attempts/batch/submit`，将 `run_id` 换为 `batch_id`；初始学习与普通批次用该入口，纠错再测用独立 Run。`answers[]` 为 `{ "question_id": "...", "answer": "..." }`；多选答案为列表。
 
 返回重点字段：
 
-- `run_id`
-- `resource_count`
-- `correct_rate`
-- `correct_count`
-- `total_questions`
-- `wrong_knowledge_points`
-- `feedback`
+- `attempt`、`decision`、`idempotent_replay`
+- `profile_version`、`knowledge_state_updates`、`learning_path`、`path_mutation`
+- `analysis`、`resource_options`、`feedback_report`（包含判分与逐题 / 逐知识点结果）
+- `generation_options`、`correction_package_option`、下一步建议
+- `followup_run_id` / `followup_run_ids`：确认后续方案后才关联到真实新任务
 
 说明：
 
-- 提交成功后，后端会保存反馈记录并回写学习者画像。
-- 反馈页“基于反馈重新生成”当前采用“选中某条反馈记录 + 当前最新画像”的方式发起新任务。
+- 提交成功后，后端原子保存正式 Attempt、决策、掌握度、能力事件、路径和画像版本；请求分数由服务端重算。
+- 相同幂等请求重放不重复更新，冲突 / 旧版本语义见 17.3。学习者使用 `/api/feedback/followups/select` 确认反馈报告中的下一步方案后，才创建后续任务。
 
 ### 11.3 `POST /api/feedback/attempts`
 
@@ -514,6 +566,7 @@
 ### 11.4 P0-07 查询接口
 
 - `GET /api/feedback/attempts/{learner_id}?limit=20`：返回最近的不可变 Attempt 事实。
+- `GET /api/feedback/results/{learner_id}?limit=20`：恢复反馈报告、候选方案和已关联后续 Run。
 - `GET /api/feedback/path/{learner_id}`：返回当前路径版本及节点状态。
 - `GET /api/report/{learner_id}`：新增 `profile_version`、`knowledge_mastery`、`current_learning_path`、`recent_attempts`、`recent_feedback_decisions`、`recent_knowledge_state_mutations`、`recent_followup_runs`、`profile_versions`；`agent_flow` 同时聚合持久化反馈决策。
 - `GET /api/runs/{child_run_id}/timeline`：`trigger_relation` 可反查触发它的 Attempt、Decision、父 Run 和触发类型。
@@ -561,42 +614,22 @@ Claim 审核阶段按资源推送脱敏进度：`claim_metric_status`、事实 C
 
 ## 12. 前端调用约定
 
-- 用户资料页：
-  `POST /api/users/` 创建用户，`PATCH /api/users/{user_id}` 更新资料
-- 新建学习方向页：
-  `GET /api/onboarding/questions` 拉取题目
-- 提交问卷后：
-  `POST /api/onboarding/initial-profile`
-- 提交诊断后：
-  `POST /api/diagnosis/submit`
-- 资源生成：
-  `POST /api/generate/jobs`
-- 任务列表：
-  `GET /api/generate/jobs?learner_id={learner_id}`
-- 任务轮询：
-  `GET /api/generate/jobs/{run_id}`
-- 任务完成后查看资源：
-  `GET /api/resources/{learner_id}?run_id={run_id}`
-- 运行中读取已发布资源摘要：
-  `GET /api/resources/{learner_id}?run_id={run_id}&page=1&page_size=100&summary_only=true`
-- 单资源正文：
-  `GET /api/resources/items/{resource_id}`
-- 互动实操预览：
-  `GET /api/resources/items/{resource_id}/preview`
-- 任务级测评加载：
-  `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
-- 任务级测评提交：
-  `POST /api/feedback/attempts/run/submit`
-- 正式反馈闭环提交：
-  `POST /api/feedback/attempts`
-- 当前学习路径：
-  `GET /api/feedback/path/{learner_id}`
-- 反馈历史：
-  `GET /api/feedback/attempts/{learner_id}`
-- 下载资源文件：
-  `GET /api/resources/file/{resource_id}`
-- 历史学习记录：
-  `GET /api/learning-history/{learner_id}/timeline`
+| 页面 / 用途 | 当前调用 |
+|---|---|
+| 首页账号弹窗 | `POST /api/auth/register`、`POST /api/auth/login`；初始化 `GET /api/auth/me` |
+| 用户资料 `/user/profile` | `PATCH /api/users/{user_id}` 更新本人资料 |
+| 工作台 / 画像切换 | 分页 `GET /api/profiles/`，读取画像和方向后恢复当前上下文 |
+| 新建方向 `/learning/new` | knowledge 目录 -> onboarding 问卷 / 初始画像 -> diagnosis 提交 -> generate jobs |
+| 生成 `/generate` | 文本和课件 Job 列表；Run timeline + events；Claim 报告；批次 continuations |
+| 文本资源 `/resources` | resource-library 只读书架、已发布资源详情和文件下载；运行中可读取 `summary_only=true` 摘要 |
+| 互动课件预览 | `/api/resources/courseware/items/{resource_id}/preview`，使用当前 release；学习事件和进度另走课件 API |
+| 正式批次测评 | `GET /api/feedback/evaluation/batch/{learner_id}/{batch_id}` -> `POST /api/feedback/attempts/batch/submit` |
+| 纠错包重新验证 | `GET /api/feedback/evaluation/run/{learner_id}/{run_id}` -> `POST /api/feedback/attempts/run/submit` |
+| 反馈报告 / 下一步 | `GET /api/feedback/results/{learner_id}`，通过 `POST /api/feedback/followups/select` 确认 |
+| 学习历史 `/learning/history` | `GET /api/learning-history/{learner_id}/journey?offset=0&limit=20`；timeline 是兼容时间线 |
+| 学习报告 `/report` | 带 `window_days=7|30|90` 和 `If-None-Match` 的快照，独立报告 events 流触发重新拉取 |
+
+页面 URL 的查询参数使用 `learnerId`、`runId`、`batchId`、`resourceId` 等前端上下文名，API 参数沿用 snake_case；`/resources?focus=1` 只切换阅读外壳。画像 / 窗口切换时取消旧更新流并使旧响应失效，不能将旧画像的数据带入新请求结果。
 
 ## 13. 当前状态
 
@@ -607,13 +640,13 @@ Claim 审核阶段按资源推送脱敏进度：`claim_metric_status`、事实 C
 - 已执行：前端统一切到异步生成任务模式
 - 已执行：生成任务列表接口可用，资源生成页支持当前任务与历史任务切换
 - 已执行：资源列表支持按 `run_id` 查看本次结果
-- 已执行：学习反馈页支持按任务加载测评题与提交反馈
+- 已执行：学习反馈页支持批次测评、独立纠错再测、反馈报告恢复与选择后续方案
 - 已执行：资源文件下载接口可用
 - 已执行：学习历史时间线接口可用
 - 已执行：`GET /api/runs/{run_id}/events` 提供 WorkflowEvent SSE replay + live tail，前端支持断线续传与轮询降级
-- 未执行：独立任务队列
-- 未执行：任务取消
-- 未执行：失败任务自动重试
+- 已执行：报告 4.1 快照 / ETag / SSE、全节点掌握投影与路径图
+- 文本任务边界：没有外部队列、任务取消或进程中断后自动续跑；用户重试通过 continuation 创建新 Run
+- 课件任务边界：使用持久 outbox 和独立 Worker，具备取消、任务 / 场景重试和 checkpoint 恢复
 ## 14. Agent 可靠执行、审核返工与回放接口
 
 异步生成任务的 `run_id` 同时作为 Agent Run 的稳定 ID。后台任务调用
@@ -645,7 +678,7 @@ GenerationJob 预分配 run_id
 - `review_status` 与 `publication_status` 分离。只有最终 approve 的当前叶子版本可以 published。
 - 默认资源列表及文件下载只暴露 published；unpublished 与不存在的下载统一返回 404。
 - 历史字符串 issues/instructions 在读取时兼容归一化，但不会补造不存在的审核事实。
-- `include_claim_check` 默认 `false`；显式设为 `true` 时会在 Reviewer 通过后执行 Claim 提取、证据判定和定向修订，并要求 `include_review=true`。Claim 开启且一次选择多个资源时，会为每种资源创建独立 Run；关闭 Claim 时仍由一个 Run 生成多个资源。
+- `include_claim_check` 默认 `false`；显式设为 `true` 时要求 `include_review=true`。普通审核需要返工且有额度时先返工；其余情况下 eligible 资源进入独立 Claim 提取、证据判定和定向修订，普通审核的 reject / human_review 仍会阻止发布。直接 `GenerateRequest` 要求 Claim 任务只有一种资源类型；前端批量选择和反馈选择按类型创建独立 Run，关闭 Claim 时仍由一个 Run 生成多个资源。
 - `POST /api/resources/batches/{batch_id}/continuations` 可选传入 `include_claim_check`，以覆盖源任务的 Claim 审核设置；省略时沿用源任务。前端“追加资源”默认勾选该选项。
 - `hallucination_rate` 保留为旧 Reviewer 主观分兼容字段；正式 Claim 指标使用
   `claim_hallucination_rate` 和 `claim_metric_status`。
@@ -721,7 +754,7 @@ Invoke-RestMethod -Method Post `
 
 ## 15. P0-09 接口验收口径
 
-P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py` 组合现有 Generate Job、Run/Timeline/Evidence/Claims、Formal Feedback Attempt、Report 与 SSE 契约，输出脱敏 machine-readable manifest。`--offline` 使用 FakeGateway/固定 fixture；`--runtime` 只读验证真实 FastAPI、默认 KB、数据库与前端契约；`--live` 只有显式环境开关时才调用 Provider。
+P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py --offline` 使用 FakeGateway / 固定 fixture；`--live` 只有显式环境开关时才调用 Provider。旧 `--runtime` 尚未适配前端 `features/<domain>/`，读取已不存在的旧页面会失败，部分静态判定仍对应旧反馈和报告字段；该模式还会启动 TestClient lifespan，触发数据库初始化与启动对账。修复前不能据其结果判断当前 API 或前端缺少能力，当前工程验收使用统一 acceptance，实际环境再按 [Demo Runbook](demo-runbook.md) 检查。
 
 ## 16. Tutor API
 
@@ -748,8 +781,33 @@ Turn 请求为：
 
 响应包含 `turn_id`、`sequence`、`hint_level`、`pedagogy_action`、`message`、`follow_up_question`、`grounding_status`、`grounding_source`、`source_refs` 和脱敏的模型调用摘要。相同 `client_message_id` 与相同 payload 返回已持久化结果；不同 payload 返回 409 `TUTOR_IDEMPOTENCY_CONFLICT`。Evidence 不足返回 HTTP 200 和 `grounding_status=evidence_insufficient`；会话不存在为 404，关闭会话继续提交为 409，模型超时/认证/请求或结构化输出失败沿用 LLMGateway 的脱敏 503 语义。响应不包含 raw prompt、raw provider response、Chain-of-Thought、密钥或异常堆栈。
 
-当前浏览器已经使用 Formal Attempt 并显示画像版本，但 Profile/Mastery/Path 完整报告、Claim/Evidence 详情和 SourceRef V2 仍未对齐，因此 P0-09 Frontend Gate 仍为 `FAIL`。接口存在不等于页面验收完成。
-## 互动课件学习事件（向前兼容）
+当前前端已提供服务端判分的 Formal Attempt、报告图表、Claim 审核报告与资源来源列表；来源列表不等同于完整 Evidence 审计页面。旧 P0-09 Frontend Gate 的文件路径与静态判定需要重新适配，实际能力与端到端证据分别核对。
+
+## 互动课件生成、发布与学习事件
+
+以下接口均要求当前用户能访问对应 learner、任务或资源。创建任务只写持久 Job / outbox，实际执行由独立 Worker 消费。
+
+| 方法 | 路径 | 当前用途 |
+|---|---|---|
+| `POST` | `/api/resources/courseware/jobs` | 创建单来源任务，202 |
+| `POST` | `/api/resources/courseware/jobs/batch` | 多选来源逐项创建独立任务，202 |
+| `GET` | `/api/resources/courseware/jobs` | 按 learner 列表 |
+| `GET` | `/api/resources/courseware/jobs/{run_id}` | 任务状态 |
+| `GET` | `/api/resources/courseware/jobs/{run_id}/detail` | 场景 / 质量 / 发布详情 |
+| `GET` | `/api/resources/courseware/jobs/{run_id}/events` | 课件事件 SSE |
+| `POST` | `/api/resources/courseware/jobs/{run_id}/retry` | 任务重试 |
+| `POST` | `/api/resources/courseware/jobs/{run_id}/cancel` | 任务取消 |
+| `POST` | `/api/resources/courseware/jobs/{run_id}/scenes/{scene_id}/retry` | 指定场景重试 |
+| `GET` | `/api/resources/courseware/jobs/{run_id}/scenes/{scene_id}/review` | 场景审核摘要 |
+| `POST` | `/api/resources/courseware/jobs/{run_id}/publish` | 自动发布门面，仍须通过硬门 |
+| `GET` | `/api/resources/courseware/items/{resource_id}` | 已发布课件详情 |
+| `GET` | `/api/resources/courseware/items/{resource_id}/preview` | 当前 release 的 HTML 预览 |
+| `GET` | `/api/resources/courseware/items/{resource_id}/file` | 当前 release 的文件 |
+| `GET` | `/api/resources/courseware/items/{resource_id}/packages/{package_format}` | 基础 ZIP / SCORM / xAPI 包 |
+| `POST` | `/api/resources/courseware/items/{resource_id}/learning-events` | 幂等学习事件批量写入 |
+| `GET` | `/api/resources/courseware/items/{resource_id}/learning-progress` | 指定当前 release 的学习进度 |
+
+`publish` 不提供人工审批工作台，也不能绕过自动审核、来源、组件和 artifact hash 门禁。候选不可变，失败保留旧发布指针。基础 SCORM / xAPI 导出不构成完整标准兼容结论。
 
 ### 互动课件按资源独立生成
 
@@ -846,7 +904,7 @@ POST /api/resources/courseware/jobs/batch
 
 初始诊断节点只有在至少三题且覆盖 `concept`、`scenario`、`misconception` 后才具备完整三维基线；不足覆盖的提交仍保留服务端评分作为基线观察，并在 `diagnostic_measurements` 中返回答题计数和缺失维度，但不能单独形成“已掌握”结论。后续正式测评不要求每次重复三维：只要会话独立、题目不重复、评分审计有效，维度可由初诊基线或多次后测累计补齐。报告增量返回 `diagnostic_measurements`，并将其脱敏的维度追踪与正式 Attempt 合并到 `knowledge_blind_spot_map`；追踪不包含学习者答案、标准答案或解析。SSE 的 `report_changed` 仍为失效通知，客户端必须重新获取完整快照。
 
-报告 additive 返回三个版本化可视化投影：
+报告 additive 返回四个版本化可视化投影：
 
 - `knowledge_blind_spot_map`：兼容旧调用者的维度证据投影；它不再作为学习报告主图，也不用于表达后续学习节点的整体掌握度。
 - `learning_node_mastery_map`：学习报告主图使用的全节点掌握投影。初始诊断节点与后续节点统一按节点展示 `mastery_score`、掌握状态、正式测评结论、独立测评次数、最近一次正式成绩、趋势、可信度和下一步动作；不使用 `concept/scenario/misconception/practice` 维度。未测节点的 `mastery_score` 为 `null`，客户端必须显示“待测”而非 0 分。
@@ -858,11 +916,12 @@ POST /api/resources/courseware/jobs/batch
 `GET /api/report/{learner_id}/resource-credibility?limit=20&cursor=...` 返回按 `published_at DESC, resource_id ASC` 排序的文本资源可信证据分页；每项与报告内 `recent_resource_credibility` 使用相同的 `credibility_score`、`credibility_level`、`score_breakdown` 和原因码，汇总额外返回平均分、Claim 通过数和受 80 分上限约束数。cursor 无效返回 `400 REPORT_CURSOR_INVALID`。互动课件不进入该统计。
 
 `GET /api/report/{learner_id}/events?window_days=30` 是当前快照 SSE，不是 durable event ledger。它先发送 `report_snapshot`，随后只在 revision 变化时发送 `report_changed`，空闲时发送 `ping`；使用 `Last-Event-ID` 或 `after_revision` 的非法 cursor 返回 `400 REPORT_STREAM_CURSOR_INVALID`。payload 只包含 learner、revision、时间窗口和变化域等白名单摘要。资源难度投影或路径投影变化时，`changed_domains` 可包含 `resource_match`、`path`。
-# 分阶学习接口增量字段
+## 18. 分阶学习接口增量字段
 
 `ability_nodes[].tier` 与 `tier_label` 提供节点所属阶级。`generation_options` 额外返回 `tier_progress`（起始阶、当前阶、最高解锁阶、补救返回阶）、`tier_completion` 和 `recommendation_type`；每个候选节点都带 `tier`、`tier_label` 与 `eligibility_status`。
 
-当生成请求包含 `target_skill_nodes` 时，服务端要求节点数量不超过3且属于同一当前阶；请求中的 `difficulty_preference` 必须等于该阶的固定难度，否则以 `LEARNING_TIER_INVALID` 拒绝。`POST /api/feedback/followups/select` 在分阶处方存在时同样锁定难度，不接受客户端改写。
-# 复习清单 V2 互动课件兼容
+当生成请求包含 `target_skill_nodes` 时，公开 DTO 要求节点数量不超过 2，服务端再校验同一当前阶与先修条件；显式传入的 `difficulty_preference` 必须匹配该阶固定难度，否则以 `LEARNING_TIER_INVALID` 拒绝。`POST /api/feedback/followups/select` 在分阶处方存在时同样锁定难度，不接受客户端改写。
+
+## 19. 复习清单 V2 互动课件兼容
 
 互动课件仍使用既有的创建、预览、学习事件和进度 HTTP 路径。选择含 `review_practice_payload` 的“复习清单”时，服务端自动生成 V2 主动回忆课件；学习事件只接受答案揭示与三态自评的受控状态，不新增作答提交接口。

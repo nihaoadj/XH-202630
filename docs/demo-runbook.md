@@ -2,7 +2,7 @@
 
 工程验收先按 [统一测试方案](testing/README.md) 执行 `python scripts/run_tests.py --profile acceptance`。三背景/54用例、冻结专业来源、三指标定义与正式质量证据见 [比赛评测方案](testing/competition.md)。后端工作流回放输出54组固定输入/协同/输出示例，离线金标与回放均不计作真实模型完成样本；缺实际生成或独立质量复核时正式质量门保留 `NOT_MEASURABLE`。
 
-> 适用基线：`feature/multi-AGENTS`，fixture `p0-09-demo-suite/v1`。本 Runbook 区分“确定性离线验收”和“真实运行时演示”；fixture/replay 不冒充实时大模型结果。
+> 文档核对日期：2026-10-09；固定 fixture 为 `p0-09-demo-suite/v1`。运行时以当前 checkout 和配置为准，分别记录确定性离线验收与真实运行时演示。
 
 ## 1. 放行原则
 
@@ -10,11 +10,13 @@
 
 - `python scripts/p0_09_preflight.py` 返回 `READY`（退出码 0）。
 - offline acceptance 的 Scenario A～J 全部 `PASS`。
-- runtime acceptance 为 `PASS`，而不只是 `/health` HTTP 200。
+- 目标运行环境的数据库、Web、Worker 与真实业务闭环均有有效验收证据；旧 P0-09 runtime 模式须先修复路径与合同，再获得有效 `PASS`。
 - 浏览器人工 E2E checklist 全部确认。
 - live provider smoke 如被列入本次演示范围，必须显式启用并单独记录结果。
 
-`DEGRADED` 只能用于排障或受控预演；`NOT_READY` 与任一 required Gate 的 `FAIL` 都是 No-Go。当前代码已包含 SQLite 外键 hook 和资源版本唯一约束 migration，但正式 demo 数据仍须完成迁移演练；前端 Claim/Evidence、SourceRef V2 和画像/路径报告缺口仍会使 runtime Gate 失败。
+`DEGRADED` 只能用于排障或受控预演；`NOT_READY` 与任一 required Gate 的 `FAIL` 都是 No-Go。正式 demo 数据仍须完成迁移演练。当前前端已实现五步方向引导、Claim 审核报告、参考来源与动态学情图表；旧 runtime 脚本尚未适配 `features/<domain>/`，不能把脚本失效解释为这些功能缺失。
+
+旧 `scripts/run_p0_09_acceptance.py --runtime` 读取不存在的 `src/views/FeedbackView.vue`、`src/views/ReportView.vue`、`src/components/ResourceViewer.vue`，还检查旧 `src/api/runEvents.js`；可能抛出 `FileNotFoundError` 而无法输出完整 manifest。即使修复路径，它对旧聚合反馈入口、SourceRef 和报告字段的字符串检查也须重新对齐当前契约。该模式会启动 TestClient lifespan，执行正常数据库初始化与启动对账，不能当成全程只读检查。本次文档维护只记录此代码问题。
 
 ## 2. 启动前准备
 
@@ -46,10 +48,10 @@ Set-Location ..
 ```powershell
 python scripts/p0_09_preflight.py --output wzx/out/p0-09-preflight.json
 python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-manifest.json
-python scripts/run_p0_09_acceptance.py --runtime --output wzx/out/p0-09-runtime-manifest.json
+python scripts/run_tests.py --profile acceptance
 ```
 
-退出码：`0=PASS/READY`、`1=FAIL/NOT_READY`、`2=PARTIAL/DEGRADED`。不得只看最后一行或 HTTP 200；必须打开 manifest 核对 Scenario、Metric、DB、Frontend 和 known limitations。
+P0-09 退出码：`0=PASS/READY`、`1=FAIL/NOT_READY`、`2=PARTIAL/DEGRADED`；单独离线运行不包含 runtime / live，顶层可能为 `PARTIAL`，应核对 A～J 的实际状态。统一测试入口全部已选工程套件通过才返回 0，见 [测试方案](testing/README.md)。旧 `--runtime` 修复前不列入可用命令；acceptance 使用隔离 fixture，不能代替下面的真实环境演示。
 
 如需收费 Provider 冒烟，另开一次并保存单独证据：
 
@@ -86,12 +88,12 @@ Invoke-RestMethod http://127.0.0.1:8081/health/ready
 1. 打开固定 learner/profile，说明 beginner/intermediate/advanced 中本次使用的层级、目标知识点和画像版本。
 2. 创建异步 Generation Job，记录 `run_id`；解释 Job 与 AgentRun 共用稳定 ID，但职责不同。
 3. 展示 SSE Agent timeline：queued、Diagnosis、Retriever/Evidence Gate、Planner、Generator、Reviewer、Claim Audit、terminal。
-4. 打开 Evidence 详情，展示安全 locator、DocumentVersion、Chunk ID 与冻结 snapshot；不展示 prompt 或模型原始响应。
+4. 通过当前登录会话读取 `/api/runs/{run_id}/evidence`，展示安全 locator、DocumentVersion、Chunk ID 与冻结 snapshot；该专用接口不等于已有完整前端 Evidence 审计页面。
 5. 展示 Reviewer 决策、结构化 issue/revision instruction 与 Claim verdict，强调 Reviewer 自评分不是正式幻觉指标。
-6. 打开最终 published leaf，展示资源版本链、SourceRef 和 publication gate；旧版与不安全状态不进入默认资源库。
+6. 在 `/resources` 打开最终已发布资源和参考来源；版本链通过 Run timeline 核对。可演示 `focus=1` 专注阅读；课件分支单独创建单来源任务并确认 Worker、release 和预览。
 7. 提交 Formal LearningAttempt，展示后端重算的逐知识点得分与幂等键。
 8. 展示 mastery、ProfileVersion N→N+1 和 LearningPath mutation；说明低/中/高分及 critical blocker 规则。
-9. 若决策为 remediate/advance，跳转 child Run 并订阅 child SSE；practice 默认不创建无意义 child generation。
+9. 在反馈报告中确认补基础、纠错包或进阶方案，再打开真实 child Run / SSE。中分也可确认纠错包与新测评；仅提交测评不自动生成，未确认时应显示下一步候选。
 10. 打开 Report，核对 Attempt、掌握度、画像版本、路径和 child relation 都来自持久化事实。
 
 ## 4. 可信性分支
@@ -116,7 +118,7 @@ Invoke-RestMethod http://127.0.0.1:8081/health/ready
 | 页面刷新 | 保留 run_id 后刷新 | REST timeline 恢复持久化事实，再续订 SSE |
 | KB not ready | 查看 `/health/ready` 与管理员 KB health | 默认 KB 故障阻断生成；非默认 KB 故障只在管理员明细中 degraded |
 | LLM auth/bad request | 使用受控 failure fixture | 不做不安全重试，不发布伪成功结果 |
-| Reviewer/Claim Judge 失败 | 使用 failure fixture | 进入 `human_review`，无默认发布 |
+| Reviewer/Claim Judge 失败 | 使用 failure fixture | Reviewer 硬失败保持未发布；Claim 不完整仅在显式 partial 策略允许时降级发布，指标仍为 `incomplete` |
 | Retriever 基础设施失败 | 使用 failure fixture | fail closed，不生成虚构资源 |
 | Persistence conflict | 使用 failure fixture | 返回稳定冲突语义，无 false success/重复 mutation |
 
@@ -142,6 +144,9 @@ kill/restart、备份恢复或 CI artifact 证据。
 ## 6. 浏览器人工 E2E Checklist
 
 - [ ] health ready
+- [ ] courseware Worker ready（包含课件演示时）
+- [ ] 首页 / 登录 / 本人资料正常；公开四项展示标为本地机制示意
+- [ ] 五步新建方向及第五步资源确认正常
 - [ ] learner fixture visible
 - [ ] generation job created
 - [ ] SSE queued
@@ -153,17 +158,21 @@ kill/restart、备份恢复或 CI artifact 证据。
 - [ ] Claim visible
 - [ ] Publication visible
 - [ ] Resource visible
-- [ ] SourceRef visible
+- [ ] SourceRef visible；完整 Evidence 来源通过专用接口核对
 - [ ] Claim metric visible
 - [ ] Attempt submit
 - [ ] Profile version update
 - [ ] Mastery update
 - [ ] Path mutation
-- [ ] child Run
-- [ ] child SSE
+- [ ] 下一步确认后才出现 child Run
+- [ ] child SSE（未确认时不要求创建）
 - [ ] Report reflects state
 - [ ] Refresh replay
 - [ ] SSE reconnect
+- [ ] 画像切换、历史分页和报告时间窗口不显示旧上下文数据
+- [ ] 专注模式、窄屏、键盘焦点与减少动态效果可用
+
+前端自动专项共 13 项，以 `tests/suites.json` 的 browser 组为准。它们使用本地 HTTP fixture，不写真实账号、反馈或课件；截图 / JSON 是浏览器 fixture 证据，现场真实 Web / Worker / 模型结果需另存。
 
 ## 7. 演示证据与收尾
 

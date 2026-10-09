@@ -2,24 +2,34 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：2.4
-> 文档更新时间：2026-08-29
+> 文档版本：2.5
+> 文档更新时间：2026-10-09
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 0. 整体架构总览
 
 ![系统整体架构图](assets/系统整体架构图.svg)
 
-图中蓝色箭头表示主调用或数据流，绿色箭头表示可信知识/发布链路，虚线表示持久化
-审计与反馈关系。它描述当前本地 SQLite + Chroma 部署的实际代码边界，不表示已完成
-分布式队列、生产级 PostgreSQL、高可用或自动恢复承诺。
+图按“交互与接口 → 应用服务 → Agent 与领域工作流 → 确定性平台能力 → 数据与外部依赖”
+五层组织，箭头表示自上而下的调用或依赖关系。API 只调用领域服务；服务负责编排用例、
+事务和执行适配，并向 Agent、仓储与平台能力注入依赖。它描述当前本地 SQLite + Chroma
+部署的实际代码边界，不表示已完成分布式队列、生产级 PostgreSQL、高可用或自动恢复承诺。
+
+### 0.1 代码架构与目录边界
+
+![代码架构图](assets/代码架构图.svg)
+
+这张图说明“代码放在哪里、可依赖什么”，而非一次请求的运行时路径。前端按
+`features/<domain>` 组织业务界面；后端保持 `api → services → agents/core/db` 的职责边界，
+`main.py` 与 `containers.py` 是配置和依赖注入的组合根。`models` 提供跨层稳定的 DTO 和
+领域契约；知识库资料、SQLite 与 Chroma 只通过受控的入库、仓储或检索能力访问。
 
 ## 1. 架构目标
 
 系统当前面向“多领域培训”场景，围绕以下闭环组织：
 
 ```text
-用户资料维护
+注册 / 登录并维护用户资料
 -> 领域选择
 -> 学习方向选择
 -> 初始画像问卷
@@ -103,13 +113,35 @@
 - 公共资源类型词汇由 `models/learning_documents/` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
 - 反馈闭环可额外创建专属 `个性化纠错训练包 -> CorrectionTrainingPackageAgent`。它在学习文档内部受支持，但不属于普通生成词汇；`FeedbackService` 验证强化候选和快照后才可创建，并只向 Agent 传入脱敏目标、教学策略、达标标准和冻结 Evidence。
 
+### 3.4 前端业务与公共界面层
+
+前端入口由 `main.js` 注册 Vue Router、Pinia、Element Plus 和 `v-module-motion`；`App.vue` 负责学习外壳、侧栏折叠与页面动效。业务页面已经迁入 `features/<domain>/`，旧 `src/views/` 不再保存业务页面。
+
+| 目录 / 入口 | 当前职责 |
+|---|---|
+| `features/auth/` | 六屏公开首页和共用登录/注册弹窗；`/login`、`/register` 复用 `LandingView` |
+| `features/home/`、`home/showcase/` | 登录后工作台和公开首页的四项本地机制示意 |
+| `features/onboarding/` | 领域、方向、问卷、诊断、资源确认五步引导 |
+| `features/learners/` | 用户资料与学习历史；历史页以 `journey` 聚合学习轮次 |
+| `features/generation/`、`features/runs/` | 资源生产工作区、运行事件 SSE、持久化轨迹和轮询降级 |
+| `features/learning-documents/` | Markdown 阅读、来源展示、资源切换与 `focus=1` 专注模式 |
+| `features/courseware/` | 单资源课件任务、来源选择、进度、iframe 预览和学习事件 |
+| `features/feedback/`、`features/tutor/` | 批次 / Run 正式测评、下一步确认和证据约束导学 |
+| `features/reports/` | 报告 4.1 快照、ETag、报告 SSE 与四类 ECharts 展示 |
+| `features/resource-library/` | 文本与课件的只读书架 API 聚合 |
+| `api/`、`stores/` | 带 Cookie 的 HTTP 客户端、认证状态、当前画像与方向上下文 |
+| `components/`、`ui/`、`styles/` | 公共准备面板、页面 / 模块动效和主题；不承载生成或判分规则 |
+
+公开首页的 Agent、证据、路径和反馈场景采用本地示意数据；实际生成页读取持久化事件。学习页面中的画像和时间窗口切换会使旧请求、分页及更新流失效，迟到响应不能覆盖当前上下文。布局按可用空间选择固定框架、区域内滚动或自然阅读；动画遵循 `prefers-reduced-motion`，相关浏览器专项由 `tests/suites.json` 管理。
+
 ## 4. 当前主流程调用链
 
 ### 4.1 用户资料、画像与诊断
 
 ```text
 frontend
--> POST /api/users/
+-> POST /api/auth/register 或 POST /api/auth/login
+-> PATCH /api/users/{user_id}（按需维护本人资料）
 -> GET /api/knowledge/domains
 -> GET /api/onboarding/questions?learning_direction_id=...
 -> POST /api/onboarding/initial-profile
@@ -120,6 +152,7 @@ frontend
 说明：
 
 - 用户的 `identity`、`education`、`major` 等稳定信息先进入 `users`。
+- 认证使用 HttpOnly Cookie；私有路由校验用户与画像归属。挂载到主应用的 `POST /api/users/` 是兼容路由，已登录请求返回 403，公开创建账号使用注册接口。
 - 通用问卷只负责当前学习方向的动态信息，不再重复采集稳定资料。
 - `onboarding_service` 会优先使用用户资料中的 `identity` 回写画像的 `learner_type`。
 
@@ -169,14 +202,13 @@ POST /api/generate/jobs
 diagnose -> retrieve -> plan -> generate
                                   |- include_review=false -> finalize_draft
                                   |- include_review=true  -> review
-                                                               |- approve + include_claim_check=true
+                                                               |- (可重试生成失败 / revise) 且有普通额度
+                                                               |     -> prepare_revision -> generate
+                                                               |- 无普通返工 + Claim 开启且有 eligible 资源
                                                                |     -> claim_extract -> claim_judge -> claim_decide
-                                                               |            |- 通过 -> finalize
-                                                               |            |- 问题 Claim 且有额度 -> prepare_revision -> generate
-                                                               |            |- 失败/额度耗尽 -> finalize(human_review)
-                                                               |- approve + include_claim_check=false -> finalize
-                                                               |- revise 且有额度 -> prepare_revision -> generate
-                                                               |- reject/额度耗尽 -> finalize
+                                                               |            |- 问题 Claim 且有 Claim 额度 -> prepare_revision -> generate
+                                                               |            |- 其余 -> finalize（逐资源发布策略）
+                                                               |- 其余 -> finalize
 finalize -> END
 ```
 
@@ -191,13 +223,21 @@ GenerateRequest 请求校验与类型规范化
 -> 已批准且已发布的资源可立即阅读
 ```
 
-每个资源仅保留 `representation=text`。数据库以 `(run_id, resource_spec_id, representation)` 唯一标识当前执行投影，以 `(run_id, resource_spec_id, representation, version)` 约束资源版本。
+每个文本资源仅保留 `representation=text`。数据库以 `(run_id, resource_spec_id, representation)` 唯一标识当前执行投影，以 `(run_id, resource_spec_id, representation, version)` 约束资源版本。关闭普通审核时只保存未发布草稿；普通返工与 Claim 返工分别受 `max_iterations`、`claim_max_iterations` 约束，后者默认 `0`。
+
+Claim finalizer 保留完整通过、硬阻断、待用户决策和显式 partial 降级的区别：无证据事实满足阈值时可等待用户决定；`CLAIM_PARTIAL_PUBLISH` 仅控制符合条件的审核不完整资源，保留 `incomplete` 指标。默认配置与模板差异见 [部署说明](deployment.md)，不能把这些发布例外表述为完整 Claim 审核通过。
+
+### 4.2.1 当前资源生产流程
+
+![当前资源生产工作流](assets/资源生产工作流图.svg)
+
+本图当前只说明文本学习资源生产。节点优先检索只在有目标节点时缩小候选范围；无映射、无命中或证据不足会回退一次全库检索。回退后仍不满足 Evidence 门禁时，工作流停止事实型生成；底层检索错误则保留原有错误语义，而不是以回退掩盖故障。普通审核返工优先于 Claim；普通审核 reject / human_review 不阻止 eligible 资源的独立 Claim 审计，发布时仍保留原阻断结论。关闭普通审核只保存草稿；发布由 finalizer 逐资源决策，区分完整通过、用户明确决定和符合配置的 Claim 不完整降级。
 
 ### 4.3 P0-07 反馈后真实闭环
 
 ```text
-POST /api/feedback/attemptsattempts
--> 校验 learner、published source resource/version、稳定知识点与请求分数
+POST /api/feedback/attempts/run/submit 或 /api/feedback/attempts/batch/submit
+-> 校验 learner、published source resource/version、冻结题目、知识点与服务端判分证据
 -> 读取 profile_version、knowledge state、最近趋势和当前 path
 -> deterministic policy
    |- overall < 0.60 或任一点 < 0.60 -> remediate
@@ -210,17 +250,21 @@ POST /api/feedback/attemptsattempts
    |- learner_profiles.profile_version + version history
    |- learning_paths/nodes + path mutation
 -> commit
--> remediate/advance 时幂等创建现有 generation job
+-> 返回反馈报告和下一步候选，不自动创建新任务
+-> 学习者通过 POST /api/feedback/followups/select 确认节点 / 纠错方案
+-> 幂等创建现有 generation job
 -> 保存 parent run / attempt / decision / child run 关系
 -> BackgroundTasks 调用 GenerationJobService.run_job
 -> 新 Run 继续经过 Evidence、Review、Claim Audit 和 Publication Gate
 ```
 
-知识点掌握度采用可解释 EWMA：已有状态为 `0.2 * old + 0.8 * attempt_score`，让最近一次客观测评占主要权重；首次作答直接取 attempt score。hint 与 duration 仅进入决策上下文和审计，不暗中改变 mastery。每次成功更新将画像版本从 N 变为 N+1，并以 `expected_profile_version` 做 CAS；重复请求不会再次加权。
+知识点掌握度采用可解释 EWMA：已有状态为 `0.2 * old + 0.8 * attempt_score`，让最近一次客观测评占主要权重；无既有分数或自评先验时，首次客观测评直接取本次得分。规范掌握态的先验和证据门槛见第 14 节。hint 与 duration 仅进入决策上下文和审计，不暗中改变 mastery。每次成功更新将画像版本从 N 变为 N+1，并以 `expected_profile_version` 做 CAS；重复请求不会再次加权。
 
 路径 mutation 由 policy 生成并校验自环、缺失前置条件、环路和重复节点。低分插入/复用 remedial，中分插入/复用 practice，高分完成当前节点并解锁满足前置条件的下一节点；无下一节点时增加 challenge。路径只有实际变化才递增版本。
 
-Follow-up 属于 after-commit 副作用。Claim 关闭时一次选择保持单 Run 多资源；Claim 开启且多资源时按资源类型创建独立 Run。每个 Run 绑定同一 Attempt/Decision；资源页追加创建 `continuation` 关系，失败重试创建新的 `retry` 关系并保留失败来源。创建失败时 Attempt 保持 `applied`、关联状态为 `failed`，相同幂等请求可安全对账重试。反馈事件只存稳定 ID、计数、分数摘要、action/reason code 和版本，不保存完整答案、画像、Prompt 或模型原文。
+旧 `POST /api/feedback/attempts` 接收聚合分数但缺少可信题目证据，返回 422 `FEEDBACK_EVIDENCE_UNVERIFIED`；它不写掌握度、路径或画像版本。
+
+Follow-up 属于确认选择后的 after-commit 副作用。Claim 关闭时一次选择保持单 Run 多资源；Claim 开启且多资源时按资源类型创建独立 Run。每个 Run 绑定同一 Attempt/Decision；资源页追加创建 `continuation` 关系，失败重试创建新的 `retry` 关系并保留失败来源。创建失败时 Attempt 保持 `applied`、关联状态为 `failed`，相同幂等请求可安全对账重试。反馈事件只存稳定 ID、计数、分数摘要、action/reason code 和版本，不保存完整答案、画像、Prompt 或模型原文。
 
 ### 4.4 P0-08 WorkflowEvent SSE
 
@@ -249,11 +293,11 @@ Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID
 资源版本、知识点与 Evidence 边界。判定失败、漏判或伪造 ID 均 fail closed 到
 `human_review`。新资源版本必须重新抽取，旧版本判定不会复制。
 
-`max_iterations` 是最大业务返工次数，不包含初次生成；`generation_attempt = revision_count + 1`。技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
+`max_iterations` 是普通审核最大返工次数，不包含初次生成；Claim 使用独立的 `claim_max_iterations`。`generation_attempt = revision_count + claim_revision_count + 1`，技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
 
 ### 多 KB collection 与健康检查边界
 
-- 每个 `knowledge_base_id` 通过 `backend/app/core/vector_store.py:_collection_name()` 映射到独立 Chroma collection。
+- 每个 `knowledge_base_id` 通过 `backend/app/core/retrieval/vector_store.py:_collection_name()` 映射到独立 Chroma collection。
 - collection 的创建、写入、查询、删除和 health 均复用该 resolver，`CHROMA_COLLECTION_NAME` 兼容期只作为前缀，不再表示唯一固定集合。
 - 公共 `/health` 与 `/health/ready` 只判断默认 KB 和 Python、storage、LLM、Embedding、Chroma 目录、资源目录等核心依赖。
 - 管理员 `/api/admin/knowledge-bases/health` 在显式 token 保护下返回所有 KB 的脱敏详情。
@@ -264,7 +308,7 @@ Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID
 当前实际对外闭环接口为：
 
 ```text
-POST /api/users/
+POST /api/auth/register 或 POST /api/auth/login
 -> GET /api/knowledge/domains
 -> GET /api/onboarding/questions
 -> POST /api/onboarding/initial-profile
@@ -274,11 +318,11 @@ POST /api/users/
 -> GET /api/generate/jobs/{run_id}
 -> GET /api/resources/{learner_id}
 -> GET /api/resources/file/{resource_id}
--> GET /api/feedback/evaluation/run/{learner_id}/{run_id}
--> POST /api/feedback/attemptsattempts/run/submit
--> POST /api/feedback/attempts
+-> GET /api/feedback/evaluation/batch/{learner_id}/{batch_id}
+-> POST /api/feedback/attempts/batch/submit
+-> POST /api/feedback/followups/select（确认后续学习方案）
 -> GET /api/feedback/attempts/{learner_id}
--> GET /api/learning-history/{learner_id}/timeline
+-> GET /api/learning-history/{learner_id}/journey
 -> GET /api/report/{learner_id}
 ```
 
@@ -294,7 +338,7 @@ POST /api/users/
 - `GET /api/reviews/{resource_id}`
 - `GET /api/generate/jobs?learner_id={learner_id}`
 - `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
-- `POST /api/feedback/attemptsattempts/run/submit`
+- `POST /api/feedback/attempts/run/submit`
 - `GET /api/feedback/attempts/{learner_id}`
 - `GET /api/evaluation/summary`
 
@@ -313,7 +357,7 @@ POST /api/users/
 
 说明：
 
-- 当前本地数据库已经按最新模型重建。
+- 默认数据库路径来自 `backend/.env.example`；实际路径由本机配置决定，迁移状态须用只读完整性检查核实。
 - `knowledge_base/questionnaire_common.json` 现已收缩为只保存动态学习信息，不再包含用户长期资料字段。
 
 ## 7. 当前目录树摘要
@@ -338,11 +382,11 @@ frontend/
   src/
     api/
     components/
-    composables/
     features/<domain>/
     router/
     stores/
     styles/
+    ui/
     utils/
 
 knowledge_base/
@@ -389,9 +433,10 @@ scripts/
 - 当前对外资源生成模式为异步任务模式
 - 同步生成接口 `POST /api/generate/` 已移除
 - 资源生成页当前按任务维度展示，默认定位当前任务，可切换查看历史成功任务
-- 学习反馈页当前按任务维度加载测评题，并支持基于选中反馈主动重新生成
-- 学习历史页面应优先依赖 `/api/learning-history/{learner_id}/timeline`
+- 学习反馈页优先按批次加载测评；纠错包重新验证使用独立 Run；下一轮生成须由学习者确认
+- 学习历史页面优先依赖 `/api/learning-history/{learner_id}/journey`；`timeline` 保留兼容
 - 通用问卷不再承担用户资料采集职责
+- 旧 P0-09 runtime 验收仍引用迁移前的前端文件；修复前不能据其结果推断当前前端能力，详情见 [Demo Runbook](demo-runbook.md)
 ## 9. Agent 可靠执行与异步任务整合
 
 dev 的异步 `GenerationJob` 负责排队和面向前端的任务状态；`AgentRun` 负责一次
@@ -439,7 +484,7 @@ GenerationJobService
 判断哪一段内容最相关。因此它不会承诺“每个 Chunk 只属于一个节点”，也不替代
 Evidence 的来源、版本和哈希校验。
 
-当前请求最多取前三个去重后的目标节点，避免在既有查询预算之外隐式扩大调用；运行顺序如下：
+公开 `GenerateRequest` 最多接受两个同阶目标节点；共享检索器另对工作流状态中的目标保留前三项去重上限，不会因此扩大公开请求契约。运行顺序如下：
 
 ```text
 target_skill_nodes 非空
@@ -513,7 +558,7 @@ Candidate 发布由 `services.courseware.release.CandidateReleaseCoordinator` �
 
 普通学习事件和 progress API 以 `released_release_id` 为边界。旧、未知、未发布或混合 release 请求在 API 层返回明确 409，批量事件在校验前不写入。组件状态以 `scene_id + component_id + component_version` 为实例边界，progress schema `2.0` 的嵌套投影和 renderer 的稳定 `data-component-id` 共同阻止同类组件互相覆盖；Viewer 切换资源/release 时更新 nonce 并丢弃迟到响应。
 
-R4 的本地候选证据必须同时包含 12-case evaluator、14 项真实进程故障矩阵、Q5 journey schema 1.1 和 browser schema 1.3 的 11×3 矩阵及 HTTP-origin/artifact restore 等检查。候选可达到 `LOCAL_READY`，但真实模型、CI、目标部署和完整发布周期仍是外部待验证项；SCORM/xAPI 仍仅为基础导出包。
+本地候选证据必须同时包含冻结 evaluator、专属真实进程故障矩阵、Node journey 和浏览器质量门。当前 evaluator manifest `2.0` 登记 20 个案例；故障报告 schema `1.1` 检查 18 类必需证据；浏览器报告 schema `1.4` 包含 15 组件 × 3 主题、9 布局模板 × 3 主题 × 多视口矩阵，以及 HTTP-origin、artifact restore 等检查。数量与契约以当前 fixture 和脚本为准，调试模式不能代替完整矩阵。候选状态须由当次完整结果判定；真实模型、CI、目标部署和完整发布周期仍需独立证据，SCORM/xAPI 仍仅为基础导出包。
 
 ## 14. Learner Mastery 规范投影与闭环
 
@@ -527,7 +572,7 @@ Diagnosis (server scored, verified)
   -> same transition policy and one profile-version increment
 Run/Batch evaluation (server scored, verified)
   -> Attempt + Decision + Ability Event + State Mutation + Learning Path + ProfileVersion
-  -> Report 3.0（事实 revision / ETag / 当前快照 SSE）+ frozen LearnerFocusSnapshotV1
+  -> Report 4.1（事实 revision / ETag / 当前快照 SSE）+ frozen LearnerFocusSnapshotV1
   -> next text-resource GenerationJob
 ```
 
@@ -536,9 +581,11 @@ Run/Batch evaluation (server scored, verified)
 SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范状态、能力事件、mutation、学习路径、画像缓存和画像版本，并由 `(learner_id, idempotency_key)`、source hash、row version 与 profile version 约束重放和并发。问卷和诊断走稳定 source ID；无状态变化的重放不增加证据或版本。客户端聚合分数不是可信入口。
 
 生成任务创建时由 `MasteryService` 按 `confirmed_weak -> regressing_learning -> low_self_report -> unassessed_prerequisite` 排序，冻结 `LearnerFocusSnapshotV1` 到请求快照。显式目标覆盖 auto，off 禁用注入；创建后的画像变化不会改变既有任务。报告、ability API、生成重点和兼容缓存因此读取同一个 profile version 的规范投影。
-# 分阶学习架构
+
+## 15. 分阶学习架构
 
 `core/learning_tiers.py` 是三阶等级映射与固定难度的唯一策略面。`MasteryService` 使用其计算准入豁免、当前阶候选、前置门禁和反馈后的升降阶；`learner_tier_progress` 持久化起始阶、活动阶和最高解锁阶。文本生成任务在创建时冻结目标阶与节点，审核阶段复核资源难度，避免不同模块各自推断难度。
-# 复习清单 V2 课件适配
+
+## 16. 复习清单 V2 课件适配
 
 互动课件来源快照保留 `review_practice_payload` 及其 hash。课件规划和确定性渲染将其投影为受控 review-practice 组件；模型不改写题目或答案，只能参与既有课件场景的受约束叙事补充。学习事件只保存题目 ID、答案揭示状态和三态自评，不保存学习者作答文本。

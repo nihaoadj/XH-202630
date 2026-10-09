@@ -1,25 +1,25 @@
 # 知识库与数据库实现说明
 
 > 项目编号：XH-202630
-> 文档版本：2.2
-> 文档更新时间：2026-08-29
+> 文档版本：2.3
+> 文档更新时间：2026-10-09
 > 文档定位：说明当前项目中知识库源文件、SQLite 数据库、问卷、诊断、画像与资源的真实落库方式。
 
 ## 1. 当前运行方式
 
 开发环境当前使用 SQLite。
 
-`backend/.env` 的关键配置为：
+`backend/.env.example` 的默认配置如下，本机 `backend/.env` 可覆盖实际路径：
 
 ```env
 DB_TYPE=sqlite
-DATABASE_URL=sqlite:///./data/domain_knowledge_writable_probe.db
+DATABASE_URL=sqlite:///./data/domain_knowledge.db
 ```
 
-数据库文件位置：
+默认数据库文件位置（相对路径按 `backend/` 解析）：
 
 ```text
-backend/data/domain_knowledge_writable_probe.db
+backend/data/domain_knowledge.db
 ```
 
 初始化与导入脚本：
@@ -41,6 +41,8 @@ python scripts/ingest_knowledge.py
   - 构建知识库向量索引
   - 将知识文档切片写入 Chroma
   - 可使用 `--knowledge-base-id <id>` 显式重新入库并对账 SQL/Chroma
+
+初始化和入库会修改配置中的数据，不属于只读文档检查。当前库是否已应用迁移、是否可检索，分别以完整性检查和环境 / KB health 为准；文档不将某次本地重建结果视为所有环境的状态。
 
 ## 2. 当前知识源目录
 
@@ -142,6 +144,7 @@ knowledge_base/<track_id>/
 - `job_role`
 - `experience_years`
 - `metadata`
+- `username` 与账号启用状态；密码哈希只在持久化 / 认证内部使用，不进入用户资料响应
 
 说明：
 
@@ -213,6 +216,8 @@ backend/chroma_db/
 | 表 | 作用 |
 |---|---|
 | `generation_jobs` | 异步资源生成任务 |
+| `resource_specs` | 每 Run 冻结的资源类型、family、目标、Evidence 和表示预算 |
+| `resource_executions` | 每 `(run_id, resource_spec_id, representation)` 当前执行投影 |
 | `generated_resources` | 已生成资源 |
 | `feedback_records` | 学习反馈 |
 | `learning_attempts` | P0-07 正式学习尝试与幂等请求摘要 |
@@ -225,6 +230,8 @@ backend/chroma_db/
 | `feedback_followup_runs` | Attempt/Decision 与后续生成 Run 的来源关系 |
 | `agent_runs` | Agent 运行主记录 |
 | `agent_steps` | Agent 步骤记录 |
+| `workflow_events` / `workflow_checkpoints` | append-only 事件与运行检查点 |
+| `retrieval_evidence_snapshots` | 每 Run 冻结的来源、版本、哈希和摘录 |
 | `resource_reviews` | 资源审核摘要 |
 | `resource_claims` | Claim 原文、资源版本、稳定 ID 与抽取元数据（兼容旧字段） |
 | `claim_judgements` | Claim 的独立判定、模型/Prompt 版本与置信度 |
@@ -236,6 +243,31 @@ backend/chroma_db/
 |---|---|
 | `contest_eval_cases` | 评测样例 |
 | `contest_eval_results` | 评测结果 |
+
+### 3.9 掌握度与课程进度
+
+| 表 | 作用 |
+|---|---|
+| `knowledge_states` / `ability_state_events` | 唯一规范掌握态与来源幂等能力事件 |
+| `learner_curriculum_nodes` | 已安排、已接触、待验证、完成和欠债等课程流程投影 |
+| `learner_tier_progress` | 起始阶、当前阶、最高解锁阶和补救返回阶 |
+
+掌握度与课程进度是不同事实。旧画像 JSON 仅为规范状态的兼容缓存；自评为低置信度，客观写入来自服务端诊断与 run/batch 正式反馈，低阶准入豁免不等于正式掌握。
+
+### 3.10 Tutor 与互动课件
+
+| 表 | 作用 |
+|---|---|
+| `tutor_sessions` / `tutor_turns` | 活动会话、幂等轮次、提示等级和受控引用 |
+| `courseware_generation_jobs` / `courseware_outbox` | 持久课件任务、租约和 Worker 消费 |
+| `courseware_workflow_checkpoints` | 课件工作流恢复边界 |
+| `courseware_specs` / `courseware_source_links` | 冻结单文本来源和结构契约 |
+| `courseware_scenes` / `courseware_scene_revisions` / `courseware_reviews` | 场景、修订与自动审核事实 |
+| `courseware_events` | 课件任务事件，独立于文本 Run 的事件流 |
+| `courseware_resources` / `courseware_releases` / `courseware_artifacts` | 资源、不可变候选与当前发布指针 |
+| `courseware_learning_events` | occurrence 幂等且按 resource / release 隔离的学习事件 |
+
+ORM 入口是 `db/shared/models.py` 与 `db/courseware/models.py`，初始化与迁移装配位于 `db/shared/database.py`。Tutor 不写掌握度；课件交互自评不替代正式反馈成绩。
 
 ## 4. 当前 API 与数据库的关系
 
@@ -265,7 +297,7 @@ backend/chroma_db/
 - `questionnaire_answers`
 - `learner_profiles`
 
-P0-07 正式接口还会原子读写 `learning_attempts`、`learning_attempt_point_results`、`feedback_decisions`、`knowledge_states`、`knowledge_state_mutations`、`learner_profile_versions`、`learning_paths`、`learning_path_nodes` 和 `learning_path_mutations`。事务提交后才创建 `generation_jobs`，随后写 `feedback_followup_runs`；外部生成失败不回滚 Attempt。
+run/batch 正式反馈会原子读写 `learning_attempts`、`learning_attempt_point_results`、`feedback_decisions`、`knowledge_states`、`ability_state_events`、`knowledge_state_mutations`、`learner_profile_versions`、`learning_paths`、`learning_path_nodes` 和 `learning_path_mutations`。提交后先返回候选；学习者确认下一步时才创建 `generation_jobs` 并写 `feedback_followup_runs`，外部生成失败不回滚 Attempt。
 
 ### 4.3 P0-07 一致性与迁移
 
@@ -291,7 +323,8 @@ LIMIT :page_size
 ### 4.5 数据库完整性与 P0-09 migration
 
 - SQLite engine 在每个新 DBAPI connection 建立时执行并验证 `PRAGMA foreign_keys=ON`，而不是只设置启动时的单个连接。
-- `generated_resources` 对 `(run_id, resource_type, version)` 建数据库级 UNIQUE，同一 Run 的同类型同版本资源只能有一条；legacy `run_id IS NULL` 仍允许并存。
+- `generated_resources` 对 `resource_spec_id IS NULL` 的 legacy 记录按 `(run_id, resource_type, version)` 建部分 UNIQUE；`run_id IS NULL` 仍允许并存。
+- `resource_spec_id IS NOT NULL` 的资源级记录按 `(run_id, resource_spec_id, representation, version)` 建部分 UNIQUE，`resource_executions` 对 `(run_id, resource_spec_id, representation)` 唯一；文本表示保持 `text`，课件使用独立表。
 - Resource 的 `run_id`、`generation_step_id` 和 `parent_resource_id` 分别引用 Run、Step 和父资源版本。旧 SQLite 表缺少声明式 FK 时，`20260815_p0_09_database_integrity` 会在预检通过后事务化重建该表。
 - migration 不自动删除重复记录、不补造 Run/Step/父资源，也不为非空 Run 的 NULL version 猜测版本；发现这些情况会 fail closed，要求先人工处理。
 - SQL Repository 保留业务查重，并将并发下数据库返回的 `IntegrityError` 映射为稳定 `PersistenceConflict`。
@@ -364,7 +397,7 @@ python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
 
 - `learner_profiles`
 
-删除时还会联动清理相关诊断记录。
+删除由 Profile 仓储协调清理画像相关的问卷、诊断、资源、反馈、审核和运行记录；认证用户本身仍由账号资料维护。具体关联和事务范围以当前仓储与删除集成测试为准。
 
 ### 4.8 诊断
 
@@ -392,10 +425,14 @@ python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
 - `GET /api/resources/file/{resource_id}`
 - `GET /api/reviews/{resource_id}`
 - `GET /api/feedback/evaluation/run/{learner_id}/{run_id}`
-- `POST /api/feedback/attemptsattempts/run/submit`
-- `POST /api/feedback/attempts`
+- `GET /api/feedback/evaluation/batch/{learner_id}/{batch_id}`
+- `POST /api/feedback/attempts/run/submit`
+- `POST /api/feedback/attempts/batch/submit`
+- `POST /api/feedback/followups/select`
 - `GET /api/feedback/attempts/{learner_id}`
+- `GET /api/feedback/results/{learner_id}`
 - `GET /api/learning-history/{learner_id}/timeline`
+- `GET /api/learning-history/{learner_id}/journey`
 - `GET /api/report/{learner_id}`
 
 涉及：
@@ -407,6 +444,8 @@ python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
 - `agent_runs`
 - `agent_steps`
 - `learner_profiles`
+
+旧 `POST /api/feedback/attempts` 因聚合分数缺少服务端题目证据返回 422 `FEEDBACK_EVIDENCE_UNVERIFIED`，不写 Attempt、掌握度或画像版本。
 
 ## 5. 问卷与诊断的边界
 
@@ -468,7 +507,7 @@ diagnostic_questions.json -> init_db.py 导入 -> diagnostic_questions -> API �
 当前是：
 
 ```text
-POST /api/users/ -> users -> onboarding / 画像流程按需读取
+POST /api/auth/register -> users -> PATCH /api/users/{user_id} -> onboarding / 画像流程按需读取
 ```
 
 所以：
@@ -484,15 +523,15 @@ POST /api/users/ -> users -> onboarding / 画像流程按需读取
 knowledge_base/rag_engineering_training/
 ```
 
-当前已知事实：
+按受版本控制的知识库源文件可核对：
 
 - `knowledge_base_id = rag_engineering_training`
 - 知识库版本：`2.3.0`
 - 综合学习模块：6 个，不再拆分教学卡、概要参考和深度参考
-- 向量切片：84 个，已经写入该知识库独立的 Chroma 集合
+- 向量切片：2026-08-29 本地验证快照为 84 个；当前配置中的 SQL / Chroma 入库状态需单独核实
 - 在线检索：多查询扩展后分别执行 BM25 关键词召回与 Chroma 向量召回，按 `chunk_id` 去重并使用 RRF 融合，再由 `BAAI/bge-reranker-base` CrossEncoder 对候选精排
 - 能力节点：13 个
-- 模块级 Chunk—节点映射：当前 84 个活动 Chunk 依据模块 `knowledge_points` 生成 182 条映射记录；映射表迁移在应用初始化时幂等回填
+- 模块级 Chunk—节点映射：上述本地快照的 84 个活动 Chunk 对应 182 条映射记录；映射表迁移在应用初始化时幂等回填
 - 诊断题：39 道
 - 学习后测评题：130 道；每个能力节点 10 道，难度分布为简单 3、中等 3、困难 4
 - 方向问卷题：5 道
@@ -514,10 +553,10 @@ knowledge_base/rag_engineering_training/metadata.json
 
 6 个模块共同覆盖 13 个能力节点；一个模块可以承载多个紧密相关的节点，但每个节点只指定一个主模块，避免检索时反复召回内容相似的卡片和参考文档。诊断题仍按 13 个细粒度能力节点组织，不因资料合并而降低诊断粒度。
 
-当前模块级映射如下。这里的“映射 Chunk 数”是活动快照中该模块的所有 Chunk 数；
+2026-08-29 本地快照的模块级映射如下。这里的“映射 Chunk 数”是该快照中模块的所有 Chunk 数；
 每一个 Chunk 映射到本行列出的全部节点，因此映射记录总数大于 Chunk 总数。
 
-| 模块文档 | 活动 Chunk | 映射能力节点 |
+| 模块文档 | 历史快照活动 Chunk | 映射能力节点 |
 |---|---:|---|
 | `module_rag_foundations` | 13 | `rag_basics`（RAG 基础概念） |
 | `module_ingestion_chunking` | 14 | `document_parsing`（文档解析）、`chunking`（Chunk 切分） |
@@ -547,7 +586,7 @@ knowledge_base/rag_engineering_training/metadata.json
 knowledge_base/rag_engineering_training/assessment_questions.json
 ```
 
-它与 `diagnostic_questions.json` 分工不同：诊断题用于初始画像和诊断更新；测评题用于学习反馈。资源中存在 AI 生成且带标准答案的 `exercise_items` 时优先使用资源题，否则按资源对应能力节点从测评题库抽取。题库在服务端保留答案、解析和权威 `source_urls`，对外会话只下发题干、选项和难度。
+它与 `diagnostic_questions.json` 分工不同：诊断题用于初始画像和诊断更新；测评题用于学习反馈。正式会话优先使用已发布且 hash 校验通过的结构化测试题节点题组，再兼容可判分的 `exercise_items`，最后回退独立测评题库。题库在服务端保留答案、解析和权威 `source_urls`，对外会话只下发题干、选项和难度。
 
 ## 8. 当前测试口径
 
@@ -650,3 +689,9 @@ P0-09 preflight 会只读检查 migration 集合、正式 demo 数据库可达�
 旧画像 JSON 迁移只在当前知识库内按节点 ID或唯一名称映射。已有规范行优先；同名歧义、未知键或无效值不会被猜测。迁移结束后，画像兼容字段由规范行重新投影：`knowledge_states` 只用节点 ID，`theory_scores` 只包含客观节点，弱强项也只依据客观状态。`learner_mastery_migration_reports` 持久化 `mapped_count`、`canonical_preserved_count`、`unmapped_count` 和脱敏的 `unmapped_entries/reason`，供升级验收审计。
 
 已有正式 `learning_attempts + knowledge_state_mutations` 可回填为 verified `learning_attempt` 事件并重算客观证据计数与置信度；无法证明来源的旧画像分数最多形成 `legacy_import, verified=false`。迁移通过 `schema_migrations` 幂等登记；重复执行不增加状态、事件或报告行。当前部署验证口径仍是 SQLite 外键开启、旧库/空库升级和重启恢复；代码中的 PostgreSQL 方言分支不构成已验收的生产承诺。
+
+## 13. 后续迁移与当前状态核对
+
+当前初始化链还装配课程进度 / 学习阶、复习清单 V2、实操指南 JSON、掌握证据门禁、测评维度、准入重新验证、反馈多 Run、用户 Claim 发布决定、审核状态及 `p0_33_chunk_skill_node_mappings` 等迁移，并包含 Tutor 和课件迁移。具体顺序与 migration ID 以 `backend/app/db/shared/database.py`、`backend/app/db/migrations/` 和 `backend/app/db/courseware/migrations.py` 为准。
+
+迁移写入由初始化 / 应用 lifespan 显式触发；只读文档核对不执行初始化、回填或真实库演练。当前前端样式和布局优化继续使用上述既有表和 API。实际数据库是否已升级不能从源码、文档日期或浏览器 fixture 推断，验收应记录目标库的 `schema_migrations`、完整性预检和受控副本演练结果。
