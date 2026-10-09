@@ -40,8 +40,8 @@ const coursewareWorkspace = readFileSync(new URL('../src/features/courseware/Cou
 const focusSwitcher = readFileSync(new URL('../src/features/learning-documents/FocusResourceSwitcher.vue', import.meta.url), 'utf8')
 assert.match(
   resourcesView,
-  /\[resourceId\]: \{ \.\.\.selectedResource\.value, \.\.\.detail \}/,
-  'courseware detail loading must retain the resource_kind discriminator from the library item',
+  /const selected = selectedResource\.value[\s\S]*?\[resourceId\]: \{ \.\.\.selected, \.\.\.detail \}/,
+  'courseware detail loading must retain the resource_kind discriminator from the requested library item snapshot',
 )
 assert.match(resourcesView, /path: '\/generate'/, 'learning resources must hand courseware creation to the generation page')
 assert.doesNotMatch(resourcesView, /waitForCoursewareTerminal/, 'learning resources must not wait for courseware generation')

@@ -1,224 +1,36 @@
 {
   "schema_version": "1.0",
   "profiles": {
-    "quick": [
-      "backend-smoke",
-      "competition",
-      "frontend-unit"
-    ],
-    "regression": [
-      "backend-full",
-      "competition",
-      "courseware-eval",
-      "frontend-unit",
-      "frontend-build"
-    ],
-    "acceptance": [
-      "backend-full",
-      "competition",
-      "courseware-eval",
-      "frontend-unit",
-      "frontend-build",
-      "frontend-browser"
-    ]
+    "quick": ["backend-smoke", "competition", "frontend-unit"],
+    "regression": ["backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build"],
+    "acceptance": ["backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build", "frontend-browser"]
   },
   "frontend_groups": {
     "unit": [
-      "unit/utils/workflowEvents.test.mjs",
-      "tutorState.test.mjs",
-      "learnerMastery.test.mjs",
-      "learningReport.test.mjs",
-      "resourceShelfOrder.test.mjs",
-      "coursewareEvents.test.mjs",
-      "coursewareUserJourney.test.mjs",
-      "coursewareSourcePolicy.test.mjs"
+      "unit/utils/workflowEvents.test.mjs", "tutorState.test.mjs", "learnerMastery.test.mjs",
+      "learningReport.test.mjs", "resourceShelfOrder.test.mjs", "coursewareEvents.test.mjs",
+      "coursewareUserJourney.test.mjs", "coursewareSourcePolicy.test.mjs"
     ],
     "browser": [
-      "learningReportBrowser.test.mjs",
-      "coursewareBrowser.test.mjs"
+      "landingBrowser.test.mjs", "featureShowcaseBrowser.test.mjs", "dashboardBrowser.test.mjs", "onboardingBrowser.test.mjs",
+      "learningReportBrowser.test.mjs", "coursewareBrowser.test.mjs", "generationBrowser.test.mjs", "feedbackBrowser.test.mjs",
+      "historyUiBrowser.test.mjs", "reportUiBrowser.test.mjs", "userProfileUiBrowser.test.mjs", "profileRequestBrowser.test.mjs",
+      "motionBrowser.test.mjs"
     ]
   },
   "suites": [
-    {
-      "id": "backend-smoke",
-      "purpose": "核心契约、发布策略、指标与测试工具快速回归",
-      "evidence_type": "deterministic",
-      "timeout_seconds": 180,
-      "command": [
-        "{python}",
-        "-m",
-        "pytest",
-        "backend/tests/unit/models",
-        "backend/tests/unit/policies",
-        "backend/tests/unit/reports",
-        "backend/tests/unit/tooling",
-        "-q",
-        "--junitxml={output}/backend-smoke.xml"
-      ]
-    },
-    {
-      "id": "backend-unit",
-      "purpose": "后端领域与共享能力单元测试",
-      "evidence_type": "deterministic",
-      "timeout_seconds": 600,
-      "command": [
-        "{python}",
-        "-m",
-        "pytest",
-        "backend/tests/unit",
-        "-q",
-        "--junitxml={output}/backend-unit.xml"
-      ]
-    },
-    {
-      "id": "backend-integration",
-      "purpose": "API、服务、仓储、工作流集成",
-      "evidence_type": "deterministic",
-      "timeout_seconds": 600,
-      "command": [
-        "{python}",
-        "-m",
-        "pytest",
-        "backend/tests/integration",
-        "-q",
-        "--junitxml={output}/backend-integration.xml"
-      ]
-    },
-    {
-      "id": "backend-api",
-      "purpose": "HTTP、DTO、认证与状态码契约",
-      "evidence_type": "deterministic",
-      "timeout_seconds": 300,
-      "command": [
-        "{python}",
-        "-m",
-        "pytest",
-        "backend/tests/integration/api",
-        "-q",
-        "--junitxml={output}/backend-api.xml"
-      ]
-    },
-    {
-      "id": "backend-workflow",
-      "purpose": "生成、证据、审核纠偏、Claim 与发布",
-      "evidence_type": "deterministic",
-      "timeout_seconds": 300,
-      "command": [
-        "{python}",
-        "-m",
-        "pytest",
-        "backend/tests/integration/workflow",
-        "-q",
-        "--junitxml={output}/backend-workflow.xml"
-      ]
-    },
-    {
-      "id": "backend-migration",
-      "purpose": "数据库迁移与旧数据兼容",
-      "evidence_type": "deterministic",
-      "timeout_seconds": 300,
-      "command": [
-        "{python}",
-        "-m",
-        "pytest",
-        "backend/tests/migrations",
-        "-q",
-        "--junitxml={output}/backend-migration.xml"
-      ]
-    },
-    {
-      "id": "backend-e2e",
-      "purpose": "生命周期、重启、回放和进程恢复",
-      "evidence_type": "deterministic_process",
-      "timeout_seconds": 600,
-      "command": [
-        "{python}",
-        "-m",
-        "pytest",
-        "backend/tests/e2e",
-        "-q",
-        "--junitxml={output}/backend-e2e.xml"
-      ]
-    },
-    {
-      "id": "backend-full",
-      "purpose": "全部后端回归，真实模型测试明确跳过",
-      "evidence_type": "deterministic_process",
-      "timeout_seconds": 1200,
-      "command": [
-        "{python}",
-        "-m",
-        "pytest",
-        "backend/tests",
-        "-q",
-        "--junitxml={output}/backend-full.xml"
-      ]
-    },
-    {
-      "id": "competition",
-      "purpose": "比赛数据、指标与策略金标回归，不能证明真实生成质量",
-      "evidence_type": "offline_gold",
-      "timeout_seconds": 180,
-      "command": [
-        "{python}",
-        "backend/scripts/competition_eval.py",
-        "--output",
-        "{output}/competition.json"
-      ]
-    },
-    {
-      "id": "courseware-eval",
-      "purpose": "互动课件冻结评测与安全硬门",
-      "evidence_type": "frozen_evaluation",
-      "timeout_seconds": 180,
-      "command": [
-        "{python}",
-        "backend/scripts/courseware_eval.py",
-        "--manifest",
-        "backend/tests/fixtures/courseware/evals/manifest.json",
-        "--baseline",
-        "backend/tests/fixtures/courseware/evals/baseline.json",
-        "--output",
-        "{output}/courseware.json"
-      ]
-    },
-    {
-      "id": "frontend-unit",
-      "purpose": "全部前端状态、策略、事件与资源排序测试",
-      "evidence_type": "deterministic",
-      "timeout_seconds": 180,
-      "command": [
-        "{node}",
-        "frontend/tests/run.mjs",
-        "unit",
-        "--output",
-        "{output}/frontend-unit.json"
-      ]
-    },
-    {
-      "id": "frontend-build",
-      "purpose": "前端生产构建",
-      "evidence_type": "build",
-      "cwd": "frontend",
-      "timeout_seconds": 180,
-      "command": [
-        "{node}",
-        "node_modules/vite/bin/vite.js",
-        "build"
-      ]
-    },
-    {
-      "id": "frontend-browser",
-      "purpose": "学习报告与课件浏览器专项，需先完成前端构建",
-      "evidence_type": "browser_fixture",
-      "timeout_seconds": 1200,
-      "command": [
-        "{node}",
-        "frontend/tests/run.mjs",
-        "browser",
-        "--output",
-        "{output}/frontend-browser.json"
-      ]
-    }
+    {"id": "backend-smoke", "purpose": "核心契约、发布策略、指标与测试工具快速回归", "evidence_type": "deterministic", "timeout_seconds": 180, "command": ["{python}", "-m", "pytest", "backend/tests/unit/models", "backend/tests/unit/policies", "backend/tests/unit/reports", "backend/tests/unit/tooling", "-q", "--junitxml={output}/backend-smoke.xml"]},
+    {"id": "backend-unit", "purpose": "后端领域与共享能力单元测试", "evidence_type": "deterministic", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/unit", "-q", "--junitxml={output}/backend-unit.xml"]},
+    {"id": "backend-integration", "purpose": "API、服务、仓储、工作流集成", "evidence_type": "deterministic", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/integration", "-q", "--junitxml={output}/backend-integration.xml"]},
+    {"id": "backend-api", "purpose": "HTTP、DTO、认证与状态码契约", "evidence_type": "deterministic", "timeout_seconds": 300, "command": ["{python}", "-m", "pytest", "backend/tests/integration/api", "-q", "--junitxml={output}/backend-api.xml"]},
+    {"id": "backend-workflow", "purpose": "生成、证据、审核纠偏、Claim 与发布", "evidence_type": "deterministic", "timeout_seconds": 300, "command": ["{python}", "-m", "pytest", "backend/tests/integration/workflow", "-q", "--junitxml={output}/backend-workflow.xml"]},
+    {"id": "backend-migration", "purpose": "数据库迁移与旧数据兼容", "evidence_type": "deterministic", "timeout_seconds": 300, "command": ["{python}", "-m", "pytest", "backend/tests/migrations", "-q", "--junitxml={output}/backend-migration.xml"]},
+    {"id": "backend-e2e", "purpose": "生命周期、重启、回放和进程恢复", "evidence_type": "deterministic_process", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/e2e", "-q", "--junitxml={output}/backend-e2e.xml"]},
+    {"id": "backend-full", "purpose": "全部后端回归，真实模型测试明确跳过", "evidence_type": "deterministic_process", "timeout_seconds": 1200, "command": ["{python}", "-m", "pytest", "backend/tests", "-q", "--junitxml={output}/backend-full.xml"]},
+    {"id": "competition", "purpose": "比赛数据、指标与策略金标回归，不能证明真实生成质量", "evidence_type": "offline_gold", "timeout_seconds": 180, "command": ["{python}", "backend/scripts/competition_eval.py", "--output", "{output}/competition.json"]},
+    {"id": "courseware-eval", "purpose": "互动课件冻结评测与安全硬门", "evidence_type": "frozen_evaluation", "timeout_seconds": 180, "command": ["{python}", "backend/scripts/courseware_eval.py", "--manifest", "backend/tests/fixtures/courseware/evals/manifest.json", "--baseline", "backend/tests/fixtures/courseware/evals/baseline.json", "--output", "{output}/courseware.json"]},
+    {"id": "frontend-unit", "purpose": "全部前端状态、策略、事件与资源排序测试", "evidence_type": "deterministic", "timeout_seconds": 180, "command": ["{node}", "frontend/tests/run.mjs", "unit", "--output", "{output}/frontend-unit.json"]},
+    {"id": "frontend-build", "purpose": "前端生产构建", "evidence_type": "build", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/vite/bin/vite.js", "build"]},
+    {"id": "frontend-browser", "purpose": "全部十三个浏览器专项，需先完成前端构建", "evidence_type": "browser_fixture", "timeout_seconds": 1200, "command": ["{node}", "frontend/tests/run.mjs", "browser", "--output", "{output}/frontend-browser.json"]}
   ]
 }

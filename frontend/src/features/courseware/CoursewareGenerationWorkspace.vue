@@ -68,7 +68,7 @@
       </article>
 
       <article class="details-panel">
-        <div class="panel-title"><div><span class="eyebrow">Courseware Details</span><h3>课件过程详情</h3></div></div>
+        <div class="panel-title"><div><span class="eyebrow">Courseware Details</span><h3>课件过程详情</h3></div><slot name="task-actions" /></div>
         <div class="details-scroll">
           <section v-if="Object.keys(visibleRequestOptions).length" class="frozen-options"><strong>已冻结偏好</strong><el-tag v-for="(value, key) in visibleRequestOptions" :key="key" effect="plain">{{ optionLabel(key) }}：{{ value }}</el-tag></section>
           <section v-if="currentJob.quality_summary && Object.keys(currentJob.quality_summary).length" class="quality-summary"><strong>质量汇总</strong><span>发布：{{ currentJob.quality_summary.publication_success ? '成功' : '未发布' }}</span><span>来源覆盖：{{ qualityPercent(currentJob.quality_summary.adopted_source_coverage) }}</span><span>场景恢复：{{ qualityPercent(currentJob.quality_summary.required_scene_recovery_rate) }}</span><span>审核：{{ currentJob.quality_summary.rubric_passed ? '通过' : '进行中或未通过' }}</span></section>

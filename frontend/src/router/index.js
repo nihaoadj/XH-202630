@@ -6,6 +6,17 @@ const routes = [
 { path: '/', name: 'landing', component: () => import('../features/auth/LandingView.vue'), meta: { publicLayout: true } },
 { path: '/login', name: 'login', component: () => import('../features/auth/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
 { path: '/register', name: 'register', component: () => import('../features/auth/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
+  ...[
+    ['multi-agent', 'agents'],
+    ['evidence', 'evidence'],
+    ['learning-path', 'path'],
+    ['feedback-loop', 'feedback'],
+  ].map(([slug]) => ({
+    path: '/features/' + slug,
+    name: 'feature-' + slug,
+    redirect: '/#' + slug,
+    meta: { publicLayout: true },
+  })),
   { path: '/dashboard', name: 'dashboard', component: HomeView, meta: { requiresAuth: true } },
 { path: '/user/profile', name: 'user-profile', component: () => import('../features/learners/UserProfileView.vue'), meta: { requiresAuth: true } },
 { path: '/learning/new', name: 'onboarding', component: () => import('../features/onboarding/OnboardingView.vue'), meta: { requiresAuth: true } },
