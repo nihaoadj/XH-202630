@@ -1,6 +1,6 @@
 # 项目测试方案
 
-> 文档核对日期：2026-10-09；登记数量以 `tests/suites.json` 为准，本次文档核对不代表重新执行业务验收。
+> 文档核对日期：2026-10-10；登记数量以 `tests/suites.json` 为准，本次结果见 [T14 实施记录](../engineering-quality-optimization.md)。
 
 本方案把工程回归、冻结评测、浏览器体验、真实模型质量和部署验收分别组织成可执行套件。套件成员以 [`tests/suites.json`](../../tests/suites.json) 为准，运行工具为 [`scripts/run_tests.py`](../../scripts/run_tests.py)。比赛数据与三项质量指标见 [比赛评测方案](competition.md)。更新计划与本地 skills 不随仓库分发。
 
@@ -18,7 +18,7 @@
 | 真实模型 | `backend/tests/live/` 与显式评测 CLI | 生产生成与模型自审的实际输出、耗时、失败 | 单独授权、有效凭据、隔离测试环境与预算 |
 | CI / 部署 | `.github/workflows/courseware-quality.yml`、demo-runbook | 干净 runner 与实际运行环境验收 | CI 必需 job；部署证据单独记录 |
 
-后端继续按目录自动添加 `unit`、`integration`、`migration`、`e2e`、`live_llm` marker，不搬动现有测试。前端目前八个 unit 文件、十三个 browser 文件，聚合入口检查是否遗漏或重复注册；新增文件必须登记一次。`coursewareUserJourney.test.mjs` 是 Node 的用户流程状态验证，不能因名称而算作真实浏览器 e2e。
+后端继续按目录自动添加 `unit`、`integration`、`migration`、`e2e`、`live_llm` marker，不搬动现有测试。前端目前九个 unit 文件、十三个 browser 文件，聚合入口检查是否遗漏或重复注册；新增文件必须登记一次。`coursewareUserJourney.test.mjs` 是 Node 的用户流程状态验证，不能因名称而算作真实浏览器 e2e。
 
 ## 二、统一命令
 
@@ -36,7 +36,7 @@ python scripts/run_tests.py --suite backend-api --suite backend-migration
 | 组合 | 成员 | 适用场景 |
 |---|---|---|
 | quick | 核心契约/策略/报告/工具、比赛金标、前端单元 | 迭代中快速定位；不替代领域最低验收 |
-| regression | 后端全量、比赛金标、课件冻结、全部前端单元、生产构建 | 共享测试设施或多领域回归 |
+| regression | Ruff / ESLint / 请求 guard 类型、Python 依赖一致性、后端全量、比赛金标、课件冻结、全部前端单元、生产构建 | 共享测试设施或多领域回归 |
 | acceptance | regression 加十三个浏览器专项 | 本地完整工程验收 |
 
 `--suite` 可重复，和 profile 组合时去重。`--fail-fast` 停止后续执行，但摘要将余下套件记为 `NOT_RUN`；默认尽量执行全部已选套件以便一次定位问题。只运行 `frontend-browser` 时，须先执行 `frontend-build`；acceptance 已按依赖顺序安排。直接 pytest 与原 npm 专项命令继续可用：
@@ -83,7 +83,7 @@ node frontend/tests/run.mjs browser --output frontend/tests/test-results/ui-repa
 
 Windows 默认使用已安装的 Edge；其他平台默认使用 Playwright Chromium。CI 安装 Chromium。`TEST_BROWSER_CHANNEL` 可统一选择通道，设置为空字符串选择 Playwright Chromium，各专项自己的 `*_BROWSER_CHANNEL` 优先。聚合浏览器入口强制必需模式，浏览器不可启动会失败；单独旧课件专项的可选 skip 不能用作验收证据。
 
-旧 `scripts/run_p0_09_acceptance.py --runtime` 当前引用已迁移的前端文件，并按旧契约静态检查，修复前不可作为工程入口或前端能力结论。统一 acceptance 是隔离工程验收；真实环境步骤和此遗留问题见 [Demo Runbook](../demo-runbook.md)。
+`scripts/run_p0_09_acceptance.py --runtime` 的前端探针已适配现行目录，仅核对源码连线，不替代浏览器行为验证；该模式启动 TestClient lifespan，会初始化数据库和启动对账。统一 acceptance 是隔离工程验收；runtime 须在隔离 demo 环境执行，步骤见 [Demo Runbook](../demo-runbook.md)。
 
 ## 三、需求与功能覆盖矩阵
 

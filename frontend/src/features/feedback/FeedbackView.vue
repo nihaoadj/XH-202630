@@ -261,7 +261,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, CircleCheck, VideoPlay } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -270,7 +270,9 @@ import { useAppStore } from '../../stores/app'
 import { formatDateTime } from '../../utils/generationDisplay'
 import PreparationPanel from '../../components/PreparationPanel.vue'
 import TutorDrawer from '../tutor/TutorDrawer.vue'
-import { countTutorTurns } from '../../utils/tutorState'
+import { useFeedbackEvaluation } from './useFeedbackEvaluation.js'
+import { useFeedbackFollowup } from './useFeedbackFollowup.js'
+import { createRequestGuard } from '../../utils/requestContext.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -278,7 +280,16 @@ const store = useAppStore()
 const workspaceRef = ref(null)
 const resultPanelRef = ref(null)
 const selectedLearnerId = ref(route.query.learnerId || store.currentLearnerId || localStorage.getItem('last_learner_id') || '')
-const form = reactive({ learner_id: selectedLearnerId.value, completed: true, time_spent_seconds: 1800, self_rating: 4, difficulty_feeling: '', helpful_part: '', confusing_part: '', comment: '' })
+const form = reactive({
+  learner_id: selectedLearnerId.value,
+  completed: true,
+  time_spent_seconds: 1800,
+  self_rating: 4,
+  difficulty_feeling: '',
+  helpful_part: '',
+  confusing_part: '',
+  comment: ''
+})
 const resources = ref([])
 const generationJobs = ref([])
 const feedbackResults = ref([])
@@ -289,6 +300,7 @@ const submitting = ref(false)
 const feedbackStatus = ref('')
 const selectingOption = ref('')
 const result = ref(null)
+const feedbackContextVersion = ref(0)
 const selectedResourceTypes = ref([])
 const includeClaimCheck = ref(false)
 const selectedDifficulty = ref('中级')
@@ -301,6 +313,12 @@ const evaluationAnswers = reactive({})
 const tutorOpen = ref(false)
 const tutorQuestion = ref(null)
 const tutorHelpCount = ref(0)
+const resourceRequests = createRequestGuard(() => ({
+  learnerId: selectedLearnerId.value,
+  formLearnerId: form.learner_id,
+  contextVersion: feedbackContextVersion.value,
+}))
+const profileRequests = createRequestGuard(() => ({ contextVersion: feedbackContextVersion.value }))
 
 const profileOptions = computed(() => profiles.value.map((profile) => ({
   ...profile,
@@ -355,7 +373,13 @@ const taskGroups = computed(() => {
   const groups = new Map()
   for (const resource of visibleResources.value) {
     const batchId = effectiveBatchByRunId.get(resource.run_id) || resource.batch_id || resource.run_id || `resource:${resource.resource_id}`
-    if (!groups.has(batchId)) groups.set(batchId, { runId: batchId, batchId, shortRunId: batchId.startsWith('resource:') ? '独立资源' : batchId.slice(0, 8).toUpperCase(), finishedAt: resource.created_at || '', resources: [] })
+    if (!groups.has(batchId)) groups.set(batchId, {
+      runId: batchId,
+      batchId,
+      shortRunId: batchId.startsWith('resource:') ? '独立资源' : batchId.slice(0, 8).toUpperCase(),
+      finishedAt: resource.created_at || '',
+      resources: []
+    })
     const task = groups.get(batchId)
     task.resources.push(resource)
     if (resource.created_at && (!task.finishedAt || resource.created_at > task.finishedAt)) task.finishedAt = resource.created_at
@@ -461,10 +485,12 @@ const canGenerateSelectedIntent = computed(() => learningIntent.value === 'learn
 
 watch(() => store.currentLearnerId, (value) => {
   if (value && value !== selectedLearnerId.value) {
+    feedbackContextVersion.value += 1
+    selectingOption.value = ''
     selectedLearnerId.value = value
     form.learner_id = value
   }
-})
+}, { flush: 'sync' })
 watch(result, (value) => {
   const option = value?.resource_options?.[0]
   if (option) {
@@ -520,9 +546,11 @@ function questionTypeLabel(type) {
     short_answer: '问答题',
   })[type] || '问答题'
 }
-function resetEvaluationAnswers() { Object.keys(evaluationAnswers).forEach((key) => delete evaluationAnswers[key]) }
+
 function formatTaskTime(value) { return formatDateTime(value) }
-function feedbackActionLabel(action) { return { remediate: '补救学习', practice: '强化练习', advance: '继续进阶', hold: '保持路径', human_review: '人工复核' }[action] || action || '已记录' }
+function feedbackActionLabel(action) {
+  return { remediate: '补救学习', practice: '强化练习', advance: '继续进阶', hold: '保持路径', human_review: '人工复核' }[action] || action || '已记录'
+}
 function friendlyText(value) {
   return String(value || '')
     .replaceAll('学习者', '你')
@@ -531,7 +559,7 @@ function friendlyText(value) {
     .replaceAll('画像', '学习情况')
     .replaceAll('客观成绩', '测评结果')
 }
-function buildIdempotencyKey(runId, submittedAt) { return `web-${runId.slice(0, 24)}-${submittedAt.toISOString().replace(/[^0-9]/g, '')}`.slice(0, 128) }
+
 function resetIntentNodes(preferredIds = []) {
   const candidates = (isDowngradeLearning.value ? learningCandidates.value : intentCandidates.value)
     .filter((item) => !(item.blocked_by_node_ids || []).length)
@@ -553,8 +581,19 @@ watch(learningIntent, (intent) => {
 })
 function feedbackScrollBehavior() { return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }
 function scrollToWorkspace() { workspaceRef.value?.scrollIntoView({ behavior: feedbackScrollBehavior(), block: 'start' }) }
-async function startEvaluation() { await loadEvaluationSession({ forceNew: true }); scrollToWorkspace() }
+async function startEvaluation() {
+  const learnerId = form.learner_id
+  const batchId = selectedRunId.value
+  const contextVersion = feedbackContextVersion.value
+  selectingOption.value = ''
+  await loadEvaluationSession({ forceNew: true })
+  if (learnerId === form.learner_id && batchId === selectedRunId.value && contextVersion === feedbackContextVersion.value) {
+    scrollToWorkspace()
+  }
+}
 function selectBatch() {
+  feedbackContextVersion.value += 1
+  selectingOption.value = ''
   const existing = feedbackResults.value.find((item) => (
     item.attempt?.source_run_id === selectedRunId.value
     || item.attempt?.metadata?.session_id === selectedRunId.value
@@ -568,11 +607,13 @@ function selectBatch() {
   }
 }
 async function loadProfiles() {
+  const request = profileRequests.capture()
   try {
     const [profileResponse, domainResponse] = await Promise.all([
       profileApi.list({ page: 1, page_size: 50 }),
       knowledgeApi.listDomains(),
     ])
+    if (!request.isCurrent()) return
     profiles.value = profileResponse.data.items || profileResponse.data.profiles || []
     tracks.value = (domainResponse.data.domains || []).flatMap((domain) => domain.tracks || [])
     if (!profiles.value.length) {
@@ -585,14 +626,19 @@ async function loadProfiles() {
       form.learner_id = selectedLearnerId.value
     }
   } catch (error) {
+    if (!request.isCurrent()) return
     console.error(error)
     ElMessage.warning('学习画像加载失败')
   }
 }
 async function handleProfileChange() {
+  feedbackContextVersion.value += 1
+  resourceRequests.invalidate()
   form.learner_id = selectedLearnerId.value
   localStorage.setItem('last_learner_id', selectedLearnerId.value)
   result.value = null
+  feedbackStatus.value = ''
+  selectingOption.value = ''
   selectedRunId.value = ''
   evaluation.questions = []
   evaluation.resourceIds = []
@@ -600,17 +646,10 @@ async function handleProfileChange() {
   tutorHelpCount.value = 0
   await loadResources()
 }
-function tutorCountKey(batchId = selectedRunId.value) { return `tutor_help_count:${form.learner_id}:${batchId}` }
-function requestTutorHint(question) { tutorQuestion.value = question; tutorOpen.value = true }
-function recordTutorHelp() {
-  tutorHelpCount.value += 1
-  localStorage.setItem(tutorCountKey(), String(tutorHelpCount.value))
-}
-function restoreTutorHelp({ turns }) {
-  const persisted = Number(localStorage.getItem(tutorCountKey()) || 0)
-  tutorHelpCount.value = Math.max(tutorHelpCount.value, persisted, countTutorTurns(turns))
-  localStorage.setItem(tutorCountKey(), String(tutorHelpCount.value))
-}
+
+
+
+
 function syncSelectedRun() {
   if (!taskGroups.value.length) { selectedRunId.value = ''; return }
   const storedId = localStorage.getItem('current_generation_run_id') || ''
@@ -620,129 +659,57 @@ function syncSelectedRun() {
   selectedRunId.value = taskGroups.value.some((item) => item.runId === storedBatchId) ? storedBatchId : taskGroups.value[0].runId
 }
 async function loadResources() {
-  if (!form.learner_id) return
+  const learnerId = form.learner_id
+  const request = resourceRequests.capture()
+  if (!request.isCurrent()) return
+  if (!learnerId) return
   try {
     const [res, jobsRes, resultsRes] = await Promise.all([
-      resourceApi.listByLearner(form.learner_id),
-      generateApi.listJobs(form.learner_id),
-      feedbackApi.listResults(form.learner_id, { limit: 50 }),
+      resourceApi.listByLearner(learnerId),
+      generateApi.listJobs(learnerId),
+      feedbackApi.listResults(learnerId, { limit: 50 }),
     ])
+    if (!request.isCurrent()) return
     resources.value = res.data.resources || []
     generationJobs.value = jobsRes.data.items || []
     feedbackResults.value = resultsRes.data || []
     syncSelectedRun()
     selectBatch()
   }
-  catch (error) { console.error(error); ElMessage.warning('资源加载失败，请先完成资源生成。') }
-}
-async function loadEvaluationSession({ forceNew = false } = {}) {
-  const evaluationRunId = pendingCorrectionRunId.value
-  const existing = feedbackResults.value.find((item) => (
-    item.attempt?.source_run_id === (evaluationRunId || selectedRunId.value)
-    || (!evaluationRunId && item.attempt?.metadata?.session_id === selectedRunId.value)
-  ))
-  if (existing && !forceNew) { result.value = existing; return }
-  result.value = null
-  if (!form.learner_id || !selectedRunId.value) return
-  try {
-    const res = evaluationRunId
-      ? await feedbackApi.getRunEvaluationSession(form.learner_id, evaluationRunId)
-      : await feedbackApi.getBatchEvaluationSession(form.learner_id, selectedRunId.value)
-    evaluation.topic = res.data.topic || ''
-    evaluation.questions = res.data.questions || []
-    evaluation.resourceIds = res.data.resource_ids || []
-    resetEvaluationAnswers()
-    evaluation.questions.forEach((question) => { evaluationAnswers[question.question_id] = question.question_type === 'multiple_choice' ? [] : '' })
-    localStorage.setItem('current_generation_run_id', evaluationRunId || selectedRunId.value)
-    tutorQuestion.value = null
-    tutorHelpCount.value = Number(localStorage.getItem(tutorCountKey()) || 0)
-  } catch (error) {
-    console.error(error); evaluation.topic = ''; evaluation.questions = []; evaluation.resourceIds = []; resetEvaluationAnswers()
-    ElMessage.error(error?.response?.data?.message || '测评题加载失败')
+  catch (error) {
+    if (!request.isCurrent()) return
+    console.error(error)
+    ElMessage.warning('资源加载失败，请先完成资源生成。')
   }
 }
-async function submitEvaluation() {
-  if (!canSubmit.value) { ElMessage.warning('请先完成全部测评题。'); return }
-  submitting.value = true
-  feedbackStatus.value = '已提交反馈，正在生成反馈报告与建议。'
-  try {
-    const submittedAt = new Date()
-    const evaluationRunId = pendingCorrectionRunId.value
-    const payload = {
-      learner_id: form.learner_id, source_resource_id: evaluation.resourceIds[0] || activeTask.value?.resources?.[0]?.resource_id,
-      idempotency_key: buildIdempotencyKey(evaluationRunId || selectedRunId.value, submittedAt), expected_profile_version: store.currentProfile?.profile_version || 1,
-      submitted_at: submittedAt.toISOString(), duration_ms: (form.time_spent_seconds || 0) * 1000, hint_count: tutorHelpCount.value,
-      answers: evaluation.questions.map((question) => ({ question_id: question.question_id, answer: evaluationAnswers[question.question_id] })),
-      metadata: { source: 'feedback_view', client_version: 'web', session_id: evaluationRunId || selectedRunId.value, learning_reflection: { completed: form.completed, time_spent_seconds: form.time_spent_seconds, self_rating: form.self_rating, difficulty_feeling: form.difficulty_feeling, helpful_part: form.helpful_part.trim(), confusing_part: form.confusing_part.trim(), comment: form.comment.trim() } },
-    }
-    const res = evaluationRunId
-      ? await feedbackApi.submitRunAttempt({ ...payload, run_id: evaluationRunId })
-      : await feedbackApi.submitBatchAttempt({ ...payload, batch_id: selectedRunId.value })
-    result.value = res.data
-    feedbackResults.value = [res.data, ...feedbackResults.value.filter((item) => item.attempt?.attempt_id !== res.data.attempt?.attempt_id)]
-    if (store.currentProfile) store.setCurrentProfile({ ...store.currentProfile, profile_version: res.data.profile_version })
-    ElMessage.success('本轮练习反馈已提交')
-    await nextTick()
-    resultPanelRef.value?.scrollIntoView({ behavior: feedbackScrollBehavior(), block: 'start' })
-    feedbackStatus.value = ''
-  } catch (error) {
-    console.error(error)
-    feedbackStatus.value = ''
-    ElMessage.error(error?.response?.data?.message || '提交失败，请稍后再试')
-  } finally { submitting.value = false }
-}
-async function selectFeedbackOption(optionId) {
-  if (!result.value?.attempt?.attempt_id) return
-  selectingOption.value = optionId
-  try {
-    const res = await feedbackApi.selectFollowup({
-      learner_id: form.learner_id,
-      attempt_id: result.value.attempt.attempt_id,
-      option_id: optionId,
-      resource_types: selectedResourceTypes.value,
-      include_claim_check: includeClaimCheck.value,
-      ...(!generationOptions.value ? { difficulty: selectedDifficulty.value } : {}),
-      ...(generationOptions.value ? {
-        learning_intent: learningIntent.value,
-        selected_skill_node_ids: selectedNodesForFollowup.value,
-        next_generation_snapshot_hash: generationOptions.value.snapshot_hash,
-      } : {}),
-    })
-    result.value = res.data
-    ElMessage.success('已确认下一步资源方案，正在创建生成任务')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error?.response?.data?.message || error?.response?.data?.detail || '资源方案确认失败')
-  } finally { selectingOption.value = '' }
-}
-async function selectCorrectionPackage() {
-  const option = correctionPackageOption.value
-  if (!option?.eligible || !result.value?.attempt?.attempt_id || !generationOptions.value) return
-  selectingOption.value = option.option_id
-  try {
-    const res = await feedbackApi.selectFollowup({
-      learner_id: form.learner_id, attempt_id: result.value.attempt.attempt_id,
-      option_id: option.option_id, learning_intent: 'reinforce_weakness',
-      include_claim_check: includeClaimCheck.value,
-      selected_skill_node_ids: option.recommended_target_ids,
-      next_generation_snapshot_hash: option.snapshot_hash,
-    })
-    result.value = res.data
-    ElMessage.success('纠错包与新测评题正在创建')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error?.response?.data?.message || error?.response?.data?.detail || '强化包创建失败')
-  } finally { selectingOption.value = '' }
-}
-function goToFollowupRun() {
-  const runIds = result.value?.followup_run_ids?.length ? result.value.followup_run_ids : [result.value?.followup_run_id]
-  const runId = runIds[0]
-  if (!runId) return
-  localStorage.setItem('current_generation_run_id', runId)
-  localStorage.setItem('current_generation_run_ids', JSON.stringify(runIds.filter(Boolean)))
-  router.push({ path: '/generate', query: { runId, learnerId: form.learner_id } })
-}
+const {
+  resetEvaluationAnswers, requestTutorHint, recordTutorHelp, restoreTutorHelp,
+  loadEvaluationSession, submitEvaluation, dispose: disposeEvaluation,
+} = useFeedbackEvaluation({
+  feedbackApi,
+  form, selectedRunId, pendingCorrectionRunId, feedbackResults, result, evaluation,
+  evaluationAnswers, tutorOpen, tutorQuestion, tutorHelpCount, canSubmit, submitting,
+  feedbackStatus, activeTask, store, resultPanelRef, feedbackScrollBehavior, messages: ElMessage,
+  contextVersion: feedbackContextVersion,
+})
+
+
+const {
+  selectFeedbackOption, selectCorrectionPackage, goToFollowupRun, dispose: disposeFollowup,
+} = useFeedbackFollowup({
+  feedbackApi,
+  form, result, selectingOption, selectedResourceTypes, includeClaimCheck, generationOptions,
+  selectedDifficulty, learningIntent, selectedNodesForFollowup, correctionPackageOption,
+  router, messages: ElMessage, contextVersion: feedbackContextVersion,
+})
+
 onMounted(async () => { await loadProfiles(); await loadResources() })
+onBeforeUnmount(() => {
+  resourceRequests.dispose()
+  profileRequests.dispose()
+  disposeEvaluation()
+  disposeFollowup()
+})
 </script>
 
 <style scoped>

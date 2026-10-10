@@ -267,14 +267,16 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Aim, ArrowDown, Download, ArrowRight, CircleCheck, Clock, Delete, DocumentChecked, Plus, Reading, Refresh, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { generateApi, knowledgeApi, profileApi, resourceApi, runApi } from '../../api'
+import { generateApi, knowledgeApi, profileApi, resourceApi } from '../../api'
 import { coursewareApi } from '../courseware/api'
 import { resourceLibraryApi } from '../resource-library/api'
-import { createRunEventClient } from '../runs/api'
+import { useGenerationProgress } from './useGenerationProgress.js'
+import { useGenerationClaims } from './useGenerationClaims.js'
+import { useProductionLayout } from './useProductionLayout.js'
 import ResourceViewer from '../learning-documents/ResourceViewer.vue'
 import PreparationPanel from '../../components/PreparationPanel.vue'
 import PreparationWorkspace from '../../components/PreparationWorkspace.vue'
@@ -318,7 +320,7 @@ const initialRunId =
   localStorage.getItem('current_generation_run_id') ||
   ''
 
-const pollTimer = ref(null)
+
 const jobs = ref([])
 const loadingJobs = ref(false)
 const jobsError = ref('')
@@ -352,9 +354,9 @@ const claimReports = ref({})
 const claimReportVisible = ref(false)
 const claimDecisionLoading = ref(false)
 const selectedClaimReportId = ref('')
-let streamClient = null
-let streamGeneration = 0
-let publishedResourceRefreshTimer = null
+
+
+
 
 const activeProfile = computed(
   () => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null
@@ -429,63 +431,10 @@ const productionConnectionLabel = computed(() => ({
   connecting: '正在连接', live: '节点级同步', fallback: '轮询降级',
   terminal: '已结束', error: '连接异常',
 }[connectionStatus.value] || '等待中'))
-let productionObserver = null
-let productionContentObserver = null
-let productionFrame = null
-let productionMounted = false
-let productionMeasureVersion = 0
-
-function scheduleProductionLayout() {
-  if (!productionMounted) return
-  if (productionFrame != null) cancelAnimationFrame(productionFrame)
-  productionFrame = requestAnimationFrame(async () => {
-    productionFrame = null
-    const version = ++productionMeasureVersion
-    const root = productionPage.value
-    if (!root) return
-    root.querySelectorAll('.generation-grid > .process-panel, .details-scroll').forEach((region, index) => {
-      region.setAttribute('tabindex', '0')
-      region.setAttribute('role', 'region')
-      region.setAttribute('aria-label', index === 0 ? '课件生成过程' : '课件过程详情')
-    })
-    const area = root.closest('.content-area')
-    const candidate = window.innerWidth >= 1100 && window.innerHeight >= 640
-      && !(coursewareComposerVisible.value && selectedJob.value)
-    isFitLayout.value = candidate
-    await nextTick()
-    if (!productionMounted || version !== productionMeasureVersion || !candidate) return
-    const regions = [...root.querySelectorAll('.process-scroll, .resource-stage, .generation-grid > .process-panel, .details-scroll')]
-    const fixed = [...root.querySelectorAll('.control-panel, .production-footer, .studio-grid > div > .panel-title, .generation-grid .panel-title, .resource-toolbar')]
-    const bounds = root.getBoundingClientRect()
-    const fits = area && root.scrollHeight <= root.clientHeight + 1
-      && bounds.bottom <= area.getBoundingClientRect().bottom + 1
-      && regions.every(region => region.clientHeight >= 120 && region.scrollWidth <= region.clientWidth + 1)
-      && fixed.every(item => item.scrollHeight <= item.clientHeight + 1 && item.scrollWidth <= item.clientWidth + 1)
-    isFitLayout.value = Boolean(fits)
-  })
-}
-
-watch([selectedRunId, selectedResourceId, selectedLearnerId, loadingJobs, loadingResources, coursewareComposerVisible,
-  () => selectedTask.value?.job_status, () => selectedTask.value?.error_message, () => resources.value.length,
-  learningDirectionName], scheduleProductionLayout, { flush: 'post' })
-watch(selectedRunId, async () => { await nextTick(); processScroll.value?.scrollTo(0, 0); resourceScroll.value?.scrollTo(0, 0) }, { flush: 'post' })
-watch(selectedResourceId, async () => { await nextTick(); resourceScroll.value?.scrollTo(0, 0) }, { flush: 'post' })
-onMounted(() => {
-  productionMounted = true
-  productionObserver = new ResizeObserver(scheduleProductionLayout)
-  productionObserver.observe(productionPage.value.closest('.content-area'), { box: 'border-box' })
-  productionContentObserver = new MutationObserver(scheduleProductionLayout)
-  productionContentObserver.observe(productionPage.value, { childList: true, subtree: true })
-  window.addEventListener('resize', scheduleProductionLayout)
-  scheduleProductionLayout()
-})
-onBeforeUnmount(() => {
-  productionMounted = false
-  productionMeasureVersion += 1
-  productionObserver?.disconnect()
-  productionContentObserver?.disconnect()
-  if (productionFrame != null) cancelAnimationFrame(productionFrame)
-  window.removeEventListener('resize', scheduleProductionLayout)
+useProductionLayout({
+  productionPage, processScroll, resourceScroll, isFitLayout, coursewareComposerVisible,
+  selectedJob, selectedRunId, selectedResourceId, selectedLearnerId, loadingJobs,
+  loadingResources, selectedTask, resources, learningDirectionName,
 })
 // End presentation-only viewport containment.
 
@@ -620,132 +569,24 @@ async function loadNodeTiers() {
   }
 }
 
-function stopPolling() {
-  if (pollTimer.value) {
-    clearInterval(pollTimer.value)
-    pollTimer.value = null
-  }
-}
+const { stopPolling, closeRealtime, cancelPublishedResourceRefresh, startRealtime, startPolling } = useGenerationProgress({
+  selectedRunId, selectedJob, timelineState, connectionStatus,
+  isMounted: () => generationMounted,
+  refreshStatus: (...args) => refreshStatus(...args),
+  loadClaimReports: (...args) => loadClaimReports(...args),
+})
 
-function closeRealtime() {
-  streamGeneration += 1
-  streamClient?.close()
-  streamClient = null
-}
 
-function cancelPublishedResourceRefresh() {
-  if (publishedResourceRefreshTimer !== null) {
-    clearTimeout(publishedResourceRefreshTimer)
-    publishedResourceRefreshTimer = null
-  }
-}
 
-function queuePublishedResourceRefresh(runId) {
-  if (runId !== selectedRunId.value || publishedResourceRefreshTimer !== null) return
-  // A resource_published event is appended only after the resource itself is
-  // durable. Coalesce a burst from the same reviewer/finalizer node so the
-  // resource list and job summary refresh once rather than once per resource.
-  publishedResourceRefreshTimer = setTimeout(() => {
-    publishedResourceRefreshTimer = null
-    if (runId === selectedRunId.value) void refreshStatus()
-  }, 0)
-}
 
-async function hydrateTimeline(runId, generation) {
-  let state = createInitialTimelineState()
-  let afterSequence = 0
-  let firstPage = true
-  try {
-    while (true) {
-      const response = await runApi.timeline(runId, { after_sequence: afterSequence, limit: 500 })
-      if (!generationMounted || generation !== streamGeneration || runId !== selectedRunId.value) return 0
-      if (firstPage) {
-        state = hydrateWorkflowTimeline(response.data)
-        firstPage = false
-      } else {
-        for (const event of response.data.events || []) state = reduceWorkflowEvent(state, event)
-      }
-      if (!response.data.next_event_sequence) break
-      afterSequence = response.data.next_event_sequence
-    }
-  } catch (error) {
-    // A queued GenerationJob can legitimately precede AgentRun creation.
-    if (error?.response?.status !== 404) throw error
-  }
-  if (generationMounted && generation === streamGeneration && runId === selectedRunId.value) timelineState.value = state
-  return state.lastSequence
-}
 
-async function startRealtime(runId) {
-  if (!generationMounted || (runId && runId !== selectedRunId.value)) return
-  closeRealtime()
-  stopPolling()
-  timelineState.value = createInitialTimelineState()
-  if (!runId) {
-    connectionStatus.value = 'idle'
-    return
-  }
-  const generation = streamGeneration
-  connectionStatus.value = 'connecting'
-  let lastSequence = 0
-  try {
-    lastSequence = await hydrateTimeline(runId, generation)
-  } catch (error) {
-    if (!generationMounted || generation !== streamGeneration) return
-    console.error(error)
-    connectionStatus.value = 'fallback'
-    startPolling()
-    return
-  }
-  if (generation !== streamGeneration) return
-  streamClient = createRunEventClient({
-    runId,
-    afterSequence: lastSequence,
-    onSnapshot: (snapshot) => {
-      if (generation !== streamGeneration) return
-      timelineState.value = applyRunSnapshot(timelineState.value, snapshot)
-      connectionStatus.value = snapshot.is_terminal ? 'terminal' : 'live'
-    },
-    onWorkflowEvent: (event) => {
-      if (generation !== streamGeneration) return
-      timelineState.value = reduceWorkflowEvent(timelineState.value, event)
-      if (event.event_type === 'resource_published') queuePublishedResourceRefresh(runId)
-    },
-    onTerminal: async () => {
-      if (generation !== streamGeneration) return
-      connectionStatus.value = 'terminal'
-      await refreshStatus()
-      if (generation !== streamGeneration) return
-      await loadClaimReports(runId)
-      if (generation !== streamGeneration) return
-      // The durable Run event can be observed immediately before the
-      // background task marks its GenerationJob completed. Keep a short
-      // fallback poll only for that hand-off window so the UI cannot remain
-      // stuck at "generating" after the SSE stream has ended.
-      if (selectedJob.value && ['queued', 'running'].includes(selectedJob.value.job_status)) {
-        startPolling()
-      }
-    },
-    onError: (error) => {
-      if (generation !== streamGeneration) return
-      if (error?.code !== 'SSE_TRANSPORT_DISCONNECTED') connectionStatus.value = 'error'
-    },
-    onFallback: () => {
-      if (generation !== streamGeneration) return
-      connectionStatus.value = 'fallback'
-      startPolling()
-    },
-  })
-  streamClient.connect()
-}
 
-function startPolling() {
-  stopPolling()
-  if (!selectedJob.value || !['queued', 'running'].includes(selectedJob.value.job_status)) {
-    return
-  }
-  pollTimer.value = setInterval(refreshStatus, 5000)
-}
+
+
+
+
+
+
 
 function pickDefaultRunId(items) {
   if (!items.length) return ''
@@ -918,91 +759,32 @@ async function loadCoursewareSourceResources() {
   }
 }
 
-async function loadClaimReports(runId = selectedRunId.value) {
-  if (!runId) return
-  const version = ++claimsRequestVersion
-  const learnerId = selectedLearnerId.value
-  const isCurrent = () => generationMounted && version === claimsRequestVersion && learnerId === selectedLearnerId.value && runId === selectedRunId.value
-  try {
-    const response = await runApi.claims(runId)
-    if (!isCurrent()) return
-    const payload = response.data || {}
-    const judgements = new Map((payload.judgements || []).map((item) => [item.claim_id, item]))
-    const next = {}
-    for (const [resourceId, metric] of Object.entries(payload.resource_metrics || {})) {
-      const factual = Number(metric.factual_claim_total || 0)
-      const supported = Number(metric.supported_claim_total || 0)
-      next[resourceId] = {
-        ...metric,
-        claim_factual_pass_rate: factual ? supported / factual : null,
-        claim_warning_publish: Boolean(
-          timelineState.value.resourceExecutions.find((item) => item.resource_id === resourceId)?.claim_warning_publish
-          ?? resources.value.find((item) => item.resource_id === resourceId)?.claim_warning_publish
-        ),
-        claim_publish_decision_pending: Boolean(
-          timelineState.value.resourceExecutions.find((item) => item.resource_id === resourceId)?.claim_publish_decision_pending
-          ?? resources.value.find((item) => item.resource_id === resourceId)?.claim_publish_decision_pending
-        ),
-        issues: (payload.claims || []).filter((claim) => {
-          const verdict = judgements.get(claim.claim_id)?.verdict
-          return claim.resource_id === resourceId && claim.claim_type === 'factual' && ['not_in_evidence', 'contradicted'].includes(verdict)
-        }).map((claim) => ({
-          claim_id: claim.claim_id,
-          claim_text: claim.claim_text,
-          verdict: judgements.get(claim.claim_id)?.verdict,
-          reason: judgements.get(claim.claim_id)?.reason,
-        })),
-      }
-    }
-    claimReports.value = next
-  } catch (error) {
-    if (!isCurrent()) return
-    if (error?.response?.status !== 404) console.error(error)
-  }
-}
+const {
+  loadClaimReports, openClaimReport, claimPassRateLabel, claimIssueCount,
+  claimReportStatusLabel, claimReportStatusClass, claimRateStyle, decideClaimPublication,
+} = useGenerationClaims({
+  selectedRunId, selectedLearnerId, timelineState, resources, claimReports,
+  selectedClaimReportId, claimReportVisible, claimDecisionLoading,
+  isMounted: () => generationMounted,
+  requestVersion: () => claimsRequestVersion,
+  nextRequestVersion: () => ++claimsRequestVersion,
+  refreshStatus: (...args) => refreshStatus(...args),
+  messages: ElMessage,
+})
 
-function openClaimReport(resourceId) {
-  selectedClaimReportId.value = resourceId
-  claimReportVisible.value = true
-}
 
-function claimPassRateLabel(report) {
-  return report.claim_factual_pass_rate == null ? '不适用' : `${(report.claim_factual_pass_rate * 100).toFixed(1)}%`
-}
 
-function claimIssueCount(report) {
-  return Array.isArray(report?.issues) ? report.issues.length : 0
-}
 
-function claimReportStatusLabel(status) {
-  return ({ complete: '审核完成', incomplete: '需要关注', not_applicable: '不适用' }[status] || status || '待审核')
-}
 
-function claimReportStatusClass(status) {
-  return status === 'complete' ? 'is-complete' : 'is-attention'
-}
 
-function claimRateStyle(report) {
-  const rate = Math.max(0, Math.min(1, Number(report?.claim_factual_pass_rate) || 0))
-  return { '--claim-rate': `${rate * 100}%` }
-}
 
-async function decideClaimPublication(publish) {
-  const resourceId = selectedClaimReportId.value
-  if (!resourceId || claimDecisionLoading.value) return
-  claimDecisionLoading.value = true
-  try {
-    await resourceApi.decideClaimPublication(resourceId, publish)
-    ElMessage.success(publish ? '资源已发布。' : '资源已保留为未发布。')
-    claimReportVisible.value = false
-    await refreshStatus()
-    await loadClaimReports(selectedRunId.value)
-  } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || '发布决定提交失败')
-  } finally {
-    claimDecisionLoading.value = false
-  }
-}
+
+
+
+
+
+
+
 
 async function refreshStatus() {
   if (!selectedJob.value?.run_id) return

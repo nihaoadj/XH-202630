@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import HumanMessage
 
-from app.core.courseware.live_workflow_smoke import (
+from scripts.courseware_harness.live import (
     LIVE_COMBINATIONS,
     LiveWorkflowBudgetExceeded,
     LiveWorkflowBudget,

@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace
 
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewarePracticeStepExtraction
+from app.models.courseware.content import CoursewarePracticeStepExtraction
 from app.agents.resource_workflows.interactive_courseware.practice_structure_agent import extract_practice_step_structure
 from app.models.shared.llm import LLMCallOptions
 

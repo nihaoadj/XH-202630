@@ -1,6 +1,6 @@
 import pytest
 
-from app.agents.resource_workflows.interactive_courseware.contracts import (
+from app.models.courseware.content import (
     CoursewarePlanEnrichmentV2,
     CoursewareSceneEnrichment,
     CoursewareScenePlan,

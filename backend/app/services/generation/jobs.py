@@ -1,10 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import logging
 import uuid
 
 from app.db.generation.base import BaseGenerationJobRepository
+from app.db.feedback.feedback_loop_base import BaseFeedbackLoopRepository
+from app.services.learning_documents.resources import ResourceService
+from app.services.generation.continuation import (
+    create_continuation,
+    execute_continuation,
+    prepare_continuation,
+)
+from app.services.generation.continuation_uow import (
+    ContinuationAtomicityError,
+    ContinuationUnitOfWork,
+    has_standard_core_writers,
+    has_standard_writers,
+)
 from app.models.learning_documents.schemas import (
+    ContinueResourceBatchRequest,
     GenerateRequest,
     GenerationJobCreateResponse,
     GenerationJobListResponse,
@@ -34,6 +50,95 @@ class GenerationJobService:
         self.job_repo = job_repo
         self.generation_service = generation_service
         self.mastery_service = mastery_service
+
+    def create_continuation(
+        self,
+        learner: LearnerProfile,
+        batch_id: str,
+        payload: ContinueResourceBatchRequest,
+        *,
+        resource_service_factory: Callable[[], ResourceService],
+        feedback_repo_factory: Callable[[], BaseFeedbackLoopRepository],
+    ) -> tuple[GenerationJobCreateResponse, GenerateRequest]:
+        """Prepare a continuation; the API schedules the returned request last."""
+        # Preserve lightweight stubs with custom mutation methods only when
+        # they have no standard persistence graph. Such a path retains legacy
+        # behavior and makes no transactional-atomicity claim.
+        custom_mutator = any(
+            getattr(getattr(self, name), "__func__", getattr(self, name))
+            is not getattr(GenerationJobService, name)
+            for name in ("create_job", "mark_superseded")
+        )
+        if custom_mutator and has_standard_core_writers(self):
+            raise ContinuationAtomicityError(
+                "custom continuation mutators cannot use standard repositories"
+            )
+        if custom_mutator:
+            return create_continuation(
+                self, learner, batch_id, payload,
+                resource_service_factory=resource_service_factory,
+                feedback_repo_factory=feedback_repo_factory,
+            )
+
+        prepared = prepare_continuation(
+            self,
+            learner,
+            batch_id,
+            payload,
+            resource_service_factory=resource_service_factory,
+        )
+        feedback_repositories = [
+            feedback_repo_factory()
+            for _ in range(prepared.feedback_repo_call_count)
+        ]
+        repository_index = 0
+
+        def planned_feedback_repo_factory():
+            nonlocal repository_index
+            if repository_index >= len(feedback_repositories):
+                raise RuntimeError("continuation requested an unplanned feedback repository")
+            repository = feedback_repositories[repository_index]
+            repository_index += 1
+            return repository
+
+        # Unknown custom repositories retain their legacy direct behavior when
+        # no standard participant is present. Once any standard writer is in
+        # the graph, the UOW validates every writer before the first mutation.
+        if not has_standard_writers(self, feedback_repositories):
+            return execute_continuation(
+                prepared,
+                self,
+                learner,
+                feedback_repo_factory=planned_feedback_repo_factory,
+            )
+
+        run_id = str(uuid.uuid4())
+        uow = ContinuationUnitOfWork(self, feedback_repositories)
+        try:
+            with uow:
+                result = execute_continuation(
+                    prepared,
+                    uow.generation_job_service,
+                    learner,
+                    feedback_repo_factory=uow.feedback_repo_factory,
+                    run_id=run_id,
+                )
+        except Exception:
+            if uow.schedule_failed:
+                request = prepared.generation_request
+                knowledge_base_id = request.knowledge_base_id or learner.knowledge_base_id
+                if self.job_repo.get(run_id) is None:
+                    self.job_repo.create_failed(
+                        run_id=run_id,
+                        batch_id=prepared.batch_id,
+                        learner_id=request.learner_id,
+                        topic=request.topic,
+                        knowledge_base_id=knowledge_base_id,
+                        request_payload=request.model_dump(mode="json"),
+                        error_message="CURRICULUM_SCHEDULE_FAILED",
+                    )
+            raise
+        return result
 
     def _initial_generation_target(self, learner: LearnerProfile) -> list[str] | None:
         """Return the frozen initial-diagnosis target for the first batch.
@@ -207,6 +312,8 @@ class GenerationJobService:
                     selection_type=selection_type,
                 )
             except Exception:
+                if getattr(self, "_continuation_atomicity_active", False):
+                    self._continuation_schedule_failed = True
                 self.job_repo.mark_failed(run_id, "CURRICULUM_SCHEDULE_FAILED")
                 self.mastery_service.release_failed_generation(learner, run_id=run_id)
                 raise

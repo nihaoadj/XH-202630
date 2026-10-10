@@ -3,9 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.quality.json",
     "test": "node tests/run.mjs unit",
     "test:unit": "node tests/run.mjs unit",
     "test:browser": "node tests/run.mjs browser",
@@ -43,7 +48,11 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
+    "eslint": "10.12.0",
+    "eslint-plugin-vue": "10.11.1",
+    "globals": "17.13.0",
     "playwright": "^1.62.1",
+    "typescript": "5.9.3",
     "vite": "^5.2.11"
   }
 }

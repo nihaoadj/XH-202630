@@ -11,14 +11,14 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.config import get_settings
-from app.core.knowledge_base import chunk_documents, list_knowledge_base_dirs, load_documents, load_knowledge_base_manifest
-from app.db.database import init_database
-from app.db.knowledge.catalog import KnowledgeCatalogRepository
+from app.core.retrieval.knowledge_base import chunk_documents, list_knowledge_base_dirs, load_documents, load_knowledge_base_manifest
+from app.db.shared.database import init_database
+from app.db.knowledge import KnowledgeCatalogRepository
 from app.db.knowledge.seed_catalog import index_seed_by_knowledge_base, load_learning_catalog_seed
-from app.db.database import get_session_factory
-from app.db.learner.repository import get_learner_repository
+from app.db.shared.database import get_session_factory
+from app.db.learners.repository import get_learner_repository
 from app.db.questionnaire.repository import create_questionnaire_repository
-from app.models.schemas import DiagnosticQuestion, LearnerProfile
+from app.models.learning_documents.schemas import DiagnosticQuestion, LearnerProfile
 
 
 def _load_questions(kb_dir: Path, filename: str) -> list[DiagnosticQuestion]:

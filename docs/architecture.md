@@ -2,8 +2,8 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：2.5
-> 文档更新时间：2026-10-09
+> 文档版本：2.6
+> 文档更新时间：2026-10-10
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 0. 整体架构总览
@@ -94,6 +94,16 @@
 - `courseware`：互动课件任务、恢复、发布和 Worker 执行门面。
 - `feedback`、`tutor`、`reports` 与 `resource_library`：生成后的学习闭环、只读聚合和资源路由。
 
+Claim 发布检查位于 `services/learning_documents/publication.py`，由 `ResourceService.decide_claim_publication` 暴露；批次续生成位于 `services/generation/continuation.py`，由 `GenerationJobService.create_continuation` 暴露。API 保留权限、健康检查、HTTP 错误适配和最后的后台调度，原提交及事件顺序不变。报告资源可信度分页使用公开 `ReportService.list_resource_credibility`，路由不再组合私有投影方法。
+
+续生成由 `generation/continuation_uow.py` 协调标准仓储：SQL 的 call-local Service/仓储副本共享外层 Connection，Memory 按参与仓储锁顺序持有快照。任务、反馈关联、源任务替代及 mastery/curriculum/tier 准备共同提交；失败回滚，调度失败单独保留同 run 的 failed 任务。容器 Provider 和普通任务创建入口保持。Memory 中绕过仓储锁直接改已返回 profile 的并发写入仍不受协调；混合标准 writer 在首写前拒绝。该边界不提供提交与后台执行间的跨进程精确重放。
+
+反馈和 Claim 从已提交事实补写缺失审计事件，使用稳定 ID 幂等追加；反馈第一条失败即停止后缀，使重试保持顺序。已存在事件的时间与 payload 不变，Claim 保留旧随机 ID 事件。恢复依赖相同业务请求重试，不是自动 outbox Worker。报告和课件 SSE 的同步查询在线程池内创建/释放 Session。
+
+服务内确定性职责按同域模块组织：`feedback/assessment.py` 与 `recommendations.py` 管题目/评分及推荐，`reports/projections.py` 管报告区块，`learners/generation_options.py` 管候选投影。原 Service 保留查询、事务、模型调用和公开方法，不增加通用业务层。
+
+课件模型内容契约位于 `models/courseware/content.py`，API/任务 DTO 保留 `models/courseware/contracts.py`；旧 workflow contracts 只提供同一对象的兼容导出，调用者已迁移到 models。shared retrieval 使用 `models/shared/workflow.py` 的 WorkflowState，core 不反向依赖具体工作流。报告雷达纯投影与课件候选的页面修复/渲染校验已提取，外层状态机、硬门顺序和异常边界保持。
+
 ### 3.3 Agent 层
 
 `backend/app/agents/` 保持以下边界：
@@ -109,9 +119,16 @@
 - Agent 负责协同推理和多步生成。
 - 服务层负责把 Agent 与数据库、画像、资源记录串起来。
 - 版本化工作流状态、Agent 契约和共享枚举位于 `models/shared/`；资源领域 DTO 位于各自的 `models/<domain>/`。
+- 资源不可变投影位于 `models/learning_documents/invariants.py`，仓储不依赖 Agent 校验模块。共享 recorded node 位于 `agents/shared/recorded_node.py`。
+- 课件来源准入、确定性组装、版本追踪与 candidate 发布编排位于 `agents/resource_workflows/interactive_courseware/`；来源读取采用同域 `SourceResourcePort`。纯来源追溯和教学质量规则位于 `core/courseware/review.py`。
+- 业务课件评测执行器位于 `backend/scripts/courseware_harness/`；`core/courseware/evaluation.py` 保留确定性指标和 fixture 计算。旧 Service 模块及 core 评测入口只保留兼容导出或按需转发，实际实现各有唯一归属；core 的旧 harness 入口是迁移兼容例外。
 - 文本资源工作流仅编排 Spec、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
 - 公共资源类型词汇由 `models/learning_documents/` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
 - 反馈闭环可额外创建专属 `个性化纠错训练包 -> CorrectionTrainingPackageAgent`。它在学习文档内部受支持，但不属于普通生成词汇；`FeedbackService` 验证强化候选和快照后才可创建，并只向 Agent 传入脱敏目标、教学策略、达标标准和冻结 Evidence。
+
+课件总工作流保留预算、租约、状态与异常边界，spec 准备、单场景 compose、scene persistence 为具名阶段，`release.py` 通过平台 callback 构建候选产物并经仓储提交。`core/courseware/storyboard.py` 仅执行来源绑定的复习/实操及分页分支，没有模型或数据库调用。
+
+课件运行资产由平台维护在 `core/courseware/assets/theme.css` 与 `runtime.js`，`runtime.py` 按自身路径读取 UTF-8 并归一为 LF，继续导出原 `STYLE`、`SCRIPT` 和版本常量。Renderer 仍将它们嵌入 HTML；资产提取保持原字节及 CSS 覆盖顺序，不引入外部请求、模型生成代码或新运行版本。详见 [资产说明](../backend/app/core/courseware/assets/README.md)。
 
 ### 3.4 前端业务与公共界面层
 
@@ -133,6 +150,9 @@
 | `components/`、`ui/`、`styles/` | 公共准备面板、页面 / 模块动效和主题；不承载生成或判分规则 |
 
 公开首页的 Agent、证据、路径和反馈场景采用本地示意数据；实际生成页读取持久化事件。学习页面中的画像和时间窗口切换会使旧请求、分页及更新流失效，迟到响应不能覆盖当前上下文。布局按可用空间选择固定框架、区域内滚动或自然阅读；动画遵循 `prefers-reduced-motion`，相关浏览器专项由 `tests/suites.json` 管理。
+
+生产页面按实际职责提取同域 composable：GenerateView 使用 `useGenerationProgress`、`useGenerationClaims`、`useProductionLayout`；FeedbackView 使用 `useFeedbackEvaluation`、`useFeedbackFollowup`；CoursewareGenerationWorkspace 使用 `useCoursewareTracking`。页面持有共享状态，watch/mount/unmount 注册顺序与模板保持；旧 `useCoursewareJob` 留作兼容 helper，其任务历史和终态通知时机不与生产 hook 混用。
+
 
 ## 4. 当前主流程调用链
 
@@ -436,7 +456,8 @@ scripts/
 - 学习反馈页优先按批次加载测评；纠错包重新验证使用独立 Run；下一轮生成须由学习者确认
 - 学习历史页面优先依赖 `/api/learning-history/{learner_id}/journey`；`timeline` 保留兼容
 - 通用问卷不再承担用户资料采集职责
-- 旧 P0-09 runtime 验收仍引用迁移前的前端文件；修复前不能据其结果推断当前前端能力，详情见 [Demo Runbook](demo-runbook.md)
+- P0-09 runtime 前端探针已适配现行目录，仅核对源码连线；TestClient lifespan 会初始化数据库和启动对账，须在隔离 demo 环境执行，详情见 [Demo Runbook](demo-runbook.md)
+
 ## 9. Agent 可靠执行与异步任务整合
 
 dev 的异步 `GenerationJob` 负责排队和面向前端的任务状态；`AgentRun` 负责一次
@@ -550,7 +571,7 @@ Tutor 持久化仅记录会话、轮次、教学动作、引用与脱敏调用�
 `source_snapshot -> source_block -> generated_field -> component_property -> artifact_node`
 构造成不可执行的 `ProvenanceGraph`。标题、正文、步骤、选项、答案、反馈以及组件属性均必须至少有一条同快照来源边；未知来源块、跨快照边或覆盖率不足会进入隔离终态。通过后的图以 root hash 和脱敏 manifest 写入 HTML candidate artifact，renderer 不负责修补或推断来源。
 
-Candidate 发布由 `services.courseware.release.CandidateReleaseCoordinator` 负责：HTML、ZIP、SCORM/xAPI 均写入带 `release_id` 的不可变路径，candidate manifest 冻结 scene/snapshot/provenance 与 artifact hash；SQLite/Memory 仓储在一次提交中切换 `released_release_id`、兼容投影、任务状态和唯一发布事件。失败 candidate 只记录 `release_blocked`，下载仍解析当前 released 指针，旧 release 不被覆盖。
+Candidate 发布由 `agents.resource_workflows.interactive_courseware.release.CandidateReleaseCoordinator` 负责：HTML、ZIP、SCORM/xAPI 均写入带 `release_id` 的不可变路径，candidate manifest 冻结 scene/snapshot/provenance 与 artifact hash；SQLite/Memory 仓储在一次提交中切换 `released_release_id`、兼容投影、任务状态和唯一发布事件。失败 candidate 只记录 `release_blocked`，下载仍解析当前 released 指针，旧 release 不被覆盖。
 
 ## 13. 互动课件 R0-R5 完整性边界
 

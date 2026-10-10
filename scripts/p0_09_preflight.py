@@ -81,8 +81,8 @@ def _check_database(engine) -> dict:
 def _check_retrieval_smoke(settings) -> dict:
     """Run one local, read-only default-KB query and expose counts only."""
 
-    from app.core.knowledge_base import load_knowledge_base_manifest
-    from app.core.vector_store import similarity_search
+    from app.core.retrieval.knowledge_base import load_knowledge_base_manifest
+    from app.core.retrieval.vector_store import similarity_search
 
     result = {
         "status": "not_ready",
@@ -114,7 +114,7 @@ def build_preflight() -> dict:
     sys.path.insert(0, str(BACKEND_DIR))
     from app.config import get_settings
     from app.core.health import build_health_report
-    from app.db.database import get_engine
+    from app.db.shared.database import get_engine
 
     settings = get_settings()
     health = build_health_report(settings)

@@ -4,7 +4,7 @@
 
 题目编号：XH-202630  
 文档版本：2.1\
-文档核对日期：2026-10-09
+文档核对日期：2026-10-10（T14 整改、依赖门禁与验收记录同步）
 
 本项目面向多领域技能学习者，构建“学习者画像输入 → 能力诊断 → 多 Agent 协同决策 → 个性化资源生成 → 审核纠偏与知识溯源 → 学情报告 → 学习反馈 → 动态调整学习路径”的领域知识个性化生成系统。RAG 工程训练是当前示例知识库和比赛分工中的一个方向，实际生成方向由用户输入的学习主题、学习者画像和所接入的知识库共同决定。
 
@@ -36,12 +36,12 @@
 
 ## 快速开始
 
-> 当前代码包含文本生成、互动课件和学习反馈闭环。工程验收以 [统一测试方案](docs/testing/README.md) 为入口；比赛与部署证据见 [Demo Runbook](docs/demo-runbook.md)。旧 P0-09 runtime 脚本仍读取迁移前的前端路径，当前不能作为有效验收入口，详见本页“P0-09 比赛验收”。
+> 当前代码包含文本生成、互动课件和学习反馈闭环。工程验收以 [统一测试方案](docs/testing/README.md) 为入口；比赛与部署证据见 [Demo Runbook](docs/demo-runbook.md)。P0-09 runtime 的前端检查仅核对源码连线，不能替代统一 acceptance，详见本页“P0-09 比赛验收”。
 
 配置文件默认读取 `backend/.env`，运行时数据统一落在 `backend/data/` 和 `backend/chroma_db/`。  
 默认 `KNOWLEDGE_BASE_DIR` 指向 RAG 工程训练示例知识库；接入其他领域时，将该配置改为对应知识库目录即可，后端 Agent 不会把生成方向固定为 RAG。
 
-首次使用需准备 Python 3.11、Node.js 18+、npm 和本地 Embedding 模型缓存。从仓库根目录执行（Windows PowerShell）：
+首次使用需准备 Python 3.11、Node.js 24（工程工具也支持 20.19+ / 22.13+）、npm 和本地 Embedding 模型缓存。从仓库根目录执行（Windows PowerShell）：
 
 ```powershell
 # 1. 创建虚拟环境，安装前后端依赖并创建 backend/.env；此时不启动服务
@@ -145,7 +145,7 @@ version1/
 │   │   ├── utils/              # 事件归并、资源排序等工具
 │   │   ├── App.vue             # 公共页、学习外壳与专注模式分支
 │   │   └── main.js
-│   ├── tests/                  # 8 项 Node 单元专项与 13 项浏览器专项
+│   ├── tests/                  # 9 项 Node 单元专项与 13 项浏览器专项
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
@@ -202,7 +202,9 @@ python scripts/run_tests.py --profile acceptance
 python scripts/run_tests.py --suite backend-api --suite backend-migration
 ```
 
-`quick` 用于快速定位；`regression` 包括后端全量、比赛金标、课件冻结评测、前端八项单元与构建；`acceptance` 追加十三项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
+`quick` 用于快速定位；`regression` 包括 Ruff、全前端 ESLint、请求上下文 JSDoc 类型检查、Python 声明/锁/环境检查、后端全量、比赛金标、课件冻结评测、前端九项单元与构建；`acceptance` 追加十三项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
+
+安装入口、CI 和 Docker 消费 `backend/requirements.lock.txt`（精确版本与 SHA256），工程工具单独锁在 `backend/requirements-dev.lock.txt`；前端使用 `npm ci`。更新依赖后重新生成锁文件，再运行 `python scripts/check_dependencies.py` 与 `python -m pip check`。锁文件再生成命令见 [部署说明](docs/deployment.md)，不会自动升级正在运行的服务。
 
 后端测试按执行层级分类，并由 `backend/tests/conftest.py` 自动添加 pytest marker：
 
@@ -318,6 +320,7 @@ node frontend/tests/run.mjs browser --output frontend/tests/test-results/ui-repa
 
 - [功能与页面](docs/features.md)：当前功能边界、真实路由和前端交互。
 - [总体架构](docs/architecture.md)：系统分层、模块职责、运行路径和主流程。
+- [工程质量优化记录](docs/engineering-quality-update.md)：T13 结构、规范及复杂度调整的实际范围、兼容证据与分步验收。
 - [API 契约](docs/api.md)：认证、HTTP/DTO、反馈证据入口和事件。
 - [知识库与数据库](docs/knowledge_base_database.md)：源文件、问卷、诊断与持久化。
 - [部署说明](docs/deployment.md)：首次安装、三进程启动、Worker 健康检查与停机。
@@ -326,17 +329,19 @@ node frontend/tests/run.mjs browser --output frontend/tests/test-results/ui-repa
 - [Demo Runbook](docs/demo-runbook.md)：比赛 fixture、主 Demo、故障恢复与人工 checklist。
 - [本次文档同步核对](docs/documentation-sync.md)：同步依据、修正内容与代码侧遗留问题。
 
-`docs/update_plan/` 保存本地历史更新记录并已由 Git 忽略，不作为当前功能状态入口。
+`docs/update_plan/` 保存本地计划与 `archive.md` 历史摘要，详细计划保留最近两次（T13、T14，含 T13 分步记录）。该目录为本地资料，已由 Git 忽略；可分发的更新结果见 [T13 实施记录](docs/engineering-quality-update.md) 和 [T14 实施记录](docs/engineering-quality-optimization.md)，当前功能状态以源码及专题文档为准。
 
 ## P0-09 比赛验收
 
 P0-09 固定离线 fixture 不调用收费 Provider；只读 preflight 检查配置中的数据库、默认知识库与构建产物：
+
+初始化、完整性检查、检索与 P0-09 脚本已使用当前领域包路径（`db/shared`、`core/retrieval`、`services/reports`）；CLI 参数不变。互动课件评测的业务执行器位于 `backend/scripts/courseware_harness/`，继续通过原 `backend/scripts/courseware_eval.py` 入口运行。导入检查不等于数据库检查；初始化和 preflight 应针对预期数据目录执行。
 
 ```powershell
 python scripts/p0_09_preflight.py --output wzx/out/p0-09-preflight.json
 python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-manifest.json
 ```
 
-旧 `scripts/run_p0_09_acceptance.py --runtime` 尚未适配 `features/<domain>/`：它读取不存在的旧 `views/FeedbackView.vue`、`views/ReportView.vue`、`components/ResourceViewer.vue`，还检查旧 `api/runEvents.js`；执行可能抛出 `FileNotFoundError`，不能据此断言当前前端缺少报告或 Claim 能力。该模式还会通过 TestClient 启动 FastAPI lifespan，触发正常数据库初始化与启动对账，并非全程只读。修复和重新验收前，工程验证使用 `python scripts/run_tests.py --profile acceptance`，目标环境 readiness 与真实业务闭环按 Runbook 单独核对。
+`scripts/run_p0_09_acceptance.py --runtime` 已按 `features/<domain>/` 更新源码检查，仍不替代实际浏览器交互验收。该模式通过 TestClient 启动 FastAPI lifespan，会触发正常数据库初始化与启动对账，并非全程只读。工程验证使用 `python scripts/run_tests.py --profile acceptance`，目标环境 readiness 与真实业务闭环按 Runbook 单独核对。
 
 状态只使用 `PASS`、`FAIL`、`SKIP`、`NOT_MEASURABLE`；小型 fixture 的实际值不等于正式统计达标。Live Provider 测试必须显式设置 `RUN_LIVE_LLM=1`，并与 deterministic offline 结果分开报告。

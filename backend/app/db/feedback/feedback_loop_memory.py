@@ -115,8 +115,9 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
         )
 
     def get_by_idempotency_key(self, learner_id: str, idempotency_key: str) -> FeedbackLoopResult | None:
-        attempt_id = self._idempotency.get((learner_id, idempotency_key))
-        return self._result(attempt_id, replay=True) if attempt_id else None
+        with self._lock:
+            attempt_id = self._idempotency.get((learner_id, idempotency_key))
+            return self._result(attempt_id, replay=True) if attempt_id else None
 
     def apply_feedback(
         self,
@@ -233,12 +234,14 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
             return self._result(attempt_id, replay=False)
 
     def list_attempts(self, learner_id: str, limit: int = 20) -> list[LearningAttempt]:
-        items = [item.model_copy(deep=True) for item in self._attempts.values() if item.learner_id == learner_id]
-        return sorted(items, key=lambda item: item.submitted_at, reverse=True)[:limit]
+        with self._lock:
+            items = [item.model_copy(deep=True) for item in self._attempts.values() if item.learner_id == learner_id]
+            return sorted(items, key=lambda item: item.submitted_at, reverse=True)[:limit]
 
     def list_results(self, learner_id: str, limit: int = 20) -> list[FeedbackLoopResult]:
-        attempts = self.list_attempts(learner_id, limit)
-        return [self._result(item.attempt_id, replay=False) for item in attempts]
+        with self._lock:
+            attempts = self.list_attempts(learner_id, limit)
+            return [self._result(item.attempt_id, replay=False) for item in attempts]
 
     def get_current_path(self, learner_id: str) -> LearningPath | None:
         item = self._paths.get(learner_id)
@@ -248,11 +251,12 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
         return [item.model_copy(deep=True) for item in reversed(self._versions.get(learner_id, []))][:limit]
 
     def get_followup_relation(self, child_run_id: str) -> dict | None:
-        for attempt_id, items in self._followups.items():
-            for item in items:
-                if item.get("child_run_id") == child_run_id:
-                    return {"attempt_id": attempt_id, **item}
-        return None
+        with self._lock:
+            for attempt_id, items in self._followups.items():
+                for item in items:
+                    if item.get("child_run_id") == child_run_id:
+                        return {"attempt_id": attempt_id, **item}
+            return None
 
     def reconcile_incomplete_followups(
         self,
@@ -275,6 +279,10 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
         return reconciled
 
     def _result(self, attempt_id: str, *, replay: bool) -> FeedbackLoopResult:
+        with self._lock:
+            return self._build_result(attempt_id, replay=replay)
+
+    def _build_result(self, attempt_id: str, *, replay: bool) -> FeedbackLoopResult:
         attempt = self._attempts[attempt_id]
         followups = sorted(self._followups.get(attempt_id, []), key=lambda item: str(item.get("child_run_id") or ""))
         followup = followups[0] if followups else {}

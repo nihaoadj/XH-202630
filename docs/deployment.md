@@ -1,17 +1,19 @@
 # 本地启动与部署说明
 
-> 文档核对日期：2026-10-09。
+> 文档核对日期：2026-10-10。
 
 > 当前可验证的部署拓扑是 SQLite：一个 FastAPI Web 进程、一个独立互动课件 Durable Worker 和一个 Vite 前端。它适用于开发、演示和本地验收；不应描述为多 Worker 或多实例的生产集群。
 
 ## 1. 运行前提
 
 - Python 3.11；推荐将项目虚拟环境放在仓库根目录 `.venv/`。
-- Node.js 18+ 与 npm。
+- Node.js 24（工程工具兼容 20.19+ / 22.13+）与 npm。
 - 已准备的 Embedding 模型缓存和 Chroma collection。默认 `EMBEDDING_LOCAL_FILES_ONLY=true`，运行时不会下载模型。
 - 真实生成需要 OpenAI-compatible Provider 的 `LLM_API_KEY`；离线测试不应设置 `RUN_LIVE_LLM=1` 或 `COURSEWARE_LIVE_EVAL=1`。
 
 本地配置、SQLite、Chroma、日志和生成物都是运行时数据，不能提交。配置统一从 `backend/.env` 读取；相对数据库、向量库和资源路径均相对 `backend/` 解释。
+
+初始化、完整性及 preflight 脚本使用当前 `db/shared` 和 `core/retrieval` 入口。课件验收 CLI 保持在 `backend/scripts/`，业务执行器归于其 `courseware_harness/` 子包；按下文原命令运行即可，端口、环境变量与数据路径不变。
 
 Claim 审核完成但存在无证据事实时，`CLAIM_USER_REVIEW_ENABLED=true` 且事实通过率达到 `CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE`（默认 `0.60`）会等待用户在审核报告中决定是否发布；旧 `CLAIM_WARNING_PUBLISH_*` 配置不再触发自动发布。
 
@@ -163,6 +165,8 @@ COURSEWARE_WORKER_HEALTH_PORT=8081
 
 课件 AI-first 链路的预算、总时限和审核策略由 `COURSEWARE_*` 环境变量控制，完整受约束模板见 [backend/.env.example](../backend/.env.example)。AI 审核不可用、预算耗尽或硬门失败会按策略降级、隔离或拒绝，不能把失败当作发布成功。
 
+`APP_MODE=production` 要求 `AUTH_JWT_SECRET` 至少 32 个 UTF-8 字节且不是开发/占位密钥，`AUTH_COOKIE_SECURE=true`，服务通过 HTTPS 对外提供。`CORS_ALLOW_ORIGINS` 使用 JSON 数组，例如 `["https://learn.example.org"]`；production 中只能配置 HTTPS origin，不能包含通配符、路径或凭据。同源部署可保留 `[]`。development/demo 仍允许 localhost / 127.0.0.1 的动态端口；其他前端 origin 必须显式配置。CORS 允许凭据并向前端暴露 ETag，认证和错误响应契约保持。
+
 代码内建默认值与分发模板有以下差异，最终值以进程环境和 `backend/.env` 为准：
 
 | 配置项 | `Settings` 内建默认 | `.env.example` | 影响 |
@@ -227,6 +231,21 @@ SSE 路由须关闭代理缓冲，read timeout 必须大于 `WORKFLOW_SSE_HEARTB
 
 当前 `Dockerfile` 安装 Python 依赖并启动端口 8000 的 Uvicorn Web；不构建前端、不启动课件 Worker，也没有配套 Compose 编排。容器方式仍须单独运行 Worker，并共享数据库、资源根目录和模型 / 索引配置；前端生产构建为 `frontend/dist`，由目标环境的静态服务器提供。
 
-当前仓库没有 `.dockerignore`，`Dockerfile` 会复制整个 `backend/`；可分发镜像应从不含真实 `.env`、数据库、模型缓存和生成物的干净构建目录制作，运行配置和数据由部署环境注入。Git 忽略规则不会自动排除 Docker 构建上下文。
+根 `.dockerignore` 排除本地环境文件、数据库、日志、缓存和生成物，保留 `.env.example`。镜像创建空运行目录，持久数据需挂载或初始化；不能依赖构建上下文携带开发数据。
+
+依赖安装使用 `pip install --require-hashes -r backend/requirements.lock.txt`；开发/验收另外安装 `backend/requirements-dev.lock.txt`。前端使用 `npm ci`，Node 24 为本地验收和 CI 的推荐版本。变更依赖后在仓库根执行：
+
+```bash
+python -m uv pip compile backend/requirements.txt --universal --python-version 3.11 --generate-hashes --no-annotate --output-file backend/requirements.lock.txt
+python -m uv pip compile backend/requirements-dev.txt --universal --python-version 3.11 --generate-hashes --output-file backend/requirements-dev.lock.txt
+python scripts/check_dependencies.py
+python -m pip check
+```
+
+现有锁文件会作为版本偏好；有意升级才显式使用 `--upgrade` 并执行完整验收。已运行进程可能锁住 Windows 二进制依赖，正常停机后再安装；验收可在独立虚拟环境安装上述锁文件，避免影响当前服务。
+
+课件运行时从 `backend/app/core/courseware/assets/` 读取平台静态 CSS/JavaScript，部署 backend 源码时需包含该目录。现有 `COPY backend ./backend` 已包含这些文件，无需新增配置；读取不依赖工作目录，资产仍嵌入生成 HTML，不新增静态服务或 URL。字节兼容及加载约束见 [资产说明](../backend/app/core/courseware/assets/README.md)。
+
+本轮已添加根 `.dockerignore`，验证了合成敏感路径的上下文过滤；Docker daemon 不可用，未实际构建镜像。运行配置和持久数据仍由部署环境注入，Git 忽略规则不会自动排除 Docker 构建上下文。
 
 `vite.config.js` 中的 `/api`、`/health` 代理只在开发服务器生效。静态部署需在同源反向代理中配置这些后端路径，并对 `/dashboard`、`/learning/new`、`/learning/history`、`/user/profile` 等 Vue Router history URL 回退到 `index.html`，确保刷新和直达可用。课件预览路径及认证 Cookie / SSE 契约保持 [API 文档](api.md) 的约束。

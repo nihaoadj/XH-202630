@@ -8,7 +8,7 @@ from typing import Any, Literal
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareReviewDecision
+from app.models.courseware.content import CoursewareReviewDecision
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.llm import LLMCallContext

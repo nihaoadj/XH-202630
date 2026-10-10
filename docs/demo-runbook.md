@@ -2,7 +2,7 @@
 
 工程验收先按 [统一测试方案](testing/README.md) 执行 `python scripts/run_tests.py --profile acceptance`。三背景/54用例、冻结专业来源、三指标定义与正式质量证据见 [比赛评测方案](testing/competition.md)。后端工作流回放输出54组固定输入/协同/输出示例，离线金标与回放均不计作真实模型完成样本；缺实际生成或独立质量复核时正式质量门保留 `NOT_MEASURABLE`。
 
-> 文档核对日期：2026-10-09；固定 fixture 为 `p0-09-demo-suite/v1`。运行时以当前 checkout 和配置为准，分别记录确定性离线验收与真实运行时演示。
+> 文档核对日期：2026-10-10（T14 整改与命令复核）；固定 fixture 为 `p0-09-demo-suite/v1`。运行时以当前 checkout 和配置为准，分别记录确定性离线验收与真实运行时演示。
 
 ## 1. 放行原则
 
@@ -10,13 +10,13 @@
 
 - `python scripts/p0_09_preflight.py` 返回 `READY`（退出码 0）。
 - offline acceptance 的 Scenario A～J 全部 `PASS`。
-- 目标运行环境的数据库、Web、Worker 与真实业务闭环均有有效验收证据；旧 P0-09 runtime 模式须先修复路径与合同，再获得有效 `PASS`。
+- 目标运行环境的数据库、Web、Worker 与真实业务闭环均有有效验收证据；P0-09 runtime 模式须在目标环境实际运行并获得有效 `PASS`。
 - 浏览器人工 E2E checklist 全部确认。
 - live provider smoke 如被列入本次演示范围，必须显式启用并单独记录结果。
 
-`DEGRADED` 只能用于排障或受控预演；`NOT_READY` 与任一 required Gate 的 `FAIL` 都是 No-Go。正式 demo 数据仍须完成迁移演练。当前前端已实现五步方向引导、Claim 审核报告、参考来源与动态学情图表；旧 runtime 脚本尚未适配 `features/<domain>/`，不能把脚本失效解释为这些功能缺失。
+`DEGRADED` 只能用于排障或受控预演；`NOT_READY` 与任一 required Gate 的 `FAIL` 都是 No-Go。正式 demo 数据仍须完成迁移演练。当前前端已实现五步方向引导、Claim 审核报告、参考来源与动态学情图表；runtime 源码探针已适配 `features/<domain>/`，实际页面行为由统一 acceptance 的浏览器专项验证。
 
-旧 `scripts/run_p0_09_acceptance.py --runtime` 读取不存在的 `src/views/FeedbackView.vue`、`src/views/ReportView.vue`、`src/components/ResourceViewer.vue`，还检查旧 `src/api/runEvents.js`；可能抛出 `FileNotFoundError` 而无法输出完整 manifest。即使修复路径，它对旧聚合反馈入口、SourceRef 和报告字段的字符串检查也须重新对齐当前契约。该模式会启动 TestClient lifespan，执行正常数据库初始化与启动对账，不能当成全程只读检查。本次文档维护只记录此代码问题。
+`scripts/run_p0_09_acceptance.py --runtime` 的前端部分仅核对当前 feature、hook、API、组件和 SSE 的源码连线，不证明实际交互或请求成功。该模式会启动 TestClient lifespan，执行正常数据库初始化与启动对账，不能当成全程只读检查；须在独立 demo 环境启用。
 
 ## 2. 启动前准备
 
@@ -32,7 +32,7 @@
 在仓库根目录执行：
 
 ```powershell
-python -m pip install -r backend/requirements.txt
+python -m pip install --require-hashes -r backend/requirements.lock.txt -r backend/requirements-dev.lock.txt
 python scripts/init_db.py
 python scripts/ingest_knowledge.py
 Set-Location frontend
@@ -43,6 +43,8 @@ Set-Location ..
 
 `init_db.py` 和 `ingest_knowledge.py` 会改变配置指向的数据；只允许对明确的 demo 路径执行。固定离线 fixture 位于 `backend/tests/fixtures/p0_09/`，其测试不需要公网，也不写正式 demo 数据库。
 
+脚本内部导入已迁至当前领域包，原 CLI 参数保留。P0-09 offline 使用 `services/reports/p0_09_acceptance.py`；runtime 的前端源码探针已适配当前 feature、hook、API、组件和 SSE 连线。
+
 ### 2.3 Preflight 与验收
 
 ```powershell
@@ -51,7 +53,7 @@ python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-
 python scripts/run_tests.py --profile acceptance
 ```
 
-P0-09 退出码：`0=PASS/READY`、`1=FAIL/NOT_READY`、`2=PARTIAL/DEGRADED`；单独离线运行不包含 runtime / live，顶层可能为 `PARTIAL`，应核对 A～J 的实际状态。统一测试入口全部已选工程套件通过才返回 0，见 [测试方案](testing/README.md)。旧 `--runtime` 修复前不列入可用命令；acceptance 使用隔离 fixture，不能代替下面的真实环境演示。
+P0-09 退出码：`0=PASS/READY`、`1=FAIL/NOT_READY`、`2=PARTIAL/DEGRADED`；单独离线运行不包含 runtime / live，顶层可能为 `PARTIAL`，应核对 A～J 的实际状态。统一测试入口全部已选工程套件通过才返回 0，见 [测试方案](testing/README.md)。`--runtime` 仅在配置隔离 demo 数据库后单独运行；其前端检查仅验证源码连线。acceptance 使用隔离 fixture，不能代替下面的真实环境演示。
 
 如需收费 Provider 冒烟，另开一次并保存单独证据：
 

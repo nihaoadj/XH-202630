@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import json
 import re
 from datetime import datetime, timezone
@@ -11,7 +10,7 @@ from app.api.dependencies import ensure_profile_access
 from app.config import get_settings
 from app.models.reports.contracts import ReportResponse
 from app.services.learners.profiles import ProfileService
-from app.services.reports.reports import ReportService, ReportSnapshotUnstable
+from app.services.reports.reports import ReportService, ReportSnapshotUnstable, ReportCursorInvalid
 
 router = APIRouter()
 
@@ -60,30 +59,17 @@ def get_report(learner_id: str, request: Request, window_days: int = Query(defau
 @router.get("/{learner_id}/resource-credibility")
 def get_resource_credibility(learner_id: str, request: Request, limit: int = Query(default=20, ge=1, le=100), cursor: str | None = None):
     profile, report_service = _profile_and_service(learner_id, request)
-    items = report_service._resource_credibility(report_service._visible_resources(learner_id))["items"]
-    start = 0
-    if cursor:
-        try:
-            decoded = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode("utf-8")
-            boundary = json.loads(decoded)
-            key = (boundary["published_at"], boundary["resource_id"])
-            start = next(index + 1 for index, item in enumerate(items) if ((item["published_at"].isoformat() if item["published_at"] else None), item["resource_id"]) == key)
-        except (ValueError, KeyError, StopIteration, json.JSONDecodeError, UnicodeDecodeError):
-            raise HTTPException(status_code=400, detail={"code": "REPORT_CURSOR_INVALID", "message": "报告分页游标无效"})
-    page = items[start:start + limit]
-    next_cursor = None
-    if start + limit < len(items) and page:
-        last = page[-1]
-        raw = json.dumps({"published_at": last["published_at"].isoformat() if last["published_at"] else None, "resource_id": last["resource_id"]}, separators=(",", ":"))
-        next_cursor = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
-    return {"items": page, "next_cursor": next_cursor}
+    try:
+        return report_service.list_resource_credibility(learner_id, limit=limit, cursor=cursor)
+    except ReportCursorInvalid as exc:
+        raise HTTPException(status_code=400, detail={"code": "REPORT_CURSOR_INVALID", "message": str(exc)}) from exc
 
 
 @router.get("/{learner_id}/events")
 async def stream_report(learner_id: str, request: Request, window_days: int = Query(default=30), after_revision: str | None = None):
     if window_days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="window_days 必须为 7、30 或 90")
-    profile, report_service = _profile_and_service(learner_id, request)
+    profile, report_service = await asyncio.to_thread(_profile_and_service, learner_id, request)
     cursor = request.headers.get("last-event-id") or after_revision
     if cursor and not _REVISION_RE.fullmatch(cursor):
         raise HTTPException(status_code=400, detail={"code": "REPORT_STREAM_CURSOR_INVALID", "message": "报告流游标无效"})
@@ -95,10 +81,9 @@ async def stream_report(learner_id: str, request: Request, window_days: int = Qu
         settings = get_settings()
         while not await request.is_disconnected():
             try:
-                current_profile = request.app.container.profile_service().get(learner_id)
-                if current_profile is None:
+                snapshot = await asyncio.to_thread(_stream_snapshot, request, report_service, learner_id, window_days)
+                if snapshot is None:
                     return
-                snapshot = report_service.build_report(current_profile, window_days=window_days)
                 revision = snapshot["report_revision"]
                 parts = snapshot["freshness"]["source_revisions"]
                 payload = {"schema_version": "1.0", "learner_id": learner_id, "report_revision": revision,
@@ -124,3 +109,11 @@ async def stream_report(learner_id: str, request: Request, window_days: int = Qu
             await asyncio.sleep(settings.report_sse_poll_interval_seconds)
 
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _stream_snapshot(request, report_service, learner_id, window_days):
+    """Run synchronous repository reads in the worker owning their Sessions."""
+    current_profile = request.app.container.profile_service().get(learner_id)
+    if current_profile is None:
+        return None
+    return report_service.build_report(current_profile, window_days=window_days)

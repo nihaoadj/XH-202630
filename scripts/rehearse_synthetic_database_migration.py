@@ -25,13 +25,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.db.database import (  # noqa: E402
+from app.db.shared.database import (  # noqa: E402
     _migrate_sqlite_feedback_records,
     _migrate_sqlite_generated_resources,
     _migrate_sqlite_generation_jobs,
     configure_sqlite_foreign_keys,
 )
-from app.db.integrity import inspect_database_integrity  # noqa: E402
+from app.db.shared.integrity import inspect_database_integrity  # noqa: E402
 from app.db.migrations import (  # noqa: E402
     apply_p0_04_migration,
     apply_p0_05_migration,
@@ -40,7 +40,7 @@ from app.db.migrations import (  # noqa: E402
     apply_p0_07_migration,
     apply_p0_09_migration,
 )
-from app.db.models import Base  # noqa: E402
+from app.db.shared.models import Base  # noqa: E402
 
 
 DEFAULT_BASELINE_REF = "2c9dcbb"

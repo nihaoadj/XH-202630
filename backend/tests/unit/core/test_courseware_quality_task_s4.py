@@ -1,6 +1,6 @@
 import pytest
 
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareReviewDecision
+from app.models.courseware.content import CoursewareReviewDecision
 from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import resolve_review_targets
 
 

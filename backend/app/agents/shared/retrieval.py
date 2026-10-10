@@ -4,7 +4,7 @@ The injected backend performs hybrid retrieval/reranking; this node still owns
 the immutable KB/Chunk/hash validation before candidates become Evidence DTOs.
 """
 
-from app.agents.resource_workflows.learning_documents.state import AgentState
+from app.models.shared.workflow import WorkflowState as AgentState
 from app.core.retrieval.retriever import EvidenceRetriever, retrieval_policy_from_settings
 from app.core.security.errors import ErrorCode
 from app.core.retrieval.knowledge_base import load_knowledge_base_manifest

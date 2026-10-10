@@ -107,7 +107,12 @@ async function screenSettled(page, index) {
   await page.waitForFunction(index => {
     const scroller = document.querySelector('.landing-main')
     const screen = document.querySelector(`#${['overview', 'features', 'multi-agent', 'evidence', 'learning-path', 'feedback-loop'][index]}`)
+    // Native hash scrolling can settle before Vue handles the scroll event.
+    // Wait for the active pagination state as well as geometry; keep the
+    // later theme, focus, overflow and visual assertions unchanged.
+    const activeButton = document.querySelector('.screen-pagination button[aria-current]')
     return Math.abs(scroller.scrollTop - screen.offsetTop) < 2
+      && activeButton?.getAttribute('aria-controls') === screen.id
   }, index)
   await stable(page)
 }

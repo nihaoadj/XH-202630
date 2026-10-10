@@ -218,10 +218,36 @@ class Settings(BaseSettings):
     auth_token_expire_minutes: int = 480
     auth_cookie_name: str = "training_pilot_token"
     auth_cookie_secure: bool = False
+    cors_allow_origins: list[str] = Field(default_factory=list)
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     debug: bool = False
     sql_echo: bool = False
+
+    @field_validator("cors_allow_origins")
+    @classmethod
+    def validate_cors_origins(cls, value: list[str]) -> list[str]:
+        origins = []
+        for origin in value:
+            origin = origin.strip().rstrip("/")
+            parsed = urlparse(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+                or "*" in origin
+            ):
+                raise ValueError("CFG_CORS_ORIGIN_INVALID")
+            try:
+                parsed.port
+            except ValueError as exc:
+                raise ValueError("CFG_CORS_ORIGIN_INVALID") from exc
+            origins.append(origin)
+        return list(dict.fromkeys(origins))
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
@@ -495,6 +521,19 @@ class Settings(BaseSettings):
             raise ValueError("CFG_LLM_MODEL_MISSING")
         if not self.embedding_model.strip():
             raise ValueError("CFG_EMBEDDING_MODEL_MISSING")
+        secret = self.auth_jwt_secret.get_secret_value().strip()
+        if (
+            len(secret.encode("utf-8")) < 32
+            or secret.lower() in {
+                "development-only-change-me", "replace-with-a-long-random-secret",
+                "your-jwt-secret-here", "changeme", "change_me",
+            }
+        ):
+            raise ValueError("CFG_PRODUCTION_AUTH_SECRET_INVALID")
+        if not self.auth_cookie_secure:
+            raise ValueError("CFG_PRODUCTION_SECURE_COOKIE_REQUIRED")
+        if any(urlparse(origin).scheme != "https" for origin in self.cors_allow_origins):
+            raise ValueError("CFG_PRODUCTION_CORS_HTTPS_REQUIRED")
         return self
 
 

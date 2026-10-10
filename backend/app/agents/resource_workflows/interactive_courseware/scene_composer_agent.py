@@ -9,7 +9,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.resource_workflows.interactive_courseware.contracts import (
+from app.models.courseware.content import (
     CoursewareNarrativeEnrichment, CoursewarePracticeEnrichment, CoursewareSceneSpec,
 )
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available

@@ -11,7 +11,7 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.db.shared.database import get_session_factory, init_database
-from app.db.knowledge.catalog import KnowledgeCatalogRepository
+from app.db.knowledge import KnowledgeCatalogRepository
 from app.services.knowledge.ingestion import ChromaKnowledgeVectorIndex, IngestionService
 
 

@@ -23,7 +23,7 @@ from app.models.shared.llm import (
     RawLLMResponse,
     StructuredOutputMode,
 )
-from app.agents.resource_workflows.interactive_courseware.contracts import (
+from app.models.courseware.content import (
     CoursewareReviewDecision,
     CoursewareSceneSpec,
     CoursewareSpec,

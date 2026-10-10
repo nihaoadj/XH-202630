@@ -61,7 +61,7 @@
         </ol>
         <p v-if="currentJob.error_message" class="error-message">{{ currentJob.error_message }}</p>
         <div class="process-actions">
-          <el-button @click="refreshCurrentJob">刷新状态</el-button>
+          <el-button @click="refreshSelectedJob">刷新状态</el-button>
           <el-button v-if="retryable" type="warning" :loading="busy" @click="retryJob">重试任务</el-button>
           <el-button v-if="published" type="primary" @click="openPublishedResource">进入学习</el-button>
         </div>
@@ -90,6 +90,7 @@
 </template>
 
 <script setup>
+
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -97,61 +98,141 @@ import { knowledgeApi, profileApi } from '../../api'
 import { resourceLibraryApi } from '../resource-library/api'
 import { buildCoursewareBatchRequest, coursewareEligibleSources } from './sourcePolicy'
 import { coursewareApi } from './api'
+import { useCoursewareTracking } from './useCoursewareTracking.js'
 import { formatDateTime } from '../../utils/generationDisplay'
+import { createRequestGuard } from '../../utils/requestContext.js'
 
 const route = useRoute()
 const router = useRouter()
 const props = defineProps({
-  embedded: { type: Boolean, default: false },
-  hideControls: { type: Boolean, default: false },
-  learnerId: { type: String, default: '' },
-  activeRunId: { type: String, default: '' },
-  sourceResources: { type: Array, default: () => [] },
+    embedded: { type: Boolean, default: false },
+    hideControls: { type: Boolean, default: false },
+    learnerId: { type: String, default: '' },
+    activeRunId: { type: String, default: '' },
+    sourceResources: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['open-text-workspace', 'created', 'published'])
-const terminalStates = new Set(['published', 'published_with_warnings', 'quarantined', 'failed', 'rejected_admission', 'release_blocked', 'cancelled', 'timed_out'])
+
 const WORKSPACE_KIND_STORAGE_KEY = 'generation_workspace_kind'
 const ACTIVE_RUN_STORAGE_KEY = 'courseware_active_run_id'
+/**
+ * @typedef {Object} CoursewareJobSummary
+ * @property {string} run_id
+ * @property {string} status
+ * @property {string|null} [resource_id]
+ * @property {string|null} [source_batch_id]
+ * @property {string} [title]
+ * @property {string} [created_at]
+ * @property {string} [updated_at]
+ * @property {string|null} [error_message]
+ * @property {Object[]} [scenes]
+ * @property {Object[]} [warnings]
+ * @property {Object.<string, *>} [request_options]
+ * @property {Object.<string, *>} [quality_summary]
+ */
 const stages = [
   { id: 'queued', label: '准备任务' }, { id: 'admitting', label: '校验来源' }, { id: 'snapshotting', label: '冻结来源' },
   { id: 'design_reviewing', label: '规划课程' }, { id: 'composing', label: '生成页面' }, { id: 'trace_reviewing', label: '审核来源' },
   { id: 'quality_reviewing', label: '质量审核' }, { id: 'auto_revising', label: '定向修订' }, { id: 'rendering', label: '渲染课件' },
   { id: 'validating', label: '发布校验' }, { id: 'publishing', label: '自动发布' }, { id: 'published', label: '课件已就绪' },
 ]
-const profiles = ref([]); const tracks = ref([]); const sourceResources = ref([]); const jobs = ref([])
+const profiles = ref([]);
+const tracks = ref([]);
+const availableSourceResources = ref([]);
+/** @type {import('vue').Ref<CoursewareJobSummary[]>} */
+const jobs = ref([])
 const selectedLearnerId = ref(props.learnerId || route.query.learnerId || localStorage.getItem('last_learner_id') || '')
 const selectedRunId = ref(props.activeRunId || route.query.runId || '')
-const currentJob = ref(null); const selectedSourceIds = ref([])
-const sourceDialogVisible = ref(false); const busy = ref(false); const connectionStatus = ref('idle')
+/** @type {import('vue').Ref<CoursewareJobSummary|null>} */
+const currentJob = ref(null);
+const selectedSourceIds = ref([])
+const sourceDialogVisible = ref(false);
+const busy = ref(false);
+const connectionStatus = ref('idle')
 const preferences = ref({ learning_goal: '', expected_duration_minutes: 30 })
-let stream = null; let pollTimer = null
-let publishedRunId = ''
-const sourceCandidates = computed(() => coursewareEligibleSources(sourceResources.value))
+const profileRequests = createRequestGuard(() => ({ learnerId: selectedLearnerId.value }))
+const sourceRequests = createRequestGuard(() => ({ learnerId: selectedLearnerId.value }))
+let actionContextVersion = 0
+const createRequests = createRequestGuard(() => ({
+    learnerId: selectedLearnerId.value,
+    contextVersion: actionContextVersion,
+}))
+const actionRequests = createRequestGuard(() => ({
+    learnerId: selectedLearnerId.value,
+    runId: selectedRunId.value,
+    contextVersion: actionContextVersion,
+}))
+const busyRequests = createRequestGuard(() => ({}))
+
+const sourceCandidates = computed(() => coursewareEligibleSources(availableSourceResources.value))
 const visibleRequestOptions = computed(() => Object.fromEntries(
-  Object.entries(currentJob.value?.request_options || {}).filter(([key]) => !['visual_style_id', 'interaction_intensity'].includes(key)),
+    Object.entries(currentJob.value?.request_options || {}).filter(([key]) => !['visual_style_id', 'interaction_intensity'].includes(key)),
 ))
 const canCreate = computed(() => Boolean(selectedLearnerId.value) && sourceCandidates.value.length > 0)
 const published = computed(() => ['published', 'published_with_warnings'].includes(currentJob.value?.status))
 const retryable = computed(() => ['failed', 'rejected_admission', 'release_blocked', 'timed_out'].includes(currentJob.value?.status))
 const shortRunId = computed(() => currentJob.value?.run_id?.slice(0, 8).toUpperCase() || '-')
-const activeStage = computed(() => { if (published.value) return stages.length; const position = stages.findIndex((stage) => stage.id === currentJob.value?.status); return position < 0 ? 0 : position + 1 })
+const activeStage = computed(() => {
+    if (published.value) return stages.length;
+    const position = stages.findIndex((stage) => stage.id === currentJob.value?.status);
+    return position < 0 ? 0 : position + 1
+})
 const connectionLabel = computed(() => ({ live: '实时同步', polling: '轮询恢复', terminal: '已完成', idle: '等待连接', error: '连接已断开' }[connectionStatus.value] || '任务记录'))
 
-function profileLabel(profile) { return `${trackName(profile.knowledge_base_id)} / ${profile.skill_level || '未分级'}` }
-function trackName(id) { return tracks.value.find((track) => track.track_id === id)?.name || id || '未命名方向' }
-function jobLabel(job) { return `${stateLabel(job.status)} / ${String(job.run_id).slice(0, 8).toUpperCase()} / ${formatDateTime(job.updated_at || job.created_at)}` }
-function stateLabel(status) { return ({ queued: '排队中', admitting: '校验来源', snapshotting: '冻结来源', design_reviewing: '课程设计', composing: '生成页面', trace_reviewing: '来源审核', quality_reviewing: '质量审核', auto_revising: '定向修订', rendering: '渲染课件', validating: '发布校验', publishing: '自动发布', approved_pending_publish: '等待发布', published: '已发布', published_with_warnings: '已发布（有警告）', failed: '失败', rejected_admission: '来源未通过', release_blocked: '发布受阻', quarantined: '已隔离', cancelled: '已取消', timed_out: '已超时' }[status] || status || '等待中') }
-function optionLabel(key) { return ({ learning_goal: '学习目标', expected_duration_minutes: '预计时长' }[key] || key) }
-function qualityPercent(value) { return typeof value === 'number' ? `${Math.round(value * 100)}%` : '未测量' }
-function stageDescription(stage) { if (stage.id === currentJob.value?.status) return '正在执行'; if (published.value && stage.id !== 'published') return '已完成'; return '' }
+function profileLabel(profile) {
+  return `${trackName(profile.knowledge_base_id)} / ${profile.skill_level || '未分级'}`
+}
+function trackName(id) {
+  return tracks.value.find((track) => track.track_id === id)?.name || id || '未命名方向'
+}
+function jobLabel(job) {
+  return `${stateLabel(job.status)} / ${String(job.run_id).slice(0, 8).toUpperCase()} / ${formatDateTime(job.updated_at || job.created_at)}`
+}
+function stateLabel(status) {
+  return ({
+      queued: '排队中',
+      admitting: '校验来源',
+      snapshotting: '冻结来源',
+      design_reviewing: '课程设计',
+      composing: '生成页面',
+      trace_reviewing: '来源审核',
+      quality_reviewing: '质量审核',
+      auto_revising: '定向修订',
+      rendering: '渲染课件',
+      validating: '发布校验',
+      publishing: '自动发布',
+      approved_pending_publish: '等待发布',
+      published: '已发布',
+      published_with_warnings: '已发布（有警告）',
+      failed: '失败',
+      rejected_admission: '来源未通过',
+      release_blocked: '发布受阻',
+      quarantined: '已隔离',
+      cancelled: '已取消',
+      timed_out: '已超时'
+    }[status] || status || '等待中')
+}
+function optionLabel(key) {
+  return ({ learning_goal: '学习目标', expected_duration_minutes: '预计时长' }[key] || key)
+}
+function qualityPercent(value) {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : '未测量'
+}
+function stageDescription(stage) {
+  if (stage.id === currentJob.value?.status) return '正在执行';
+  if (published.value && stage.id !== 'published') return '已完成';
+  return ''
+}
 function snakeStepPosition(index) {
   const columns = 3
   const row = Math.floor(index / columns)
   const positionInRow = index % columns
   return { gridRow: row + 1, gridColumn: row % 2 === 0 ? positionInRow + 1 : columns - positionInRow }
 }
-function retryableScene(scene) { return ['failed', 'retry_queued', 'revision_required'].includes(scene.status) }
-function stopTracking() { stream?.close(); stream = null; if (pollTimer) { window.clearInterval(pollTimer); pollTimer = null } }
+function retryableScene(scene) {
+  return ['failed', 'retry_queued', 'revision_required'].includes(scene.status)
+}
+
 function activeRunStorageKey(learnerId = selectedLearnerId.value) {
   return learnerId ? `${ACTIVE_RUN_STORAGE_KEY}:${learnerId}` : ACTIVE_RUN_STORAGE_KEY
 }
@@ -166,51 +247,155 @@ function syncRoute(runId = selectedRunId.value) {
   }
   if (props.embedded) return
   localStorage.setItem(WORKSPACE_KIND_STORAGE_KEY, 'courseware')
-  router.replace({ query: { ...route.query, kind: 'courseware', learnerId: selectedLearnerId.value || undefined, runId: runId || undefined } })
+  router.replace({
+    query: {
+      ...route.query,
+      kind: 'courseware',
+      learnerId: selectedLearnerId.value || undefined,
+      runId: runId || undefined
+    }
+  })
 }
-function selectDefaultSources() { selectedSourceIds.value = sourceCandidates.value.map((item) => item.resource_id).slice(0, 8) }
-function openCreateDialog() { selectDefaultSources(); sourceDialogVisible.value = true }
+function selectDefaultSources() {
+  selectedSourceIds.value = sourceCandidates.value.map((item) => item.resource_id).slice(0, 8)
+}
+function openCreateDialog() {
+  selectDefaultSources();
+  sourceDialogVisible.value = true
+}
 
-async function loadProfiles() { if (props.embedded) return; const [profileRes, domainRes] = await Promise.all([profileApi.list({ page: 1, page_size: 50 }), knowledgeApi.listDomains()]); profiles.value = profileRes.data.items || profileRes.data.profiles || []; tracks.value = (domainRes.data.domains || []).flatMap((domain) => domain.tracks || []); if (!profiles.value.some((item) => item.learner_id === selectedLearnerId.value)) selectedLearnerId.value = profiles.value[0]?.learner_id || '' }
-async function loadSourceResources() { if (props.embedded) { sourceResources.value = props.sourceResources.map((item) => ({ ...item, resource_id: item.resource_id || item.id })); selectDefaultSources(); return } if (!selectedLearnerId.value) { sourceResources.value = []; return } const response = await resourceLibraryApi.listByLearner(selectedLearnerId.value); sourceResources.value = (response.data || []).filter((item) => item.resource_kind !== 'interactive_courseware').map((item) => ({ ...item, resource_id: item.resource_id || item.id })); selectDefaultSources() }
-async function loadJobs() {
-  if (!selectedLearnerId.value) { jobs.value = []; currentJob.value = null; return }
-  const restoredRunId = rememberedRunId()
+async function loadProfiles() {
+  if (props.embedded) return
+  const request = profileRequests.capture()
   try {
-    const response = await coursewareApi.listJobs(selectedLearnerId.value)
-    jobs.value = response.data.items || []
+    const [profileRes, domainRes] = await Promise.all([
+      profileApi.list({ page: 1, page_size: 50 }),
+      knowledgeApi.listDomains(),
+    ])
+    if (!request.isCurrent()) return
+    profiles.value = profileRes.data.items || profileRes.data.profiles || []
+    tracks.value = (domainRes.data.domains || []).flatMap((domain) => domain.tracks || [])
+    if (!profiles.value.some((item) => item.learner_id === selectedLearnerId.value)) selectedLearnerId.value = profiles.value[0]?.learner_id || ''
   } catch (error) {
-    // A rolling local deployment can temporarily run an API process from
-    // before the list endpoint was added. The task itself still has a stable
-    // detail endpoint, so never make an already-created task disappear.
-    jobs.value = []
-    if (!restoredRunId) {
-      ElMessage.error(error?.response?.data?.detail || '课件任务列表加载失败')
-      currentJob.value = null
-      return
-    }
-    try {
-      const response = await coursewareApi.getJobDetail(restoredRunId)
-      jobs.value = [response.data]
-    } catch (restoreError) {
-      ElMessage.error(restoreError?.response?.data?.detail || '无法恢复已创建的课件任务')
-      currentJob.value = null
-      return
-    }
+    if (request.isCurrent()) throw error
   }
-  if (!jobs.value.some((job) => job.run_id === selectedRunId.value)) {
-    selectedRunId.value = jobs.value.some((job) => job.run_id === restoredRunId) ? restoredRunId : jobs.value[0]?.run_id || ''
-  }
-  await loadCurrentJob()
 }
-async function loadCurrentJob() { stopTracking(); if (!selectedRunId.value) { currentJob.value = null; connectionStatus.value = 'idle'; return } try { const response = await coursewareApi.getJobDetail(selectedRunId.value); currentJob.value = response.data; const position = jobs.value.findIndex((job) => job.run_id === selectedRunId.value); if (position >= 0) jobs.value.splice(position, 1, { ...jobs.value[position], ...response.data }); syncRoute(); if (terminalStates.has(currentJob.value.status)) { connectionStatus.value = 'terminal'; return } startTracking(selectedRunId.value) } catch (error) { connectionStatus.value = 'error'; ElMessage.error(error?.response?.data?.detail || '课件任务加载失败') } }
-function startTracking(runId) { if (!runId || typeof EventSource === 'undefined') { startPolling(); return } connectionStatus.value = 'live'; stream = new EventSource(coursewareApi.eventsUrl(runId)); stream.addEventListener('courseware_progress', () => { void refreshCurrentJob() }); stream.onerror = () => { stream?.close(); stream = null; startPolling() } }
-function startPolling() { if (pollTimer || terminalStates.has(currentJob.value?.status)) return; connectionStatus.value = 'polling'; pollTimer = window.setInterval(() => void refreshCurrentJob(), 2500) }
-function notifyPublished() { if (!published.value || !currentJob.value?.resource_id || publishedRunId === currentJob.value.run_id) return; publishedRunId = currentJob.value.run_id; emit('published', currentJob.value) }
-async function refreshCurrentJob() { if (!selectedRunId.value) return; try { const response = await coursewareApi.getJobDetail(selectedRunId.value); currentJob.value = response.data; const position = jobs.value.findIndex((job) => job.run_id === selectedRunId.value); if (position >= 0) jobs.value.splice(position, 1, { ...jobs.value[position], ...response.data }); if (terminalStates.has(currentJob.value.status)) { stopTracking(); connectionStatus.value = 'terminal'; notifyPublished() } } catch (_) { startPolling() } }
-async function createCourseware() { if (!selectedSourceIds.value.length) return; busy.value = true; try { const response = await coursewareApi.createJobs(buildCoursewareBatchRequest({ learnerId: selectedLearnerId.value, resourceIds: selectedSourceIds.value, preferences: preferences.value })); const created = response.data.jobs || []; const job = created[0]; sourceDialogVisible.value = false; if (!job) throw new Error('未创建课件任务'); selectedRunId.value = job.run_id; jobs.value = [...created, ...jobs.value.filter((item) => !created.some((createdJob) => createdJob.run_id === item.run_id))]; localStorage.setItem('courseware_active_run_id', job.run_id); syncRoute(job.run_id); await loadCurrentJob(); emit('created', { jobs: created, activeJob: currentJob.value }); ElMessage.success(`已为 ${created.length} 份资源追加互动课件任务。`) } catch (error) { ElMessage.error(error?.response?.data?.detail || error?.response?.data?.message || '互动课件创建失败') } finally { busy.value = false } }
-async function retryJob() { busy.value = true; try { await coursewareApi.retryJob(selectedRunId.value); await refreshCurrentJob(); ElMessage.success('已提交课件重试') } catch (error) { ElMessage.error(error?.response?.data?.detail || '课件重试失败') } finally { busy.value = false } }
-async function retryScene(sceneId) { busy.value = true; try { await coursewareApi.retryScene(selectedRunId.value, sceneId); await refreshCurrentJob(); ElMessage.success('已提交页面级重试') } catch (error) { ElMessage.error(error?.response?.data?.detail || '页面重试失败') } finally { busy.value = false } }
+async function loadSourceResources() {
+  const request = sourceRequests.capture()
+  if (!request.isCurrent()) return
+  if (props.embedded) {
+    availableSourceResources.value = props.sourceResources.map((item) => ({ ...item, resource_id: item.resource_id || item.id }));
+    selectDefaultSources();
+    return
+  }
+  if (!selectedLearnerId.value) {
+    availableSourceResources.value = [];
+    selectedSourceIds.value = []
+    return
+  }
+  const learnerId = selectedLearnerId.value
+  try {
+    const response = await resourceLibraryApi.listByLearner(learnerId)
+    if (!request.isCurrent()) return
+    availableSourceResources.value = (response.data || []).filter((item) => item.resource_kind !== 'interactive_courseware').map((item) => ({ ...item, resource_id: item.resource_id || item.id }));
+    selectDefaultSources()
+  } catch (error) {
+    if (request.isCurrent()) throw error
+  }
+}
+const { stopTracking, dispose: disposeTracking, loadJobs, loadCurrentJob, refreshCurrentJob } = useCoursewareTracking({
+  selectedLearnerId, selectedRunId, jobs, currentJob, connectionStatus, published,
+  rememberedRunId, syncRoute, emit, messages: ElMessage,
+})
+
+function refreshSelectedJob() { return refreshCurrentJob(selectedRunId.value) }
+
+function invalidateCurrentAction() {
+  actionContextVersion += 1
+  createRequests.invalidate()
+  actionRequests.invalidate()
+  busyRequests.invalidate()
+  busy.value = false
+}
+
+function clearSelectedWorkspace() {
+  stopTracking()
+  invalidateCurrentAction()
+  jobs.value = []
+  currentJob.value = null
+  connectionStatus.value = 'idle'
+}
+
+async function createCourseware() {
+  if (!selectedSourceIds.value.length) return;
+  const learnerId = selectedLearnerId.value
+  const resourceIds = [...selectedSourceIds.value]
+  const request = createRequests.capture()
+  const busyRequest = busyRequests.capture()
+  busy.value = true;
+  try {
+    const response = await coursewareApi.createJobs(buildCoursewareBatchRequest({
+      learnerId,
+      resourceIds,
+      preferences: preferences.value
+    }));
+    if (!request.isCurrent()) return
+    const created = response.data.jobs || [];
+    const job = created[0];
+    sourceDialogVisible.value = false;
+    if (!job) throw new Error('未创建课件任务');
+    selectedRunId.value = job.run_id;
+    jobs.value = [...created, ...jobs.value.filter((item) => !created.some((createdJob) => createdJob.run_id === item.run_id))];
+    localStorage.setItem('courseware_active_run_id', job.run_id);
+    syncRoute(job.run_id);
+    await loadCurrentJob();
+    if (!request.isCurrent()) return
+    emit('created', { jobs: created, activeJob: currentJob.value });
+    ElMessage.success(`已为 ${created.length} 份资源追加互动课件任务。`)
+  } catch (error) {
+    if (request.isCurrent()) ElMessage.error(error?.response?.data?.detail || error?.response?.data?.message || '互动课件创建失败')
+  } finally {
+    if (busyRequest.isCurrent()) busy.value = false
+  }
+}
+async function retryJob() {
+  const learnerId = selectedLearnerId.value
+  const runId = selectedRunId.value
+  if (!runId) return
+  const request = actionRequests.capture()
+  const busyRequest = busyRequests.capture()
+  busy.value = true;
+  try {
+    await coursewareApi.retryJob(runId);
+    if (!request.isCurrent() || learnerId !== selectedLearnerId.value) return
+    await refreshCurrentJob(runId);
+    if (!request.isCurrent()) return
+    ElMessage.success('已提交课件重试')
+  } catch (error) {
+    if (request.isCurrent()) ElMessage.error(error?.response?.data?.detail || '课件重试失败')
+  } finally {
+    if (busyRequest.isCurrent()) busy.value = false
+  }
+}
+async function retryScene(sceneId) {
+  const learnerId = selectedLearnerId.value
+  const runId = selectedRunId.value
+  if (!runId || !sceneId) return
+  const request = actionRequests.capture()
+  const busyRequest = busyRequests.capture()
+  busy.value = true;
+  try {
+    await coursewareApi.retryScene(runId, sceneId);
+    if (!request.isCurrent() || learnerId !== selectedLearnerId.value) return
+    await refreshCurrentJob(runId);
+    if (!request.isCurrent()) return
+    ElMessage.success('已提交页面级重试')
+  } catch (error) {
+    if (request.isCurrent()) ElMessage.error(error?.response?.data?.detail || '页面重试失败')
+  } finally {
+    if (busyRequest.isCurrent()) busy.value = false
+  }
+}
 function openPublishedResource() {
   if (!currentJob.value?.resource_id) return
   if (props.embedded) {
@@ -221,23 +406,73 @@ function openPublishedResource() {
   // resource library can select the published courseware instead of falling
   // back to an unrelated batch (or showing an empty state).
   router.push({
-    path: '/resources',
-    query: {
-      learnerId: selectedLearnerId.value,
-      runId: currentJob.value.source_batch_id || currentJob.value.run_id,
-      resourceId: currentJob.value.resource_id,
-    },
+      path: '/resources',
+      query: {
+        learnerId: selectedLearnerId.value,
+        runId: currentJob.value.source_batch_id || currentJob.value.run_id,
+        resourceId: currentJob.value.resource_id,
+      },
   })
 }
-function openLearningResources() { router.push({ path: '/resources', query: { learnerId: selectedLearnerId.value || undefined } }) }
-async function handleLearnerChange() { localStorage.setItem('last_learner_id', selectedLearnerId.value); selectedRunId.value = ''; await Promise.all([loadSourceResources(), loadJobs()]) }
-async function handleRunChange() { await loadCurrentJob() }
-watch(() => props.learnerId, async (learnerId) => { if (!props.embedded || learnerId === selectedLearnerId.value) return; stopTracking(); selectedLearnerId.value = learnerId || ''; selectedRunId.value = ''; await Promise.all([loadSourceResources(), loadJobs()]) })
-watch(() => props.activeRunId, async (runId) => { if (!props.embedded || !runId || runId === selectedRunId.value) return; stopTracking(); selectedRunId.value = runId; await loadCurrentJob() })
-watch(() => props.sourceResources, () => { if (props.embedded) void loadSourceResources() }, { deep: true })
-onMounted(async () => { await loadProfiles(); await Promise.all([loadSourceResources(), loadJobs()]) })
-onBeforeUnmount(stopTracking)
+function openLearningResources() {
+  router.push({ path: '/resources', query: { learnerId: selectedLearnerId.value || undefined } })
+}
+async function handleLearnerChange() {
+  profileRequests.invalidate()
+  sourceRequests.invalidate()
+  createRequests.invalidate()
+  clearSelectedWorkspace()
+  localStorage.setItem('last_learner_id', selectedLearnerId.value);
+  selectedRunId.value = '';
+  availableSourceResources.value = []
+  selectedSourceIds.value = []
+  await Promise.all([loadSourceResources(), loadJobs()])
+}
+async function handleRunChange() {
+  stopTracking()
+  invalidateCurrentAction()
+  currentJob.value = null
+  connectionStatus.value = 'idle'
+  await loadCurrentJob()
+}
+watch(() => props.learnerId, async (learnerId) => {
+    if (!props.embedded || learnerId === selectedLearnerId.value) return;
+    profileRequests.invalidate()
+    sourceRequests.invalidate()
+    createRequests.invalidate()
+    clearSelectedWorkspace()
+    selectedLearnerId.value = learnerId || '';
+    selectedRunId.value = '';
+    availableSourceResources.value = []
+    selectedSourceIds.value = []
+    await Promise.all([loadSourceResources(), loadJobs()])
+}, { flush: 'sync' })
+watch(() => props.activeRunId, async (runId) => {
+    if (!props.embedded || !runId || runId === selectedRunId.value) return;
+    stopTracking();
+    invalidateCurrentAction()
+    currentJob.value = null
+    connectionStatus.value = 'idle'
+    selectedRunId.value = runId;
+    await loadCurrentJob()
+}, { flush: 'sync' })
+watch(() => props.sourceResources, () => {
+    if (props.embedded) void loadSourceResources()
+  }, { deep: true })
+onMounted(async () => {
+    await loadProfiles();
+    await Promise.all([loadSourceResources(), loadJobs()])
+})
+onBeforeUnmount(() => {
+    profileRequests.dispose()
+    sourceRequests.dispose()
+    createRequests.dispose()
+    actionRequests.dispose()
+    busyRequests.dispose()
+    disposeTracking()
+})
 defineExpose({ openCreateDialog, refreshCurrentJob })
+
 </script>
 
 <style scoped>

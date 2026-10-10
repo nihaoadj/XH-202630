@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareReviewDecision
+from app.models.courseware.content import CoursewareReviewDecision
 from app.core.courseware.components import component_asset_matrix, is_registered_component
 from app.core.courseware.live_model import live_model_config_from_file
 
@@ -165,7 +165,7 @@ def test_planner_accepts_pydantic_learning_objectives_in_live_path(monkeypatch):
     from types import SimpleNamespace
 
     import app.agents.resource_workflows.interactive_courseware.planner_agent as planner
-    from app.agents.resource_workflows.interactive_courseware.contracts import (
+    from app.models.courseware.content import (
         CoursewarePlanEnrichmentV2,
         CoursewareScenePlan,
         CoursewareSpec,

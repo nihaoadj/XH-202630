@@ -345,18 +345,20 @@ class MemoryMasteryRepository(BaseMasteryRepository):
         return profile.profile_version
 
     def list_states(self, learner_id, knowledge_base_id):
-        return [
-            deepcopy(value)
-            for key, value in sorted(self._states.items())
-            if key[:2] == (learner_id, knowledge_base_id)
-        ]
+        with self._lock:
+            return [
+                deepcopy(value)
+                for key, value in sorted(self._states.items())
+                if key[:2] == (learner_id, knowledge_base_id)
+            ]
 
     def list_events(self, learner_id, knowledge_base_id):
-        values = [
-            deepcopy(value) for value in self._events.values()
-            if value.learner_id == learner_id and value.knowledge_base_id == knowledge_base_id
-        ]
-        return sorted(values, key=lambda item: (item.occurred_at, item.evidence_id))
+        with self._lock:
+            values = [
+                deepcopy(value) for value in self._events.values()
+                if value.learner_id == learner_id and value.knowledge_base_id == knowledge_base_id
+            ]
+            return sorted(values, key=lambda item: (item.occurred_at, item.evidence_id))
 
 
 class SQLMasteryRepository(BaseMasteryRepository):

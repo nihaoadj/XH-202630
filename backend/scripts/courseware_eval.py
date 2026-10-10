@@ -10,7 +10,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.courseware.evaluation import build_deterministic_fixture, evaluate_courseware_case, execute_workflow_case
+from app.core.courseware.evaluation import build_deterministic_fixture, evaluate_courseware_case
+from scripts.courseware_harness.offline import execute_workflow_case
 
 
 def main() -> int:

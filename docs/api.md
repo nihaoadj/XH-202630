@@ -458,6 +458,8 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 
 请求体为 `{ "publish": true|false }`。资源须属于本人且处于待决策状态，Claim 指标完整、通过率达到配置阈值且无矛盾事实；服务端重新校验后返回 `{ "resource": Resource }`。同一已完成决定可幂等返回，不符合当前状态或门禁返回 409，资源不可访问返回 404。它只决定符合条件的文本资源是否分发。
 
+同一决定重试会检查并补写缺失审计事件，不重复提交决定，也不重复已有事件。反馈 Attempt 的同幂等键重试同样补齐六个事件，保持原顺序；补写时间只用于缺失事件。
+
 旧文本 `GET /api/resources/items/{resource_id}/preview` 当前没有注册路由。互动课件使用 `/api/resources/courseware/items/{resource_id}/preview`；文本仍使用 9.3 的 Markdown 详情。
 
 ### 9.5 `GET /api/resource-library/{learner_id}`
@@ -467,6 +469,8 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 ### 9.6 `POST /api/resources/batches/{batch_id}/continuations`
 
 创建同一批次的新文本 Run，用于追加、全批重试或单资源重试。必填 `learner_id` 和 `resource_types`；可选 `instructions`、`include_claim_check`、`source_run_id`、`replace_source_run`、`replace_existing_types`。返回 `GenerationJobCreateResponse`，包含新 `run_id` 和沿用的 `batch_id`。追加不覆盖旧审计记录；完整重试可标记源 Run 被替代，单项重试仅替换对应类型的学习者可见投影。
+
+标准 SQL/Memory 仓储下，任务创建、反馈关联、源 Run 替代及画像准备由用例事务协调；关联/提交失败会回滚，调度失败保留 failed 任务。相同成功请求再次调用仍创建新 Run；本接口没有新增请求体去重或幂等键。API 在事务成功后才注册后台执行，提交后进程中断的精确重放仍需独立部署证据。
 
 服务端从源任务冻结请求继承知识库、目标、难度和约束，验证源 Run 归属，再附加有界 continuation 摘要；省略 Claim 选项时沿用源请求，显式开启仍要求普通审核。源任务 / 批次不可访问为 404，冻结请求不可用为 409，输入非法为 422，依赖未就绪为 503。生成页的重试使用本路径；当前没有独立的 `resource-specs/.../representations/.../retry` 文本 API。
 
@@ -754,7 +758,7 @@ Invoke-RestMethod -Method Post `
 
 ## 15. P0-09 接口验收口径
 
-P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py --offline` 使用 FakeGateway / 固定 fixture；`--live` 只有显式环境开关时才调用 Provider。旧 `--runtime` 尚未适配前端 `features/<domain>/`，读取已不存在的旧页面会失败，部分静态判定仍对应旧反馈和报告字段；该模式还会启动 TestClient lifespan，触发数据库初始化与启动对账。修复前不能据其结果判断当前 API 或前端缺少能力，当前工程验收使用统一 acceptance，实际环境再按 [Demo Runbook](demo-runbook.md) 检查。
+P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py --offline` 使用 FakeGateway / 固定 fixture；`--live` 只有显式环境开关时才调用 Provider。`--runtime` 的前端探针已适配 `features/<domain>/`，仅核对 feature、hook、API、组件和 SSE 的源码连线，不证明浏览器交互。该模式启动 TestClient lifespan，触发数据库初始化与启动对账，须在隔离 demo 环境运行。工程验收使用统一 acceptance，实际环境按 [Demo Runbook](demo-runbook.md) 检查。
 
 ## 16. Tutor API
 
@@ -781,7 +785,7 @@ Turn 请求为：
 
 响应包含 `turn_id`、`sequence`、`hint_level`、`pedagogy_action`、`message`、`follow_up_question`、`grounding_status`、`grounding_source`、`source_refs` 和脱敏的模型调用摘要。相同 `client_message_id` 与相同 payload 返回已持久化结果；不同 payload 返回 409 `TUTOR_IDEMPOTENCY_CONFLICT`。Evidence 不足返回 HTTP 200 和 `grounding_status=evidence_insufficient`；会话不存在为 404，关闭会话继续提交为 409，模型超时/认证/请求或结构化输出失败沿用 LLMGateway 的脱敏 503 语义。响应不包含 raw prompt、raw provider response、Chain-of-Thought、密钥或异常堆栈。
 
-当前前端已提供服务端判分的 Formal Attempt、报告图表、Claim 审核报告与资源来源列表；来源列表不等同于完整 Evidence 审计页面。旧 P0-09 Frontend Gate 的文件路径与静态判定需要重新适配，实际能力与端到端证据分别核对。
+当前前端已提供服务端判分的 Formal Attempt、报告图表、Claim 审核报告与资源来源列表；来源列表不等同于完整 Evidence 审计页面。P0-09 Frontend Gate 已更新为现行源码连线检查，实际能力与端到端证据仍按浏览器专项和目标环境分别核对。
 
 ## 互动课件生成、发布与学习事件
 

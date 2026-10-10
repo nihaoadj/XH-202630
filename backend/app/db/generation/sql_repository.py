@@ -60,6 +60,34 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
             )
             db.commit()
 
+    def create_failed(
+        self,
+        run_id: str,
+        learner_id: str,
+        topic: str,
+        knowledge_base_id: Optional[str],
+        request_payload: dict[str, Any],
+        error_message: str,
+        batch_id: str | None = None,
+    ) -> Optional[GenerationJobStatusResponse]:
+        with self.session_factory() as db:
+            orm = GenerationJobORM(
+                run_id=run_id,
+                batch_id=batch_id or run_id,
+                learner_id=learner_id,
+                topic=topic,
+                knowledge_base_id=knowledge_base_id,
+                status="failed",
+                error_message=error_message,
+                request_payload=request_payload,
+                resource_ids=[],
+                finished_at=datetime.now(timezone.utc),
+            )
+            db.add(orm)
+            db.commit()
+            db.refresh(orm)
+            return _to_schema(orm)
+
     def get(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
         with self.session_factory() as db:
             orm = db.query(GenerationJobORM).filter_by(run_id=run_id).first()

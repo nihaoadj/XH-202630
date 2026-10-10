@@ -22,15 +22,15 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.config import get_settings  # noqa: E402
-from app.db.database import (  # noqa: E402
+from app.db.shared.database import (  # noqa: E402
     get_engine,
     get_session_factory,
     init_database,
 )
-from app.db.learner.sql_repository import SQLLearnerRepository  # noqa: E402
-from app.db.models import KnowledgeBaseORM, RagSkillNodeORM  # noqa: E402
-from app.db.resource.sql_repository import SQLResourceRepository  # noqa: E402
-from app.models.schemas import LearnerProfile, LearningResource  # noqa: E402
+from app.db.learners.sql_repository import SQLLearnerRepository  # noqa: E402
+from app.db.shared.models import KnowledgeBaseORM, RagSkillNodeORM  # noqa: E402
+from app.db.learning_documents.sql_repository import SQLResourceRepository  # noqa: E402
+from app.models.learning_documents.schemas import LearnerProfile, LearningResource  # noqa: E402
 
 
 def _free_port() -> int:

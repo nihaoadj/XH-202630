@@ -2,14 +2,14 @@
   "schema_version": "1.0",
   "profiles": {
     "quick": ["backend-smoke", "competition", "frontend-unit"],
-    "regression": ["backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build"],
-    "acceptance": ["backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build", "frontend-browser"]
+    "regression": ["backend-lint", "dependency-check", "pip-check", "frontend-lint", "frontend-typecheck", "backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build"],
+    "acceptance": ["backend-lint", "dependency-check", "pip-check", "frontend-lint", "frontend-typecheck", "backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build", "frontend-browser"]
   },
   "frontend_groups": {
     "unit": [
       "unit/utils/workflowEvents.test.mjs", "tutorState.test.mjs", "learnerMastery.test.mjs",
       "learningReport.test.mjs", "resourceShelfOrder.test.mjs", "coursewareEvents.test.mjs",
-      "coursewareUserJourney.test.mjs", "coursewareSourcePolicy.test.mjs"
+      "coursewareUserJourney.test.mjs", "coursewareSourcePolicy.test.mjs", "requestContextRace.test.mjs"
     ],
     "browser": [
       "landingBrowser.test.mjs", "featureShowcaseBrowser.test.mjs", "dashboardBrowser.test.mjs", "onboardingBrowser.test.mjs",
@@ -19,6 +19,11 @@
     ]
   },
   "suites": [
+    {"id": "backend-lint", "purpose": "后端和脚本的错误预防静态检查", "evidence_type": "static_analysis", "timeout_seconds": 180, "command": ["{python}", "-m", "ruff", "check", "backend/app", "backend/tests", "scripts"]},
+    {"id": "dependency-check", "purpose": "Python 声明、哈希锁和安装版本一致性", "evidence_type": "dependency_metadata", "timeout_seconds": 180, "command": ["{python}", "scripts/check_dependencies.py"]},
+    {"id": "pip-check", "purpose": "Python 安装包依赖兼容性", "evidence_type": "dependency_metadata", "timeout_seconds": 180, "command": ["{python}", "-m", "pip", "check"]},
+    {"id": "frontend-lint", "purpose": "全部前端 src JS/Vue 错误预防检查", "evidence_type": "static_analysis", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/eslint/bin/eslint.js", "src"]},
+    {"id": "frontend-typecheck", "purpose": "请求上下文 guard 的 JSDoc 严格类型检查", "evidence_type": "type_analysis", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/typescript/bin/tsc", "-p", "tsconfig.quality.json"]},
     {"id": "backend-smoke", "purpose": "核心契约、发布策略、指标与测试工具快速回归", "evidence_type": "deterministic", "timeout_seconds": 180, "command": ["{python}", "-m", "pytest", "backend/tests/unit/models", "backend/tests/unit/policies", "backend/tests/unit/reports", "backend/tests/unit/tooling", "-q", "--junitxml={output}/backend-smoke.xml"]},
     {"id": "backend-unit", "purpose": "后端领域与共享能力单元测试", "evidence_type": "deterministic", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/unit", "-q", "--junitxml={output}/backend-unit.xml"]},
     {"id": "backend-integration", "purpose": "API、服务、仓储、工作流集成", "evidence_type": "deterministic", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/integration", "-q", "--junitxml={output}/backend-integration.xml"]},

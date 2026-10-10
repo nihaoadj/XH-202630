@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from app.models.learning_documents.invariants import immutable_resource_payload
 from app.models.learning_documents.schemas import LearningResource
 
 
@@ -61,29 +62,3 @@ def validate_resource_lineage(
         raise ValueError("resource version must increment by one")
     if resource.parent_resource_id != previous.resource_id:
         raise ValueError("resource parent must reference the previous version")
-
-
-def immutable_resource_payload(resource: LearningResource) -> dict[str, Any]:
-    return resource.model_dump(
-        mode="json",
-        include={
-            "resource_id",
-            "learner_id",
-            "topic",
-            "resource_type",
-            "resource_spec_id",
-            "resource_family_id",
-            "representation",
-            "difficulty",
-            "storage_type",
-            "content_text",
-            "knowledge_points",
-            "source_refs",
-            "learning_path_node",
-            "version",
-            "parent_resource_id",
-            "exercise_items",
-            "assessment_payload",
-            "assessment_payload_hash",
-        },
-    )

@@ -3,7 +3,7 @@ from pydantic import ValidationError
 import json
 from pathlib import Path
 
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewareSceneSpec
+from app.models.courseware.content import CoursewareSceneSpec
 
 
 def _block(component):

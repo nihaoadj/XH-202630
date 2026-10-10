@@ -3,12 +3,12 @@
 from types import SimpleNamespace
 
 import pytest
-from app.agents.resource_workflows.interactive_courseware.contracts import (
+from app.models.courseware.content import (
     CoursewareNarrativeEnrichment, CoursewarePracticeEnrichment, CoursewareSceneSpec,
 )
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import compose_courseware_scene
 from app.agents.resource_workflows.interactive_courseware.practice_structure_agent import extract_practice_step_structure
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewarePracticeStepExtraction
+from app.models.courseware.content import CoursewarePracticeStepExtraction
 from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import review_courseware_quality_decision
 from app.core.courseware.renderer import render_courseware
 from app.services.courseware.review import source_trace_review

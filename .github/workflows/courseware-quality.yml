@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "ruff.toml"
+      - "Dockerfile"
+      - ".dockerignore"
       - "backend/**"
       - "frontend/**"
       - "knowledge_base/**"
@@ -13,6 +16,9 @@ on:
       - ".github/workflows/courseware-quality.yml"
   push:
     paths:
+      - "ruff.toml"
+      - "Dockerfile"
+      - ".dockerignore"
       - "backend/**"
       - "frontend/**"
       - "knowledge_base/**"
@@ -32,7 +38,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r backend/requirements.txt
+      - run: pip install --require-hashes -r backend/requirements.lock.txt -r backend/requirements-dev.lock.txt
+      - name: Check Python lint, declarations, locks and installed dependencies
+        run: python scripts/run_tests.py --suite backend-lint --suite dependency-check --suite pip-check --output output/test-runs/ci-quality
       - run: python backend/scripts/courseware_ci_artifacts.py --manifest backend/tests/fixtures/courseware/evals/manifest.json --output backend/courseware-ci-artifacts
       - name: Run backend regression and frozen evaluations
         id: full-backend-tests
@@ -44,6 +52,7 @@ jobs:
           name: courseware-evaluation
           path: |
             output/test-runs/ci-backend
+            output/test-runs/ci-quality
             backend/courseware-ci-artifacts
           if-no-files-found: error
 
@@ -73,7 +82,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r backend/requirements.txt
+      - run: pip install --require-hashes -r backend/requirements.lock.txt
       - name: Require an explicit model credential for live acceptance
         shell: bash
         run: test -n "$LLM_API_KEY"
@@ -100,14 +109,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r backend/requirements.txt
+      - run: pip install --require-hashes -r backend/requirements.lock.txt
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
+      - name: Check all frontend sources and typed request guard
+        run: python scripts/run_tests.py --suite frontend-lint --suite frontend-typecheck --output output/test-runs/ci-frontend-quality
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
       - name: Run frontend unit, build and all browser suites
@@ -123,6 +134,7 @@ jobs:
           name: courseware-browser-evidence
           path: |
             output/test-runs/ci-frontend
+            output/test-runs/ci-frontend-quality
             frontend/tests/test-results
           if-no-files-found: error
 
