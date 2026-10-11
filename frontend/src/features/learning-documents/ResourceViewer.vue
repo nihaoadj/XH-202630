@@ -1,5 +1,6 @@
 <template>
   <article v-for="res in resources" :key="res.resource_id" class="reader-card">
+    <slot name="header" :resource="res" :download="download" :difficulty="difficultyType(res.difficulty)">
     <header class="reader-header">
       <div class="reader-title-wrap">
         <div class="reader-context-title">
@@ -34,6 +35,7 @@
         <slot name="header-end-actions" :resource="res" />
       </div>
     </header>
+    </slot>
 
     <section class="reader-content">
       <div class="content-label"><span></span>学习内容</div>

@@ -2,12 +2,9 @@ import json
 import uuid
 import hashlib
 import logging
-import random
-import re
 from dataclasses import replace
 from collections.abc import Callable
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
 
 from app.agents.learning_agents.feedback_agent import apply_feedback_decision, decide_feedback
 from app.db.feedback.base import BaseFeedbackRepository
@@ -33,7 +30,7 @@ from app.models.feedback.feedback_loop import (
     ProfileVersionRecord,
 )
 from app.models.shared.persistence import WorkflowEventType, canonical_hash
-from app.models.learners.mastery import LearningIntent, MASTERY_CONFIRMATION_THRESHOLD
+from app.models.learners.mastery import LearningIntent
 from app.models.shared.agent_contracts import AssessmentShortAnswerGradeV1
 from app.models.learning_documents.schemas import (
     FeedbackAnswer,
@@ -54,12 +51,7 @@ from app.models.learning_documents.schemas import (
 )
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.llm import LLMCallContext
-from app.models.shared.assessment import (
-    ASSESSMENT_QUESTION_QUOTAS,
-    ASSESSMENT_SCORE_BY_TYPE,
-    ASSESSMENT_SCORE_DECIMAL_PLACES,
-    ASSESSMENT_TOTAL_SCORE,
-)
+from app.models.shared.assessment import ASSESSMENT_TOTAL_SCORE
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.services.knowledge.knowledge import KnowledgeService
 from app.services.generation.jobs import GenerationJobService
@@ -70,44 +62,16 @@ from app.services.feedback.learning_path_policy import mutate_learning_path
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
 from app.db.learning_documents.base import BaseResourceRepository
 from app.core.learning_tiers import difficulty_for_tier
+from app.services.feedback import assessment, recommendations
 
 
 logger = logging.getLogger(__name__)
 
 
-def _round_assessment_score(value: float) -> float:
-    """Round learner-facing assessment scores with decimal half-up semantics."""
-
-    quantum = Decimal("1").scaleb(-ASSESSMENT_SCORE_DECIMAL_PLACES)
-    return float(Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP))
+_round_assessment_score = assessment._round_assessment_score
 
 
-def _weighted_point_scores(question_results: list[dict[str, object]]) -> dict[str, float]:
-    """Aggregate question scores by point using each question's maximum score.
-
-    ``correct_count`` is reserved for fully correct questions. It must not be
-    used as the point score because partial answers still earn score.
-    """
-
-    totals: dict[str, float] = {}
-    maximums: dict[str, float] = {}
-    for item in question_results:
-        point_id = item.get("skill_node_id") or item.get("knowledge_point") or "综合能力"
-        try:
-            score = float(item.get("score") or 0.0)
-            maximum = float(item.get("max_score") or 0.0)
-        except (TypeError, ValueError):
-            continue
-        if maximum <= 0:
-            continue
-        point_id = str(point_id)
-        totals[point_id] = totals.get(point_id, 0.0) + score
-        maximums[point_id] = maximums.get(point_id, 0.0) + maximum
-    return {
-        point_id: total / maximums[point_id]
-        for point_id, total in totals.items()
-        if maximums.get(point_id, 0.0) > 0
-    }
+_weighted_point_scores = assessment._weighted_point_scores
 
 
 class FeedbackService:
@@ -190,6 +154,7 @@ class FeedbackService:
         if existing:
             if existing.attempt.request_hash != request_hash:
                 raise ApplicationError(ErrorCode.FEEDBACK_IDEMPOTENCY_CONFLICT, status_code=409)
+            self._record_feedback_events(existing)
             return self._with_analysis_and_options(existing, profile)
 
         attempt_id = self._stable_id("att", req.learner_id, req.idempotency_key)
@@ -733,29 +698,7 @@ class FeedbackService:
             "feedback_report": feedback_report,
         })
 
-    @staticmethod
-    def _correction_target_ids(result: FeedbackLoopResult) -> list[str]:
-        """Keep a review pack available for any non-perfect assessed attempt.
-
-        The pack remains scoped to the knowledge points covered by this attempt;
-        it is not a generic remediation selector. A perfect attempt has no
-        correction target and therefore does not expose this option.
-        """
-        attempt_results = list(result.attempt.knowledge_point_results)
-        if attempt_results:
-            non_perfect_results = [
-                item for item in attempt_results if (item.score or 0.0) < 1.0
-            ]
-            if not non_perfect_results:
-                return []
-            ordered = sorted(
-                non_perfect_results,
-                key=lambda item: ((item.score if item.score is not None else 0.0), item.knowledge_point_id),
-            )
-            return list(dict.fromkeys(item.knowledge_point_id for item in ordered))[:2]
-        # Preserve legacy attempts that predate per-point results. Their
-        # feedback decision remains the only durable scope available.
-        return list(dict.fromkeys(result.decision.target_knowledge_point_ids))[:2]
+    _correction_target_ids = staticmethod(recommendations._correction_target_ids)
 
     @staticmethod
     def _correction_package_option(
@@ -763,49 +706,11 @@ class FeedbackService:
         profile: LearnerProfile | None,
         result: FeedbackLoopResult,
     ) -> CorrectionPackageOptionV1 | None:
-        if generation_options is None:
-            return None
-        # Correction is scoped to the node(s) assessed in this attempt. The
-        # feedback decision may rewrite its targets to lower-tier prerequisites
-        # for downgrade learning; those must never become review-pack targets.
-        target_ids = FeedbackService._correction_target_ids(result)
-        if not target_ids:
-            return None
-        difficulty = profile.skill_level if profile and profile.skill_level in {"初级", "中级", "高级"} else "中级"
-        candidate_by_id = {
-            item.skill_node_id: item
-            for item in getattr(generation_options, "learning_candidates", [])
-        }
-        candidate_by_id.update({
-            item.skill_node_id: item
-            for item in generation_options.reinforce_weakness
-        })
-        candidate_by_id.update({
-            item.skill_node_id: item
-            for item in generation_options.learn_new_knowledge
-        })
-        serialized = []
-        for point_id in target_ids:
-            item = candidate_by_id.get(point_id)
-            payload = item.model_dump(mode="json") if item is not None else {
-                "skill_node_id": point_id,
-                "name": point_id,
-                "mastery_score": next(
-                    (attempt_item.score for attempt_item in result.attempt.knowledge_point_results
-                     if attempt_item.knowledge_point_id == point_id),
-                    None,
-                ),
-            }
-            payload.update({
-                "skill_node_id": point_id,
-                "priority_group": "correction_target",
-                "reason_codes": ["CURRENT_FEEDBACK_TARGET"],
-            })
-            serialized.append(payload)
-        return CorrectionPackageOptionV1(
-            eligible=True, selectable_targets=serialized,
-            recommended_target_ids=target_ids,
-            recommended_difficulty=difficulty, snapshot_hash=generation_options.snapshot_hash,
+        return recommendations._correction_package_option(
+            generation_options,
+            profile,
+            result,
+            correction_target_ids=FeedbackService._correction_target_ids,
         )
 
     def _downgrade_source_node_ids(self, result: FeedbackLoopResult) -> list[str]:
@@ -843,191 +748,7 @@ class FeedbackService:
             profile, source_node_ids=self._downgrade_source_node_ids(result),
         )
 
-    @staticmethod
-    def _next_step_recommendation(
-        result: FeedbackLoopResult,
-        generation_options,
-        correction_option: CorrectionPackageOptionV1 | None,
-        downgrade_candidates: list | None = None,
-        tier_unlock: tuple[int, int] | None = None,
-    ) -> dict[str, object]:
-        """Return an explainable default without taking the next step for the learner."""
-        if generation_options is None:
-            return {"recommended_action": "review_feedback", "title": "先回顾本次反馈"}
-        new_nodes = [item for item in generation_options.learn_new_knowledge if not item.blocked_by_node_ids]
-        review_nodes = list(generation_options.reinforce_weakness)
-        action = result.decision.action.value
-        learning_candidates = list(getattr(generation_options, "learning_candidates", []))
-        learning_candidate_by_id = {item.skill_node_id: item for item in learning_candidates}
-        default_learning_ids = [
-            node_id for node_id in getattr(
-                generation_options, "recommended_node_ids", []
-            )
-            if node_id in learning_candidate_by_id
-            and not learning_candidate_by_id[node_id].blocked_by_node_ids
-        ][:2]
-        if not default_learning_ids:
-            default_learning_ids = [
-                item.skill_node_id for item in learning_candidates
-                if not item.blocked_by_node_ids
-            ][:2]
-        if tier_unlock:
-            from_tier, to_tier = tier_unlock
-            return {
-                "recommended_action": "upgrade_learning",
-                "learning_mode": "upgrade_learning",
-                "learning_intent": LearningIntent.UPGRADE_LEARNING.value,
-                "title": f"已解锁第 {to_tier} 阶：升阶学习",
-                "description": (
-                    f"恭喜你，已完成第 {from_tier} 阶全部能力节点，"
-                    f"现已解锁第 {to_tier} 阶学习。下一步可以选择第 {to_tier} 阶节点继续学习。"
-                ),
-                "default_learning_node_ids": default_learning_ids,
-                "default_new_node_ids": default_learning_ids,
-                "default_review_node_ids": [],
-                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
-            }
-        if action == "remediate" and downgrade_candidates:
-            default_learning_ids = [
-                item.skill_node_id for item in downgrade_candidates
-                if not item.blocked_by_node_ids
-            ][:2]
-            return {
-                "recommended_action": "downgrade_learning",
-                "learning_mode": "downgrade_learning",
-                "learning_intent": LearningIntent.DOWNGRADE_LEARNING.value,
-                "title": "默认建议：降阶学习",
-                "description": "本次建议来自本轮学习目标的未掌握前置链：可选同阶前置、低阶前置及其前置；系统优先推荐距离目标最近的节点。仅确认低阶节点后才会调整当前学习阶。",
-                "default_learning_node_ids": default_learning_ids,
-                "default_new_node_ids": default_learning_ids,
-                "default_review_node_ids": [],
-                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
-            }
-        if action == "advance" and getattr(generation_options, "recommendation_type", None) == "advance":
-            return {
-                "recommended_action": "upgrade_learning",
-                "learning_mode": "upgrade_learning",
-                "learning_intent": LearningIntent.UPGRADE_LEARNING.value,
-                "title": "默认建议：升阶学习",
-                "description": "优先学习当前所在阶的下一高阶节点，也可以搭配已经学习过的节点；这里只提供建议，不会自动生成。",
-                "default_learning_node_ids": default_learning_ids,
-                "default_new_node_ids": default_learning_ids,
-                "default_review_node_ids": [],
-                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
-            }
-        if action == "remediate" and new_nodes:
-            decision_ids = set(result.decision.target_knowledge_point_ids)
-            downgrade_nodes = [item for item in new_nodes if item.skill_node_id in decision_ids]
-            default_nodes = (downgrade_nodes or new_nodes)[:2]
-            return {
-                "recommended_action": "learn_new", "learning_intent": LearningIntent.LEARN_NEW_KNOWLEDGE.value,
-                "title": "默认建议：补强学习",
-                "description": "当前没有可用的降级学习候选，请从当前阶的可学节点中继续补强；纠错包仍可用于本次错题复习。",
-                "default_new_node_ids": [item.skill_node_id for item in default_nodes],
-                "default_review_node_ids": [],
-                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
-            }
-        if action == "practice" and correction_option and correction_option.eligible:
-            alternative_intent = None
-            alternative_node_ids = []
-            alternative_new_node_ids = []
-            alternative_review_node_ids = []
-            alternative_title = None
-            alternative_description = None
-            alternative = {
-                "alternative_action": "learn_new_and_reinforce" if new_nodes and review_nodes else "learn_new" if new_nodes else None,
-            }
-            if downgrade_candidates:
-                downgrade_ids = [
-                    item.skill_node_id for item in downgrade_candidates
-                    if not item.blocked_by_node_ids
-                ][:2]
-                alternative = {
-                    "alternative_action": "downgrade_learning",
-                }
-                alternative_intent = LearningIntent.DOWNGRADE_LEARNING.value
-                alternative_node_ids = downgrade_ids
-                alternative_title = "降阶学习"
-                alternative_description = "从本轮目标的未掌握前置链补基础，可选同阶前置、低阶前置及其前置；只有确认低阶节点后才会调整当前学习阶。"
-            elif new_nodes and review_nodes:
-                alternative_intent = LearningIntent.LEARN_NEW_AND_REINFORCE.value
-                alternative_new_node_ids = [new_nodes[0].skill_node_id]
-                alternative_review_node_ids = [review_nodes[0].skill_node_id]
-                alternative_node_ids = alternative_new_node_ids + alternative_review_node_ids
-                alternative_title = "一新一旧学习"
-                alternative_description = "兼顾推进与巩固：学习一个新节点，同时复习一个已学习但未完全掌握的节点。"
-            elif new_nodes:
-                alternative_intent = LearningIntent.LEARN_NEW_KNOWLEDGE.value
-                alternative_node_ids = [new_nodes[0].skill_node_id]
-                alternative_title = "学习新节点"
-                alternative_description = "从当前学习阶的可学节点中选择一个继续推进。"
-            if alternative_intent:
-                alternative.update({
-                    "alternative_learning_intent": alternative_intent,
-                    "alternative_learning_node_ids": alternative_node_ids,
-                    "alternative_new_node_ids": alternative_new_node_ids,
-                    "alternative_review_node_ids": alternative_review_node_ids,
-                    "alternative_learning_title": alternative_title,
-                    "alternative_learning_description": alternative_description,
-                })
-            return {
-                "recommended_action": "correction_package",
-                "title": "默认建议：纠错包巩固",
-                "description": (
-                    "本轮处于强化区间，默认先用纠错包巩固本次薄弱点；你也可以选择降阶学习补齐前置。"
-                    if downgrade_candidates else
-                    "本轮处于强化区间，默认先用纠错包巩固本次薄弱点；也可以从当前学习阶选择可学习节点。"
-                ),
-                "default_new_node_ids": [],
-                "default_review_node_ids": correction_option.recommended_target_ids,
-                **alternative,
-            }
-        if action == "advance" and new_nodes and review_nodes:
-            return {
-                "recommended_action": "learn_new_and_reinforce", "learning_intent": LearningIntent.LEARN_NEW_AND_REINFORCE.value,
-                "title": "默认建议：一旧一新",
-                "description": "本轮达到进阶条件，默认同时巩固一个旧节点并学习一个新节点；你也可以改选两个新节点。",
-                "default_new_node_ids": [new_nodes[0].skill_node_id],
-                "default_review_node_ids": [review_nodes[0].skill_node_id],
-                "can_choose_two_new_nodes": len(new_nodes) >= 2,
-                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
-            }
-        if action == "advance" and len(new_nodes) >= 2:
-            return {
-                "recommended_action": "learn_new", "learning_intent": LearningIntent.LEARN_NEW_KNOWLEDGE.value,
-                "title": "默认建议：一个新节点", "description": "本轮没有需要优先巩固的旧节点，默认推荐一个可学习的新节点；你也可以改选两个新节点。",
-                "default_new_node_ids": [new_nodes[0].skill_node_id], "default_review_node_ids": [],
-                "can_choose_two_new_nodes": True,
-                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
-            }
-        if action == "practice" and new_nodes and review_nodes:
-            return {
-                "recommended_action": "learn_new_and_reinforce", "learning_intent": LearningIntent.LEARN_NEW_AND_REINFORCE.value,
-                "title": "建议一新一旧学习", "description": "兼顾推进与巩固：学习一个新节点，同时复习一个已学习但未完全掌握的节点；也可改选纠错包强化。",
-                "default_new_node_ids": [new_nodes[0].skill_node_id],
-                "default_review_node_ids": [review_nodes[0].skill_node_id],
-                "alternative_action": "correction_package" if correction_option and correction_option.eligible else None,
-            }
-        if action == "remediate":
-            return {
-                "recommended_action": "correction_package" if correction_option and correction_option.eligible else "learn_new",
-                "title": "默认建议：纠错包巩固" if not new_nodes else "默认建议：降级学习",
-                "description": "纠错包始终开放，你可以直接巩固本次失败点；也可以选择低阶节点学习。" if new_nodes else "当前优先使用纠错包巩固本次失败点。",
-                "default_new_node_ids": [item.skill_node_id for item in new_nodes[:2]],
-                "default_review_node_ids": [item.skill_node_id for item in review_nodes[:2]],
-                "alternative_action": "learn_new" if new_nodes else None,
-            }
-        if new_nodes:
-            return {
-                "recommended_action": "learn_new", "learning_intent": LearningIntent.LEARN_NEW_KNOWLEDGE.value,
-                "title": "建议选择一个新节点", "description": "默认一次学习一个节点，你可以在同阶范围内选择至多两个新节点。",
-                "default_new_node_ids": [new_nodes[0].skill_node_id], "default_review_node_ids": [],
-            }
-        return {
-            "recommended_action": "correction_package" if correction_option and correction_option.eligible else "review_feedback",
-            "title": "建议复习巩固", "description": "当前没有可推进的新节点，建议先巩固已学习内容。",
-            "default_new_node_ids": [], "default_review_node_ids": [item.skill_node_id for item in review_nodes[:2]],
-        }
+    _next_step_recommendation = staticmethod(recommendations._next_step_recommendation)
 
     def _correction_focus_snapshot(
         self,
@@ -1417,30 +1138,38 @@ class FeedbackService:
             "overall_score": result.attempt.overall_score,
             "knowledge_point_ids": [item.knowledge_point_id for item in result.knowledge_state_updates],
         }
-        self._append_event(run_id, WorkflowEventType.ATTEMPT_SUBMITTED, attempt_id, summary, "submitted")
-        self._append_event(run_id, WorkflowEventType.FEEDBACK_DECISION_STARTED, attempt_id, {"attempt_id": attempt_id}, "started")
-        self._append_event(run_id, WorkflowEventType.FEEDBACK_DECISION_COMPLETED, attempt_id, {
-            **summary, "action": result.decision.action.value, "reason_codes": result.decision.reason_codes,
-        }, "completed")
-        self._append_event(run_id, WorkflowEventType.KNOWLEDGE_STATE_UPDATED, attempt_id, {
-            "attempt_id": attempt_id, "knowledge_point_ids": summary["knowledge_point_ids"], "count": len(result.knowledge_state_updates),
-        }, "applied")
-        self._append_event(run_id, WorkflowEventType.PROFILE_UPDATED, attempt_id, {
-            "attempt_id": attempt_id, "profile_version": result.profile_version,
-        }, "applied")
-        self._append_event(run_id, WorkflowEventType.PATH_MUTATED, attempt_id, {
-            "attempt_id": attempt_id,
-            "mutation_id": result.path_mutation.mutation_id,
-            "path_id": result.path_mutation.path_id,
-            "inserted_node_ids": result.path_mutation.inserted_node_ids,
-            "unlocked_node_ids": result.path_mutation.unlocked_node_ids,
-            "completed_node_ids": result.path_mutation.completed_node_ids,
-        }, "applied")
+        events = (
+            (WorkflowEventType.ATTEMPT_SUBMITTED, summary, "submitted"),
+            (WorkflowEventType.FEEDBACK_DECISION_STARTED, {"attempt_id": attempt_id}, "started"),
+            (WorkflowEventType.FEEDBACK_DECISION_COMPLETED, {
+                **summary, "action": result.decision.action.value, "reason_codes": result.decision.reason_codes,
+            }, "completed"),
+            (WorkflowEventType.KNOWLEDGE_STATE_UPDATED, {
+                "attempt_id": attempt_id, "knowledge_point_ids": summary["knowledge_point_ids"], "count": len(result.knowledge_state_updates),
+            }, "applied"),
+            (WorkflowEventType.PROFILE_UPDATED, {
+                "attempt_id": attempt_id, "profile_version": result.profile_version,
+            }, "applied"),
+            (WorkflowEventType.PATH_MUTATED, {
+                "attempt_id": attempt_id,
+                "mutation_id": result.path_mutation.mutation_id,
+                "path_id": result.path_mutation.path_id,
+                "inserted_node_ids": result.path_mutation.inserted_node_ids,
+                "unlocked_node_ids": result.path_mutation.unlocked_node_ids,
+                "completed_node_ids": result.path_mutation.completed_node_ids,
+            }, "applied"),
+        )
+        for event_type, payload, status in events:
+            # Stop at the first missing event so retries preserve the original order.
+            if not self._append_event(run_id, event_type, attempt_id, payload, status):
+                break
 
-    def _append_event(self, run_id, event_type, subject_id, payload, status, error_code=None):
-        if not run_id or self.audit_repo is None or self.audit_repo.get_run(run_id) is None:
-            return
+    def _append_event(self, run_id, event_type, subject_id, payload, status, error_code=None) -> bool:
+        if not run_id or self.audit_repo is None:
+            return False
         try:
+            if self.audit_repo.get_run(run_id) is None:
+                return False
             self.audit_repo.append_event(
                 run_id,
                 event_type,
@@ -1451,10 +1180,12 @@ class FeedbackService:
                 error_code=error_code,
                 event_id=self._stable_id("evt", run_id, event_type.value, subject_id),
             )
+            return True
         except Exception:
             # Attempt/profile/path facts are already committed; audit outage must not
             # pretend the learner action never happened.
             logger.exception("Feedback audit event failed run_id=%s type=%s", run_id, event_type.value)
+            return False
 
     def process_feedback(self, profile: LearnerProfile, req: FeedbackRequest) -> FeedbackResponse:
         history = self.feedback_repo.list_by_learner(req.learner_id)
@@ -1934,118 +1665,16 @@ class FeedbackService:
         knowledge_service: KnowledgeService,
         limit: int = 10,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
-        questions: list[ResourceEvaluationQuestion] = []
-        answer_key: dict[str, object] = {}
-
-        structured = self._structured_assessment_questions(resource)
-        if structured is not None:
-            for item in structured[:limit]:
-                question_id = str(item["question_id"])
-                options = [f"{choice['option_id']}. {choice['text']}" for choice in item.get("options", [])]
-                questions.append(ResourceEvaluationQuestion(
-                    question_id=question_id, question_type=item["question_type"], question=item["stem"],
-                    options=options, skill_node_id=item.get("skill_node_id"), path_node_id=resource.learning_path_node,
-                    knowledge_point=(item.get("knowledge_point_tags") or [None])[0], difficulty=resource.difficulty,
-                    source="resource",
-                ))
-                answer_key[question_id] = item
-            return questions, answer_key
-
-        generated_items = self._usable_resource_exercises(resource)
-        if generated_items:
-            for item in generated_items[:limit]:
-                question_id = f"{resource.resource_id}:{item.question_id}"
-                questions.append(
-                    ResourceEvaluationQuestion(
-                        question_id=question_id,
-                        question_type=item.question_type,
-                        question=item.question,
-                        options=item.options,
-                        skill_node_id=item.skill_node_id or resource.learning_path_node,
-                        path_node_id=resource.learning_path_node,
-                        knowledge_point=item.knowledge_point,
-                        difficulty=item.difficulty,
-                        diagnostic_dimension=item.diagnostic_dimension,
-                        source="resource",
-                    )
-                )
-                answer_key[question_id] = item.answer
-            return questions, answer_key
-
-        if not profile.knowledge_base_id:
-            return questions, answer_key
-
-        target_skill_nodes = [item for item in self._resource_target_skill_nodes(resource) if item]
-        load_assessment = getattr(knowledge_service, "load_assessment_questions", None)
-        candidates = load_assessment(profile.knowledge_base_id) if load_assessment else []
-        question_source = "assessment_bank"
-        if not candidates:
-            # 兼容尚未配置独立测评题库的其他知识库。
-            candidates = knowledge_service.load_diagnostic_questions(profile.knowledge_base_id)
-            question_source = "knowledge_base"
-        related = [
-            item
-            for item in candidates
-            if target_skill_nodes and item.skill_node_id in target_skill_nodes
-        ]
-        seen_related_ids = {item.question_id for item in related}
-
-        tokens = [resource.topic or "", *(resource.knowledge_points or [])]
-        for item in candidates:
-            if item.question_id in seen_related_ids:
-                continue
-            searchable = " ".join(
-                [
-                    item.question or "",
-                    item.knowledge_point or "",
-                    " ".join(item.options or []),
-                ]
-            )
-            if any(token and token in searchable for token in tokens):
-                related.append(item)
-                seen_related_ids.add(item.question_id)
-
-        if len(related) < limit:
-            select_assessment = getattr(knowledge_service, "select_assessment_questions", None)
-            if question_source == "assessment_bank" and select_assessment:
-                selected = select_assessment(
-                    profile.knowledge_base_id,
-                    # 只有确实命中题库节点时才把路径节点作为硬过滤，兼容历史资源中
-                    # 使用展示名称或旧节点 ID 的 learning_path_node。
-                    skill_node_ids=target_skill_nodes if related else None,
-                    limit=limit,
-                )
-            else:
-                selected = knowledge_service.select_diagnostic_questions(
-                    profile.knowledge_base_id,
-                    limit=limit,
-                )
-            for item in selected:
-                if item.question_id in seen_related_ids:
-                    continue
-                related.append(item)
-                seen_related_ids.add(item.question_id)
-                if len(related) >= limit:
-                    break
-
-        for item in self._order_questions_for_coverage(related)[:limit]:
-            questions.append(
-                ResourceEvaluationQuestion(
-                    question_id=item.question_id,
-                    question_type=item.question_type,
-                    question=item.question,
-                    options=item.options or [],
-                    skill_node_id=item.skill_node_id,
-                    path_node_id=resource.learning_path_node,
-                    knowledge_point=item.knowledge_point,
-                    difficulty=item.difficulty,
-                    diagnostic_dimension=item.metadata.get("diagnostic_dimension"),
-                    source=question_source,
-                )
-            )
-            answer_key[item.question_id] = item.answer
-
-        return questions, answer_key
+        return assessment._build_question_specs(
+            profile,
+            resource,
+            knowledge_service,
+            limit,
+            resource_target_skill_nodes=self._resource_target_skill_nodes,
+            usable_resource_exercises=self._usable_resource_exercises,
+            structured_assessment_questions=self._structured_assessment_questions,
+            order_questions_for_coverage=self._order_questions_for_coverage,
+        )
 
     @staticmethod
     def _resource_target_skill_nodes(resource: LearningResource) -> list[str]:
@@ -2062,95 +1691,11 @@ class FeedbackService:
             if item.question.strip() and item.answer is not None
         ]
 
-    @staticmethod
-    def _structured_assessment_questions(resource: LearningResource) -> list[dict] | None:
-        payload = resource.assessment_payload
-        if payload is None:
-            return None
-        expected_hash = resource.assessment_payload_hash or payload.get("payload_hash")
-        actual_payload = {key: value for key, value in payload.items() if key != "payload_hash"}
-        actual_hash = hashlib.sha256(json.dumps(actual_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-        if not expected_hash or expected_hash != actual_hash:
-            raise ValueError("结构化测试题资源校验失败")
-        blocks = payload.get("node_blocks", [])
-        if not isinstance(blocks, list) or not blocks:
-            raise ValueError("结构化测试题资源内容不完整")
-        rows = []
-        for block in blocks:
-            if not isinstance(block, dict):
-                raise ValueError("结构化测试题资源题型配额无效")
-            for field_name, quota in (
-                ("single_choice_questions", ASSESSMENT_QUESTION_QUOTAS["single_choice"]),
-                ("multiple_choice_questions", ASSESSMENT_QUESTION_QUOTAS["multiple_choice"]),
-                ("short_answer_questions", ASSESSMENT_QUESTION_QUOTAS["short_answer"]),
-            ):
-                values = block.get(field_name)
-                if not isinstance(values, list) or len(values) != quota:
-                    raise ValueError("结构化测试题资源题型配额无效")
-            for field_name in ("single_choice_questions", "multiple_choice_questions", "short_answer_questions"):
-                for question in block.get(field_name, []):
-                    rows.append({**question, "skill_node_id": block.get("skill_node_id"), "skill_node_name": block.get("skill_node_name")})
-        type_totals = {
-            question_type: round(
-                sum(float(item.get("max_score", 0)) for item in rows if item.get("question_type") == question_type),
-                ASSESSMENT_SCORE_DECIMAL_PLACES,
-            )
-            for question_type in ASSESSMENT_QUESTION_QUOTAS
-        }
-        expected_type_totals = {
-            question_type: ASSESSMENT_SCORE_BY_TYPE[question_type] * quota
-            for question_type, quota in ASSESSMENT_QUESTION_QUOTAS.items()
-        }
-        if (
-            not rows
-            or round(sum(float(item.get("max_score", 0)) for item in rows), ASSESSMENT_SCORE_DECIMAL_PLACES) != ASSESSMENT_TOTAL_SCORE
-            or type_totals != expected_type_totals
-        ):
-            raise ValueError("结构化测试题资源内容不完整")
-        return rows
+    _structured_assessment_questions = staticmethod(assessment._structured_assessment_questions)
 
-    @staticmethod
-    def _order_questions_for_coverage(questions: list) -> list:
-        dimensions = ("concept", "scenario", "misconception")
-        ordered = []
-        seen = set()
-        for dimension in dimensions:
-            for question in questions:
-                if question.question_id in seen:
-                    continue
-                diagnostic_dimension = getattr(question, "diagnostic_dimension", None)
-                if diagnostic_dimension is None:
-                    diagnostic_dimension = getattr(question, "metadata", {}).get("diagnostic_dimension")
-                if diagnostic_dimension == dimension:
-                    ordered.append(question)
-                    seen.add(question.question_id)
-        for question in questions:
-            if question.question_id not in seen:
-                ordered.append(question)
-        return ordered
+    _order_questions_for_coverage = staticmethod(assessment._order_questions_for_coverage)
 
-    @staticmethod
-    def _shuffle_question_options(
-        questions: list[ResourceEvaluationQuestion],
-        learner_id: str,
-        session_id: str,
-    ) -> list[ResourceEvaluationQuestion]:
-        """Shuffle fallback-bank choices while preserving generated-resource choices.
-
-        Generated and structured assessment resources already have an authored
-        option order.  Only fallback questions selected from the shared bank
-        need deterministic shuffling to avoid presenting the same bank order
-        to every learner while keeping a session resumable.
-        """
-        shuffled_questions = []
-        for question in questions:
-            options = list(question.options or [])
-            if question.source in {"assessment_bank", "knowledge_base"} and len(options) > 1:
-                seed_material = f"{learner_id}\x1f{session_id}\x1f{question.question_id}"
-                seed = int.from_bytes(hashlib.sha256(seed_material.encode("utf-8")).digest()[:8], "big")
-                random.Random(seed).shuffle(options)
-            shuffled_questions.append(question.model_copy(update={"options": options}))
-        return shuffled_questions
+    _shuffle_question_options = staticmethod(assessment._shuffle_question_options)
 
     @staticmethod
     def _question_result_key(question: ResourceEvaluationQuestion) -> str:
@@ -2209,13 +1754,7 @@ class FeedbackService:
             return max(0.0, min(1.0, ratio))
         return 1.0 if self._answers_match(expected, actual) else 0.0
 
-    @staticmethod
-    def _question_max_score(expected: object) -> float:
-        if isinstance(expected, dict):
-            value = float(expected.get("max_score") or 0.0)
-            if value > 0:
-                return value
-        return 1.0
+    _question_max_score = staticmethod(assessment._question_max_score)
 
     def _short_answer_score(self, question: dict, actual: object) -> float:
         if self.llm_gateway is None:
@@ -2250,20 +1789,7 @@ class FeedbackService:
         score = _round_assessment_score(max(0.0, min(maximum, result.output.score)))
         return score / maximum
 
-    @staticmethod
-    def _normalize_answer_set(value: object) -> set[str]:
-        if value is None:
-            return set()
-        if isinstance(value, (list, tuple, set)):
-            raw_values = value
-        else:
-            raw_values = [value]
-        values = set()
-        for item in raw_values:
-            text = str(item).strip()
-            match = re.match(r"^([A-D])(?:[.、\s]|$)", text, re.I)
-            values.add((match.group(1) if match else text).casefold()) if text else None
-        return values
+    _normalize_answer_set = staticmethod(assessment._normalize_answer_set)
 
     @staticmethod
     def _normalize_answer_value(value: object) -> object:
@@ -2298,108 +1824,17 @@ class FeedbackService:
         questions_per_skill_node: int = 1,
         max_questions: int = 13,
     ) -> tuple[list[ResourceEvaluationQuestion], dict[str, object]]:
-        """Build one question per covered skill node, capped for a focused feedback session."""
-        candidates: list[ResourceEvaluationQuestion] = []
-        answer_key: dict[str, object] = {}
-        seen_question_ids: set[str] = set()
-        structured_resources = self._latest_structured_resources(resources)
-        # A published v2 assessment is authoritative for its batch.  Do not
-        # silently mix it with bank items or truncate its fixed 6-question
-        # node blocks; a corrupt payload is rejected by _build_question_specs.
-        if structured_resources:
-            for resource in structured_resources:
-                questions, keys = self._build_question_specs(profile, resource, knowledge_service, limit=1000)
-                for question in questions:
-                    if question.question_id in seen_question_ids:
-                        raise ValueError("结构化测试题中存在重复题号")
-                    candidates.append(question)
-                    answer_key[question.question_id] = keys[question.question_id]
-                    seen_question_ids.add(question.question_id)
-            return candidates, answer_key
-        skill_nodes = list(dict.fromkeys(
-            resource.learning_path_node for resource in resources if resource.learning_path_node
-        ))
-
-        resources_with_generated_questions = [
-            resource
-            for resource in resources
-            if self._usable_resource_exercises(resource)
-        ]
-        # 任务中只要有资源携带 AI 生成题，就只聚合这些题；只有整个任务均未生成
-        # 可判分题目时，才由每个资源对应的能力节点触发题库回退。
-        question_resources = resources_with_generated_questions or resources
-
-        for resource in question_resources:
-            questions, resource_answer_key = self._build_question_specs(
-                profile,
-                resource,
-                knowledge_service,
-                limit=50,
-            )
-            for question in questions:
-                if question.question_id in seen_question_ids:
-                    continue
-                candidates.append(question)
-                answer_key[question.question_id] = resource_answer_key.get(question.question_id)
-                seen_question_ids.add(question.question_id)
-                if question.skill_node_id and question.skill_node_id not in skill_nodes:
-                    skill_nodes.append(question.skill_node_id)
-
-        if not skill_nodes:
-            selected = candidates[:max_questions]
-            return selected, {item.question_id: answer_key[item.question_id] for item in selected}
-
-        # AI-generated resource exercises can be sparse. Supplement each covered
-        # node from the assessment bank so every node has a comparable check.
-        load_assessment = getattr(knowledge_service, "load_assessment_questions", None)
-        assessment_candidates = load_assessment(profile.knowledge_base_id) if load_assessment else []
-        assessment_source = "assessment_bank"
-        if not assessment_candidates:
-            assessment_candidates = knowledge_service.load_diagnostic_questions(profile.knowledge_base_id)
-            assessment_source = "knowledge_base"
-
-        for skill_node_id in skill_nodes:
-            current_count = sum(question.skill_node_id == skill_node_id for question in candidates)
-            if current_count >= questions_per_skill_node:
-                continue
-            for item in assessment_candidates:
-                if item.question_id in seen_question_ids or item.skill_node_id != skill_node_id:
-                    continue
-                candidates.append(
-                    ResourceEvaluationQuestion(
-                        question_id=item.question_id,
-                        question_type=item.question_type,
-                        question=item.question,
-                        options=item.options or [],
-                        skill_node_id=item.skill_node_id,
-                        path_node_id=skill_node_id,
-                        knowledge_point=item.knowledge_point,
-                        difficulty=item.difficulty,
-                        diagnostic_dimension=item.metadata.get("diagnostic_dimension"),
-                        source=assessment_source,
-                    )
-                )
-                answer_key[item.question_id] = item.answer
-                seen_question_ids.add(item.question_id)
-                current_count += 1
-                if current_count >= questions_per_skill_node:
-                    break
-
-        selected_questions: list[ResourceEvaluationQuestion] = []
-        selected_answer_key: dict[str, object] = {}
-        for skill_node_id in skill_nodes:
-            if len(selected_questions) >= max_questions:
-                break
-            node_questions = self._order_questions_for_coverage(
-                [question for question in candidates if question.skill_node_id == skill_node_id]
-            )[:questions_per_skill_node]
-            for question in node_questions:
-                if len(selected_questions) >= max_questions:
-                    break
-                selected_questions.append(question)
-                selected_answer_key[question.question_id] = answer_key[question.question_id]
-
-        return selected_questions, selected_answer_key
+        return assessment._build_run_question_specs(
+            profile,
+            resources,
+            knowledge_service,
+            questions_per_skill_node,
+            max_questions,
+            build_question_specs=self._build_question_specs,
+            latest_structured_resources=self._latest_structured_resources,
+            usable_resource_exercises=self._usable_resource_exercises,
+            order_questions_for_coverage=self._order_questions_for_coverage,
+        )
 
     @staticmethod
     def _latest_structured_resources(resources: list[LearningResource]) -> list[LearningResource]:

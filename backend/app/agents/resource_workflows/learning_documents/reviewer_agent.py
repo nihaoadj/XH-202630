@@ -6,7 +6,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.resource_workflows.learning_documents.state import AgentState
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.core.retrieval.evidence import source_refs_are_scoped
-from app.core.security.errors import ErrorCode
+from app.core.security.errors import ApplicationError, ErrorCode
 from app.models.shared.agent_contracts import (
     NodeResult,
     PracticeGuidePackageV3,

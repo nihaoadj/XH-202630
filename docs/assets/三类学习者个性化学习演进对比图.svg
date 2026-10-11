@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1300" viewBox="0 0 1800 1300" role="img" aria-labelledby="title desc">
+  <title id="title">三类学习者个性化学习演进对比</title>
+  <desc id="desc">对比初学者、中级学习者和高级学习者在同一学习主题下，从能力诊断、路径选择、资源组合、反馈决策到下一阶段的典型学习演进。</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="0.52" stop-color="#f7fbff"/><stop offset="1" stop-color="#f3f0ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#64748b" flood-opacity="0.13"/>
+    </filter>
+    <marker id="greenArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#2f855a"/></marker>
+    <marker id="blueArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#2878a8"/></marker>
+    <marker id="purpleArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#7357b5"/></marker>
+    <style>
+      text{font-family:"Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif;fill:#18324a}
+      .title{font-size:36px;font-weight:700}.subtitle{font-size:17px;fill:#60758a}.lane-title{font-size:25px;font-weight:700}.persona{font-size:15px;fill:#60758a}
+      .stage{font-size:13px;font-weight:700;letter-spacing:.6px}.h{font-size:19px;font-weight:700}.p{font-size:14.5px;fill:#425d74}.small{font-size:12.5px;fill:#667b8f}
+      .badge{font-size:13px;font-weight:700}.compare{font-size:15px;font-weight:700}.foot{font-size:13.5px;fill:#536d83}
+      .card{fill:#fff;stroke-width:2}.gline{fill:none;stroke:#2f855a;stroke-width:3;marker-end:url(#greenArrow)}.bline{fill:none;stroke:#2878a8;stroke-width:3;marker-end:url(#blueArrow)}.pline{fill:none;stroke:#7357b5;stroke-width:3;marker-end:url(#purpleArrow)}
+      .dash{stroke-dasharray:7 6}.divider{stroke:#d9e3ec;stroke-width:1.5;stroke-dasharray:5 6}
+    </style>
+  </defs>
+
+  <rect width="1800" height="1300" fill="#f7f9fc"/>
+  <rect x="35" y="25" width="1730" height="112" rx="20" fill="url(#header)" stroke="#d4e1ed" filter="url(#shadow)"/>
+  <text x="900" y="72" text-anchor="middle" class="title">三类学习者的个性化学习演进路径</text>
+  <text x="900" y="105" text-anchor="middle" class="subtitle">系统依据能力证据、先修关系与正式测评动态选择起点、资源组合和下一步，而不是套用统一课程</text>
+
+  <!-- lane backgrounds -->
+  <rect x="55" y="170" width="530" height="945" rx="22" fill="#f1faf4" stroke="#a8d8b8" stroke-width="2"/>
+  <rect x="635" y="170" width="530" height="945" rx="22" fill="#f1f8fd" stroke="#a7cee5" stroke-width="2"/>
+  <rect x="1215" y="170" width="530" height="945" rx="22" fill="#f7f4fd" stroke="#c9bce9" stroke-width="2"/>
+
+  <!-- lane headers -->
+  <circle cx="112" cy="221" r="29" fill="#dff3e5" stroke="#6fbd88" stroke-width="2"/><text x="112" y="229" text-anchor="middle" font-size="22" font-weight="700" fill="#237044">①</text>
+  <text x="158" y="216" class="lane-title" fill="#237044">初学者</text><text x="158" y="242" class="persona">零基础或首次接触该领域</text>
+  <rect x="425" y="196" width="125" height="34" rx="17" fill="#dff3e5"/><text x="487" y="218" text-anchor="middle" class="badge" fill="#237044">从基础起步</text>
+
+  <circle cx="692" cy="221" r="29" fill="#dff1fb" stroke="#67a8cf" stroke-width="2"/><text x="692" y="229" text-anchor="middle" font-size="22" font-weight="700" fill="#1f6d98">②</text>
+  <text x="738" y="216" class="lane-title" fill="#1f6d98">中级学习者</text><text x="738" y="242" class="persona">已有基础，但能力节点存在断点</text>
+  <rect x="1005" y="196" width="125" height="34" rx="17" fill="#dff1fb"/><text x="1067" y="218" text-anchor="middle" class="badge" fill="#1f6d98">定向补缺口</text>
+
+  <circle cx="1272" cy="221" r="29" fill="#ebe5fa" stroke="#9b82d3" stroke-width="2"/><text x="1272" y="229" text-anchor="middle" font-size="22" font-weight="700" fill="#6746aa">③</text>
+  <text x="1318" y="216" class="lane-title" fill="#6746aa">高级学习者</text><text x="1318" y="242" class="persona">基础稳定，关注复杂问题与工程优化</text>
+  <rect x="1585" y="196" width="125" height="34" rx="17" fill="#ebe5fa"/><text x="1647" y="218" text-anchor="middle" class="badge" fill="#6746aa">跳过已掌握</text>
+
+  <!-- stage 1 -->
+  <text x="82" y="286" class="stage" fill="#2f855a">01 · 诊断起点</text>
+  <rect x="82" y="300" width="476" height="122" rx="15" class="card" stroke="#78bd90"/>
+  <text x="106" y="333" class="h">画像：大量节点“未测 / 初次学习”</text>
+  <text x="106" y="363" class="p">• 前置概念尚未形成稳定认知</text><text x="106" y="389" class="p">• 自评只作低置信度参考，先从第 1 阶开始</text>
+
+  <text x="662" y="286" class="stage" fill="#2878a8">01 · 诊断起点</text>
+  <rect x="662" y="300" width="476" height="122" rx="15" class="card" stroke="#73b1d3"/>
+  <text x="686" y="333" class="h">画像：基础节点已完成，局部能力薄弱</text>
+  <text x="686" y="363" class="p">• 可直接进入第 2 阶，不重复基础内容</text><text x="686" y="389" class="p">• 重点识别切分、检索、Prompt 等断点</text>
+
+  <text x="1242" y="286" class="stage" fill="#7357b5">01 · 诊断起点</text>
+  <rect x="1242" y="300" width="476" height="122" rx="15" class="card" stroke="#a88ed9"/>
+  <text x="1266" y="333" class="h">画像：基础稳定，高阶节点掌握不均</text>
+  <text x="1266" y="363" class="p">• 跳过已验证节点，直接进入第 3 阶</text><text x="1266" y="389" class="p">• 聚焦混合检索、重排、幻觉控制与评测</text>
+
+  <!-- arrows 1 -->
+  <path d="M320 422V462" class="gline"/><path d="M900 422V462" class="bline"/><path d="M1480 422V462" class="pline"/>
+
+  <!-- stage 2 -->
+  <text x="82" y="478" class="stage" fill="#2f855a">02 · 最可能的首轮路径</text>
+  <rect x="82" y="492" width="476" height="142" rx="15" class="card" stroke="#78bd90"/>
+  <rect x="104" y="514" width="126" height="32" rx="16" fill="#dff3e5"/><text x="167" y="535" text-anchor="middle" class="badge" fill="#237044">第 1 阶 · 基础</text>
+  <text x="106" y="574" class="p">基础概念 → 文档解析 → Embedding</text>
+  <text x="106" y="601" class="p">先建立术语、操作步骤和最小可运行认知</text>
+  <text x="106" y="624" class="small">前置未满足时，不允许直接跳到复杂节点</text>
+
+  <text x="662" y="478" class="stage" fill="#2878a8">02 · 最可能的首轮路径</text>
+  <rect x="662" y="492" width="476" height="142" rx="15" class="card" stroke="#73b1d3"/>
+  <rect x="684" y="514" width="126" height="32" rx="16" fill="#dff1fb"/><text x="747" y="535" text-anchor="middle" class="badge" fill="#1f6d98">第 2 阶 · 中级</text>
+  <text x="686" y="574" class="p">Chunk 切分 → 向量数据库 → 相似度检索</text>
+  <text x="686" y="601" class="p">只补未完成节点，并串联到 Prompt 与引用溯源</text>
+  <text x="686" y="624" class="small">节点范围检索优先提供与薄弱点直接相关的 Evidence</text>
+
+  <text x="1242" y="478" class="stage" fill="#7357b5">02 · 最可能的首轮路径</text>
+  <rect x="1242" y="492" width="476" height="142" rx="15" class="card" stroke="#a88ed9"/>
+  <rect x="1264" y="514" width="126" height="32" rx="16" fill="#ebe5fa"/><text x="1327" y="535" text-anchor="middle" class="badge" fill="#6746aa">第 3 阶 · 进阶</text>
+  <text x="1266" y="574" class="p">混合检索 → Rerank → 幻觉控制 → RAG 评测</text>
+  <text x="1266" y="601" class="p">以工程决策、对比实验和调优策略为主</text>
+  <text x="1266" y="624" class="small">已掌握节点只作为先修证据，不重复占用学习时间</text>
+
+  <!-- arrows 2 -->
+  <path d="M320 634V674" class="gline"/><path d="M900 634V674" class="bline"/><path d="M1480 634V674" class="pline"/>
+
+  <!-- stage 3 resources -->
+  <text x="82" y="690" class="stage" fill="#2f855a">03 · 个性化资源与导学组合</text>
+  <rect x="82" y="704" width="476" height="150" rx="15" class="card" stroke="#78bd90"/>
+  <text x="106" y="738" class="h">讲义 + 实操指南 + 复习清单</text>
+  <text x="106" y="768" class="p">知识库证据约束的基础讲解、循序实操与主动复习</text>
+  <rect x="106" y="790" width="98" height="27" rx="13" fill="#edf8f0"/><text x="155" y="808" text-anchor="middle" class="small">概念脚手架</text>
+  <rect x="216" y="790" width="98" height="27" rx="13" fill="#edf8f0"/><text x="265" y="808" text-anchor="middle" class="small">循序实操</text>
+  <rect x="326" y="790" width="98" height="27" rx="13" fill="#edf8f0"/><text x="375" y="808" text-anchor="middle" class="small">主动回忆</text>
+  <text x="106" y="838" class="small">发布后支持：互动课件 · 证据约束 Tutor</text>
+
+  <text x="662" y="690" class="stage" fill="#2878a8">03 · 个性化资源与导学组合</text>
+  <rect x="662" y="704" width="476" height="150" rx="15" class="card" stroke="#73b1d3"/>
+  <text x="686" y="738" class="h">实操指南 + 案例分析 + 分阶测试题</text>
+  <text x="686" y="768" class="p">围绕薄弱能力节点组织实操与案例，验证场景迁移</text>
+  <rect x="686" y="790" width="98" height="27" rx="13" fill="#eaf5fb"/><text x="735" y="808" text-anchor="middle" class="small">节点定向</text>
+  <rect x="796" y="790" width="98" height="27" rx="13" fill="#eaf5fb"/><text x="845" y="808" text-anchor="middle" class="small">案例迁移</text>
+  <rect x="906" y="790" width="98" height="27" rx="13" fill="#eaf5fb"/><text x="955" y="808" text-anchor="middle" class="small">正式测评</text>
+  <text x="686" y="838" class="small">发布后支持：互动课件 · 证据约束 Tutor</text>
+
+  <text x="1242" y="690" class="stage" fill="#7357b5">03 · 个性化资源与导学组合</text>
+  <rect x="1242" y="704" width="476" height="150" rx="15" class="card" stroke="#a88ed9"/>
+  <text x="1266" y="738" class="h">案例分析 + 分阶测试题 + 复习清单</text>
+  <text x="1266" y="768" class="p">围绕高阶能力节点组织复杂案例、测评与复习巩固</text>
+  <rect x="1266" y="790" width="98" height="27" rx="13" fill="#f0ecfa"/><text x="1315" y="808" text-anchor="middle" class="small">复杂场景</text>
+  <rect x="1376" y="790" width="98" height="27" rx="13" fill="#f0ecfa"/><text x="1425" y="808" text-anchor="middle" class="small">高阶测评</text>
+  <rect x="1486" y="790" width="98" height="27" rx="13" fill="#f0ecfa"/><text x="1535" y="808" text-anchor="middle" class="small">复习巩固</text>
+  <text x="1266" y="838" class="small">发布后支持：互动课件 · 证据约束 Tutor</text>
+
+  <!-- arrows 3 -->
+  <path d="M320 854V894" class="gline"/><path d="M900 854V894" class="bline"/><path d="M1480 854V894" class="pline"/>
+
+  <!-- stage 4 feedback -->
+  <text x="82" y="910" class="stage" fill="#2f855a">04 · 测评后的最可能演进</text>
+  <rect x="82" y="924" width="476" height="164" rx="15" class="card" stroke="#78bd90"/>
+  <text x="106" y="956" class="h">本阶基础节点全部完成，才解锁下一阶</text>
+  <text x="106" y="984" class="p">低于 60%：优先推荐未掌握的前置节点</text>
+  <text x="106" y="1008" class="p">60%–&lt;80%：纠错包 + 再测，补齐当前节点</text>
+  <text x="106" y="1032" class="p">达到 80%：仅表示本次覆盖节点达标</text>
+  <text x="106" y="1056" class="p">第 1 阶全部节点完成 → 解锁第 2 阶</text>
+  <path d="M112 1072H522" stroke="#8dcaa1" stroke-width="3"/><circle cx="168" cy="1072" r="7" fill="#2f855a"/><circle cx="320" cy="1072" r="7" fill="#2f855a"/><circle cx="480" cy="1072" r="10" fill="#237044"/>
+
+  <text x="662" y="910" class="stage" fill="#2878a8">04 · 测评后的最可能演进</text>
+  <rect x="662" y="924" width="476" height="164" rx="15" class="card" stroke="#73b1d3"/>
+  <text x="686" y="956" class="h">低分优先降阶补前置，完成低阶后逐阶解锁</text>
+  <text x="686" y="984" class="p">低于 60%：优先推荐降阶，补学未掌握的前置节点</text>
+  <text x="686" y="1008" class="p">60%–&lt;80%：纠错包 + 再测，继续巩固当前节点</text>
+  <text x="686" y="1032" class="p">达到 80%：仅表示本次覆盖节点达标</text>
+  <text x="686" y="1056" class="p">确认降阶后：低阶全部节点完成，才按规则上升一阶</text>
+  <path d="M692 1072H1102" stroke="#8dc3df" stroke-width="3"/><circle cx="748" cy="1072" r="7" fill="#2878a8"/><circle cx="900" cy="1072" r="10" fill="#1f6d98"/><circle cx="1060" cy="1072" r="7" fill="#2878a8"/>
+
+  <text x="1242" y="910" class="stage" fill="#7357b5">04 · 测评后的最可能演进</text>
+  <rect x="1242" y="924" width="476" height="164" rx="15" class="card" stroke="#a88ed9"/>
+  <text x="1266" y="956" class="h">第 3 阶内动态推进，完成最高阶后收束</text>
+  <text x="1266" y="984" class="p">低于 60%：若有前置候选，推荐降阶补基础</text>
+  <text x="1266" y="1008" class="p">60%–&lt;80%：默认纠错包，可选择降阶备选</text>
+  <text x="1266" y="1032" class="p">本次达标：推荐前置满足的第 3 阶未覆盖节点</text>
+  <text x="1266" y="1056" class="p">第 3 阶全部节点完成 → 标记最高阶完成</text>
+  <path d="M1272 1072H1682" stroke="#b6a3df" stroke-width="3"/><circle cx="1328" cy="1072" r="7" fill="#7357b5"/><circle cx="1480" cy="1072" r="7" fill="#7357b5"/><circle cx="1640" cy="1072" r="10" fill="#6746aa"/>
+
+  <!-- comparison band -->
+  <rect x="55" y="1145" width="1690" height="118" rx="20" fill="#fff" stroke="#cbd9e6" stroke-width="2" filter="url(#shadow)"/>
+  <text x="93" y="1181" class="compare" fill="#365f7d">个性化的共同决策依据</text>
+  <rect x="93" y="1198" width="245" height="38" rx="19" fill="#eef5fa"/><text x="215" y="1223" text-anchor="middle" class="badge" fill="#365f7d">规范能力节点与先修关系</text>
+  <rect x="359" y="1198" width="230" height="38" rx="19" fill="#eef5fa"/><text x="474" y="1223" text-anchor="middle" class="badge" fill="#365f7d">正式测评与掌握度证据</text>
+  <rect x="610" y="1198" width="210" height="38" rx="19" fill="#eef5fa"/><text x="715" y="1223" text-anchor="middle" class="badge" fill="#365f7d">当前学习阶与难度</text>
+  <rect x="841" y="1198" width="210" height="38" rx="19" fill="#eef5fa"/><text x="946" y="1223" text-anchor="middle" class="badge" fill="#365f7d">已发布资源覆盖情况</text>
+  <rect x="1072" y="1198" width="210" height="38" rx="19" fill="#eef5fa"/><text x="1177" y="1223" text-anchor="middle" class="badge" fill="#365f7d">学习者确认的下一步</text>
+  <text x="1710" y="1182" text-anchor="end" class="foot">三条路径是典型示例；系统不会按“初/中/高”标签硬编码课程。</text>
+  <text x="1710" y="1225" text-anchor="end" class="foot">实际路径会随学习与测评结果、学习者画像和节点掌握情况动态调整。</text>
+</svg>

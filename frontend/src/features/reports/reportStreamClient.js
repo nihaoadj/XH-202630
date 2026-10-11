@@ -21,7 +21,14 @@ export class ReportStreamClient {
     this._connect(this.generation)
   }
 
-  stop() { if (this.source) this.source.close(); this.source = null; clearInterval(this.timer); this.timer = null; clearTimeout(this.debounce); this.onStatus('closed') }
+  stop() {
+    this.generation += 1
+    if (this.source) this.source.close()
+    this.source = null
+    clearInterval(this.timer); this.timer = null; clearTimeout(this.debounce)
+    this.pending = false; this.pendingRefresh = false
+    this.onStatus('closed')
+  }
   refresh(force = false) { return this._refresh(this.generation, force) }
 
   _connect(generation) {
@@ -66,9 +73,13 @@ export class ReportStreamClient {
         this.revision = result.revision
         this.onReport(result.data)
       }
+    } catch {
+      if (generation === this.generation) this.onStatus('reconnecting')
     } finally {
-      this.pending = false
-      if (this.pendingRefresh) { this.pendingRefresh = false; this._refresh(generation) }
+      if (generation === this.generation) {
+        this.pending = false
+        if (this.pendingRefresh) { this.pendingRefresh = false; this._refresh(generation) }
+      }
     }
   }
 

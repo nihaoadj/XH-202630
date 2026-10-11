@@ -15,10 +15,10 @@
       class="timeline-alert"
     />
     <el-collapse v-if="resourceExecutions.length" v-model="expandedResourceSections" class="resource-progress-tree">
-      <el-collapse-item name="generation">
+      <el-collapse-item name="generation" class="resource-phase">
         <template #title>
           <div class="resource-tree-title">
-            <span>资源生成</span>
+            <span class="phase-order" aria-hidden="true">01</span><span class="phase-name">资源生成</span>
             <el-tag size="small" effect="plain">{{ progressLabel }}</el-tag>
           </div>
         </template>
@@ -33,10 +33,10 @@
           @open-claim-report="$emit('open-claim-report', $event)"
         />
       </el-collapse-item>
-      <el-collapse-item name="review">
+      <el-collapse-item name="review" class="resource-phase">
         <template #title>
           <div class="resource-tree-title">
-            <span>审核与发布</span>
+            <span class="phase-order" aria-hidden="true">02</span><span class="phase-name">审核与发布</span>
             <el-tag :type="progressSummary.failed ? 'warning' : 'success'" size="small" effect="plain">
               已发布 {{ progressSummary.published }}/{{ progressSummary.total }}
             </el-tag>
@@ -178,7 +178,7 @@ function statusType(status) {
 
 <style scoped>
 .muted {
-  color: #667085;
+  color: #59697b;
   font-size: 13px;
   margin: 4px 0;
 }
@@ -200,48 +200,81 @@ function statusType(status) {
 }
 
 .resource-progress-tree {
-  margin-bottom: 18px;
-  border: 1px solid #dce6ef;
-  border-radius: 9px;
-  background: #fbfdff;
+  position: relative;
+  margin-bottom: 20px;
+  padding-left: 30px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.resource-progress-tree::before {
+  content: '';
+  position: absolute;
+  top: 25px;
+  bottom: 18px;
+  left: 11px;
+  width: 1px;
+  background: #c4d7de;
 }
 
 .resource-progress-tree :deep(.el-collapse-item__header) {
-  height: 43px;
-  padding: 0 12px;
-  border-bottom-color: #e7edf3;
+  min-height: 48px;
+  height: auto;
+  padding: 8px 0;
+  border-bottom-color: transparent;
   background: transparent;
 }
 
 .resource-progress-tree :deep(.el-collapse-item__wrap) {
-  border-bottom-color: #e7edf3;
+  border-bottom: 0;
   background: transparent;
 }
 
 .resource-progress-tree :deep(.el-collapse-item__content) {
-  padding: 10px 12px 13px;
+  padding: 4px 0 18px;
 }
 
 .resource-tree-title {
+  position: relative;
   display: flex;
   width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-right: 8px;
-  color: #2a3f58;
+  padding-right: 4px;
+  color: #172c45;
   font-size: 13px;
   font-weight: 700;
 }
 
+.phase-order { position:absolute; left:-30px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:24px; height:24px; border:1px solid #91b7bd; border-radius:50%; background:#f1f7f8; color:#176b70; font:10px/1 Consolas,monospace; }
+.phase-name { flex:1; min-width:0; line-height:1.5; }
+.resource-tree-title :deep(.el-tag) { flex:0 1 auto; max-width:62%; font-size:10px; }
+
 .workflow-timeline {
-  height: 100%;
-  overflow: hidden;
+  height: auto;
+  overflow: visible;
 }
 
 .workflow-timeline :deep(.el-card__body) {
-  max-height: min(620px, calc(100vh - 230px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  max-height: none;
+  overflow: visible;
 }
+.workflow-timeline :deep(.el-timeline) { padding: 0 0 0 6px; }
+.workflow-timeline :deep(.el-timeline-item__tail) { border-color: #d1dfe5; }
+.workflow-timeline :deep(.el-timeline-item__node) { box-shadow:0 0 0 4px #f3f7fa; }
+.workflow-timeline :deep(.el-timeline-item__wrapper) { padding-left:24px; }
+.workflow-timeline :deep(.el-timeline-item) { padding-bottom:24px; }
+.workflow-timeline :deep(.el-timeline-item__content) { color: #172c45; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.workflow-timeline :deep(.el-timeline-item__timestamp) { color: #59697b; font-size: 11px; line-height: 1.5; }
+.workflow-timeline :deep(.el-timeline-item__content > strong) { font-size: 14px; }
+.workflow-timeline :deep(.el-timeline-item__content > p) { margin: 6px 0; }
+.workflow-timeline :deep(.el-tag) { height: auto; min-height: 24px; padding: 3px 7px; border-radius: 3px; white-space: normal; line-height: 1.5; }
+.workflow-timeline :deep(.el-tag--primary) { color: #176b70; border-color: #bbd9d2; background: #eef7f4; }
+.workflow-timeline :deep(.el-tag--info) { color: #59697b; }
+.workflow-timeline :deep(.el-tag--success) { color: #176b70; border-color: #bbd9d2; background: #eef7f4; }
+.workflow-timeline :deep(.el-tag--warning) { color: #935719; border-color: #e4c59f; background: #fff7ed; }
+.workflow-timeline :deep(.el-tag--danger) { color: #a1322c; border-color: #e8c5c0; background: #fff3f0; }
+.workflow-timeline :deep(.el-button:focus-visible),.workflow-timeline :deep(.el-collapse-item__header:focus-visible) { outline: 2px solid #176b70; outline-offset: -2px; }
 </style>

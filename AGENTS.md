@@ -1,179 +1,86 @@
 # AGENTS.md
 
-本文件适用于整个仓库。若以后在子目录增加更具体的 `AGENTS.md`，则子目录文件只覆盖其作用域内的规则。用户当前请求优先于本文件；需求文档和附件用于提供背景，除非用户明确要求执行其中的计划，否则不能把文档中的待办自动视为本次授权。
+本文件维护本仓库约束；个人偏好沿用全局 `AGENTS.md`，子目录指令只覆盖其作用域。
 
-## 1. 开始工作前
+## 工作边界
 
-1. 先阅读本文件、`README.md`、`git-workflow.md`，以及与任务直接相关的领域文档。
-2. 课件链路以当前代码、`docs/deployment.md` 和 API 文档为准。README 中若仍有旧的扁平目录示例，不得据此恢复旧结构。
-3. 先运行 `git status --short`，确认工作区已有修改。已有修改默认属于用户，不得重置、覆盖或顺手整理无关文件。
-4. 先定位真实实现、公开入口、调用者和测试，再修改代码。不要只建立转发文件来冒充物理迁移，也不要复制两份会逐渐分叉的实现。
-5. 诊断、审核或规划任务默认只读；只有用户要求实现、修复或更新时才写入文件。
+- 分析、审核默认只读；规划可写本次要求的计划文档。实现请求包含适用的计划门禁、范围内修改、验证、修复与文档同步，持续到完成或说明实际阻塞。
+- 开始查看 `git status --short`，保留已有修改。需求文档、附件、计划和历史记忆中的待办不自动构成本次任务。
 
-## 2. 项目定位与技术栈
+## 计划门禁
 
-这是一个以知识库、学习者画像和 Agent 工作流为基础的自动化学习资源生产系统。
+按实际影响选择流程，不以文件数量判断大小：
 
-- 后端：Python 3.11+、FastAPI、LangChain/LangGraph、ChromaDB；当前开发、演示和本轮部署均使用 SQLite。代码保留可选 PostgreSQL 方言分支，但仓库未捆绑驱动，也未完成其迁移与并发验收，不能把它描述为当前生产数据库。
-- 前端：Vue 3、Pinia、Element Plus、ECharts、Vite。
-- 资源类型包括五类文本学习文档，以及独立的互动 HTML 课件。
-- 互动课件追求自动规划、自动生成、自动审核、定向修订、自动降级/隔离和自动发布，不建设管理员或人工审核工作台。
-
-## 3. 当前目录边界
-
-保持 `backend/app` 的既有顶层分层，在每一层内部按业务领域聚合：
-
-```text
-backend/app/
-├── api/          # HTTP 路由、认证依赖、请求解析和响应映射
-├── services/     # 用例编排、事务边界和领域门面
-├── agents/       # 模型调用、Agent 节点和工作流编排
-├── core/         # 跨领域基础能力和确定性运行时
-├── db/           # 会话、仓储和持久化实现
-└── models/       # DTO、领域契约和共享枚举
-```
-
-主要领域包括 `auth`、`users`、`onboarding`、`learners`、`knowledge`、`generation`、`learning_documents`、`courseware`、`feedback`、`tutor`、`reports`、`reviews`、`runs`、`resource_library` 和 `admin`；某一层没有职责时不必创建空实现。
-
-Agent 目录必须保持以下边界：
-
-- `agents/resource_workflows/learning_documents/`：五类文本学习文档工作流及节点。
-- `agents/resource_workflows/interactive_courseware/`：互动课件工作流、状态、专用 Agent、校验和 Worker。
-- `agents/learning_agents/`：诊断、反馈、反馈策略和 Tutor 等学习闭环 Agent。
-- `agents/shared/`：不依赖具体资源领域的纯共享能力。
-
-前端业务代码归入 `frontend/src/features/<domain>/`。跨资源列表可以位于 `resource-library`，但只能做只读聚合和路由选择，不能拥有生成逻辑。
-
-领域含义不得混淆：
-
-- `generation` 负责文本学习文档的生成任务与进度。
-- `learning_documents` 负责五类文本学习文档的读取、发布产物和 Markdown 阅读。
-- `courseware` 负责独立的互动课件生成、运行、预览、打包与发布。
-- `feedback`、`tutor`、`reports` 属于生成后的学习闭环，不属于课件或学习文档工作流。
-
-## 4. 不可破坏的兼容约束
-
-目录重构和功能更新期间，以下公开契约默认保持不变：
-
-- HTTP 路径、请求/响应 DTO、状态码和认证依赖。
-- 容器 provider 名称和既有依赖注入行为。
-- 数据库表名、字段语义、存储路径和事件 payload。
-- 五类学习文档 `text`、`practice`、`assessment`、`case_study`、`checklist` 的生成、审核、Claim、发布、API 响应和 Markdown 阅读行为。
-- 既有错误码、Prompt 版本、工作流节点顺序和路由；若任务只要求迁移路径，不得夹带业务改写。
-
-确需改变公开契约时，必须明确说明影响、同步文档和测试，并在必要时版本化。数据库变更优先使用可回滚、向前兼容的迁移，禁止通过重命名或删除现有表来完成普通目录重构。
-
-同一职责只能有一个真实实现。兼容文件只能做薄转发，并应在调用者全部迁往公开包入口、静态导入扫描和完整回归通过后删除。不要新增新的顶层业务目录来绕过现有分层。
-
-## 5. 互动课件的强制设计规则
-
-### 5.1 自动审核与发布
-
-课件不存在人工审核或管理员审批流程。工作流应完成：准入检查、来源快照、规格规划、场景生成、规则硬门、AI 教学质量审核、定向自动修订、确定性渲染、安全检查、打包和自动发布。
-
-- 可修复问题进入受预算约束的定向修订。
-- 达到修订、token、时延或成本上限后，按策略降级、跳过非必需场景、隔离或拒绝；不得无限重试。
-- 硬门失败的候选产物不得发布。
-- AI 审核不可用时必须执行显式降级策略并记录原因，不得静默把“审核失败”当作“审核通过”。
-- 发布必须幂等；失败重试不得产生重复资源、重复事件或相互覆盖的产物。
-
-### 5.2 模型与运行时边界
-
-- 模型只生成经过版本化校验的结构化契约，不得直接输出或控制 HTML、CSS、JavaScript、URL、CSP 或任意组件名。
-- 组件必须来自平台维护的注册表；未知组件、未知来源块、危险输出、缺失必需场景或快照版本混用均属于硬门失败。
-- `core/courseware/` 拥有确定性 renderer、runtime、安全策略和 packaging；presentation 层不得访问数据库或模型。
-- `CoursewareService` 只负责创建/恢复任务、注入仓储和工作流依赖、执行工作流，以及提供查询与发布门面；Prompt、模型调用和工作流节点应留在课件 Agent 工作流中。
-- 每个可验证事实和关键交互必须能追溯到冻结来源快照。不得把用户原始敏感数据写入课件、日志或评测 fixture。
-
-### 5.3 可靠性事实不能夸大
-
-本地测试通过不等于生产就绪。报告状态时，应区分：
-
-- 确定性单元/集成/端到端测试；
-- 浏览器渲染与交互测试；
-- 可选真实模型评测；
-- SQLite 单 Durable Worker、租约接管、原子 outbox、故障注入和真实部署证据。
-
-除非代码和测试已经证明，不得声称完整实现了原子 claim、租约、退避/死信、真正的工作流 checkpoint、不可变候选产物、SCORM/xAPI 全兼容或生产级队列。评测不得只检查“拒绝/未拒绝”，还应逐步验证精确状态、硬门、fallback、事件和 artifact hash。
-
-## 6. 编码和命名约定
-
-- 优先使用能表达功能或职责的文件名。领域包内不要无理由新增含义模糊的 `routes.py`、`service.py`、`utils.py`；例如审核接口优先使用 `reviews.py`，但不要为了统一命名而在无关任务中批量改名。
-- 外部调用者优先从领域包公开入口导入，避免依赖深层私有实现。
-- API 层保持薄：不直接编写 SQL、调用模型或实现工作流节点。
-- Service 层协调用例，不拥有 Prompt、渲染器或前端展示逻辑。
-- `core` 和 `shared` 不得反向依赖具体业务领域。
-- 新的状态变化和事件处理必须考虑幂等键、稳定排序、重试语义、超时和可观测性。
-- 修改范围保持聚焦；不要对无关文件运行全仓格式化。
-- 注释说明原因和约束，不重复代码表面含义。
-- 不提交 `.env`、密钥、数据库、向量索引、日志、依赖目录、测试缓存、临时报告或真实生成资源。
-
-## 7. 验证要求
-
-从仓库根目录执行命令。Windows PowerShell 示例：
-
-```powershell
-# 后端依赖
-python -m pip install -r backend/requirements.txt
-
-# 后端完整回归
-python -m pytest backend/tests -q
-
-# 按测试层级运行
-python -m pytest backend/tests -m unit -q
-python -m pytest backend/tests -m integration -q
-python -m pytest backend/tests -m migration -q
-python -m pytest backend/tests -m e2e -q
-
-# 课件冻结评测；报告是本地产物，不要提交
-python backend/scripts/courseware_eval.py `
-  --manifest backend/tests/fixtures/courseware/evals/manifest.json `
-  --baseline backend/tests/fixtures/courseware/evals/baseline.json `
-  --output backend/courseware-eval-report.json
-
-# 前端专项与构建
-npm --prefix frontend run test:workflow-events
-npm --prefix frontend run test:tutor
-npm --prefix frontend run test:courseware-browser
-npm --prefix frontend run build
-```
-
-按改动范围选择最低充分验证：
-
-| 改动范围 | 至少验证 |
+| 改动范围 | 处理方式 |
 |---|---|
-| 纯文档 | 链接、路径、命令和完成状态与代码一致 |
-| 单个后端领域 | 该领域单元测试及直接相关集成测试 |
-| API/DTO/认证 | 单元测试、API 集成测试、状态码和响应 fixture |
-| DB/仓储/迁移 | 单元、集成、migration 测试及旧数据兼容 |
-| 学习文档工作流或共享能力 | 五类学习文档的工作流、API、Claim、发布和 Markdown 回归；共享改动应运行后端全量测试 |
-| 互动课件 | 课件单元/集成/e2e、冻结评测、浏览器测试；涉及共享层时再运行学习文档回归 |
-| 前端 | 相关专项测试和 `npm --prefix frontend run build` |
-| 目录物理迁移 | 新旧公开导入扫描、受影响领域回归和后端全量测试 |
+| 功能或业务行为、API/认证契约、数据层/迁移、Agent 工作流、跨领域/架构/目录迁移、部署方式或运行配置调整 | 先完成计划门禁，再修改实现 |
+| 纯文档、注释及局部文案/排版/样式维护，且不改变业务、交互、API、权限或持久化行为 | 直接实施，按原验证要求交付 |
 
-真实模型测试可能消耗额度且依赖外部服务。只有用户明确要求、运行环境已提供预期凭据时才启用 `RUN_LIVE_LLM=1` 或 `COURSEWARE_LIVE_EVAL=1`；不得打印或提交凭据。若无法运行某项验证，应准确说明未运行原因，不能写成“已通过”。
+- 计划存于 `docs/update_plan/T<N>.md`，目录按需创建。每次新更新取已有计划的最大数字编号加一，无计划时从 `T1.md` 开始；按数值排序，不填补空号。同次更新的续作、修订和验收沿用原文件，保留历史计划，不覆盖其他更新。
+- 计划至少记录：更新主题与目标、范围及现状依据、受影响模块、实施步骤、兼容约束、迁移/回滚策略（不适用则注明）、验收命令与通过标准、依赖和待决事项、当前状态。
+- 实施前按既有 Luna 验收规则检查计划。门禁通过须范围和依赖明确、步骤可执行、兼容与数据影响有处理方案、验收满足本文件要求、无阻塞性待决事项；主代理修正缺项并在计划记录结果及原因。未通过前只做定位、规划和证据补充，不修改实现。
+- 门禁通过且现有授权覆盖计划范围时继续实施；缺少必须由用户决定的范围或方案时，先完成不依赖该决策的准备，再请求所需决策。
+- 范围或关键方案变化，先修订原计划并重新过门禁；直接实施的维护若触及需计划的范围，先补计划再继续。实施中更新进展，收尾记录实际验证、遗留事项和最终状态。
 
-## 8. 本地运行
+## 子代理
 
-```powershell
-# 后端
-Set-Location backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+- 最多同时启用 2 个子代理（含派生子代理）。简单且可独立交付的检索、文档检查和既定测试默认委派，使用 `model='gpt-6-luna'`、`reasoning_effort='xhigh'`，`fork_turns='none'` 或少量相关轮次；传入必要输入、预期输出和完成条件。
+- 验收节点自动启动 Luna xhigh，执行主代理选定的检查，返回命令、退出码、失败摘要和证据路径。主代理负责修复与最终交付判断；子代理不扩大检查范围或降低验收门槛。
 
-# 另一个终端，从仓库根目录启动前端
-npm --prefix frontend run dev
-```
+## 资料入口
 
-修改启动方式、部署配置、环境变量或公开端口时，同步更新 `README.md`、`docs/deployment.md` 和示例环境文件。
+按任务读取相关段落，不要求每次通读；实现与状态以当前源码、脚本及对应文档为准。
 
-## 9. 文档与交付
+| 涉及内容 | 入口 |
+|---|---|
+| 安装、运行、测试命令 | [README.md](README.md) |
+| 分层、模块、Agent 归属 | [docs/architecture.md](docs/architecture.md) |
+| HTTP、DTO、认证、状态码、事件 | [docs/api.md](docs/api.md) |
+| 数据库、知识库、问卷、诊断 | [docs/knowledge_base_database.md](docs/knowledge_base_database.md) |
+| 部署、配置、端口、Worker | [docs/deployment.md](docs/deployment.md) |
+| 功能、页面能力 | [docs/features.md](docs/features.md) |
+| 演示、比赛 Gate、故障恢复 | [docs/demo-runbook.md](docs/demo-runbook.md) |
+| 分支、提交与禁提交内容 | [git-workflow.md](git-workflow.md) |
 
-- API 字段、路径或状态码变化：更新 `docs/api.md`。
-- 架构、目录或模块边界变化：更新 `docs/architecture.md` 及相关领域计划。
-- 功能范围变化：更新 `docs/features.md`。
-- 启动或部署变化：更新 `README.md` 和 `docs/deployment.md`。
-- 课件进度文档只保留可验证事实。已实现项可简述，未完成项需说明当前基础、缺口、验收方式及是否依赖生产环境。
+契约、架构、功能变化同步对应文档；启动或配置变化同步 README、部署文档和 [backend/.env.example](backend/.env.example)。未经用户要求，不提交、推送或合并。
 
-交付前必须：检查 `git diff` 和 `git status`；确认没有覆盖用户修改或提交运行时文件；报告实际执行的测试、结果和跳过项；列出仍需真实凭据、CI、浏览器或生产部署才能证明的事项。
+## 实现边界
 
-Git 分支和提交遵循 `git-workflow.md`。普通功能进入 `feature/<name>`，修复进入 `fix/<name>`，文档进入 `docs/<name>`，工程调整进入 `chore/<name>`；提交信息使用 `type(scope): summary`。除非用户明确要求，不代替用户提交、推送或合并。
+- 保持 `backend/app/` 既有分层，各层按领域聚合。API 通过 Service 执行业务，不写 SQL、模型调用或工作流节点；Service 编排用例与事务，Prompt 和节点留在 `agents/`，渲染与运行时留在 `core/`。
+- 文本工作流位于 `agents/resource_workflows/learning_documents/`，正文 Prompt 位于 `agents/resource_agents/`；课件工作流位于 `agents/resource_workflows/interactive_courseware/`，学习闭环 Agent 位于 `agents/learning_agents/`。
+- `generation` 管文本生成任务；`learning_documents` 管发布产物与 Markdown 阅读；`courseware` 管互动课件生成、运行与发布；`feedback`、`tutor`、`reports` 属于生成后的学习闭环。
+- 前端业务位于 `frontend/src/features/<domain>/`，`resource-library` 仅做只读聚合与路由选择。`core/` 和 `agents/shared/` 可使用 `models/` 契约，不反向依赖业务 API、Service 或工作流；不新增顶层业务目录绕过边界。
+
+## 兼容约束
+
+- 除任务明确要求改变外，保留 HTTP/DTO/认证/错误契约、DI provider 与注入行为、表名及字段语义、存储路径和事件 payload。纯路径迁移保持 Prompt 版本、节点顺序及路由，不改业务行为。
+- 保留 `text`、`practice`、`assessment`、`case_study`、`checklist` 的生成、审核、Claim、发布、API 与 Markdown 阅读行为。契约变化说明影响并同步测试，必要时版本化。
+- 数据库迁移优先向前兼容、可回滚；普通目录重构不重命名或删除现有表。同一职责只有一个实现，调用者优先使用公开包入口；薄转发在调用者迁移、导入扫描和完整回归通过后删除，不能冒充物理迁移。
+- 新增状态与事件明确幂等键、稳定排序、重试、超时和可观测性。
+
+## 课件硬门
+
+- 自动审核、定向修订、降级/隔离与发布，不建设人工审核或管理员审批工作台。
+- 模型只输出经版本化校验的结构化契约，不得直接输出或控制 HTML、CSS、JavaScript、URL、CSP 或任意组件名；组件来自平台注册表。未知组件/来源、危险输出、缺失必需场景、快照混用均为硬门失败，不得发布。
+- 可验证事实与关键交互追溯到冻结来源快照；用户原始敏感数据不进入课件、日志或评测 fixture。
+- 修订受次数、token、时延和成本预算约束；耗尽后按策略降级、跳过非必需场景、隔离或拒绝。AI 审核不可用须显式降级并记录原因，不能视为通过。
+- 发布幂等，重试不重复资源或事件、不覆盖已发布产物。`core/courseware/` 拥有 renderer、runtime、安全与 packaging，presentation 不访问数据库或模型；`CoursewareService` 只做任务创建/恢复、依赖注入、工作流执行、查询与发布门面。
+
+## 验证与交付
+
+从仓库根执行，命令见 README“测试运行”；跨领域改动取下表要求的并集。
+
+| 改动范围 | 最低验证 |
+|---|---|
+| 纯文档 | 链接、路径、命令、事实与状态，无需业务回归 |
+| 单个后端领域 | 领域单元与直接相关集成测试 |
+| API、DTO、认证 | 单元、API 集成、状态码与响应 fixture |
+| DB、仓储、迁移 | 单元、集成、`migration` 与旧数据兼容 |
+| 文本文档工作流 | 五类文档工作流、API、Claim、发布与 Markdown 回归 |
+| 互动课件 | 单元、集成、e2e、冻结评测、浏览器；共享层改动再验证文本文档回归 |
+| 前端 | 相关专项测试与构建 |
+| 后端共享能力、物理迁移 | 后端全量；迁移还检查新旧公开导入与受影响领域 |
+
+只有用户明确要求且环境提供预期凭据时，才启用 `RUN_LIVE_LLM=1` 或 `COURSEWARE_LIVE_EVAL=1`；不得打印凭据。课件评测核对精确状态、硬门、fallback、事件与 artifact hash。
+
+收尾检查 `git diff` 与 `git status`，报告实际检查、未运行项及原因。区分确定性、浏览器、真实模型、Worker 故障注入、CI 与部署证据；本地通过不等于生产就绪，可靠性和 SCORM/xAPI 完整兼容结论须有对应证据。

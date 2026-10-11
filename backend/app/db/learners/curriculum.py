@@ -89,7 +89,8 @@ class MemoryCurriculumRepository(BaseCurriculumRepository):
             return self.list_nodes(learner_id, knowledge_base_id)
 
     def list_nodes(self, learner_id, knowledge_base_id):
-        return [deepcopy(value) for key, value in sorted(self._rows.items()) if key[:2] == (learner_id, knowledge_base_id)]
+        with self._lock:
+            return [deepcopy(value) for key, value in sorted(self._rows.items()) if key[:2] == (learner_id, knowledge_base_id)]
 
     def _update(self, key, **changes):
         before = self._rows[key]

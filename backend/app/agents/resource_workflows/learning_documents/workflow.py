@@ -46,7 +46,7 @@ from app.agents.shared.policies import (
     target_resource_types,
 )
 from app.models.knowledge.knowledge import RetrievalStatus
-from app.services.runs.recorded_node import recorded_node
+from app.agents.shared.recorded_node import recorded_node
 
 
 def _review_decision(state: AgentState) -> ReviewDecision:

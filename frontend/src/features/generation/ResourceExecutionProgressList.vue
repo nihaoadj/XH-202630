@@ -2,7 +2,7 @@
   <div class="resource-execution-list">
     <el-empty v-if="!displayExecutions.length" :image-size="44" description="等待资源任务拆解" />
     <div v-else class="execution-grid">
-      <article v-for="item in displayExecutions" :key="item.key" class="execution-card">
+      <article v-for="item in displayExecutions" :key="item.key" class="execution-card" :class="`is-${phaseMeta(item).type}`">
         <div class="execution-card-head">
           <div class="execution-title">
             <strong>{{ item.resource_type || '学习资源' }}</strong>
@@ -166,17 +166,25 @@ function claimStatusLabel(status) {
 
 <style scoped>
 .resource-execution-list { display: grid; gap: 10px; }
-.execution-grid { display: grid; gap: 9px; }
-.execution-card { padding: 11px 12px; border: 1px solid #dce6ef; border-radius: 9px; background: linear-gradient(180deg, #fff, #f8fbfd); }
+.execution-grid { display: grid; gap: 10px; }
+.execution-card { min-width:0; padding:12px; border:1px solid #dce4eb; border-left:2px solid #9eb2c0; border-radius:4px; background:linear-gradient(180deg,#fff,#f9fbfc); }
+.execution-card.is-success { border-left-color:#52978c; }
+.execution-card.is-warning { border-left-color:#b68a52; }
+.execution-card.is-danger { border-left-color:#b45c52; }
 .execution-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; }
 .execution-title { display: flex; min-width: 0; flex: 1 1 auto; flex-wrap: wrap; align-items: baseline; gap: 4px 7px; }
-.execution-card-head strong { min-width: 0; color: #203853; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; white-space: normal; }
-.execution-card-head span { flex: 0 0 auto; color: #75869a; font-size: 11px; }
-.execution-card-head :deep(.el-tag) { flex: 0 0 auto; margin-top: 1px; }
-.execution-objective { display: -webkit-box; margin: 8px 0 0; overflow: hidden; color: #63758b; font-size: 12px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.execution-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 8px; color: #8290a2; font-size: 10px; }
-.execution-error { margin: 8px 0 0; padding: 7px 8px; border-radius: 6px; background: #fff1ef; color: #a34b43; font-size: 11px; line-height: 1.45; }
-.execution-actions { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 7px; }
-.execution-actions :deep(.el-button) { height: 29px; margin: 0; padding: 0 8px; border: 1px solid #e5bc7b; border-radius: 7px; background: #fffaf1; color: #9a5a14; font-size: 11px; font-weight: 650; }
-.execution-actions :deep(.el-button:hover) { border-color: #d99542; background: #fff0d5; color: #7c4307; }
+.execution-card-head strong { min-width: 0; color: #172c45; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; white-space: normal; }
+.execution-title > span { flex: 0 0 auto; color: #59697b; font-size: 10px; }
+.execution-card-head :deep(.el-tag) { flex: 0 1 auto; max-width: 55%; margin-top: 1px; white-space: normal; height: auto; line-height: 1.5; }
+.execution-objective { margin: 9px 0 0; color: #59697b; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.execution-meta { display:flex; flex-wrap:wrap; gap:4px 10px; margin-top:8px; padding-top:8px; border-top:1px solid #e6edf2; color:#59697b; font-size:11px; line-height:1.6; }
+.execution-meta > span { min-width:0; max-width:100%; overflow-wrap:anywhere; }
+.execution-error { margin: 10px 0 0; padding: 9px 10px; border-radius: 3px; background: #fff3f0; color: #a1322c; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.execution-actions { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:4px; }
+.execution-actions :deep(.el-button) { min-height:44px; height:auto; max-width:100%; margin:0; padding:8px 0; border:0; border-radius:2px; background:transparent; color:#176b70; font-size:11px; font-weight:600; }
+.execution-actions :deep(.el-button > span) { white-space:normal; overflow-wrap:anywhere; }
+.execution-actions :deep(.el-button--warning) { color:#935719; }
+.execution-actions :deep(.el-button:hover) { background:transparent; color:#125c60; text-decoration:underline; text-underline-offset:4px; }
+.execution-actions :deep(.el-button--warning:hover) { background:transparent; color:#774312; }
+.execution-actions :deep(.el-button:focus-visible) { outline: 2px solid #176b70; outline-offset: 2px; }
 </style>

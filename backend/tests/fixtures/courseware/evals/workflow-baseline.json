@@ -1,0 +1,241 @@
+{
+  "single-lecture": {
+    "status": "rejected_admission",
+    "artifact_hash": null,
+    "artifact_present": false,
+    "warning_codes": [],
+    "error_code": "COURSEWARE_SOURCE_ADMISSION_REJECTED",
+    "error_message": "源资源类型不受课件工作流支持",
+    "quality_summary": {},
+    "checkpoint_stage": null
+  },
+  "lecture-practice-quiz": {
+    "status": "published_with_warnings",
+    "artifact_hash": "c570f42e5d77a2551ccec082a77c8fb86a74d69d4ee3895a5f89a8235a74b4ec",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "missing-quiz": {
+    "status": "published_with_warnings",
+    "artifact_hash": "dcca931a11c1f3de8540553bc20589aebcfb5e1b996a97920cc7dddc01d85307",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "duplicate-source": {
+    "status": "request_rejected",
+    "artifact_hash": null,
+    "artifact_present": null,
+    "warning_codes": null,
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": null,
+    "checkpoint_stage": null
+  },
+  "empty-source": {
+    "status": "rejected_admission",
+    "artifact_hash": null,
+    "artifact_present": null,
+    "warning_codes": null,
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": null,
+    "checkpoint_stage": null
+  },
+  "unknown-source": {
+    "status": "rejected_admission",
+    "artifact_hash": null,
+    "artifact_present": false,
+    "warning_codes": [],
+    "error_code": "COURSEWARE_SOURCE_ADMISSION_REJECTED",
+    "error_message": "源资源不存在或无权访问",
+    "quality_summary": {},
+    "checkpoint_stage": null
+  },
+  "unsafe-model-content": {
+    "status": "published_with_warnings",
+    "artifact_hash": "ae81e7978e357b499c55313637b03b7d683ff14be810755e2bc0e0eaa42836b0",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "unknown-component": {
+    "status": "quarantined",
+    "artifact_hash": null,
+    "artifact_present": false,
+    "warning_codes": [],
+    "error_code": "COURSEWARE_STORYBOARD_SLOT_MISMATCH",
+    "error_message": "场景未严格填充冻结 Storyboard 槽位: scene_id",
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "unknown-source-block": {
+    "status": "quarantined",
+    "artifact_hash": null,
+    "artifact_present": false,
+    "warning_codes": [],
+    "error_code": "COURSEWARE_STORYBOARD_SLOT_MISMATCH",
+    "error_message": "场景未严格填充冻结 Storyboard 槽位: scene_id",
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "scene-retry-idempotent": {
+    "status": "published_with_warnings",
+    "artifact_hash": "427bda4f541f1904c7fbadc2206973b4f8dd61e703b9bde4652b77cc677a8a48",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "ai-review-revision": {
+    "status": "published_with_warnings",
+    "artifact_hash": "4aeec470c9134aea0abc0bcc405f7bf5b3a743e6b391ebbf75a47a75d0d2fb30",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "ai-review-unresolved": {
+    "status": "published_with_warnings",
+    "artifact_hash": "d17b1c5b6eae776b6a2d8edec669dc55c7f17533e74b4ad1660f28c04cd8e138",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "short-low-interaction": {
+    "status": "published_with_warnings",
+    "artifact_hash": "c2a1ca9fd513ff42bb4195f2d6ee6af51bb28923c16080cea922f67614e27cfc",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "medium-interaction-30m": {
+    "status": "published_with_warnings",
+    "artifact_hash": "d27315589d1c546a325dfd402620ac24219b0699a07ad3e36a59486c1f25e654",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "high-interaction-60m": {
+    "status": "published_with_warnings",
+    "artifact_hash": "65afce3db1425c25196eb557dfe432558eed248e1cf10856b9a286724d203945",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "multi-resource-concept-fusion": {
+    "status": "published_with_warnings",
+    "artifact_hash": "363e12bfd9a6509b4ccf2baf7fd9a86908547d0e9cff319236e7c35de411a7c1",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "duplicate-and-complementary-sources": {
+    "status": "request_rejected",
+    "artifact_hash": null,
+    "artifact_present": null,
+    "warning_codes": null,
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": null,
+    "checkpoint_stage": null
+  },
+  "source-conflict-parallel": {
+    "status": "published_with_warnings",
+    "artifact_hash": "0ba27b15f670ffdc265a444b383d158d3bc131284d1846ba5192b72cd5d9edba",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "constrained-interaction-quota": {
+    "status": "published_with_warnings",
+    "artifact_hash": "7a0336e7a3a5a4e3abc17d9a9e16868e81010e9eacc212fad1b48e02a8d9d0b7",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  },
+  "localized-review-repair": {
+    "status": "published_with_warnings",
+    "artifact_hash": "2a05f941f6a2dfc6683852c634b9db8aed6b6eece1554f1fa9486ff1ba4b1145",
+    "artifact_present": true,
+    "warning_codes": [
+      "COURSEWARE_STAGE_TIMEOUT",
+      "COURSEWARE_STAGE_TIMEOUT"
+    ],
+    "error_code": null,
+    "error_message": null,
+    "quality_summary": {},
+    "checkpoint_stage": "snapshot"
+  }
+}

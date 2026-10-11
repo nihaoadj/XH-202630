@@ -80,8 +80,9 @@ def require_command(command: str) -> str:
 
 
 def install_dependencies(python: Path) -> None:
-    subprocess.run([str(python), "-m", "pip", "install", "-r", str(BACKEND / "requirements.txt")], check=True)
-    subprocess.run([require_command("npm"), "install"], cwd=FRONTEND, check=True)
+    for lock in ("requirements.lock.txt", "requirements-dev.lock.txt"):
+        subprocess.run([str(python), "-m", "pip", "install", "--require-hashes", "-r", str(BACKEND / lock)], check=True)
+    subprocess.run([require_command("npm"), "ci"], cwd=FRONTEND, check=True)
 
 
 def verify_runtime_dependencies(python: Path, include_frontend: bool) -> None:

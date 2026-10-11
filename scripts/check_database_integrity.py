@@ -9,8 +9,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.db.database import get_engine  # noqa: E402
-from app.db.integrity import inspect_database_integrity  # noqa: E402
+from app.db.shared.database import get_engine  # noqa: E402
+from app.db.shared.integrity import inspect_database_integrity  # noqa: E402
 
 
 def main() -> int:

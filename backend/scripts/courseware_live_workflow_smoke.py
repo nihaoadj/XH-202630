@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.courseware.live_workflow_smoke import run_bounded_live_workflow
+from scripts.courseware_harness.live import run_bounded_live_workflow
 
 
 def main() -> int:

@@ -9,7 +9,7 @@ from app.db.shared.models import GeneratedResourceORM, ResourceExecutionORM, Res
 from app.db.learning_documents.base import BaseResourceRepository
 from app.db.learning_documents.models import ResourceExecutionRecord, ResourceSpecRecord
 from app.models.learning_documents.schemas import ExerciseItem, LearningResource, SourceRef
-from app.agents.shared.validators import immutable_resource_payload
+from app.models.learning_documents.invariants import immutable_resource_payload
 from app.db.audit.base import PersistenceConflict
 
 

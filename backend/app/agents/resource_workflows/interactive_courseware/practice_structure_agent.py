@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.resource_workflows.interactive_courseware.contracts import CoursewarePracticeStepExtraction
+from app.models.courseware.content import CoursewarePracticeStepExtraction
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.llm import LLMCallContext, LLMCallOptions

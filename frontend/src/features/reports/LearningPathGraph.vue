@@ -6,7 +6,9 @@
     </div>
     <el-empty v-if="!nodes.length" description="完成方向选择后展示学习路径" :image-size="56" />
     <template v-else>
-      <v-chart class="chart" :option="option" autoresize aria-label="学习路径规划图" />
+      <div ref="chartFrame" class="chart-frame">
+        <v-chart v-if="chartSize.width && chartSize.height" class="chart" :option="option" autoresize aria-label="学习路径规划图" />
+      </div>
       <div class="node-legend" aria-label="学习节点状态说明">
         <span class="legend-current"><i></i>当前学习</span>
         <span class="legend-completed"><i></i>已完成历史（非本轮）</span>
@@ -25,7 +27,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { GraphChart } from 'echarts/charts'
@@ -35,6 +37,27 @@ import VChart from 'vue-echarts'
 use([CanvasRenderer, GraphChart, TooltipComponent])
 
 const props = defineProps({ data: { type: Object, default: () => ({}) } })
+const chartFrame = ref(null)
+const chartSize = ref({ width: 0, height: 0 })
+const symbolSize = [136, 54]
+// Leave room beyond the symbol for its stroke, focus shadow and hover scale.
+const graphGutter = 20
+watch(chartFrame, (frame, _previous, onCleanup) => {
+  if (!frame) {
+    chartSize.value = { width: 0, height: 0 }
+    return
+  }
+  const measure = () => {
+    const width = frame.clientWidth
+    const height = frame.clientHeight
+    if (!width || !height) return
+    if (width !== chartSize.value.width || height !== chartSize.value.height) chartSize.value = { width, height }
+  }
+  measure()
+  const observer = new ResizeObserver(measure)
+  observer.observe(frame)
+  onCleanup(() => observer.disconnect())
+}, { flush: 'post' })
 const nodes = computed(() => props.data?.nodes || [])
 const edges = computed(() => {
   const seen = new Set()
@@ -93,6 +116,23 @@ const layout = computed(() => {
   return positions
 })
 
+const graphBox = computed(() => {
+  const positions = [...layout.value.values()]
+  const xs = positions.map((position) => position.x)
+  const ys = positions.map((position) => position.y)
+  // ECharts expands a zero-span axis by one unit on each side. Match that
+  // range so single-node, single-tier and single-row graphs stay centered.
+  const spanX = positions.length ? Math.max(...xs) - Math.min(...xs) || 2 : 2
+  const spanY = positions.length ? Math.max(...ys) - Math.min(...ys) || 2 : 2
+  const availableWidth = Math.max(1, chartSize.value.width - symbolSize[0] - graphGutter * 2)
+  const availableHeight = Math.max(1, chartSize.value.height - symbolSize[1] - graphGutter * 2)
+  const scale = Math.min(availableWidth / spanX, availableHeight / spanY)
+  // Graph box bounds apply to node centers, not to the complete symbols.
+  // A uniform transform also prevents ECharts' independent x/y stretching
+  // from enlarging symbol height when only a few rows occupy many tiers.
+  return { left: 'center', top: 'middle', width: spanX * scale, height: spanY * scale }
+})
+
 const option = computed(() => ({
   tooltip: { backgroundColor: 'rgba(15, 32, 56, .96)', padding: [10, 13], borderWidth: 0, borderRadius: 10, textStyle: { color: '#eef6ff', fontSize: 12, lineHeight: 19 }, formatter: ({ data }) => {
     const score = typeof data?.mastery_score === 'number' ? `${Math.round(data.mastery_score * 100)}%` : '未测量'
@@ -101,8 +141,8 @@ const option = computed(() => ({
     return `<b>${data?.name || ''}</b><br/>显示状态：${displayStateLabel(data)}<br/>第 ${data?.tier || '—'} 阶 · ${labels[data?.role] || data?.role}<br/>掌握度：${score}<br/>进度：${data?.progress_status || '—'}${placement ? `<br/>入门判定：${placement}` : ''}${data?.blocked ? `<br/>${lockReason}` : ''}`
   } },
   series: [{
-    type: 'graph', layout: 'none', roam: true, draggable: false, left: 48, right: 44, top: 34, bottom: 22,
-    symbol: 'roundRect', symbolSize: [136, 54], edgeSymbol: ['none', 'arrow'], edgeSymbolSize: [0, 8],
+    type: 'graph', layout: 'none', roam: true, draggable: false, ...graphBox.value,
+    symbol: 'roundRect', symbolSize, edgeSymbol: ['none', 'arrow'], edgeSymbolSize: [0, 8],
     label: { show: true, formatter: ({ data }) => data.name, color: '#fff', fontSize: 12, fontWeight: 700, overflow: 'truncate', width: 112, opacity: 1 },
     lineStyle: { color: '#b7c9dc', width: 1.5, opacity: .78 },
     emphasis: { focus: 'adjacency', scale: 1.05, lineStyle: { width: 2.5, opacity: 1 }, itemStyle: { shadowBlur: 10, shadowColor: 'rgba(24, 54, 85, .20)' } },
@@ -136,5 +176,5 @@ const option = computed(() => ({
 </script>
 
 <style scoped>
-.visual-card { position:relative; min-width:0; overflow:hidden; padding:24px; border:1px solid #dbe8f5; border-radius:22px; background:linear-gradient(145deg,#fff 0%,#f8fbff 100%); box-shadow:0 16px 44px rgba(29,67,110,.10); }.visual-card::before { position:absolute; top:-105px; right:-80px; width:270px; height:270px; border-radius:50%; background:radial-gradient(circle,rgba(69,137,204,.13),transparent 68%); content:''; pointer-events:none; }.visual-heading { position:relative; display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }.visual-heading span { display:block; color:#3476b9; font-size:11px; font-weight:800; letter-spacing:.13em; }.visual-heading h3 { margin:8px 0 0; color:#142d4a; font-size:22px; font-weight:800; letter-spacing:-.035em; }.visual-heading small { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid #e6defa; border-radius:999px; background:#f7f3ff; color:#7657aa; font-size:12px; font-weight:700; white-space:nowrap; }.visual-heading small i { width:6px; height:6px; border-radius:50%; background:#a46bd4; box-shadow:0 0 0 4px rgba(164,107,212,.13); }.chart { position:relative; height:352px; margin-top:13px; border:1px solid rgba(211,226,240,.74); border-radius:16px; background:linear-gradient(180deg,rgba(247,251,255,.88),rgba(255,255,255,.58)); }.node-legend { position:relative; display:flex; flex-wrap:wrap; gap:12px; margin:12px 2px 0; color:#637d95; font-size:11px; font-weight:650; }.node-legend span { display:inline-flex; align-items:center; gap:5px; }.node-legend i { width:8px; height:8px; border-radius:50%; }.legend-current i { background:#f0a33a; }.legend-completed i { background:#548b88; }.legend-learned-incomplete i { background:#8b6fc4; }.legend-remedial i { background:#e66557; }.legend-next i { background:#4f8dcc; }.legend-locked i { background:#9aaabd; }.focus-route { position:relative; display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 0; padding:0; list-style:none; }.focus-route li { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid #dce8f5; border-radius:10px; background:#fff; color:#234664; font-size:12px; font-weight:650; box-shadow:0 3px 10px rgba(36,75,114,.05); }.focus-route li:not(:last-child)::after { margin-left:5px; color:#75a2cb; content:'→'; }.focus-route small { color:#6f879e; font-size:11px; font-weight:500; }.summary,.path-note { position:relative; margin:12px 0 0; color:#607890; font-size:12px; line-height:1.6; }.path-note { margin-top:4px; color:#8a9cb0; } @media (max-width:560px) { .visual-card { padding:18px; border-radius:18px; }.visual-heading { flex-direction:column; }.chart { height:300px; } }
+.visual-card { position:relative; min-width:0; overflow:hidden; padding:24px; border:1px solid #dbe8f5; border-radius:22px; background:linear-gradient(145deg,#fff 0%,#f8fbff 100%); box-shadow:0 16px 44px rgba(29,67,110,.10); }.visual-card::before { position:absolute; top:-105px; right:-80px; width:270px; height:270px; border-radius:50%; background:radial-gradient(circle,rgba(69,137,204,.13),transparent 68%); content:''; pointer-events:none; }.visual-heading { position:relative; display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }.visual-heading span { display:block; color:#3476b9; font-size:11px; font-weight:800; letter-spacing:.13em; }.visual-heading h3 { margin:8px 0 0; color:#142d4a; font-size:22px; font-weight:800; letter-spacing:-.035em; }.visual-heading small { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid #e6defa; border-radius:999px; background:#f7f3ff; color:#7657aa; font-size:12px; font-weight:700; white-space:nowrap; }.visual-heading small i { width:6px; height:6px; border-radius:50%; background:#a46bd4; box-shadow:0 0 0 4px rgba(164,107,212,.13); }.chart-frame { position:relative; height:352px; margin-top:13px; border:1px solid rgba(211,226,240,.74); border-radius:16px; background:linear-gradient(180deg,rgba(247,251,255,.88),rgba(255,255,255,.58)); }.chart { position:relative; width:100%; height:100%; }.node-legend { position:relative; display:flex; flex-wrap:wrap; gap:12px; margin:12px 2px 0; color:#637d95; font-size:11px; font-weight:650; }.node-legend span { display:inline-flex; align-items:center; gap:5px; }.node-legend i { width:8px; height:8px; border-radius:50%; }.legend-current i { background:#f0a33a; }.legend-completed i { background:#548b88; }.legend-learned-incomplete i { background:#8b6fc4; }.legend-remedial i { background:#e66557; }.legend-next i { background:#4f8dcc; }.legend-locked i { background:#9aaabd; }.focus-route { position:relative; display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 0; padding:0; list-style:none; }.focus-route li { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid #dce8f5; border-radius:10px; background:#fff; color:#234664; font-size:12px; font-weight:650; box-shadow:0 3px 10px rgba(36,75,114,.05); }.focus-route li:not(:last-child)::after { margin-left:5px; color:#75a2cb; content:'→'; }.focus-route small { color:#6f879e; font-size:11px; font-weight:500; }.summary,.path-note { position:relative; margin:12px 0 0; color:#607890; font-size:12px; line-height:1.6; }.path-note { margin-top:4px; color:#8a9cb0; } @media (max-width:560px) { .visual-card { padding:18px; border-radius:18px; }.visual-heading { flex-direction:column; }.chart-frame { height:300px; } }
 </style>

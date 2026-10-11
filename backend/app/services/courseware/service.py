@@ -9,7 +9,12 @@ import json
 from app.agents.resource_workflows.interactive_courseware.workflow import (
     InteractiveCoursewareWorkflow,
 )
+from app.agents.resource_workflows.interactive_courseware.ports import (
+    CoursewareRepository,
+    LearnerContextProvider,
+)
 from app.db.audit.base import BaseAuditRepository
+from app.core.llm.gateway import LLMGateway
 from app.core.storage.file_storage import load_resource_file
 from app.models.courseware import (
     CoursewareBatchCreateRequest,
@@ -21,7 +26,7 @@ from app.models.courseware import (
 )
 from app.models.shared.resource_library import ResourceLibraryItem
 from app.services.learning_documents.resources import ResourceService
-from app.services.courseware.source import CoursewareAdmissionError
+from app.agents.resource_workflows.interactive_courseware.source import CoursewareAdmissionError
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import (
     compose_courseware_scene,
 )
@@ -37,12 +42,12 @@ class CoursewareService:
 
     def __init__(
         self,
-        repo,
+        repo: CoursewareRepository,
         resource_service: ResourceService,
         audit_repo: BaseAuditRepository,
-        llm_gateway: Any | None = None,
+        llm_gateway: LLMGateway | None = None,
         workflow: InteractiveCoursewareWorkflow | None = None,
-        learner_context_provider: Any | None = None,
+        learner_context_provider: LearnerContextProvider | None = None,
     ):
         self.repo = repo
         self.resource_service = resource_service

@@ -24,6 +24,8 @@ from app.db.shared.models import (
     RagSkillNodeORM,
 )
 from app.db.learning_documents.sql_repository import SQLResourceRepository
+from app.db.audit.sql_repository import SQLAuditRepository
+from app.models.shared.persistence import CreateRunCommand, WorkflowEventType, canonical_hash
 from app.models.feedback.feedback_loop import FeedbackFollowupSelection, KnowledgePointAttemptResult, LearningAttemptSubmit
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.services.feedback.feedback import FeedbackService
@@ -141,6 +143,8 @@ def test_restart_reconciles_commit_to_followup_crash_window(tmp_path, monkeypatc
         _request(),
     )
 
+
+
     persisted = loop.get_by_idempotency_key("learner", "restart-recovery-key")
     assert persisted is not None
     assert persisted.profile_version == 2
@@ -227,3 +231,68 @@ def test_restart_fails_stale_job_and_idempotent_replay_requeues_it(tmp_path):
     assert replayed_selection.followup_generation_status.value == "queued"
     assert jobs.get(result.followup_run_id).job_status == "queued"
     assert len(jobs.list_by_learner("learner")) == 1
+
+
+@pytest.mark.parametrize("commit_before_error", [False, True])
+def test_restart_replays_missing_sql_feedback_events_without_recommitting_facts(
+    tmp_path, monkeypatch, commit_before_error,
+):
+    engine, factory, learners, resources, loop, jobs, service = _setup(tmp_path)
+    audit = SQLAuditRepository(factory)
+    now = datetime.now(timezone.utc)
+    snapshot = {"learner_id": "learner", "topic": "retrieval"}
+    audit.create_run(CreateRunCommand(
+        run_id="source-run", learner_id="learner", knowledge_base_id="kb",
+        topic="retrieval", request_snapshot=snapshot,
+        request_hash=canonical_hash(snapshot), occurred_at=now,
+    ))
+    audit.start_run("source-run", occurred_at=now)
+    initial_events = audit.list_events("source-run")
+    service.audit_repo = audit
+    resource = resources.get("resource").model_copy(update={"run_id": "source-run"})
+    request = _request().model_copy(update={"source_run_id": "source-run"})
+    original_append = audit.append_event
+
+    def fail_once(run_id, event_type, **kwargs):
+        if event_type == WorkflowEventType.FEEDBACK_DECISION_COMPLETED:
+            if commit_before_error:
+                original_append(run_id, event_type, **kwargs)
+            raise RuntimeError("injected-audit-outage")
+        return original_append(run_id, event_type, **kwargs)
+
+    monkeypatch.setattr(audit, "append_event", fail_once)
+    first = service.process_learning_attempt(learners.get("learner"), resource, request)
+    version_after_commit = learners.get("learner").profile_version
+    prefix = audit.list_events("source-run")[len(initial_events):]
+    assert len(prefix) == (3 if commit_before_error else 2)
+
+    # Recreate both service and audit adapter as a process restart would.
+    recovered_audit = SQLAuditRepository(factory)
+    restarted = FeedbackService(
+        MemoryFeedbackRepository(), feedback_loop_repo=SQLFeedbackLoopRepository(factory),
+        generation_job_service=GenerationJobService(jobs, _NoopGenerationService()),
+        audit_repo=recovered_audit,
+    )
+    replay = restarted.process_learning_attempt(learners.get("learner"), resource, request)
+    restarted.process_learning_attempt(learners.get("learner"), resource, request)
+    assert replay.attempt.attempt_id == first.attempt.attempt_id
+    assert learners.get("learner").profile_version == version_after_commit
+    all_events = recovered_audit.list_events("source-run")
+    assert all_events[:len(initial_events)] == initial_events
+    events = all_events[len(initial_events):]
+    assert [item.event_type for item in events] == [
+        WorkflowEventType.ATTEMPT_SUBMITTED,
+        WorkflowEventType.FEEDBACK_DECISION_STARTED,
+        WorkflowEventType.FEEDBACK_DECISION_COMPLETED,
+        WorkflowEventType.KNOWLEDGE_STATE_UPDATED,
+        WorkflowEventType.PROFILE_UPDATED,
+        WorkflowEventType.PATH_MUTATED,
+    ]
+    assert len({item.event_id for item in events}) == 6
+    assert [(item.event_id, item.occurred_at) for item in events[:len(prefix)]] == [
+        (item.event_id, item.occurred_at) for item in prefix
+    ]
+    with factory() as db:
+        assert db.query(LearningAttemptORM).count() == 1
+        assert db.query(FeedbackDecisionORM).count() == 1
+    engine.dispose()

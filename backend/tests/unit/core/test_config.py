@@ -154,6 +154,8 @@ def test_settings_accept_legal_app_modes(mode):
     overrides = {"app_mode": mode}
     if mode == "production":
         overrides["llm_api_key"] = "test-production-key"
+        overrides["auth_jwt_secret"] = "synthetic-production-secret-0123456789"
+        overrides["auth_cookie_secure"] = True
     assert make_settings(**overrides).app_mode == mode
 
 

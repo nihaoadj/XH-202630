@@ -30,6 +30,7 @@ from app.api.dependencies import get_current_user
 from app.config import get_settings
 from app.containers import init_container
 from app.core.security.errors import ApplicationError, ErrorCode
+from app.core.security.cors import cors_options
 from app.core.health import build_health_report
 from app.db.shared.database import init_database
 
@@ -150,10 +151,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **cors_options(get_settings()),
 )
 
 

@@ -92,12 +92,11 @@ def stream_courseware_events(run_id: str, request: Request, after_sequence: int 
         while True:
             if await request.is_disconnected():
                 return
-            events = _service(request).events(run_id, sequence)
+            events, job = await asyncio.to_thread(_progress_snapshot, request, run_id, sequence)
             for event in events:
                 sequence = event["event_sequence"]
                 payload = json.dumps(event, ensure_ascii=False, default=str, separators=(",", ":"))
                 yield f"id: {sequence}\nevent: courseware_progress\ndata: {payload}\n\n"
-            job = _service(request).get_job(run_id)
             if job is None or (job.status in terminal and not events):
                 return
             idle_ticks += 1
@@ -106,6 +105,12 @@ def stream_courseware_events(run_id: str, request: Request, after_sequence: int 
             await asyncio.sleep(0.25)
 
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
+
+
+def _progress_snapshot(request, run_id, sequence):
+    """Read progress and job state without blocking the SSE event loop."""
+    service = _service(request)
+    return service.events(run_id, sequence), service.get_job(run_id)
 
 
 @router.post("/courseware/jobs/{run_id}/retry", response_model=CoursewareJobResponse)

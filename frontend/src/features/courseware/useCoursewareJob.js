@@ -11,6 +11,8 @@ function activeRunStorage() {
   return globalThis.window?.localStorage || null
 }
 
+// Compatibility helper for imperative callers. The production workspace uses
+// useCoursewareTracking, whose history, polling and publication timing differ.
 export function useCoursewareJob() {
   const busy = ref(false)
   const currentJob = ref(null)
