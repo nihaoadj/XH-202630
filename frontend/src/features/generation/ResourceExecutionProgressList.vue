@@ -1,55 +1,67 @@
 <template>
   <div class="resource-execution-list">
-    <el-empty v-if="!displayExecutions.length" :image-size="44" description="等待资源任务拆解" />
+    <p v-if="!displayExecutions.length" class="execution-empty">暂无资源执行记录</p>
     <div v-else class="execution-grid">
       <article v-for="item in displayExecutions" :key="item.key" class="execution-card" :class="`is-${phaseMeta(item).type}`">
         <div class="execution-card-head">
+          <svg class="execution-document" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
           <div class="execution-title">
             <strong>{{ item.resource_type || '学习资源' }}</strong>
             <span>{{ representationLabel(item.representation) }}</span>
           </div>
-          <el-tag :type="phaseMeta(item).type" size="small" effect="plain">
+          <span class="execution-phase">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path v-if="phaseMeta(item).type === 'success'" d="m3.5 8 3 3 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              <path v-else-if="phaseMeta(item).type === 'danger'" d="m5 5 6 6M11 5l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              <template v-else><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3" /><path d="M8 4.8v3.5l2 1.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></template>
+            </svg>
             {{ phaseMeta(item).label }}
-          </el-tag>
+          </span>
         </div>
 
         <p v-if="item.learning_objective" class="execution-objective">{{ item.learning_objective }}</p>
-        <div class="execution-meta">
-          <span v-if="item.attempt">第 {{ item.attempt }} 次尝试</span>
-          <span v-if="item.agent_name">{{ item.agent_name }}</span>
-          <span v-if="item.validation_status">校验 {{ item.validation_status }}</span>
-          <span v-if="item.claim_metric_status">Claim {{ claimStatusLabel(item.claim_metric_status) }}</span>
-          <span v-if="item.claim_factual_pass_rate != null">事实通过 {{ percent(item.claim_factual_pass_rate) }}</span>
-          <span v-if="item.claim_publish_decision_pending" class="claim-pending">待用户决定发布</span>
+        <div class="execution-status-line" role="status" aria-live="polite" aria-atomic="true">
+          <span class="execution-status-context">{{ item.resource_type }}：{{ phaseMeta(item).label }}。</span>
+          <span v-if="item.validation_status" class="execution-status-field"><small>校验</small><strong>{{ validationStatusLabel(item.validation_status) }}</strong></span>
+          <span v-if="item.review_status" class="execution-status-field"><small>审核</small><strong>{{ reviewStatusLabel(item.review_status) }}</strong></span>
+          <span class="execution-status-field"><small>发布状态</small><strong :class="{ 'is-published': item.publication_status === 'published' }">{{ publicationLabel(item) }}</strong></span>
+          <span v-if="item.claim_metric_status" class="execution-status-field"><small>事实核验</small><strong>{{ claimStatusLabel(item.claim_metric_status) }}</strong></span>
         </div>
-        <el-alert
-          v-if="item.claim_warning_publish"
-          title="已带 Claim 警告发布"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="claim-warning"
-        />
-        <p v-if="item.error_message || item.error_code" class="execution-error">
+        <p v-if="isPublicationPending(item)" class="execution-notice claim-pending">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m10 3 8 14H2L10 3Zm0 5v4m0 2v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          待你决定发布
+        </p>
+        <p v-if="item.claim_warning_publish" class="execution-notice claim-warning">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m10 3 8 14H2L10 3Zm0 5v4m0 2v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          已带 Claim 警告发布
+        </p>
+        <p v-if="['failed', 'human_review', 'revision_requested'].includes(item.resource_execution_state) && (item.error_message || item.error_code)" class="execution-error">
           {{ item.error_message || `处理失败（${item.error_code}）` }}
         </p>
 
-        <div v-if="canOpen(item) || canRetry(item) || canShowClaimReport(item)" class="execution-actions">
-          <el-button v-if="canOpen(item)" text type="primary" @click="$emit('open-resource', item)">
-            查看已发布资源
+        <div v-if="item.attempt || item.agent_name || item.claim_factual_pass_rate != null" class="execution-meta">
+          <span v-if="item.attempt">第 {{ item.attempt }} 次生成</span>
+          <span v-if="item.agent_name">{{ resourceAgentLabel(item.agent_name) }}</span>
+          <span v-if="item.claim_factual_pass_rate != null">已审事实通过 {{ percent(item.claim_factual_pass_rate) }}</span>
+        </div>
+        <div v-if="!item.request_placeholder" class="execution-actions">
+          <el-button v-if="canOpen(item)" class="execution-primary" type="primary" aria-label="查看已发布资源" @click="$emit('open-resource', item)">
+            查看资源<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
           </el-button>
-          <el-button v-if="canShowClaimReport(item)" text type="primary" @click="$emit('open-claim-report', item.resource_id)">
-            查看审核报告
+          <el-button v-if="canShowClaimReport(item) && isPublicationPending(item)" class="execution-primary" type="primary" aria-label="查看审核报告" @click="$emit('open-claim-report', item.resource_id)">
+            审核报告<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
           </el-button>
           <el-button
-            v-if="canRetry(item)"
-            text
-            type="warning"
-            :loading="retryingKey === item.key"
-            @click="$emit('retry-resource', item)"
+            v-if="canRetry(item)" class="execution-retry" type="warning"
+            :class="canShowClaimReport(item) && isPublicationPending(item) ? 'execution-secondary' : 'execution-primary'"
+            :loading="retryingKey === item.key" aria-label="重新生成此资源" @click="$emit('retry-resource', item)"
           >
-            重新生成此资源
+            重新生成
           </el-button>
+          <el-button v-if="canShowClaimReport(item) && !isPublicationPending(item)" class="execution-secondary" text type="primary" aria-label="查看审核报告" @click="$emit('open-claim-report', item.resource_id)">
+            审核报告
+          </el-button>
+          <el-button class="execution-secondary" text type="primary" aria-label="查看过程详情" @click="$emit('inspect-resource', item)">过程详情</el-button>
         </div>
       </article>
     </div>
@@ -58,85 +70,37 @@
 
 <script setup>
 import { computed } from 'vue'
-import {
-  resourceExecutionStateMeta,
-  resourceRepresentationLabel,
-} from '../../utils/generationDisplay'
+import { resourceRepresentationLabel } from '../../utils/generationDisplay'
+import { resourceAgentLabel, resourceStatusMeta, validationStatusLabel } from './resourceStatusPresentation.js'
 
 const props = defineProps({
   executions: { type: Array, default: () => [] },
-  phase: { type: String, default: 'all' },
+  reviewEnabled: { type: Boolean, default: true },
   retryingKey: { type: String, default: '' },
   retryEnabled: { type: Boolean, default: true },
   claimReports: { type: Object, default: () => ({}) },
 })
 
-defineEmits(['open-resource', 'retry-resource', 'open-claim-report'])
+defineEmits(['open-resource', 'retry-resource', 'open-claim-report', 'inspect-resource'])
 
-function logicalState(items) {
-  const states = items.map((item) => item.resource_execution_state)
-  if (states.includes('failed')) return 'failed'
-  if (states.includes('human_review')) return 'human_review'
-  if (states.includes('revision_requested')) return 'revision_requested'
-  if (states.includes('claim_checking')) return 'claim_checking'
-  if (states.includes('reviewing')) return 'reviewing'
-  if (states.includes('generating')) return 'generating'
-  if (states.includes('queued') && states.some((state) => state !== 'queued')) return 'generating'
-  if (states.includes('queued')) return 'queued'
-  if (states.every((state) => state === 'approved')) return 'approved'
-  return 'generated'
-}
-
-const displayExecutions = computed(() => {
-  const groups = new Map()
-  for (const item of props.executions) {
-    const key = item.resource_spec_id || `${item.resource_type}:${item.representation || 'text'}`
-    const items = groups.get(key) || []
-    items.push(item)
-    groups.set(key, items)
-  }
-  return [...groups.values()].map((items) => {
-    const text = items.find((item) => item.representation === 'text') || items[0]
-    return {
-      ...text,
-      key: text.resource_spec_id || text.key,
-      representation: text.representation,
-      resource_execution_state: logicalState(items),
-      agent_name: text.agent_name,
-      validation_status: items.map((item) => item.validation_status).filter(Boolean).join(' / '),
-      error_code: items.find((item) => item.error_code)?.error_code || text.error_code,
-    }
-  }).sort((left, right) => (
-  Number(left.display_order || 0) - Number(right.display_order || 0)
-    || String(left.resource_type || '').localeCompare(String(right.resource_type || ''), 'zh-CN')
-    || (left.representation === 'text' ? -1 : 1)
-  ))
-})
+const displayExecutions = computed(() => props.executions.map(item => ({
+  ...item,
+  statusMeta: resourceStatusMeta({ ...item, claim_publish_decision_pending: isPublicationPending(item) }, {
+    retryEnabled: props.retryEnabled, reviewEnabled: props.reviewEnabled,
+  }),
+})))
 
 function representationLabel(representation) {
   return resourceRepresentationLabel(representation)
 }
 
 function phaseMeta(item) {
-  const state = item.resource_execution_state
-  if (props.phase === 'generation') {
-    if (['generated', 'reviewing', 'claim_checking', 'approved'].includes(state)) {
-      return { label: '生成完成', type: 'success' }
-    }
-    if (state === 'human_review') {
-      if (item.claim_publish_decision_pending) return { label: 'Claim 审核报告待你决定', type: 'warning' }
-      return { label: '已生成，待人工复核', type: 'warning' }
-    }
-    if (state === 'revision_requested') return { label: props.retryEnabled ? '等待重新生成' : '重新生成中', type: 'warning' }
-  }
-  if (props.phase === 'review') {
-    if (['queued', 'generating'].includes(state)) return { label: '等待生成', type: 'info' }
-    if (state === 'generated') return { label: '等待审核', type: 'info' }
-    if (state === 'approved' && item.publication_status !== 'published') {
-      return { label: '审核通过，等待发布', type: 'warning' }
-    }
-  }
-  return resourceExecutionStateMeta(state)
+  return item.statusMeta
+}
+
+function publicationLabel(item) {
+  if (item.publication_status !== 'published') return '尚未发布'
+  return item.resource_execution_state === 'approved' ? '已发布' : '已有版本已发布'
 }
 
 function canOpen(item) {
@@ -155,6 +119,10 @@ function canShowClaimReport(item) {
   return Boolean(item.resource_id && props.claimReports[item.resource_id])
 }
 
+function isPublicationPending(item) {
+  return Boolean(item.claim_publish_decision_pending ?? props.claimReports[item.resource_id]?.claim_publish_decision_pending)
+}
+
 function percent(value) {
   return `${(Number(value) * 100).toFixed(1)}%`
 }
@@ -162,29 +130,54 @@ function percent(value) {
 function claimStatusLabel(status) {
   return ({ complete: '已完成', incomplete: '未完成', not_applicable: '不适用' }[status] || status)
 }
+
+function reviewStatusLabel(status) {
+  return ({ approved: '已通过', revision_requested: '需修订', rejected: '未通过', human_review: '待复核',
+    skipped: '未启用', pending: '待审核' })[status] || status
+}
 </script>
 
 <style scoped>
-.resource-execution-list { display: grid; gap: 10px; }
-.execution-grid { display: grid; gap: 10px; }
-.execution-card { min-width:0; padding:12px; border:1px solid #dce4eb; border-left:2px solid #9eb2c0; border-radius:4px; background:linear-gradient(180deg,#fff,#f9fbfc); }
-.execution-card.is-success { border-left-color:#52978c; }
-.execution-card.is-warning { border-left-color:#b68a52; }
-.execution-card.is-danger { border-left-color:#b45c52; }
-.execution-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; }
-.execution-title { display: flex; min-width: 0; flex: 1 1 auto; flex-wrap: wrap; align-items: baseline; gap: 4px 7px; }
-.execution-card-head strong { min-width: 0; color: #172c45; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; white-space: normal; }
-.execution-title > span { flex: 0 0 auto; color: #59697b; font-size: 10px; }
-.execution-card-head :deep(.el-tag) { flex: 0 1 auto; max-width: 55%; margin-top: 1px; white-space: normal; height: auto; line-height: 1.5; }
-.execution-objective { margin: 9px 0 0; color: #59697b; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
-.execution-meta { display:flex; flex-wrap:wrap; gap:4px 10px; margin-top:8px; padding-top:8px; border-top:1px solid #e6edf2; color:#59697b; font-size:11px; line-height:1.6; }
+.resource-execution-list { --resource-ink:#172c45; --resource-muted:#59697b; --resource-accent:#176b70; --resource-line:#e1eaee; min-width:0; background:#f3f7fa; }
+.execution-empty { margin:0; padding:12px 0; color:var(--resource-muted); font-size:12px; line-height:1.7; }
+.execution-grid { display:grid; gap:10px; }
+.execution-card { --execution-tone:var(--resource-muted); min-width:0; padding:10px; border:1px solid #d6e2e9; border-radius:8px; background:#fff; }
+.execution-card.is-success,.execution-card.is-primary { --execution-tone:var(--resource-accent); }
+.execution-card.is-warning { --execution-tone:#935719; }
+.execution-card.is-danger { --execution-tone:#a1322c; }
+.execution-card-head { display:grid; grid-template-columns:18px minmax(0,1fr) auto; align-items:start; gap:6px; }
+.execution-document { width:18px; height:18px; margin-top:2px; color:var(--resource-accent); }
+.execution-title { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 8px; min-width:0; }
+.execution-title strong { color:var(--resource-ink); font-size:14px; font-weight:600; line-height:1.5; overflow-wrap:anywhere; }
+.execution-title > span { color:var(--resource-muted); font-size:12px; line-height:1.7; }
+.execution-phase { display:flex; align-items:center; gap:4px; max-width:120px; min-width:0; padding-top:1px; color:var(--execution-tone); font-size:12px; font-weight:500; line-height:1.6; overflow-wrap:anywhere; }
+.execution-phase svg { width:16px; height:16px; flex:none; }
+.execution-objective { margin:8px 0 0; color:var(--resource-muted); font-size:13px; line-height:1.8; overflow-wrap:anywhere; }
+.execution-status-line { position:relative; display:flex; flex-wrap:wrap; gap:4px 12px; margin:8px 0 0; }
+.execution-status-context { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.execution-status-field { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 6px; min-width:0; max-width:100%; line-height:1.6; }
+.execution-status-field small { color:var(--resource-muted); font-size:12px; }
+.execution-status-field strong { color:var(--resource-ink); font-size:12px; font-weight:500; overflow-wrap:anywhere; }
+.execution-status-field .is-published { color:var(--resource-accent); }
+.execution-notice { display:flex; align-items:flex-start; gap:6px; margin:6px 0 0; color:#935719; font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+.execution-notice svg { width:18px; height:18px; margin-top:2px; flex:none; }
+.execution-error { margin:6px 0 0; padding:6px 8px; border-radius:5px; background:#fff3f0; color:#a1322c; font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+.execution-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:8px 0 0; padding-top:8px; border-top:1px solid var(--resource-line); }
+.resource-execution-list .execution-actions :deep(.el-button) { flex:0 1 auto; min-width:32px; min-height:34px; height:auto; max-width:100%; margin:0; padding:6px 8px; border-radius:5px; font-size:12px; font-weight:500; line-height:1.5; }
+.resource-execution-list .execution-actions :deep(.el-button > span) { display:flex; justify-content:center; gap:6px; min-width:0; white-space:normal; overflow-wrap:anywhere; }
+.execution-actions :deep(.execution-primary) { border:1px solid #bfdad6; background:#edf6f4; color:var(--resource-accent); }
+.execution-actions :deep(.execution-primary:hover) { border-color:#8db9b0; background:#dfeeea; }
+.execution-actions :deep(.execution-retry) { background:#fff3e3; color:#935719; }
+.execution-actions :deep(.execution-retry:hover) { background:#ffeace; color:#774312; }
+.execution-actions :deep(.execution-secondary) { border:1px solid transparent; background:transparent; color:var(--resource-accent); }
+.execution-actions :deep(.execution-secondary.execution-retry) { background:#fff9f0; color:#935719; }
+.execution-actions :deep(.execution-secondary:hover) { background:#eef5f6; }
+.execution-actions :deep(.execution-secondary.execution-retry:hover) { background:#fff0da; color:#774312; }
+.execution-actions svg { width:14px; height:14px; flex:none; align-self:center; }
+.execution-actions :deep(.el-button:focus-visible) { outline:2px solid var(--resource-accent); outline-offset:2px; }
+.execution-meta { display:flex; flex-wrap:wrap; gap:3px 12px; margin-top:4px; color:var(--resource-muted); font-size:12px; line-height:1.7; }
 .execution-meta > span { min-width:0; max-width:100%; overflow-wrap:anywhere; }
-.execution-error { margin: 10px 0 0; padding: 9px 10px; border-radius: 3px; background: #fff3f0; color: #a1322c; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
-.execution-actions { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:4px; }
-.execution-actions :deep(.el-button) { min-height:44px; height:auto; max-width:100%; margin:0; padding:8px 0; border:0; border-radius:2px; background:transparent; color:#176b70; font-size:11px; font-weight:600; }
-.execution-actions :deep(.el-button > span) { white-space:normal; overflow-wrap:anywhere; }
-.execution-actions :deep(.el-button--warning) { color:#935719; }
-.execution-actions :deep(.el-button:hover) { background:transparent; color:#125c60; text-decoration:underline; text-underline-offset:4px; }
-.execution-actions :deep(.el-button--warning:hover) { background:transparent; color:#774312; }
-.execution-actions :deep(.el-button:focus-visible) { outline: 2px solid #176b70; outline-offset: 2px; }
+.execution-meta .claim-pending { color:#935719; }
+@media (pointer:coarse), (max-width:720px) { .resource-execution-list .execution-actions :deep(.el-button) { min-width:44px; min-height:44px; } }
+@media (max-width:360px) { .execution-card-head { grid-template-columns:18px minmax(0,1fr); }.execution-phase { grid-column:2; max-width:none; } }
 </style>

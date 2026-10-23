@@ -1,0 +1,181 @@
+/* Role-specific, single-page execution dossiers. Never affects the published Claim report. */
+.workflow-detail-dialog {
+  --detail-ink:#172c45; --detail-muted:#536577; --detail-accent:#176b70;
+  --detail-line:#dce5ec; --detail-canvas:#f5f8fb; --detail-tint:#eef7f7;
+  --detail-danger:#a1322c; --detail-warning:#85521c; --el-color-primary:var(--detail-accent);
+  display:flex; flex-direction:column; max-height:92dvh; padding:0; overflow:hidden;
+  border:1px solid var(--detail-line); border-radius:12px; background:#fff;
+  box-shadow:0 24px 80px #10233926; color:var(--detail-ink);
+}
+.workflow-detail-dialog .el-dialog__header { margin:0; padding:14px 68px 14px 28px; flex:none; border-bottom:1px solid var(--detail-line); background:linear-gradient(105deg,#f2f8fa,#fff 65%); }
+.workflow-detail-dialog .el-dialog__headerbtn { top:14px; right:12px; width:44px; height:44px; }
+.workflow-detail-dialog .el-dialog__body { min-height:0; overflow:auto; padding:0; overscroll-behavior:contain; }
+.workflow-detail-dialog .audit-dialog-heading { display:flex; gap:14px; align-items:center; min-width:0; }
+.workflow-detail-dialog .detail-node-mark { width:32px; height:32px; color:var(--detail-accent); flex:none; }
+.workflow-detail-dialog .detail-heading-copy { min-width:0; flex:1; }
+.workflow-detail-dialog .audit-dialog-heading h2 { margin:2px 0 0; font-size:20px; line-height:1.45; font-weight:700; overflow-wrap:anywhere; }
+.workflow-detail-dialog :is(h2,h3,h4) { text-wrap:pretty; color:var(--detail-ink); }
+.workflow-detail-dialog :is(button,summary,select) { touch-action:manipulation; }
+.workflow-detail-dialog .audit-header-code { font:11px/1.6 Consolas,monospace; letter-spacing:.06em; color:var(--detail-muted); }
+.workflow-detail-dialog .detail-execution-status { display:flex; gap:10px; flex:none; align-items:baseline; font-size:12px; color:var(--detail-muted); }
+.workflow-detail-dialog .detail-execution-status strong { font-weight:600; }
+.workflow-detail-dialog .audit-refresh { margin:0; min-height:44px; padding:9px 14px; color:var(--detail-accent); border-color:#c5d8df; background:#fff; }
+.workflow-detail-dialog .audit-loading { padding:40px 28px; color:var(--detail-muted); }
+.workflow-detail-dialog .audit-workspace,.workflow-detail-dialog .audit-main { min-width:0; width:100%; }
+.workflow-detail-dialog .detail-content { padding:24px 32px 0; color:var(--detail-ink); }
+.workflow-detail-dialog .detail-content[data-content-kind="claims"] { padding-top:18px; }
+.workflow-detail-dialog .detail-content[data-content-kind="claims"] .detail-resource-caption { margin-bottom:12px; }
+.workflow-detail-dialog .detail-module { min-width:0; margin:0 0 24px; }
+.workflow-detail-dialog .detail-section-heading { display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; margin:0 0 18px; }
+.workflow-detail-dialog .detail-section-heading h3 { margin:0; font-size:20px; font-weight:700; line-height:1.5; }
+.workflow-detail-dialog .section-number,.workflow-detail-dialog .context-index,.workflow-detail-dialog .version-kicker { font:11px/1.5 Consolas,monospace; letter-spacing:.08em; color:var(--detail-accent); }
+.workflow-detail-dialog .detail-resource-caption { display:flex; flex-wrap:wrap; gap:12px; font-size:13px; color:var(--detail-ink); margin:0 0 18px; }
+.workflow-detail-dialog .detail-resource-caption span { color:var(--detail-muted); }
+.workflow-detail-dialog .result-caption,.workflow-detail-dialog .audit-helper { font-size:12px; line-height:1.8; color:var(--detail-muted); overflow-wrap:anywhere; }
+.workflow-detail-dialog .result-primary { min-width:0; }
+.workflow-detail-dialog .node-output { margin:0; font-size:16px; line-height:1.95; white-space:pre-wrap; overflow-wrap:anywhere; }
+.workflow-detail-dialog .node-guidance { margin-top:24px; padding:22px 0 4px; border-top:1px solid var(--detail-line); }
+.workflow-detail-dialog .node-guidance h4 { font-size:16px; margin:6px 0 12px; font-weight:650; }
+.workflow-detail-dialog .node-guidance p { color:var(--detail-ink); line-height:1.95; }
+.workflow-detail-dialog .diagnosis-result { display:grid; grid-template-columns:180px minmax(0,1fr); gap:32px; padding:24px 28px; background:linear-gradient(110deg,var(--detail-tint),#f9fbfd); }
+.workflow-detail-dialog .diagnosis-level strong { display:block; margin:10px 0 0; font-size:34px; font-weight:650; color:var(--detail-accent); }
+.workflow-detail-dialog .diagnosis-blindspots { padding-left:32px; border-left:1px solid #c6dbe1; }
+.workflow-detail-dialog .diagnosis-blindspots p { font-size:19px; line-height:1.8; margin:10px 0 0; overflow-wrap:anywhere; font-weight:600; }
+.workflow-detail-dialog .planning-path { margin:24px 0 0; padding:0; list-style:none; }
+.workflow-detail-dialog .planning-path li { position:relative; display:grid; grid-template-columns:50px minmax(0,1fr); gap:24px; padding:0 0 28px; }
+.workflow-detail-dialog .planning-path li:last-child { padding-bottom:4px; }
+.workflow-detail-dialog .planning-path li:not(:last-child)::before { content:''; position:absolute; width:1px; left:24px; top:50px; bottom:0; background:linear-gradient(var(--detail-accent),#a6c6cb); }
+.workflow-detail-dialog .path-index { display:flex; align-items:center; justify-content:center; width:48px; height:48px; font:18px/1 Consolas,monospace; color:var(--detail-accent); background:var(--detail-tint); clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); }
+.workflow-detail-dialog .path-label { font-size:12px; color:var(--detail-muted); }
+.workflow-detail-dialog .planning-path li p { margin:5px 0 0; font-size:19px; font-weight:650; line-height:1.7; overflow-wrap:anywhere; }
+.workflow-detail-dialog .retrieval-stats { display:flex; flex-wrap:wrap; gap:10px 24px; margin:0 0 20px; padding:4px 0 16px; border-bottom:1px solid var(--detail-line); }
+.workflow-detail-dialog .retrieval-stats > div { display:flex; align-items:baseline; gap:8px; }
+.workflow-detail-dialog .retrieval-stats dt { font-size:12px; color:var(--detail-muted); }
+.workflow-detail-dialog .retrieval-stats dd { margin:0; font:14px/1.7 Consolas,monospace; color:var(--detail-ink); font-weight:600; }
+.workflow-detail-dialog .generated-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:14px 0; border-block:1px solid var(--detail-line); }
+.workflow-detail-dialog .generated-heading strong { font-size:16px; }
+.workflow-detail-dialog .generated-heading strong span { font:12px/1.6 Consolas,monospace; color:var(--detail-muted); }
+.workflow-detail-dialog pre { white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.9 Consolas,monospace; color:var(--detail-ink); margin:12px 0; }
+.workflow-detail-dialog .generated-content { max-width:82ch; font-family:inherit; font-size:16px; line-height:2; background:transparent; padding:10px 0; margin:0; }
+.workflow-detail-dialog .detail-disclosure { border-top:1px solid var(--detail-line); font-size:13px; color:var(--detail-muted); overflow-wrap:anywhere; }
+.workflow-detail-dialog summary { min-height:44px; cursor:pointer; padding:12px 0; color:var(--detail-accent); line-height:1.6; }
+.workflow-detail-dialog .audit-context { margin:0 32px; }
+.workflow-detail-dialog .audit-context-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; list-style:none; color:var(--detail-muted); }
+.workflow-detail-dialog .audit-context-heading::-webkit-details-marker { display:none; }
+.workflow-detail-dialog .context-heading-copy { display:flex; align-items:center; gap:12px; min-width:0; font-size:12px; }
+.workflow-detail-dialog .context-heading-copy svg { width:16px; height:16px; flex:none; transition:transform .15s ease; }
+.workflow-detail-dialog .audit-context[open] .context-heading-copy svg { transform:rotate(180deg); }
+.workflow-detail-dialog .audit-context-body { padding:8px 0 20px; }
+.workflow-detail-dialog .context-fields { display:flex; flex-wrap:wrap; gap:14px 28px; margin:0 0 16px; }
+.workflow-detail-dialog .context-fields > div { display:flex; gap:12px; }
+.workflow-detail-dialog .context-fields dd { margin:0; font-weight:600; color:var(--detail-ink); }
+.workflow-detail-dialog .resource-picker { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:16px 0; font-size:13px; color:var(--detail-muted); }
+.workflow-detail-dialog .primary-resource-picker { margin:0 0 20px; }
+.workflow-detail-dialog .execution-summary-fields { display:grid; gap:16px; margin:4px 0 20px; }
+.workflow-detail-dialog .execution-summary-fields dt { color:var(--detail-muted); font-size:12px; }
+.workflow-detail-dialog .execution-summary-fields dd { margin:4px 0 0; white-space:pre-wrap; color:var(--detail-ink); line-height:1.9; }
+.workflow-detail-dialog .audit-identifiers p,.workflow-detail-dialog .source-identity p { font:11px/1.9 Consolas,monospace; overflow-wrap:anywhere; margin:6px 0; }
+.workflow-detail-dialog .empty-note { border-left:2px solid #a06c30; padding:10px 14px; color:#785327; background:#fbf7ef; font-size:13px; line-height:1.8; overflow-wrap:anywhere; }
+.workflow-detail-dialog .is-approved,.workflow-detail-dialog .is-supported { color:var(--detail-accent); }
+.workflow-detail-dialog .is-rejected,.workflow-detail-dialog .is-contradicted { color:var(--detail-danger); }
+.workflow-detail-dialog .is-revision,.workflow-detail-dialog .is-not_in_evidence,.workflow-detail-dialog .is-incomplete { color:var(--detail-warning); }
+.workflow-detail-dialog .claim-verdict-counts { display:flex; gap:6px 14px; flex-wrap:wrap; font-size:12px; color:var(--detail-muted); }
+.workflow-detail-dialog .claim-verdict-counts strong { margin-left:3px; font-size:14px; }
+.workflow-detail-dialog .claim-audit-heading { margin-bottom:8px; }
+.workflow-detail-dialog .claim-list-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; padding:0; }
+.workflow-detail-dialog .claim-detail > summary { padding:12px 0; }
+.workflow-detail-dialog .claim-statement { font-size:17px; line-height:1.75; }
+.workflow-detail-dialog .claim-detail[open] > summary { background:linear-gradient(90deg,#f5fafb,#fff 70%); }
+.workflow-detail-dialog .claim-detail-body { gap:28px; padding:20px 0; }
+.workflow-detail-dialog .evidence-section-label { font-size:13px; letter-spacing:0; }
+.workflow-detail-dialog .claim-detail-body p { font-size:14px; line-height:1.9; }
+.workflow-detail-dialog .evidence-excerpt { margin:12px 0; padding:16px 18px; border-left:2px solid var(--detail-accent); background:var(--detail-tint); color:var(--detail-ink); font-size:15px; line-height:1.9; }
+.workflow-detail-dialog .review-card { margin:0 0 24px; color:var(--detail-accent); }
+.workflow-detail-dialog .review-card.is-rejected { color:var(--detail-danger); }
+.workflow-detail-dialog .review-card.is-revision { color:var(--detail-warning); }
+.workflow-detail-dialog .review-card-heading { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:22px 24px; border-left:3px solid currentColor; background:var(--detail-canvas); }
+.workflow-detail-dialog .review-card-heading h4 { display:flex; gap:12px; align-items:center; margin:0; font-size:28px; font-weight:700; color:inherit; }
+.workflow-detail-dialog .review-card-heading svg { width:28px; height:28px; flex:none; }
+.workflow-detail-dialog .review-card-heading > span { font-size:12px; color:var(--detail-muted); }
+.workflow-detail-dialog .review-clear { color:var(--detail-muted); margin:18px 0; font-size:15px; }
+.workflow-detail-dialog .review-issue { display:grid; grid-template-columns:32px minmax(0,1fr); gap:20px; padding:24px 0; border-bottom:1px solid var(--detail-line); color:var(--detail-ink); }
+.workflow-detail-dialog .issue-number { font:14px/1.8 Consolas,monospace; color:var(--detail-warning); }
+.workflow-detail-dialog .issue-heading { display:flex; gap:12px; align-items:baseline; }
+.workflow-detail-dialog .issue-heading strong { font-size:13px; }
+.workflow-detail-dialog .issue-level { font-size:12px; color:var(--detail-warning); }
+.workflow-detail-dialog .review-issue p { margin:10px 0 8px; font-size:18px; line-height:1.9; overflow-wrap:anywhere; }
+.workflow-detail-dialog .review-issue small { font-size:12px; line-height:1.8; color:var(--detail-muted); overflow-wrap:anywhere; }
+.workflow-detail-dialog .revision-instructions { margin:22px 0 0; padding:20px 24px; background:var(--detail-tint); color:var(--detail-ink); }
+.workflow-detail-dialog .revision-instructions h4 { font-size:15px; margin:0; color:var(--detail-accent); }
+.workflow-detail-dialog .revision-instructions ol { margin:12px 0 0; padding-left:20px; }
+.workflow-detail-dialog .revision-instructions li { font-size:16px; line-height:1.9; overflow-wrap:anywhere; }
+.workflow-detail-dialog .review-agent-output { margin-top:24px; padding-top:20px; border-top:1px solid var(--detail-line); }
+.workflow-detail-dialog .review-agent-output h4 { font-size:14px; margin:12px 0 8px; }
+.workflow-detail-dialog .review-output-copy { font-size:15px; line-height:1.9; white-space:pre-wrap; overflow-wrap:anywhere; margin:0 0 18px; }
+.workflow-detail-dialog .review-output-copy > div + div { margin-top:16px; }
+.workflow-detail-dialog .review-output-copy dt { font-size:12px; color:var(--detail-muted); margin-bottom:6px; }
+.workflow-detail-dialog .review-output-copy dd { margin:0; }
+.workflow-detail-dialog .review-agent-output-caption { font-size:12px; line-height:1.8; color:var(--detail-muted); }
+.workflow-detail-dialog .review-revisions { margin:0 0 24px; }
+.workflow-detail-dialog .review-revisions > summary { font-weight:600; }
+.workflow-detail-dialog .review-revisions[open] > .detail-module { padding-top:12px; }
+.workflow-detail-dialog .node-evidence-card { padding:24px 0; border-top:1px solid var(--detail-line); }
+.workflow-detail-dialog .source-heading { display:flex; gap:16px; align-items:baseline; }
+.workflow-detail-dialog .source-number { font:14px/1.8 Consolas,monospace; color:var(--detail-accent); }
+.workflow-detail-dialog .source-heading h4 { font-size:18px; margin:0; font-weight:650; overflow-wrap:anywhere; }
+.workflow-detail-dialog .source-locator { font-size:12px; line-height:1.8; color:var(--detail-muted); margin:8px 0; overflow-wrap:anywhere; }
+.workflow-detail-dialog .source-excerpt { margin:16px 0; padding:20px 24px; border-left:2px solid var(--detail-accent); background:var(--detail-tint); color:var(--detail-ink); font-size:16px; line-height:1.95; white-space:pre-wrap; overflow-wrap:anywhere; }
+.workflow-detail-dialog .source-technical-fields { margin:0; }
+.workflow-detail-dialog .source-technical-fields > div { display:grid; grid-template-columns:120px minmax(0,1fr); gap:12px; padding:5px 0; font:11px/1.9 Consolas,monospace; }
+.workflow-detail-dialog .source-technical-fields dd { margin:0; overflow-wrap:anywhere; }
+.workflow-detail-dialog .version-comparison { display:grid; grid-template-columns:1fr 1fr; }
+.workflow-detail-dialog .version-column { min-width:0; padding:20px 24px 20px 0; border-top:1px solid var(--detail-line); }
+.workflow-detail-dialog .version-column + .version-column { padding:20px 0 20px 24px; border-left:1px solid var(--detail-line); }
+.workflow-detail-dialog .version-column h4 { font-size:16px; margin:10px 0; }
+.workflow-detail-dialog .version-before { background:#fff4ef; padding:14px 16px; }
+.workflow-detail-dialog .version-after { background:var(--detail-tint); padding:14px 16px; }
+.workflow-detail-dialog .version-review-notes { font-size:14px; color:var(--detail-ink); line-height:1.9; overflow-wrap:anywhere; }
+.workflow-detail-dialog :is(summary,button):focus-visible { outline:2px solid var(--detail-accent); outline-offset:3px; }
+@media (max-width:760px) {
+  .workflow-detail-dialog { max-height:94dvh; margin-top:3dvh!important; }
+  .workflow-detail-dialog .el-dialog__header { padding:12px 58px 12px 16px; }
+  .workflow-detail-dialog .audit-dialog-heading { gap:10px; flex-wrap:wrap; }
+  .workflow-detail-dialog .detail-node-mark { width:24px; height:24px; }
+  .workflow-detail-dialog .audit-dialog-heading h2 { font-size:16px; }
+  .workflow-detail-dialog .audit-header-code { font-size:10px; }
+  .workflow-detail-dialog .detail-execution-status { width:100%; order:3; margin-left:34px; font-size:12px; }
+  .workflow-detail-dialog .audit-refresh { padding:8px 10px; font-size:12px; }
+  .workflow-detail-dialog .detail-content { padding:18px 16px 0; }
+  .workflow-detail-dialog .detail-section-heading { gap:6px 10px; margin-bottom:14px; }
+  .workflow-detail-dialog .detail-section-heading h3 { font-size:17px; }
+  .workflow-detail-dialog .section-number { font-size:10px; }
+  .workflow-detail-dialog .audit-context { margin:0 16px; }
+  .workflow-detail-dialog .audit-context-heading { font-size:12px; }
+  .workflow-detail-dialog .context-heading-copy { font-size:11px; }
+  .workflow-detail-dialog .context-fields { gap:12px 20px; }
+  .workflow-detail-dialog .diagnosis-result { grid-template-columns:1fr; gap:18px; padding:20px; }
+  .workflow-detail-dialog .diagnosis-blindspots { padding:16px 0 0; border-left:0; border-top:1px solid #c6dbe1; }
+  .workflow-detail-dialog .diagnosis-blindspots p { font-size:17px; }
+  .workflow-detail-dialog .planning-path li { grid-template-columns:42px minmax(0,1fr); gap:16px; }
+  .workflow-detail-dialog .path-index { width:40px; height:40px; }
+  .workflow-detail-dialog .planning-path li:not(:last-child)::before { left:20px; top:42px; }
+  .workflow-detail-dialog .planning-path li p { font-size:16px; }
+  .workflow-detail-dialog .node-output { font-size:15px; }
+  .workflow-detail-dialog .retrieval-stats { gap:8px 16px; padding:0 0 14px; }
+  .workflow-detail-dialog .claim-list-heading { grid-template-columns:1fr; gap:4px; }
+  .workflow-detail-dialog .claim-list-heading > label { justify-self:start; }
+  .workflow-detail-dialog .claim-verdict-counts { gap:4px 10px; font-size:11px; }
+  .workflow-detail-dialog .claim-detail > summary { padding:14px 0; }
+  .workflow-detail-dialog .claim-statement { font-size:15px; }
+  .workflow-detail-dialog .claim-detail-body { gap:16px; padding:14px 0; }
+  .workflow-detail-dialog .review-card-heading { padding:18px 16px; }
+  .workflow-detail-dialog .review-card-heading h4 { font-size:23px; }
+  .workflow-detail-dialog .review-issue { grid-template-columns:24px minmax(0,1fr); gap:12px; padding:20px 0; }
+  .workflow-detail-dialog .review-issue p { font-size:16px; }
+  .workflow-detail-dialog .revision-instructions { padding:16px 18px; }
+  .workflow-detail-dialog .source-heading h4 { font-size:16px; }
+  .workflow-detail-dialog .source-excerpt { padding:16px 18px; font-size:15px; }
+  .workflow-detail-dialog .version-comparison { grid-template-columns:1fr; }
+  .workflow-detail-dialog .version-column,.workflow-detail-dialog .version-column + .version-column { padding:18px 0; border-left:0; }
+}
+@media (prefers-reduced-motion:reduce) { .workflow-detail-dialog .context-heading-copy svg { transition:none; } }

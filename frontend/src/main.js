@@ -3,6 +3,7 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import './styles/auth.css'
 import './styles/theme.css'
+import './styles/selects.css'
 
 import App from './App.vue'
 import router from './router'

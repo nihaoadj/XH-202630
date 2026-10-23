@@ -202,7 +202,7 @@ python scripts/run_tests.py --profile acceptance
 python scripts/run_tests.py --suite backend-api --suite backend-migration
 ```
 
-`quick` 用于快速定位；`regression` 包括 Ruff、全前端 ESLint、请求上下文 JSDoc 类型检查、Python 声明/锁/环境检查、后端全量、比赛金标、课件冻结评测、前端九项单元与构建；`acceptance` 追加十三项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
+`quick` 用于快速定位；`regression` 包括 Ruff、全前端 ESLint、请求上下文 JSDoc 类型检查、Python 声明/锁/环境检查、后端全量、比赛金标、课件冻结评测、前端十项单元与构建；`acceptance` 追加十四项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
 
 安装入口、CI 和 Docker 消费 `backend/requirements.lock.txt`（精确版本与 SHA256），工程工具单独锁在 `backend/requirements-dev.lock.txt`；前端使用 `npm ci`。更新依赖后重新生成锁文件，再运行 `python scripts/check_dependencies.py` 与 `python -m pip check`。锁文件再生成命令见 [部署说明](docs/deployment.md)，不会自动升级正在运行的服务。
 
@@ -292,7 +292,16 @@ npm --prefix frontend run test:feedback-browser
 
 专项覆盖桌面展开/收起与手机布局、无可用批次、测评前状态、单选/多选/问答、未完成时禁用提交、反思字段 payload、反馈小结与逐题结果、纠错及新节点选择、下一步确认和原 `/generate` 路由，并检查 44px 操作目标、横向溢出、选中对比度、键盘焦点与减少动态效果。截图和 `summary.json` 位于 `frontend/tests/test-results/feedback-ui/`；Windows 默认使用 Edge，可通过 `FEEDBACK_BROWSER_CHANNEL` 或 `TEST_BROWSER_CHANNEL` 选择通道。
 
-学习历史、学习报告、用户资料、四页画像请求归属及页面动效专项都使用本地 HTTP fixture。先构建后可单项运行；聚合浏览器入口会执行全部十三项专项：
+Tutor 界面专项使用本地 HTTP fixture，覆盖普通/专注阅读和测评提示中的消息、引用、输入、等待与失败恢复，以及五页顶部辅助导航的颜色一致性；不调用真实 Tutor 模型：
+
+```powershell
+npm --prefix frontend run build
+npm --prefix frontend run test:tutor-ui-browser
+```
+
+截图和 `summary.json` 位于 `frontend/tests/test-results/tutor-ui/`；Windows 默认使用 Edge，可通过 `TUTOR_BROWSER_CHANNEL` 或 `TEST_BROWSER_CHANNEL` 选择通道。
+
+学习历史、学习报告、用户资料、四页画像请求归属及页面动效专项都使用本地 HTTP fixture。先构建后可单项运行；聚合浏览器入口会执行全部十四项专项：
 
 ```powershell
 npm --prefix frontend run build

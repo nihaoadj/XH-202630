@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
 :is(.is-dashboard,.is-onboarding,.is-generation,.is-resources,.is-feedback) .topbar-kicker { padding-left:15px; border-left:1px solid var(--dashboard-line); color:var(--dashboard-muted); font:10px/1.5 Consolas,'SFMono-Regular',monospace; }
 :is(.is-dashboard,.is-onboarding,.is-generation,.is-resources,.is-feedback) .topbar-copy p { display:none; }
 :is(.is-dashboard,.is-onboarding,.is-generation,.is-resources,.is-feedback) .topbar-actions { position:static; transform:none; width:auto; gap:2px; flex-wrap:nowrap; }
-:is(.is-dashboard,.is-onboarding,.is-generation,.is-resources,.is-feedback) .topbar-action { min-height:44px; margin:0; padding-inline:12px; border:1px solid transparent; border-radius:4px; background:transparent; color:var(--dashboard-muted); font-size:12px; font-weight:500; }
+:is(.is-dashboard,.is-onboarding,.is-generation,.is-resources,.is-feedback) .topbar-action { min-height:44px; margin:0; padding-inline:12px; border:1px solid transparent; border-radius:4px; background:transparent; color:var(--dashboard-ink); font-size:12px; font-weight:600; }
 :is(.is-dashboard,.is-onboarding,.is-generation,.is-resources,.is-feedback) .topbar-action:hover { border-color:transparent; background:#f0f4f7; color:var(--dashboard-ink); }
 :is(.is-dashboard,.is-onboarding,.is-generation,.is-resources,.is-feedback) .topbar-meta { display:flex; min-width:0; width:auto; padding-left:24px; border-left:1px solid var(--dashboard-line); }
 :is(.is-dashboard,.is-onboarding,.is-generation,.is-resources,.is-feedback) .topbar-meta > div { padding:0; border:0; border-radius:0; background:transparent; }

@@ -15,4 +15,4 @@ npm --prefix frontend run build
 npm --prefix frontend run test:motion-browser
 ```
 
-本地证据写入 `frontend/tests/test-results/motion-ui/`，包括 `summary.json` 和中间帧截图；该目录是忽略的验收产物。聚合浏览器入口会把本专项纳入十三项检查，须先构建前端。
+本地证据写入 `frontend/tests/test-results/motion-ui/`，包括 `summary.json` 和中间帧截图；该目录是忽略的验收产物。聚合浏览器入口会把本专项纳入全部浏览器检查，须先构建前端。

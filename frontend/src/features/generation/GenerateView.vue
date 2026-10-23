@@ -45,16 +45,32 @@
 
     <section v-if="selectedJob" class="studio-grid">
       <div class="process-panel">
-        <div class="panel-title compact"><div><span class="eyebrow">01 / WORKFLOW</span><h3>生成协作轨迹</h3></div><span class="connection-state" :class="`is-${connectionStatus}`"><i aria-hidden="true" />{{ productionConnectionLabel }}</span></div>
+        <div class="panel-title compact"><div class="panel-heading-copy"><span class="panel-section-number">01</span><h3>生成协作轨迹</h3><span class="eyebrow">/ WORKFLOW</span></div><span class="connection-state" :class="`is-${connectionStatus}`"><i aria-hidden="true" />{{ productionConnectionLabel }}</span></div>
         <div ref="processScroll" class="process-scroll" role="region" aria-label="生成协作轨迹" tabindex="0">
-          <AgentVisualization v-if="selectedRunId" :trace="timelineState.steps" :markers="timelineState.markers" :connection-status="connectionStatus" :legacy-partial="timelineState.replayCompleteness === 'legacy_partial'" :resource-executions="timelineState.resourceExecutions" :resource-progress-summary="selectedJob?.resource_progress_summary || timelineState.resourceProgressSummary" :retrying-resource-key="retryingResourceKey" :retry-enabled="['completed', 'failed'].includes(selectedJob.job_status)" :claim-reports="claimReports" @open-child-run="openChildRun" @open-resource="openGeneratedResource" @retry-resource="retryResource" @open-claim-report="openClaimReport" />
+          <AgentVisualization
+            v-if="selectedRunId" :key="selectedRunId" :run-id="selectedRunId"
+            :trace="timelineState.steps" :child-runs="timelineState.childRuns"
+            :legacy-partial="timelineState.replayCompleteness === 'legacy_partial'"
+            :resource-executions="timelineState.resourceExecutions"
+            :resource-progress-summary="selectedJob.resource_progress_summary || timelineState.resourceProgressSummary"
+            :requested-resource-types="selectedJob.request_payload?.resource_types || []"
+            :job-status="selectedJob.job_status" :published-resources="resources"
+            :review-enabled="selectedJob.request_payload?.include_review !== false"
+            :retrying-resource-key="retryingResourceKey" :retry-enabled="['completed', 'failed'].includes(selectedJob.job_status)"
+            :claim-reports="claimReports" @open-child-run="openChildRun" @open-resource="openGeneratedResource"
+            @retry-resource="retryResource" @open-claim-report="openClaimReport"
+            @inspect-step="openAuditStep" @inspect-resource="openAuditResource"
+          />
         </div>
       </div>
       <div class="resources-panel" v-module-motion="{ key: selectedRunId + ':' + selectedResourceId, ready: !loadingResources }">
         <div class="panel-title compact resource-panel-heading">
-          <div><span class="eyebrow">02 / OUTPUT</span><h3>{{ selectedJob.job_status === 'completed' ? '任务资源' : '资源预览' }}</h3></div>
-          <div class="resource-panel-tools">
-            <span class="output-count">{{ resources.length }} <small>份资源</small></span>
+          <div class="panel-heading-copy"><span class="panel-section-number">02</span><h3>{{ selectedJob.job_status === 'completed' ? '任务资源' : '资源预览' }}</h3><span class="eyebrow">/ OUTPUT</span></div>
+        </div>
+        <div class="resource-toolbar">
+          <el-select v-if="resources.length" v-model="selectedResourceId" aria-label="选择要阅读的资源" filterable placeholder="选择要阅读的资源" class="resource-select" popper-class="refined-select-dropdown"><el-option v-for="item in resources" :key="item.resource_id" :label="resourceLabel(item)" :value="item.resource_id" /></el-select>
+          <div class="resource-toolbar-actions">
+            <div v-if="resources.length" id="generation-resource-difficulty" class="resource-grade" />
             <div class="task-actions" role="group" aria-label="资源任务操作">
               <el-button v-if="selectedJob.job_status === 'running' || selectedJob.job_status === 'queued'" class="status-action status-action-refresh" :icon="Refresh" @click="refreshStatus">刷新状态</el-button>
               <el-button v-if="selectedJob.job_status === 'failed'" class="status-action status-action-retry" :icon="RefreshRight" @click="retryGeneration" :loading="retrying">重新生成</el-button>
@@ -64,13 +80,10 @@
                 <template #dropdown><el-dropdown-menu><el-dropdown-item command="text" :disabled="!selectedJob">文本学习资源</el-dropdown-item><el-dropdown-item command="courseware" :disabled="!resources.length">HTML 互动课件</el-dropdown-item></el-dropdown-menu></template>
               </el-dropdown>
             </div>
-          </div>
-        </div>
-        <div v-if="resources.length" class="resource-toolbar">
-          <el-select v-model="selectedResourceId" aria-label="选择要阅读的资源" filterable placeholder="选择要阅读的资源" class="resource-select" popper-class="refined-select-dropdown"><el-option v-for="item in resources" :key="item.resource_id" :label="resourceLabel(item)" :value="item.resource_id" /></el-select>
-          <div class="reader-toolbar-actions">
-            <div id="generation-reader-actions" class="reader-resource-actions" role="group" aria-label="资源文件操作" />
-            <el-button class="learning-mode-action" :icon="Reading" @click="enterLearningMode">学习模式<el-icon class="mode-arrow"><ArrowRight /></el-icon></el-button>
+            <div v-if="resources.length" class="reader-toolbar-actions">
+              <div id="generation-reader-actions" class="reader-resource-actions" role="group" aria-label="资源文件操作" />
+              <el-button class="learning-mode-action" :icon="Reading" @click="enterLearningMode">学习模式<el-icon class="mode-arrow"><ArrowRight /></el-icon></el-button>
+            </div>
           </div>
         </div>
         <div ref="resourceScroll" v-loading="loadingResources" class="resource-stage" role="region" aria-label="学习资源预览" :aria-busy="loadingResources" tabindex="0">
@@ -93,8 +106,10 @@
           </PreparationPanel>
           <ResourceViewer v-if="selectedResource" :resources="[selectedResource]">
             <template #header="{ resource, download, difficulty }">
-              <Teleport to="#generation-reader-actions">
+              <Teleport to="#generation-resource-difficulty">
                 <el-tag class="resource-difficulty" effect="plain" :type="difficulty">{{ resource.difficulty || '待分级' }}</el-tag>
+              </Teleport>
+              <Teleport to="#generation-reader-actions">
                 <el-button v-if="resource.file_path" class="download-button toolbar-download-action" :icon="Download" @click="download(resource.resource_id)">下载材料</el-button>
               </Teleport>
             </template>
@@ -161,6 +176,7 @@
       </template>
     </el-dialog>
 
+    <WorkflowDetailDialog v-model:visible="auditVisible" v-model:resource-id="auditResourceId" :loading="auditLoading" :error="auditError" :claims-error="auditClaimsError" :snapshot="auditSnapshot" :claims="auditClaims" :step="auditStep" :run-id="selectedRunId" :claim-enabled="selectedJob?.request_payload?.include_claim_check !== false" @refresh="refreshAudit" />
     <el-dialog v-model="claimReportVisible" class="production-dialog claim-report-dialog" width="min(760px, calc(100vw - 32px))">
       <template #header>
         <div class="claim-report-header">
@@ -169,7 +185,7 @@
             <div>
               <span class="claim-report-eyebrow">CLAIM QUALITY CHECK</span>
               <h3>资源 Claim 审核报告</h3>
-              <p>核对生成内容中的事实陈述，确保每一条都能被知识来源支持。</p>
+              <p>对照冻结来源核验已抽取的事实陈述。</p>
             </div>
           </div>
           <div
@@ -194,10 +210,11 @@
             </div>
             <div class="claim-rate-copy">
               <span class="claim-report-eyebrow">AUDIT SUMMARY</span>
-              <strong>{{ claimIssueCount(selectedClaimReport) ? '发现需要关注的事实' : '事实核验全部通过' }}</strong>
+              <strong>{{ claimAuditSummary(selectedClaimReport, selectedJob?.request_payload?.include_claim_check !== false) }}</strong>
               <p>
                 共检查 {{ selectedClaimReport.factual_claim_total || 0 }} 条事实 Claim，
                 {{ selectedClaimReport.supported_claim_total || 0 }} 条获得证据支持。
+                仅覆盖已抽取的事实，不代表全文正确率。
               </p>
             </div>
           </div>
@@ -224,34 +241,10 @@
 
         <el-alert v-if="selectedClaimReport.claim_warning_publish" title="该资源达到发布阈值，已带 Claim 警告发布。" type="warning" :closable="false" show-icon class="claim-report-alert" />
         <el-alert v-if="selectedClaimReport.claim_publish_decision_pending" title="该资源满足用户审核阈值，请查看报告后决定是否发布。" type="warning" :closable="false" show-icon class="claim-report-alert" />
-        <section class="claim-issues-section" aria-label="事实问题">
-          <div class="claim-section-heading">
-            <div>
-              <span class="claim-report-eyebrow">REVIEW NOTES</span>
-              <h4>需要关注的事实</h4>
-            </div>
-            <span class="claim-issue-count">{{ claimIssueCount(selectedClaimReport) }} 条</span>
-          </div>
-
-          <div v-if="!claimIssueCount(selectedClaimReport)" class="claim-report-empty">
-            <span class="claim-empty-icon" aria-hidden="true"><CircleCheck /></span>
-            <div><strong>事实核验通过</strong><p>没有需要提示的事实 Claim，当前内容可以继续使用。</p></div>
-          </div>
-          <div v-else class="claim-issue-list">
-            <article v-for="(issue, index) in selectedClaimReport.issues" :key="issue.claim_id" class="claim-issue-card">
-              <div class="claim-issue-marker">{{ String(index + 1).padStart(2, '0') }}</div>
-              <div class="claim-issue-content">
-                <div class="claim-issue-topline">
-                  <el-tag :type="issue.verdict === 'contradicted' ? 'danger' : 'warning'" size="small" effect="plain">
-                    {{ issue.verdict === 'contradicted' ? '证据矛盾' : '未获证据支持' }}
-                  </el-tag>
-                  <span>事实 Claim</span>
-                </div>
-                <p>{{ issue.claim_text }}</p>
-                <small>{{ issue.reason || '未提供审核原因' }}</small>
-              </div>
-            </article>
-          </div>
+        <section class="claim-issues-section" aria-label="事实与证据">
+          <el-button text type="primary" @click="loadClaimReports()">刷新报告</el-button>
+          <el-alert v-if="selectedClaimReport.sourceError" :title="selectedClaimReport.sourceError" type="warning" :closable="false" />
+          <ClaimEvidenceList :rows="selectedClaimReport.rows" />
         </section>
 
         <div v-if="selectedClaimReport.claim_publish_decision_pending" class="claim-report-actions">
@@ -262,6 +255,7 @@
           </div>
         </div>
       </template>
+      <el-empty v-else description="暂无可展示的 Claim 审核数据，可关闭后重试。" />
     </el-dialog>
   </div>
 </template>
@@ -271,11 +265,15 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Aim, ArrowDown, Download, ArrowRight, CircleCheck, Clock, Delete, DocumentChecked, Plus, Reading, Refresh, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { generateApi, knowledgeApi, profileApi, resourceApi } from '../../api'
+import { generateApi, knowledgeApi, profileApi, resourceApi, runApi } from '../../api'
 import { coursewareApi } from '../courseware/api'
 import { resourceLibraryApi } from '../resource-library/api'
 import { useGenerationProgress } from './useGenerationProgress.js'
 import { useGenerationClaims } from './useGenerationClaims.js'
+import { useGenerationAudit } from './useGenerationAudit.js'
+import { buildResourceStatusItems } from './resourceStatusPresentation.js'
+import WorkflowDetailDialog from './WorkflowDetailDialog.vue'
+import ClaimEvidenceList from './ClaimEvidenceList.vue'
 import { useProductionLayout } from './useProductionLayout.js'
 import ResourceViewer from '../learning-documents/ResourceViewer.vue'
 import PreparationPanel from '../../components/PreparationPanel.vue'
@@ -325,6 +323,7 @@ const jobs = ref([])
 const loadingJobs = ref(false)
 const jobsError = ref('')
 let jobsRequestVersion = 0
+let statusRequestVersion = 0
 let resourcesRequestVersion = 0
 let nodeTiersRequestVersion = 0
 let claimsRequestVersion = 0
@@ -392,9 +391,16 @@ const selectedResource = computed(
   () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
 )
 const selectedClaimReport = computed(() => claimReports.value[selectedClaimReportId.value] || null)
+const {
+  visible: auditVisible, loading: auditLoading, error: auditError, claimsError: auditClaimsError,
+  snapshot: auditSnapshot, claims: auditClaims, step: auditStep, resourceId: auditResourceId,
+  refresh: refreshAudit, openStep: openAuditStep, openResource: openAuditResource,
+} = useGenerationAudit({ selectedRunId, selectedLearnerId })
 const retryableResourceTypes = computed(() => {
   const retryableStates = new Set(['failed', 'human_review', 'revision_requested'])
-  const types = (timelineState.value.resourceExecutions || [])
+  const types = buildResourceStatusItems(timelineState.value.resourceExecutions || [], {
+    resources: resources.value, runId: selectedRunId.value, claimReports: claimReports.value,
+  })
     .filter((item) => retryableStates.has(item.resource_execution_state))
     .map((item) => item.resource_type)
     .filter(Boolean)
@@ -760,7 +766,7 @@ async function loadCoursewareSourceResources() {
 }
 
 const {
-  loadClaimReports, openClaimReport, claimPassRateLabel, claimIssueCount,
+  loadClaimReports, openClaimReport, claimPassRateLabel, claimAuditSummary,
   claimReportStatusLabel, claimReportStatusClass, claimRateStyle, decideClaimPublication,
 } = useGenerationClaims({
   selectedRunId, selectedLearnerId, timelineState, resources, claimReports,
@@ -790,14 +796,29 @@ async function refreshStatus() {
   if (!selectedJob.value?.run_id) return
   const learnerId = selectedLearnerId.value
   const runId = selectedJob.value.run_id
-  const version = jobsRequestVersion
-  const isCurrent = () => generationMounted && learnerId === selectedLearnerId.value && runId === selectedJob.value?.run_id && version === jobsRequestVersion
+  const version = ++statusRequestVersion
+  const jobsVersion = jobsRequestVersion
+  const requestWatermark = timelineState.value.lastSequence
+  const isCurrent = () => generationMounted && learnerId === selectedLearnerId.value && runId === selectedJob.value?.run_id
+    && version === statusRequestVersion && jobsVersion === jobsRequestVersion
   try {
     const res = await generateApi.getJobStatus(runId)
     if (!isCurrent()) return
     const nextJob = res.data
+    if (nextJob.run_id !== runId) return
+    let resourceOptions = {}
+    const items = nextJob.resource_progress_summary?.items || []
+    if (items.some(item => !item.updated_at) && timelineState.value.resourceExecutions.length) {
+      // Legacy projections lack an execution timestamp. Bound their authority
+      // by events observed before this request, never by an invented infinity.
+      const timeline = await runApi.timeline(runId, { limit: 1 })
+      if (!isCurrent()) return
+      if (timeline.data.run?.run_id && timeline.data.run.run_id !== runId) return
+      resourceOptions = { authoritative: true,
+        watermark: Math.min(requestWatermark, Number(timeline.data.run?.last_event_sequence || 0)) }
+    }
     jobs.value = jobs.value.map((item) => (item.run_id === nextJob.run_id ? nextJob : item))
-    timelineState.value = applyRunSnapshot(timelineState.value, nextJob)
+    timelineState.value = applyRunSnapshot(timelineState.value, nextJob, resourceOptions)
     persistSelectedJob()
 
     const hasPublishedResources = Number(nextJob.resource_progress_summary?.published || 0) > 0
@@ -1163,11 +1184,8 @@ onBeforeUnmount(() => {
 .selector-field label { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:8px; color:var(--prod-muted); font-size:12px; }
 .selector-field label span { font:9px Consolas,monospace; }
 .task-select,.resource-select { width:100%; min-width:0; }
-.generate-page :deep(.el-select__wrapper) { min-height:44px; border-radius:3px; background:#f7f9fb; box-shadow:0 0 0 1px #cdd9e2 inset; padding-inline:12px; font-size:12px; }
-.generate-page :deep(.el-select__wrapper.is-focused) { box-shadow:0 0 0 2px var(--prod-accent) inset; }
-.generate-page :deep(.el-select__placeholder) { color:var(--prod-ink); }
 .profile-option { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
-.profile-option > span { overflow:hidden; text-overflow:ellipsis; }
+.profile-option > span { min-width:0; white-space:normal; overflow-wrap:anywhere; }
 .profile-delete { width:30px; height:30px; flex:none; margin:0; color:#a93434; }
 .job-summary { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,.7fr) minmax(0,.85fr) minmax(0,.65fr) repeat(2,minmax(0,1fr)); gap:0; margin:0 20px 14px; padding-top:12px; border-top:1px solid var(--prod-line); }
 .summary-item { min-width:0; padding:0 12px; border-left:1px solid var(--prod-line); }
@@ -1187,9 +1205,8 @@ onBeforeUnmount(() => {
 .error-message { grid-column:1/-1; display:flex; align-items:flex-start; gap:8px; margin:0; padding:12px 22px; color:#a1322c; background:#fff4f1; border-top:1px solid #efcec8; font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
 .error-message .el-icon { flex:none; margin-top:3px; }
 .task-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; }
-.resource-panel-tools { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:12px; min-width:0; }
-.resource-panel-heading { flex-wrap:wrap; }
-.resource-panel-heading > div:first-child { flex:none; }
+.panel-heading-copy { display:flex; align-items:baseline; gap:8px; min-width:0; white-space:nowrap; }
+.panel-section-number { flex:none; color:var(--prod-accent); font:12px/1.5 Consolas,monospace; }
 :deep(.production-dialog .el-button), .generate-page :deep(.el-button) { min-height:44px; height:auto; border-radius:3px; font-size:12px; font-weight:600; transition:background .16s ease,border-color .16s ease,color .16s ease; }
 .generate-page :deep(.el-button + .el-button) { margin-left:0; }
 .generate-page :deep(.el-button > span) { gap:7px; white-space:normal; line-height:1.5; }
@@ -1201,22 +1218,24 @@ onBeforeUnmount(() => {
 .studio-grid { display:grid; grid-template-columns:minmax(280px,.3fr) minmax(0,.7fr); gap:20px; min-width:0; }
 .process-panel,.resources-panel { min-width:0; display:flex; flex-direction:column; }
 .resources-panel { border-left:1px solid var(--prod-line); padding-left:20px; }
-.panel-title { display:flex; flex:none; min-height:60px; align-items:center; justify-content:space-between; gap:12px; padding:0 0 12px; border-bottom:1px solid var(--prod-line); }
-.panel-title h3 { margin:4px 0 0; font-size:19px; line-height:1.4; }
+.panel-title { display:flex; flex:none; min-height:40px; align-items:center; justify-content:space-between; gap:8px; padding:0 0 8px; border-bottom:1px solid var(--prod-line); }
+.panel-title h3 { margin:0; font-size:18px; line-height:1.4; }
 .connection-state { display:flex; align-items:center; gap:6px; color:var(--prod-muted); font-size:11px; }
 .connection-state i { width:6px; height:6px; flex:none; border-radius:50%; background:#64748b; }
 .connection-state.is-live { color:#176b70; }
 .connection-state.is-live i { background:#176b70; }
 .connection-state:is(.is-error,.is-fallback) { color:#935719; }
 .connection-state:is(.is-error,.is-fallback) i { background:#935719; }
-.output-count { color:var(--prod-accent); font:20px/1 Consolas,monospace; white-space:nowrap; }
-.output-count small { color:var(--prod-muted); font:11px sans-serif; }
 .process-scroll { padding:8px 8px 0 0; min-width:0; }
 .process-scroll :deep(.workflow-timeline) { border:0; border-radius:0; box-shadow:none; background:transparent; }
 .process-scroll :deep(.el-card__header) { display:none; }
 .process-scroll :deep(.el-card__body) { padding:0; }
-.resource-toolbar { display:grid; grid-template-columns:minmax(0,1fr) auto; flex:none; align-items:center; gap:12px; padding:12px 0; }
-.resource-select { flex:1; }
+.resource-toolbar { display:flex; flex-wrap:wrap; flex:none; align-items:center; gap:8px; padding:10px 0; min-width:0; }
+.resource-select { flex:1 1 160px; width:auto; }
+.resource-toolbar-actions { display:flex; flex:0 1 auto; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; min-width:0; max-width:100%; margin-left:auto; }
+.resource-grade { display:flex; flex:none; align-items:center; }
+.resource-toolbar-actions :deep(.el-button) { margin:0; }
+.resource-toolbar-actions .task-actions .status-action:not(.is-retry),.resource-toolbar-actions .toolbar-download-action,.resource-toolbar-actions .learning-mode-action { width:112px; flex:none; }
 .resource-select :deep(.el-select__selection),.resource-select :deep(.el-select__selected-item) { min-width:0; max-width:100%; }
 .resource-select :deep(.el-select__selected-item > span) { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .reader-toolbar-actions,.reader-resource-actions { display:flex; min-width:0; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
@@ -1381,8 +1400,8 @@ onBeforeUnmount(() => {
   .summary-item { padding-inline:9px; }
   .summary-item strong { margin-top:5px; }
   .summary-item .summary-count { font-size:18px; }
-  .panel-title { min-height:56px; padding-bottom:8px; }
-  .panel-title h3 { font-size:17px; margin-top:2px; }
+  .panel-title { min-height:36px; padding-bottom:6px; }
+  .panel-title h3 { font-size:17px; }
   .resource-toolbar { padding:9px 0; gap:8px; }
   .process-scroll { padding-top:12px; }
   .resource-placeholder { padding:18px; }
@@ -1405,9 +1424,9 @@ onBeforeUnmount(() => {
   .summary-item:nth-child(odd) { padding-left:0; border-left:0; }
   .summary-item:nth-child(4) { padding-left:12px; border-left:1px solid var(--prod-line); }
   .summary-item strong { font-size:12px; }
-  .resource-panel-tools { justify-content:flex-start; width:100%; }
-  .resource-toolbar { grid-template-columns:minmax(0,1fr); }
-  .reader-toolbar-actions { justify-self:end; max-width:100%; }
+  .resource-select { flex-basis:100%; }
+  .resource-toolbar-actions { width:100%; }
+  .reader-toolbar-actions { max-width:100%; }
   .resource-stage :deep(.reader-content),.resource-stage :deep(.reader-footer) { padding:18px; }
   .production-footer { flex-wrap:wrap; margin-top:-14px; font-size:9px; }
   .claim-report-header { flex-wrap:wrap; }

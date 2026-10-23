@@ -72,14 +72,14 @@ export function createInitialTimelineState() {
   }
 }
 
-export function applyRunSnapshot(state, snapshot) {
+export function applyRunSnapshot(state, snapshot, resourceOptions = {}) {
   const next = {
     ...state,
     runSummary: { ...(state.runSummary || {}), ...snapshot },
     replayCompleteness: snapshot.replay_completeness || state.replayCompleteness,
     terminal: Boolean(snapshot.is_terminal || TERMINAL_STATUSES.has(snapshot.run_status)),
   }
-  return applyResourceProgressSnapshot(next, snapshot)
+  return applyResourceProgressSnapshot(next, snapshot, resourceOptions)
 }
 
 function normalizeEvent(event) {
@@ -132,6 +132,7 @@ export function normalizeResourceExecution(source, fallbackSequence = 0) {
     || source.state
     || payload.resource_execution_state
     || payload.execution_state
+    || payload.state
     || RESOURCE_EVENT_STATES[source.event_type]
     || 'queued'
   return {
@@ -140,6 +141,7 @@ export function normalizeResourceExecution(source, fallbackSequence = 0) {
     key: `${resourceSpecId}:${representation}`,
     resource_id: source.resource_id ?? payload.resource_id ?? null,
     review_id: source.review_id ?? payload.review_id ?? null,
+    review_status: source.review_status ?? payload.review_status ?? null,
     resource_type: source.resource_type ?? payload.resource_type ?? '学习资源',
     learning_objective: source.learning_objective ?? payload.learning_objective ?? '',
     resource_execution_state: state,
@@ -151,6 +153,7 @@ export function normalizeResourceExecution(source, fallbackSequence = 0) {
     artifact_format: source.artifact_format ?? payload.artifact_format ?? null,
     validation_status: source.validation_status ?? payload.validation_status ?? null,
     publication_status: source.publication_status ?? payload.publication_status ?? null,
+    claim_publish_decision: source.claim_publish_decision ?? payload.claim_publish_decision ?? null,
     claim_metric_status: source.claim_metric_status ?? payload.claim_metric_status ?? null,
     claim_count: source.claim_count ?? payload.claim_count ?? null,
     factual_claim_total: source.factual_claim_total ?? payload.factual_claim_total ?? null,
@@ -159,43 +162,85 @@ export function normalizeResourceExecution(source, fallbackSequence = 0) {
     not_in_evidence_claim_total: source.not_in_evidence_claim_total ?? payload.not_in_evidence_claim_total ?? null,
     claim_factual_pass_rate: source.claim_factual_pass_rate ?? payload.claim_factual_pass_rate ?? null,
     claim_warning_publish: Boolean(source.claim_warning_publish ?? payload.claim_warning_publish),
+    claim_publish_decision_pending: source.claim_publish_decision_pending ?? payload.claim_publish_decision_pending,
     display_order: Number(source.display_order ?? payload.display_order ?? 0) || 0,
     updated_at: source.updated_at ?? payload.updated_at ?? source.occurred_at ?? null,
     last_sequence: Number(source.last_sequence ?? source.sequence ?? fallbackSequence) || 0,
   }
 }
 
-function mergeResourceExecution(current, incoming) {
+function resourceTimestamp(value) {
+  if (!value) return null
+  const text = String(value)
+  const timestamp = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(text) ? text : `${text}Z`)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function resourcePatch(source, incoming) {
+  const aliases = {
+    resource_execution_state: ['resource_execution_state', 'execution_state', 'state'],
+    agent_name: ['agent_name', 'node_name'],
+    updated_at: ['updated_at', 'occurred_at'],
+  }
+  const patch = { key: incoming.key, resource_spec_id: incoming.resource_spec_id, last_sequence: incoming.last_sequence }
+  for (const [key, value] of Object.entries(incoming)) {
+    const names = aliases[key] || [key]
+    if (names.some(name => Object.hasOwn(source, name) || Object.hasOwn(source.payload || {}, name))) {
+      patch[key] = value
+    }
+  }
+  if (RESOURCE_EVENT_STATES[source.event_type]) patch.resource_execution_state = incoming.resource_execution_state
+  return patch
+}
+
+function mergeResourceExecution(current, incoming, { snapshot = false, authoritative = false } = {}) {
   if (!current) return incoming
   const newerAttempt = incoming.attempt > current.attempt
   const sameAttempt = incoming.attempt === current.attempt
-  const newerEvent = incoming.last_sequence >= current.last_sequence
-  if (newerAttempt || (sameAttempt && newerEvent)) {
+  const currentTime = resourceTimestamp(current.updated_at)
+  const incomingTime = resourceTimestamp(incoming.updated_at)
+  const timestamped = currentTime != null && incomingTime != null
+  const newer = snapshot
+    ? (authoritative ? incoming.last_sequence >= current.last_sequence
+      : timestamped ? incomingTime >= currentTime : incoming.last_sequence >= current.last_sequence)
+    : incoming.last_sequence > current.last_sequence && (!timestamped || incomingTime >= currentTime)
+  if (newerAttempt || (sameAttempt && newer)) {
     return {
       ...current,
       ...incoming,
-      resource_id: incoming.resource_id || current.resource_id,
-      review_id: incoming.review_id || current.review_id,
-      error_code: incoming.error_code || null,
-      error_message: incoming.error_message || '',
+      last_sequence: Math.max(current.last_sequence, incoming.last_sequence),
     }
   }
-  // A delayed/backfilled event may carry metadata omitted from the newer
-  // event, but it must never regress the execution state or attempt.
+  // An older event may fill stable descriptive fields, but cannot attach an
+  // old artifact, validation or Claim result to a newly started attempt.
   const next = { ...current }
+  if (!sameAttempt || (incoming.resource_id && current.resource_id && incoming.resource_id !== current.resource_id)) return next
   for (const [key, value] of Object.entries(incoming)) {
+    if (!['resource_type', 'learning_objective', 'display_order'].includes(key)) continue
     if ((next[key] == null || next[key] === '') && value != null && value !== '') next[key] = value
   }
   return next
 }
 
-function upsertResourceExecution(executions, source, fallbackSequence = 0) {
-  const incoming = normalizeResourceExecution(source, fallbackSequence)
+function upsertResourceExecution(executions, source, fallbackSequence = 0, options = {}) {
+  let incoming = normalizeResourceExecution(source, fallbackSequence)
   if (!incoming) return executions
   const index = executions.findIndex((item) => item.key === incoming.key)
   const next = [...executions]
   if (index < 0) next.push(incoming)
-  else next[index] = mergeResourceExecution(next[index], incoming)
+  else {
+    const current = next[index]
+    const patch = resourcePatch(source, incoming)
+    const attempt = patch.attempt ?? current.attempt
+    if (attempt > current.attempt) {
+      // A new attempt must not inherit the previous artifact, publication,
+      // errors or Claim result, even when its first event is sparse.
+      incoming = { ...incoming, resource_type: patch.resource_type ?? current.resource_type,
+        learning_objective: patch.learning_objective ?? current.learning_objective,
+        display_order: patch.display_order ?? current.display_order }
+    } else incoming = { ...current, ...patch, attempt }
+    next[index] = mergeResourceExecution(current, incoming, options)
+  }
   return next.sort((left, right) => (
     Number(left.display_order || 0) - Number(right.display_order || 0)
       || String(left.resource_type || '').localeCompare(String(right.resource_type || ''), 'zh-CN')
@@ -213,19 +258,22 @@ function progressItems(source) {
     || []
 }
 
-export function applyResourceProgressSnapshot(state, source, { authoritative = false } = {}) {
+export function applyResourceProgressSnapshot(state, source, { authoritative = false, watermark = null } = {}) {
   if (!source) return state
+  const snapshotSequence = watermark ?? Math.max(
+    Number(source.last_event_sequence || source.run?.last_event_sequence || 0),
+    ...(source.events || []).map(event => Number(event.sequence || event.event_sequence || 0)),
+  )
   let resourceExecutions = state.resourceExecutions || []
   for (const item of progressItems(source)) {
-    // A persisted snapshot represents the latest durable state, even when a
-    // backfilled historical event has a larger sequence number.
-    const snapshotItem = authoritative
-      ? { ...item, last_sequence: Number.MAX_SAFE_INTEGER }
-      : item
+    // A finite replay watermark protects the snapshot from its own history
+    // while still allowing subsequent live events to update this attempt.
+    const snapshotItem = { ...item, last_sequence: Math.max(Number(item.last_sequence || 0), snapshotSequence) }
     resourceExecutions = upsertResourceExecution(
       resourceExecutions,
       snapshotItem,
       snapshotItem.last_sequence || 0,
+      { snapshot: true, authoritative },
     )
   }
   const summary = source.resource_progress_summary || source.progress_summary
@@ -247,9 +295,15 @@ function upsertStep(steps, event) {
     key,
     step_id: event.step_id,
     sequence: event.step_sequence || current.sequence || event.sequence,
-    agent_name: event.node_name || current.agent_name || 'workflow',
+    agent_name: current.agent_name || event.node_name || 'workflow',
+    node_name: event.node_name || current.node_name,
+    input_summary: event.payload.input_summary ?? current.input_summary,
+    decision_reason: event.payload.decision_reason ?? current.decision_reason,
+    evidence_refs: event.payload.evidence_refs ?? current.evidence_refs,
+    resource_ids: event.payload.resource_ids ?? current.resource_ids,
+    review_ids: event.payload.review_ids ?? current.review_ids,
     action: event.summary || current.action || EVENT_LABELS[event.event_type] || event.event_type,
-    output_summary: event.summary || current.output_summary || '',
+    output_summary: event.payload.output_summary ?? (current.recorded_output_summary ? current.output_summary : event.summary || current.output_summary || ''),
     status: stepStatus(event),
     retry_count: event.payload.retry_count ?? current.retry_count ?? 0,
     duration_ms: event.payload.duration_ms ?? current.duration_ms,
@@ -342,18 +396,26 @@ export function hydrateWorkflowTimeline(timeline) {
     replay_completeness: timeline.replay_completeness,
     is_terminal: TERMINAL_STATUSES.has(timeline.run?.status),
   })
-  state = applyResourceProgressSnapshot(state, timeline, { authoritative: true })
   for (const step of timeline.steps || []) {
     state.steps.push({
       key: step.step_id,
       step_id: step.step_id,
       sequence: step.step_sequence,
       agent_name: step.agent_name || step.node_name,
+      node_name: step.node_name,
+      input_summary: step.input_summary,
+      decision_reason: step.decision_reason,
+      evidence_refs: step.evidence_refs,
+      resource_ids: step.resource_ids,
+      review_ids: step.review_ids,
       action: step.action,
       output_summary: step.output_summary,
+      recorded_output_summary: Boolean(step.output_summary),
       status: step.status,
       retry_count: step.retry_count || 0,
       duration_ms: step.duration_ms,
+      claim_count: step.claim_count,
+      revision_count: step.revision_count,
       evidence_count: step.retrieval_candidate_count,
       occurred_at: step.started_at,
     })
@@ -365,6 +427,6 @@ export function hydrateWorkflowTimeline(timeline) {
   // The execution snapshot is the durable, current source of truth. Events
   // are historical and may describe an earlier attempt or an old status before
   // a targeted retry, so never let replay overwrite current visibility.
-  state = applyResourceProgressSnapshot(state, timeline)
+  state = applyResourceProgressSnapshot(state, timeline, { authoritative: true })
   return state
 }

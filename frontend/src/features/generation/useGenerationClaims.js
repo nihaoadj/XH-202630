@@ -1,4 +1,7 @@
 import { resourceApi, runApi } from '../../api/index.js'
+import { watch } from 'vue'
+import { buildClaimRows, claimAuditSummary } from './generationAudit.js'
+import { buildResourceStatusItems } from './resourceStatusPresentation.js'
 
 /** Load and present Claim results without changing publication or refresh order. */
 export function useGenerationClaims({
@@ -16,45 +19,56 @@ export function useGenerationClaims({
   refreshStatus,
   messages,
 }) {
+  watch([selectedRunId, selectedLearnerId], () => {
+    nextRequestVersion()
+    claimReports.value = {}
+    claimReportVisible.value = false
+    selectedClaimReportId.value = ''
+  }, { flush: 'sync' })
+
   async function loadClaimReports(runId = selectedRunId.value) {
     if (!runId) return
     const version = nextRequestVersion()
     const learnerId = selectedLearnerId.value
     const isCurrent = () => isMounted() && version === requestVersion() && learnerId === selectedLearnerId.value && runId === selectedRunId.value
     try {
-      const response = await runApi.claims(runId)
+      const [claimsResult, timelineResult] = await Promise.allSettled([
+        runApi.claims(runId), runApi.timeline(runId, { limit: 1 }),
+      ])
       if (!isCurrent()) return
-      const payload = response.data || {}
-      const judgements = new Map((payload.judgements || []).map((item) => [item.claim_id, item]))
+      if (claimsResult.status !== 'fulfilled') throw claimsResult.reason
+      const payload = claimsResult.value.data || {}
+      if (payload.run_id && payload.run_id !== runId) throw new Error('Claim response Run mismatch')
+      const timeline = timelineResult.status === 'fulfilled' ? timelineResult.value.data || {} : {}
+      const sourceAvailable = timelineResult.status === 'fulfilled' && (!timeline.run?.run_id || timeline.run.run_id === runId)
+      const publications = buildResourceStatusItems(timelineState.value.resourceExecutions, {
+        resources: [...resources.value, ...(sourceAvailable ? timeline.resource_versions || [] : [])], runId,
+      })
       const next = {}
       for (const [resourceId, metric] of Object.entries(payload.resource_metrics || {})) {
         const factual = Number(metric.factual_claim_total || 0)
         const supported = Number(metric.supported_claim_total || 0)
+        const rows = buildClaimRows(payload, resourceId, runId, sourceAvailable ? timeline.evidence : [],
+          sourceAvailable ? timeline.resource_versions?.find(item => item.resource_id === resourceId) : null)
+        const artifact = sourceAvailable ? timeline.resource_versions?.find(item => item.resource_id === resourceId) : null
+        const publication = publications.find(item => item.resource_id === resourceId) || artifact
+          || resources.value.find(item => item.resource_id === resourceId)
         next[resourceId] = {
           ...metric,
-          claim_factual_pass_rate: factual ? supported / factual : null,
-          claim_warning_publish: Boolean(
-            timelineState.value.resourceExecutions.find((item) => item.resource_id === resourceId)?.claim_warning_publish
-            ?? resources.value.find((item) => item.resource_id === resourceId)?.claim_warning_publish
-          ),
-          claim_publish_decision_pending: Boolean(
-            timelineState.value.resourceExecutions.find((item) => item.resource_id === resourceId)?.claim_publish_decision_pending
-            ?? resources.value.find((item) => item.resource_id === resourceId)?.claim_publish_decision_pending
-          ),
-          issues: (payload.claims || []).filter((claim) => {
-            const verdict = judgements.get(claim.claim_id)?.verdict
-            return claim.resource_id === resourceId && claim.claim_type === 'factual' && ['not_in_evidence', 'contradicted'].includes(verdict)
-          }).map((claim) => ({
-            claim_id: claim.claim_id,
-            claim_text: claim.claim_text,
-            verdict: judgements.get(claim.claim_id)?.verdict,
-            reason: judgements.get(claim.claim_id)?.reason,
-          })),
+          claim_factual_pass_rate: metric.metric_status === 'complete' && factual ? supported / factual : null,
+          rows,
+          sourceError: sourceAvailable ? '' : '冻结来源加载失败，可刷新报告重试。',
+          publication_status: publication?.publication_status,
+          claim_publish_decision: publication?.claim_publish_decision,
+          claim_warning_publish: Boolean(publication?.claim_warning_publish),
+          claim_publish_decision_pending: Boolean(publication?.claim_publish_decision_pending),
+          issues: rows.filter(row => row.claim_type === 'factual' && ['not_in_evidence', 'contradicted'].includes(row.verdict)),
         }
       }
       claimReports.value = next
     } catch (error) {
       if (!isCurrent()) return
+      claimReports.value = {}
       if (error?.response?.status !== 404) console.error(error)
     }
   }
@@ -62,10 +76,12 @@ export function useGenerationClaims({
   function openClaimReport(resourceId) {
     selectedClaimReportId.value = resourceId
     claimReportVisible.value = true
+    loadClaimReports()
   }
 
   function claimPassRateLabel(report) {
-    return report.claim_factual_pass_rate == null ? '不适用' : `${(report.claim_factual_pass_rate * 100).toFixed(1)}%`
+    if (report.metric_status === 'incomplete') return '未完成'
+    return report.claim_factual_pass_rate == null ? '无分母' : `${(report.claim_factual_pass_rate * 100).toFixed(1)}%`
   }
 
   function claimIssueCount(report) {
@@ -73,7 +89,7 @@ export function useGenerationClaims({
   }
 
   function claimReportStatusLabel(status) {
-    return ({ complete: '审核完成', incomplete: '需要关注', not_applicable: '不适用' }[status] || status || '待审核')
+    return ({ complete: '审核完成', incomplete: '判定未完成', not_applicable: '不适用', legacy_unavailable: '历史数据缺失' }[status] || status || '待审核')
   }
 
   function claimReportStatusClass(status) {
@@ -104,6 +120,7 @@ export function useGenerationClaims({
 
   return {
     loadClaimReports,
+    claimAuditSummary,
     openClaimReport,
     claimPassRateLabel,
     claimIssueCount,

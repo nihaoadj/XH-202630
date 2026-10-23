@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { chromium } from 'playwright'
 import { browserOptions } from './browserOptions.mjs'
+import { inspectElementSelect } from './selectPresentation.mjs'
 
 const frontendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = path.join(frontendDir, 'dist')
@@ -1710,6 +1711,23 @@ test('onboarding five-stage UI and API contract use an isolated browser fixture'
     await assertReachableContent(page, 'narrow questionnaire reaches final question and action', { lastQuestion: true })
     await recordScreenshot(page, '03-questionnaire-mobile-375x667-bottom')
     await fillQuestionnaire(page, { checkFocus: true })
+    const experienceSelect = page.locator('.question-block[data-question-id="q-experience"] .el-select')
+    await page.setViewportSize({ width: viewports[0].width, height: viewports[0].height })
+    await settle(page)
+    await inspectElementSelect({
+      page, suite: 'onboarding', evidenceDir: reportDir, id: 'onboarding-experience-desktop',
+      select: experienceSelect, longText: '有项目经验，正在处理复杂医疗数据', minHeight: 46,
+      getWriteCount: () => state.writes.length,
+    })
+    await page.setViewportSize({ width: viewports[4].width, height: viewports[4].height })
+    await settle(page)
+    await inspectElementSelect({
+      page, suite: 'onboarding', evidenceDir: reportDir, id: 'onboarding-experience-mobile',
+      select: experienceSelect, longText: '有项目经验，正在处理复杂医疗数据', minHeight: 46,
+      getWriteCount: () => state.writes.length,
+    })
+    await page.setViewportSize({ width: viewports[5].width, height: viewports[5].height })
+    await settle(page)
     const qExperienceBlock = page.locator('.question-block[data-question-id="q-experience"]')
     assert.ok(await qExperienceBlock.getByText('有项目经验，正在处理复杂医疗数据').isVisible(), 'option label should render for its distinct submitted value')
     state.evidence.questionnaireChecks.push({

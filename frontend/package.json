@@ -28,6 +28,7 @@
     "test:motion-browser": "node tests/motionBrowser.test.mjs",
     "test:workflow-events": "node tests/unit/utils/workflowEvents.test.mjs",
     "test:tutor": "node tests/tutorState.test.mjs",
+    "test:tutor-ui-browser": "node tests/tutorUiBrowser.test.mjs",
     "test:learner-mastery": "node tests/learnerMastery.test.mjs",
     "test:learning-report": "node tests/learningReport.test.mjs",
     "test:learning-report-browser": "node tests/learningReportBrowser.test.mjs",

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { browserOptions } from './browserOptions.mjs'
+import { inspectElementSelect } from './selectPresentation.mjs'
 
 const frontendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = path.join(frontendDir, 'dist')
@@ -833,6 +834,10 @@ try {
     await page.evaluate(() => window.dispatchEvent(new Event('online')))
     await waitForAudit(() => audit.requests.some((item) => item.path === '/api/report/learner-main' && item.responseStatus === 304), 'online resumes conditional report GET')
     await measureLayout(page, 'desktop-expanded-1393x871', 1393, 871, true)
+    await inspectElementSelect({
+      page, suite: 'report', evidenceDir, id: 'report-window-desktop',
+      select: page.locator('.window-select'), getWriteCount: () => audit.writes.length,
+    })
     await page.close()
 
     const collapsed = await openReport({ width: 1331, height: 871, collapsed: true })
@@ -850,6 +855,12 @@ try {
 
     for (const [width, height] of [[390, 844], [375, 667]]) {
       const mobile = await openReport({ width, height, collapsed: true, reducedMotion: width === 390 })
+      if (width === 390) {
+        await inspectElementSelect({
+          page: mobile, suite: 'report', evidenceDir, id: 'report-window-mobile',
+          select: mobile.locator('.window-select'), getWriteCount: () => audit.writes.length,
+        })
+      }
       await saveShot(mobile, 'report-mobile-' + width + 'x' + height + '.png')
       await measureLayout(mobile, 'mobile-' + width + 'x' + height, width, height, true)
       await mobile.locator('.content-area').evaluate((element) => { element.scrollTop = 0 })

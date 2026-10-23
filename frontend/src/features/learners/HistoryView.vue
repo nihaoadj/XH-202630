@@ -397,11 +397,6 @@ onBeforeUnmount(() => { historyMounted = false; ++journeyRequestVersion })
 .history-page :deep(.el-button:hover) { border-color: #649eaa; background: #edf8f6; color: #086575; }
 .history-page :deep(.el-button:focus-visible), .profile-item:focus-visible { outline: 2px solid #167587; outline-offset: 3px; }
 .history-page :deep(.el-select) { width: 100%; min-width: 0; }
-.history-page :deep(.el-select__wrapper) { min-height: 44px; padding: 8px 12px; border-radius: 5px; background: #fff; color: var(--history-ink); box-shadow: 0 0 0 1px #cbdbe4 inset; font-size: 12px; }
-.history-page :deep(.el-select__placeholder), .history-page :deep(.el-select__placeholder.is-transparent) { color: var(--history-ink); }
-.history-page :deep(.el-select__wrapper.is-focused) { box-shadow: 0 0 0 2px #167587 inset; }
-.history-page :deep(.el-select__caret) { color: #536b7d; }
-.history-page :deep(.el-select__clear) { width: 24px; height: 24px; }
 .history-page .archive-refresh { padding: 10px 9px; border-color: transparent; background: transparent; color: var(--history-muted); }
 .profile-filter { padding-bottom: 15px; }
 .profile-filter label, .round-filter label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 7px; color: var(--history-muted); font-size: 12px; line-height: 1.5; }
@@ -548,8 +543,6 @@ onBeforeUnmount(() => { historyMounted = false; ++journeyRequestVersion })
 :global(.app-shell:has(.history-page) .topbar-meta span) { font-size: 10px; line-height: 1.5; color: #536b7d; }
 :global(.app-shell:has(.history-page) .topbar-meta strong) { max-width: 160px; margin-top: 3px; color: #132c40; white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
 :global(.app-shell:has(.history-page) .content-area) { padding: 22px 28px 24px; background: #f5f7fa; overflow: hidden; }
-:global(.history-filter-dropdown .el-select-dropdown__item) { min-height: 36px; line-height: 36px; font-size: 12px; color: #132c40; }
-:global(.history-filter-dropdown .el-select-dropdown__item.is-selected) { background: #edf8f6; color: #086575; font-weight: 600; }
 
 @media (max-width: 1500px) {
   .journey-stages { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 17px 0; }

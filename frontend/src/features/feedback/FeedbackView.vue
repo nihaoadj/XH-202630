@@ -748,7 +748,7 @@ onBeforeUnmount(() => {
 :global(.app-shell.is-feedback) { background: #f5f7fa; }
 :global(.app-shell.is-feedback .topbar-kicker) { color: #086575; font: 11px/1.5 Consolas, 'SFMono-Regular', monospace; }
 :global(.app-shell.is-feedback .topbar h1) { color: #132c40; font-weight: 700; }
-:global(.app-shell.is-feedback .topbar-action) { min-height: 44px; border-radius: 5px; font-size: 12px; font-weight: 600; }
+:global(.app-shell.is-feedback .topbar-action) { min-height: 44px; border-radius: 5px; font-size: 12px; }
 :global(.app-shell.is-feedback .topbar-meta span) { color: #536b7d; }
 :global(.app-shell.is-feedback .topbar-meta strong) { color: #132c40; }
 .feedback-hero, .evaluation-panel, .reflection-panel, .result-panel { min-width: 0; border: 1px solid var(--feedback-line); border-radius: 6px; background: #fff; }
@@ -759,21 +759,22 @@ onBeforeUnmount(() => {
 .task-selection-label small { flex-shrink: 0; font: 11px/1.5 Consolas, 'SFMono-Regular', monospace; }
 .profile-select, .task-select { width: 100%; min-width: 0; }
 .task-empty-tip { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--feedback-line); color: var(--feedback-muted); font-size: 13px; line-height: 1.6; }
-.feedback-page :deep(.el-button) { min-height: 44px; height: auto; margin: 0; padding: 10px 16px; border-radius: 5px; font-size: 13px; font-weight: 600; line-height: 1.5; box-shadow: none; transition: border-color .18s ease, background-color .18s ease, color .18s ease; }
-.feedback-page :deep(.el-button--primary) { border-color: var(--feedback-navy); background: var(--feedback-navy); color: #fff; }
-.feedback-page :deep(.el-button--primary:hover) { border-color: #1d4055; background: #1d4055; color: #fff; }
-.feedback-page :deep(.el-button--primary.is-plain), .result-actions :deep(.el-button) { border-color: #b9cdd8; background: #fff; color: var(--feedback-ink); }
-.feedback-page :deep(.el-button--primary.is-plain:hover), .result-actions :deep(.el-button:hover) { border-color: var(--feedback-teal); background: #edf8f6; color: var(--feedback-teal); }
+/* Shared Tutor controls keep their own sizes and interaction states. */
+.feedback-page :deep(.el-button:not(.tutor-panel *)) { min-height: 44px; height: auto; margin: 0; padding: 10px 16px; border-radius: 5px; font-size: 13px; font-weight: 600; line-height: 1.5; box-shadow: none; transition: border-color .18s ease, background-color .18s ease, color .18s ease; }
+.feedback-page :deep(.el-button--primary:not(.tutor-panel *)) { border-color: var(--feedback-navy); background: var(--feedback-navy); color: #fff; }
+.feedback-page :deep(.el-button--primary:hover:not(.tutor-panel *)) { border-color: #1d4055; background: #1d4055; color: #fff; }
+.feedback-page :deep(.el-button--primary.is-plain:not(.tutor-panel *)), .result-actions :deep(.el-button) { border-color: #b9cdd8; background: #fff; color: var(--feedback-ink); }
+.feedback-page :deep(.el-button--primary.is-plain:hover:not(.tutor-panel *)), .result-actions :deep(.el-button:hover) { border-color: var(--feedback-teal); background: #edf8f6; color: var(--feedback-teal); }
 .feedback-page .start-evaluation-button { min-width: 120px; border-color: var(--feedback-navy) !important; background: var(--feedback-navy) !important; color: #fff !important; }
 .feedback-page .start-evaluation-button:hover { border-color: #1d4055 !important; background: #1d4055 !important; }
 .feedback-page .submit-feedback-button { width: 100%; border-color: #8bd8cc !important; background: var(--feedback-mint) !important; color: #123747 !important; }
 .feedback-page .submit-feedback-button:hover { border-color: #6cc4b8 !important; background: #b4f2e8 !important; }
-.feedback-page :deep(.el-button.is-disabled), .feedback-page :deep(.el-button.is-disabled:hover) { border-color: #d9e4e9 !important; background: #edf1f4 !important; color: #687b88 !important; box-shadow: none; }
-.feedback-page :deep(.el-select__wrapper), .feedback-page :deep(.el-input__wrapper) { min-height: 44px; border-radius: 5px; background: #fff; box-shadow: 0 0 0 1px #cbdbe4 inset; }
-.feedback-page :deep(.el-select__wrapper:hover), .feedback-page :deep(.el-input__wrapper:hover) { box-shadow: 0 0 0 1px #7099a7 inset; }
-.feedback-page :deep(.el-select__wrapper.is-focused), .feedback-page :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 2px var(--feedback-teal) inset; }
+.feedback-page :deep(.el-button.is-disabled:not(.tutor-panel *)), .feedback-page :deep(.el-button.is-disabled:hover:not(.tutor-panel *)) { border-color: #d9e4e9 !important; background: #edf1f4 !important; color: #687b88 !important; box-shadow: none; }
+.feedback-page :deep(.el-input__wrapper) { min-height: 44px; border-radius: 5px; background: #fff; box-shadow: 0 0 0 1px #cbdbe4 inset; }
+.feedback-page :deep(.el-input__wrapper:hover) { box-shadow: 0 0 0 1px #7099a7 inset; }
+.feedback-page :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 2px var(--feedback-teal) inset; }
 .feedback-page :deep(.el-select__selection), .feedback-page :deep(.el-select__selected-item) { min-width: 0; }
-.feedback-page :deep(.el-select__selected-item), .feedback-page :deep(.el-input__inner) { color: var(--feedback-ink); font-size: 14px; }
+.feedback-page :deep(.el-input__inner) { color: var(--feedback-ink); font-size: 14px; }
 .feedback-page :deep(.el-textarea__inner) { padding: 11px 12px; border-radius: 5px; color: var(--feedback-ink); font-size: 14px; line-height: 1.65; box-shadow: 0 0 0 1px #cbdbe4 inset; }
 .feedback-page :deep(.el-textarea__inner:focus) { box-shadow: 0 0 0 2px var(--feedback-teal) inset; }
 .feedback-page :deep(.el-input__inner::placeholder), .feedback-page :deep(.el-textarea__inner::placeholder) { color: #617786; }
@@ -986,7 +987,7 @@ onBeforeUnmount(() => {
   .reflection-panel { padding: 0 18px 18px; }
   .reflection-fields { grid-template-columns: minmax(0, 1fr); }
   .reflection-fields > * { grid-column: 1 !important; }
-  .feedback-page :deep(.el-input__inner), .feedback-page :deep(.el-select__selected-item), .feedback-page :deep(.el-textarea__inner) { font-size: 16px; }
+  .feedback-page :deep(.el-input__inner), .feedback-page :deep(.el-textarea__inner) { font-size: 16px; }
   .result-panel { gap: 22px; padding: 20px 18px; }
   .result-summary h2 { font-size: 24px; }
   .result-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
