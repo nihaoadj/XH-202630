@@ -1,0 +1,256 @@
+/* Shared selection surfaces. Menus are teleported, so their styles live here. */
+:root {
+  --select-ink: #172c45;
+  --select-muted: #596f82;
+  --select-accent: #176b70;
+  --select-accent-soft: #e8f5f4;
+  --select-line: #c7d8e2;
+  --select-radius: 10px;
+  --select-panel-radius: 12px;
+  --select-height: 44px;
+  --select-focus: 0 0 0 2px var(--select-accent) inset, 0 0 0 3px rgb(23 107 112 / 10%);
+}
+
+.el-select .el-select__wrapper {
+  min-height: var(--select-height);
+  padding: 8px 12px;
+  border-radius: var(--select-radius);
+  background: linear-gradient(180deg, #fff, #f8fbfc);
+  color: var(--select-ink);
+  font-size: 13px;
+  box-shadow: 0 0 0 1px var(--select-line) inset, 0 2px 4px rgb(23 44 69 / 3%);
+  outline: none;
+  transition: box-shadow .15s ease, background-color .15s ease;
+}
+
+.el-select .el-select__wrapper:not(.is-disabled):hover {
+  box-shadow: 0 0 0 1px #7aa2af inset, 0 2px 6px rgb(23 44 69 / 5%);
+}
+
+.el-select .el-select__wrapper:not(.is-disabled):is(.is-focused, :focus-within) {
+  box-shadow: var(--select-focus);
+}
+
+.el-select .el-select__selected-item,
+.el-select .el-select__input {
+  color: var(--select-ink);
+  font-size: inherit;
+}
+
+.el-select .el-select__selection,
+.el-select .el-select__selected-item {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.el-select .el-select__placeholder > span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.el-select .el-select__placeholder.is-transparent,
+.el-select .el-select__input::placeholder {
+  color: var(--select-muted);
+}
+
+.el-select .el-select__caret,
+.el-select .el-select__clear {
+  width: 24px;
+  height: 24px;
+  padding: 5px;
+  border-radius: 6px;
+  background: #edf3f6;
+  color: var(--select-muted);
+  transition: color .15s ease, background-color .15s ease, transform .15s ease;
+}
+
+.el-select .el-select__wrapper:not(.is-disabled):is(.is-focused, :focus-within) .el-select__caret,
+.el-select .el-select__clear:hover {
+  background: var(--select-accent-soft);
+  color: var(--select-accent);
+}
+
+.el-select .el-tag {
+  border-radius: 6px;
+}
+
+.el-select .el-select__wrapper.is-disabled {
+  background: #f0f4f6;
+  box-shadow: 0 0 0 1px #d7e1e7 inset;
+  cursor: not-allowed;
+}
+
+.el-select .el-select__wrapper.is-disabled :is(.el-select__selected-item, .el-select__caret, .el-select__input) {
+  color: #738494;
+}
+
+.el-form-item.is-error .el-select .el-select__wrapper {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+
+.el-form-item.is-error .el-select .el-select__wrapper:is(.is-focused, :focus-within) {
+  box-shadow: 0 0 0 2px var(--el-color-danger) inset, 0 0 0 3px rgb(185 54 54 / 10%);
+}
+
+/* Only selection menus: Tooltip and Popover keep their own presentation. */
+.el-select__popper.el-popper,
+.el-popper:has(.el-dropdown-menu) {
+  max-width: calc(100vw - 24px);
+  border: 1px solid #d9e5eb;
+  border-radius: var(--select-panel-radius);
+  background: #fff;
+  box-shadow: 0 12px 28px rgb(23 44 69 / 12%), 0 2px 6px rgb(23 44 69 / 4%);
+}
+
+.el-select__popper.el-popper .el-popper__arrow,
+.el-popper:has(.el-dropdown-menu) .el-popper__arrow {
+  display: none;
+}
+
+.el-select__popper .el-select-dropdown,
+.el-popper .el-dropdown-menu {
+  border-radius: var(--select-panel-radius);
+  background: #fff;
+}
+
+.el-select-dropdown .el-select-dropdown__list,
+.el-popper .el-dropdown-menu {
+  padding: 6px;
+}
+
+.el-select-dropdown .el-select-dropdown__item {
+  position: relative;
+  height: auto;
+  min-height: 44px;
+  margin: 2px 0;
+  padding: 11px 12px 11px 30px;
+  border-radius: 7px;
+  color: var(--select-ink);
+  font-size: 13px;
+  line-height: 22px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+.el-select-dropdown .el-select-dropdown__item:not(.is-disabled):is(.is-hovering, :hover) {
+  background: #f0f6f8;
+}
+
+.el-select-dropdown .el-select-dropdown__item.is-selected {
+  background: var(--select-accent-soft);
+  color: var(--select-accent);
+  font-weight: 600;
+}
+
+.el-select-dropdown .el-select-dropdown__item.is-selected:not(.is-disabled):is(.is-hovering, :hover) {
+  background: #dcefed;
+}
+
+.el-select-dropdown .el-select-dropdown__item.is-selected::before {
+  content: '';
+  position: absolute;
+  top: 17px;
+  left: 12px;
+  width: 5px;
+  height: 9px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.el-select-dropdown .el-select-dropdown__item.is-disabled {
+  background: transparent;
+  color: #738494;
+}
+
+.el-select-dropdown .el-select-group__title {
+  height: auto;
+  padding: 8px 12px;
+  color: var(--select-muted);
+  font-size: 11px;
+  line-height: 20px;
+}
+
+.el-select-dropdown .el-select-dropdown__empty,
+.el-select-dropdown .el-select-dropdown__loading {
+  padding: 18px 16px;
+  color: var(--select-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.el-popper .el-dropdown-menu__item {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  color: var(--select-ink);
+  font-size: 13px;
+  line-height: 24px;
+  white-space: normal;
+}
+
+.el-popper .el-dropdown-menu__item:not(.is-disabled):is(:hover, :focus) {
+  background: var(--select-accent-soft);
+  color: var(--select-accent);
+}
+
+.el-popper .el-dropdown-menu__item.is-disabled {
+  color: #738494;
+}
+
+/* Native controls retain platform selection and keyboard behavior. */
+select:not([multiple]) {
+  appearance: none;
+  min-height: var(--select-height);
+  max-width: 100%;
+  padding: 8px 38px 8px 12px;
+  border: 1px solid var(--select-line);
+  border-radius: var(--select-radius);
+  background-color: #fbfdfe;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23596f82' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"), linear-gradient(180deg, #fff, #f8fbfc);
+  background-position: right 12px center, center;
+  background-repeat: no-repeat;
+  color: var(--select-ink);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: 0 2px 4px rgb(23 44 69 / 3%);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+select:not([multiple]):not(:disabled):hover {
+  border-color: #7aa2af;
+}
+
+select:not([multiple]):focus {
+  border-color: var(--select-accent);
+  box-shadow: 0 0 0 1px var(--select-accent) inset, 0 0 0 3px rgb(23 107 112 / 10%);
+}
+
+select:not([multiple]):disabled {
+  background-color: #f0f4f6;
+  background-image: none;
+  color: #738494;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .el-select .el-select__wrapper,
+  select:not([multiple]) {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .el-select .el-select__wrapper,
+  .el-select .el-select__caret,
+  .el-select .el-select__clear,
+  select:not([multiple]) {
+    transition: none;
+  }
+}

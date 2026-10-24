@@ -18,7 +18,7 @@
 | 真实模型 | `backend/tests/live/` 与显式评测 CLI | 生产生成与模型自审的实际输出、耗时、失败 | 单独授权、有效凭据、隔离测试环境与预算 |
 | CI / 部署 | `.github/workflows/courseware-quality.yml`、demo-runbook | 干净 runner 与实际运行环境验收 | CI 必需 job；部署证据单独记录 |
 
-后端继续按目录自动添加 `unit`、`integration`、`migration`、`e2e`、`live_llm` marker，不搬动现有测试。前端目前九个 unit 文件、十三个 browser 文件，聚合入口检查是否遗漏或重复注册；新增文件必须登记一次。`coursewareUserJourney.test.mjs` 是 Node 的用户流程状态验证，不能因名称而算作真实浏览器 e2e。
+后端继续按目录自动添加 `unit`、`integration`、`migration`、`e2e`、`live_llm` marker，不搬动现有测试。前端目前十个 unit 文件、十四个 browser 文件，聚合入口检查是否遗漏或重复注册；新增文件必须登记一次。`coursewareUserJourney.test.mjs` 是 Node 的用户流程状态验证，不能因名称而算作真实浏览器 e2e。
 
 ## 二、统一命令
 
@@ -37,7 +37,7 @@ python scripts/run_tests.py --suite backend-api --suite backend-migration
 |---|---|---|
 | quick | 核心契约/策略/报告/工具、比赛金标、前端单元 | 迭代中快速定位；不替代领域最低验收 |
 | regression | Ruff / ESLint / 请求 guard 类型、Python 依赖一致性、后端全量、比赛金标、课件冻结、全部前端单元、生产构建 | 共享测试设施或多领域回归 |
-| acceptance | regression 加十三个浏览器专项 | 本地完整工程验收 |
+| acceptance | regression 加十四个浏览器专项 | 本地完整工程验收 |
 
 `--suite` 可重复，和 profile 组合时去重。`--fail-fast` 停止后续执行，但摘要将余下套件记为 `NOT_RUN`；默认尽量执行全部已选套件以便一次定位问题。只运行 `frontend-browser` 时，须先执行 `frontend-build`；acceptance 已按依赖顺序安排。直接 pytest 与原 npm 专项命令继续可用：
 
@@ -54,12 +54,13 @@ npm --prefix frontend run test:report-ui-browser
 npm --prefix frontend run test:user-profile-ui-browser
 npm --prefix frontend run test:profile-request-browser
 npm --prefix frontend run test:motion-browser
+npm --prefix frontend run test:tutor-ui-browser
 node frontend/tests/run.mjs browser --output frontend/tests/test-results/ui-repair/frontend-browser.json
 ```
 
 ### 浏览器专项与证据位置
 
-每个专项读取已构建的 `frontend/dist`，先执行 `npm --prefix frontend run build`；下面列出全部 13 个 browser 成员。更细的页面合同保留在源码与已链接的专项说明中。
+每个专项读取已构建的 `frontend/dist`，先执行 `npm --prefix frontend run build`；下面列出全部 14 个 browser 成员。更细的页面合同保留在源码与已链接的专项说明中。
 
 | npm 专项 | 主要覆盖 | 本地证据目录 / 文件 |
 |---|---|---|
@@ -76,6 +77,7 @@ node frontend/tests/run.mjs browser --output frontend/tests/test-results/ui-repa
 | `test:user-profile-ui-browser` | 本人资料字段、保存 / 失败 / 重试、响应式与路由样式 | `frontend/tests/test-results/user-profile-ui/`；[合同](user-profile-ui.md) |
 | `test:profile-request-browser` | 历史 / 报告 / 生成 / 资源四页画像竞态和失败归属 | `frontend/tests/test-results/ui-repair/profile-requests/` |
 | `test:motion-browser` | 页面 / 模块过渡、减少动态效果、快速导航和清理 | `frontend/tests/test-results/motion-ui/`；[合同](motion-ui.md) |
+| `test:tutor-ui-browser` | Tutor 消息、引用、输入、等待与失败恢复，普通/专注/测评及五页顶部辅助导航 | `frontend/tests/test-results/tutor-ui/` |
 
 本地 HTTP fixture 中允许的登录、注册、资料 PATCH、画像 DELETE、测评和方案确认只写入各脚本的隔离服务。业务写入、外网和页面异常按各专项审计，不能以这些 fixture 结果推断真实后端事务、模型质量或目标部署已通过。
 
@@ -99,7 +101,7 @@ Windows 默认使用已安装的 Edge；其他平台默认使用 Playwright Chro
 | F-REVIEW 审核/纠偏/Claim/发布 | [Claim 工作流](../../backend/tests/integration/workflow/test_claim_workflow.py)、[发布定稿](../../backend/tests/integration/services/test_generation_finalization.py)、[资源 API](../../backend/tests/integration/api/test_resource_api.py) | backend-workflow/full；保留历史版本、仅统计最终发布叶子 |
 | F-READ Markdown 与资源库 | [资源库 API](../../backend/tests/integration/api/test_resource_library_api.py)、[资源详情](../../backend/tests/integration/api/test_resource_api.py)、`resourceShelfOrder.test.mjs` | backend-api/frontend-unit；公开产物与排序 |
 | F-FEEDBACK 学习反馈与动态路径 | [浏览器专项](../../frontend/tests/feedbackBrowser.test.mjs)、[反馈闭环](../../backend/tests/integration/services/test_feedback_loop_service.py)、[掌握度策略](../../backend/tests/unit/policies/test_learner_mastery_policy.py)、`learnerMastery.test.mjs` | integration/unit/browser；低正确率补救、强化/推进与版本变化；测评题、反思 payload、反馈结果、纠错与下一步选择；浏览器提交只写本地 fixture |
-| F-TUTOR 导学 | [Tutor 服务](../../backend/tests/unit/services/test_tutor_service.py)、`tutorState.test.mjs` | backend-unit/frontend-unit；上下文与追问状态 |
+| F-TUTOR 导学 | [Tutor 服务](../../backend/tests/unit/services/test_tutor_service.py)、`tutorState.test.mjs`、[Tutor 界面专项](../../frontend/tests/tutorUiBrowser.test.mjs) | backend-unit/frontend-unit/browser；上下文与追问状态、消息/引用/输入、等待防重复、失败恢复及响应式可达性 |
 | F-REPORT 学情、难度与路径报告 | [报告可视化](../../backend/tests/unit/reports/test_report_visualizations.py)、`learningReport.test.mjs`、[报告 UI 专项](../../frontend/tests/reportUiBrowser.test.mjs)、`learningReportBrowser.test.mjs` | unit/browser；数据/颜色/字号契约、图表交互、SSE/ETag 与实际节点边界可见性 |
 | F-HISTORY 学习历史与旅程 | [历史 UI 专项](../../frontend/tests/historyUiBrowser.test.mjs) | browser；画像归属、分页、轮次与未关联事件时间过滤、删除后选择并加载替代画像 |
 | F-PROFILE-UI 用户资料 | [资料 UI 专项](../../frontend/tests/userProfileUiBrowser.test.mjs) | browser；字段、PATCH payload、保存/失败/重试、布局与页面路由行为合同 |

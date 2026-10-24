@@ -9,13 +9,13 @@
     "unit": [
       "unit/utils/workflowEvents.test.mjs", "tutorState.test.mjs", "learnerMastery.test.mjs",
       "learningReport.test.mjs", "resourceShelfOrder.test.mjs", "coursewareEvents.test.mjs",
-      "coursewareUserJourney.test.mjs", "coursewareSourcePolicy.test.mjs", "requestContextRace.test.mjs"
+      "coursewareUserJourney.test.mjs", "coursewareSourcePolicy.test.mjs", "requestContextRace.test.mjs", "unit/utils/workflowDetailPresentation.test.mjs"
     ],
     "browser": [
       "landingBrowser.test.mjs", "featureShowcaseBrowser.test.mjs", "dashboardBrowser.test.mjs", "onboardingBrowser.test.mjs",
       "learningReportBrowser.test.mjs", "coursewareBrowser.test.mjs", "generationBrowser.test.mjs", "feedbackBrowser.test.mjs",
       "historyUiBrowser.test.mjs", "reportUiBrowser.test.mjs", "userProfileUiBrowser.test.mjs", "profileRequestBrowser.test.mjs",
-      "motionBrowser.test.mjs"
+      "motionBrowser.test.mjs", "tutorUiBrowser.test.mjs"
     ]
   },
   "suites": [
@@ -36,6 +36,6 @@
     {"id": "courseware-eval", "purpose": "互动课件冻结评测与安全硬门", "evidence_type": "frozen_evaluation", "timeout_seconds": 180, "command": ["{python}", "backend/scripts/courseware_eval.py", "--manifest", "backend/tests/fixtures/courseware/evals/manifest.json", "--baseline", "backend/tests/fixtures/courseware/evals/baseline.json", "--output", "{output}/courseware.json"]},
     {"id": "frontend-unit", "purpose": "全部前端状态、策略、事件与资源排序测试", "evidence_type": "deterministic", "timeout_seconds": 180, "command": ["{node}", "frontend/tests/run.mjs", "unit", "--output", "{output}/frontend-unit.json"]},
     {"id": "frontend-build", "purpose": "前端生产构建", "evidence_type": "build", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/vite/bin/vite.js", "build"]},
-    {"id": "frontend-browser", "purpose": "全部十三个浏览器专项，需先完成前端构建", "evidence_type": "browser_fixture", "timeout_seconds": 1200, "command": ["{node}", "frontend/tests/run.mjs", "browser", "--output", "{output}/frontend-browser.json"]}
+    {"id": "frontend-browser", "purpose": "全部十四个浏览器专项，需先完成前端构建", "evidence_type": "browser_fixture", "timeout_seconds": 1200, "command": ["{node}", "frontend/tests/run.mjs", "browser", "--output", "{output}/frontend-browser.json"]}
   ]
 }

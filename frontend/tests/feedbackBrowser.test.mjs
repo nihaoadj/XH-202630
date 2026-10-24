@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { browserOptions } from './browserOptions.mjs'
+import { inspectElementSelect } from './selectPresentation.mjs'
 
 const frontendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = path.join(frontendDir, 'dist')
@@ -960,6 +961,16 @@ async function checkDesktopAndFlow() {
     await assertElementPlusFieldFocus(page, 'feedback-batch-select', batchSelect.locator('input'), batchSelect.locator('.el-select__wrapper'))
     await chooseFilterableOptionWithKeyboard(page, batchSelect, '资源批次 01', '资源批次 01', 'feedback-batch')
     await assertNoTargetOverlap(page, '.task-selection .el-select, .task-selection .start-evaluation-button', 'desktop task selectors')
+    await inspectElementSelect({
+      page, suite: 'feedback', evidenceDir, id: 'feedback-batch-desktop',
+      select: batchSelect, getWriteCount: () => audit.writes.length,
+    })
+    await page.setViewportSize({ width: 390, height: 844 })
+    await inspectElementSelect({
+      page, suite: 'feedback', evidenceDir, id: 'feedback-batch-mobile',
+      select: batchSelect, getWriteCount: () => audit.writes.length,
+    })
+    await page.setViewportSize({ width: 1393, height: 871 })
     await resetScrollPosition(page)
     await assertFeedbackPreparationState(page, '1393x871-desktop', { screenshotName: 'feedback-preparation-1393x871.png' })
     await assertTopbarVisible(page, 'desktop-prestart-top')

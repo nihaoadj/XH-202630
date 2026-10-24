@@ -278,10 +278,6 @@ onBeforeUnmount(() => {
 .report-field label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: var(--report-muted); font-size: 12px; line-height: 1.5; }
 .report-field label span { font: 10px/1.5 Consolas, monospace; }
 .report-input, .window-select { width: 100%; min-width: 0; }
-.report-selector-row :deep(.el-select__wrapper) { min-height: 44px; padding: 8px 12px; border-radius: 5px !important; background: #f8fafc; box-shadow: 0 0 0 1px #cbdbe4 inset; font-size: 12px; }
-.report-selector-row :deep(.el-select__placeholder), .report-selector-row :deep(.el-select__placeholder.is-transparent) { color: var(--report-ink); }
-.report-selector-row :deep(.el-select__wrapper.is-focused) { box-shadow: 0 0 0 2px #167587 inset; }
-.report-selector-row :deep(.el-select__caret) { color: var(--report-muted); }
 .report-page .report-refresh-button { min-width: 116px; min-height: 44px; height: auto; margin: 0; padding: 10px 16px; border: 1px solid #11283c !important; border-radius: 5px !important; background: #11283c !important; color: #fff !important; font-size: 12px; font-weight: 600; box-shadow: none; }
 .report-page .report-refresh-button:hover { border-color: #1d4055 !important; background: #1d4055 !important; }
 .report-page .report-refresh-button :deep(.el-icon) { width: 14px; height: 14px; font-size: 14px; color: #fff; }
@@ -349,8 +345,6 @@ onBeforeUnmount(() => {
 :global(.app-shell:has(.report-page) .topbar-meta span) { font-size: 10px; line-height: 1.5; color: #536b7d; }
 :global(.app-shell:has(.report-page) .topbar-meta strong) { max-width: 160px; margin-top: 3px; color: #132c40; white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
 :global(.app-shell:has(.report-page) .content-area) { padding: 22px 28px 28px; background: #f5f7fa; overflow-y: auto; }
-:global(.report-control-dropdown .el-select-dropdown__item) { min-height: 36px; line-height: 36px; font-size: 12px; color: #132c40; }
-:global(.report-control-dropdown .el-select-dropdown__item.is-selected) { background: #edf8f6; color: #086575; font-weight: 600; }
 
 @media (max-width: 1300px) {
   :global(.app-shell:has(.report-page) .topbar-kicker) { display: none; }
@@ -393,7 +387,7 @@ onBeforeUnmount(() => {
   .suggestion-list { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .report-page .report-refresh-button, .report-page :deep(.el-select__wrapper) { transition: none; }
+  .report-page .report-refresh-button { transition: none; }
   :global(.app-shell:has(.report-page) .topbar-action) { transition: none; }
 }
 </style>

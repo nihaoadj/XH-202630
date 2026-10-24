@@ -153,6 +153,8 @@ Claim 发布检查位于 `services/learning_documents/publication.py`，由 `Res
 
 生产页面按实际职责提取同域 composable：GenerateView 使用 `useGenerationProgress`、`useGenerationClaims`、`useProductionLayout`；FeedbackView 使用 `useFeedbackEvaluation`、`useFeedbackFollowup`；CoursewareGenerationWorkspace 使用 `useCoursewareTracking`。页面持有共享状态，watch/mount/unmount 注册顺序与模板保持；旧 `useCoursewareJob` 留作兼容 helper，其任务历史和终态通知时机不与生产 hook 混用。
 
+`styles/selects.css` 由 `main.js` 在主题后加载，统一 Element Plus Select、Teleport 下拉菜单及原生单选 select 的视觉 token、焦点和选中状态。领域页面只保留选择器布局/宽度及必要高度适配，不重复覆盖圆角、背景和焦点。菜单样式限定真实 Select/Dropdown 类，普通输入框、Tooltip/Popover 与课件 iframe 资产沿用各自规则；所有业务绑定与原生键盘行为保持。
+
 
 ## 4. 当前主流程调用链
 
@@ -306,7 +308,13 @@ WorkflowEvent Ledger 是唯一事件事实源，SSE 只是只读 transport，不
 
 GenerationJob/AgentRun 的 queued 竞态保持现有 ownership：Job 可先存在，SSE snapshot 此时 run_status 为空并等待 AgentRun。P0-08 没有引入 Redis、消息队列、WebSocket、自动 resume/cancel 或 token streaming。
 
-资源事件 payload 只公开 `resource_spec_id`、`resource_family_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`resource_id`、`review_id`、`agent_name`、`prompt_version`、`artifact_format`、`validation_status` 和安全错误码等白名单字段；不下发正文、Prompt 或模型原始响应。前端高层 Agent 流程保持不变，仅在生成/审核节点下展开资源级卡片。
+资源事件 payload 只公开 `resource_spec_id`、`resource_family_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`resource_id`、`review_id`、`agent_name`、`prompt_version`、`artifact_format`、`validation_status` 和安全错误码等白名单字段；不下发正文、Prompt 或模型原始响应。
+
+前端 `features/generation/WorkflowExecutionGraph.vue` 先按真实步骤序号计算每次调用次序，再按有效序号稳定倒序呈现，缺编号记录置后，复审/返工不聚合；SVG 曲线按实际节点锚点测量绘制，从较旧下方节点指向较新上方节点，仅表示记录顺序，不推断因果或并行关系。浅色画布用左侧轻错位业务图形、统一文字列和状态文字呈现，无第三方图编辑依赖；新记录仅影响process-scroll，顶部跟随、历史保持可见step_id/偏移，状态更新不重置。AgentVisualization按Run设置key，重建局部状态并沿用切Run回顶；关键节点沿用原只读详情入口，辅助与未知节点被动展示。`useGenerationAudit.js` 通过只读 timeline/claims 加载审核制品，使用请求上下文守卫隔离画像、Run 和晚到响应；timeline 的完整 steps/reviews/resource_versions/evidence 不受事件分页限制，既有事件回放仍由 progress hook 分页。`generationAudit.js` 负责 Claim 与判定身份校验、同 Run 冻结 Evidence ID 关联、资源版本族和线性变化范围投影；`WorkflowDetailDialog.vue`、`workflow-detail/` 叶子组件与 `ClaimEvidenceList.vue` 只展示，不调用模型或改变发布状态。旧 Claim 报告复用同一证据组件，发布入口沿用原 Service 契约。对应界面行为由生成页浏览器专项验证。
+
+`features/generation/resourceStatusPresentation.js` 统一请求占位、spec 分组和同产物发布投影，仅派生显示数据，不写入 execution ledger。卡片、计数、重试入口与 Claim 发布报告共用这一口径。事件 reducer 使用有限的真实回放水位与持久项时间，稀疏同次事件保留未提供字段，新 attempt 清除旧产物/错误/核验信息；人工发布的资源投影独立于执行记录时间戳。
+
+T15 建立完整 trace 图形链路并移除重复的生命周期日志UI；T17 将唯一资源状态区域置于轨迹上方常显，从真实请求类型占位过渡到执行记录。AgentVisualization仅展示图形链路、资源交付与按真实childRuns显示的独立后续生成导航，reducer事件保存不变；交付列表采用浅灰底面的独立白色资源article，以细边界和间距明确每份产物归属；状态横排，操作按内容宽度横排/按需折行，使用短可见文案并保留完整aria-label与原发射事件。校验、发布、生成次数及 Agent 记录在卡片主体常显，技术审计保留原过程详情入口。ResourceExecutionProgressList保留spec分组/text优先/状态优先级和原按钮条件，阶段审核、publication与Claim状态分别显示；不把审核通过或Claim完成当作已发布，汇总既有多表示口径未变。待决定提示与发布结果按同resource_id读取当前资源本体和报告中的显式决定，再补执行字段；已确认发布清除过期待决定，不改变发布规则。历史执行项缺少时间时，状态刷新按需读取现有timeline查询取得有限水位。`workflowPresentation.js` 集中维护真实关键节点与明确历史 agent 别名的展示/详情白名单，图与详情 hook 共用；已有未知 node_name 不借 agent 别名提升为可交互节点。`associatedStepResources` 仅使用同 Run 的显式 resource_ids 或 review_ids 关联资源；没有关联的诊断/规划等节点不自动选择其他产物。详情分开执行状态、普通审核和事实判定。`WorkflowDetailDialog.vue`管理通用外壳、加载/刷新、显式资源选择和唯一body滚动；无tablist/tab/tabpanel或模块切换。`workflowDetailPresentation.js`管理六项职责与唯一contentKind、受控公开摘要投影/未知全文回退；`workflow-detail/`的结果、普通审核、冻结证据、版本叶子按职责渲染单页，CSS仅作用于详情。诊断展示难度/盲区/建议，检索展示明确引用的冻结来源，规划仅投影最多四项保存摘要，生成展示显式关联版本正文，审核展示真实Review及已保存摘要/decision_reason，Claim核验展示真实判定与来源对照。evidence_gate/claim_extract被动，仅图内状态，不再重复检索/核验正文；不同调用/版本的同角色不按名称去重。资源入口只展示普通审核和默认折叠的显式版本对比，旧独立Claim发布报告保持。已删除不再使用的导航/抽取详情实现，不保留转发。`workflowNodeIcons.js`共用14个既有图形与未知图形。底部执行上下文/输入/标识默认折叠；多资源节点选择放在主体前，单资源选择折叠。接口未保存完整诊断/规划或逐资源模型suggestion时不补造；审核聚合说明不称原始模型回复，执行成功不等于审核通过。ClaimEvidenceList可选focusFirst仅详情启用，按记录顺序优先contradicted/not_in_evidence/incomplete，无问题时首条，non_factual不抢占问题，旧发布报告默认折叠。冻结来源、版本身份、请求隔离和发布边界不变，呈现不改变判定或发布。
 
 P0-06 的 Claim 抽取器与 Generator 相互独立。模型只能从资源、目标技能节点和当前
 Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、

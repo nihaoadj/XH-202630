@@ -535,7 +535,7 @@ onBeforeUnmount(() => { resourcesMounted = false; ++resourceListRequestVersion; 
 :global(.app-shell:has(.resources-layout) .topbar-kicker) { color: #086575; font: 11px/1.5 Consolas, 'SFMono-Regular', monospace; }
 :global(.app-shell:has(.resources-layout) .topbar h1) { color: #132c40; font-weight: 700; }
 :global(.app-shell:has(.resources-layout) .topbar p) { color: #536b7d; }
-:global(.app-shell:has(.resources-layout) .topbar-action) { min-height: 44px; border-radius: 5px; font-size: 12px; font-weight: 600; }
+:global(.app-shell:has(.resources-layout) .topbar-action) { min-height: 44px; border-radius: 5px; font-size: 12px; }
 :global(.app-shell:has(.resources-layout) .topbar-meta > div) { background: transparent; box-shadow: none; }
 :global(.app-shell:has(.resources-layout) .topbar-meta span) { color: #536b7d; }
 :global(.app-shell:has(.resources-layout) .topbar-meta strong) { color: #132c40; }
@@ -547,10 +547,7 @@ onBeforeUnmount(() => { resourcesMounted = false; ++resourceListRequestVersion; 
 .field-caption { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .field-caption small { flex-shrink: 0; font: 11px/1.5 Consolas, 'SFMono-Regular', monospace; }
 .field-label :deep(.el-select) { width: 100%; min-width: 0; }
-.field-label :deep(.el-select__wrapper) { min-height: 44px; padding-inline: 12px; background: #fff; box-shadow: 0 0 0 1px #cbdbe4 inset; transition: box-shadow .18s ease, background-color .18s ease; }
-.field-label :deep(.el-select__wrapper:hover) { box-shadow: 0 0 0 1px #7099a7 inset; }
-.field-label :deep(.el-select__wrapper.is-focused) { box-shadow: 0 0 0 2px var(--learn-teal) inset; }
-.field-label :deep(.el-select__selected-item) { min-width: 0; max-width: 100%; color: var(--learn-ink); font-size: 13px; font-weight: 500; }
+.field-label :deep(.el-select__selected-item) { min-width: 0; max-width: 100%; }
 .field-label :deep(.el-select__selection) { min-width: 0; }
 .toolbar-actions { display: flex; align-items: center; justify-content: flex-end; min-width: max-content; gap: 8px; white-space: nowrap; }
 .courseware-button, .refresh-button, .focus-button { height: 44px; min-height: 44px; margin: 0; border: 1px solid #b9cdd8; border-radius: 5px; background: #fff; color: var(--learn-ink); font-size: 12px; font-weight: 600; transition: border-color .18s ease, background-color .18s ease, color .18s ease; }
@@ -627,25 +624,6 @@ onBeforeUnmount(() => { resourcesMounted = false; ++resourceListRequestVersion; 
 @media (min-width: 1100px) and (min-height: 720px) {
   .library-empty { min-height: calc(100dvh - 212px); }
 }
-
-/* Tutor keeps its original drawer/embedded placement and adopts this page's palette. */
-.resources-layout :deep(.tutor-panel) { border-color: var(--learn-line); background: #f8fafb; }
-.resources-layout :deep(.tutor-panel-header) { border-color: #2b465a; background: var(--learn-navy); }
-.resources-layout :deep(.tutor-heading span) { color: var(--learn-mint); }
-.resources-layout :deep(.tutor-heading strong) { color: #fff; }
-.resources-layout :deep(.tutor-heading small) { color: #bed6e1; }
-.resources-layout :deep(.tutor-close) { width: 44px; height: 44px; border-color: #4b6a7b; border-radius: 5px; background: transparent; color: #e0eef2; }
-.resources-layout :deep(.tutor-close:hover) { border-color: #9cecdf; background: #24485b; color: #9cecdf; }
-.resources-layout :deep(.tutor-welcome) { border-color: var(--learn-line); border-radius: 6px; background: #fff; box-shadow: none; }
-.resources-layout :deep(.welcome-mark) { border-radius: 5px; background: var(--learn-navy); color: var(--learn-mint); box-shadow: none; }
-.resources-layout :deep(.welcome-eyebrow) { color: var(--learn-teal); }
-.resources-layout :deep(.starter-prompts button) { min-height: 54px; border-color: var(--learn-line); border-radius: 5px; background: #f8fafb; }
-.resources-layout :deep(.starter-prompts button:hover) { border-color: #6aa7b0; background: #edf6f7; box-shadow: none; }
-.resources-layout :deep(.starter-prompts button small) { color: var(--learn-muted); }
-.resources-layout :deep(.composer-editor) { border-radius: 6px; background: #f8fafb; }
-.resources-layout :deep(.composer-actions) { border-color: var(--learn-line); background: #edf5f6; }
-.resources-layout :deep(.composer-send:not(.is-disabled)) { border-radius: 5px; background: var(--learn-navy); color: #fff; box-shadow: none; }
-.resources-layout :deep(.composer-send:not(.is-disabled):hover) { background: #224e62; color: var(--learn-mint); box-shadow: none; transform: none; }
 
 /* Focus mode uses the same materials and buttons without changing its scroll model. */
 .resources-page.is-focus-mode { min-height: 100dvh; height: 100dvh; gap: 0; padding: 0; overflow-y: auto; background: var(--learn-paper); }

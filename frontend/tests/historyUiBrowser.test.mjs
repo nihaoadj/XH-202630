@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { browserOptions } from './browserOptions.mjs'
+import { inspectElementSelect } from './selectPresentation.mjs'
 
 const frontendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = path.join(frontendDir, 'dist')
@@ -717,6 +718,17 @@ try {
     assert.equal(await desktop.locator('.app-shell').evaluate((element) => element.classList.contains('is-sidebar-collapsed')), false, 'expanded desktop evidence should use the expanded sidebar')
     await pageReady(desktop)
     await checkProfileAndJourneyBehaviors(desktop)
+    const timeFilter = desktop.locator('.round-filter .el-select').nth(1)
+    await inspectElementSelect({
+      page: desktop, suite: 'history', evidenceDir, id: 'history-time-filter-desktop',
+      select: timeFilter, getWriteCount: () => audit.writes.length,
+    })
+    await desktop.setViewportSize({ width: 390, height: 844 })
+    await inspectElementSelect({
+      page: desktop, suite: 'history', evidenceDir, id: 'history-time-filter-mobile',
+      select: timeFilter, getWriteCount: () => audit.writes.length,
+    })
+    await desktop.setViewportSize({ width: 1393, height: 871 })
     // Reload to restore a clean first page before independent scrolling and route checks.
     await desktop.reload({ waitUntil: 'domcontentloaded' })
     await desktop.locator('.journey-chain-item:not(.history-event)').first().waitFor()

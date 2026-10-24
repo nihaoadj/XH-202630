@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { browserOptions } from './browserOptions.mjs'
+import { inspectDropdownMenu, inspectElementSelect, inspectNativeSelect } from './selectPresentation.mjs'
 
 const frontendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = path.join(frontendDir, 'dist')
@@ -84,6 +85,367 @@ function timelineEvents(runId, count = 5) {
   }))
 }
 
+function auditVisualizationEvents(runId) {
+  const resource = (resourceId, version, parentResourceId, reviewId) => ({
+    resource_id: resourceId,
+    resource_spec_id: 'spec-guide',
+    resource_family_id: 'family-guide',
+    resource_type: '实操指南',
+    representation: 'text',
+    version,
+    parent_resource_id: parentResourceId,
+    review_id: reviewId,
+  })
+  const events = [
+    {
+      event_type: 'resource_version_created', status: 'generated',
+      payload: { ...resource('resource-guide-v1', 1, null, 'review-guide-v1'), resource_execution_state: 'generated', attempt: 1 },
+    },
+    {
+      event_type: 'review_persisted', status: 'revision_requested',
+      payload: { ...resource('resource-guide-v1', 1, null, 'review-guide-v1'), resource_execution_state: 'revision_requested', attempt: 1, review_id: 'review-guide-v1' },
+    },
+    {
+      event_type: 'revision_requested', status: 'revision_requested',
+      payload: { resource_ids: ['resource-guide-v1'], revision_count: 1, decision_reason: '步骤缺少可核对的来源依据，请补充并修正版本说明。' },
+    },
+    {
+      event_type: 'resource_version_created', status: 'generated',
+      payload: { ...resource('resource-guide', 2, 'resource-guide-v1', 'review-guide-v2'), resource_execution_state: 'generated', attempt: 2 },
+    },
+    {
+      event_type: 'review_persisted', status: 'approved',
+      payload: { ...resource('resource-guide', 2, 'resource-guide-v1', 'review-guide-v2'), resource_execution_state: 'approved', attempt: 2, review_id: 'review-guide-v2' },
+    },
+    {
+      event_type: 'followup_generation_created', status: 'queued',
+      payload: { child_run_id: 'followup-run', attempt_id: 'followup-attempt' },
+    },
+    { event_type: 'run_completed', status: 'completed', payload: {} },
+  ].map((event, index) => ({
+    run_id: runId,
+    event_id: 'evt-' + runId + '-audit-' + (index + 1),
+    event_type: event.event_type,
+    event_sequence: index + 1,
+    sequence: index + 1,
+    step_id: 'audit-step-' + (index + 1),
+    step_sequence: index + 1,
+    node_name: event.event_type === 'review_persisted' ? 'review' : event.event_type,
+    agent_name: event.event_type === 'review_persisted' ? '审核 Agent' : '资源工作流',
+    action: event.event_type,
+    status: event.status,
+    payload: event.payload,
+    occurred_at: '2026-10-01T08:0' + (index + 1) + ':00Z',
+  }))
+  return events
+}
+
+const AUDIT_OTHER_SPEC_RESOURCE_ID = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
+
+function assertRenderedEvidenceLocator(content, evidence, label) {
+  const locator = evidence?.locator || {}
+  const expected = []
+  if (locator.page != null) expected.push(`第 ${locator.page} 页`)
+  if (locator.line_start != null) {
+    expected.push(`行 ${locator.line_start}${locator.line_end != null ? `–${locator.line_end}` : ''}`)
+  } else if (locator.line_end != null) {
+    expected.push(`截止行 ${locator.line_end}`)
+  }
+  for (const part of expected) assert.ok(content.includes(part), `${label} should render recorded locator field ${part}`)
+}
+
+function auditVisualizationTimeline(runId) {
+  const timestamp = '2026-10-01T08:00:00Z'
+  const step = (stepId, stepSequence, nodeName, agentName, action, status, values = {}) => ({
+    schema_version: '1.0',
+    run_id: runId,
+    step_id: stepId,
+    step_sequence: stepSequence,
+    node_name: nodeName,
+    agent_name: agentName,
+    action,
+    status,
+    generation_attempt: stepSequence > 2 ? 2 : 1,
+    input_summary: '',
+    output_summary: '',
+    decision_reason: null,
+    evidence_refs: [],
+    resource_ids: [],
+    review_ids: [],
+    retry_count: 0,
+    started_at: timestamp,
+    ended_at: timestamp,
+    duration_ms: 340,
+    ...values,
+  })
+  const evidence = [
+    {
+      schema_version: '1.0',
+      evidence_id: 'evidence-frozen-supported',
+      run_id: runId,
+      retrieval_step_id: 'step-retrieval',
+      knowledge_base_id: 'track-1',
+      document_id: 'doc-frozen-protocol',
+      document_version: '3.2',
+      chunk_id: 'chunk-protocol-07',
+      query_hash: 'a'.repeat(64),
+      query_rank: 1,
+      rank: 1,
+      raw_score: 0.93,
+      score_kind: 'similarity',
+      normalized_score: 0.93,
+      excerpt: '冻结来源原文：每次提交后记录操作者、提交时间与结果状态。',
+      excerpt_hash: 'b'.repeat(64),
+      locator: {
+        knowledge_base_id: 'track-1',
+        document_id: 'doc-frozen-protocol',
+        document_version: '3.2',
+        chunk_id: 'chunk-protocol-07',
+        source_type: 'markdown',
+        source_path: 'docs/protocol.md',
+        title: '发布审计操作规范',
+        section: '2.4 提交记录',
+        page: 5,
+        line_start: 42,
+        line_end: 46,
+      },
+      config_hash: 'c'.repeat(64),
+      snapshot_hash: 'd'.repeat(64),
+      retrieved_at: timestamp,
+    },
+    {
+      schema_version: '1.0',
+      evidence_id: 'evidence-frozen-contradiction',
+      run_id: runId,
+      retrieval_step_id: 'step-retrieval',
+      knowledge_base_id: 'track-1',
+      document_id: 'doc-frozen-protocol',
+      document_version: '3.2',
+      chunk_id: 'chunk-protocol-03',
+      query_hash: 'e'.repeat(64),
+      query_rank: 1,
+      rank: 2,
+      raw_score: 0.86,
+      score_kind: 'similarity',
+      normalized_score: 0.86,
+      excerpt: '冻结来源原文：审核记录保留九十天，超过期限后按归档规则清理。',
+      excerpt_hash: 'f'.repeat(64),
+      locator: {
+        knowledge_base_id: 'track-1',
+        document_id: 'doc-frozen-protocol',
+        document_version: '3.2',
+        chunk_id: 'chunk-protocol-03',
+        source_type: 'markdown',
+        source_path: 'docs/protocol.md',
+        title: '发布审计操作规范',
+        section: '1.2 记录保存期限',
+        page: 2,
+        line_start: 18,
+        line_end: 22,
+      },
+      config_hash: 'c'.repeat(64),
+      snapshot_hash: '1'.repeat(64),
+      retrieved_at: timestamp,
+    },
+  ]
+
+  return {
+    steps: [
+      step('audit-diagnose-unbound', 1, 'diagnose', 'diagnosis', '学情诊断', 'success', {
+        input_summary: '读取当前学习目标与已有学情。',
+        output_summary: '形成诊断结果；此步骤没有关联资源。',
+      }),
+      step('audit-review-v1', 2, 'review', '审核 Agent', '审核资源 v1', 'failed', {
+        input_summary: '检查资源 resource-guide-v1 的事实陈述与证据引用。',
+        output_summary: '审核发现来源范围不一致，要求定向返工。',
+        decision_reason: '保留期限与冻结来源不符，且未说明记录字段。',
+        evidence_refs: ['evidence-frozen-contradiction'],
+        resource_ids: ['resource-guide-v1'],
+        review_ids: ['review-guide-v1'],
+        retry_count: 1,
+      }),
+      step('audit-revision', 3, 'prepare_revision', 'supervisor', '安排定向返工', 'success', {
+        input_summary: '依据 review-guide-v1 的修订指令重新生成。',
+        output_summary: '返工范围限定为 spec-guide 的 text 资源。',
+        decision_reason: '审核要求修正记录保存期限并补足提交记录字段。',
+        resource_ids: ['resource-guide-v1'],
+        review_ids: ['review-guide-v1'],
+      }),
+      step('audit-generate-v2', 4, 'generate', 'generator', '生成资源 v2', 'success', {
+        input_summary: '根据审核意见和冻结来源生成 resource-guide v2。',
+        output_summary: '生成新版本并保留与 v1 的父子关系。',
+        decision_reason: '修订记录保留期限为九十天，并补充操作者、时间和结果字段。',
+        evidence_refs: ['evidence-frozen-supported', 'evidence-frozen-contradiction'],
+        resource_ids: ['resource-guide'],
+        retry_count: 2,
+      }),
+      step('audit-review-v2', 5, 'review', '审核 Agent', '审核资源 v2', 'success', {
+        input_summary: '复核 resource-guide v2 的修订内容及来源依据。',
+        output_summary: '必要事实与冻结来源一致，审核通过。',
+        decision_reason: '保存期限与记录字段均有直接冻结来源支持。',
+        evidence_refs: ['evidence-frozen-supported'],
+        resource_ids: ['resource-guide'],
+        review_ids: ['review-guide-v2'],
+      }),
+      step('audit-unknown-node', 6, 'unknown_future_node', 'reviewer', '未知节点不能借 reviewer 别名打开详情', 'success'),
+    ],
+    reviews: [
+      {
+        review_id: 'review-guide-v1', resource_id: 'resource-guide-v1', run_id: runId,
+        status: 'revision_requested', claim_total: 2, claim_supported: 0, claim_unsupported: 2,
+        suspected_hallucinations: 1, hallucination_rate: 0.5, legacy_reviewer_score: 0.42,
+        claim_hallucination_rate: null, claim_metric_status: 'incomplete', review_pass_rate: 0.42,
+        revision_count: 1,
+        issues: [{ code: 'evidence_conflict', severity: 'high', description: '保存期限陈述与冻结来源冲突。' }],
+        revision_instructions: [{ issue_codes: ['evidence_conflict'], target_resource_type: '实操指南', action: '按冻结来源修订期限，并补充记录字段。', priority: 1 }],
+        review_hash: '2'.repeat(64), created_at: '2026-10-01T08:01:00Z',
+      },
+      {
+        review_id: 'review-guide-v2', resource_id: 'resource-guide', run_id: runId,
+        status: 'approved', claim_total: 2, claim_supported: 2, claim_unsupported: 0,
+        suspected_hallucinations: 0, hallucination_rate: 0, legacy_reviewer_score: 0.98,
+        claim_hallucination_rate: 0, claim_metric_status: 'complete', review_pass_rate: 0.98,
+        revision_count: 1, issues: [], revision_instructions: [],
+        review_hash: '3'.repeat(64), created_at: '2026-10-01T08:03:00Z',
+      },
+    ],
+    resource_versions: [
+      {
+        resource_id: 'resource-guide-v1', run_id: runId, resource_spec_id: 'spec-guide',
+        resource_family_id: 'family-guide', representation: 'text', resource_type: '实操指南',
+        version: 1, parent_resource_id: null, review_id: 'review-guide-v1', review_status: 'revision_requested',
+        publication_status: 'unpublished',
+        content_text: '# 提交审计指南\n\n每次提交后只需记录操作者。\n\n审核记录永久保存。',
+        created_at: '2026-10-01T08:00:00Z',
+      },
+      {
+        resource_id: 'resource-guide', run_id: runId, resource_spec_id: 'spec-guide',
+        resource_family_id: 'family-guide', representation: 'text', resource_type: '实操指南',
+        version: 2, parent_resource_id: 'resource-guide-v1', review_id: 'review-guide-v2', review_status: 'approved',
+        publication_status: 'published',
+        content_text: '# 提交审计指南\n\n每次提交后记录操作者、提交时间与结果状态。\n\n审核记录保留九十天，超过期限后按归档规则清理。',
+        created_at: '2026-10-01T08:02:00Z',
+      },
+      {
+        resource_id: AUDIT_OTHER_SPEC_RESOURCE_ID, run_id: runId, resource_spec_id: 'spec-guide-other',
+        resource_family_id: 'family-guide-other', representation: 'text', resource_type: '实操指南',
+        version: 1, parent_resource_id: null, review_id: 'review-guide-other', review_status: 'approved',
+        publication_status: 'published', content_text: '# 另一条实操指南\n\n它与 resource-guide 属于不同资源规格。',
+        created_at: '2026-10-01T08:04:00Z',
+      },
+    ],
+    evidence,
+  }
+}
+
+function auditVisualizationClaims(runId) {
+  const claimValues = [
+    {
+      claim_id: 'clm_11111111111111111111111111111111',
+      claim_text: '每次提交后记录操作者、提交时间与结果状态。',
+      source_text: '每次提交后记录操作者、提交时间与结果状态。',
+      source_evidence_ids: ['evidence-frozen-supported'],
+      verdict: 'supported', evidence_ids: ['evidence-frozen-supported'],
+      reason: '与冻结来源原文一致。',
+    },
+    {
+      claim_id: 'clm_22222222222222222222222222222222',
+      claim_text: '审核记录永久保存。',
+      source_text: '审核记录永久保存。',
+      source_evidence_ids: ['evidence-frozen-contradiction'],
+      verdict: 'contradicted', evidence_ids: ['evidence-frozen-contradiction'],
+      reason: '冻结来源明确规定保存九十天后按归档规则清理。',
+    },
+    {
+      claim_id: 'clm_33333333333333333333333333333333',
+      claim_text: '提交时还会自动通知所有关注者。',
+      source_text: '提交时还会自动通知所有关注者。',
+      source_evidence_ids: [],
+      verdict: 'not_in_evidence', evidence_ids: [],
+      reason: '当前 Run 冻结的证据快照没有支持该陈述。',
+    },
+  ]
+  return {
+    run_id: runId,
+    audit_status: 'complete',
+    claims: claimValues.map((item, claimIndex) => ({
+      schema_version: '2.0',
+      claim_id: item.claim_id,
+      run_id: runId,
+      resource_id: 'resource-guide',
+      resource_version: 2,
+      review_id: 'review-guide-v2',
+      claim_index: claimIndex,
+      claim_text: item.claim_text,
+      claim_type: 'factual',
+      source_text: item.source_text,
+      source_start: 0,
+      source_end: item.source_text.length,
+      source_text_hash: '4'.repeat(64),
+      source_evidence_ids: item.source_evidence_ids,
+      extraction_method: 'deterministic',
+      extractor_prompt_version: 'fixture-v1',
+      claim_hash: '5'.repeat(64),
+      created_at: '2026-10-01T08:03:00Z',
+    })),
+    judgements: claimValues.map((item) => ({
+      judgement_id: 'jdg_' + item.claim_id.slice(4),
+      claim_id: item.claim_id,
+      run_id: runId,
+      resource_id: 'resource-guide',
+      resource_version: 2,
+      review_id: 'review-guide-v2',
+      status: 'completed',
+      verdict: item.verdict,
+      evidence_ids: item.evidence_ids,
+      reason: item.reason,
+      judge_type: 'deterministic',
+      judge_prompt_version: 'fixture-v1',
+      confidence: 0.96,
+      created_at: '2026-10-01T08:03:00Z',
+    })),
+    resource_metrics: {
+      'resource-guide': {
+        metric_status: 'complete',
+        claim_hallucination_rate: 2 / 3,
+        claim_total: 3,
+        factual_claim_total: 3,
+        supported_claim_total: 1,
+        contradicted_claim_total: 1,
+        not_in_evidence_claim_total: 1,
+        non_factual_claim_total: 0,
+        incomplete_claim_total: 0,
+      },
+    },
+  }
+}
+
+function fullChainTimeline(runId, running = false) {
+  const nodes = [
+    ['diagnose', '学习目标与薄弱点诊断'],
+    ['retrieve', '检索学习所需知识'],
+    ['evidence_gate', '核对冻结来源'],
+    ['plan', '制定资源与学习路径'],
+    ['generate', '生成资源 v1'],
+    ['review', '审核资源 v1', 'failed'],
+    ['prepare_revision', '准备定向修订'],
+    ['generate', '生成资源 v2'],
+    ['review', '复审资源 v2'],
+    ['claim_extract', '抽取可核验事实'],
+    ['claim_judge', '对照冻结证据核验事实', running ? 'running' : 'success'],
+    ...(!running ? [['claim_decide', '汇总事实核验结果'], ['finalize', '整理本轮执行结果']] : []),
+  ]
+  return {
+    steps: nodes.map(([nodeName, action, status = 'success'], index) => ({
+      schema_version: '1.0', run_id: runId, step_id: `chain-${index + 1}`, step_sequence: index + 1,
+      node_name: nodeName, agent_name: nodeName, action, status,
+      resource_ids: [], review_ids: [], evidence_refs: [], retry_count: 0,
+      input_summary: '', output_summary: '', duration_ms: status === 'running' ? null : (index + 1) * 180,
+    })).reverse(),
+    reviews: [], resource_versions: [], evidence: [],
+  }
+}
+
 function makeJob(learnerId, runId, status = 'completed', overrides = {}) {
   const resourceTypes = ['讲义', '实操指南', '分阶测试题']
   return {
@@ -124,15 +486,20 @@ function scenarioState(name) {
   const long = name === 'long'
   const primaryStatus = name === 'queued' ? 'queued'
     : name === 'running' || name === 'sse-fallback' ? 'running'
+      : name === 'resource-live' ? 'running'
       : name === 'failed' ? 'failed' : 'completed'
   const primaryRun = name === 'multi' ? 'run-one' : 'run-main'
   const jobsByLearner = {
     'learner-1': name === 'no-task' || name === 'no-profile' ? [] : [
-      makeJob('learner-1', primaryRun, name === 'multi' ? 'running' : primaryStatus, name === 'no-output' ? {
-        resource_progress_summary: { total: 3, completed: 3, published: 0, failed: 0 },
-      } : {}),
+      makeJob('learner-1', primaryRun, name === 'multi' ? 'running' : primaryStatus,
+        name === 'no-output' ? { resource_progress_summary: { total: 3, completed: 3, published: 0, failed: 0 } }
+          : name === 'claim-pending' ? { resource_progress_summary: { total: 3, completed: 3, published: 2, failed: 0 } }
+            : name === 'resource-live' ? { request_payload: {
+              learner_id: 'learner-1', resource_types: ['实操指南', '复习清单', '讲义'],
+              include_review: true, include_claim_check: true,
+            } } : {}),
     ],
-    'learner-2': name === 'multi' ? [makeJob('learner-2', 'run-alt', 'completed', {
+    'learner-2': ['multi', 'audit-visualization'].includes(name) ? [makeJob('learner-2', 'run-alt', 'completed', {
       batch_id: 'batch-learner-2',
       request_payload: { learner_id: 'learner-2', resource_types: ['复习清单'], include_review: true, include_claim_check: false },
     })] : [],
@@ -140,10 +507,29 @@ function scenarioState(name) {
   if (name === 'multi') {
     jobsByLearner['learner-1'].push(makeJob('learner-1', 'run-queued', 'queued', { batch_id: 'batch-learner-1-queued' }))
   }
+  if (name === 'followup-navigation') {
+    jobsByLearner['learner-1'].push(makeJob('learner-1', 'followup-run', 'completed', {
+      batch_id: 'batch-learner-1-followup',
+      created_at: '2026-09-30T08:00:00Z',
+      request_payload: { learner_id: 'learner-1', resource_types: ['复习清单'], include_review: true, include_claim_check: true },
+    }))
+  }
   const resourcesByRun = {
     [primaryRun]: ['no-task', 'no-profile', 'no-output', 'queued'].includes(name) ? [] : [
       resource('resource-guide', 'learner-1', primaryRun, long ? '多阶段知识迁移与证据核验实操指南资源类型' : '实操指南', 'learning_document', long ? longMarkdown() : '# 实操指南\n\n从验收来源中完成一个可复核步骤。', {
         claim_publish_decision_pending: name === 'claim-pending',
+        ...(name === 'resource-live' ? { publication_status: 'unpublished', claim_publish_decision_pending: false } : {}),
+        ...(name === 'audit-visualization' ? {
+          resource_spec_id: 'spec-guide',
+          resource_family_id: 'family-guide',
+          representation: 'text',
+          version: 2,
+          parent_resource_id: 'resource-guide-v1',
+          review_id: 'review-guide-v2',
+          review_status: 'approved',
+          publication_status: 'published',
+          content_text: '# 提交审计指南\n\n每次提交后记录操作者、提交时间与结果状态。\n\n审核记录保留九十天，超过期限后按归档规则清理。',
+        } : {}),
       }),
       resource('resource-checklist', 'learner-1', primaryRun, '复习清单', 'learning_document', '# 复习清单\n\n回忆关键概念并核对证据。'),
       resource('resource-lecture', 'learner-1', primaryRun, '讲义'),
@@ -151,19 +537,25 @@ function scenarioState(name) {
     'run-alt': [
       resource('resource-alt', 'learner-2', 'run-alt', '复习清单'),
     ],
+    'followup-run': [],
     'run-queued': [],
   }
   const executionsByRun = {
-    [primaryRun]: ['no-output', 'queued'].includes(name) ? [] : [
-      execution('spec-guide', 'resource-guide', '实操指南', name === 'partial' ? 'revision_requested' : 'approved', {
+    [primaryRun]: ['no-output', 'queued'].includes(name) ? [] : name === 'resource-live' ? [
+      execution('spec-guide', 'resource-guide', '实操指南', 'generating', {
+        attempt: 2, publication_status: 'unpublished', updated_at: '2026-10-01T08:00:00Z',
+      }),
+    ] : [
+      execution('spec-guide', 'resource-guide', '实操指南', name === 'partial' ? 'revision_requested' : name === 'claim-pending' ? 'human_review' : 'approved', {
         error_message: name === 'partial' ? '审核要求再次生成此资源。' : '',
+        ...(name === 'claim-pending' ? { publication_status: 'unpublished' } : {}),
         agent_name: long ? '资源生成与跨阶段证据核验协作 Agent' : undefined,
-        validation_status: long ? '来源快照与发布范围一致性及学习目标覆盖校验通过' : undefined,
+        validation_status: long ? 'validated' : undefined,
         claim_metric_status: 'complete',
-        factual_claim_total: 5,
-        supported_claim_total: 4,
-        not_in_evidence_claim_total: 1,
-        claim_factual_pass_rate: 0.8,
+        factual_claim_total: name === 'audit-visualization' ? 3 : 5,
+        supported_claim_total: name === 'audit-visualization' ? 1 : 4,
+        not_in_evidence_claim_total: name === 'audit-visualization' ? 1 : 1,
+        claim_factual_pass_rate: name === 'audit-visualization' ? 1 / 3 : 0.8,
         claim_publish_decision_pending: name === 'claim-pending',
       }),
       execution('spec-checklist', 'resource-checklist', '复习清单', 'approved', { display_order: 2 }),
@@ -173,6 +565,7 @@ function scenarioState(name) {
       }),
     ],
     'run-alt': [execution('spec-alt', 'resource-alt', '复习清单', 'approved')],
+    'followup-run': [],
     'run-queued': [],
   }
   const longCourseware = name === 'courseware-long'
@@ -203,7 +596,7 @@ function scenarioState(name) {
       }))
       : [],
   }
-  const timelineCount = long ? 90 : name === 'running' ? 8 : 5
+  const timelineCount = long ? 90 : ['running', 'resource-live'].includes(name) ? 8 : 5
   return {
     scenario: name,
     profiles,
@@ -213,11 +606,15 @@ function scenarioState(name) {
     resourcesByRun,
     executionsByRun,
     timelines: {
-      [primaryRun]: timelineEvents(primaryRun, timelineCount),
+      [primaryRun]: ['audit-visualization', 'followup-navigation'].includes(name)
+        ? auditVisualizationEvents(primaryRun)
+        : timelineEvents(primaryRun, timelineCount),
       'run-alt': timelineEvents('run-alt', 6),
+      'followup-run': name === 'followup-navigation' ? timelineEvents('followup-run', 2) : [],
       'run-queued': [],
       'cw-existing': [],
     },
+    timelineDetails: ['audit-visualization', 'followup-navigation'].includes(name) ? auditVisualizationTimeline(primaryRun) : null,
     sseMode: name === 'sse-fallback' ? 'stream_error' : 'normal',
     writes: [],
     requests: [],
@@ -225,13 +622,15 @@ function scenarioState(name) {
     failureMessages: [],
     statusFailureCount: 0,
     resourceFailureCount: 0,
+    statusResourceExecutions: {},
+    statusGetGate: null,
     resourceDelayMs: 0,
     jobsDelayMs: 0,
     timelineDelayMs: 0,
     sseClients: new Set(),
     nextRun: 0,
     lastClaimDecision: null,
-    claims: {
+    claims: name === 'audit-visualization' ? auditVisualizationClaims(primaryRun) : {
       claims: [
         { claim_id: 'claim-1', resource_id: 'resource-guide', claim_type: 'factual', claim_text: '验收事实陈述。' },
       ],
@@ -408,6 +807,22 @@ async function apiResponse(url, method, request, response) {
       ...state.claims.resource_metrics[state.lastClaimDecision.resource_id],
       claim_publish_decision_pending: false,
     }
+    const decidedResource = Object.values(state.resourcesByRun).flat()
+      .find(item => item.resource_id === state.lastClaimDecision.resource_id)
+    if (decidedResource) {
+      decidedResource.publication_status = body.publish ? 'published' : 'unpublished'
+      decidedResource.claim_publish_decision_pending = false
+      if (body.publish) {
+        const job = findJob(decidedResource.run_id)
+        const summary = job?.resource_progress_summary || {}
+        if (job) {
+          job.resource_progress_summary = {
+            ...summary,
+            published: Math.min(Number(summary.total) || 0, (Number(summary.published) || 0) + 1),
+          }
+        }
+      }
+    }
     return json(response, { resource_id: state.lastClaimDecision.resource_id, published: Boolean(body.publish) })
   }
   const coursewareBatchPath = '/api/resources/courseware/jobs/batch'
@@ -457,6 +872,7 @@ async function apiResponse(url, method, request, response) {
       resource_executions: state.executionsByRun[runId] || [],
       next_event_sequence: null,
       replay_completeness: 'complete',
+      ...(runId === 'run-main' && state.timelineDetails ? state.timelineDetails : {}),
     })
   }
   const resourceDetailMatch = pathname.match(/^\/api\/resources\/items\/([^/]+)$/)
@@ -473,8 +889,37 @@ async function apiResponse(url, method, request, response) {
       state.statusFailureCount -= 1
       return json(response, {}, 503)
     }
-    const job = findJob(decodeURIComponent(statusMatch[1]))
-    return job ? json(response, job) : json(response, { detail: 'Unknown fixture run' }, 404)
+    const runId = decodeURIComponent(statusMatch[1])
+    const job = findJob(runId)
+    const items = state.statusResourceExecutions[runId]
+    const status = job && items
+      ? { ...job, resource_progress_summary: { ...job.resource_progress_summary, items: items.map(item => ({ ...item })) } }
+      : job ? JSON.parse(JSON.stringify(job)) : null
+    const gate = state.statusGetGate
+    if (status && gate?.runId === runId && !gate.started) {
+      gate.snapshot = JSON.parse(JSON.stringify(status))
+      response.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-fixture-status-snapshot': 'held',
+      })
+      response.flushHeaders?.()
+      gate.started = true
+      await gate.promise
+      response.end(JSON.stringify(gate.snapshot))
+      return
+    }
+    if (gate?.runId === runId) {
+      gate.newerResponses = (gate.newerResponses || 0) + 1
+      response.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-fixture-status-snapshot': 'current',
+      })
+      response.end(JSON.stringify(status))
+      return
+    }
+    return status ? json(response, status) : json(response, { detail: 'Unknown fixture run' }, 404)
   }
   const resourceFileMatch = pathname.match(/^\/api\/resources\/file\/([^/]+)$/)
   if (resourceFileMatch && method === 'GET') {
@@ -590,6 +1035,11 @@ async function newPage(browser, base, name, viewport = baseViewport, options = {
   if (options.failResources) state.resourceFailureCount = options.failResources
   if (options.delayResourcesMs) state.resourceDelayMs = options.delayResourcesMs
   if (options.delayTimelineMs) state.timelineDelayMs = options.delayTimelineMs
+  if (options.claimEnabled === false) for (const jobs of Object.values(state.jobsByLearner)) for (const job of jobs) job.request_payload.include_claim_check = false
+  if (options.timeline) {
+    state.timelineDetails = options.timeline
+    state.timelines['run-main'] = []
+  }
   const page = await browser.newPage({
     viewport: { width: viewport.width, height: viewport.height },
     reducedMotion: options.reducedMotion ? 'reduce' : 'no-preference',
@@ -608,6 +1058,23 @@ async function newPage(browser, base, name, viewport = baseViewport, options = {
     localStorage.clear()
     sessionStorage.clear()
   })
+  if (options.traceRunStatusXhr) {
+    await page.addInitScript(() => {
+      window.__t17RunStatusXhrTrace = []
+      const xhrPrototype = window.XMLHttpRequest.prototype
+      const xhrOpen = xhrPrototype.open
+      const xhrSend = xhrPrototype.send
+      xhrPrototype.open = function (method, url, ...args) {
+        this.__t17TraceStatusRequest = String(url) === '/api/generate/jobs/run-main'
+        if (this.__t17TraceStatusRequest) window.__t17RunStatusXhrTrace.push({ kind: 'open', method: String(method), url: String(url) })
+        return xhrOpen.call(this, method, url, ...args)
+      }
+      xhrPrototype.send = function (...args) {
+        if (this.__t17TraceStatusRequest) window.__t17RunStatusXhrTrace.push({ kind: 'send', url: '/api/generate/jobs/run-main' })
+        return xhrSend.apply(this, args)
+      }
+    })
+  }
   await page.goto(base + '/generate', { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.generate-page', { state: 'visible' })
   await page.locator('.task-selector').waitFor({ state: 'visible' })
@@ -659,19 +1126,21 @@ async function geometry(page, label, requireFit = false) {
     const selectorFields = [...document.querySelectorAll('.task-selector .selector-field')]
     const summaryItems = [...document.querySelectorAll('.job-summary .summary-item')]
     const status = document.querySelector('.job-summary .production-status')
-    const textActions = document.querySelector('.resources-panel > .panel-title .task-actions')
+    const textActions = document.querySelector('.resources-panel > .resource-toolbar .task-actions')
     const coursewareActions = document.querySelector('.courseware-generation-page .details-panel > .panel-title .task-actions')
     const actionToolbar = textActions || coursewareActions
     const readerCard = document.querySelector('.resource-stage .reader-card')
     const readerHeader = readerCard?.querySelector('.reader-header')
     const resourceToolbar = document.querySelector('.resources-panel .resource-toolbar')
-    const readerToolbarActions = resourceToolbar?.querySelector('.reader-toolbar-actions')
+    const resourceToolbarActions = resourceToolbar?.querySelector('.resource-toolbar-actions')
+    const readerTaskActions = resourceToolbarActions?.querySelector('.task-actions')
+    const readerToolbarActions = resourceToolbarActions?.querySelector('.reader-toolbar-actions')
     const readerActionAnchor = resourceToolbar?.querySelector('#generation-reader-actions.reader-resource-actions')
+    const resourceDifficulty = resourceToolbar?.querySelector('#generation-resource-difficulty.resource-grade')
     const readerTitle = readerCard?.querySelector('.resource-content h1')
-    const resourceDifficulty = readerActionAnchor?.querySelector('.resource-difficulty')
     const downloadButton = readerActionAnchor?.querySelector('.download-button')
     const learningModeButton = readerToolbarActions?.querySelector('.learning-mode-action')
-    const appendButton = document.querySelector('.resources-panel > .panel-title .task-actions .status-action-append')
+    const appendButton = document.querySelector('.resources-panel > .resource-toolbar .task-actions .status-action-append')
     const selectors = ['.task-selector', '.job-summary', '.studio-grid', '.courseware-generation-page .generation-grid']
     return {
       viewport: { width: innerWidth, height: innerHeight },
@@ -686,7 +1155,7 @@ async function geometry(page, label, requireFit = false) {
       summaryStatus: status ? { ...rect(status), text: status.innerText.trim(), role: status.getAttribute('role'), ariaLive: status.getAttribute('aria-live'), ariaAtomic: status.getAttribute('aria-atomic'), iconCount: status.querySelectorAll('svg').length } : null,
       actionToolbar: actionToolbar ? {
         ...rect(actionToolbar),
-        heading: rect(actionToolbar.parentElement),
+        container: rect(textActions ? resourceToolbar : coursewareActions.parentElement),
         buttons: [...actionToolbar.querySelectorAll('button')].map((node) => ({ ...rect(node), text: node.innerText.trim(), visible: node.getClientRects().length > 0 })),
       } : null,
       actionToolbarKind: textActions ? 'text' : coursewareActions ? 'courseware' : null,
@@ -698,20 +1167,44 @@ async function geometry(page, label, requireFit = false) {
       reader: readerCard ? {
         card: rect(readerCard),
         headerCount: readerCard.querySelectorAll('.reader-header').length,
-        difficultyCount: resourceToolbar?.querySelectorAll('.reader-resource-actions .resource-difficulty').length || 0,
+        difficultyCount: resourceToolbar?.querySelectorAll('#generation-resource-difficulty.resource-grade .resource-difficulty').length || 0,
+        resourceToolbarActionsCount: resourceToolbar?.querySelectorAll('.resource-toolbar-actions').length || 0,
         downloadCount: resourceToolbar?.querySelectorAll('.reader-resource-actions .download-button').length || 0,
-        learningModeCount: resourceToolbar?.querySelectorAll('.learning-mode-action').length || 0,
+        learningModeCount: resourceToolbarActions?.querySelectorAll('.learning-mode-action').length || 0,
         toolbar: resourceToolbar ? { ...rect(resourceToolbar), scrollWidth: resourceToolbar.scrollWidth, clientWidth: resourceToolbar.clientWidth } : null,
-        toolbarActions: readerToolbarActions ? rect(readerToolbarActions) : null,
+        toolbarActions: resourceToolbarActions ? rect(resourceToolbarActions) : null,
         learningModeLast: readerToolbarActions?.lastElementChild?.classList.contains('learning-mode-action') || false,
-        actionAnchor: readerActionAnchor ? { ...rect(readerActionAnchor), role: readerActionAnchor.getAttribute('role'), ariaLabel: readerActionAnchor.getAttribute('aria-label') } : null,
+        actionAnchor: readerActionAnchor ? { ...rect(readerActionAnchor), id: readerActionAnchor.id, className: readerActionAnchor.className, role: readerActionAnchor.getAttribute('role'), ariaLabel: readerActionAnchor.getAttribute('aria-label') } : null,
+        actionAnchorCount: resourceToolbar?.querySelectorAll('#generation-reader-actions.reader-resource-actions').length || 0,
+        difficulty: resourceDifficulty ? {
+          ...rect(resourceDifficulty), id: resourceDifficulty.id, className: resourceDifficulty.className,
+          text: resourceDifficulty.innerText.trim(), visible: resourceDifficulty.getClientRects().length > 0,
+          containsGrade: Boolean(resourceDifficulty.querySelector('.resource-difficulty')),
+          inToolbarActions: resourceDifficulty.parentElement === resourceToolbarActions,
+          beforeTaskActions: Boolean(readerTaskActions && (resourceDifficulty.compareDocumentPosition(readerTaskActions) & Node.DOCUMENT_POSITION_FOLLOWING)),
+        } : null,
+        taskActionsInToolbarActions: Boolean(readerTaskActions && readerTaskActions.parentElement === resourceToolbarActions),
         title: readerTitle ? { ...rect(readerTitle), text: readerTitle.innerText.trim(), whiteSpace: getComputedStyle(readerTitle).whiteSpace, textOverflow: getComputedStyle(readerTitle).textOverflow, overflowX: getComputedStyle(readerTitle).overflowX, overflowY: getComputedStyle(readerTitle).overflowY, scrollWidth: readerTitle.scrollWidth, clientWidth: readerTitle.clientWidth } : null,
-        difficulty: resourceDifficulty ? { ...rect(resourceDifficulty), text: resourceDifficulty.innerText.trim(), visible: resourceDifficulty.getClientRects().length > 0 } : null,
         download: downloadButton ? { ...rect(downloadButton), text: downloadButton.innerText.trim(), visible: downloadButton.getClientRects().length > 0 } : null,
         learningMode: learningModeButton ? { ...rect(learningModeButton), text: learningModeButton.innerText.trim(), visible: learningModeButton.getClientRects().length > 0 } : null,
         append: appendButton ? rect(appendButton) : null,
       } : null,
       headings: { process: rect(processTitle), resources: rect(resourcesTitle) },
+      bilingualTitles: studio ? [processTitle, resourcesTitle].map((title) => {
+        const number = title.querySelector('.panel-section-number')
+        const chinese = title.querySelector('h3')
+        const english = title.querySelector('.eyebrow')
+        return {
+          number: rect(number),
+          numberText: number?.textContent.trim() || '',
+          numberBeforeChinese: Boolean(number && chinese && (number.compareDocumentPosition(chinese) & Node.DOCUMENT_POSITION_FOLLOWING)),
+          chinese: rect(chinese),
+          chineseBeforeEnglish: Boolean(chinese && english && (chinese.compareDocumentPosition(english) & Node.DOCUMENT_POSITION_FOLLOWING)),
+          english: rect(english),
+          englishText: english?.textContent.trim() || '',
+          actions: title.querySelectorAll('button, .task-actions, .output-count').length,
+        }
+      }) : [],
       processScroll: processScroll ? { top: processScroll.scrollTop, height: processScroll.scrollHeight, clientHeight: processScroll.clientHeight, width: processScroll.scrollWidth, clientWidth: processScroll.clientWidth } : null,
       resourceStage: resourceStage ? { top: resourceStage.scrollTop, height: resourceStage.scrollHeight, clientHeight: resourceStage.clientHeight, width: resourceStage.scrollWidth, clientWidth: resourceStage.clientWidth } : null,
       externalOverflow: [...document.querySelectorAll('.generate-page *')].filter((node) => {
@@ -735,6 +1228,21 @@ async function geometry(page, label, requireFit = false) {
   assert.equal(metrics.document.top, 0, label + ': document must start at scrollTop 0')
   assert.equal(metrics.rootScroll.top, 0, label + ': generation root must start at scrollTop 0')
   assert.equal(metrics.content.top, 0, label + ': outer app content must start at scrollTop 0')
+  for (const [index, title] of metrics.bilingualTitles.entries()) {
+    assert.equal(title.numberText, ['01', '02'][index],
+      label + ': compact bilingual title should retain its panel number')
+    assert.equal(title.englishText, ['/ WORKFLOW', '/ OUTPUT'][index],
+      label + ': English eyebrow should contain only its slash and panel label')
+    assert.ok(title.number, label + ': numbered panel heading should render its section number')
+    assert.ok(title.numberBeforeChinese, label + ': section number should precede the Chinese title in the heading')
+    assert.ok(title.chineseBeforeEnglish, label + ': Chinese title should appear before the English eyebrow')
+    assert.ok(title.number.right <= title.chinese.left + 1, label + ': section number should be visually left of the Chinese title')
+    assert.ok(title.chinese.right <= title.english.left + 1, label + ': bilingual title should use adjacent columns')
+    assert.ok(title.number.top < title.chinese.bottom && title.chinese.top < title.number.bottom
+      && title.chinese.top < title.english.bottom && title.english.top < title.chinese.bottom,
+    label + ': numbered bilingual title should share one line')
+    assert.equal(title.actions, 0, label + ': panel heading should reserve its space for the title')
+  }
   if (requireFit) {
     assert.equal(metrics.fit, true, label + ': measured desktop should enable fit layout')
     assert.ok(metrics.document.height <= metrics.document.clientHeight + 1, label + ': fit layout should prevent document scrolling')
@@ -771,9 +1279,9 @@ async function geometry(page, label, requireFit = false) {
     assert.equal(metrics.summaryStatus.ariaAtomic, 'true', label + ': moved production state should remain atomic')
     assert.ok(metrics.summaryStatus.iconCount > 0, label + ': task state should retain its semantic icon')
     assert.equal(await page.locator('.status-actions').count(), 0, label + ': deleted top-level action row should not return')
-    assert.ok(metrics.actionToolbar, label + ': task actions should move into the panel title')
+    assert.ok(metrics.actionToolbar, label + ': task actions should stay in their local tools area')
     assert.ok(metrics.actionToolbar.width > 0, label + ': local action toolbar should remain visible')
-    assert.ok(metrics.actionToolbar.left >= metrics.actionToolbar.heading.left - 1 && metrics.actionToolbar.right <= metrics.actionToolbar.heading.right + 1, label + ': local toolbar should remain inside its panel heading')
+    assert.ok(metrics.actionToolbar.left >= metrics.actionToolbar.container.left - 1 && metrics.actionToolbar.right <= metrics.actionToolbar.container.right + 1, label + ': local toolbar should remain inside its tools area')
     for (const button of metrics.actionToolbar.buttons) {
       assert.ok(button.visible && button.left >= metrics.actionToolbar.left - 1 && button.right <= metrics.actionToolbar.right + 1, label + ': local action should remain visible inside its toolbar: ' + JSON.stringify(button))
       assert.ok(button.height >= 44, label + ': local task action should meet the 44px target: ' + JSON.stringify(button))
@@ -802,8 +1310,18 @@ async function geometry(page, label, requireFit = false) {
     assert.equal(metrics.reader.headerCount, 0, label + ': generation reader header should be removed')
     assert.ok(metrics.reader.toolbar && metrics.reader.toolbarActions && metrics.reader.actionAnchor, label + ': reader actions should be merged into the resource toolbar')
     assert.equal(metrics.reader.learningModeLast, true, label + ': learning mode should be the final toolbar action')
-    assert.equal(metrics.reader.actionAnchor.role, 'group', label + ': teleported grade/download controls should retain a named group')
-    assert.equal(metrics.reader.actionAnchor.ariaLabel, '资源文件操作', label + ': teleported grade/download group should be accessible')
+    assert.equal(metrics.reader.resourceToolbarActionsCount, 1, label + ': resource action area should remain a single layout group')
+    assert.equal(metrics.reader.difficulty?.id, 'generation-resource-difficulty', label + ': difficulty should use the dedicated Teleport anchor')
+    assert.ok(metrics.reader.difficulty?.className.split(/\s+/).includes('resource-grade'), label + ': difficulty anchor should retain its resource-grade class')
+    assert.ok(metrics.reader.difficulty?.containsGrade, label + ': difficulty label should remain inside its Teleport anchor')
+    assert.equal(metrics.reader.difficulty?.inToolbarActions, true, label + ': difficulty should belong to resource-toolbar-actions')
+    assert.equal(metrics.reader.taskActionsInToolbarActions, true, label + ': task actions should remain in resource-toolbar-actions')
+    assert.equal(metrics.reader.difficulty?.beforeTaskActions, true, label + ': difficulty anchor should precede task actions')
+    assert.equal(metrics.reader.actionAnchorCount, 1, label + ': the download Teleport anchor should remain unique')
+    assert.equal(metrics.reader.actionAnchor.id, 'generation-reader-actions', label + ': download should retain its Teleport target')
+    assert.ok(metrics.reader.actionAnchor.className.split(/\s+/).includes('reader-resource-actions'), label + ': download target should retain its reader-resource-actions class')
+    assert.equal(metrics.reader.actionAnchor.role, 'group', label + ': teleported download control should retain a named group')
+    assert.equal(metrics.reader.actionAnchor.ariaLabel, '资源文件操作', label + ': teleported download group should remain accessible')
     assert.equal(metrics.reader.difficultyCount, 1, label + ': generation reader should show one difficulty control in its toolbar')
     assert.equal(metrics.reader.downloadCount, 1, label + ': generation reader should show one download control in its toolbar')
     assert.equal(metrics.reader.learningModeCount, 1, label + ': generation reader should show one learning mode action in its toolbar')
@@ -816,7 +1334,7 @@ async function geometry(page, label, requireFit = false) {
     for (const control of [metrics.reader.difficulty, metrics.reader.download, metrics.reader.learningMode]) {
       assert.ok(control.left >= metrics.reader.toolbar.left - 1 && control.right <= metrics.reader.toolbar.right + 1, label + ': reader control should remain inside the resource toolbar: ' + JSON.stringify(control))
     }
-    for (const control of [metrics.reader.difficulty, metrics.reader.download]) {
+    for (const control of [metrics.reader.download]) {
       assert.ok(control.left >= metrics.reader.actionAnchor.left - 1 && control.right <= metrics.reader.actionAnchor.right + 1, label + ': teleported reader controls should remain in their resource action group: ' + JSON.stringify(control))
     }
     assert.ok(metrics.reader.download.height >= 44, label + ': download control should meet the 44px target')
@@ -838,10 +1356,35 @@ async function geometry(page, label, requireFit = false) {
       if (metrics.reader.title.clientWidth > 0) assert.ok(metrics.reader.title.scrollWidth <= metrics.reader.title.clientWidth + 1, label + ': complete body title should fit its visible box')
     }
     if (metrics.viewport.width >= 1280) {
-      assert.ok(metrics.reader.append, label + ': append action should remain available above the reading toolbar')
+      assert.ok(metrics.reader.append, label + ': append action should remain available in the reading toolbar')
       assert.ok(Math.abs(metrics.reader.append.width - 112) <= 1, label + ': append action should retain its 112px target width')
       assert.ok(Math.abs(metrics.reader.learningMode.width - metrics.reader.append.width) <= 1, label + ': learning mode and append actions should have equal widths')
-      assert.ok(Math.abs(metrics.reader.learningMode.right - metrics.reader.append.right) <= 1, label + ': learning mode and append actions should share a right edge')
+      const overlapX = metrics.reader.append.left < metrics.reader.learningMode.right && metrics.reader.learningMode.left < metrics.reader.append.right
+      const overlapY = metrics.reader.append.top < metrics.reader.learningMode.bottom && metrics.reader.learningMode.top < metrics.reader.append.bottom
+      assert.ok(!(overlapX && overlapY), label + ': append and learning controls should not overlap')
+      if (state.scenario === 'completed' && metrics.viewport.width >= 1393) {
+        const buttons = [...metrics.actionToolbar.buttons, metrics.reader.download, metrics.reader.learningMode]
+        const orderedButtons = [...buttons].sort((left, right) => left.left - right.left)
+        assert.equal(buttons.length, 4, label + ': completed resource toolbar should expose four primary resource actions')
+        assert.ok(buttons.every((button) => Math.abs(button.top - buttons[0].top) <= 1),
+          label + ': all four resource actions should share the same tool row: ' + JSON.stringify(buttons))
+        assert.ok(metrics.reader.difficulty.right <= orderedButtons[0].left + 1,
+          label + ': difficulty should be the first item before all four resource actions: ' + JSON.stringify({ difficulty: metrics.reader.difficulty, buttons }))
+        assert.ok(metrics.reader.difficulty.top < orderedButtons[0].bottom && orderedButtons[0].top < metrics.reader.difficulty.bottom,
+          label + ': difficulty should share the four-button row: ' + JSON.stringify({ difficulty: metrics.reader.difficulty, buttons }))
+        for (const button of orderedButtons) {
+          if (/^重新生成失败资源/.test(button.text)) {
+            assert.ok(button.width > 112, label + ': long failed-resource retry should retain its adaptive width: ' + JSON.stringify(button))
+          } else {
+            assert.ok(Math.abs(button.width - 112) <= 1, label + ': resource action should retain its 112px width: ' + JSON.stringify(button))
+          }
+        }
+        for (let index = 1; index < orderedButtons.length; index += 1) {
+          const gap = orderedButtons[index].left - orderedButtons[index - 1].right
+          assert.ok(Math.abs(gap - 8) <= 1,
+            label + ': four resource actions should use an 8px gap within 1px: ' + JSON.stringify({ previous: orderedButtons[index - 1], current: orderedButtons[index], gap }))
+        }
+      }
     }
   }
   if (metrics.processScroll) assert.ok(metrics.processScroll.width <= metrics.processScroll.clientWidth + 1, label + ': process region horizontal overflow')
@@ -864,10 +1407,10 @@ async function assertSummaryAndActions(page, label) {
   assert.ok(await statusLocator.locator('svg').count(), label + ': production state icon should remain visible')
   assert.equal(await page.locator('.production-intro, .production-banner, .production-context').count(), 0, label + ': top-level intro and banner should be removed')
   await assertNoLocalHistoryAction(page, label)
-  const localActions = page.locator('.resources-panel > .panel-title .task-actions')
-  assert.equal(await localActions.count(), 1, label + ': task actions should live in the resource panel heading')
+  const localActions = page.locator('.resources-panel > .resource-toolbar .task-actions')
+  assert.equal(await localActions.count(), 1, label + ': task actions should live in the resource toolbar')
   assert.ok(await localActions.getByRole('button', { name: '刷新资源', exact: true }).count(), label + ': resource refresh should keep its full label')
-  assert.ok(await localActions.getByRole('button', { name: '追加资源', exact: false }).count(), label + ': append action should remain in the resource panel heading')
+  assert.ok(await localActions.getByRole('button', { name: '追加资源', exact: false }).count(), label + ': append action should remain in the resource toolbar')
   assert.equal(await page.getByRole('combobox', { name: '学习画像' }).count(), 1, label + ': profile selector needs an accessible name')
   assert.equal(await page.getByRole('combobox', { name: '资源批次' }).count(), 1, label + ': batch selector needs an accessible name')
   const targets = await page.evaluate(() => [...document.querySelectorAll(
@@ -889,36 +1432,219 @@ async function assertNoLocalHistoryAction(page, label) {
   assert.equal(await page.getByRole('button', { name: '学习历史', exact: true }).count(), 1, label + ': topbar learning history route should remain')
 }
 
-async function assertResourcePhases(page, label, { longMetadata = false } = {}) {
-  const metrics = await page.locator('.resource-progress-tree').evaluate((tree) => {
-    const phases = [...tree.querySelectorAll('.resource-phase')]
-    const headings = phases.map((phase) => phase.querySelector('.el-collapse-item__header'))
-    const order = [...tree.querySelectorAll('.phase-order')]
-    const line = getComputedStyle(tree, '::before')
-    const rect = (node) => {
-      const value = node.getBoundingClientRect()
-      return { top: value.top, bottom: value.bottom, left: value.left, right: value.right, width: value.width, height: value.height }
-    }
+async function openResourceDelivery(page) {
+  const delivery = page.locator('.resource-progress-tree')
+  await delivery.waitFor({ state: 'visible' })
+  assert.equal(await delivery.evaluate((node) => node.tagName), 'SECTION',
+    'resource status should use a permanently visible section')
+}
+
+async function alignProcessScrollBelowTopbar(page, label) {
+  if ((page.viewportSize()?.width || 0) > 600) return { skipped: true, reason: 'desktop viewport' }
+  const alignment = await page.evaluate(() => {
+    const processScroll = document.querySelector('.generate-page .process-scroll')
+    const topbar = document.querySelector('.app-shell .topbar')
+    const contentArea = processScroll?.closest('.content-area')
+    if (!processScroll || !topbar) return { missing: true }
+
+    const desiredTop = () => Math.max(0, topbar.getBoundingClientRect().bottom) + 12
+    const initialScrollTop = processScroll.getBoundingClientRect().top
+    const initialDesiredTop = desiredTop()
+    const initialWindowY = window.scrollY
+
+    // First move the outer document for fixed/sticky shell layouts, then move
+    // the actual content scroller by the remaining measured overlap.
+    window.scrollBy(0, initialScrollTop - initialDesiredTop)
+    const afterWindowTop = processScroll.getBoundingClientRect().top
+    const afterWindowDesired = desiredTop()
+    const contentDelta = afterWindowTop - afterWindowDesired
+    if (contentArea && contentDelta) contentArea.scrollTop += contentDelta
+
+    const finalTop = processScroll.getBoundingClientRect().top
+    const finalDesired = desiredTop()
     return {
-      phases: phases.map((phase, index) => ({
-        className: phase.className,
-        active: phase.classList.contains('is-active'),
-        heading: rect(headings[index]),
-        label: phase.querySelector('.phase-name')?.textContent.trim() || '',
-      })),
-      order: order.map((node) => ({ text: node.textContent.trim(), ...rect(node) })),
-      connector: {
-        content: line.content,
-        top: Number.parseFloat(line.top),
-        bottom: Number.parseFloat(line.bottom),
-        width: Number.parseFloat(line.width),
-        height: tree.clientHeight - Number.parseFloat(line.top) - Number.parseFloat(line.bottom),
-        backgroundColor: line.backgroundColor,
-      },
-      cards: [...tree.querySelectorAll('.execution-card')].map((node) => ({
+      initialScrollTop,
+      initialDesiredTop,
+      finalTop,
+      finalDesired,
+      windowYBefore: initialWindowY,
+      windowYAfter: window.scrollY,
+      contentScrollTop: contentArea?.scrollTop ?? null,
+      viewportHeight: window.innerHeight,
+    }
+  })
+  assert.ok(!alignment.missing, label + ': mobile crop requires the real process scrollport and shared topbar')
+  assert.ok(Math.abs(alignment.finalTop - alignment.finalDesired) <= 2,
+    label + ': actual page/content scrolling must place the process area below the visible topbar: ' + JSON.stringify(alignment))
+  assert.ok(alignment.finalTop < alignment.viewportHeight - 32,
+    label + ': process area should remain inside the real mobile viewport after alignment: ' + JSON.stringify(alignment))
+  return alignment
+}
+
+async function captureResourceDelivery(page, target, filename) {
+  await target.scrollIntoViewIfNeeded()
+  await target.evaluate((node) => {
+    const scrollport = node.closest('.process-scroll')
+    if (!scrollport) return
+    const targetTop = node.getBoundingClientRect().top
+    const scrollportTop = scrollport.getBoundingClientRect().top
+    scrollport.scrollTop += targetTop - scrollportTop - 8
+  })
+  const alignment = await alignProcessScrollBelowTopbar(page, filename)
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  const geometry = await target.evaluate((node) => {
+    const target = node.getBoundingClientRect()
+    const delivery = node.closest('.resource-progress-tree')?.getBoundingClientRect() || target
+    const scrollport = node.closest('.process-scroll')?.getBoundingClientRect() || target
+    const topbar = document.querySelector('.app-shell .topbar')?.getBoundingClientRect()
+    const left = Math.max(target.left, delivery.left, scrollport.left, 0)
+    const top = Math.max(target.top, delivery.top, scrollport.top, topbar?.bottom || 0, 0)
+    const right = Math.min(target.right, delivery.right, scrollport.right, window.innerWidth)
+    const bottom = Math.min(target.bottom, delivery.bottom, scrollport.bottom, window.innerHeight)
+    return { clip: { x: left, y: top, width: right - left, height: bottom - top }, topbarBottom: topbar?.bottom || 0 }
+  })
+  const { clip } = geometry
+  assert.ok(clip.width > 0 && clip.height > 0, 'resource evidence crop must intersect the visible delivery area: ' + JSON.stringify(clip))
+  const pathName = path.join(reportDir, filename + '.png')
+  await page.screenshot({ path: pathName, clip, animations: 'disabled' })
+  evidence.screenshots.push({ filename: path.basename(pathName), path: pathName, viewport: page.viewportSize(), clip, alignment, topbarBottom: geometry.topbarBottom, crop: 'visible-resource' })
+}
+
+async function captureResourceDeliveryOverview(page, filename) {
+  await openResourceDelivery(page)
+  const first = page.locator('.resource-progress-tree .execution-card').nth(0)
+  const second = page.locator('.resource-progress-tree .execution-card').nth(1)
+  assert.equal(await first.count(), 1, 'delivery overview should include a first resource card')
+  assert.equal(await second.count(), 1, 'delivery overview should include an adjacent second resource card')
+  await first.scrollIntoViewIfNeeded()
+  await first.evaluate((node) => {
+    const scrollport = node.closest('.process-scroll')
+    if (!scrollport) return
+    scrollport.scrollTop += node.getBoundingClientRect().top - scrollport.getBoundingClientRect().top - 8
+  })
+  const alignment = await alignProcessScrollBelowTopbar(page, filename)
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  const geometry = await first.evaluate((node) => {
+    const secondNode = node.parentElement?.querySelectorAll('.execution-card')[1]
+    const wrapper = node.closest('.resource-execution-list')
+    const delivery = node.closest('.resource-progress-tree')
+    const scrollport = node.closest('.process-scroll')
+    const firstRect = node.getBoundingClientRect()
+    const secondRect = secondNode?.getBoundingClientRect()
+    const wrapperRect = wrapper?.getBoundingClientRect() || firstRect
+    const deliveryRect = delivery?.getBoundingClientRect() || firstRect
+    const scrollRect = scrollport?.getBoundingClientRect() || firstRect
+    const titleRect = node.querySelector('.execution-title')?.getBoundingClientRect() || firstRect
+    const topbarRect = document.querySelector('.app-shell .topbar')?.getBoundingClientRect()
+    const left = Math.max(wrapperRect.left, deliveryRect.left, scrollRect.left, 0)
+    const right = Math.min(wrapperRect.right, deliveryRect.right, scrollRect.right, window.innerWidth)
+    const top = Math.max(firstRect.top, deliveryRect.top, scrollRect.top, topbarRect?.bottom || 0, 0)
+    const bottom = Math.min(secondRect?.bottom || firstRect.bottom, deliveryRect.bottom, scrollRect.bottom, window.innerHeight)
+    return {
+      clip: { x: left, y: top, width: right - left, height: bottom - top },
+      firstTop: firstRect.top,
+      firstBottom: firstRect.bottom,
+      firstTitleTop: titleRect.top,
+      firstTitleBottom: titleRect.bottom,
+      secondTop: secondRect?.top || 0,
+      secondHeight: secondRect?.height || 0,
+      topbarBottom: topbarRect?.bottom || 0,
+    }
+  })
+  const { clip } = geometry
+  assert.ok(clip.width > 0 && clip.height > 0, 'delivery overview crop must intersect the visible resource list: ' + JSON.stringify(geometry))
+  assert.ok(clip.y <= geometry.firstTitleTop && clip.y + clip.height >= geometry.firstTitleBottom,
+    'delivery overview crop must show the first resource title below the shared topbar: ' + JSON.stringify(geometry))
+  assert.ok(clip.y + clip.height >= geometry.secondTop + Math.min(32, geometry.secondHeight),
+    'delivery overview crop should show the first resource and the adjacent second resource boundary: ' + JSON.stringify(geometry))
+  const pathName = path.join(reportDir, filename + '.png')
+  await page.screenshot({ path: pathName, clip, animations: 'disabled' })
+  evidence.screenshots.push({ filename: path.basename(pathName), path: pathName, viewport: page.viewportSize(), clip, alignment, topbarBottom: geometry.topbarBottom, crop: 'visible-resource-overview' })
+}
+
+async function assertResourcePhases(page, label, {
+  longMetadata = false, captureName = '', expectFailedUnpublished = false,
+  expectedPhase = '', expectAllPublished = false, captureTitle = '实操指南',
+} = {}) {
+  const delivery = page.locator('.resource-progress-tree')
+  await openResourceDelivery(page)
+  const metrics = await page.locator('.resource-progress-tree').evaluate((tree) => {
+    const cards = [...tree.querySelectorAll('.execution-card')]
+    const graph = tree.ownerDocument.querySelector('.execution-graph')
+    return {
+      tagName: tree.tagName,
+      visible: Boolean(tree.getClientRects().length),
+      beforeGraph: Boolean(graph && (tree.compareDocumentPosition(graph) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      disclosureElements: tree.querySelectorAll('details, summary, .execution-metadata').length,
+      labels: [...tree.querySelectorAll('.phase-name')].map((node) => node.textContent.trim()),
+      deliveryCount: tree.querySelector('.delivery-count')?.innerText.trim() || '',
+      phasePanels: tree.querySelectorAll('.resource-phase, .el-collapse').length,
+      width: tree.clientWidth,
+      scrollWidth: tree.scrollWidth,
+      cards: cards.map((node) => ({
         className: node.className,
-        phase: node.closest('.resource-phase')?.querySelector('.phase-name')?.textContent.trim() || '',
+        title: node.querySelector('.execution-title strong')?.textContent.trim() || '',
+        representation: node.querySelector('.execution-title > span')?.textContent.trim() || '',
+        phase: node.querySelector('.execution-phase')?.innerText.trim() || '',
+        rect: (() => {
+          const rect = node.getBoundingClientRect()
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+        })(),
+        border: (() => {
+          const style = getComputedStyle(node)
+          return {
+            widths: [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth],
+            styles: [style.borderTopStyle, style.borderRightStyle, style.borderBottomStyle, style.borderLeftStyle],
+            color: style.borderTopColor,
+            background: style.backgroundColor,
+          }
+        })(),
+        statusFields: [...node.querySelectorAll('.execution-status-field')].map((field) => ({
+          label: field.querySelector('small')?.innerText.trim() || '',
+          value: field.querySelector('strong')?.innerText.trim() || '',
+          width: field.querySelector('strong')?.clientWidth || 0,
+          scrollWidth: field.querySelector('strong')?.scrollWidth || 0,
+        })),
+        statusText: node.querySelector('.execution-status-line')?.innerText.trim() || '',
+        metadataText: node.querySelector('.execution-meta')?.innerText.trim() || '',
+        metadataVisible: Boolean(node.querySelector('.execution-meta')?.getClientRects().length),
+        errorText: node.querySelector('.execution-error')?.innerText.trim() || '',
+        notices: [...node.querySelectorAll('.execution-notice')].map((notice) => notice.innerText.trim()),
+        cardWidth: node.clientWidth,
+        cardHeight: node.getBoundingClientRect().height,
+        cardScrollWidth: node.scrollWidth,
+        actionsWidth: node.querySelector('.execution-actions')?.getBoundingClientRect().width || 0,
+        actionsHeight: node.querySelector('.execution-actions')?.getBoundingClientRect().height || 0,
+        actionsDisplay: getComputedStyle(node.querySelector('.execution-actions')).display,
+        actionsWrap: getComputedStyle(node.querySelector('.execution-actions')).flexWrap,
+        actionsGap: getComputedStyle(node.querySelector('.execution-actions')).columnGap,
+        actionLabels: [...node.querySelectorAll('.execution-actions button')].map((button) => button.innerText.trim()),
+        actionButtons: [...node.querySelectorAll('.execution-actions button')].map((button) => {
+          const rect = button.getBoundingClientRect()
+          const style = getComputedStyle(button)
+          return {
+            label: button.innerText.trim(),
+            ariaLabel: button.getAttribute('aria-label') || '',
+            className: button.className,
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+            scrollWidth: button.scrollWidth,
+            fontSize: style.fontSize,
+            borderRadius: style.borderRadius,
+          }
+        }),
       })),
+      outerBackground: getComputedStyle(tree.querySelector('.resource-execution-list')).backgroundColor,
+      cardGaps: cards.slice(1).map((node, index) => {
+        const previous = cards[index].getBoundingClientRect()
+        return node.getBoundingClientRect().top - previous.bottom
+      }),
       metadata: [...tree.querySelectorAll('.execution-meta')].map((node) => ({
         text: node.innerText.trim(),
         flexWrap: getComputedStyle(node).flexWrap,
@@ -933,20 +1659,99 @@ async function assertResourcePhases(page, label, { longMetadata = false } = {}) 
           overflowX: getComputedStyle(span).overflowX,
         })),
       })),
+      actionTargetMode: window.matchMedia('(pointer: coarse), (max-width: 720px)').matches ? 'touch' : 'desktop',
     }
   })
-  assert.equal(metrics.phases.length, 2, label + ': resource workflow should retain its two phases')
-  assert.deepEqual(metrics.phases.map((phase) => phase.label), ['资源生成', '审核与发布'], label + ': resource phases should keep their original order')
-  assert.ok(metrics.phases.every((phase) => phase.active), label + ': both resource phases should remain expanded and readable')
-  assert.deepEqual(metrics.order.map((item) => item.text), ['01', '02'], label + ': phase numbers should be present in order')
-  assert.ok(Math.abs((metrics.order[0].top + metrics.order[0].bottom) / 2 - (metrics.phases[0].heading.top + metrics.phases[0].heading.bottom) / 2) <= 1, label + ': first phase marker should align with its heading')
-  assert.ok(Math.abs((metrics.order[1].top + metrics.order[1].bottom) / 2 - (metrics.phases[1].heading.top + metrics.phases[1].heading.bottom) / 2) <= 1, label + ': second phase marker should align with its heading')
-  assert.ok(metrics.order[0].top < metrics.order[1].top, label + ': numbered phase markers should follow the vertical flow')
-  assert.notEqual(metrics.connector.content, 'none', label + ': phase connector should be rendered')
-  assert.ok(metrics.connector.width >= 1 && metrics.connector.height > 0, label + ': phase connector should have visible geometry')
-  assert.notEqual(metrics.connector.backgroundColor, 'rgba(0, 0, 0, 0)', label + ': phase connector should have a visible line color')
-  assert.ok(metrics.cards.length >= 3, label + ': generation/review cards should remain available')
-  assert.ok(metrics.cards.every((card) => /\bis-(success|warning|danger|info)\b/.test(card.className)), label + ': resource cards should expose their phase status style class')
+  assert.equal(metrics.tagName, 'SECTION', label + ': resource status should be a normal section')
+  assert.ok(metrics.visible, label + ': resource status should be visible by default')
+  assert.ok(metrics.beforeGraph, label + ': resource status should precede the execution graph')
+  assert.equal(metrics.disclosureElements, 0, label + ': resource status and processing records should not require disclosure')
+  assert.deepEqual(metrics.labels, ['资源状态'], label + ': resources should appear in one status section')
+  assert.ok(metrics.deliveryCount.includes('已发布') && metrics.deliveryCount.includes('/'), label + ': delivery summary should keep the published-to-total count')
+  assert.equal(metrics.phasePanels, 0, label + ': delivery should not render nested phase panels or collapse groups')
+  assert.ok(metrics.scrollWidth <= metrics.width + 1, label + ': expanded delivery should not overflow horizontally')
+  assert.equal(metrics.cards.length, 3, label + ': each fixture resource should appear once in the delivery section')
+  assert.equal(new Set(metrics.cards.map((card) => card.title)).size, metrics.cards.length,
+    label + ': a resource must not be duplicated between generation and review summaries')
+  assert.ok(metrics.cards.every((card) => /\bis-(success|warning|danger|info)\b/.test(card.className) && card.phase), label + ': each resource should expose its real phase and status tone')
+  if (expectedPhase) assert.ok(metrics.cards.every((card) => card.phase === expectedPhase), label + ': existing phase labels should be preserved')
+  assert.ok(metrics.cards.every((card) => card.statusFields.some((field) => field.label === '发布状态' && field.value)),
+    label + ': each resource should expose its publication status as a labeled field')
+  assert.ok(metrics.cards.every((card) => card.statusFields.filter((field) => field.label === '校验').length <= 1),
+    label + ': a resource should expose at most one explicit validation status')
+  if (longMetadata) {
+    const validated = metrics.cards.find((card) => card.title === '实操指南')
+    assert.ok(validated?.statusFields.some((field) => field.label === '校验' && field.value === '已通过'),
+      label + ': the persisted validated status should be presented as 已通过')
+  } else {
+    assert.ok(metrics.cards.every((card) => !card.statusFields.some((field) => field.label === '校验' && field.value === '已通过')),
+      label + ': absent validation evidence must not be presented as passed')
+  }
+  assert.ok(metrics.cards.every((card) => card.border.widths.every((width) => width === '1px')
+    && card.border.styles.every((style) => style === 'solid')
+    && card.border.background === 'rgb(255, 255, 255)'),
+  label + ': each delivery item should be a distinct white article with a one-pixel solid border')
+  assert.ok(metrics.cardGaps.every((gap) => gap >= 10), label + ': adjacent resource articles should have at least 10px separation')
+  const outerRgb = metrics.outerBackground.match(/\d+(?:\.\d+)?/g)?.slice(0, 3).map(Number) || []
+  assert.equal(outerRgb.length, 3, label + ': delivery list should expose a measurable outer background')
+  assert.ok(outerRgb.every((channel) => channel >= 235) && outerRgb.some((channel) => channel < 255),
+    label + ': white resource articles should sit against a light neutral outer surface')
+  if (expectAllPublished) {
+    assert.ok(metrics.cards.every((card) => card.statusFields.some((field) => field.label === '发布状态' && field.value === '已发布')),
+      label + ': published resources should retain their true publication state')
+  }
+  assert.ok(metrics.cards.every((card) => card.cardScrollWidth <= card.cardWidth + 1), label + ': resource card content should not overflow horizontally')
+  assert.ok(metrics.cards.every((card) => card.statusFields.every((field) => field.scrollWidth <= field.width + 1)),
+    label + ': publication and Claim status text should remain fully readable')
+  assert.ok(metrics.cards.every((card) => card.metadataVisible), label + ': attempt and agent records should remain visible on each card')
+  const firstAction = delivery.locator('.execution-actions button').first()
+  await firstAction.focus()
+  const actionFocus = await firstAction.evaluate((node) => ({
+    visible: node.matches(':focus-visible'),
+    outlineStyle: getComputedStyle(node).outlineStyle,
+    outlineWidth: getComputedStyle(node).outlineWidth,
+  }))
+  assert.ok(actionFocus.visible && actionFocus.outlineStyle !== 'none' && actionFocus.outlineWidth !== '0px',
+    label + ': keyboard focus should remain visible on resource actions')
+  await firstAction.evaluate((node) => node.blur())
+  for (const card of metrics.cards) {
+    if (metrics.actionTargetMode === 'touch') {
+      assert.ok(card.actionButtons.every((button) => button.height >= 44), label + ': touch actions should retain 44px targets: ' + card.title)
+    } else {
+      assert.ok(card.actionButtons.every((button) => button.height >= 32 && button.height <= 36),
+        label + ': desktop actions should use compact 32–36px targets: ' + card.title)
+    }
+    assert.ok(card.actionButtons.every((button) => button.scrollWidth <= button.width + 1), label + ': action labels should wrap without horizontal clipping: ' + card.title)
+    assert.equal(card.actionsDisplay, 'flex', label + ': compact resource actions should use a wrapping flex row: ' + card.title)
+    assert.equal(card.actionsWrap, 'wrap', label + ': compact resource actions should wrap when space is limited: ' + card.title)
+    assert.ok(card.actionButtons.every((button) => button.width < card.actionsWidth * 0.75),
+      label + ': action buttons should keep compact fit-content widths instead of stretching: ' + card.title)
+    const expectedActionLabels = {
+      '查看资源': '查看已发布资源',
+      '审核报告': '查看审核报告',
+      '重新生成': '重新生成此资源',
+      '过程详情': '查看过程详情',
+    }
+    for (const button of card.actionButtons) {
+      assert.equal(expectedActionLabels[button.label], button.ariaLabel,
+        label + ': compact action text should preserve its original accessible name: ' + JSON.stringify(button))
+    }
+    if (card.actionButtons.length === 2) {
+      assert.ok(Math.abs(card.actionButtons[0].y - card.actionButtons[1].y) <= 2,
+        label + ': two ordinary resource actions should remain on the same row: ' + card.title)
+      if (!card.errorText && card.notices.length === 0) {
+        assert.ok(card.actionsHeight / card.cardHeight < 0.35,
+          label + ': a normal two-action row should stay compact relative to its resource article: ' + card.title)
+      }
+    } else if (card.actionButtons.length >= 3) {
+      const gap = Number.parseFloat(card.actionsGap) || 0
+      const requiredWidth = card.actionButtons.reduce((sum, button) => sum + button.width, 0) + gap * (card.actionButtons.length - 1)
+      if (requiredWidth <= card.actionsWidth + 1) {
+        assert.ok(card.actionButtons.every((button) => Math.abs(button.y - card.actionButtons[0].y) <= 2),
+          label + ': three compact actions should share one row when their measured widths fit: ' + card.title)
+      }
+    }
+  }
   for (const metadata of metrics.metadata) {
     assert.equal(metadata.flexWrap, 'wrap', label + ': execution metadata should wrap instead of clipping')
     assert.ok(metadata.scrollWidth <= metadata.width + 1, label + ': execution metadata row should not overflow horizontally')
@@ -957,12 +1762,46 @@ async function assertResourcePhases(page, label, { longMetadata = false } = {}) 
     }
   }
   if (longMetadata) {
-    const longRow = metrics.metadata.find((item) => item.text.includes('资源生成与跨阶段证据核验协作 Agent'))
-    assert.ok(longRow, label + ': long fixture should render its expanded execution metadata')
-    assert.ok(longRow.text.includes('来源快照与发布范围一致性及学习目标覆盖校验通过'), label + ': long fixture should retain its validation metadata')
-    assert.ok(longRow.spans.length >= 5, label + ': long fixture should preserve each execution metadata field')
+      const longCard = page.locator('.resource-progress-tree .execution-card').first()
+    const longRow = await longCard.locator('.execution-meta').evaluate((node) => ({
+      text: node.innerText.trim(),
+      flexWrap: getComputedStyle(node).flexWrap,
+      width: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+      spans: [...node.querySelectorAll(':scope > span')].map((span) => ({
+        text: span.innerText.trim(), width: span.clientWidth, scrollWidth: span.scrollWidth,
+        textOverflow: getComputedStyle(span).textOverflow, overflowX: getComputedStyle(span).overflowX,
+      })),
+    }))
+    assert.ok(longRow.text.includes('资源生成与跨阶段证据核验协作 Agent'), label + ': visible processing row should show the agent metadata')
+    assert.ok(longRow.spans.some((span) => span.text.includes('第 1 次生成')), label + ': visible processing row should retain the attempt')
+    assert.ok(longRow.spans.length >= 2, label + ': visible processing row should preserve each available metadata field')
+    assert.equal(longRow.flexWrap, 'wrap', label + ': visible metadata should wrap instead of clipping')
+    assert.ok(longRow.scrollWidth <= longRow.width + 1, label + ': visible metadata should not overflow horizontally')
+    for (const span of longRow.spans) {
+      assert.ok(span.scrollWidth <= span.width + 1, label + ': visible metadata should remain fully readable: ' + JSON.stringify(span))
+      assert.equal(span.textOverflow, 'clip', label + ': visible metadata should not be ellipsized: ' + JSON.stringify(span))
+      assert.ok(!['hidden', 'clip'].includes(span.overflowX), label + ': visible metadata should not be clipped: ' + JSON.stringify(span))
+    }
+    if (captureName) await captureResourceDelivery(page, longCard, captureName)
+  }
+  if (expectFailedUnpublished) {
+    const failed = metrics.cards.find((card) => card.title === '讲义')
+    assert.ok(failed, label + ': failed resource should retain its own delivery entry')
+    assert.match(failed.className, /\bis-danger\b/, label + ': failed resource should keep its failure status tone')
+    assert.match(failed.phase, /失败/, label + ': failed resource phase should remain explicit')
+    const revision = metrics.cards.find((card) => card.title === '实操指南')
+    assert.ok(revision?.phase.includes('返工中'), label + ': the revision phase label should remain unchanged')
+    assert.ok(failed.statusFields.some((field) => field.label === '发布状态' && field.value === '尚未发布'),
+      label + ': failed resource should remain explicitly unpublished')
+    assert.ok(failed.errorText.includes('验收故障'), label + ': failed resource reason should remain visible')
   }
   evidence.layoutChecks.push({ label: label + '-resource-phases', ...metrics })
+  if (captureName && !longMetadata) {
+    const captureIndex = metrics.cards.findIndex((card) => card.title === captureTitle)
+    assert.ok(captureIndex >= 0, label + ': requested delivery crop resource should exist: ' + captureTitle)
+    await captureResourceDelivery(page, delivery.locator('.execution-card').nth(captureIndex), captureName)
+  }
 }
 
 async function capture(page, filename) {
@@ -984,9 +1823,17 @@ async function assertContrast(page, label) {
       '.job-summary .summary-item span', '.job-summary .summary-item strong',
       '.studio-grid .panel-title h3', '.process-scroll', '.resource-stage', '.execution-card strong',
       '.process-scroll .el-tag__content', '.resource-toolbar .resource-difficulty', '.resource-toolbar .download-button',
-      '.execution-card-head .el-tag__content', '.execution-objective', '.execution-meta',
+      '.execution-phase', '.execution-objective', '.execution-meta', '.execution-notice', '.execution-actions button',
+      '.execution-graph-node-title', '.execution-graph-status', '.execution-graph-node-secondary',
+      '.execution-graph-sequence', '.execution-graph-call-count', '.execution-graph-revision-label',
       '.resource-content h2', '.resource-content p',
       '.el-dialog__title', '.source-hint', '.source-list .el-checkbox__label', '.source-list span',
+      '.audit-dialog-heading h2', '.audit-header-code', '.audit-refresh', '.audit-kicker',
+      '.context-heading-copy strong', '.context-heading-copy small', '.context-fields dt', '.context-fields dd',
+      '.audit-main h3', '.audit-main h4', '.audit-main .node-output', '.audit-main .path-index', '.audit-main .path-label', '.audit-main .result-caption', '.audit-main .result-context p', '.audit-main .source-excerpt', '.detail-execution-status', '.audit-main .section-number', '.review-card-heading h4', '.review-issue p', '.issue-level', '.retrieval-result', '.claim-verification', '.review-revisions summary',
+      '.revision-instructions li', '.claim-verdict-counts > span', '.claim-statement', '.claim-summary-reason',
+      '.claim-number', '.verdict', '.claim-detail-body p', '.evidence-section-label', '.evidence-section-label > span',
+      '.source-locator', '.evidence-excerpt', '.audit-main summary', '.coverage-note',
       '.el-dialog__footer button', '.courseware-generation-page .scene-list strong',
       '.courseware-generation-page .scene-list small', '.courseware-generation-page .warnings',
       '.courseware-generation-page .scene-list button', '.courseware-generation-page .process-actions button',
@@ -1108,6 +1955,9 @@ async function assertInternalScroll(page, label) {
     const expectedLabel = selector === '.process-scroll' ? '生成协作轨迹' : '学习资源预览'
     assert.equal(await locator.getAttribute('aria-label'), expectedLabel, label + ': scroll region accessible name changed')
     assert.equal(await locator.getAttribute('tabindex'), '0', label + ': scroll region should be keyboard focusable')
+    // Disclosure inspection may have scrolled to the delivery section at the
+    // bottom. Establish a known starting point before checking forward motion.
+    await locator.evaluate((node) => { node.scrollTop = 0 })
     const before = await locator.evaluate((node) => ({ top: node.scrollTop, max: node.scrollHeight - node.clientHeight, height: node.clientHeight }))
     assert.ok(before.max > 0, label + ': long fixture should create scrollable content in ' + selector)
     await locator.evaluate((node) => { node.scrollTop = Math.min(140, node.scrollHeight) })
@@ -1240,7 +2090,7 @@ async function chooseFilterableOptionWithKeyboard(page, select, searchText, expe
 }
 
 async function openAppendDialog(page, command) {
-  await page.locator('.resources-panel > .panel-title .task-actions').getByRole('button', { name: '追加资源', exact: false }).click()
+  await page.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '追加资源', exact: false }).click()
   await page.getByRole('menuitem', { name: command, exact: true }).click()
   if (command === '文本学习资源') await page.getByRole('heading', { name: '追加学习资源' }).waitFor()
   else await page.getByRole('heading', { name: '创建互动课件' }).waitFor()
@@ -1549,17 +2399,33 @@ async function testStateMatrix(browser, base) {
     for (const semantic of ['学习方向', '任务编号', '任务状态', '可读资源', '创建时间', '完成时间']) {
       assert.ok(summary.includes(semantic), scenario + ': missing job summary fact ' + semantic)
     }
-    const actionToolbar = page.locator('.resources-panel > .panel-title .task-actions')
+    const actionToolbar = page.locator('.resources-panel > .resource-toolbar .task-actions')
     const shouldHaveActions = !['no-task', 'no-profile'].includes(scenario)
-    assert.equal(await actionToolbar.count(), shouldHaveActions ? 1 : 0, scenario + ': conditional task controls should be placed under the resource heading')
+    assert.equal(await actionToolbar.count(), shouldHaveActions ? 1 : 0, scenario + ': conditional task controls should be placed in the resource toolbar')
     if (scenario === 'queued') {
       assert.ok(text.includes('排队中'), 'queued task state should be visible')
-      assert.ok(await actionToolbar.getByRole('button', { name: '刷新状态', exact: true }).count(), 'queued job should expose its refresh control in the resource heading')
+      assert.ok(await actionToolbar.getByRole('button', { name: '刷新状态', exact: true }).count(), 'queued job should expose its refresh control in the resource toolbar')
+      const requestedTypes = state.jobsByLearner['learner-1'][0].request_payload.resource_types
+      const queuedSection = page.locator('.resource-progress-tree')
+      assert.ok(await queuedSection.isVisible(), 'queued task should show the resource status section before execution records exist')
+      const queuedCards = await queuedSection.locator('.execution-card').evaluateAll((cards) => cards.map((card) => ({
+        type: card.querySelector('.execution-title strong')?.textContent.trim() || '',
+        phase: card.querySelector('.execution-phase')?.textContent.trim() || '',
+        actions: card.querySelectorAll('.execution-actions button').length,
+        validation: [...card.querySelectorAll('.execution-status-field')].find((field) => field.querySelector('small')?.textContent.trim() === '校验')
+          ?.querySelector('strong')?.textContent.trim() || '',
+      })))
+      assert.deepEqual(queuedCards.map((card) => card.type), requestedTypes,
+        'queued placeholders should come only from the real request payload and preserve its resource order')
+      assert.ok(queuedCards.every((card) => /等待生成/.test(card.phase) && card.actions === 0),
+        'queued placeholders should say they are waiting and expose no resource operations')
+      assert.ok(queuedCards.every((card) => !card.validation || card.validation !== '已通过'),
+        'queued placeholders must not claim validation passed')
       await capture(page, 'desktop-pending')
     }
     if (scenario === 'running') {
       assert.ok(text.includes('生成中'), 'running task state should be visible')
-      assert.ok(await actionToolbar.getByRole('button', { name: '刷新状态', exact: true }).count(), 'running job should retain refresh in the resource heading')
+      assert.ok(await actionToolbar.getByRole('button', { name: '刷新状态', exact: true }).count(), 'running job should retain refresh in the resource toolbar')
       assert.ok(text.includes('节点级同步') || text.includes('任务记录'), 'running task should expose stream status')
     }
     if (scenario === 'sse-fallback') {
@@ -1571,16 +2437,30 @@ async function testStateMatrix(browser, base) {
       assert.ok(text.includes('已完成'), 'completed task state should be visible')
       assert.ok(await page.locator('.resource-stage').count(), 'completed task should render the resource reader')
       await assertSummaryAndActions(page, scenario)
-      await assertResourcePhases(page, scenario)
+      await assertResourcePhases(page, scenario, {
+        captureName: 'desktop-resource-delivery-normal', expectedPhase: '已发布', expectAllPublished: true,
+      })
+      for (const viewport of [
+        { width: 1301, height: 871, name: 'desktop-resource-status-1301x871' },
+        { width: 1886, height: 1290, name: 'desktop-resource-status-1886x1290' },
+        { width: 390, height: 844, name: 'mobile-resource-status-390' },
+      ]) {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height })
+        await waitForLayout(page, viewport.width > 720)
+        const statusSection = page.locator('.resource-progress-tree')
+        assert.ok(await statusSection.isVisible(), viewport.name + ': resource status should stay visible without interaction')
+        assert.ok(await statusSection.locator('.execution-card').count() > 0, viewport.name + ': visible status overview should contain resource cards')
+        await captureResourceDeliveryOverview(page, viewport.name)
+      }
       assert.ok((await page.locator('.process-panel .connection-state').innerText()).includes('已结束'), 'terminal run should retain its terminal connection status')
     }
     if (scenario === 'partial') {
       assert.ok(text.includes('失败') || text.includes('审核') || text.includes('重新生成'), 'partial failures should remain visible')
-      assert.ok(await actionToolbar.getByRole('button', { name: /重新生成失败资源/ }).count(), 'failed resource batch action should remain in the resource heading')
+      assert.ok(await actionToolbar.getByRole('button', { name: /重新生成失败资源/ }).count(), 'failed resource batch action should remain in the resource toolbar')
     }
     if (scenario === 'failed') {
       assert.ok(text.includes('验收任务故障说明'), 'failed task reason should be readable')
-      assert.ok(await actionToolbar.getByRole('button', { name: '重新生成', exact: true }).count(), 'failed batch retry should remain in the resource heading')
+      assert.ok(await actionToolbar.getByRole('button', { name: '重新生成', exact: true }).count(), 'failed batch retry should remain in the resource toolbar')
       await capture(page, 'desktop-failed')
     }
     if (scenario === 'no-task') {
@@ -1591,6 +2471,11 @@ async function testStateMatrix(browser, base) {
       assert.ok(text.includes('把学习目标，转化为专属内容。'), 'empty task state should explain the next step')
       const primary = page.getByRole('button', { name: '新建学习方向' })
       assert.ok((await primary.boundingBox())?.height >= 44, 'empty state main action should remain at least 44px high')
+      await inspectElementSelect({
+        page, suite: 'generation', evidenceDir: reportDir, id: 'generation-disabled-batch',
+        select: page.locator('.task-selector .task-select').nth(1), disabled: true,
+        getWriteCount: () => state.writes.length,
+      })
       await capture(page, 'desktop-empty')
       await page.getByRole('button', { name: '新建学习方向' }).click()
       await assertRouteFixtureReady(page, '/learning/new')
@@ -1632,7 +2517,9 @@ async function testStateMatrix(browser, base) {
         && placeholderGeometry.panel.bottom <= placeholderGeometry.stage.bottom + 1,
       'no-output preparation should fit the resource reading region: ' + JSON.stringify(placeholderGeometry))
       assert.equal(await placeholder.locator('.el-empty').count(), 0, 'no-output state should not retain the legacy empty illustration')
-      assert.equal(await page.locator('.resource-toolbar').count(), 0, 'no-output state should not offer a reader toolbar without an actual resource')
+      assert.equal(await page.locator('.resource-toolbar').count(), 1, 'no-output state should retain its real task controls in the toolbar')
+      assert.equal(await page.locator('.resource-toolbar .resource-select, .resource-toolbar .reader-toolbar-actions').count(), 0,
+        'no-output state should not fabricate a resource selector or reader actions')
       assert.equal(await page.locator('.resource-stage .reader-card').count(), 0, 'no-output state should not render a fabricated reader')
       assert.ok(text.includes('已完成'), 'no-output state should preserve the actual completed job status')
       assert.equal(state.jobsByLearner['learner-1'][0]?.job_status, 'completed', 'no-output fixture should have a completed task')
@@ -2055,7 +2942,17 @@ async function testDesktopFitMatrix(browser, base) {
   const page = await newPage(browser, base, 'long', viewports[0])
   await page.waitForFunction(() => (document.querySelector('.process-scroll')?.scrollHeight || 0) > (document.querySelector('.process-scroll')?.clientHeight || Infinity))
   await page.waitForFunction(() => (document.querySelector('.resource-stage')?.scrollHeight || 0) > (document.querySelector('.resource-stage')?.clientHeight || Infinity))
-  await assertResourcePhases(page, 'long-desktop', { longMetadata: true })
+  await assertResourcePhases(page, 'long-desktop', {
+    longMetadata: true, captureName: 'desktop-resource-delivery-long-metadata', expectedPhase: '已发布', expectAllPublished: true,
+  })
+  const graph = page.locator('.execution-graph')
+  assert.equal(await graph.locator('.execution-graph-header, .execution-graph-modes').count(), 0, 'the chain should reserve its canvas for execution records')
+  assert.equal(await graph.locator('.execution-graph-node').count(), 90, 'the long fixture should retain all ninety unique unknown node records')
+  assert.equal(await graph.locator('.execution-graph-node[data-inspectable="false"]').count(), 90, 'unknown long-fixture nodes should remain visible without becoming interactive')
+  assert.equal(await graph.locator('button.execution-graph-node').count(), 0, 'unknown long-fixture records must not add keyboard actions')
+  const longGraphScroll = await page.locator('.process-scroll').evaluate((node) => ({ scrollHeight: node.scrollHeight, clientHeight: node.clientHeight }))
+  assert.ok(longGraphScroll.scrollHeight > longGraphScroll.clientHeight, 'all ninety unknown nodes should remain reachable through the process panel scroll region')
+  evidence.interactionChecks.push({ scenario: 'workflow-long-unknown-nodes', count: 90, actualCalls: true, scrollRegion: '.process-scroll', inspectable: 0 })
   for (const viewport of viewports) {
     await page.setViewportSize(viewport)
     await waitForLayout(page, true)
@@ -2073,6 +2970,11 @@ async function testDesktopFitMatrix(browser, base) {
   await assertInternalScroll(page, '1393x871-long-collapsed')
   await assertContrast(page, '1393x871-long-collapsed')
   await capture(page, 'desktop-long-scrolled')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await waitForLayout(page, false)
+  await assertResourcePhases(page, 'long-mobile', {
+    longMetadata: true, captureName: 'mobile-resource-delivery-long-metadata', expectedPhase: '已发布', expectAllPublished: true,
+  })
   await assertNoExternalOrUnexpected('desktop-fit-matrix')
   await page.close()
 }
@@ -2132,7 +3034,7 @@ async function testSwitchesRefreshAndErrors(browser, base) {
   const page = await newPage(browser, base, 'multi', baseViewport, { delayJobsMs: 350 })
   await chooseOption(page, '资源批次', /run-queu/i)
   assert.ok((await page.locator('.generate-page').innerText()).includes('排队中'), 'batch selector should switch to queued run')
-  await page.locator('.resources-panel > .panel-title .task-actions').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await page.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '刷新状态', exact: true }).click()
   await waitForFixture(() => state.requests.some((item) => item.path === '/api/generate/jobs/run-queued'), 'selected run status refresh')
   const statusRequests = state.requests.filter((item) => item.path === '/api/generate/jobs/run-queued')
   assert.ok(statusRequests.length >= 1, 'refresh should request the selected job status')
@@ -2145,6 +3047,11 @@ async function testSwitchesRefreshAndErrors(browser, base) {
   await page.close()
 
   const deletePage = await newPage(browser, base, 'multi')
+  await inspectElementSelect({
+    page: deletePage, suite: 'generation', evidenceDir: reportDir, id: 'generation-profile-delete-clearance',
+    select: deletePage.locator('.task-selector .task-select').first(),
+    protectEndControlSelector: '.profile-delete', getWriteCount: () => state.writes.length,
+  })
   await deletePage.getByRole('combobox', { name: '学习画像' }).click()
   await deletePage.locator('.profile-select-dropdown').locator('.profile-delete').first().click()
   const deleteDialog = deletePage.getByRole('dialog').filter({ hasText: '删除学习画像' })
@@ -2158,7 +3065,7 @@ async function testSwitchesRefreshAndErrors(browser, base) {
   await deletePage.close()
 
   const errorPage = await newPage(browser, base, 'running', baseViewport, { failStatus: 1 })
-  await errorPage.locator('.resources-panel > .panel-title .task-actions').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await errorPage.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '刷新状态', exact: true }).click()
   await errorPage.getByText('任务状态获取失败').waitFor({ state: 'visible' })
   assert.ok((await errorPage.locator('.generate-page').innerText()).includes('生成中'), 'a status failure should keep the current task readable')
   evidence.interactionChecks.push({ scenario: 'running-status-error', statusFailure: true })
@@ -2166,7 +3073,7 @@ async function testSwitchesRefreshAndErrors(browser, base) {
   await errorPage.close()
 
   const resourcePage = await newPage(browser, base, 'completed', baseViewport, { delayResourcesMs: 450, failResources: 1 })
-  await resourcePage.locator('.resources-panel > .panel-title .task-actions').getByRole('button', { name: '刷新资源', exact: true }).click()
+  await resourcePage.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '刷新资源', exact: true }).click()
   assert.ok(await resourcePage.locator('.resource-stage .el-loading-mask').count(), 'resource refresh should expose a loading state')
   await resourcePage.getByText('资源列表加载失败').waitFor({ state: 'visible' })
   evidence.interactionChecks.push({ scenario: 'resource-load-error', loadingAndError: true })
@@ -2188,6 +3095,10 @@ async function testResourceSwitchAndLearningRoutes(browser, base) {
   await fullLongOption.waitFor({ state: 'visible' })
   assert.ok((await fullLongOption.innerText()).includes(longResourceType), 'resource option should retain the full accessible long type')
   await page.keyboard.press('Escape')
+  await inspectElementSelect({
+    page, suite: 'generation', evidenceDir: reportDir, id: 'generation-resource-long-desktop',
+    select: resourceSelect, longText: longResourceType, getWriteCount: () => state.writes.length,
+  })
   const longDocumentTitle = page.locator('.resource-content h1')
   assert.ok((await longDocumentTitle.innerText()).includes(longResourceType + ' · 节点A、节点B'), 'resource body title should retain the complete long resource identity')
   await geometry(page, '1393x871-long-kind-tools', true)
@@ -2201,6 +3112,10 @@ async function testResourceSwitchAndLearningRoutes(browser, base) {
     document.querySelector('.resource-stage')?.scrollTo(0, 0)
   })
   await geometry(page, '390x844-long-kind-tools', false)
+  await inspectElementSelect({
+    page, suite: 'generation', evidenceDir: reportDir, id: 'generation-resource-long-mobile',
+    select: resourceSelect, longText: longResourceType, getWriteCount: () => state.writes.length,
+  })
   await capture(page, 'mobile-long-kind-tools')
   const popupPromise = page.waitForEvent('popup')
   await page.locator('.resource-toolbar .download-button').click()
@@ -2492,19 +3407,126 @@ async function testResourceSwitchAndLearningRoutes(browser, base) {
 
 async function testClaimAndAppend(browser, base) {
   const claimPage = await newPage(browser, base, 'claim-pending')
+  await assertResourcePhases(claimPage, 'claim-pending-resource-delivery', {
+    captureName: 'desktop-resource-delivery-claim-pending',
+  })
+  await openResourceDelivery(claimPage)
+  const assertPendingReviewActions = async (resource, label) => {
+    const metrics = await resource.locator('.execution-actions').evaluate((actions) => {
+      const buttons = [...actions.querySelectorAll('button')]
+      return {
+        actionsWidth: actions.getBoundingClientRect().width,
+        buttons: buttons.map((button) => {
+          const rect = button.getBoundingClientRect()
+          return {
+            label: button.innerText.trim(),
+            ariaLabel: button.getAttribute('aria-label') || '',
+            className: button.className,
+            x: rect.x,
+            width: rect.width,
+            height: rect.height,
+            scrollWidth: button.scrollWidth,
+          }
+        }),
+      }
+    })
+    const reports = metrics.buttons.filter((button) => button.ariaLabel === '查看审核报告')
+    assert.equal(reports.length, 1, label + ': pending publication should expose exactly one review-report action')
+    assert.equal(reports[0].label, '审核报告', label + ': review report should use the compact visible label')
+    assert.ok(reports[0].className.includes('execution-primary'), label + ': the review report should be the primary action')
+    assert.deepEqual(metrics.buttons.filter((button) => button.className.includes('execution-primary')).map((button) => button.ariaLabel),
+      ['查看审核报告'], label + ': the pending report should be the sole primary action')
+
+    const retry = metrics.buttons.find((button) => button.ariaLabel === '重新生成此资源')
+    assert.ok(retry, label + ': the existing resource retry action should remain available')
+    assert.equal(retry.label, '重新生成', label + ': retry should use the compact visible label')
+    assert.ok(retry.className.includes('execution-secondary'), label + ': pending retry should be a secondary action')
+    const secondary = metrics.buttons.filter((button) => button.className.includes('execution-secondary'))
+    assert.deepEqual(secondary.map((button) => button.ariaLabel), ['重新生成此资源', '查看过程详情'],
+      label + ': retry and process details should share the secondary action row')
+    assert.deepEqual(secondary.map((button) => button.label), ['重新生成', '过程详情'],
+      label + ': pending secondary actions should use compact visible labels')
+    const touchTargets = await resource.evaluate(() => matchMedia('(pointer: coarse), (max-width: 720px)').matches)
+    assert.ok(metrics.buttons.every((button) => touchTargets
+      ? button.height >= 44
+      : button.height >= 32 && button.height <= 36),
+    label + ': pending actions should use the responsive 34px desktop / 44px touch target')
+    assert.ok(metrics.buttons.every((button) => button.width < metrics.actionsWidth * 0.75),
+      label + ': pending actions should keep compact fit-content widths')
+    assert.ok(metrics.buttons.every((button) => button.scrollWidth <= button.width + 1),
+      label + ': pending action labels should remain visible without clipping')
+  }
+  await assertContrast(claimPage, 'desktop-resource-delivery-claim-pending')
+  assert.match(await claimPage.locator('.resource-progress-tree .delivery-count').innerText(), /2\s*\/\s*3/,
+    'a pending publication decision should retain the true two-of-three published summary')
+  const publicationStates = await claimPage.locator('.resource-progress-tree .execution-card').evaluateAll((cards) => cards.map((card) => ({
+    resource: card.querySelector('.execution-title strong')?.textContent.trim(),
+    status: [...card.querySelectorAll('.execution-status-field')].find((field) => field.querySelector('small')?.textContent.trim() === '发布状态')
+      ?.querySelector('strong')?.textContent.trim(),
+  })))
+  assert.deepEqual(publicationStates, [
+    { resource: '实操指南', status: '尚未发布' },
+    { resource: '复习清单', status: '已发布' },
+    { resource: '讲义', status: '已发布' },
+  ], 'one pending review should remain unpublished while the other two resources stay published')
+  const pendingResource = claimPage.locator('.resource-progress-tree .execution-card').filter({ hasText: '实操指南' }).first()
+  assert.ok((await pendingResource.locator('.execution-notice.claim-pending').innerText()).includes('待你决定发布'),
+    'a pending publication decision should remain explicit on its resource delivery item')
+  await assertPendingReviewActions(pendingResource, 'desktop pending publication')
+  await captureResourceDeliveryOverview(claimPage, 'desktop-resource-delivery-overview')
+  await claimPage.setViewportSize({ width: 390, height: 844 })
+  await waitForLayout(claimPage, false)
+  assert.ok((await pendingResource.locator('.execution-notice.claim-pending').innerText()).includes('待你决定发布'),
+    'mobile delivery should also expose the pending publication decision')
+  await assertPendingReviewActions(pendingResource, 'mobile pending publication')
+  await assertContrast(claimPage, 'mobile-resource-delivery-claim-pending')
+  await captureResourceDeliveryOverview(claimPage, 'mobile-resource-delivery-overview')
+  await captureResourceDelivery(claimPage, pendingResource, 'mobile-resource-delivery-claim-pending')
+  await claimPage.setViewportSize(baseViewport)
+  await waitForLayout(claimPage, true)
   await claimPage.getByRole('button', { name: '查看审核报告' }).first().click()
   await claimPage.getByRole('heading', { name: '资源 Claim 审核报告' }).waitFor()
   assert.ok((await claimPage.locator('.claim-report-dialog').innerText()).includes('验收事实陈述'), 'claim dialog should retain its report content')
+  const publicationClaims = claimPage.locator('.claim-report-dialog .claim-detail')
+  assert.ok(await publicationClaims.count() > 0, 'the publication report fixture must contain Claims')
+  assert.ok(await publicationClaims.evaluateAll((nodes) => nodes.every((node) => !node.open)), 'the original publication report must keep all Claim details folded by default')
   await capture(claimPage, 'desktop-claim-report')
   await claimPage.getByRole('button', { name: '确认发布' }).click()
   await waitForFixture(() => state.writes.some((item) => item.path.includes('claim-publication-decision')), 'claim decision')
   assert.equal(state.writes.filter((item) => item.path.includes('claim-publication-decision')).length, 1, 'claim decision should submit once')
   assert.deepEqual(state.lastClaimDecision, { resource_id: 'resource-guide', body: { publish: true } })
+  await claimPage.locator('.claim-report-dialog').waitFor({ state: 'hidden' })
+  await claimPage.waitForFunction(() => {
+    const card = [...document.querySelectorAll('.resource-progress-tree .execution-card')]
+      .find(item => item.querySelector('.execution-title strong')?.textContent.trim() === '实操指南')
+    const publication = [...(card?.querySelectorAll('.execution-status-field') || [])]
+      .find(field => field.querySelector('small')?.textContent.trim() === '发布状态')
+    return card?.querySelector('.execution-phase')?.textContent.includes('已发布')
+      && publication?.querySelector('strong')?.textContent.trim() === '已发布'
+      && !card.querySelector('.execution-notice.claim-pending')
+  }, null, { timeout: 9000 })
+  assert.match(await claimPage.locator('.resource-progress-tree .delivery-count').innerText(), /3\s*\/\s*3/,
+    'publishing the pending Claim resource should update the visible published count')
+  assert.ok(await pendingResource.getByRole('button', { name: '查看已发布资源', exact: true }).isEnabled(),
+    'the confirmed resource should expose the normal published-resource action')
+  assert.equal(await pendingResource.getByRole('button', { name: '重新生成此资源', exact: true }).count(), 0,
+    'a stale human_review execution must not expose retry after the exact resource was published')
+  assert.equal(await pendingResource.locator('.execution-notice.claim-pending').count(), 0,
+    'the explicitly published resource must clear its stale Claim decision notice')
+  await pendingResource.getByRole('button', { name: '查看审核报告', exact: true }).click()
+  await claimPage.getByRole('heading', { name: '资源 Claim 审核报告' }).waitFor()
+  assert.equal(await claimPage.locator('.claim-report-actions').count(), 0,
+    'reopening the report after a user decision must not offer publication decisions again')
+  assert.equal(await claimPage.getByRole('button', { name: '确认发布', exact: true }).count(), 0)
+  assert.equal(await claimPage.getByRole('button', { name: '暂不发布', exact: true }).count(), 0)
+  await claimPage.keyboard.press('Escape')
+  await claimPage.locator('.claim-report-dialog').waitFor({ state: 'hidden' })
   evidence.interactionChecks.push({ scenario: 'claim-report', decision: state.lastClaimDecision })
   await assertNoExternalOrUnexpected('claim-report')
   await claimPage.close()
 
   const retainPage = await newPage(browser, base, 'claim-pending')
+  await openResourceDelivery(retainPage)
   await retainPage.getByRole('button', { name: '查看审核报告' }).first().click()
   await retainPage.getByRole('heading', { name: '资源 Claim 审核报告' }).waitFor()
   await retainPage.getByRole('button', { name: '暂不发布' }).click()
@@ -2515,6 +3537,10 @@ async function testClaimAndAppend(browser, base) {
   await retainPage.close()
 
   const splitPage = await newPage(browser, base, 'completed')
+  await inspectDropdownMenu({
+    page: splitPage, suite: 'generation', evidenceDir: reportDir, id: 'generation-append-dropdown',
+    trigger: splitPage.locator('.status-action-append').first(), getWriteCount: () => state.writes.length,
+  })
   await appendTextTypes(splitPage, true, ['复习清单', '案例分析'], 'desktop-append-dialog')
   await waitForFixture(() => state.writes.filter((item) => item.path.endsWith('/continuations')).length === 2, 'Claim-enabled append split')
   const splitWrites = state.writes.filter((item) => item.path.endsWith('/continuations'))
@@ -2539,8 +3565,731 @@ async function testClaimAndAppend(browser, base) {
   await mergedPage.close()
 }
 
+async function testFollowupRunNavigation(browser, base) {
+  const page = await newPage(browser, base, 'followup-navigation')
+  assert.deepEqual(state.jobsByLearner['learner-1'].map((job) => job.run_id), ['run-main', 'followup-run'],
+    'follow-up navigation fixture should expose the child through the learner task list')
+  await waitForFixture(() => state.requests.some((item) => item.path === '/api/runs/run-main/timeline'), 'parent Run lifecycle event')
+  assert.equal((await page.locator('.summary-code').innerText()).trim(), 'RUN-MAIN', 'follow-up navigation should begin on its parent Run')
+  assert.equal(await page.locator('.workflow-activity').count(), 0, 'the removed Run activity log should not render')
+  assert.equal(await page.getByText('运行记录', { exact: true }).count(), 0, 'the removed Run activity label should not remain visible')
+  const followups = page.locator('.workflow-followups')
+  await followups.waitFor({ state: 'visible' })
+  assert.equal(await followups.getByRole('button', { name: /^查看后续生成/ }).count(), 1,
+    'the separate follow-up area should retain its child Run action')
+  await followups.getByRole('button', { name: /^查看后续生成/ }).click()
+  await waitForFixture(() => state.requests.some((item) => item.path === '/api/runs/followup-run/timeline'), 'child Run timeline after follow-up navigation')
+  await page.waitForFunction(() => document.querySelector('.summary-code')?.textContent.trim() === 'FOLLOWUP')
+  await page.locator('.execution-graph-node[data-step-id="step-1"]').waitFor({ state: 'visible' })
+  assert.equal(await page.locator('.execution-graph-node[data-step-id^="step-"]').count(), 2,
+    'following the child should show its own two-step timeline')
+  assert.equal(await page.locator('.workflow-followups').count(), 0, 'the child should not inherit its parent follow-up links')
+  assert.ok(state.requests.some((item) => item.method === 'GET' && item.path === '/api/generate/jobs'),
+    'follow-up selection should resolve the child from the task list')
+  assert.deepEqual(state.writes, [], 'opening a child Run should remain read only')
+  evidence.interactionChecks.push({
+    scenario: 'followup-run-navigation', parentRun: 'run-main', childRun: 'followup-run',
+    childTimelineLoaded: true, writes: state.writes.length,
+  })
+  await assertNoExternalOrUnexpected('followup-run-navigation')
+  await page.close()
+}
+
+async function testWorkflowAuditVisualization(browser, base) {
+  const page = await newPage(browser, base, 'audit-visualization')
+  await waitForFixture(() => state.requests.some((item) => item.path === '/api/runs/run-main/timeline'), 'audit visualization timeline')
+  const dialog = page.locator('.workflow-detail-dialog')
+  const graph = page.locator('.execution-graph')
+  await assertResourcePhases(page, 'audit-visualization-desktop', {
+    captureName: 'desktop-resource-delivery-expanded',
+    expectedPhase: '已发布', expectAllPublished: true,
+  })
+  assert.equal(await graph.count(), 1, 'the compact workflow view should render one execution graph')
+  assert.equal(await graph.locator('.execution-graph-header, .execution-graph-modes, .execution-graph-count').count(), 0, 'redundant title, counter and view modes should be removed')
+  assert.equal(await graph.locator('.execution-graph-node').count(), 6, 'the chain should show every actual call, including both reviews')
+  assert.deepEqual(await graph.locator('.execution-graph-node').evaluateAll((nodes) => nodes.map((node) => node.dataset.stepId)), [
+    'audit-unknown-node', 'audit-review-v2', 'audit-generate-v2', 'audit-revision', 'audit-review-v1', 'audit-diagnose-unbound',
+  ], 'the complete chain should show the newest recorded execution first')
+  assert.equal(await page.locator('.resource-progress-tree').count(), 1, 'the workflow should have a single resource delivery section')
+  assert.equal(await page.locator('.workflow-activity').count(), 0, 'the separate lifecycle log should be removed')
+  assert.equal(await page.getByText('运行记录', { exact: true }).count(), 0, 'the removed lifecycle log label should not remain')
+  const compactText = await graph.innerText()
+  assert.ok(!compactText.includes('检查资源 resource-guide-v1 的事实陈述与证据引用。'), 'compact overview should not duplicate long execution summaries')
+  assert.ok(!compactText.includes('保留期限与冻结来源不符'), 'compact overview should keep decision reasons inside on-demand details')
+  await graph.scrollIntoViewIfNeeded()
+  await capture(page, 'desktop-workflow-redesign')
+
+  const waitForAuditReads = async (targetDialog, before, label) => {
+    await waitForFixture(() => (
+      state.requests.filter((item) => item.method === 'GET' && item.path === '/api/runs/run-main/timeline').length > before.timeline
+      && state.requests.filter((item) => item.method === 'GET' && item.path === '/api/runs/run-main/claims').length > before.claims
+    ), label)
+    await targetDialog.getByText('正在加载执行详情…', { exact: true }).waitFor({ state: 'hidden' })
+  }
+  const auditReadCounts = () => ({
+    timeline: state.requests.filter((item) => item.method === 'GET' && item.path === '/api/runs/run-main/timeline').length,
+    claims: state.requests.filter((item) => item.method === 'GET' && item.path === '/api/runs/run-main/claims').length,
+  })
+  const openStepDetails = async (node, label) => {
+    const before = auditReadCounts()
+    await node.click()
+    await dialog.locator('.audit-dialog-heading h2').waitFor()
+    await waitForAuditReads(dialog, before, label)
+  }
+
+  const beforeUninspectableClicks = auditReadCounts()
+  const uninspectableNodes = graph.locator('.execution-graph-node[data-inspectable="false"]')
+  for (const nodeKey of ['prepare_revision', 'unknown_future_node']) {
+    const node = graph.locator(`.execution-graph-node[data-node-key="${nodeKey}"]`)
+    assert.equal(await node.count(), 1, `${nodeKey} should remain visible as a recorded workflow stage`)
+    assert.equal(await node.evaluate((element) => element.tagName), 'DIV', `${nodeKey} must not be rendered as an interactive button`)
+    assert.equal(await node.getAttribute('tabindex'), null, `${nodeKey} must not enter the keyboard tab order`)
+    assert.equal(await node.getAttribute('role'), null, `${nodeKey} must not expose button semantics`)
+    await node.click()
+  }
+  assert.equal(await uninspectableNodes.count(), 2, 'the helper and explicit unknown node should both be non-interactive')
+  assert.deepEqual(auditReadCounts(), beforeUninspectableClicks, 'clicking helper and unknown nodes must not request audit details')
+  assert.equal(await dialog.isVisible(), false, 'clicking helper and unknown nodes must not open the audit dialog')
+
+  const diagnose = graph.locator('.execution-graph-node[data-node-key="diagnose"]')
+  await openStepDetails(diagnose, 'unbound diagnosis details')
+  assert.equal(await dialog.locator('.unlinked-note').count(), 0, 'normal unbound diagnosis must not be displayed as a warning')
+  assert.equal(await dialog.locator('.resource-picker').count(), 0, 'unbound diagnosis must not offer a picker for unrelated resources')
+  assert.equal(await dialog.locator('.audit-signal-row').count(), 0, 'unbound diagnosis must not show a resource review summary')
+  assert.equal(await dialog.getByRole('tab').count(), 0, 'a single diagnosis result must not render unrelated or disabled audit navigation')
+  assert.ok(!(await dialog.innerText()).includes('审核通过'), 'unbound diagnosis must not inherit another resource approval')
+  await page.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'hidden' })
+
+  const firstReview = graph.locator('.execution-graph-node[data-step-id="audit-review-v1"]')
+  await firstReview.waitFor({ state: 'visible' })
+  assert.equal(await firstReview.count(), 1, 'execution graph should show the failed first-version review as a real recorded step')
+  await openStepDetails(firstReview, 'v1 workflow audit details')
+  assert.equal(await dialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, 'review details should remain one page without module navigation')
+  assert.equal(await dialog.locator('.review-card').count(), 1, 'the selected v1 review should be the primary content')
+  const v1ResourcePicker = dialog.locator('select[aria-label="审核资源"]')
+  assert.equal(await v1ResourcePicker.isVisible(), false, 'a single linked resource should stay inside folded context')
+  const v1ReviewText = await dialog.locator('.audit-main').innerText()
+  assert.ok(v1ReviewText.includes('保存期限陈述与冻结来源冲突'), 'selected v1 review should show its persisted issue')
+  assert.ok(v1ReviewText.includes('按冻结来源修订期限，并补充记录字段'), 'selected v1 review should show its revision instruction')
+  const executionSummary = dialog.locator('.audit-execution-summary')
+  const identifiers = dialog.locator('.audit-context .audit-identifiers')
+  assert.equal(await executionSummary.evaluate((node) => node.open), false, 'complete execution input/output/reason should start folded')
+  assert.equal(await identifiers.evaluate((node) => node.open), false, 'technical IDs should start folded')
+  await capture(page, 'desktop-audit-overview')
+  await dialog.locator('.audit-context > summary').click()
+  assert.equal(await v1ResourcePicker.inputValue(), 'resource-guide-v1', 'a v1 review step should remain attached to its explicitly linked v1 resource')
+  assert.equal(await executionSummary.locator('dd').first().isVisible(), false, 'technical execution summaries should remain folded inside expanded context')
+  const v1Options = await v1ResourcePicker.locator('option').evaluateAll((options) => options.map((item) => ({ value: item.value, label: item.innerText.trim() })))
+  assert.deepEqual(v1Options.map((item) => item.value), ['resource-guide-v1'], 'a v1 review step must not switch to the latest v2 resource')
+  assert.ok(v1Options.every((item) => !item.label.includes(item.value)), 'resource picker labels should use human-readable type and version instead of UUIDs')
+  await executionSummary.locator(':scope > summary').click()
+  const expandedSummary = await executionSummary.innerText()
+  assert.ok(expandedSummary.includes('检查资源 resource-guide-v1 的事实陈述与证据引用。'), 'expanded execution details should retain the full persisted input')
+  assert.ok(expandedSummary.includes('审核发现来源范围不一致，要求定向返工。'), 'expanded execution details should retain the full persisted output')
+  assert.ok(expandedSummary.includes('保留期限与冻结来源不符，且未说明记录字段。'), 'expanded execution details should retain the persisted decision reason')
+  await executionSummary.locator(':scope > summary').click()
+  await identifiers.locator(':scope > summary').click()
+  const identifierText = await identifiers.innerText()
+  assert.ok(identifierText.includes('Step ID：audit-review-v1'), 'expanded technical identifiers should expose the exact step ID on demand')
+  assert.ok(identifierText.includes('Resource ID：resource-guide-v1'), 'expanded technical identifiers should expose the linked resource ID on demand')
+  assert.ok(identifierText.includes('Review ID：review-guide-v1'), 'expanded technical identifiers should expose the linked review ID on demand')
+  assert.ok(identifierText.includes('来源引用：evidence-frozen-contradiction'), 'expanded technical identifiers should expose the exact evidence reference on demand')
+  await identifiers.locator(':scope > summary').click()
+  await dialog.locator('.audit-context > summary').click()
+  await page.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'hidden' })
+
+  const secondReview = graph.locator('.execution-graph-node[data-step-id="audit-review-v2"]')
+  await secondReview.waitFor({ state: 'visible' })
+  assert.equal(await secondReview.count(), 1, 'execution graph should show the successful rework review as a separate recorded step')
+  await openStepDetails(secondReview, 'v2 workflow audit details')
+  assert.equal(await dialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, 'the v2 review must use the same single-page interaction')
+  assert.equal(await dialog.locator('.review-card').count(), 1, 'the v2 review should stay distinct from the v1 review')
+  const v2ReviewText = await dialog.locator('.audit-main').innerText()
+  assert.equal(await dialog.locator('.detail-execution-status strong').innerText(), '执行成功', 'the workflow node can succeed independently of the reviewer verdict')
+  assert.ok(v2ReviewText.includes('审核通过'), 'selected v2 review should show its successful decision')
+  assert.ok(!v2ReviewText.includes('保存期限陈述与冻结来源冲突'), 'v1 review issues must not leak into the selected v2 review')
+  const v2RevisionDetails = dialog.locator('.review-revisions')
+  assert.equal(await v2RevisionDetails.count(), 1, 'review details should retain an in-page version comparison disclosure')
+  assert.equal(await v2RevisionDetails.evaluate((node) => node.open), false, 'version comparison should remain folded by default')
+  const v2ExecutionSummary = dialog.locator('.audit-execution-summary')
+  const v2Context = dialog.locator('.audit-context')
+  const v2Identifiers = v2Context.locator('.audit-identifiers')
+  assert.equal(await v2ExecutionSummary.evaluate((node) => node.open), false, 'the v2 execution summary should also start folded')
+  assert.equal(await v2Identifiers.evaluate((node) => node.open), false, 'the v2 technical identifiers should start folded')
+  assert.equal(await v2Context.evaluate((node) => node.open), false, 'the v2 technical context should start folded')
+  await v2Context.locator(':scope > summary').click()
+  await v2ExecutionSummary.locator(':scope > summary').click()
+  assert.ok((await v2ExecutionSummary.innerText()).includes('保存期限与记录字段均有直接冻结来源支持。'), 'expanded v2 execution details should show its persisted decision reason')
+  await v2ExecutionSummary.locator(':scope > summary').click()
+  await v2Identifiers.locator(':scope > summary').click()
+  assert.ok((await v2Identifiers.innerText()).includes('Review ID：review-guide-v2'), 'expanded v2 technical identifiers should expose the explicitly linked review ID')
+  await v2Identifiers.locator(':scope > summary').click()
+  await v2Context.locator(':scope > summary').click()
+  await page.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'hidden' })
+
+  await openResourceDelivery(page)
+  const guideCard = page.locator('.execution-card').filter({ hasText: '实操指南' }).first()
+  assert.ok(await guideCard.innerText().then((value) => value.includes('已发布')), 'publication status should remain visible on the resource card before expanding metadata')
+  assert.equal(await guideCard.getByRole('button', { name: '查看已发布资源', exact: true }).count(), 1, 'the published-resource action should remain available')
+  assert.equal(await guideCard.getByRole('button', { name: '查看审核报告', exact: true }).count(), 1, 'the Claim review report action should remain available')
+  assert.equal(await guideCard.getByRole('button', { name: '查看过程详情', exact: true }).count(), 1, 'the resource workflow detail action should remain available')
+  const beforeResourceDetails = auditReadCounts()
+  await guideCard.getByRole('button', { name: '查看过程详情', exact: true }).click()
+  await dialog.locator('.audit-dialog-heading h2').waitFor()
+  await waitForAuditReads(dialog, beforeResourceDetails, 'resource workflow audit details')
+  assert.equal(await dialog.locator('select[aria-label="审核资源"]').inputValue(), 'resource-guide',
+    'resource-card details should load the selected resource from the current Run')
+
+  assert.equal(await dialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, 'the resource review should remain one page')
+  const auditResourceSelect = dialog.locator('select[aria-label="审核资源"]')
+  assert.equal(await auditResourceSelect.inputValue(), 'resource-guide', 'resource details must select the explicitly linked current Run resource')
+  assert.equal(await auditResourceSelect.isVisible(), true, 'a multi-resource review should show its selector with the main review content')
+  assert.equal(await auditResourceSelect.evaluate((node) => Boolean(node.closest('.audit-context'))), false,
+    'a multi-resource selector should precede the review body instead of being hidden in technical context')
+  assert.ok(await dialog.locator('.review-card').count() > 0, 'resource entry should remain a read-only ordinary review subject')
+  assert.equal(await dialog.locator('.claim-verification, .claim-evidence-list, .extraction-module').count(), 0,
+    'Claim statements and evidence should appear only on the explicit claim_judge detail')
+  const reviewRevisions = dialog.locator('.review-revisions')
+  assert.equal(await reviewRevisions.count(), 1, 'resource review should retain version comparison in the same page')
+  assert.equal(await reviewRevisions.evaluate((node) => node.open), false, 'version comparison should start collapsed')
+  await capture(page, 'desktop-audit-overview')
+  await reviewRevisions.locator(':scope > summary').click()
+  const compareSelect = reviewRevisions.getByRole('combobox', { name: '对比版本' })
+  const versionOptions = compareSelect.locator('option')
+  const versionOptionValues = await versionOptions.evaluateAll((options) => options.map((item) => item.value))
+  assert.deepEqual(versionOptionValues.sort(), ['resource-guide', 'resource-guide-v1'],
+    'version comparison should offer only the current resource and its explicit parent')
+  assert.ok(!versionOptionValues.includes('resource-guide-other'), 'same-type resources from another spec must not be offered as versions')
+  await compareSelect.selectOption('resource-guide')
+  const versionText = await reviewRevisions.innerText()
+  assert.ok(versionText.includes('每次提交后只需记录操作者。'), 'diff should include the old version text')
+  assert.ok(versionText.includes('每次提交后记录操作者、提交时间与结果状态。'), 'diff should include the revised version text')
+  assert.ok(versionText.includes('审核记录永久保存。') && versionText.includes('审核记录保留九十天，超过期限后按归档规则清理。'),
+    'version comparison should retain both versions’ complete changed facts')
+  assert.ok(versionText.includes('按冻结来源修订期限，并补充记录字段'), 'version comparison should retain the parent review instructions')
+  assert.ok(versionText.includes('审核通过'), 'version comparison should retain the revised version review status')
+  await dialog.locator('.el-dialog__body').evaluate((node) => { node.scrollTop = 0 })
+  await capture(page, 'desktop-existing-version')
+  await reviewRevisions.locator(':scope > summary').click()
+  await capture(page, 'desktop-audit-visualization')
+
+  let releaseDelayedTimeline
+  let delayedTimelineFetched = false
+  let delayedTimelineDelivered = false
+  const delayedTimelineGate = new Promise((resolve) => { releaseDelayedTimeline = resolve })
+  await page.route('**/api/runs/run-main/timeline*', async (route) => {
+    const response = await route.fetch()
+    delayedTimelineFetched = true
+    await delayedTimelineGate
+    await route.fulfill({ response })
+    delayedTimelineDelivered = true
+  })
+  await dialog.getByRole('button', { name: '刷新数据', exact: true }).click()
+  await waitForFixture(() => delayedTimelineFetched, 'delayed old-Run timeline response should be fetched before profile switch')
+  await page.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'hidden' })
+  await chooseOption(page, '学习画像', /周明远/)
+  await page.waitForFunction(() => document.querySelector('.summary-code')?.textContent.trim() === 'RUN-ALT')
+  await waitForFixture(() => state.requests.some((item) => item.path === '/api/runs/run-alt/timeline'), 'new learner Run timeline after audit close')
+  assert.equal(await dialog.isVisible(), false, 'switching learner and Run should close the old audit details')
+  releaseDelayedTimeline()
+  await waitForFixture(() => delayedTimelineDelivered, 'delayed old-Run response should finish after switching')
+  await page.waitForTimeout(50)
+  assert.equal(await dialog.isVisible(), false, 'a late old-Run response must not reopen the audit dialog')
+  assert.equal(await page.getByText('保存期限陈述与冻结来源冲突', { exact: true }).count(), 0,
+    'a late old-Run response must not expose old review content in the newly selected Run')
+  await page.unroute('**/api/runs/run-main/timeline*')
+  assert.deepEqual(state.writes, [], 'audit details and refresh must remain read only')
+  evidence.interactionChecks.push({
+    scenario: 'workflow-audit-visualization',
+    runId: 'run-main',
+    resourceIds: state.timelineDetails.resource_versions.map((item) => item.resource_id),
+    evidenceIds: state.timelineDetails.evidence.map((item) => item.evidence_id),
+    refreshReads: state.requests.filter((item) => item.path === '/api/runs/run-main/timeline' || item.path === '/api/runs/run-main/claims').length,
+    versionOptions: versionOptionValues,
+    claimEvidenceSeparate: true,
+    versionComparisonCollapsedByDefault: true,
+    requestOwnership: { delayedRun: 'run-main', selectedLearner: 'learner-2', selectedRun: 'run-alt', staleContentVisible: false },
+    writes: state.writes.length,
+  })
+  await assertNoExternalOrUnexpected('workflow-audit-visualization')
+  await page.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'hidden' })
+  await page.close()
+
+  const mobilePage = await newPage(browser, base, 'audit-visualization', { width: 390, height: 844 }, { reducedMotion: true })
+  const mobileBefore = {
+    timeline: state.requests.filter((item) => item.method === 'GET' && item.path === '/api/runs/run-main/timeline').length,
+    claims: state.requests.filter((item) => item.method === 'GET' && item.path === '/api/runs/run-main/claims').length,
+  }
+  await assertResourcePhases(mobilePage, 'audit-visualization-mobile', {
+    captureName: 'mobile-resource-delivery-expanded', expectedPhase: '已发布', expectAllPublished: true,
+  })
+  const mobileGraph = mobilePage.locator('.execution-graph')
+  assert.equal(await mobileGraph.locator('.execution-graph-node').count(), 6, 'mobile should also expose the whole actual execution chain')
+  assert.equal(await mobilePage.locator('.resource-progress-tree .phase-name').count(), 1, 'mobile workflow should keep one delivery area')
+  await mobileGraph.scrollIntoViewIfNeeded()
+  await capture(mobilePage, 'mobile-workflow-redesign')
+  await openResourceDelivery(mobilePage)
+  await mobilePage.locator('.execution-card').filter({ hasText: '实操指南' }).first()
+    .getByRole('button', { name: '查看过程详情', exact: true }).click()
+  const mobileDialog = mobilePage.locator('.workflow-detail-dialog')
+  await mobileDialog.getByRole('heading', { name: '资源审核详情', exact: true }).waitFor()
+  await waitForAuditReads(mobileDialog, mobileBefore, 'mobile audit details should load current Run data')
+  assert.equal(await mobileDialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, 'mobile resource review must stay on one page')
+  assert.ok(await mobileDialog.locator('.review-card').count() > 0, 'mobile resource entry should show the ordinary review subject')
+  assert.equal(await mobileDialog.locator('.claim-verification, .claim-evidence-list, .extraction-module').count(), 0,
+    'mobile resource review must not duplicate Claim statements or evidence')
+  const mobileMetrics = await mobilePage.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+    dialogWidth: document.querySelector('.workflow-detail-dialog')?.getBoundingClientRect().width || 0,
+    dialogClientWidth: document.querySelector('.workflow-detail-dialog')?.clientWidth || 0,
+    dialogScrollWidth: document.querySelector('.workflow-detail-dialog')?.scrollWidth || 0,
+  }))
+  assert.ok(mobileMetrics.documentWidth <= mobileMetrics.viewportWidth + 1, 'mobile audit dialog must not cause horizontal page overflow')
+  assert.ok(mobileMetrics.dialogScrollWidth <= mobileMetrics.dialogClientWidth + 1, 'mobile audit dialog content must not overflow horizontally')
+  await capture(mobilePage, 'mobile-audit-visualization')
+  await assertContrast(mobilePage, 'mobile-audit-visualization')
+  await mobilePage.keyboard.press('Escape')
+  await mobileDialog.waitFor({ state: 'hidden' })
+  assert.deepEqual(state.writes, [], 'mobile audit details must not issue business writes')
+  evidence.layoutChecks.push({ label: 'workflow-audit-visualization-mobile', ...mobileMetrics })
+  evidence.interactionChecks.push({ scenario: 'workflow-audit-visualization-mobile', keyboardClose: true, writes: 0 })
+  await assertNoExternalOrUnexpected('workflow-audit-visualization-mobile')
+  await mobilePage.close()
+}
+
+async function testAuditContentWorkspace(browser, base) {
+  const makeTimeline = () => {
+    const timeline = auditVisualizationTimeline('run-main')
+    timeline.steps.push({
+      ...timeline.steps.find((step) => step.step_id === 'audit-review-v2'),
+      step_id: 'audit-claim-judge', step_sequence: 7, node_name: 'claim_judge', agent_name: 'claim_judge',
+      action: '事实核验', output_summary: '完成三条陈述的独立判定。',
+      evidence_refs: ['evidence-frozen-supported', 'evidence-frozen-contradiction'],
+    })
+    return timeline
+  }
+  for (const mobile of [false, true]) {
+    const label = mobile ? 'mobile-audit-content' : 'desktop-audit-content'
+    const page = await newPage(browser, base, 'audit-visualization', mobile ? { width: 390, height: 844 } : { width: 1393, height: 620 }, { timeline: makeTimeline(), reducedMotion: true })
+    const dialog = page.locator('.workflow-detail-dialog')
+    const readCount = () => state.requests.filter((item) => item.path === '/api/runs/run-main/claims').length
+    const before = readCount()
+    await page.locator('.execution-graph-node[data-step-id="audit-claim-judge"]').click()
+    await dialog.getByRole('heading', { name: '事实核验 · 执行详情', exact: true }).waitFor()
+    await waitForFixture(() => readCount() > before, label + ' Claim load')
+    await dialog.getByText('正在加载执行详情…', { exact: true }).waitFor({ state: 'hidden' })
+    assert.equal(await dialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, 'fact verification should stay on one page without module navigation')
+    assert.equal(await dialog.locator('.claim-verification').count(), 1, 'the selected claim_judge step should own the Claim result section')
+    const claimList = dialog.getByTestId('claim-evidence-list')
+    const claimDetails = claimList.locator('.claim-detail')
+    assert.equal(await claimDetails.count(), 3, 'all supported, contradicted, and unsupported factual Claims should remain visible')
+    const claimSummaries = await claimList.locator('.claim-detail > summary').allInnerTexts()
+    for (const claim of ['每次提交后记录操作者、提交时间与结果状态。', '审核记录永久保存。', '提交时还会自动通知所有关注者。']) {
+      assert.ok(claimSummaries.some((summary) => summary.includes(claim)), 'Claim summary should retain the statement: ' + claim)
+    }
+    assert.ok(claimSummaries[0].includes('获得证据支持'), 'the supported Claim should retain its supported verdict')
+    assert.ok(claimSummaries[1].includes('与证据矛盾'), 'the contradicted Claim should retain its contradiction verdict')
+    assert.ok(claimSummaries[2].includes('当前证据未支持'), 'the Claim without evidence should retain its unsupported verdict')
+    await claimDetails.nth(1).locator('.evidence-excerpt').waitFor({ state: 'visible' })
+    assert.deepEqual(await claimDetails.evaluateAll((nodes) => nodes.map((node) => node.open)), [false, true, false], 'the first factual problem should be visible immediately')
+    const claimEvidenceTexts = []
+    const supportedDetail = claimDetails.nth(0)
+    await supportedDetail.locator(':scope > summary').click()
+    const supportedText = await supportedDetail.innerText()
+    claimEvidenceTexts.push(supportedText)
+    assert.ok(supportedText.includes('资源版本 v2'), 'supported Claim provenance should retain its generated resource version')
+    assert.ok(supportedText.includes('冻结来源原文：每次提交后记录操作者、提交时间与结果状态。'), 'supported Claim should map to its own frozen evidence ID')
+    assertRenderedEvidenceLocator(supportedText, state.timelineDetails.evidence.find(item => item.evidence_id === 'evidence-frozen-supported'), 'supported Claim source')
+    const supportedIdentity = supportedDetail.locator('.source-identity')
+    await supportedIdentity.locator(':scope > summary').click()
+    assert.ok((await supportedIdentity.innerText()).includes('Evidence ID：evidence-frozen-supported'), 'supported Claim should expose its exact frozen Evidence ID')
+    await supportedIdentity.locator(':scope > summary').click()
+    await supportedDetail.locator(':scope > summary').click()
+
+    const contradictedDetail = claimDetails.nth(1)
+    const contradictedText = await contradictedDetail.innerText()
+    claimEvidenceTexts.push(contradictedText)
+    assert.ok(contradictedText.includes('资源版本 v2'), 'contradicted Claim provenance should retain its generated resource version')
+    assert.ok(contradictedText.includes('冻结来源明确规定保存九十天'), 'the initial problem must show its judgement reason')
+    assert.ok(contradictedText.includes('冻结来源原文：审核记录保留九十天'), 'the initial problem must show the exact frozen excerpt')
+    assert.ok(contradictedText.includes('冻结来源原文：审核记录保留九十天，超过期限后按归档规则清理。'), 'contradicted Claim should map to its own frozen evidence ID')
+    assert.ok(contradictedText.includes('生成原句：审核记录永久保存。'), 'the contradicted Claim should preserve the generated sentence separately from its evidence')
+    assertRenderedEvidenceLocator(contradictedText, state.timelineDetails.evidence.find(item => item.evidence_id === 'evidence-frozen-contradiction'), 'contradicted Claim source')
+    const contradictedIdentity = contradictedDetail.locator('.source-identity')
+    await contradictedIdentity.locator(':scope > summary').click()
+    assert.ok((await contradictedIdentity.innerText()).includes('Evidence ID：evidence-frozen-contradiction'), 'contradicted Claim should expose its exact frozen Evidence ID')
+    await contradictedIdentity.locator(':scope > summary').click()
+
+    const unsupportedDetail = claimDetails.nth(2)
+    await unsupportedDetail.locator(':scope > summary').click()
+    const unsupportedText = await unsupportedDetail.innerText()
+    claimEvidenceTexts.push(unsupportedText)
+    assert.ok(unsupportedText.includes('资源版本 v2'), 'unsupported Claim provenance should retain its generated resource version')
+    assert.ok(unsupportedText.includes('未关联冻结证据。当前证据未支持，不等于现实中的陈述一定错误。'),
+      'a Claim without evidence IDs should show the explicit frozen-evidence empty state')
+    await unsupportedDetail.locator(':scope > summary').click()
+    assert.deepEqual(await claimDetails.evaluateAll((nodes) => nodes.map((node) => node.open)), [false, true, false], 'expanding provenance must restore the default focused-issue disclosure state')
+    assert.equal(await claimList.locator('.evidence-excerpt').count(), 2, 'only evidence-backed Claims should show frozen excerpts')
+    const initialEvidenceText = claimEvidenceTexts.join('\n')
+    assert.ok(initialEvidenceText.includes('文档版本 3.2') && initialEvidenceText.includes('2.4 提交记录') && initialEvidenceText.includes('1.2 记录保存期限'),
+      'Claim evidence should retain the frozen document version and section locators')
+    assert.equal(await claimDetails.nth(2).locator('.evidence-excerpt').count(), 0, 'a Claim without evidence IDs must not match a similar frozen source')
+    assert.ok(!initialEvidenceText.includes('历史记录缺少版本或审核关联字段'), 'complete provenance should not be rendered as unavailable')
+
+    const refresh = async () => {
+      const reads = readCount()
+      await dialog.getByRole('button', { name: '刷新数据', exact: true }).click()
+      await waitForFixture(() => readCount() > reads, label + ' refresh')
+      await dialog.getByText('正在加载执行详情…', { exact: true }).waitFor({ state: 'hidden' })
+      assert.equal(await dialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, 'refresh should retain the single-page detail model')
+      assert.equal(await dialog.locator('.claim-verification').count(), 1, 'refresh should keep the selected claim_judge result visible')
+    }
+
+    const context = dialog.locator('.audit-context')
+    assert.equal(await context.evaluate((node) => node.open), false, 'auxiliary execution context must start folded on both desktop and mobile')
+    await dialog.locator('.el-dialog__body').evaluate((node) => { node.scrollTop = 0 })
+    const dimensions = await dialog.evaluate((node) => {
+      const main = node.querySelector('.audit-main').getBoundingClientRect()
+      const workspace = node.querySelector('.audit-workspace').getBoundingClientRect()
+      const body = node.querySelector('.el-dialog__body').getBoundingClientRect()
+      const firstContent = node.querySelector('.claim-statement').getBoundingClientRect()
+      const scrollers = [...node.querySelectorAll('*')].filter((item) => ['auto', 'scroll'].includes(getComputedStyle(item).overflowY) && item.scrollHeight > item.clientHeight + 1).map((item) => item.className)
+      return { mainShare: main.width / workspace.width, firstContentOffset: firstContent.top - body.top, scrollWidth: node.scrollWidth, clientWidth: node.clientWidth, scrollers }
+    })
+    evidence.layoutChecks.push({ label, ...dimensions })
+    await capture(page, label)
+    assert.ok(mobile || dimensions.mainShare >= 0.7, 'desktop must dedicate at least 70% of workspace width to audit content: ' + JSON.stringify(dimensions))
+    assert.ok(dimensions.firstContentOffset >= 0 && dimensions.firstContentOffset < (mobile ? 300 : 220), 'the first factual statement should be visible near the start of the unscrolled body: ' + JSON.stringify(dimensions))
+    assert.ok(dimensions.scrollWidth <= dimensions.clientWidth + 1, 'the audit workspace must have no horizontal overflow')
+    assert.ok(dimensions.scrollers.every((item) => item.includes('el-dialog__body')), 'the dialog body must be the only vertical scroll owner')
+    await assertContrast(page, label)
+
+    const originalClaims = state.claims
+    state.claims = {
+      run_id: 'run-main', audit_status: 'incomplete', claims: [], judgements: [],
+      resource_metrics: { 'resource-guide': {
+        metric_status: 'incomplete', claim_hallucination_rate: null, claim_total: 1,
+        factual_claim_total: 1, supported_claim_total: 0, contradicted_claim_total: 0,
+        not_in_evidence_claim_total: 0, non_factual_claim_total: 0, incomplete_claim_total: 1,
+      } },
+    }
+    await refresh()
+    let refreshedText = await dialog.innerText()
+    assert.ok(refreshedText.includes('事实判定未完成'), 'incomplete Claim data should show its explicit summary')
+    assert.ok(!refreshedText.includes('核验通过'), 'incomplete Claim data must never display a pass message')
+    state.claims = {
+      run_id: 'run-main', audit_status: 'not_applicable', claims: [], judgements: [],
+      resource_metrics: { 'resource-guide': {
+        metric_status: 'not_applicable', claim_hallucination_rate: null, claim_total: 0,
+        factual_claim_total: 0, supported_claim_total: 0, contradicted_claim_total: 0,
+        not_in_evidence_claim_total: 0, non_factual_claim_total: 0, incomplete_claim_total: 0,
+      } },
+    }
+    await refresh()
+    refreshedText = await dialog.innerText()
+    assert.ok(refreshedText.includes('通用 Claim 审核不适用'), 'not-applicable Claim data should show its explicit summary')
+    assert.ok(!refreshedText.includes('核验通过'), 'not-applicable Claim data must never display a pass message')
+    state.claims = originalClaims
+    await refresh()
+
+    await claimDetails.nth(1).locator(':scope > summary').click()
+    assert.equal(await claimDetails.nth(1).evaluate((node) => node.open), false, 'the initially focused Claim must still be collapsible by the user')
+    const filter = claimList.getByRole('combobox', { name: '事实判定筛选' })
+    await filter.selectOption('not_in_evidence')
+    assert.equal(await claimDetails.count(), 1, 'verdict filtering should show only the selected category')
+    assert.ok((await claimDetails.first().innerText()).includes('未关联冻结证据'), 'filtering must retain the explicit missing-evidence explanation')
+    await filter.selectOption('all')
+    assert.equal(await claimDetails.count(), 3, 'clearing the filter must restore every Claim')
+    await inspectNativeSelect({
+      page, suite: 'generation', evidenceDir: reportDir, id: `${label}-claim-verdict-native-filter`,
+      select: filter, getWriteCount: () => state.writes.length,
+    })
+
+    if (mobile) {
+      await context.locator(':scope > summary').focus()
+      await page.keyboard.press('Enter')
+      assert.equal(await context.evaluate((node) => node.open), true, 'mobile context must be expandable with the keyboard')
+      assert.equal(await dialog.locator('select[aria-label="审核资源"]').inputValue(), 'resource-guide', 'expanded mobile metadata must retain the explicit resource association')
+      const contextText = await context.innerText()
+      assert.ok(contextText.includes('节点执行') && contextText.includes('完整执行摘要'), 'technical context should retain execution state and its folded full summary')
+      assert.ok(!contextText.includes('普通审核') && !contextText.includes('每次提交后记录操作者、提交时间与结果状态。'),
+        'Claim details should not mix ordinary review content or Claim statements into technical context')
+      await page.keyboard.press('Enter')
+      assert.equal(await context.evaluate((node) => node.open), false, 'mobile context must also be collapsible with the keyboard')
+      state.claims.claims[1].claim_text = '审核记录永久保存。'.repeat(30)
+      state.claims.judgements[1].reason = '冻结来源规定九十天后按归档规则清理。'.repeat(40)
+      state.timelineDetails.evidence[1].excerpt = '冻结来源原文：记录保留九十天。'.repeat(50)
+    } else {
+      state.claims.claims[0].claim_type = 'non_factual'
+      state.claims.judgements[0].verdict = 'non_factual'
+      Object.assign(state.claims.resource_metrics['resource-guide'], { factual_claim_total: 2, non_factual_claim_total: 1, supported_claim_total: 0, claim_hallucination_rate: 1 })
+    }
+    await refresh()
+    assert.deepEqual(await claimDetails.evaluateAll((nodes) => nodes.map((node) => node.open)), [false, true, false], mobile ? 'long fact content must retain its focused problem' : 'non-factual content must not take focus away from the factual problem')
+    if (mobile) {
+      const longMetrics = await dialog.evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth, bodyScroll: node.querySelector('.el-dialog__body').scrollHeight, bodyClient: node.querySelector('.el-dialog__body').clientHeight }))
+      assert.ok(longMetrics.scroll <= longMetrics.client + 1, 'long statements, reasons and excerpts must wrap on mobile')
+      assert.ok(longMetrics.bodyScroll > longMetrics.bodyClient, 'long evidence must remain accessible through the dialog scroll')
+      await dialog.locator('.el-dialog__body').evaluate((node) => { node.scrollTop = node.scrollHeight })
+      assert.ok(await claimDetails.nth(2).locator(':scope > summary').isVisible(), 'the final Claim must remain reachable after long evidence')
+      await capture(page, 'mobile-audit-long-content')
+      evidence.layoutChecks.push({ label: 'mobile-audit-long-content', ...longMetrics })
+    } else {
+      const supported = auditVisualizationClaims('run-main')
+      supported.claims = supported.claims.slice(0, 2)
+      supported.judgements = supported.judgements.slice(0, 2)
+      const corrected = '审核记录保留九十天，超过期限后按归档规则清理。'
+      Object.assign(supported.claims[1], { claim_text: corrected, source_text: corrected, source_end: corrected.length })
+      Object.assign(supported.judgements[1], { verdict: 'supported', reason: '与冻结来源原文一致。' })
+      Object.assign(supported.resource_metrics['resource-guide'], { claim_total: 2, factual_claim_total: 2, supported_claim_total: 2, contradicted_claim_total: 0, not_in_evidence_claim_total: 0, claim_hallucination_rate: 0 })
+      state.claims = supported
+      await refresh()
+      assert.deepEqual(await claimDetails.evaluateAll((nodes) => nodes.map((node) => node.open)), [true, false], 'an all-supported audit must show only the first Claim by default')
+      await claimDetails.first().locator(':scope > summary').click()
+      assert.equal(await claimDetails.first().evaluate((node) => node.open), false, 'the all-supported fallback must also support manual collapse')
+      assert.equal(await dialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, 'an all-supported result should remain in the same Claim page')
+      await dialog.locator('.el-dialog__body').evaluate((node) => { node.scrollTop = 0 })
+      assert.equal(await dialog.locator('.claim-verification').count(), 1, 'the Claim result remains the only review content for claim_judge')
+      await capture(page, 'desktop-audit-approved')
+    }
+    evidence.interactionChecks.push({ scenario: label, singlePage: true, manualCollapse: true, filtering: true, refreshRolePreserved: true, contextKeyboard: mobile, supportedFallback: !mobile, nonFactualFocusExcluded: !mobile, writes: state.writes.length })
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+    assert.deepEqual(state.writes, [], 'viewing facts and changing presentation must remain read only')
+    await assertNoExternalOrUnexpected(label)
+    await page.close()
+  }
+}
+
+async function testNodeDetailRoles(browser, base) {
+  const roles = ['diagnose', 'retrieve', 'plan', 'generate', 'review', 'claim_judge']
+  const passiveRoles = ['evidence_gate', 'claim_extract']
+  const allRoles = [...roles, ...passiveRoles]
+  const makeTimeline = () => {
+    const timeline = auditVisualizationTimeline('run-main')
+    const template = timeline.steps.find(item => item.step_id === 'audit-review-v2')
+    const outputs = {
+      diagnose: "推荐难度：初级; 盲区：['Embedding', '文档解析']",
+      retrieve: '混合候选 12 条；有效证据 2 条；状态：available；来源：知识库',
+      evidence_gate: '门禁通过',
+      plan: '学习路径：Embedding 的定义与核心思想 -> 文本向量化：从词、句子到固定维度向量 -> 查询与文档编码 -> 语义相似度与向量距离计算',
+      generate: '已生成文本表示：实操指南',
+      review: '审核通过；覆盖情况以本次审核记录为准。',
+      claim_extract: '已抽取三条陈述，后续独立核验。',
+      claim_judge: '完成三条陈述的独立判定。',
+    }
+    timeline.steps = allRoles.map((key, index) => ({
+      ...template, step_id: `role-${key}`, node_name: key, agent_name: key, step_sequence: index + 1,
+      input_summary: key === 'plan' ? '目标节点：Embedding；诊断盲区：文档解析；证据数：2' : `本次${key}的持久化输入摘要。`,
+      output_summary: outputs[key], decision_reason: key === 'plan' ? '先理解文本表示，再学习查询编码，最后用相似度计算验证检索效果。' : `本次${key}的持久化决策理由。`,
+      evidence_refs: ['retrieve', 'claim_judge'].includes(key)
+        ? ['evidence-frozen-supported', 'evidence-frozen-contradiction']
+        : ['diagnose', 'plan', 'generate'].includes(key) ? ['evidence-frozen-supported'] : [],
+      resource_ids: ['review', 'claim_judge', 'generate'].includes(key) ? ['resource-guide'] : [],
+      review_ids: ['review', 'claim_judge'].includes(key) ? ['review-guide-v2'] : [],
+      ...(key === 'retrieve' ? { retrieval_status: 'available', retrieval_query_count: 2, retrieval_candidate_count: 12, retrieval_dropped_candidate_count: 3, retrieval_partial_failure_count: 0 } : {}),
+    }))
+    return timeline
+  }
+  for (const mobile of [false, true]) {
+    const prefix = mobile ? 'mobile-node' : 'desktop-node'
+    const page = await newPage(browser, base, 'audit-visualization', mobile ? { width: 390, height: 844 } : { width: 1393, height: 720 }, { timeline: makeTimeline(), reducedMotion: true })
+    const dialog = page.locator('.workflow-detail-dialog')
+    const graph = page.locator('.execution-graph')
+    const readCount = () => state.requests.filter(item => item.path === '/api/runs/run-main/claims').length
+    const readDetail = async (key) => {
+      const before = readCount()
+      await graph.locator(`.execution-graph-node[data-step-id="role-${key}"]`).click()
+      await dialog.waitFor({ state: 'visible' })
+      await waitForFixture(() => readCount() > before, prefix + key + ' load')
+      await dialog.getByText('正在加载执行详情…', { exact: true }).waitFor({ state: 'hidden' })
+      await dialog.evaluate(async node => { await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))) })
+    }
+    const refresh = async (label) => {
+      const before = readCount()
+      await dialog.getByRole('button', { name: '刷新数据', exact: true }).click()
+      await waitForFixture(() => readCount() > before, prefix + label + ' refresh')
+      await dialog.getByText('正在加载执行详情…', { exact: true }).waitFor({ state: 'hidden' })
+      assert.equal(await dialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, label + ': refresh must preserve the single-page detail model')
+    }
+
+    const initialReads = readCount()
+    for (const key of passiveRoles) {
+      const node = graph.locator(`.execution-graph-node[data-step-id="role-${key}"]`)
+      assert.equal(await node.count(), 1, `${key} should remain visible as a recorded status node`)
+      assert.equal(await node.getAttribute('data-inspectable'), 'false', `${key} should not expose a detail action`)
+      assert.equal(await node.evaluate(element => element.tagName), 'DIV', `${key} must not be rendered as an interactive button`)
+      assert.equal(await node.getAttribute('tabindex'), null, `${key} must not enter the keyboard tab order`)
+      assert.ok((await node.innerText()).includes('完成'), `${key} should retain its persisted execution status`)
+      await node.click()
+      assert.equal(await dialog.isVisible(), false, `${key} click must not open detail`)
+    }
+    assert.equal(readCount(), initialReads, 'passive status nodes must not request Claim details')
+
+    for (const key of roles) {
+      await readDetail(key)
+      assert.ok((await dialog.locator('.audit-dialog-heading h2').innerText()).endsWith('· 执行详情'), key + ': the header must name this node rather than a shared audit workspace')
+      assert.equal(await dialog.locator('[role="tablist"], [role="tab"], [role="tabpanel"]').count(), 0, key + ': detail must have no tab navigation')
+      assert.equal(await dialog.locator('.unlinked-note, .el-tabs__item.is-disabled').count(), 0, key + ': no unrelated warning or disabled placeholder')
+      assert.equal(await dialog.locator('.audit-context').evaluate(node => node.open), false, key + ': technical context must start folded')
+
+      if (key === 'diagnose') {
+        const result = dialog.locator('.node-result[data-role="diagnose"]')
+        assert.equal(await result.count(), 1)
+        assert.ok((await result.innerText()).includes('初级'))
+        assert.ok((await result.innerText()).includes('Embedding'))
+      } else if (key === 'retrieve') {
+        const result = dialog.locator('.retrieval-result')
+        assert.equal(await result.count(), 1, 'retrieval should own one combined result and evidence body')
+        assert.deepEqual(await result.locator('.retrieval-stats dd').allInnerTexts(), ['2', 'available', '2', '12', '3', '0'], 'use actual recorded evidence and retrieval fields, including zero')
+        assert.equal(await result.locator('.node-evidence-card').count(), 2, 'retrieval should show only explicitly referenced frozen evidence')
+        const retrievalText = await result.innerText()
+        assert.ok(retrievalText.includes('冻结来源原文：每次提交后记录操作者、提交时间与结果状态。'))
+        assert.ok(retrievalText.includes('冻结来源原文：审核记录保留九十天，超过期限后按归档规则清理。'))
+        assertRenderedEvidenceLocator(retrievalText, state.timelineDetails.evidence.find(item => item.evidence_id === 'evidence-frozen-supported'), 'retrieval supported source')
+        assertRenderedEvidenceLocator(retrievalText, state.timelineDetails.evidence.find(item => item.evidence_id === 'evidence-frozen-contradiction'), 'retrieval contradicted source')
+      } else if (key === 'plan') {
+        const result = dialog.locator('.node-result[data-role="plan"]')
+        assert.equal(await result.count(), 1)
+        assert.equal(await result.locator('.planning-path li').count(), 4, 'show only the four topics in the saved summary')
+        assert.ok((await result.innerText()).includes('非完整学习计划'))
+        assert.ok((await result.innerText()).includes('语义相似度与向量距离计算'), 'last saved topic must be readable')
+        assert.equal(await dialog.locator('.node-evidence-card, .claim-detail').count(), 0, 'planning should not duplicate sources or judgements from other roles')
+      } else if (key === 'generate') {
+        const result = dialog.locator('.node-result[data-role="generate"]')
+        assert.equal(await result.count(), 1)
+        const generationVersion = state.timelineDetails.resource_versions.find(item => item.resource_id === 'resource-guide')
+        const originalBody = generationVersion.content_text
+        assert.equal(await result.locator('.generated-content').innerText(), originalBody,
+          'generation must show the full explicitly linked version body')
+        const literalMarkup = '<img data-ui-injected="literal" alt="should remain text"><script data-ui-injected="literal">window.__generationAuditLiteralMarkupExecuted = true</script>'
+        generationVersion.content_text = literalMarkup
+        await refresh('generate-literal-html')
+        const literalContent = dialog.locator('.node-result[data-role="generate"] .generated-content')
+        assert.equal(await literalContent.innerText(), literalMarkup, 'model-provided markup must remain complete literal text in the generated resource body')
+        assert.equal(await literalContent.locator('img, script').count(), 0, 'literal resource markup must not create active DOM elements')
+        assert.equal(await page.evaluate(() => window.__generationAuditLiteralMarkupExecuted), undefined, 'literal resource script text must not execute')
+        generationVersion.content_text = originalBody
+        await refresh('generate-body-restored')
+        assert.equal(await dialog.locator('.node-result[data-role="generate"] .generated-content').innerText(), originalBody,
+          'restoring the actual resource body must keep full markdown output visible')
+        assert.equal(await dialog.locator('.node-evidence-card, .claim-detail').count(), 0, 'generation should not duplicate source excerpts or judgements')
+      } else if (key === 'review') {
+        assert.ok(await dialog.locator('.review-card').count() > 0, 'review should show only its ordinary review record as the main result')
+        assert.equal(await dialog.locator('.claim-verification, .claim-detail, .node-evidence-card').count(), 0,
+          'ordinary review must not duplicate Claim evidence or retrieval excerpts')
+        const revisions = dialog.locator('.review-revisions')
+        assert.equal(await revisions.count(), 1, 'version comparison should remain within the review page')
+        assert.equal(await revisions.evaluate(node => node.open), false, 'version comparison must start collapsed')
+        const selector = dialog.locator('select[aria-label="审核资源"]')
+        assert.equal(await selector.isVisible(), false, 'a single linked resource should stay in folded context')
+        await dialog.locator('.audit-context > summary').click()
+        assert.equal(await selector.inputValue(), 'resource-guide', 'review resource identity must remain explicit')
+        await dialog.locator('.audit-context > summary').click()
+      } else if (key === 'claim_judge') {
+        const result = dialog.locator('.claim-verification')
+        assert.equal(await result.count(), 1, 'claim_judge should own the factual verification result')
+        assert.equal(await dialog.getByTestId('claim-evidence-list').locator('.claim-detail').count(), 3)
+        assert.ok(await dialog.locator('.claim-detail[open] .evidence-excerpt').isVisible(), 'judgement must expose a problematic Claim and its frozen evidence')
+        assert.equal(await dialog.locator('.extraction-module').count(), 0, 'claim_judge must not render a separate extraction view')
+      }
+
+      if (!['retrieve', 'claim_judge'].includes(key)) {
+        assert.equal(await dialog.locator('.node-evidence-card, .evidence-excerpt').count(), 0, key + ': source excerpts must not be duplicated in this role')
+      }
+      const layout = await dialog.evaluate(node => ({
+        scroll: node.scrollWidth, client: node.clientWidth,
+        mainShare: node.querySelector('.audit-main').getBoundingClientRect().width / node.querySelector('.audit-workspace').getBoundingClientRect().width,
+        scrollers: [...node.querySelectorAll('*')].filter(item => ['auto', 'scroll'].includes(getComputedStyle(item).overflowY) && item.scrollHeight > item.clientHeight + 1).map(item => item.className),
+        refreshHeight: node.querySelector('.audit-refresh').getBoundingClientRect().height,
+      }))
+      assert.ok(layout.scroll <= layout.client + 1, key + ': no horizontal overflow ' + JSON.stringify(layout))
+      assert.ok(layout.mainShare >= 0.7 && layout.refreshHeight >= 44, key + ': primary content and hit targets must retain adequate space')
+      assert.ok(layout.scrollers.every(item => item.includes('el-dialog__body')), key + ': only the body may scroll vertically')
+      evidence.layoutChecks.push({ label: `${prefix}-${key}`, ...layout })
+      await capture(page, `${prefix}-${key}`)
+      await assertContrast(page, `${prefix}-${key}`)
+
+      if (key === 'plan') {
+        const longRaw = '规划结果：未提供结构化路径。' + '完整摘要需要保留。'.repeat(45) + 'END-PLAN-SUMMARY'
+        state.timelineDetails.steps.find(item => item.node_name === 'plan').output_summary = longRaw
+        await refresh('plan-fallback')
+        assert.equal(await dialog.locator('.node-result[data-role="plan"] .result-primary .node-output').innerText(), longRaw,
+          'unknown planning summaries must remain complete and must not be reconstructed')
+        await dialog.locator('.el-dialog__body').evaluate(node => { node.scrollTop = node.scrollHeight })
+        await capture(page, `${prefix}-plan-fallback`)
+      } else if (key === 'generate') {
+        const generateStep = state.timelineDetails.steps.find(item => item.step_id === 'role-generate')
+        generateStep.resource_ids = []
+        generateStep.review_ids = []
+        await refresh('generate-unbound')
+        const unboundResult = dialog.locator('.node-result[data-role="generate"]')
+        assert.ok((await unboundResult.innerText()).includes('本节点未关联可读取的生成版本，未使用其他资源替代。'),
+          'generation without an explicit resource association must stay empty rather than borrowing another version')
+        assert.equal(await unboundResult.locator('.generated-content').count(), 0, 'an unbound generation node must not display another resource body')
+        generateStep.resource_ids = ['resource-guide']
+        state.timelineDetails.resource_versions.find(item => item.resource_id === 'resource-guide').content_text = null
+        await refresh('generate-missing')
+        assert.ok((await dialog.locator('.node-result[data-role="generate"]').innerText()).includes('正文未记录'))
+        assert.equal(await dialog.locator('.generated-content').count(), 0, 'missing content cannot be replaced with another resource body')
+      } else if (key === 'retrieve') {
+        state.timelineDetails.steps.find(item => item.node_name === 'retrieve').evidence_refs = ['evidence-missing-explicit']
+        await refresh('retrieve-missing-source')
+        const missingEvidence = dialog.locator('.retrieval-result .node-evidence-card')
+        assert.equal(await missingEvidence.count(), 1)
+        assert.ok((await missingEvidence.innerText()).includes('冻结依据缺失'), 'missing explicit evidence must stay visible')
+        assert.equal(await missingEvidence.locator('.source-excerpt').count(), 0, 'missing explicit source cannot fall back to another excerpt')
+      }
+      await page.keyboard.press('Escape')
+      await dialog.waitFor({ state: 'hidden' })
+    }
+    assert.deepEqual(state.writes, [], 'single-page node detail projection and refresh must remain read only')
+    evidence.interactionChecks.push({ scenario: prefix + '-role-matrix', roles, passiveRoles, singlePage: true, strictSummaryFallback: true, explicitEvidenceOnly: true, writes: 0 })
+    await assertNoExternalOrUnexpected(prefix + '-role-matrix')
+    await page.close()
+  }
+}
+
+async function testNodeClaimDisabled(browser, base) {
+  const timeline = auditVisualizationTimeline('run-main')
+  timeline.steps.push({ ...timeline.steps.find(item => item.step_id === 'audit-review-v2'), step_id: 'disabled-claim-judge', node_name: 'claim_judge', step_sequence: 7 })
+  const page = await newPage(browser, base, 'audit-visualization', baseViewport, { timeline, claimEnabled: false, reducedMotion: true })
+  const dialog = page.locator('.workflow-detail-dialog')
+  const node = page.locator('.execution-graph-node[data-step-id="disabled-claim-judge"]')
+  assert.equal(await node.getAttribute('data-inspectable'), 'true', 'claim_judge remains a detail role when this task disabled Claim checking')
+  const readsBefore = state.requests.filter(item => item.path === '/api/runs/run-main/claims').length
+  await node.click()
+  await dialog.waitFor({ state: 'visible' })
+  await waitForFixture(() => state.requests.filter(item => item.path === '/api/runs/run-main/claims').length > readsBefore, 'disabled Claim detail read')
+  await dialog.getByText('正在加载执行详情…', { exact: true }).waitFor({ state: 'hidden' })
+  assert.equal(await dialog.locator('.claim-verification').count(), 1, 'disabled claim_judge should remain an explicit neutral result')
+  assert.equal(await dialog.locator('.claim-detail').count(), 0, 'disabled Claim checking must not fabricate or show Claim rows')
+  assert.ok((await dialog.innerText()).includes('此节点没有启用事实核验，不能据此认为事实通过。'), 'disabled Claim remains an explicit neutral state, never a pass')
+  assert.deepEqual(state.writes, [], 'viewing disabled Claim status must remain read only')
+  evidence.interactionChecks.push({ scenario: 'node-claim-disabled', neutralStatus: true, noFabricatedClaims: true, writes: 0 })
+  await assertNoExternalOrUnexpected('node-claim-disabled')
+  await page.close()
+}
+
 async function testRetriesAndCourseware(browser, base) {
   const partialPage = await newPage(browser, base, 'partial')
+  await assertResourcePhases(partialPage, 'partial-resource-delivery', {
+    captureName: 'desktop-resource-delivery-failed-unpublished', expectFailedUnpublished: true, captureTitle: '讲义',
+  })
+  await partialPage.setViewportSize({ width: 390, height: 844 })
+  await waitForLayout(partialPage, false)
+  await assertResourcePhases(partialPage, 'partial-resource-delivery-mobile', {
+    captureName: 'mobile-resource-delivery-failed-unpublished', expectFailedUnpublished: true, captureTitle: '讲义',
+  })
+  await partialPage.setViewportSize(baseViewport)
+  await waitForLayout(partialPage, true)
+  await openResourceDelivery(partialPage)
   await partialPage.getByRole('button', { name: '重新生成此资源' }).first().click()
   await partialPage.waitForFunction(() => document.querySelector('.el-message__content')?.textContent.includes('已在当前批次重新生成'))
   const itemRetry = state.writes.filter((item) => item.path.endsWith('/continuations'))
@@ -2551,7 +4300,7 @@ async function testRetriesAndCourseware(browser, base) {
   await partialPage.close()
 
   const retryPendingPage = await newPage(browser, base, 'partial')
-  await retryPendingPage.locator('.resources-panel > .panel-title .task-actions').getByRole('button', { name: /重新生成失败资源/ }).click()
+  await retryPendingPage.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: /重新生成失败资源/ }).click()
   await waitForFixture(() => state.writes.some((item) => item.path.endsWith('/continuations')), 'batch retry of pending resources')
   const pendingRetry = state.writes.filter((item) => item.path.endsWith('/continuations'))
   assert.equal(pendingRetry.length, 1)
@@ -2562,7 +4311,7 @@ async function testRetriesAndCourseware(browser, base) {
   await retryPendingPage.close()
 
   const batchFailurePage = await newPage(browser, base, 'failed')
-  await batchFailurePage.locator('.resources-panel > .panel-title .task-actions').getByRole('button', { name: '重新生成', exact: true }).click()
+  await batchFailurePage.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '重新生成', exact: true }).click()
   await batchFailurePage.waitForFunction(() => document.querySelector('.el-message__content')?.textContent.includes('已在原资源批次中重新发起'))
   const batchRetry = state.writes.filter((item) => item.path.endsWith('/continuations'))
   assert.equal(batchRetry.length, 1)
@@ -2922,6 +4671,491 @@ async function testRetriesAndCourseware(browser, base) {
   await sceneRetryPage.close()
 }
 
+async function assertChainGeometry(page, label, stepCount) {
+  await page.waitForFunction((count) => document.querySelectorAll('.execution-graph-edge').length === count - 1, stepCount)
+  const metrics = await page.locator('.execution-graph').evaluate((graph) => {
+    const rect = graph.getBoundingClientRect()
+    const nodes = [...graph.querySelectorAll('.execution-graph-node')]
+    const anchors = new Map(nodes.map((node) => {
+      const anchor = node.querySelector('.execution-graph-anchor').getBoundingClientRect()
+      return [node.dataset.stepId, { x: anchor.left + anchor.width / 2, y: anchor.top + anchor.height / 2 }]
+    }))
+    const edges = [...graph.querySelectorAll('.execution-graph-edge')].map((edge) => {
+      const matrix = edge.getScreenCTM()
+      const start = edge.getPointAtLength(0)
+      const end = edge.getPointAtLength(edge.getTotalLength())
+      const startPoint = new DOMPoint(start.x, start.y).matrixTransform(matrix)
+      const endPoint = new DOMPoint(end.x, end.y).matrixTransform(matrix)
+      const from = anchors.get(edge.dataset.fromStep)
+      const to = anchors.get(edge.dataset.toStep)
+      return {
+        from: edge.dataset.fromStep, to: edge.dataset.toStep,
+        upwards: Boolean(from && to && from.y > to.y),
+        startError: from ? Math.hypot(startPoint.x - from.x, startPoint.y - from.y) : Infinity,
+        endError: to ? Math.hypot(endPoint.x - to.x, endPoint.y - to.y) : Infinity,
+        curve: /C|Q/.test(edge.getAttribute('d')),
+      }
+    })
+    return {
+      width: rect.width, clientWidth: graph.clientWidth, scrollWidth: graph.scrollWidth,
+      viewportWidth: window.innerWidth, documentWidth: document.documentElement.scrollWidth,
+      edges, ids: nodes.map((node) => node.dataset.stepId),
+      textColumns: nodes.map((node) => node.querySelector('.execution-graph-node-content').getBoundingClientRect().left),
+      keyTargets: nodes.filter((node) => node.tagName === 'BUTTON').map((node) => node.getBoundingClientRect().height),
+    }
+  })
+  assert.equal(metrics.ids.length, stepCount, label + ': each execution should retain its own node')
+  assert.equal(metrics.edges.length, stepCount - 1, label + ': adjacent records should have one connecting curve')
+  assert.ok(metrics.edges.every((edge) => edge.curve && edge.startError < 3 && edge.endError < 3), label + ': measured curves should stay anchored to their own records: ' + JSON.stringify(metrics.edges))
+  assert.ok(metrics.edges.every((edge) => edge.upwards), label + ': execution curves should point from older lower steps to newer upper steps')
+  assert.ok(Math.max(...metrics.textColumns) - Math.min(...metrics.textColumns) <= 1,
+    label + ': every stage should share one aligned text column')
+  assert.ok(metrics.keyTargets.every((height) => height >= 44), label + ': key nodes should remain large enough to operate')
+  assert.ok(metrics.scrollWidth <= metrics.clientWidth + 1 && metrics.documentWidth <= metrics.viewportWidth + 1, label + ': whole chain should not overflow horizontally')
+  evidence.layoutChecks.push({ label, ...metrics })
+}
+
+async function testFullWorkflowChain(browser, base) {
+  for (const viewport of [baseViewport, { width: 390, height: 844 }]) {
+    const mobile = viewport.width === 390
+    const page = await newPage(browser, base, 'completed', viewport, { timeline: fullChainTimeline('run-main') })
+    const graph = page.locator('.execution-graph')
+    await assertChainGeometry(page, mobile ? 'mobile-complete-chain' : 'desktop-complete-chain', 13)
+    const ids = await graph.locator('.execution-graph-node').evaluateAll((nodes) => nodes.map((node) => node.dataset.stepId))
+    assert.deepEqual(ids, Array.from({ length: 13 }, (_, index) => `chain-${13 - index}`), 'the graph should show the newest actual step first regardless of snapshot input order')
+    assert.equal(await graph.locator('[data-node-key="review"]').count(), 2, 'failed review and successful re-review should remain separate')
+    assert.equal(await graph.locator('[data-node-key="generate"]').count(), 2, 'both generated versions should remain in the chain')
+    const generateCalls = await graph.locator('[data-node-key="generate"] .execution-graph-call-count').allTextContents()
+    assert.deepEqual(generateCalls.map((text) => Number(text.match(/\d+/)?.[0])), [2, 1],
+      'latest-first presentation must preserve actual chronological call numbers')
+    assert.ok(await page.locator('.resource-progress-tree').isVisible(), 'full chain should keep current resource status visible')
+    assert.ok(await page.locator('.resource-progress-tree').evaluate((node) => (
+      Boolean(node.compareDocumentPosition(document.querySelector('.execution-graph')) & Node.DOCUMENT_POSITION_FOLLOWING)
+    )), 'full chain should follow the resource status section')
+    const step = graph.locator('[data-step-id="chain-1"]')
+    await step.focus()
+    const focus = await step.evaluate((node) => ({ visible: node.matches(':focus-visible'), style: getComputedStyle(node).outlineStyle }))
+    assert.ok(focus.visible && focus.style !== 'none', 'key node keyboard focus should have a visible outline')
+    await assertContrast(page, mobile ? 'mobile-chain-contrast' : 'desktop-chain-contrast')
+    const graphAnimations = await graph.evaluate((node) => node.getAnimations({ subtree: true })
+      .filter((item) => item.playState === 'running')
+      .map((item) => ({ kind: item.constructor.name, duration: item.effect?.getComputedTiming().duration })))
+    assert.equal(graphAnimations.filter((item) => item.kind !== 'CSSTransition').length, 0,
+      'a completed chain must not run automatic animations; keyboard focus feedback may briefly transition')
+    await step.blur()
+    const chainFilename = mobile ? 'mobile-complete-chain.png' : 'desktop-complete-chain.png'
+    const chainPath = path.join(reportDir, chainFilename)
+    // Export the actual rendered canvas outside the scroll viewport so the
+    // evidence image contains the complete chain instead of a clipped canvas.
+    await graph.evaluate((node) => {
+      const copy = node.cloneNode(true)
+      const bounds = node.getBoundingClientRect()
+      copy.id = 'chain-export-preview'
+      Object.assign(copy.style, {
+        position: 'absolute', left: '0', top: '0', zIndex: '100000',
+        width: `${bounds.width}px`, boxSizing: 'border-box', font: getComputedStyle(node).font,
+      })
+      document.body.appendChild(copy)
+    })
+    try {
+      await page.locator('#chain-export-preview').screenshot({ path: chainPath,
+        style: 'html, body { overflow:visible !important; height:auto !important; max-height:none !important; } body > :not(#chain-export-preview) { visibility:hidden !important; }',
+      })
+    } finally {
+      await page.locator('#chain-export-preview').evaluate((node) => node.remove())
+    }
+    evidence.screenshots.push({ filename: chainFilename, path: chainPath, viewport: page.viewportSize() })
+    await page.locator('.process-scroll').evaluate((node) => { node.scrollTop = 0 })
+    await capture(page, mobile ? 'mobile-chain-workspace' : 'desktop-chain-workspace')
+    assert.equal(state.writes.length, 0, 'readonly chain inspection must not mutate business data')
+    evidence.interactionChecks.push({ scenario: mobile ? 'mobile-complete-chain' : 'desktop-complete-chain', actualOrder: ids, keyboardFocus: true, writes: 0 })
+    await assertNoExternalOrUnexpected('complete-chain')
+    await page.close()
+  }
+  const runningPage = await newPage(browser, base, 'running', { width: 390, height: 844 }, {
+    timeline: fullChainTimeline('run-main', true), reducedMotion: true,
+  })
+  const graph = runningPage.locator('.execution-graph')
+  await assertChainGeometry(runningPage, 'mobile-running-chain', 11)
+  assert.equal(await graph.locator('.execution-graph-node.status-running').count(), 1, 'only the recorded active step should show running status')
+  const animations = await graph.evaluate((node) => node.getAnimations({ subtree: true }).filter((item) => item.playState === 'running').length)
+  assert.equal(animations, 0, 'reduced-motion should stop running chain animation')
+  evidence.motionChecks.push({ label: 'running-chain-reduced-motion', activeAnimations: animations })
+  await assertNoExternalOrUnexpected('running-chain-reduced-motion')
+  await runningPage.close()
+}
+
+async function testIncompleteChainOrder(browser, base) {
+  const steps = [
+    { step_id: 'no-number', step_sequence: null },
+    { step_id: 'tie-first', step_sequence: 4 },
+    { step_id: 'tie-second', step_sequence: 4 },
+    { step_id: 'oldest', step_sequence: 1 },
+  ].map((step) => ({ ...step, run_id: 'run-main', node_name: 'review', agent_name: 'review', status: 'success', action: '审核资源' }))
+  const page = await newPage(browser, base, 'completed', baseViewport, {
+    timeline: { steps, reviews: [], resource_versions: [], evidence: [] },
+  })
+  const nodes = page.locator('.execution-graph-node')
+  await page.waitForFunction(() => document.querySelectorAll('.execution-graph-node').length === 4)
+  assert.deepEqual(await nodes.evaluateAll((items) => items.map((item) => item.dataset.stepId)),
+    ['tie-first', 'tie-second', 'oldest', 'no-number'],
+    'equal sequences should retain stable input order and missing sequences must not masquerade as newest')
+  const missing = page.locator('.execution-graph-node[data-step-id="no-number"] .execution-graph-sequence')
+  assert.ok((await missing.innerText()).includes('未记录'), 'a missing sequence should have an explicit unknown label')
+  assert.equal(state.writes.length, 0, 'incomplete-history rendering must remain read-only')
+  evidence.interactionChecks.push({ scenario: 'chain-missing-and-tied-sequence', stableTies: true, missingLast: true, writes: 0 })
+  await assertNoExternalOrUnexpected('chain-missing-and-tied-sequence')
+  await page.close()
+}
+
+async function testWorkflowIconRoles(browser, base) {
+  const roleKeys = [
+    'diagnose', 'retrieve', 'evidence_gate', 'plan', 'generate', 'review', 'claim_extract', 'claim_judge',
+    'prepare_revision', 'prepare_claim_revision', 'finalize_draft', 'claim_decide', 'finalize', 'finalize_evidence_insufficient',
+  ]
+  for (const viewport of [baseViewport, { width: 390, height: 844 }]) {
+    // An unknown name colliding with Object.prototype must still use fallback.
+    const steps = [...roleKeys, 'constructor'].map((key, index) => ({
+      step_id: `icon-role-${index + 1}`, step_sequence: index + 1, run_id: 'run-main',
+      node_name: key, agent_name: key, status: 'success', action: '图标展示验收',
+    }))
+    const page = await newPage(browser, base, 'completed', viewport, {
+      timeline: { steps, reviews: [], resource_versions: [], evidence: [] },
+    })
+    await page.waitForFunction(() => document.querySelectorAll('.execution-graph-node').length === 15)
+    const icons = await page.locator('.execution-graph-node').evaluateAll((nodes) => nodes.map((node) => ({
+      role: node.dataset.nodeKey,
+      interactive: node.tagName === 'BUTTON',
+      emblemCount: node.querySelectorAll('svg.execution-graph-emblem').length,
+      terminalCores: [...node.querySelectorAll('.execution-graph-terminal-core')].map((shape) => shape.tagName.toLowerCase()),
+      hexagons: [...node.querySelectorAll('.execution-graph-hexagon')].map((shape) => shape.tagName.toLowerCase()),
+      paths: [...node.querySelectorAll('.execution-graph-symbol path, .execution-graph-auxiliary-symbol path')]
+        .map((path) => path.getAttribute('d')).join('|'),
+    })))
+    const known = icons.filter((icon) => roleKeys.includes(icon.role))
+    assert.equal(known.length, 14, 'all known workflow roles should render an icon')
+    assert.ok(known.every((icon) => icon.paths), 'known roles should not fall back to empty auxiliary symbols')
+    assert.equal(new Set(known.map((icon) => icon.paths)).size, 14,
+      'different workflow roles must not collapse to the same inner SVG symbol')
+    assert.ok(icons.every((icon) => icon.emblemCount === 1), 'each known and unknown role should use one unified execution-graph-emblem SVG')
+    const terminal = icons.filter((icon) => icon.role === 'finalize')
+    assert.equal(terminal.length, 1, 'the finalization role should be uniquely identifiable by metadata key')
+    assert.deepEqual(terminal[0].terminalCores, ['circle'], 'only finalize should use a circular terminal core')
+    assert.deepEqual(terminal[0].hexagons, [], 'finalize should not also render the hexagonal role outline')
+    for (const icon of icons.filter((entry) => entry.role !== 'finalize')) {
+      assert.deepEqual(icon.terminalCores, [], icon.role + ': non-final roles should not render a circular terminal core')
+      assert.deepEqual(icon.hexagons, ['path'], icon.role + ': all other known and unknown roles should render one hexagonal outline path')
+    }
+    assert.equal(icons.filter((icon) => icon.interactive).length, 6,
+      'only the six approved business detail roles should remain actionable; auxiliary icons must stay passive')
+    const unknown = icons.find((icon) => icon.role === 'constructor')
+    assert.ok(unknown?.paths && !unknown.interactive, 'unknown roles should retain a neutral passive symbol')
+    assert.ok(!known.some((icon) => icon.paths === unknown.paths), 'unknown fallback should not pretend to be a known business phase')
+    const screenshotName = viewport.width === 390 ? 'mobile-role-icons' : 'desktop-role-icons'
+    await geometry(page, screenshotName, viewport.width >= 1100)
+    await capture(page, screenshotName)
+    assert.equal(state.writes.length, 0, 'icon inspection must not write business data')
+    evidence.interactionChecks.push({ scenario: 'workflow-role-icons', viewport, knownRoles: known.length, distinctSymbols: 14, terminalCircle: 'finalize', hexagonalRoles: 14, unifiedEmblems: icons.length, detailActions: 6, writes: 0 })
+    await assertNoExternalOrUnexpected('workflow-role-icons')
+    await page.close()
+  }
+}
+
+async function testLiveChainScroll(browser, base) {
+  const page = await newPage(browser, base, 'running', baseViewport, {
+    timeline: fullChainTimeline('run-main', true), reducedMotion: true,
+  })
+  await waitForLayout(page, true)
+  await page.waitForFunction(() => document.querySelectorAll('.execution-graph-node').length === 11)
+  await waitForFixture(() => state.sseClients.size === 1, 'live chain SSE connection')
+  const area = page.locator('.process-scroll')
+  const graph = page.locator('.execution-graph')
+  const send = (sequence, stepSequence, type = 'step_started') => {
+    const event = {
+      run_id: 'run-main', event_id: `evt-live-${sequence}`, sequence,
+      event_type: type, step_id: `live-${stepSequence}`, step_sequence: stepSequence,
+      node_name: 'review', summary: '实时资源审核',
+      status: type === 'step_started' ? 'running' : 'success',
+      payload: { duration_ms: type === 'step_started' ? null : 480 },
+    }
+    for (const response of state.sseClients) {
+      response.write(`event: ${event.event_type}\ndata: ${JSON.stringify(event)}\n\n`)
+    }
+  }
+  const readAnchor = () => area.evaluate((scroll) => {
+    const bounds = scroll.getBoundingClientRect()
+    const nodes = [...scroll.querySelectorAll('.execution-graph-node')]
+    const visible = nodes.find((node) => node.getBoundingClientRect().bottom > bounds.top + 1)
+    return {
+      id: visible?.dataset.stepId,
+      offset: visible ? visible.getBoundingClientRect().top - bounds.top : null,
+      top: scroll.scrollTop,
+      readerTop: document.querySelector('.resource-stage').scrollTop,
+      pageTop: document.querySelector('.content-area').scrollTop,
+    }
+  })
+  await area.evaluate((node) => { node.scrollTop = 0 })
+  send(1, 12)
+  await page.waitForFunction(() => document.querySelector('.execution-graph-node')?.dataset.stepId === 'live-12')
+  assert.equal(await graph.locator('.execution-graph-node').count(), 12, 'a new SSE step should prepend one actual record')
+  assert.equal(await area.evaluate((node) => node.scrollTop), 0, 'a user at the top should see the newest step without scrolling')
+  send(1, 12)
+  await page.waitForTimeout(80)
+  assert.equal(await graph.locator('[data-step-id="live-12"]').count(), 1, 'replayed SSE events should not duplicate a visual node')
+  const anchorTargetOffset = -16
+  const historicalNode = graph.locator('.execution-graph-node').nth(3)
+  const historicalId = await historicalNode.getAttribute('data-step-id')
+  assert.ok(historicalId && historicalId !== 'live-12', 'history scroll setup should choose an existing historical node')
+  await historicalNode.evaluate((node, targetOffset) => {
+    const scroll = node.closest('.process-scroll')
+    const currentOffset = node.getBoundingClientRect().top - scroll.getBoundingClientRect().top
+    scroll.scrollTop += currentOffset - targetOffset
+  }, anchorTargetOffset)
+  const before = await readAnchor()
+  assert.equal(before.id, historicalId, 'history scroll setup should anchor the selected historical graph node')
+  assert.notEqual(before.id, 'live-12', 'history scroll setup must not leave the first live node as the reading anchor')
+  assert.ok(before.top > 24 && before.id && before.offset <= 0,
+    'history scroll check should place a real historical record at or just above the process viewport: ' + JSON.stringify(before))
+  send(2, 13)
+  await page.waitForFunction(() => document.querySelector('.execution-graph-node')?.dataset.stepId === 'live-13')
+  await page.waitForTimeout(80)
+  const after = await readAnchor()
+  assert.equal(after.id, before.id, 'a new top record must not replace the historical step being read')
+  assert.ok(Math.abs(after.offset - before.offset) <= 3, 'a new top record should preserve the visible historical offset: ' + JSON.stringify({ before, after }))
+  assert.equal(after.readerTop, before.readerTop, 'live chain updates should not scroll the reader')
+  assert.equal(after.pageTop, before.pageTop, 'live chain updates should not scroll the outer page')
+  send(3, 13, 'step_succeeded')
+  await graph.locator('[data-step-id="live-13"].status-success').waitFor()
+  const afterStatus = await readAnchor()
+  assert.equal(afterStatus.id, after.id, 'status-only updates should keep the historical node in view')
+  assert.ok(Math.abs(afterStatus.top - after.top) <= 1 && Math.abs(afterStatus.offset - after.offset) <= 3,
+    'status-only updates should not reset or shift scrolling')
+  assert.equal(await graph.locator('.execution-graph-node').count(), 13, 'status changes should update the existing step')
+  await assertChainGeometry(page, 'live-chain-upwards', 13)
+  // Supply the existing second profile with its own completed run, then use
+  // the real profile selector to verify remounting and Run scroll isolation.
+  state.jobsByLearner['learner-2'] = [makeJob('learner-2', 'run-alt', 'completed', {
+    batch_id: 'batch-learner-2',
+    request_payload: { learner_id: 'learner-2', resource_types: ['复习清单'], include_review: true, include_claim_check: false },
+  })]
+  await chooseOption(page, '学习画像', /周明远/)
+  await page.waitForFunction(() => document.querySelector('.summary-code')?.textContent.trim() === 'RUN-ALT')
+  await page.waitForFunction(() => document.querySelectorAll('.execution-graph-node').length === 6)
+  assert.equal(await area.evaluate((node) => node.scrollTop), 0, 'switching Run should start at the newest step of that Run')
+  assert.equal(await graph.locator('[data-step-id^="chain-"], [data-step-id^="live-"]').count(), 0, 'the new Run should not retain old visual records')
+  assert.equal(state.writes.length, 0, 'live visualization and profile switching must remain read-only')
+  evidence.scrollChecks.push({ label: 'live-chain-history-anchor', anchorTargetOffset, before, after, afterStatus, runSwitchTop: 0 })
+  evidence.interactionChecks.push({ scenario: 'live-chain-prepend-replay-status-run', records: 13, replayDeduplicated: true, writes: 0 })
+  await assertNoExternalOrUnexpected('live-chain-scroll')
+  await page.close()
+}
+
+async function testLiveResourceProgress(browser, base) {
+  const page = await newPage(browser, base, 'resource-live', baseViewport, { reducedMotion: true, traceRunStatusXhr: true })
+  await waitForFixture(() => state.sseClients.size === 1, 'resource progress SSE connection')
+  const statusSection = page.locator('.resource-progress-tree')
+  await statusSection.waitFor({ state: 'visible' })
+  const initialCards = await statusSection.locator('.execution-card').evaluateAll((cards) => cards.map((card) => ({
+    type: card.querySelector('.execution-title strong')?.textContent.trim() || '',
+    phase: card.querySelector('.execution-phase')?.textContent.trim() || '',
+    actionCount: card.querySelectorAll('.execution-actions button').length,
+  })))
+  assert.equal(initialCards.length, 3, 'an arriving execution should replace its matching request placeholder without duplication')
+  assert.deepEqual(initialCards.map((card) => card.type), ['实操指南', '复习清单', '讲义'],
+    'live execution cards should preserve requested resource identity and order')
+  assert.ok(initialCards.some((card) => card.type === '实操指南' && card.phase === '生成中'),
+    'the recorded resource attempt should show its actual generating state')
+  assert.ok(initialCards.filter((card) => card.type !== '实操指南').every((card) => /等待生成/.test(card.phase) && card.actionCount === 0),
+    'request placeholders should remain passive until their matching execution arrives')
+
+  const emitResource = (sequence, eventType, occurredAt, fields = {}) => {
+    const event = {
+      run_id: 'run-main',
+      event_id: 'evt-resource-' + sequence,
+      sequence,
+      event_sequence: sequence,
+      event_type: eventType,
+      occurred_at: occurredAt,
+      payload: {
+        resource_spec_id: 'spec-guide',
+        resource_type: '实操指南',
+        representation: 'text',
+        resource_id: 'resource-guide',
+        attempt: 2,
+        ...fields,
+      },
+    }
+    for (const response of state.sseClients) {
+      response.write('event: ' + event.event_type + '\ndata: ' + JSON.stringify(event) + '\n\n')
+    }
+  }
+  const card = statusSection.locator('.execution-card').filter({ hasText: '实操指南' }).first()
+  emitResource(9, 'resource_generation_started', '2026-10-01T08:01:00Z', {
+    resource_execution_state: 'generating',
+  })
+  await card.locator('.execution-phase').filter({ hasText: '生成中' }).waitFor()
+  emitResource(10, 'resource_generated', '2026-10-01T08:02:00Z', {
+    resource_execution_state: 'generated',
+    validation_status: 'pending',
+  })
+  await card.locator('.execution-phase').filter({ hasText: '等待审核' }).waitFor()
+  emitResource(11, 'resource_execution_updated', '2026-10-01T08:03:00Z', {
+    resource_execution_state: 'generated',
+    validation_status: 'validated',
+  })
+  await card.locator('.execution-status-field').filter({ hasText: '校验' }).getByText('已通过', { exact: true }).waitFor()
+
+  // The publication event is newer than this same-attempt JobStatus item.
+  // The refresh must not roll the visible SSE result back to generated/unpublished.
+  state.statusResourceExecutions['run-main'] = [{
+    ...state.executionsByRun['run-main'][0],
+    resource_execution_state: 'generated',
+    validation_status: 'validated',
+    publication_status: 'unpublished',
+    updated_at: '2026-10-01T08:03:00Z',
+  }]
+  const statusRequestsBefore = state.requests.filter(item => item.path === '/api/generate/jobs/run-main').length
+  const publicationRefreshResponse = page.waitForResponse(response =>
+    response.url().includes('/api/generate/jobs/run-main') && response.request().method() === 'GET' && response.status() === 200)
+  emitResource(12, 'resource_published', '2026-10-01T08:04:00Z', {
+    resource_execution_state: 'approved',
+    publication_status: 'published',
+    validation_status: 'validated',
+  })
+  await waitForFixture(() => state.requests.filter(item => item.path === '/api/generate/jobs/run-main').length > statusRequestsBefore,
+    'resource publication should refresh the durable JobStatus')
+  await publicationRefreshResponse
+  await page.waitForFunction(() => {
+    const card = [...document.querySelectorAll('.resource-progress-tree .execution-card')]
+      .find(item => item.querySelector('.execution-title strong')?.textContent.trim() === '实操指南')
+    const fields = [...(card?.querySelectorAll('.execution-status-field') || [])]
+    const publication = fields.find(field => field.querySelector('small')?.textContent.trim() === '发布状态')
+    const validation = fields.find(field => field.querySelector('small')?.textContent.trim() === '校验')
+    return card?.querySelector('.execution-phase')?.textContent.includes('已发布')
+      && publication?.querySelector('strong')?.textContent.trim() === '已发布'
+      && validation?.querySelector('strong')?.textContent.trim() === '已通过'
+  }, null, { timeout: 9000 })
+  assert.equal(await statusSection.locator('.execution-card').count(), 3,
+    'resource SSE and durable refresh must not reintroduce the replaced request placeholder')
+  assert.equal(await card.locator('.execution-phase').innerText(), '已发布',
+    'the later same-attempt publication event must survive an older durable status refresh')
+
+  // Hold an older same-Run JobStatus response after capturing its running /
+  // unpublished snapshot. A later terminal SSE event starts a newer request;
+  // the delayed response must not overwrite that accepted terminal state.
+  let releaseDelayedStatus
+  const delayedStatusGate = {
+    runId: 'run-main',
+    started: false,
+    snapshot: null,
+    newerResponses: 0,
+    promise: new Promise(resolve => { releaseDelayedStatus = resolve }),
+  }
+  delayedStatusGate.release = releaseDelayedStatus
+  state.statusGetGate = delayedStatusGate
+  const statusAction = page.locator('.resources-panel > .resource-toolbar .task-actions')
+    .getByRole('button', { name: '刷新状态', exact: true })
+  const requestsBeforeDelayed = state.requests.filter(item => item.path === '/api/generate/jobs/run-main').length
+  const delayedStatusResponsePromise = page.waitForResponse(response =>
+    response.url().includes('/api/generate/jobs/run-main') && response.request().method() === 'GET'
+      && response.status() === 200 && response.headers()['x-fixture-status-snapshot'] === 'held')
+  await statusAction.click()
+  await waitForFixture(() => delayedStatusGate.started, 'the older JobStatus GET should be held in flight')
+  const delayedStatusResponse = await delayedStatusResponsePromise
+  assert.equal(delayedStatusGate.snapshot.job_status, 'running', 'the held response should capture the older running job state')
+  assert.equal(delayedStatusGate.snapshot.resource_progress_summary.published, 0,
+    'the held response should capture the older unpublished summary')
+  assert.equal(delayedStatusGate.snapshot.resource_progress_summary.items[0].publication_status, 'unpublished',
+    'the held response should capture the older same-attempt resource state')
+
+  const completedJob = findJob('run-main')
+  completedJob.job_status = 'completed'
+  completedJob.status = 'completed'
+  completedJob.finished_at = '2026-10-01T08:05:00Z'
+  completedJob.resource_progress_summary = { total: 3, completed: 3, published: 3, failed: 0 }
+  state.statusResourceExecutions['run-main'] = [
+    ...state.executionsByRun['run-main'],
+    execution('spec-checklist', 'resource-checklist', '复习清单', 'approved', { display_order: 2 }),
+    execution('spec-lecture', 'resource-lecture', '讲义', 'approved', { display_order: 3 }),
+  ].map(item => ({
+    ...item,
+    resource_execution_state: 'approved',
+    publication_status: 'published',
+    validation_status: item.resource_type === '实操指南' ? 'validated' : item.validation_status,
+    updated_at: '2026-10-01T08:05:00Z',
+  }))
+  for (const item of state.resourcesByRun['run-main']) {
+    item.publication_status = 'published'
+    item.claim_publish_decision_pending = false
+  }
+  const statusXhrSendsBeforeTerminal = await page.evaluate(() => window.__t17RunStatusXhrTrace
+    .filter(item => item.kind === 'send' && item.url === '/api/generate/jobs/run-main').length)
+  const completedStatusResponse = page.waitForResponse(response =>
+    response.url().includes('/api/generate/jobs/run-main') && response.request().method() === 'GET'
+      && response.status() === 200 && response.headers()['x-fixture-status-snapshot'] === 'current')
+  const terminalEvent = {
+    run_id: 'run-main',
+    event_id: 'evt-resource-13',
+    sequence: 13,
+    event_sequence: 13,
+    event_type: 'run_completed',
+    status: 'completed',
+    occurred_at: '2026-10-01T08:05:00Z',
+    payload: {},
+  }
+  const terminalSseClients = [...state.sseClients]
+  assert.equal(terminalSseClients.length, 1,
+    'the terminal event must be written to the active Run SSE connection, not only to a stale fixture response')
+  evidence.interactionChecks.push({
+    scenario: 'live-resource-terminal-sse',
+    activeSseClientsBeforeTerminal: terminalSseClients.length,
+  })
+  for (const response of terminalSseClients) {
+    response.write('event: run_completed\ndata: ' + JSON.stringify(terminalEvent) + '\n\n')
+  }
+  await completedStatusResponse
+  const statusXhrSendsAfterTerminal = await page.evaluate(() => window.__t17RunStatusXhrTrace
+    .filter(item => item.kind === 'send' && item.url === '/api/generate/jobs/run-main').length)
+  assert.equal(statusXhrSendsAfterTerminal, statusXhrSendsBeforeTerminal + 1,
+    'run_completed should issue one distinct JobStatus XHR while the older no-store GET remains held')
+  evidence.interactionChecks.push({
+    scenario: 'live-resource-terminal-refresh',
+    statusXhrSendsBeforeTerminal,
+    statusXhrSendsAfterTerminal,
+    terminalRefreshXhrDelta: statusXhrSendsAfterTerminal - statusXhrSendsBeforeTerminal,
+  })
+  await waitForFixture(() => delayedStatusGate.newerResponses > 0
+    && state.requests.filter(item => item.path === '/api/generate/jobs/run-main').length > requestsBeforeDelayed + 1,
+  'the terminal SSE event should complete a newer same-Run JobStatus request')
+  await page.waitForFunction(() => document.querySelector('.job-summary .production-status')?.textContent.includes('已完成')
+    && document.querySelector('.resource-progress-tree .delivery-count')?.textContent.includes('3'), null, { timeout: 9000 })
+  assert.equal(await card.locator('.execution-phase').innerText(), '已发布',
+    'the terminal refresh should retain the published resource state')
+
+  releaseDelayedStatus()
+  await delayedStatusResponse.finished()
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  assert.ok((await page.locator('.job-summary .production-status').innerText()).includes('已完成'),
+    'a delayed older JobStatus GET must not roll the accepted completed Run back to running')
+  assert.equal(await card.locator('.execution-phase').innerText(), '已发布',
+    'a delayed older JobStatus GET must not roll the resource card back to generated')
+  assert.match(await statusSection.locator('.delivery-count').innerText(), /3\s*\/\s*3/,
+    'a delayed older JobStatus GET must not roll the published count back')
+  state.statusGetGate = null
+  assert.equal(state.writes.length, 0, 'resource progress and durable refresh fixtures must remain read-only')
+  await assertContrast(page, 'live-resource-progress')
+  await assertNoExternalOrUnexpected('live-resource-progress')
+  evidence.interactionChecks.push({
+    scenario: 'live-resource-progress',
+    transitions: ['生成中', '校验已通过', '已发布'],
+    staleJobRefreshRejected: true,
+    delayedSameRunStatusRejected: true,
+    placeholdersReplaced: true,
+    writes: 0,
+  })
+  await page.close()
+}
+
 async function testReducedMotionAndMobile(browser, base) {
   const page = await newPage(browser, base, 'completed', { width: 390, height: 844 }, { reducedMotion: true })
   const metrics = await geometry(page, '390x844-reduced-motion', false)
@@ -2947,6 +5181,16 @@ async function run() {
   let failure = null
   try {
     browser = await chromium.launch(browserOptions('GENERATION_BROWSER_CHANNEL'))
+    await testFullWorkflowChain(browser, base)
+    await testIncompleteChainOrder(browser, base)
+    await testWorkflowIconRoles(browser, base)
+    await testLiveChainScroll(browser, base)
+    await testLiveResourceProgress(browser, base)
+    await testFollowupRunNavigation(browser, base)
+    await testWorkflowAuditVisualization(browser, base)
+    await testNodeDetailRoles(browser, base)
+    await testNodeClaimDisabled(browser, base)
+    await testAuditContentWorkspace(browser, base)
     await testStateMatrix(browser, base)
     await testPreparationResponsiveStates(browser, base)
     await testLearningPreparationStates(browser, base)
@@ -2960,8 +5204,19 @@ async function run() {
     console.log('generation browser tests passed')
   } catch (error) {
     failure = error
+    const failurePage = browser?.contexts().flatMap(context => context.pages()).at(-1)
+    if (failurePage) {
+      await capture(failurePage, 'failure-state').catch(() => {})
+      const failureUi = await failurePage.evaluate(() => ({
+        graph: document.querySelector('.execution-graph')?.textContent,
+        alerts: [...document.querySelectorAll('.el-alert,.jobs-error')].map(item => item.textContent),
+        body: document.querySelector('.generate-page')?.textContent?.slice(0, 6000),
+      })).catch(() => null)
+      writeFileSync(path.join(reportDir, 'failure-ui.json'), JSON.stringify(failureUi, null, 2))
+    }
     console.error('generation browser tests failed:', error.stack || error)
   } finally {
+    state.statusGetGate?.release?.()
     for (const response of state.sseClients) response.end()
     if (browser) await browser.close().catch(() => {})
     await new Promise((resolve) => server.close(resolve))
