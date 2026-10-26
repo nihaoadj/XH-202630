@@ -9,6 +9,7 @@ from app.db.feedback.memory import MemoryFeedbackRepository
 from app.db.learners.memory import MemoryLearnerRepository
 from app.db.learning_documents.memory import MemoryResourceRepository
 from app.models.learning_documents.schemas import LearnerProfile
+from app.models.reports.contracts import CurrentReportResponse
 from app.services.learners.profiles import ProfileService
 from app.services.reports.reports import ReportService
 from app.services.reports.reports import ReportSnapshotUnstable
@@ -35,6 +36,9 @@ def test_report_uses_window_specific_etag_and_safe_conditional_parsing():
     current = client.get("/api/report/report-learner?window_days=30")
     other_window = client.get("/api/report/report-learner?window_days=7")
     assert current.status_code == 200
+    typed_current = CurrentReportResponse.model_validate(current.json())
+    assert typed_current.window.window_days == 30
+    assert CurrentReportResponse.model_validate(other_window.json()).window.window_days == 7
     assert current.headers["cache-control"] == "private, no-cache"
     assert current.headers["etag"] != other_window.headers["etag"]
     assert client.get("/api/report/report-learner", headers={"If-None-Match": f'W/{current.headers["etag"]}, "other"'}).status_code == 304

@@ -12,7 +12,8 @@ from app.models.shared.agent_contracts import (
     ResourceRepresentationSpec,
     ResourceSpec,
 )
-from app.models.knowledge.knowledge import EvidenceItem
+from app.models.knowledge.knowledge import EvidenceItem, EvidenceAllocation
+from app.agents.shared.evidence_scope import scoped_node_map, contract_error
 
 
 RESOURCE_SPEC_NAMESPACE = uuid.UUID("7fb4d9f0-5482-4cd4-bf19-d5556d751f49")
@@ -32,6 +33,7 @@ def build_resource_specs(
     evidence: list[EvidenceItem],
     target_skill_nodes: list[str] | None = None,
     node_evidence_map: dict[str, list[str]] | None = None,
+    evidence_allocation: EvidenceAllocation | None = None,
 ) -> list[ResourceSpec]:
     if not evidence:
         raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
@@ -42,6 +44,12 @@ def build_resource_specs(
         {"个性化纠错训练包"}, {"个性化纠错训练包", "分阶测试题"},
     ):
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+
+    if evidence_allocation is not None:
+        try:
+            evidence_allocation.validate_evidence(evidence, normalized)
+        except (ValueError, TypeError) as exc:
+            raise contract_error() from exc
 
     requirements = learning_plan.get("resource_requirements") or {}
     path_points = [
@@ -78,14 +86,18 @@ def build_resource_specs(
                 display_order=1,
             )
         ]
+        resource_ids = evidence_allocation.available_ids(resource_type) if evidence_allocation else evidence_ids
+        resource_map = scoped_node_map(node_evidence_map or {}, resource_ids) if evidence_allocation else (node_evidence_map or {})
+        if evidence_allocation and resource_type == "分阶测试题" and any(node not in resource_map for node in (target_skill_nodes or [])):
+            raise contract_error()
         specs.append(ResourceSpec(
             resource_spec_id=_stable_uuid(run_id, resource_type, "spec"),
             resource_family_id=_stable_uuid(run_id, resource_type, "family"),
             resource_type=resource_type,
             learning_objective=objective,
             knowledge_points=knowledge_points,
-            evidence_ids=evidence_ids,
-            node_evidence_map=node_evidence_map or {},
+            evidence_ids=resource_ids,
+            node_evidence_map=resource_map,
             difficulty=difficulty,
             representations=representations,
             dependencies=[],

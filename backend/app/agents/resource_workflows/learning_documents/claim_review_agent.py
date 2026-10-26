@@ -10,6 +10,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.learning_documents.state import AgentState
+from app.agents.shared.evidence_scope import evidence_for_resource, validate_payload_evidence, contract_error
 from app.config import get_settings
 from app.core.security.errors import ErrorCode
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
@@ -228,6 +229,9 @@ def claim_extract_node(
         item.resource_id for item in all_resources
         if item.resource_type == "分阶测试题" and item.assessment_payload is not None
     }
+    for resource in all_resources:
+        resource_evidence = evidence_for_resource(state, resource)
+        validate_payload_evidence(resource, resource_evidence)
     resources = [item for item in all_resources if item.resource_id not in assessment_resource_ids]
     evidence = state.get("retrieved_evidence", [])
     review_ids = {
@@ -261,7 +265,12 @@ def claim_extract_node(
     failed_resource_ids: list[str] = []
     errors: list[dict[str, Any]] = []
     last_result = None
+    used_evidence_ids = set()
     for resource in resources:
+        evidence = evidence_for_resource(state, resource)
+        validate_payload_evidence(resource, evidence)
+        allowed_evidence = {item.evidence_id for item in evidence}
+        used_evidence_ids.update(allowed_evidence)
         try:
             payload = {
                 "allowed_evidence": [
@@ -349,7 +358,7 @@ def claim_extract_node(
                         f"结构化测评专用审核 {len(assessment_resource_ids)} 个；失败资源 {len(failed_resource_ids)} 个"
                         + (f"；逐资源错误：{error_summary}" if error_summary else "")),
         decision_reason="结构化测评由内部 JSON 审核；其余资源通过 Claim 白名单校验。",
-        evidence_refs=[item.evidence_id for item in evidence],
+        evidence_refs=[item.evidence_id for item in state.get("retrieved_evidence", []) if item.evidence_id in used_evidence_ids],
         resource_ids=[item.resource_id for item in all_resources],
         review_ids=list(review_ids.values()),
         step_context=step_context,
@@ -388,6 +397,9 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
         return _failure(state, node_name="claim_judge",
                         code=ErrorCode.CLAIM_JUDGEMENT_INVALID, detail="no validated claims",
                         resource_ids=state.get("claim_eligible_resource_ids", []))
+    for resource in state.get("generated_resources", []):
+        if resource.resource_id in assessment_resource_ids:
+            validate_payload_evidence(resource, evidence_for_resource(state, resource))
     evidence = state.get("retrieved_evidence", [])
     claims_by_resource: dict[str, list[ClaimRecord]] = defaultdict(list)
     for item in claims:
@@ -396,7 +408,13 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
     failed_resource_ids = set(state.get("claim_failed_resource_ids", []))
     errors: list[dict[str, Any]] = []
     last_result = None
+    used_evidence_ids = set()
+    resource_by_id = {item.resource_id: item for item in state.get("generated_resources", [])}
     for resource_id, resource_claims in claims_by_resource.items():
+        if resource_id not in resource_by_id:
+            raise contract_error()
+        evidence = evidence_for_resource(state, resource_by_id[resource_id])
+        used_evidence_ids.update(item.evidence_id for item in evidence)
         try:
             payload = {
                 "allowed_evidence": [
@@ -497,7 +515,7 @@ def claim_judge_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[str,
                         f"失败资源 {len(failed_resource_ids)} 个"
                         + (f"；逐资源错误：{error_summary}" if error_summary else "")),
         decision_reason="成功资源完成冻结证据判定；失败资源被隔离并转人工复核。",
-        evidence_refs=[item.evidence_id for item in evidence],
+        evidence_refs=[item.evidence_id for item in state.get("retrieved_evidence", []) if item.evidence_id in used_evidence_ids],
         resource_ids=sorted(claims_by_resource),
         review_ids=sorted({item.review_id for item in claims}),
         step_context=step_context,

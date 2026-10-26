@@ -2,8 +2,8 @@
 
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
-> 文档版本：2.6
-> 文档更新时间：2026-10-10
+> 文档版本：2.7
+> 文档更新时间：2026-10-25
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 0. 整体架构总览
@@ -100,7 +100,13 @@ Claim 发布检查位于 `services/learning_documents/publication.py`，由 `Res
 
 反馈和 Claim 从已提交事实补写缺失审计事件，使用稳定 ID 幂等追加；反馈第一条失败即停止后缀，使重试保持顺序。已存在事件的时间与 payload 不变，Claim 保留旧随机 ID 事件。恢复依赖相同业务请求重试，不是自动 outbox Worker。报告和课件 SSE 的同步查询在线程池内创建/释放 Session。
 
+报告读取由 `db/reports/repository.py` 管 SQLite 可见性/keyset 查询与轻量水位读取，`db/reports/watermarks.py` 明确来源闭包；`services/reports/snapshots.py` 管完整语义 revision、时间边界、正文防御性拷贝与进程内有界 LRU/singleflight。`ReportService.build_report` 仍返回原 dict，新增内部 `get_snapshot` 供 GET/流读取 metadata。容器保留原 singleton provider 并注入可选读仓储；只有已知原生 SQL 依赖共用同一 session_factory 且能力/覆盖检查通过才共享快照。未知/混合/Memory/非 SQLite 依赖采用完整语义双读验证，无跨请求缓存。
+
+SQLite trigger 将所有报告来源的增改删与全局 epoch 放进同一事务；安装身份防止重装后的计数重用，构建前后水位一致才发布，首次 mastery 初始化等写入会重试。时间窗口使用下一实际内容边界失效。缓存键包含 learner、owner、knowledge base、窗口和投影版本；容量64、JSON估算总量32MiB、闲置300秒，超大报告不缓存，同 key 累计等待预算10秒。它不跨 Web 进程共享，其他学习者的写入会保守地触发冷重建。API 始终先校验权限，SSE 每轮重检归属；不在缓存或线程之间保存 Session。报告通知不写 durable WorkflowEvent ledger。
+
 服务内确定性职责按同域模块组织：`feedback/assessment.py` 与 `recommendations.py` 管题目/评分及推荐，`reports/projections.py` 管报告区块，`learners/generation_options.py` 管候选投影。原 Service 保留查询、事务、模型调用和公开方法，不增加通用业务层。
+
+`learners/ability_projection.py` 计算已读取快照上的能力节点、客观趋势、课程计数、全图弱项排序和 focus 选择；`MasteryService` 继续拥有仓储读取、目标校验、证据写入、时间与 hash。该纯计算模块不接收仓储或 Session。`feedback_analysis_agent.py` 与 `short_answer_grader_agent.py` 位于 `agents/learning_agents/`，分别持有小结和短答评分的 Prompt、结构化调用及上下文；`FeedbackService` 保留 fallback、异常映射、分数截断/舍入及双评编排。课件场景审核诊断通过 `CoursewareService.get_scene_review` 查询，路由只保留授权、404 和 HTTP 返回，不再直接读取其仓储。具体结构决策和保行为证据见 [2026-10-25 结构优化记录](architecture-optimization-2026-10-25.md)。
 
 课件模型内容契约位于 `models/courseware/content.py`，API/任务 DTO 保留 `models/courseware/contracts.py`；旧 workflow contracts 只提供同一对象的兼容导出，调用者已迁移到 models。shared retrieval 使用 `models/shared/workflow.py` 的 WorkflowState，core 不反向依赖具体工作流。报告雷达纯投影与课件候选的页面修复/渲染校验已提取，外层状态机、硬门顺序和异常边界保持。
 
@@ -128,6 +134,8 @@ Claim 发布检查位于 `services/learning_documents/publication.py`，由 `Res
 
 课件总工作流保留预算、租约、状态与异常边界，spec 准备、单场景 compose、scene persistence 为具名阶段，`release.py` 通过平台 callback 构建候选产物并经仓储提交。`core/courseware/storyboard.py` 仅执行来源绑定的复习/实操及分页分支，没有模型或数据库调用。
 
+E1 在现有文本 retrieve/plan/generate/review/Claim 节点内接入，节点与边保持。`agents/shared/retrieval.py` 拥有公共／类型查询规则；`core/retrieval/vector_store.py` 保留多查询命中并固定候选 owner，`resource_allocation.py` 在来源／分数校验后选择 C/S；版本化 `models/knowledge/knowledge.py::EvidenceAllocation` 绑定 step、config、E、类型和查询指纹。运行 state/snapshot 显式传递，trace 经 complete_step 与 Evidence 一同写入，checkpoint 保存 ID／映射且继续受64KiB限制，不复制正文或增加SQL列。Planner 在新模式只读全部最终 E 一次；`agents/shared/evidence_scope.py` 集中校验资源 spec 的 A 与节点交集，生成、审核、Claim、来源和返工统一使用原范围。旧spec尊重原ID，旧快照默认legacy；新模式缺分配或越界失败关闭。开关及窗口条件见 [部署说明](deployment.md)，实际验收见 [T26](update_plan/T26.md)。
+
 课件运行资产由平台维护在 `core/courseware/assets/theme.css` 与 `runtime.js`，`runtime.py` 按自身路径读取 UTF-8 并归一为 LF，继续导出原 `STYLE`、`SCRIPT` 和版本常量。Renderer 仍将它们嵌入 HTML；资产提取保持原字节及 CSS 覆盖顺序，不引入外部请求、模型生成代码或新运行版本。详见 [资产说明](../backend/app/core/courseware/assets/README.md)。
 
 ### 3.4 前端业务与公共界面层
@@ -146,10 +154,12 @@ Claim 发布检查位于 `services/learning_documents/publication.py`，由 `Res
 | `features/feedback/`、`features/tutor/` | 批次 / Run 正式测评、下一步确认和证据约束导学 |
 | `features/reports/` | 报告 4.1 快照、ETag、报告 SSE 与四类 ECharts 展示 |
 | `features/resource-library/` | 文本与课件的只读书架 API 聚合 |
-| `api/`、`stores/` | 带 Cookie 的 HTTP 客户端、认证状态、当前画像与方向上下文 |
+| `api/`、`stores/` | 带 Cookie 的 HTTP 客户端、旧 API 入口兼容导出、认证状态、当前画像与方向上下文 |
 | `components/`、`ui/`、`styles/` | 公共准备面板、页面 / 模块动效和主题；不承载生成或判分规则 |
 
 公开首页的 Agent、证据、路径和反馈场景采用本地示意数据；实际生成页读取持久化事件。学习页面中的画像和时间窗口切换会使旧请求、分页及更新流失效，迟到响应不能覆盖当前上下文。布局按可用空间选择固定框架、区域内滚动或自然阅读；动画遵循 `prefers-reduced-motion`，相关浏览器专项由 `tests/suites.json` 管理。
+
+HTTP 端点实现统一归所属 `features/<domain>/api.js`，Run 查询沿用 `features/runs/queryApi.js`；画像、用户资料、诊断和历史 API 跟随现有 `learners` 界面归属。领域模块只使用共享 `api/client.js` 创建的 Axios 实例；页面、store 和 composable 直接导入实际所属域，`api/index.js` 保留全部15个旧导出的同对象转出，不实现业务端点。报告旧 `reportApi` 和带窗口/ETag/校验的 `learningReportApi` 各保留原契约。ESLint 阻止内部静态导入集中兼容入口，允许同域 `./api` 和跨域公开 API。
 
 生产页面按实际职责提取同域 composable：GenerateView 使用 `useGenerationProgress`、`useGenerationClaims`、`useProductionLayout`；FeedbackView 使用 `useFeedbackEvaluation`、`useFeedbackFollowup`；CoursewareGenerationWorkspace 使用 `useCoursewareTracking`。页面持有共享状态，watch/mount/unmount 注册顺序与模板保持；旧 `useCoursewareJob` 留作兼容 helper，其任务历史和终态通知时机不与生产 hook 混用。
 
@@ -213,10 +223,17 @@ backend/app/core + backend/app/db
 ```text
 POST /api/generate/jobs
 -> GET /api/generate/jobs?learner_id={learner_id}
--> BackgroundTasks 触发 generation_job_service.run_job(...)
+-> 同事务持久化 job、冻结请求/画像与 mastery 调度（SQLite）
+-> 独立 generation_worker.py 原子领取，GenerationJobService.run_claim(...)
 -> 任务状态通过 GET /api/generate/jobs/{run_id} 查询
 -> 结果通过 GET /api/resources/{learner_id}?run_id={run_id} 获取
 ```
+
+SQLite 文本任务归 `generation`：`db/generation/dispatch.py` 管原子领取、owner/epoch 续租、唯一重试链与有界对账；`services/generation/worker.py` 管并发 1 的执行与持续 heartbeat。`core/execution.py` 只保存通用执行上下文，SQL flush/commit 隔离位于 `db/generation/fencing.py`，资源线程用 `copy_context` 保留归属。API 经 Service 保存冻结输入，不写 SQL 或运行模型。旧 legacy 无 Run 任务才适用排队年龄阈值；running 以 AgentRun 的租约和终态判断。开始前故障可重领，开始后过期明确中断，新尝试不复活旧终态。文本检查点没有自动重建/续跑入口。
+
+Worker 在监护循环内处理续租与对账异常，当前线程仍运行时不返回新领取路径；异常期间 readiness 失败，成功续租/对账后恢复。明确 lease-lost 则停止领取，并保留错误原因；异常路径也检查既有退出预算。
+
+普通创建、continuation 和 durable feedback 使用同一连接的短事务绑定 job、mastery 与必要关联/事件；SQLite `BEGIN IMMEDIATE` 在决策读取前取得写锁，避免并发重复调度。已发布文本文件不可原位改写；SQL 拒绝失效执行者的资源、审计、checkpoint 和发布提交。
 
 运行中遵守以下控制流：
 
@@ -276,7 +293,7 @@ POST /api/feedback/attempts/run/submit 或 /api/feedback/attempts/batch/submit
 -> 学习者通过 POST /api/feedback/followups/select 确认节点 / 纠错方案
 -> 幂等创建现有 generation job
 -> 保存 parent run / attempt / decision / child run 关系
--> BackgroundTasks 调用 GenerationJobService.run_job
+-> 独立文本 Worker 消费同事务提交的生成任务（memory 保留 BackgroundTasks）
 -> 新 Run 继续经过 Evidence、Review、Claim Audit 和 Publication Gate
 ```
 
@@ -304,7 +321,7 @@ Follow-up 属于确认选择后的 after-commit 副作用。Claim 关闭时一�
 
 WorkflowEvent Ledger 是唯一事件事实源，SSE 只是只读 transport，不创建第二套 UI event 表或进程内 progress ledger。每个 SSE poll 都打开并关闭独立 Repository Session，不在长连接期间持有数据库事务或行锁；同步 SQL 查询通过 thread offload 避免阻塞 ASGI event loop。
 
-连接先发 snapshot，再补发 durable event backlog，最后 live tail。浏览器断线只停止观看，不取消 BackgroundTasks/Workflow；重连使用原 EventSource 的 `Last-Event-ID`，或页面刷新后以 timeline 最后 sequence 作为 `after_sequence`。heartbeat 不进入 Event Ledger。两个客户端独立读取同一 append-only ledger，不存在 delivered/ack 或破坏性消费。
+连接先发 snapshot，再补发 durable event backlog，最后 live tail。浏览器断线只停止观看，不取消 Worker/Workflow；重连使用原 EventSource 的 `Last-Event-ID`，或页面刷新后以 timeline 最后 sequence 作为 `after_sequence`。heartbeat 不进入 Event Ledger。两个客户端独立读取同一 append-only ledger，不存在 delivered/ack 或破坏性消费。
 
 GenerationJob/AgentRun 的 queued 竞态保持现有 ownership：Job 可先存在，SSE snapshot 此时 run_status 为空并等待 AgentRun。P0-08 没有引入 Redis、消息队列、WebSocket、自动 resume/cancel 或 token streaming。
 
@@ -453,7 +470,7 @@ scripts/
 - Vite 前端代理应指向 `8000`
 - 文档与联调口径均以 `8000` 为准
 - 互动课件任务由 `backend/scripts/courseware_worker.py` 的独立 Durable Worker 消费；Web 生命周期不执行课件工作流
-- 当前 SQLite 拓扑只运行一个顺序 Worker，默认健康端点为 `http://127.0.0.1:8081`；`/health/ready` 表示完成过持久 outbox 轮询
+- 当前 SQLite 课件链路只运行一个顺序 Worker，默认健康端点为 `http://127.0.0.1:8081`；`/health/ready` 表示完成过持久 outbox 轮询。文本任务另有唯一 `generation_worker.py`，健康端口为 8082
 - 一键本地启动入口为 `python scripts/start_local.py`，完整操作与停机语义见 `docs/deployment.md`
 
 ### 8.4 当前实现边界
@@ -589,6 +606,10 @@ Candidate 发布由 `agents.resource_workflows.interactive_courseware.release.Ca
 
 本地候选证据必须同时包含冻结 evaluator、专属真实进程故障矩阵、Node journey 和浏览器质量门。当前 evaluator manifest `2.0` 登记 20 个案例；故障报告 schema `1.1` 检查 18 类必需证据；浏览器报告 schema `1.4` 包含 15 组件 × 3 主题、9 布局模板 × 3 主题 × 多视口矩阵，以及 HTTP-origin、artifact restore 等检查。数量与契约以当前 fixture 和脚本为准，调试模式不能代替完整矩阵。候选状态须由当次完整结果判定；真实模型、CI、目标部署和完整发布周期仍需独立证据，SCORM/xAPI 仍仅为基础导出包。
 
+课件 Viewer 的学习事件由 `offlineEvents.js` 的 IndexedDB 事务队列与 `eventSync.js` 的发送协调器分工：记录绑定账号/resource/release，按保存时间和 event_id 稳定排序，100 条分批，从 Axios `data` 中取 ACK，仅删除本批明确确认的 ID。Web Locks 协调跨标签发送，缺失时允许稳定 ID 的幂等重传，事务仍防止存储覆盖。迟到 ACK 只影响原上下文；401 暂停，临时错误退避最多 5 次，旧版本/非法数据隔离保留，归属不明的 v1 队列不自动分配账号。保存失败显示尚未可靠保存，工具栏可重试或导出待处理记录。
+
+等待本地队列或 Web Lock 后须重新检查发送上下文与卸载状态；已过期的读取不发起 HTTP，也不安排旧重试或更新新上下文提示。已发出请求的合法迟到 ACK 仍只确认原账号/resource/release 的原批 ID。
+
 ## 14. Learner Mastery 规范投影与闭环
 
 学习者掌握事实统一为 `knowledge_states`，稳定键为 `learner_id + knowledge_base_id + skill_node_id`。问卷答案、服务端诊断答案、正式 `LearningAttempt` 与 append-only `ability_state_events` 是证据事实；画像中的 `knowledge_states/theory_scores/weak_points/strong_points` 只是由规范表单向重建的兼容缓存，不能反向覆盖规范状态。节点关系在仓储和 API 中使用 ID，名称只用于展示。
@@ -609,7 +630,7 @@ Run/Batch evaluation (server scored, verified)
 
 SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范状态、能力事件、mutation、学习路径、画像缓存和画像版本，并由 `(learner_id, idempotency_key)`、source hash、row version 与 profile version 约束重放和并发。问卷和诊断走稳定 source ID；无状态变化的重放不增加证据或版本。客户端聚合分数不是可信入口。
 
-生成任务创建时由 `MasteryService` 按 `confirmed_weak -> regressing_learning -> low_self_report -> unassessed_prerequisite` 排序，冻结 `LearnerFocusSnapshotV1` 到请求快照。显式目标覆盖 auto，off 禁用注入；创建后的画像变化不会改变既有任务。报告、ability API、生成重点和兼容缓存因此读取同一个 profile version 的规范投影。
+生成任务创建时由 `MasteryService` 使用同域纯投影，按 `confirmed_weak -> regressing_learning -> ready_uncovered -> low_self_report -> blocked_uncovered -> maintain_mastery` 排序，冻结 `LearnerFocusSnapshotV1` 到请求快照。auto 在可行时保留一个就绪未覆盖节点，显式目标覆盖 auto，off 禁用注入；创建后的画像变化不会改变既有任务。报告、ability API、生成重点和兼容缓存因此读取同一个 profile version 的规范投影。
 
 ## 15. 分阶学习架构
 
@@ -618,3 +639,25 @@ SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范�
 ## 16. 复习清单 V2 课件适配
 
 互动课件来源快照保留 `review_practice_payload` 及其 hash。课件规划和确定性渲染将其投影为受控 review-practice 组件；模型不改写题目或答案，只能参与既有课件场景的受约束叙事补充。学习事件只保存题目 ID、答案揭示状态和三态自评，不保存学习者作答文本。
+
+## 17. 契约与导入边界门禁
+
+后端 `models/` 是首批前端 DTO/状态/事件类型的来源，由 `scripts/export_frontend_contracts.py` 确定性生成到 `frontend/src/contracts/generated/`，CI 只读核对漂移。`ports.d.ts` 描述前端端口，`guards.js` 校验外部数据的关键字段；JS 生产 API、SSE、报告 adapter 和课件发送器使用严格 JSDoc/checkJs，尚未覆盖全部 Vue/reducer。生成 HTTP wrapper 位于 `features/generation/api.js`，Run 查询位于 `features/runs/queryApi.js`，`api/index.js` 保留原公开 re-export，只有一份实现，Axios response 约定不变。
+
+`scripts/check_architecture.py` 用 AST 检查共享层不能依赖业务 API/Service/Agent，API 不能直接导入 Agent、db、SQLAlchemy 或 core/llm。`models` 和 `db` 禁止反向导入业务 API/Service/Agent，`models` 还禁止导入 db/SQLAlchemy；现有 models 对纯 core helper/validator 的依赖保留。扫描包含相对导入、函数内与 TYPE_CHECKING、常见动态导入别名/常量；受限目录无法解析的动态目标失败。Service 编排与 containers 组合根仍可依赖业务模块，不禁止所有跨领域协作。此扫描不能证明任意间接执行、SQL 位置、Service 属性访问或事务所有权。
+
+前端 `no-restricted-imports` 使用现有 ESLint 检查 JS/Vue 的静态 import/export，真实 lint 正负例位于 `frontend/tests/apiModules.test.mjs`，与38个 Axios 请求契约和15个兼容导出身份一并执行。该规则不解析动态 `import()` 表达式；当前运行时代码的动态 import 是路由页面懒加载，收尾另核对不存在集中 API 动态导入。
+
+为防止经 `scripts` 绕过边界，受限目录的脚本导入也纳入门禁；当前仅保留 `core/courseware/evaluation.py → scripts.courseware_harness.offline`、`core/courseware/live_workflow_smoke.py → scripts.courseware_harness.live` 两处既有兼容入口，精确记录在 `tests/architecture-import-exceptions.json`。迁完调用者、导入扫描及完整回归后删除，多余/过期例外失败。本轮没有迁移 harness 或重构其业务工作流。命令与负例证据见 [测试方案](testing/README.md)。
+
+## 18. 用例准备与副作用归属
+
+反馈的 `services/feedback/followup_plan.py` 只将已确认的选项、难度和快照组装成生成请求，按 Claim 规则拆分；`FeedbackService.choose_followup` 继续确认 Mastery、校验选择、计算稳定 Run ID，并在原 UoW 内按创建任务、关联、事件、调度的顺序执行。纠错包沿用来源批次，普通后续选择新建批次，durable dispatch 的 submission hash 与失败回滚不变。准备模块不接收整个 Service，也不读写仓储。
+
+`services/feedback/attempt_evidence.py` 接收已验证的题目、答案键、Tutor 计数和显式评分函数，准备逐题/逐节点分数、短答复评审计及 `LearningAttemptSubmit`。题库/资源校验、Tutor 仓储读取和不可用时的回退仍在 Service；正式事实提交、幂等、Profile/掌握度/路径与事件仍由 `process_learning_attempt` 拥有。评分调用保留原 gateway/Prompt，规范化和舍入复用 assessment；没有另一套判分策略。
+
+课件的 `agents/resource_workflows/interactive_courseware/stages.py` 承担 design 的实操 JSON/冻结块绑定检查与设计准备，以及 scene 的槽位检查、稳定顺序增强和 warning/硬门结果收集。结果显式区分产物与失败，只有现有场景组成和 trace 的窄回调；阶段模块不访问 job/checkpoint/release 仓储。`InteractiveCoursewareWorkflow` 继续拥有阶段顺序、恢复、控制检查、预算入口、状态/事件/检查点、审核降级和发布。失败结果由原入口落成同样的拒绝/隔离状态，来源/未知组件等硬门不下放给阶段自行绕过。
+
+生成页通过 `features/generation/generationCommands.js` 准备并发送 continuation 请求，`useGenerationCommands.js` 负责四个命令的上下文、异步步骤与按钮状态归属；页面通过窄回调执行选择、localStorage、资源清空、订阅及通知。协调器复用 `createRequestGuard`，同步观察 learner/run，切换（包括 A→B→A）或卸载立即失效；retry、append、resource 三个忙碌通道各有当前所有者，两种批量重试共用 retry。自身合法选中新 Run 时保留该命令并重新捕获预期上下文，其他旧命令失效。命令刷新将有效性谓词传入 `loadJobs`，列表回写和错误也检查命令归属；false 不启动订阅或宣告成功，列表 loading 仍由其独立请求版本收尾。忽略过期 UI 响应不取消或重发服务端任务，后续可从原列表重新发现。
+
+`useGenerationResources.js` 只拥有所选任务资源和节点阶级读取及各自版本号，文本读取按 Run，课件来源按 batch；页面提供明确的 learner/run/textRun/knowledge base/batch 上下文并在切换/卸载时失效请求。jobs/status/claims/profile/task 的计数以及 Progress/Claims/Audit 的订阅清理继续独立，未合并成一个全局计数器，也未改变页面模板、样式和路由。命令协调器纳入严格 JSDoc/checkJs；纯请求计划和公共请求 guard 的契约保持。

@@ -1,29 +1,31 @@
 {
   "schema_version": "1.0",
   "profiles": {
-    "quick": ["backend-smoke", "competition", "frontend-unit"],
-    "regression": ["backend-lint", "dependency-check", "pip-check", "frontend-lint", "frontend-typecheck", "backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build"],
-    "acceptance": ["backend-lint", "dependency-check", "pip-check", "frontend-lint", "frontend-typecheck", "backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build", "frontend-browser"]
+    "quick": ["architecture", "frontend-contracts", "backend-smoke", "competition", "frontend-unit"],
+    "regression": ["architecture", "frontend-contracts", "backend-lint", "dependency-check", "pip-check", "frontend-lint", "frontend-typecheck", "backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build"],
+    "acceptance": ["architecture", "frontend-contracts", "backend-lint", "dependency-check", "pip-check", "frontend-lint", "frontend-typecheck", "backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build", "frontend-browser"]
   },
   "frontend_groups": {
     "unit": [
       "unit/utils/workflowEvents.test.mjs", "tutorState.test.mjs", "learnerMastery.test.mjs",
       "learningReport.test.mjs", "resourceShelfOrder.test.mjs", "coursewareEvents.test.mjs",
-      "coursewareUserJourney.test.mjs", "coursewareSourcePolicy.test.mjs", "requestContextRace.test.mjs", "unit/utils/workflowDetailPresentation.test.mjs"
+      "coursewareUserJourney.test.mjs", "coursewareSourcePolicy.test.mjs", "requestContextRace.test.mjs", "unit/utils/workflowDetailPresentation.test.mjs", "contracts.test.mjs", "generationPreparation.test.mjs", "apiModules.test.mjs"
     ],
     "browser": [
       "landingBrowser.test.mjs", "featureShowcaseBrowser.test.mjs", "dashboardBrowser.test.mjs", "onboardingBrowser.test.mjs",
       "learningReportBrowser.test.mjs", "coursewareBrowser.test.mjs", "generationBrowser.test.mjs", "feedbackBrowser.test.mjs",
       "historyUiBrowser.test.mjs", "reportUiBrowser.test.mjs", "userProfileUiBrowser.test.mjs", "profileRequestBrowser.test.mjs",
-      "motionBrowser.test.mjs", "tutorUiBrowser.test.mjs"
+      "motionBrowser.test.mjs", "tutorUiBrowser.test.mjs", "coursewareSyncBrowser.test.mjs"
     ]
   },
   "suites": [
-    {"id": "backend-lint", "purpose": "后端和脚本的错误预防静态检查", "evidence_type": "static_analysis", "timeout_seconds": 180, "command": ["{python}", "-m", "ruff", "check", "backend/app", "backend/tests", "scripts"]},
+    {"id": "backend-lint", "purpose": "后端和脚本的错误预防静态检查", "evidence_type": "static_analysis", "timeout_seconds": 180, "command": ["{python}", "-m", "ruff", "check", "backend/app", "backend/tests", "scripts", "backend/scripts"]},
+    {"id": "architecture", "purpose": "共享层/API 的 AST 导入边界与精确兼容例外", "evidence_type": "static_analysis", "timeout_seconds": 180, "command": ["{python}", "scripts/check_architecture.py"]},
+    {"id": "frontend-contracts", "purpose": "Pydantic 公开契约生成产物无漂移", "evidence_type": "contract_schema", "timeout_seconds": 180, "command": ["{python}", "scripts/export_frontend_contracts.py", "--check"]},
     {"id": "dependency-check", "purpose": "Python 声明、哈希锁和安装版本一致性", "evidence_type": "dependency_metadata", "timeout_seconds": 180, "command": ["{python}", "scripts/check_dependencies.py"]},
     {"id": "pip-check", "purpose": "Python 安装包依赖兼容性", "evidence_type": "dependency_metadata", "timeout_seconds": 180, "command": ["{python}", "-m", "pip", "check"]},
     {"id": "frontend-lint", "purpose": "全部前端 src JS/Vue 错误预防检查", "evidence_type": "static_analysis", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/eslint/bin/eslint.js", "src"]},
-    {"id": "frontend-typecheck", "purpose": "请求上下文 guard 的 JSDoc 严格类型检查", "evidence_type": "type_analysis", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/typescript/bin/tsc", "-p", "tsconfig.quality.json"]},
+    {"id": "frontend-typecheck", "purpose": "关键 API/SSE、课件发送器、报告 adapter 与请求 guard 的严格 JSDoc 类型检查", "evidence_type": "type_analysis", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/typescript/bin/tsc", "-p", "tsconfig.quality.json"]},
     {"id": "backend-smoke", "purpose": "核心契约、发布策略、指标与测试工具快速回归", "evidence_type": "deterministic", "timeout_seconds": 180, "command": ["{python}", "-m", "pytest", "backend/tests/unit/models", "backend/tests/unit/policies", "backend/tests/unit/reports", "backend/tests/unit/tooling", "-q", "--junitxml={output}/backend-smoke.xml"]},
     {"id": "backend-unit", "purpose": "后端领域与共享能力单元测试", "evidence_type": "deterministic", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/unit", "-q", "--junitxml={output}/backend-unit.xml"]},
     {"id": "backend-integration", "purpose": "API、服务、仓储、工作流集成", "evidence_type": "deterministic", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/integration", "-q", "--junitxml={output}/backend-integration.xml"]},
@@ -36,6 +38,6 @@
     {"id": "courseware-eval", "purpose": "互动课件冻结评测与安全硬门", "evidence_type": "frozen_evaluation", "timeout_seconds": 180, "command": ["{python}", "backend/scripts/courseware_eval.py", "--manifest", "backend/tests/fixtures/courseware/evals/manifest.json", "--baseline", "backend/tests/fixtures/courseware/evals/baseline.json", "--output", "{output}/courseware.json"]},
     {"id": "frontend-unit", "purpose": "全部前端状态、策略、事件与资源排序测试", "evidence_type": "deterministic", "timeout_seconds": 180, "command": ["{node}", "frontend/tests/run.mjs", "unit", "--output", "{output}/frontend-unit.json"]},
     {"id": "frontend-build", "purpose": "前端生产构建", "evidence_type": "build", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/vite/bin/vite.js", "build"]},
-    {"id": "frontend-browser", "purpose": "全部十四个浏览器专项，需先完成前端构建", "evidence_type": "browser_fixture", "timeout_seconds": 1200, "command": ["{node}", "frontend/tests/run.mjs", "browser", "--output", "{output}/frontend-browser.json"]}
+    {"id": "frontend-browser", "purpose": "全部十五个浏览器专项，需先完成前端构建", "evidence_type": "browser_fixture", "timeout_seconds": 1200, "command": ["{node}", "frontend/tests/run.mjs", "browser", "--output", "{output}/frontend-browser.json"]}
   ]
 }

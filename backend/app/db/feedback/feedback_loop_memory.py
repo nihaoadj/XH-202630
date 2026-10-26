@@ -233,10 +233,10 @@ class MemoryFeedbackLoopRepository(BaseFeedbackLoopRepository):
                 existing_items.append(payload)
             return self._result(attempt_id, replay=False)
 
-    def list_attempts(self, learner_id: str, limit: int = 20) -> list[LearningAttempt]:
+    def list_attempts(self, learner_id: str, limit: int | None = 20) -> list[LearningAttempt]:
         with self._lock:
             items = [item.model_copy(deep=True) for item in self._attempts.values() if item.learner_id == learner_id]
-            return sorted(items, key=lambda item: item.submitted_at, reverse=True)[:limit]
+            return sorted(items, key=lambda item: (item.submitted_at, item.attempt_id), reverse=True)[:limit]
 
     def list_results(self, learner_id: str, limit: int = 20) -> list[FeedbackLoopResult]:
         with self._lock:

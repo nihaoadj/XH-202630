@@ -2,14 +2,14 @@
 
 > 项目编号：XH-202630
 > 文档版本：2.3
-> 文档更新时间：2026-10-09
+> 文档更新时间：2026-10-23
 > 说明：本文档以当前代码实现为准，覆盖 `backend/app/api` 中已经启用的核心接口。
 
 ## 1. 基本信息
 
 - 服务地址：`http://127.0.0.1:8000`
 - API 前缀：`/api`
-- 当前资源生成模式：异步任务模式；文本任务由 Web `BackgroundTasks` 执行，互动课件由独立 Durable Worker 执行
+- 当前资源生成模式：异步任务模式；SQLite 文本任务和互动课件分别由独立 Worker 执行，memory 文本任务保留非持久 `BackgroundTasks`
 
 ### 1.1 认证与访问边界
 
@@ -59,6 +59,14 @@ POST /api/auth/register 或 POST /api/auth/login
 - 旧聚合分数 `/api/feedback/attempts` 保留路径但返回 422，不再作为正式掌握度写入口。
 - 学习历史以 `journey` 返回轮次与当前学情，`timeline` 保留兼容；报告 4.1 使用 ETag 和独立报告 SSE。
 - 文本追加 / 重试走批次 continuation；互动 HTML 通过独立课件 API 读取，旧文本 `items/{resource_id}/preview` 未挂载。
+
+### 3.1 前端契约与边界校验
+
+[`export_frontend_contracts.py`](../scripts/export_frontend_contracts.py) 从后端模型导出关键 DTO、Job/Run 状态及工作流事件名称到 [`frontend/src/contracts/generated/`](../frontend/src/contracts/generated/)。HTTP wrapper 保持完整 Axios response；课件事件确认仍为 `response.data.acknowledged_event_ids`，显式 ACK 模型只包含这个 ID 数组，不增加响应字段。生成任务使用 Job 四态，Run/SSE 使用各自 Run 状态，禁止混用。
+
+当前报告的派生契约 `CurrentReportResponse` 描述实际 `window_days=7/30/90` 与 `rpt_` 加 64 位小写十六进制 revision；历史 `ReportResponse` 保留兼容字段和可空值。GET 304 不含报告正文，前端 snapshot adapter 返回 `null` 并保留已有 revision；未测量值继续为 `null`。报告 SSE invalidation 单独建模，客户端拒绝坏 JSON、错误身份/窗口/revision。这里没有改变报告计算、revision 算法或查询成本。
+
+前端运行时 guard 检查首批关键字段，不执行通用 JSON Schema 全量验证。非法 HTTP 数据产生安全的客户端 `INVALID_API_RESPONSE` 错误，非法 SSE 被忽略。Run 客户端由后端枚举建立监听名单，并显式保留十二个既有 legacy 别名；原有 sequence 别名、回放、去重和终态规则保留，补听后端已有的 `resource_publication_decided`。版本化合成 fixture 与负例见 [测试方案](testing/README.md)。
 
 ## 4. 接口总览
 
@@ -315,6 +323,9 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 说明：
 
 - 此接口只返回任务信息，不直接返回资源正文。
+- SQLite 接受成功即持久保存执行意图及冻结画像，Web 不执行模型。未启动文本 Worker 时任务保持 queued；公开四态、响应 DTO 与认证不变。
+- 可选 `Idempotency-Key` 请求头适用于本接口及批次 continuation，非空且最多 128 字符。相同账号、入口（continuation 包含批次）与键、相同规范化请求返回同一任务；参数不同返回 HTTP 409 `GENERATION_IDEMPOTENCY_CONFLICT`，非法键返回 422。不带键仍可主动创建新任务。
+- 执行前崩溃可在最多 3 次领取内恢复同一冻结任务；执行已开始后租约过期标为 interrupted/failed，用户重试建立关联的新 Run，不复活原终态。文本检查点用于记录与回放，本版不做检查点续跑。
 - 普通生成支持 `讲义`、`实操指南`、`分阶测试题`、`复习清单`、`案例分析`；唯一兼容别名 `定制讲义` 会在请求校验时规范化为 `讲义`。
 - 未知资源类型在任务创建和任何模型调用前以 HTTP 422 拒绝，不创建失败任务占位。
 - `个性化纠错训练包` 是反馈专属的第六类内部文本资源。普通生成请求它会以 HTTP 422 `FEEDBACK_ONLY_RESOURCE_TYPE` 拒绝。
@@ -649,7 +660,7 @@ Claim 审核阶段按资源推送脱敏进度：`claim_metric_status`、事实 C
 - 已执行：学习历史时间线接口可用
 - 已执行：`GET /api/runs/{run_id}/events` 提供 WorkflowEvent SSE replay + live tail，前端支持断线续传与轮询降级
 - 已执行：报告 4.1 快照 / ETag / SSE、全节点掌握投影与路径图
-- 文本任务边界：没有外部队列、任务取消或进程中断后自动续跑；用户重试通过 continuation 创建新 Run
+- 文本任务边界：SQLite 持久队列可恢复执行前投递，执行中断后不自动续跑；用户重试建立关联的新 Run。无外部队列服务或任务取消
 - 课件任务边界：使用持久 outbox 和独立 Worker，具备取消、任务 / 场景重试和 checkpoint 恢复
 ## 14. Agent 可靠执行、审核返工与回放接口
 
@@ -915,11 +926,13 @@ POST /api/resources/courseware/jobs/batch
 - `resource_difficulty_curve`：最新资源批次按资源返回稳定能力节点的 `learner_readiness_score`、`resource_difficulty_score`、`difficulty_gap` 与 `match_status`；更早批次各返回一个 `point_type="batch_average"` 的汇总点，其数值字段为该批次可用数据的平均值，并通过 `resource_count`、`resource_ids` 保留规模和追溯关系。资源点还会返回 `point_type="resource"`、`batch_id` 和用于展示的 `resource_name`。首版 `strategy_version="declared-band/v1"` 仅标准化初级/中级/高级；未知难度或未测准备度返回 `not_measured`，不伪造分数。正式反馈均分低于 60% 时，系统按低分幅度和准备度差距小幅上调 `resource_difficulty_score`，保留 `default_resource_difficulty_score`、`feedback_score`、`feedback_count` 和 `difficulty_adjustment`，并将来源标为 `calibrated_history`；无低分反馈时默认值不变。每个点还可附加 `credibility_score`（百分制 0–100）、`credibility_level`、保留的 `credibility_grade` 和 `credibility_score_breakdown`。可信度使用 `普通审核 0–40 + 来源验证 0–50 + Claim 审核 0/10`：Claim 完整通过且无矛盾/无依据事实声明时最高 99 分；Claim 未开启、未完成、不适用或失败时最高 80 分。审核硬失败、high/critical 问题或跨知识库来源优先标为 `attention`。`credibility_score=null` 表示该资源尚无可量化可信度投影，客户端不得以 0 分替代。
 - `learning_path_graph`：知识图谱前置边与持久化学习路径/课程进度的只读图投影，节点返回角色、阻塞节点和资源建议；`placement_verification_status` 会明确标示初始豁免、待重新验证或已完成正式重新验证。接入生成任务仓储时，`current_node_ids` 仅取同一知识库中最新、未被替代且状态为 queued/running/completed 的批次冻结目标，节点的 `is_current_batch` 与它一一对应；历史 `scheduled` 节点不会被误标为当前学习。前端仅将 `progress_status=completed` 的非本轮节点渲染为绿色；`exposed`、`verification_pending`、`reinforcement_due` 渲染为“已学未完成”，最新批次黄色优先。`role="remedial"` 可与 `is_current_batch=true` 同时出现，表示本轮正在巩固已学节点。它不修改路径，也不替代正式反馈决策。
 
-响应始终带 `ETag: "rpt_<sha256>"` 和 `Cache-Control: private, no-cache`。匹配的 `If-None-Match` 返回无响应体的 `304`；认证与 learner 访问校验仍先执行。`generated_at` 不影响 ETag。
+响应始终带 `ETag: "rpt_<sha256>"` 和 `Cache-Control: private, no-cache`。匹配的 `If-None-Match` 返回无响应体的 `304`；认证与 learner 访问校验仍先执行。GET 在权限校验后读取共享快照的 metadata；暖 304 不拷贝或序列化正文。revision 按完整客户端语义投影生成，旧来源键保留，新增 `history` 和 `projection` 补集；修订兼容反馈、Attempt metadata、决定/后续任务、画像版本、诊断、图谱与课程进度时，只要实际返回内容变化就会更新 revision。
 
-`GET /api/report/{learner_id}/resource-credibility?limit=20&cursor=...` 返回按 `published_at DESC, resource_id ASC` 排序的文本资源可信证据分页；每项与报告内 `recent_resource_credibility` 使用相同的 `credibility_score`、`credibility_level`、`score_breakdown` 和原因码，汇总额外返回平均分、Claim 通过数和受 80 分上限约束数。cursor 无效返回 `400 REPORT_CURSOR_INVALID`。互动课件不进入该统计。
+`generated_at`、`window.start/end`、`learning_activity.window_start/end`、`generation_options.created_at` 是该快照的计算时间元数据，后者统一为 `generated_at`；它们不单独触发 revision，命中缓存时保留原值。ETag 标识规范化语义投影，不是逐字节正文 hash；冷构建或重启可重新计算这些时间元数据，同 revision 的 304 允许继续使用原快照。其余事实时间和完整返回内容参与 hash。`data_as_of` 保留既有语义：画像、正式提交、发布资源及掌握事件的已存储时间最大值；它不表示所有来源的最后修改时间，也不用于替代水位/完整revision判断。窗口仍按 UTC 的本期 `[now-W,now)`、上期 `[now-2W,now-W)` 计算，Attempt 进入/退出及 mastery 趋势跨窗即失效，无须等待数据库写入或每日零点。
 
-`GET /api/report/{learner_id}/events?window_days=30` 是当前快照 SSE，不是 durable event ledger。它先发送 `report_snapshot`，随后只在 revision 变化时发送 `report_changed`，空闲时发送 `ping`；使用 `Last-Event-ID` 或 `after_revision` 的非法 cursor 返回 `400 REPORT_STREAM_CURSOR_INVALID`。payload 只包含 learner、revision、时间窗口和变化域等白名单摘要。资源难度投影或路径投影变化时，`changed_domains` 可包含 `resource_match`、`path`。
+`GET /api/report/{learner_id}/resource-credibility?limit=20&cursor=...` 返回按 `published_at DESC, resource_id ASC` 排序的文本资源可信证据分页（缺发布时间视为最早）；每项与报告内 `recent_resource_credibility` 使用相同的 `credibility_score`、`credibility_level`、`score_breakdown` 和原因码，完整报告中的汇总另返回平均分、Claim 通过数和受 80 分上限约束数。分页仅返回 `items`、`next_cursor`，不以当前页均值代替全体汇总。cursor 仍为原格式，锚点须以原发布时间/id 留在同一可见集合中；删除、取消发布、替代或更改排序键后返回 `400 REPORT_CURSOR_INVALID`。SQLite 同库路径在数据库完成可见性筛选与 keyset 分页，只装载 `limit+1` 个完整资源后计算对应证据；父版本、superseded Run、实际已发布替代类型及同批次最新替代规则不变。报告的 recent 资源按 `created_at, resource_id` 稳定读取。互动课件不进入该统计。
+
+`GET /api/report/{learner_id}/events?window_days=30` 是当前快照 SSE，不是 durable event ledger。它先发送 `report_snapshot`，随后只在 revision 变化时发送 `report_changed`，空闲时发送 `ping`；使用 `Last-Event-ID` 或 `after_revision` 的非法 cursor 返回 `400 REPORT_STREAM_CURSOR_INVALID`。payload 只包含 learner、revision、时间窗口和变化域等白名单摘要。资源难度投影或路径投影变化时，`changed_domains` 可包含 `resource_match`、`path`，以及 `profile`、`mastery`、`activity`、`text_resources`、`history`、`projection`。每次 poll 重新校验画像归属，metadata 与 GET 共享；没有事实写入时，滚动时间边界同样可触发 `report_changed`。快照连续三次无法稳定，GET 保持 `503 REPORT_SNAPSHOT_UNSTABLE`，流保持安全的 `stream_error` 语义。
 ## 18. 分阶学习接口增量字段
 
 `ability_nodes[].tier` 与 `tier_label` 提供节点所属阶级。`generation_options` 额外返回 `tier_progress`（起始阶、当前阶、最高解锁阶、补救返回阶）、`tier_completion` 和 `recommendation_type`；每个候选节点都带 `tier`、`tier_label` 与 `eligibility_status`。

@@ -10,7 +10,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, TypedDict
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.shared.common import ErrorInfo
-from app.models.knowledge.knowledge import EvidenceItem, RetrievalStatus
+from app.models.knowledge.knowledge import EvidenceAllocation, EvidenceItem, RetrievalStatus
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 
 
@@ -170,6 +170,8 @@ class WorkflowState(TypedDict, total=False):
     retrieval_dropped_candidate_count: int
     retrieval_partial_failure_count: int
     retrieval_profile: Dict[str, Any]
+    retrieval_strategy_version: str
+    evidence_allocation: Optional[EvidenceAllocation]
 
     diagnosis: Dict[str, Any]
     retrieved_evidence: List[EvidenceItem]
@@ -237,6 +239,8 @@ class WorkflowStateSnapshot(BaseModel):
     retrieval_dropped_candidate_count: int = Field(default=0, ge=0)
     retrieval_partial_failure_count: int = Field(default=0, ge=0)
     retrieval_profile: Dict[str, Any] = Field(default_factory=dict)
+    retrieval_strategy_version: str = "legacy"
+    evidence_allocation: Optional[EvidenceAllocation] = None
 
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)

@@ -78,13 +78,14 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import { knowledgeApi, profileApi } from '../../api'
+import { knowledgeApi } from '../knowledge/api.js'
+import { profileApi } from '../learners/api.js'
 import { useAppStore } from '../../stores/app'
 import ReportChart from './ReportChart.vue'
 import LearningNodeMasteryChart from './LearningNodeMasteryChart.vue'
 import ResourceDifficultyCurve from './ResourceDifficultyCurve.vue'
 import LearningPathGraph from './LearningPathGraph.vue'
-import { learningReportApi } from './api'
+import { learningReportApi, fetchReportSnapshot } from './api'
 import { ReportStreamClient } from './reportStreamClient'
 
 const store = useAppStore()
@@ -137,11 +138,7 @@ const stream = new ReportStreamClient({
     replaceReport(data)
     reportError.value = ''
   },
-  fetchReport: async ({ learnerId, windowDays: days, etag }) => {
-    const res = await learningReportApi.get(learnerId, days, etag)
-    if (res.status === 304) return null
-    return { data: res.data, revision: res.data.report_revision }
-  },
+  fetchReport: fetchReportSnapshot,
 })
 
 async function loadReport(force = false) {

@@ -11,7 +11,7 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
-from app.db.shared.models import LearnerCurriculumNodeORM
+from app.db.shared.models import GenerationJobORM, LearnerCurriculumNodeORM
 from app.models.learners.mastery import (
     MASTERY_CONFIRMATION_THRESHOLD,
     CurriculumNodeProgressV1,
@@ -190,6 +190,27 @@ class MemoryCurriculumRepository(BaseCurriculumRepository):
 class SQLCurriculumRepository(BaseCurriculumRepository):
     def __init__(self, session_factory: Callable[[], Session]):
         self.session_factory = session_factory
+
+    def reconcile_failed_generations(self, *, limit=100):
+        """Repair the crash window after a failed job, without releasing a newer run."""
+        now = datetime.now(timezone.utc)
+        with self.session_factory() as db:
+            candidates = db.query(LearnerCurriculumNodeORM).join(
+                GenerationJobORM, GenerationJobORM.run_id == LearnerCurriculumNodeORM.scheduled_run_id,
+            ).filter(
+                GenerationJobORM.status == "failed",
+                LearnerCurriculumNodeORM.progress_status == "scheduled",
+                LearnerCurriculumNodeORM.published_resource_count == 0,
+            ).order_by(LearnerCurriculumNodeORM.curriculum_node_id).limit(limit).all()
+            changed = 0
+            for row in candidates:
+                changed += db.query(LearnerCurriculumNodeORM).filter_by(
+                    curriculum_node_id=row.curriculum_node_id, scheduled_run_id=row.scheduled_run_id,
+                    row_version=row.row_version, progress_status="scheduled", published_resource_count=0,
+                ).update({"progress_status": "unplanned", "scheduled_run_id": None, "updated_at": now,
+                          "row_version": LearnerCurriculumNodeORM.row_version + 1}, synchronize_session=False)
+            db.commit()
+            return changed
 
     def ensure_nodes(self, learner_id, knowledge_base_id, node_ids):
         with self.session_factory() as db:

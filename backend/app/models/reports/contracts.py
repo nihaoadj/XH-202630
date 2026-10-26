@@ -166,6 +166,8 @@ class ReportRevisionPartsV1(BaseModel):
     text_resources: str
     resource_match: str = ""
     path: str = ""
+    history: str = ""
+    projection: str = ""
 
 
 class ReportResponse(BaseModel):
@@ -235,6 +237,34 @@ class EvaluationSummary(BaseModel):
     metrics: Dict[str, float]
     ablation: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: Optional[datetime] = None
+
+
+class ReportWindow(BaseModel):
+    """The window already emitted by the current report service."""
+
+    window_days: Literal[7, 30, 90]
+    start: datetime
+    end: datetime
+
+
+class CurrentReportResponse(ReportResponse):
+    """Typed current projection; the historical ReportResponse remains additive."""
+
+    report_revision: str = Field(pattern=r"^rpt_[0-9a-f]{64}$")
+    window: ReportWindow
+
+
+class ReportInvalidation(BaseModel):
+    """Shared receive contract for snapshot/changed, not ping/error frames."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    learner_id: str
+    report_revision: str = Field(pattern=r"^rpt_[0-9a-f]{64}$")
+    window_days: Literal[7, 30, 90]
+    as_of_profile_version: int | None = None
+    data_as_of: datetime | None = None
+    replay_mode: Literal["current_snapshot"] | None = None
+    changed_domains: list[str] = Field(default_factory=list)
 
 
 __all__ = [

@@ -215,7 +215,7 @@ backend/chroma_db/
 
 | 表 | 作用 |
 |---|---|
-| `generation_jobs` | 异步资源生成任务 |
+| `generation_jobs` | 文本任务、冻结输入、持久领取租约与关联重试 |
 | `resource_specs` | 每 Run 冻结的资源类型、family、目标、Evidence 和表示预算 |
 | `resource_executions` | 每 `(run_id, resource_spec_id, representation)` 当前执行投影 |
 | `generated_resources` | 已生成资源 |
@@ -297,7 +297,11 @@ ORM 入口是 `db/shared/models.py` 与 `db/courseware/models.py`，初始化与
 - `questionnaire_answers`
 - `learner_profiles`
 
-run/batch 正式反馈会原子读写 `learning_attempts`、`learning_attempt_point_results`、`feedback_decisions`、`knowledge_states`、`ability_state_events`、`knowledge_state_mutations`、`learner_profile_versions`、`learning_paths`、`learning_path_nodes` 和 `learning_path_mutations`。提交后先返回候选；学习者确认下一步时才创建 `generation_jobs` 并写 `feedback_followup_runs`，外部生成失败不回滚 Attempt。
+run/batch 正式反馈会原子读写 `learning_attempts`、`learning_attempt_point_results`、`feedback_decisions`、`knowledge_states`、`ability_state_events`、`knowledge_state_mutations`、`learner_profile_versions`、`learning_paths`、`learning_path_nodes` 和 `learning_path_mutations`。提交后先返回候选；学习者确认下一步时才创建 `generation_jobs` 并写 `feedback_followup_runs`，外部生成失败不回滚 Attempt。SQLite 持久投递将子任务、冻结输入、mastery 调度、反馈关联和生成创建事件放入同一事务；关联写入失败时不会留下可执行的半成品。
+
+`p0_34_generation_dispatch` 为 `generation_jobs` 增量添加内部字段：`dispatch_mode`、`dispatch_snapshot`、`submission_hash`、`claim_owner`、`claim_epoch`、`claim_count`、`lease_expires_at`、`next_attempt_at`、`retry_of_run_id`。旧行归属 `legacy`，新持久任务归属 `worker`；HTTP DTO 不暴露这些字段。冻结快照保存版本化 workflow、LearnerProfile 和请求摘要。`retry_of_run_id` 唯一索引及前序 `superseded_by_run_id IS NULL` 的事务 CAS 保证同一失败任务不会并发分叉。
+
+Worker 原子领取时置 running，owner/epoch 及有效租约约束续租和终态写入；执行中的 SQL 写入在 flush/commit 前于同一事务验证归属并持有 SQLite 写锁。周期对账每轮最多 100 个候选，运行任务以 AgentRun 租约和终态为准，新 queued 持久任务不按创建年龄失败。反馈与 curriculum 另按已确认失败事实修复崩溃窗口，条件更新不会释放已归属新 run 的节点。文本 Markdown 文件只允许相同内容幂等复用，已存在的不同内容拒绝覆盖。
 
 ### 4.3 P0-07 一致性与迁移
 
@@ -318,7 +322,7 @@ ORDER BY event_sequence
 LIMIT :page_size
 ```
 
-长 SSE 连接不持有 Session、事务或锁，不增加 delivered/ack 字段；不同客户端只读同一 append-only Ledger。当前 SQLite 使用短连接轮询，并需结合一个 Durable Worker、SSE 客户端数和 0.5 秒默认间隔评估锁等待与连接数量。Event retention 尚未在 P0-08 自动清理，删除策略必须保留比赛回放与 `legacy_partial` 语义。
+长 SSE 连接不持有 Session、事务或锁，不增加 delivered/ack 字段；不同客户端只读同一 append-only Ledger。当前 SQLite 使用短连接轮询，并需结合文本和课件各一个 Worker、SSE 客户端数和 0.5 秒默认间隔评估锁等待与连接数量。Event retention 尚未在 P0-08 自动清理，删除策略必须保留比赛回放与 `legacy_partial` 语义。
 
 ### 4.5 数据库完整性与 P0-09 migration
 
@@ -692,6 +696,17 @@ P0-09 preflight 会只读检查 migration 集合、正式 demo 数据库可达�
 
 ## 13. 后续迁移与当前状态核对
 
-当前初始化链还装配课程进度 / 学习阶、复习清单 V2、实操指南 JSON、掌握证据门禁、测评维度、准入重新验证、反馈多 Run、用户 Claim 发布决定、审核状态及 `p0_33_chunk_skill_node_mappings` 等迁移，并包含 Tutor 和课件迁移。具体顺序与 migration ID 以 `backend/app/db/shared/database.py`、`backend/app/db/migrations/` 和 `backend/app/db/courseware/migrations.py` 为准。
+当前初始化链还装配课程进度 / 学习阶、复习清单 V2、实操指南 JSON、掌握证据门禁、测评维度、准入重新验证、反馈多 Run、用户 Claim 发布决定、审核状态及 `p0_33_chunk_skill_node_mappings`、`p0_34_generation_dispatch`、`p0_35_report_read_model` 等迁移，并包含 Tutor 和课件迁移。具体顺序与 migration ID 以 `backend/app/db/shared/database.py`、`backend/app/db/migrations/` 和 `backend/app/db/courseware/migrations.py` 为准。
 
 迁移写入由初始化 / 应用 lifespan 显式触发；只读文档核对不执行初始化、回填或真实库演练。当前前端样式和布局优化继续使用上述既有表和 API。实际数据库是否已升级不能从源码、文档日期或浏览器 fixture 推断，验收应记录目标库的 `schema_migrations`、完整性预检和受控副本演练结果。
+
+
+## 14. P0-35 报告读模型
+
+SQLite additive 迁移 `p0_35_report_read_model` 新增 `report_read_watermarks`、81个来源触发器和5个报告索引，不修改/重命名/回填原学习事实。水位唯一 `global` 行保存 `installation_id`、覆盖 `protocol` 和单调 `epoch`。27张来源表覆盖画像、资源/任务、旧反馈、正式 Attempt/point results、decision/mutation/profile versions/path/nodes/path mutations/followup、diagnostic、mastery events/states/curriculum/tier、review/Claim/judgement/evidence、skill nodes/relations 和知识目录三表；精确表名/列清单以 [watermarks.py](../backend/app/db/reports/watermarks.py) 为准。新增来源/投影依赖须同步清单与协议。
+
+INSERT/DELETE 计数，UPDATE 仅在受监视列实际变化时计数；generation job 的 claim/lease/dispatch 运维列不触发报告失效。直接 SQL、旧时间戳修订、删除同样覆盖，事务回滚会同时回滚 epoch。全局水位保证保守失效，可能因其他学习者写入多做一次重建；它不携带学习者内容。每次缓存读取验证水位协议与完整触发器定义，缺失/未知时安全回到完整读取。重复迁移保留有效身份；修复触发器/协议或 rollback 后重装生成新身份。
+
+索引服务资源 learner/publication/published_at/id、parent、run/type、Attempt 稳定时间/id排序及最新审核。SQL 分页只装载页资源，正式 Attempt 明细按500分块读取；报告聚合不再截断到10000，默认仓储 `limit=20` 仍保留。
+
+回滚入口 `rollback_p0_35_report_read_model_migration(engine)` 仅删除本迁移拥有的触发器/索引/水位表，保留所有业务表与事实，读路径随即无缓存降级。维护命令和先停写/备份要求见 [部署文档](deployment.md)。本次仅在隔离合成/旧结构数据库执行迁移与回滚；未对实际业务数据库执行。

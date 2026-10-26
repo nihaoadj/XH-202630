@@ -16,6 +16,7 @@ class RequestStub:
 
     def __init__(self, container):
         self.app = SimpleNamespace(container=container)
+        self.state = SimpleNamespace()
 
     async def is_disconnected(self):
         return False

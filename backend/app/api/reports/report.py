@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.models.reports.contracts import ReportResponse
 from app.services.learners.profiles import ProfileService
 from app.services.reports.reports import ReportService, ReportSnapshotUnstable, ReportCursorInvalid
+from app.services.reports.snapshots import ReportSnapshot
 
 router = APIRouter()
 
@@ -40,6 +41,14 @@ def _profile_and_service(learner_id: str, request: Request):
     return profile, container.report_service()
 
 
+def _snapshot(report_service, profile, window_days):
+    getter = getattr(report_service, "get_snapshot", None)
+    if getter is not None:
+        return getter(profile, window_days=window_days)
+    # Preserve older injected Service facades without giving them a cache.
+    return ReportSnapshot(report_service.build_report(profile, window_days=window_days))
+
+
 @router.get("/{learner_id}", response_model=ReportResponse)
 def get_report(learner_id: str, request: Request, window_days: int = Query(default=30)):
     """获取学情报告"""
@@ -47,13 +56,14 @@ def get_report(learner_id: str, request: Request, window_days: int = Query(defau
         raise HTTPException(status_code=422, detail="window_days 必须为 7、30 或 90")
     profile, report_service = _profile_and_service(learner_id, request)
     try:
-        report = report_service.build_report(profile, window_days=window_days)
+        snapshot = _snapshot(report_service, profile, window_days)
     except ReportSnapshotUnstable:
         raise HTTPException(status_code=503, detail={"code": "REPORT_SNAPSHOT_UNSTABLE", "message": "报告数据正在更新，请稍后重试"})
-    headers = {"ETag": f'"{report["report_revision"]}"', "Cache-Control": "private, no-cache"}
-    if _if_none_match_matches(request.headers.get("if-none-match"), report["report_revision"]):
+    metadata = snapshot.metadata()
+    headers = {"ETag": f'"{metadata["report_revision"]}"', "Cache-Control": "private, no-cache"}
+    if _if_none_match_matches(request.headers.get("if-none-match"), metadata["report_revision"]):
         return Response(status_code=304, headers=headers)
-    return JSONResponse(content=ReportResponse.model_validate(report).model_dump(mode="json"), headers=headers)
+    return JSONResponse(content=ReportResponse.model_validate(snapshot.materialize()).model_dump(mode="json"), headers=headers)
 
 
 @router.get("/{learner_id}/resource-credibility")
@@ -113,7 +123,7 @@ async def stream_report(learner_id: str, request: Request, window_days: int = Qu
 
 def _stream_snapshot(request, report_service, learner_id, window_days):
     """Run synchronous repository reads in the worker owning their Sessions."""
-    current_profile = request.app.container.profile_service().get(learner_id)
+    current_profile = ensure_profile_access(request, request.app.container.profile_service().get(learner_id))
     if current_profile is None:
         return None
-    return report_service.build_report(current_profile, window_days=window_days)
+    return _snapshot(report_service, current_profile, window_days).metadata()

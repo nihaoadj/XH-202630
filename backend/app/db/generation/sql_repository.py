@@ -4,11 +4,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.generation.base import BaseGenerationJobRepository
-from app.db.shared.models import GenerationJobORM
+from app.db.generation.dispatch import GenerationDispatchMixin
+from app.db.generation.fencing import install_execution_fencing
+from app.db.shared.models import GenerationJobORM, AgentRunORM
 from app.models.learning_documents.schemas import GenerationJobStatusResponse
 
 
@@ -32,9 +33,10 @@ def _to_schema(orm: GenerationJobORM) -> GenerationJobStatusResponse:
     )
 
 
-class SQLGenerationJobRepository(BaseGenerationJobRepository):
+class SQLGenerationJobRepository(GenerationDispatchMixin, BaseGenerationJobRepository):
     def __init__(self, session_factory: Callable[[], Session]):
         self.session_factory = session_factory
+        install_execution_fencing()
 
     def create(
         self,
@@ -44,6 +46,8 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
         knowledge_base_id: Optional[str],
         request_payload: dict[str, Any],
         batch_id: str | None = None,
+        *, dispatch_snapshot: dict | None = None, submission_hash: str | None = None,
+        retry_of_run_id: str | None = None,
     ) -> None:
         with self.session_factory() as db:
             db.add(
@@ -56,6 +60,9 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
                     status="queued",
                     request_payload=request_payload,
                     resource_ids=[],
+                    dispatch_mode="worker" if dispatch_snapshot else "legacy",
+                    dispatch_snapshot=dispatch_snapshot, submission_hash=submission_hash,
+                    retry_of_run_id=retry_of_run_id,
                 )
             )
             db.commit()
@@ -98,6 +105,8 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
             orm = db.query(GenerationJobORM).filter_by(run_id=run_id).first()
             if orm is None:
                 return None
+            if orm.status in {"failed", "completed"}:
+                return _to_schema(orm)
             orm.status = "running"
             orm.started_at = datetime.now(timezone.utc)
             db.commit()
@@ -109,6 +118,11 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
             orm = db.query(GenerationJobORM).filter_by(run_id=run_id).first()
             if orm is None:
                 return None
+            if orm.status in {"failed", "completed"}:
+                return _to_schema(orm)
+            run = db.get(AgentRunORM, run_id)
+            if run and run.status in {"failed", "interrupted"}:
+                return _to_schema(orm)
             orm.status = "completed"
             orm.resource_ids = resource_ids
             orm.finished_at = datetime.now(timezone.utc)
@@ -122,6 +136,11 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
             orm = db.query(GenerationJobORM).filter_by(run_id=run_id).first()
             if orm is None:
                 return None
+            if orm.status in {"failed", "completed"}:
+                return _to_schema(orm)
+            run = db.get(AgentRunORM, run_id)
+            if run and run.status in {"completed", "degraded", "human_review"}:
+                return _to_schema(orm)
             orm.status = "failed"
             orm.error_message = error_message
             orm.finished_at = datetime.now(timezone.utc)
@@ -134,6 +153,9 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
             orm = db.query(GenerationJobORM).filter_by(run_id=run_id).with_for_update().first()
             if orm is None:
                 return None
+            run = db.get(AgentRunORM, run_id)
+            if run and run.status in {"failed", "interrupted", "completed", "degraded", "human_review"}:
+                raise ValueError("terminal run requires a new attempt")
             orm.status = "queued"
             orm.error_message = None
             orm.started_at = None
@@ -157,28 +179,9 @@ class SQLGenerationJobRepository(BaseGenerationJobRepository):
             return _to_schema(orm)
 
     def fail_incomplete_before(self, before: datetime, error_message: str) -> list[str]:
-        with self.session_factory() as db:
-            rows = (
-                db.query(GenerationJobORM)
-                .filter(
-                    GenerationJobORM.status.in_(("queued", "running")),
-                    or_(
-                        GenerationJobORM.created_at < before,
-                        GenerationJobORM.created_at.is_(None),
-                    ),
-                )
-                .with_for_update()
-                .all()
-            )
-            finished_at = datetime.now(timezone.utc)
-            run_ids = []
-            for row in rows:
-                row.status = "failed"
-                row.error_message = error_message
-                row.finished_at = finished_at
-                run_ids.append(row.run_id)
-            db.commit()
-            return run_ids
+        # Legacy entry point now delegates to the same lease-aware facts.
+        seconds = max(0, int((datetime.now(timezone.utc) - before.replace(tzinfo=before.tzinfo or timezone.utc)).total_seconds()))
+        return self.reconcile(queued_timeout_seconds=seconds)["failed_run_ids"]
 
     def list_by_learner(self, learner_id: str) -> list[GenerationJobStatusResponse]:
         with self.session_factory() as db:

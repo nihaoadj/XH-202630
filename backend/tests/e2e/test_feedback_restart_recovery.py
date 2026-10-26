@@ -296,3 +296,79 @@ def test_restart_replays_missing_sql_feedback_events_without_recommitting_facts(
         assert db.query(LearningAttemptORM).count() == 1
         assert db.query(FeedbackDecisionORM).count() == 1
     engine.dispose()
+
+
+def test_durable_feedback_dispatch_commits_once_and_retry_keeps_lineage(tmp_path):
+    engine, factory, learners, resources, loop, jobs, service = _setup(tmp_path)
+    service.generation_job_service.dispatch_mode = "worker"
+    audit = SQLAuditRepository(factory)
+    service.audit_repo = audit
+    audit.create_run(CreateRunCommand(run_id="source-run", learner_id="learner", request_snapshot={}, request_hash=canonical_hash({})))
+    result = service.process_learning_attempt(learners.get("learner"), resources.get("resource").model_copy(update={"run_id": "source-run"}),
+                                             _request().model_copy(update={"source_run_id": "source-run"}))
+    selection = FeedbackFollowupSelection(learner_id="learner", attempt_id=result.attempt.attempt_id, option_id="remediate-core")
+    scheduled = []
+    first = service.choose_followup(learners.get("learner"), selection, schedule_followup=lambda *_: scheduled.append(True))
+    replay = service.choose_followup(learners.get("learner"), selection)
+    assert replay.followup_run_id == first.followup_run_id
+    assert not scheduled
+    assert jobs.get_dispatch(first.followup_run_id)["dispatch_mode"] == "worker"
+    assert jobs.get_dispatch(first.followup_run_id)["dispatch_snapshot"]["learner"]["profile_version"] == 2
+    assert len([event for event in audit.list_events("source-run") if event.event_type == WorkflowEventType.FOLLOWUP_GENERATION_CREATED]) == 1
+    jobs.mark_failed(first.followup_run_id, "synthetic-interruption")
+    from app.services.generation.reconciliation import GenerationReconciler
+    assert GenerationReconciler(jobs, loop).run_once()["feedback"] == 1
+    retry = service.choose_followup(learners.get("learner"), selection)
+    assert retry.followup_run_id != first.followup_run_id
+    assert jobs.get(first.followup_run_id).job_status == "failed"
+    assert jobs.get(first.followup_run_id).superseded_by_run_id == retry.followup_run_id
+    created_events = [event for event in audit.list_events("source-run") if event.event_type == WorkflowEventType.FOLLOWUP_GENERATION_CREATED]
+    assert [event.payload["child_run_id"] for event in created_events] == [first.followup_run_id, retry.followup_run_id]
+    with factory() as db:
+        assert db.query(FeedbackFollowUpRunORM).count() == 2
+        assert db.query(LearningAttemptORM).count() == 1
+    engine.dispose()
+
+
+def test_durable_feedback_audit_failure_rolls_back_dispatch(tmp_path, monkeypatch):
+    from app.core.security.errors import ApplicationError
+    engine, factory, learners, resources, loop, jobs, service = _setup(tmp_path)
+    service.generation_job_service.dispatch_mode = "worker"
+    audit = SQLAuditRepository(factory)
+    service.audit_repo = audit
+    audit.create_run(CreateRunCommand(run_id="source-run", learner_id="learner", request_snapshot={}, request_hash=canonical_hash({})))
+    result = service.process_learning_attempt(learners.get("learner"), resources.get("resource").model_copy(update={"run_id": "source-run"}),
+                                             _request().model_copy(update={"source_run_id": "source-run"}))
+    original = SQLAuditRepository.append_event
+    def fail_created(self, run_id, event_type, **kwargs):
+        if event_type == WorkflowEventType.FOLLOWUP_GENERATION_CREATED:
+            raise RuntimeError("synthetic-audit-outage")
+        return original(self, run_id, event_type, **kwargs)
+    monkeypatch.setattr(SQLAuditRepository, "append_event", fail_created)
+    with pytest.raises(ApplicationError):
+        service.choose_followup(learners.get("learner"), FeedbackFollowupSelection(
+            learner_id="learner", attempt_id=result.attempt.attempt_id, option_id="remediate-core"))
+    assert jobs.list_by_learner("learner") == []
+    with factory() as db:
+        assert db.query(FeedbackFollowUpRunORM).count() == 0
+        assert db.query(LearningAttemptORM).count() == 1
+    engine.dispose()
+
+
+def test_durable_feedback_relation_failure_rolls_back_dispatch(tmp_path, monkeypatch):
+    from app.core.security.errors import ApplicationError
+    engine, factory, learners, resources, loop, jobs, service = _setup(tmp_path)
+    service.generation_job_service.dispatch_mode = "worker"
+    result = service.process_learning_attempt(learners.get("learner"), resources.get("resource"), _request())
+    def fail_relation(*args, **kwargs):
+        raise RuntimeError("synthetic-relation-outage")
+    monkeypatch.setattr(SQLFeedbackLoopRepository, "attach_followup", fail_relation)
+    with pytest.raises(ApplicationError):
+        service.choose_followup(learners.get("learner"), FeedbackFollowupSelection(
+            learner_id="learner", attempt_id=result.attempt.attempt_id, option_id="remediate-core"))
+    assert jobs.list_by_learner("learner") == []
+    with factory() as db:
+        assert db.query(FeedbackFollowUpRunORM).count() == 0
+        assert db.query(LearningAttemptORM).count() == 1
+    assert loop.get_by_idempotency_key("learner", "restart-recovery-key").followup_generation_status.value == "not_requested"
+    engine.dispose()

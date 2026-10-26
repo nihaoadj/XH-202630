@@ -30,6 +30,10 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
     env:
       PYTHONPATH: .
       COURSEWARE_BROWSER_REQUIRED: "1"
@@ -37,10 +41,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - run: pip install --require-hashes -r backend/requirements.lock.txt -r backend/requirements-dev.lock.txt
       - name: Check Python lint, declarations, locks and installed dependencies
-        run: python scripts/run_tests.py --suite backend-lint --suite dependency-check --suite pip-check --output output/test-runs/ci-quality
+        run: python scripts/run_tests.py --suite backend-lint --suite architecture --suite frontend-contracts --suite dependency-check --suite pip-check --output output/test-runs/ci-quality
       - run: python backend/scripts/courseware_ci_artifacts.py --manifest backend/tests/fixtures/courseware/evals/manifest.json --output backend/courseware-ci-artifacts
       - name: Run backend regression and frozen evaluations
         id: full-backend-tests
@@ -49,7 +53,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: courseware-evaluation
+          name: courseware-evaluation-py${{ matrix.python-version }}
           path: |
             output/test-runs/ci-backend
             output/test-runs/ci-quality
@@ -108,7 +112,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - run: pip install --require-hashes -r backend/requirements.lock.txt
       - uses: actions/setup-node@v4
         with:
@@ -117,7 +121,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
-      - name: Check all frontend sources and typed request guard
+      - name: Check all frontend sources and typed API, SSE and request boundaries
         run: python scripts/run_tests.py --suite frontend-lint --suite frontend-typecheck --output output/test-runs/ci-frontend-quality
       - run: npx playwright install --with-deps chromium
         working-directory: frontend

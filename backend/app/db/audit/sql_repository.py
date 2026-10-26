@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Optional
 
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -772,34 +774,34 @@ class SQLAuditRepository(BaseAuditRepository):
             )
             return [self._evidence_record(item) for item in rows]
 
+    def interrupt_expired_in_session(self, db, run, now) -> bool:
+        lease = run.lease_expires_at
+        if run.status not in {"running", "finalizing"} or lease is None or _as_utc(lease) > _as_utc(now):
+            return False
+        changed = db.query(AgentRunORM).filter(
+            AgentRunORM.run_id == run.run_id, AgentRunORM.status == run.status,
+            AgentRunORM.row_version == run.row_version, AgentRunORM.lease_expires_at == lease,
+            AgentRunORM.lease_expires_at <= now,
+        ).update({"status": "interrupted", "execution_status": "interrupted", "ended_at": now,
+                  "last_error_code": "WORKFLOW_RUN_INTERRUPTED", "lease_expires_at": None,
+                  "row_version": AgentRunORM.row_version + 1}, synchronize_session=False)
+        if changed != 1:
+            return False
+        db.expire(run)
+        self._append_event(db, run, WorkflowEventType.RUN_INTERRUPTED, payload={}, occurred_at=now,
+                           status="interrupted", error_code="WORKFLOW_RUN_INTERRUPTED",
+                           event_id=f"{run.run_id}:lease-interrupted")
+        return True
+
     def mark_stale_interrupted(self, *, before: datetime, occurred_at: datetime) -> int:
         with self.session_factory() as db:
-            runs = (
-                db.query(AgentRunORM)
-                .filter(AgentRunORM.status.in_([RunStatus.RUNNING.value, RunStatus.FINALIZING.value]))
-                .filter(AgentRunORM.lease_expires_at.is_not(None))
-                .filter(AgentRunORM.lease_expires_at < before)
-                .with_for_update()
-                .all()
-            )
-            for run in runs:
-                require_run_transition(run.status, RunStatus.INTERRUPTED)
-                run.status = RunStatus.INTERRUPTED.value
-                run.execution_status = "interrupted"
-                run.ended_at = occurred_at
-                run.last_error_code = "WORKFLOW_RUN_INTERRUPTED"
-                run.lease_expires_at = None
-                self._append_event(
-                    db,
-                    run,
-                    WorkflowEventType.RUN_INTERRUPTED,
-                    payload={},
-                    occurred_at=occurred_at,
-                    status=RunStatus.INTERRUPTED.value,
-                    error_code="WORKFLOW_RUN_INTERRUPTED",
-                )
+            runs = db.query(AgentRunORM).filter(
+                AgentRunORM.status.in_(("running", "finalizing")),
+                AgentRunORM.lease_expires_at <= before,
+            ).order_by(AgentRunORM.lease_expires_at, AgentRunORM.run_id).limit(100).all()
+            count = sum(self.interrupt_expired_in_session(db, run, occurred_at) for run in runs)
             db.commit()
-            return len(runs)
+            return count
 
     def save_run(
         self,
@@ -992,45 +994,79 @@ class SQLAuditRepository(BaseAuditRepository):
                 .order_by(ResourceClaimORM.claim_id)
                 .all()
             )
-            return ReviewSummary(
-                review_id=review.review_id,
-                resource_id=review.resource_id,
-                status=normalize_review_status(review.status),
-                claim_total=review.claim_total,
-                claim_supported=review.claim_supported,
-                claim_unsupported=review.claim_unsupported,
-                suspected_hallucinations=review.suspected_hallucinations,
-                hallucination_rate=review.hallucination_rate,
-                legacy_reviewer_score=review.legacy_reviewer_score,
-                claim_hallucination_rate=review.claim_hallucination_rate,
-                claim_metric_status=review.claim_metric_status,
-                review_pass_rate=review.review_pass_rate,
-                revision_count=review.revision_count,
-                issues=review.issues or [],
-                revision_instructions=review.revision_instructions or [],
-                claims=[
-                    ResourceClaim(
-                        claim_id=claim.claim_id,
-                        text=claim.claim_text,
-                        knowledge_point=claim.knowledge_point,
-                        supported=claim.supported,
-                        confidence=claim.confidence,
-                        evidence_refs=[
-                            SourceRef(
-                                doc_id=ref.get("doc_id", "unknown"),
-                                title=ref.get("title", ref.get("doc_id", "未知来源")),
-                                snippet=ref.get("snippet", ""),
-                                score=float(ref.get("score", 0.0)),
-                                chunk_id=ref.get("chunk_id"),
-                                source_path=ref.get("source_path"),
-                                metadata=ref,
-                            )
-                            for ref in (claim.evidence_refs or [])
-                        ],
-                        issue_type=claim.issue_type,
-                        correction=claim.correction,
-                        review_comment=claim.review_comment,
-                    )
-                    for claim in claims
-                ],
-            )
+            return self._review_summary(review, claims)
+
+    @staticmethod
+    def _review_summary(review, claims):
+        return ReviewSummary(
+            review_id=review.review_id,
+            resource_id=review.resource_id,
+            status=normalize_review_status(review.status),
+            claim_total=review.claim_total,
+            claim_supported=review.claim_supported,
+            claim_unsupported=review.claim_unsupported,
+            suspected_hallucinations=review.suspected_hallucinations,
+            hallucination_rate=review.hallucination_rate,
+            legacy_reviewer_score=review.legacy_reviewer_score,
+            claim_hallucination_rate=review.claim_hallucination_rate,
+            claim_metric_status=review.claim_metric_status,
+            review_pass_rate=review.review_pass_rate,
+            revision_count=review.revision_count,
+            issues=review.issues or [],
+            revision_instructions=review.revision_instructions or [],
+            claims=[
+                ResourceClaim(
+                    claim_id=claim.claim_id,
+                    text=claim.claim_text,
+                    knowledge_point=claim.knowledge_point,
+                    supported=claim.supported,
+                    confidence=claim.confidence,
+                    evidence_refs=[
+                        SourceRef(
+                            doc_id=ref.get("doc_id", "unknown"),
+                            title=ref.get("title", ref.get("doc_id", "未知来源")),
+                            snippet=ref.get("snippet", ""),
+                            score=float(ref.get("score", 0.0)),
+                            chunk_id=ref.get("chunk_id"),
+                            source_path=ref.get("source_path"),
+                            metadata=ref,
+                        )
+                        for ref in (claim.evidence_refs or [])
+                    ],
+                    issue_type=claim.issue_type,
+                    correction=claim.correction,
+                    review_comment=claim.review_comment,
+                )
+                for claim in claims
+            ],
+        )
+
+
+    def get_reviews_by_resources(self, resource_ids: list[str]) -> dict[str, ReviewSummary]:
+        result = {}
+        ids = list(dict.fromkeys(resource_ids))
+        with self.session_factory() as db:
+            if db.bind.dialect.name == "sqlite" and sqlite3.sqlite_version_info < (3, 25, 0):
+                return {resource_id: self.get_review_by_resource(resource_id) for resource_id in ids}
+            tie = literal_column("resource_reviews.rowid") if db.bind.dialect.name == "sqlite" else ResourceReviewORM.review_id
+            for start in range(0, len(ids), 500):
+                ranked = select(
+                    ResourceReviewORM.review_id,
+                    func.row_number().over(
+                        partition_by=ResourceReviewORM.resource_id,
+                        order_by=(ResourceReviewORM.created_at.desc(), tie),
+                    ).label("position"),
+                ).where(ResourceReviewORM.resource_id.in_(ids[start:start + 500])).subquery()
+                reviews = db.query(ResourceReviewORM).filter(ResourceReviewORM.review_id.in_(
+                    select(ranked.c.review_id).where(ranked.c.position == 1),
+                )).all()
+                claims = db.query(ResourceClaimORM).filter(
+                    ResourceClaimORM.review_id.in_([review.review_id for review in reviews]),
+                    (ResourceClaimORM.schema_version.is_(None)) | (ResourceClaimORM.schema_version != "2.0"),
+                ).order_by(ResourceClaimORM.claim_id).all() if reviews else []
+                by_review = {}
+                for claim in claims:
+                    by_review.setdefault(claim.review_id, []).append(claim)
+                for review in reviews:
+                    result[review.resource_id] = self._review_summary(review, by_review.get(review.review_id, []))
+        return result

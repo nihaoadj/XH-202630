@@ -41,6 +41,12 @@ class CoursewareLearningEventBatch(BaseModel):
     events: list[CoursewareLearningEvent] = Field(min_length=1, max_length=100)
 
 
+class CoursewareLearningEventAck(BaseModel):
+    """The HTTP acknowledgement envelope, without transport wrapper fields."""
+
+    acknowledged_event_ids: list[str]
+
+
 def sanitize_component_state(value: Any) -> dict[str, Any]:
     """Keep only bounded, named runtime state; never persist learner answers."""
     if not isinstance(value, Mapping):

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import uuid
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Protocol
 
 from app.agents.shared.policies import target_resource_types
+from app.agents.shared.evidence_scope import allocation_for_state, validate_spec, contract_error, validate_payload_evidence
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
 from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
 from app.agents.resource_workflows.learning_documents.state import AgentState
@@ -42,9 +44,15 @@ GENERATION_PROMPT = "Resource routing is deterministic; specialized prompts own 
 
 
 def _specs_for_state(state: AgentState, node_input: GeneratorInput) -> list[ResourceSpec]:
+    allocation = allocation_for_state(state)
     stored = state.get("resource_specs") or []
+    if allocation and not stored and (node_input.generation_attempt > 1 or node_input.generated_resources):
+        raise contract_error()
     if stored:
-        specs = [ResourceSpec.model_validate(item) for item in stored]
+        try:
+            specs = [ResourceSpec.model_validate(item) for item in stored]
+        except (ValueError, TypeError) as exc:
+            raise contract_error() from exc
     else:
         specs = build_resource_specs(
             run_id=node_input.run_id,
@@ -61,10 +69,13 @@ def _specs_for_state(state: AgentState, node_input: GeneratorInput) -> list[Reso
             evidence=node_input.retrieved_evidence,
             target_skill_nodes=node_input.target_skill_nodes,
             node_evidence_map=node_input.node_evidence_map,
+            evidence_allocation=allocation,
         )
     expected = [normalize_resource_type(item) for item in node_input.resource_types]
     if [item.resource_type for item in specs] != expected:
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+    for spec in specs:
+        validate_spec(state, spec)
     return specs
 
 
@@ -73,6 +84,7 @@ def _context(
     state: AgentState,
     step_id: str,
     previous: LearningResource | None = None,
+    spec: ResourceSpec | None = None,
 ) -> ResourceGenerationContext:
     learner = node_input.learner
     constraints = dict(node_input.constraints)
@@ -93,8 +105,8 @@ def _context(
             "learning_goal": learner.learning_goal,
         },
         learning_path=list(node_input.learning_plan.get("learning_path", []))[:50],
-        evidence=node_input.retrieved_evidence,
-        node_evidence_map=node_input.node_evidence_map,
+        evidence=validate_spec(state, spec) if spec else node_input.retrieved_evidence,
+        node_evidence_map=spec.node_evidence_map if spec else node_input.node_evidence_map,
         continuation_context=list(node_input.constraints.get("continuation_context", []))[:12],
         constraints=constraints,
         generation_attempt=node_input.generation_attempt,
@@ -124,7 +136,7 @@ def _materialize(
 ) -> LearningResource:
     metadata = artifact.metadata
     data = artifact.artifact_data
-    return LearningResource(
+    resource = LearningResource(
         resource_id=str(uuid.uuid4()), learner_id=node_input.learner.learner_id,
         topic=node_input.topic, run_id=node_input.run_id, batch_id=node_input.batch_id,
         resource_spec_id=metadata.resource_spec_id,
@@ -136,7 +148,7 @@ def _materialize(
         # agent-added subpoints, but never allow an artifact to drop a selected
         # target node before publication and curriculum accounting.
         knowledge_points=list(dict.fromkeys([*spec.knowledge_points, *artifact.knowledge_points])),
-        source_refs=source_refs_from_evidence(node_input.retrieved_evidence),
+        source_refs=source_refs_from_evidence([item for item in node_input.retrieved_evidence if item.evidence_id in spec.evidence_ids]),
         review_status=(ResourceStatus.PENDING_REVIEW.value if node_input.include_review
                        else ResourceStatus.UNREVIEWED_DRAFT.value),
         version=(previous.version + 1) if previous else 1,
@@ -149,6 +161,11 @@ def _materialize(
         practice_guide_payload=data.get("practice_guide_package"),
         practice_guide_payload_hash=(data.get("practice_guide_package") or {}).get("payload_hash"),
     )
+    validate_payload_evidence(resource, [item for item in node_input.retrieved_evidence if item.evidence_id in spec.evidence_ids])
+    if not set(metadata.source_evidence_ids) <= set(spec.evidence_ids):
+        raise contract_error()
+    return resource
+
 
 
 def _validate_artifact_scope(artifact: GeneratedArtifact, spec: ResourceSpec,
@@ -177,7 +194,7 @@ def _fallback(spec: ResourceSpec, node_input: GeneratorInput, previous: Learning
         content_text=(f"# {node_input.topic} - {spec.resource_type}\n\n## 学习目标\n"
                       f"{spec.learning_objective}\n\n## 资源状态\n模型调用未完成，等待人工复核。\n"),
         knowledge_points=spec.knowledge_points,
-        source_refs=source_refs_from_evidence(node_input.retrieved_evidence),
+        source_refs=source_refs_from_evidence([item for item in node_input.retrieved_evidence if item.evidence_id in spec.evidence_ids]),
         review_status=ResourceStatus.HUMAN_REVIEW.value,
         version=(previous.version + 1) if previous else 1,
         parent_resource_id=previous.resource_id if previous else None,
@@ -267,6 +284,7 @@ def generate_node(
                 state,
                 _worker_step_id(node_input, spec, "text"),
                 previous.get((spec.resource_spec_id, "text")),
+                spec=spec,
             ),
         )
         for spec in specs
@@ -309,7 +327,7 @@ def generate_node(
         executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="resource-worker")
         futures = {
             spec.resource_spec_id: executor.submit(
-                agent.generate,
+                copy_context().run, agent.generate,
                 spec,
                 context,
                 llm_gateway=llm_gateway,

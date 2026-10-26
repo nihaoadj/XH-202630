@@ -1,9 +1,9 @@
 export { coursewareApi } from './api'
 export { useCoursewareJob } from './useCoursewareJob'
 export {
-  acknowledgeCoursewareEvents,
+  CoursewareEventQueue,
   createCoursewareEvent,
-  enqueueCoursewareEvent,
-  pendingCoursewareEvents,
   projectCoursewareProgress,
 } from './offlineEvents'
+
+export { CoursewareEventSender } from './eventSync.js'

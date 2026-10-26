@@ -274,6 +274,16 @@ class GenerationJobORM(Base):
     started_at = Column(DateTime(timezone=True), nullable=True, comment="开始时间")
     finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
 
+    dispatch_mode = Column(String(16), nullable=False, default="legacy", server_default="legacy")
+    dispatch_snapshot = Column(JSON, nullable=True)
+    submission_hash = Column(String(64), nullable=True)
+    claim_owner = Column(String(128), nullable=True)
+    claim_epoch = Column(Integer, nullable=False, default=0, server_default="0")
+    claim_count = Column(Integer, nullable=False, default=0, server_default="0")
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    next_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    retry_of_run_id = Column(String(128), nullable=True, unique=True)
+
 
 class ResourceSpecORM(Base):
     """一次 Run 中冻结的语义资源工作单元。"""

@@ -59,10 +59,11 @@ def test_frontend_inventory_is_complete_and_disjoint():
               if "test-results" not in item.parts}
     assert len(registered) == len(set(registered))
     assert set(registered) == actual
-    assert len(groups["browser"]) == 13
+    assert len(groups["browser"]) == 15
     assert {"historyUiBrowser.test.mjs", "reportUiBrowser.test.mjs",
             "userProfileUiBrowser.test.mjs", "profileRequestBrowser.test.mjs",
-            "motionBrowser.test.mjs"} <= set(groups["browser"])
+            "motionBrowser.test.mjs", "tutorUiBrowser.test.mjs",
+            "coursewareSyncBrowser.test.mjs"} <= set(groups["browser"])
 
 
 def test_invalid_junit_is_an_error_and_does_not_abort_reporting(tmp_path):
@@ -79,7 +80,9 @@ def test_fail_fast_keeps_unexecuted_suite_visible(monkeypatch, tmp_path):
     output = tmp_path / "run"
     assert runner.main(["--profile", "quick", "--fail-fast", "--output", str(output)]) == 1
     report = json.loads((output / "summary.json").read_text(encoding="utf-8"))
-    assert [item["status"] for item in report["results"]] == ["FAIL", "NOT_RUN", "NOT_RUN"]
+    requested = runner.load_catalog()["profiles"]["quick"]
+    assert [item["id"] for item in report["results"]] == requested
+    assert [item["status"] for item in report["results"]] == ["FAIL", *(["NOT_RUN"] * (len(requested) - 1))]
     with pytest.raises(SystemExit) as error:
         runner.main(["--profile", "quick", "--output", str(output)])
     assert error.value.code == 2

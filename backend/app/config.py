@@ -166,10 +166,19 @@ class Settings(BaseSettings):
     embedding_local_files_only: bool = True
     retrieval_top_k_default: int = Field(default=3, ge=1, le=10)
     retrieval_max_queries: int = Field(default=6, ge=1, le=10)
+    resource_aware_retrieval_enabled: bool = False
+    resource_aware_retrieval_max_queries: int = Field(default=10, ge=1, le=10)
+    # Deployment must supply the actual model window before using AI planning.
+    resource_aware_planner_context_tokens: int | None = Field(default=None, ge=256)
+    resource_aware_planner_input_budget_tokens: int = Field(default=32768, ge=256)
     retrieval_max_evidence: int = Field(default=8, ge=1, le=20)
     retrieval_min_evidence: int = Field(default=1, ge=1, le=20)
     retrieval_min_normalized_score: float = Field(default=0.35, ge=0, le=1)
     evidence_max_excerpt_chars: int = Field(default=1200, ge=100, le=10000)
+    generation_dispatch_mode: str = "worker"
+    generation_worker_poll_seconds: float = Field(default=2.0, ge=0.1, le=60)
+    generation_worker_shutdown_seconds: float = Field(default=30.0, ge=0, le=300)
+    generation_queue_timeout_seconds: int = Field(default=1260, ge=30, le=86400)
     workflow_run_lease_seconds: int = Field(default=1260, ge=30, le=3600)
     resource_worker_max_concurrency: int = Field(default=2, ge=1, le=4)
     resource_continuation_max_items: int = Field(default=12, ge=1, le=100)
@@ -433,6 +442,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_runtime_settings(self):
+        if self.generation_dispatch_mode not in {"worker", "background"}:
+            raise ValueError("CFG_INVALID_GENERATION_DISPATCH_MODE")
+        if self.db_type == "sqlite" and self.generation_dispatch_mode != "worker":
+            raise ValueError("CFG_SQLITE_REQUIRES_GENERATION_WORKER")
         legacy_prefix = (self.chroma_collection_name or "").strip()
         if legacy_prefix and "chroma_collection_prefix" not in self.model_fields_set:
             self.chroma_collection_prefix = legacy_prefix

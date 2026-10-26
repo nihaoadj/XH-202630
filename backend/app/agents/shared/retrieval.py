@@ -17,7 +17,12 @@ from app.models.shared.agent_contracts import (
     require_agent_fallback,
     start_step,
 )
-from app.models.knowledge.knowledge import RetrievalRequest, RetrievalStatus
+from app.models.knowledge.knowledge import (
+    LEGACY_RETRIEVAL_STRATEGY, RESOURCE_AWARE_STRATEGY, QueryPurpose,
+    RetrievalRequest, RetrievalStatus,
+)
+from app.models.learning_documents.types import GENERAL_GENERATION_RESOURCE_TYPES, canonical_resource_type
+from app.core.retrieval.knowledge_ids import normalize_text, query_hash
 from app.models.shared.workflow import StepStatus
 
 
@@ -54,6 +59,58 @@ def _queries(node_input: RetrieverInput) -> tuple[list[str], dict[str, str]]:
     return queries, {query: node_id for query, node_id in query_node_ids.items() if query in queries}
 
 
+RESOURCE_QUERY_FOCUS = {
+    "讲义": "原理解释 概念关系 适用条件",
+    "实操指南": "前置条件 操作步骤 验证方法 常见错误",
+    "分阶测试题": "概念区别 判断条件 适用边界",
+    "复习清单": "核心要点 易混淆点 常见错误",
+    "案例分析": "应用情境 决策依据 限制条件",
+}
+
+
+def _resource_queries(node_input: RetrieverInput, budget: int):
+    """Schedule unique queries while preserving every normalized purpose."""
+    public, _ = _queries(node_input)
+    bindings: dict[str, list[QueryPurpose]] = {}
+    gaps: list[dict[str, str]] = []
+
+    def bind(query, purpose):
+        key = normalize_text(query)
+        values = bindings.setdefault(key, [])
+        if purpose not in values:
+            values.append(purpose)
+
+    for query in public:
+        bind(query, QueryPurpose())
+    nodes = list(dict.fromkeys(node_input.target_skill_nodes[:3]))
+    for node in nodes:
+        name, points = _node_descriptor(node)
+        bind(" ".join([node_input.topic, name, *points]), QueryPurpose(node_id=node))
+    if len(bindings) > budget:
+        return None
+    types = list(dict.fromkeys(canonical_resource_type(item) for item in node_input.resource_types))
+    scopes = nodes or [None]
+    # Type-major turns with staggered first node. Do not stop processing when
+    # full: duplicate queries must still acquire every later purpose.
+    for turn in range(len(scopes)):
+        for index, resource_type in enumerate(types):
+            node = scopes[(turn + index) % len(scopes)]
+            name, points = _node_descriptor(node) if node else ("", [])
+            query = normalize_text(" ".join([node_input.topic, name, *points, RESOURCE_QUERY_FOCUS[resource_type]]))
+            gap = {"resource_type": resource_type, "node_id": node or "", "query_hash": query_hash(query)}
+            if len(query) > 2000:
+                gaps.append({**gap, "reason": "query_too_long"})
+            elif query not in bindings and len(bindings) >= budget:
+                gaps.append({**gap, "reason": "query_budget"})
+            else:
+                bind(query, QueryPurpose(node_id=node, resource_type=resource_type))
+    query_node_ids = {
+        query: next(p.node_id for p in purposes if p.node_id)
+        for query, purposes in bindings.items() if any(p.node_id for p in purposes)
+    }
+    return list(bindings), query_node_ids, bindings, types, gaps
+
+
 def retrieve_node(
     state: AgentState,
     *,
@@ -77,12 +134,35 @@ def retrieve_node(
         evidence_retriever.settings,
         top_k_override=top_k_override,
     )
+    strategy = LEGACY_RETRIEVAL_STRATEGY
+    strategy_reason = None
+    bindings = {}
+    resource_types = []
+    query_gaps = []
+    if node_input.retrieval_strategy_version == RESOURCE_AWARE_STRATEGY and node_input.resource_types:
+        types = [canonical_resource_type(item) for item in node_input.resource_types]
+        if set(types) <= set(GENERAL_GENERATION_RESOURCE_TYPES):
+            scheduled = _resource_queries(node_input, evidence_retriever.settings.resource_aware_retrieval_max_queries)
+            if scheduled is None:
+                strategy_reason = "query_budget_below_public_count"
+            else:
+                queries, query_node_ids, bindings, resource_types, query_gaps = scheduled
+                strategy = RESOURCE_AWARE_STRATEGY
+                policy = policy.model_copy(update={
+                    "max_query_count": evidence_retriever.settings.resource_aware_retrieval_max_queries,
+                    "strategy_version": strategy,
+                    "query_strategy_version": strategy,
+                    "ranking_strategy_version": "resource-aware-owner-v1",
+                })
     request = RetrievalRequest(
         run_id=node_input.run_id,
         step_id=step_context["step_id"],
         knowledge_base_id=knowledge_base_id,
         queries=queries,
         query_node_ids=query_node_ids,
+        query_bindings=bindings,
+        resource_types=resource_types,
+        query_gaps=query_gaps,
         policy=policy,
     )
     target_nodes = list(dict.fromkeys(node_input.target_skill_nodes[:3]))
@@ -124,9 +204,12 @@ def retrieve_node(
     else:
         final_retrieval_source = "global"
     profile.update({
+        "retrieval_strategy_version": strategy,
         "final_retrieval_source": final_retrieval_source,
         "node_mapped_chunk_count": len(allowed_chunk_ids),
     })
+    if strategy_reason:
+        profile["strategy_fallback_reason"] = strategy_reason
     if fallback_reason:
         profile["node_scope_fallback_reason"] = fallback_reason
     batch = batch.model_copy(update={"retrieval_profile": profile})
@@ -147,6 +230,8 @@ def retrieve_node(
         )
     status = StepStatus.DEGRADED if error else StepStatus.SUCCESS
     output = RetrieverOutput(
+        retrieval_strategy_version=strategy,
+        evidence_allocation=batch.evidence_allocation,
         retrieved_evidence=batch.evidence,
         node_evidence_map=batch.node_evidence_map,
         retrieval_status=batch.status,
@@ -194,6 +279,8 @@ def retrieve_node(
         },
     )
     return {
+        "retrieval_strategy_version": strategy,
+        "evidence_allocation": batch.evidence_allocation,
         "knowledge_base_id": knowledge_base_id,
         "retrieved_evidence": batch.evidence,
         "node_evidence_map": batch.node_evidence_map,

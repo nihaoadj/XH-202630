@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -59,7 +60,7 @@ const sseClients = new Set()
 let fixtureMode = 'full'
 let forceNextUpdate = false
 function reportKey(learnerId, days) { return learnerId + ':' + days }
-function revision(learnerId, days, version) { return 'rpt-' + learnerId + '-' + days + '-v' + version }
+function revision(learnerId, days, version) { return 'rpt_' + createHash('sha256').update(`${learnerId}:${days}:${version}`).digest('hex') }
 function makeReport(learnerId, days, pending = false) {
   const state = { version: 1, data: null }
   const empty = pending
@@ -789,14 +790,14 @@ try {
     await page.getByRole('option', { name: /主学习画像/ }).click()
     await page.getByText('初始校准：问卷预判第 3 阶', { exact: false }).waitFor()
     await waitForAudit(() => audit.requests.slice(mainProfileStart).some((item) => item.path === '/api/report/learner-main' && item.query.includes('window_days=30') && item.responseStatus === 200), '主画像 report payload')
-    await waitForAudit(() => audit.requests.slice(mainProfileStart).some((item) => item.path === '/api/report/learner-main/events' && item.query.includes('window_days=30') && item.query.includes('after_revision=rpt-learner-main-30-v1')), '主画像 report stream snapshot')
+    await waitForAudit(() => audit.requests.slice(mainProfileStart).some((item) => item.path === '/api/report/learner-main/events' && item.query.includes('window_days=30') && item.query.includes('after_revision=' + revision('learner-main', 30, 1))), '主画像 report stream snapshot')
     for (const days of [7, 30, 90]) {
       const control = page.getByRole('combobox', { name: '报告时间窗口' })
       const windowStart = audit.requests.length
       await control.press('ArrowDown')
       await page.getByRole('option', { name: '近 ' + days + ' 天', exact: true }).click()
       await waitForAudit(() => audit.requests.slice(windowStart).some((item) => item.path === '/api/report/learner-main' && item.query.includes('window_days=' + days) && item.responseStatus === 200), 'window_days=' + days + ' report payload')
-      await waitForAudit(() => audit.requests.slice(windowStart).some((item) => item.path === '/api/report/learner-main/events' && item.query.includes('window_days=' + days) && item.query.includes('after_revision=rpt-learner-main-' + days + '-v1')), 'window_days=' + days + ' report stream snapshot')
+      await waitForAudit(() => audit.requests.slice(windowStart).some((item) => item.path === '/api/report/learner-main/events' && item.query.includes('window_days=' + days) && item.query.includes('after_revision=' + revision('learner-main', days, 1))), 'window_days=' + days + ' report stream snapshot')
     }
     summary.checks.push({ name: 'profile-selection-and-7-30-90-window-get', status: 'PASS' })
 

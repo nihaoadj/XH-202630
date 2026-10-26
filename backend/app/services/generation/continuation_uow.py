@@ -9,6 +9,7 @@ from typing import Any, Self
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+from app.db.audit.sql_repository import SQLAuditRepository
 from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
 from app.db.feedback.feedback_loop_sql_repository import SQLFeedbackLoopRepository
 from app.db.generation.memory import MemoryGenerationJobRepository
@@ -43,6 +44,7 @@ def _repository_kind(repository: object) -> str | None:
         return "memory"
     if type(repository) in (
         SQLGenerationJobRepository,
+        SQLAuditRepository,
         SQLFeedbackLoopRepository,
         SQLMasteryRepository,
         SQLCurriculumRepository,
@@ -119,10 +121,11 @@ class ContinuationUnitOfWork:
     """Bind a call-local service graph to one SQL connection or Memory snapshot."""
 
     def __init__(
-        self, generation_job_service: object, feedback_repositories: list[object]
+        self, generation_job_service: object, feedback_repositories: list[object], audit_repository=None
     ):
         self.original_service = generation_job_service
         self.feedback_repositories = feedback_repositories
+        self.audit_repository = audit_repository
         self.mode: str | None = None
         self.engine: Engine | None = None
         self.connection = None
@@ -145,6 +148,8 @@ class ContinuationUnitOfWork:
             )
 
         writer_repositories = [job_repository, *self.feedback_repositories]
+        if self.audit_repository is not None:
+            writer_repositories.append(self.audit_repository)
         if mastery_service is not None:
             writer_repositories.append(mastery_service.repository)
             writer_repositories.extend(
@@ -210,6 +215,10 @@ class ContinuationUnitOfWork:
         if self.mode == "sql":
             self.connection = self.engine.connect()
             self.transaction = self.connection.begin()
+            if self.connection.dialect.name == "sqlite":
+                # Serialize the read/decision/write sequence, including mastery
+                # scheduling, before inspecting an idempotent submission or retry.
+                self.connection.exec_driver_sql("BEGIN IMMEDIATE")
             self.session_factory = scoped_session(
                 sessionmaker(
                     autocommit=False,
@@ -268,6 +277,8 @@ class ContinuationUnitOfWork:
             self.session_factory,
         )
         self._bind_feedback_repositories()
+        if self.audit_repository is not None:
+            self.audit_repository = _clone_with_session_factory(self.audit_repository, self.session_factory)
 
         mastery_service = original.mastery_service
         if mastery_service is None:
@@ -372,7 +383,7 @@ class ContinuationUnitOfWork:
                 seen.add(id(lock))
 
         self._snapshots = [
-            (job_repo, {"_store": deepcopy(job_repo._store)}),
+            (job_repo, {"_store": deepcopy(job_repo._store), "_dispatch_metadata": deepcopy(job_repo._dispatch_metadata)}),
             *((repo, {"_followups": deepcopy(repo._followups)}) for repo in feedback),
         ]
         if mastery_repo is not None:

@@ -12,6 +12,7 @@ from app.models.learning_documents.schemas import (
 from app.models.learning_documents.types import FEEDBACK_ONLY_RESOURCE_TYPES
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.services.generation.jobs import GenerationJobService
+from app.services.generation.dispatch import schedule_generation, submission_identity
 from app.services.learners.profiles import ProfileService
 
 router = APIRouter()
@@ -40,14 +41,9 @@ def create_generation_job(
         raise HTTPException(status_code=404, detail="学习者画像不存在")
 
     generation_job_service: GenerationJobService = container.generation_job_service()
-    job = generation_job_service.create_job(learner, req)
-    background_tasks.add_task(
-        generation_job_service.run_job,
-        learner,
-        req,
-        job.run_id,
-        job.batch_id,
-    )
+    identity = submission_identity(learner, req, getattr(request, "headers", {}).get("Idempotency-Key"), "generation")
+    job = generation_job_service.create_job(learner, req, **identity)
+    schedule_generation(generation_job_service, background_tasks, learner, req, job.run_id, job.batch_id)
     return job
 
 

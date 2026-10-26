@@ -15,7 +15,7 @@ from app.core.security.errors import (
     PUBLIC_MESSAGES,
     require_degraded_generation,
 )
-from app.models.knowledge.knowledge import EvidenceItem, RetrievalStatus
+from app.models.knowledge.knowledge import EvidenceAllocation, EvidenceItem, RetrievalStatus
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.models.shared.assessment import ASSESSMENT_QUESTION_QUOTAS
 from app.models.shared.workflow import (
@@ -85,6 +85,8 @@ class DiagnosisOutput(BaseModel):
 
 class RetrieverInput(AgentInput):
     topic: str
+    resource_types: List[str] = Field(default_factory=list)
+    retrieval_strategy_version: str = "legacy"
     knowledge_base_id: Optional[str] = None
     target_skill_nodes: List[str] = Field(default_factory=list)
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
@@ -92,6 +94,8 @@ class RetrieverInput(AgentInput):
 
 
 class RetrieverOutput(BaseModel):
+    retrieval_strategy_version: str = "legacy"
+    evidence_allocation: Optional[EvidenceAllocation] = None
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
     node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     retrieval_status: RetrievalStatus
@@ -103,6 +107,10 @@ class RetrieverOutput(BaseModel):
 
 
 class PlannerInput(AgentInput):
+    resource_types: List[str] = Field(default_factory=list)
+    retrieval_strategy_version: str = "legacy"
+    retrieval_config_hash: Optional[str] = None
+    evidence_allocation: Optional[EvidenceAllocation] = None
     learner: LearnerProfile
     topic: str
     diagnostic_result_id: Optional[str] = None
@@ -120,6 +128,9 @@ class PlannerOutput(BaseModel):
 
 
 class GeneratorInput(AgentInput):
+    retrieval_strategy_version: str = "legacy"
+    retrieval_config_hash: Optional[str] = None
+    evidence_allocation: Optional[EvidenceAllocation] = None
     learner: LearnerProfile
     topic: str
     resource_types: List[str] = Field(min_length=1)

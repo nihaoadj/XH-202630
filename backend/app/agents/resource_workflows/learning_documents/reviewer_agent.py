@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.learning_documents.state import AgentState
+from app.agents.shared.evidence_scope import evidence_for_resource, validate_payload_evidence
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.core.retrieval.evidence import source_refs_are_scoped
 from app.core.security.errors import ApplicationError, ErrorCode
@@ -478,7 +479,12 @@ def review_node(
             "revision_instructions": [],
         }
 
+    used_evidence_ids = set()
     for resource in resources:
+        evidence = evidence_for_resource(state, resource)
+        validate_payload_evidence(resource, evidence)
+        used_evidence_ids.update(item.evidence_id for item in evidence)
+        context = "\n\n".join(f"[证据 {item.evidence_id}] {item.excerpt}" for item in evidence)
         invalid_source_refs = not source_refs_are_scoped(resource.source_refs, evidence)
         error = None
         specialized_review = None
@@ -737,7 +743,7 @@ def review_node(
         input_summary=f"资源数：{len(resources)}；证据数：{len(evidence)}；生成轮次：{node_input.generation_attempt}",
         output_summary=f"决策：{aggregate_decision.value}; 幻觉分：{review.get('hallucination_score', 0):.2f}; 覆盖率：{review.get('coverage_rate', 0):.2f}",
         decision_reason=review.get("suggestion", "根据知识库证据、事实一致性、覆盖率和难度匹配给出审核结论。"),
-        evidence_refs=[item.evidence_id for item in evidence[:5]],
+        evidence_refs=[item.evidence_id for item in node_input.retrieved_evidence if item.evidence_id in used_evidence_ids],
         resource_ids=[resource.resource_id for resource in resources],
         review_ids=list(review_ids.values()),
         error=trace_error,

@@ -23,6 +23,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
     def __init__(self):
         self._store: dict[str, dict[str, Any]] = {}
         self._lock = RLock()
+        self._dispatch_metadata = {}
 
     @staticmethod
     def _utcnow() -> datetime:
@@ -59,7 +60,9 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         knowledge_base_id: Optional[str],
         request_payload: dict[str, Any],
         batch_id: str | None = None,
+        *, submission_hash: str | None = None,
     ) -> None:
+        self._dispatch_metadata[run_id] = {"submission_hash": submission_hash, "dispatch_mode": "legacy"}
         self._store[run_id] = {
             "run_id": run_id,
             "batch_id": batch_id or run_id,
@@ -75,6 +78,21 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
             "finished_at": None,
             "request_payload": request_payload,
         }
+
+    @_locked
+    def get_dispatch(self, run_id):
+        return dict(self._dispatch_metadata.get(run_id, {}))
+
+    @_locked
+    def create_retry(self, previous_run_id, *, run_id, learner_id, topic, knowledge_base_id,
+                     request_payload, batch_id, dispatch_snapshot=None, submission_hash=None):
+        previous = self._store[previous_run_id]
+        if previous.get("superseded_by_run_id"):
+            return previous["superseded_by_run_id"]
+        self.create(run_id, learner_id, topic, knowledge_base_id, request_payload,
+                    batch_id, submission_hash=submission_hash)
+        previous["superseded_by_run_id"] = run_id
+        return run_id
 
     @_locked
     def create_failed(
@@ -110,6 +128,15 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
     def get(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
         record = self._store.get(run_id)
         return self._schema(record) if record else None
+
+    @_locked
+    def try_start_background(self, run_id: str) -> bool:
+        """Duplicate in-process submissions share one execution, without durability."""
+        record = self._store.get(run_id)
+        if record is None or record["job_status"] != "queued":
+            return False
+        self.mark_running(run_id)
+        return True
 
     @_locked
     def mark_running(self, run_id: str) -> Optional[GenerationJobStatusResponse]:

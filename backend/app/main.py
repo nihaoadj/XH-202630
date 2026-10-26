@@ -82,30 +82,13 @@ async def lifespan(app: FastAPI):
                     interrupted,
                 )
             if settings.db_type == "sqlite":
-                stale_job_ids = (
-                    container.generation_job_repository().fail_incomplete_before(
-                        # A development reload starts a new web process while a
-                        # request's persisted workflow may still own a valid
-                        # lease.  Do not turn every in-flight job into a
-                        # terminal failure merely because this process started.
-                        # The audit repository above owns the authoritative
-                        # interruption decision once the lease actually expires.
-                        now - timedelta(seconds=settings.workflow_run_lease_seconds),
-                        ErrorCode.GENERATION_JOB_INTERRUPTED.value,
-                    )
-                )
-                reconciled_followups = (
-                    container.feedback_loop_repository().reconcile_incomplete_followups(
-                        stale_child_run_ids=stale_job_ids,
-                        error_code=ErrorCode.GENERATION_JOB_INTERRUPTED.value,
-                    )
-                )
-                if stale_job_ids or reconciled_followups:
-                    logger.warning(
-                        "Reconciled restart state stale_generation_jobs=%s feedback_followups=%s",
-                        len(stale_job_ids),
-                        reconciled_followups,
-                    )
+                from app.services.generation.reconciliation import GenerationReconciler
+                result = GenerationReconciler(container.generation_job_repository(),
+                    container.feedback_loop_repository(), settings.generation_queue_timeout_seconds,
+                    curriculum=container.curriculum_repository()).run_once()
+                if result["failed_run_ids"] or result["feedback"]:
+                    logger.warning("Reconciled generation jobs failed=%s followups=%s",
+                                   len(result["failed_run_ids"]), result["feedback"])
             logger.info("Database tables initialized.")
         except Exception:
             logger.error(
