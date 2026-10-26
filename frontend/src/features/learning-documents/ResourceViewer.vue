@@ -73,7 +73,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { Download } from '@element-plus/icons-vue'
-import { resourceApi } from '../../api'
+import { resourceApi } from './api.js'
 import SourceRefList from './SourceRefList.vue'
 
 const props = defineProps({

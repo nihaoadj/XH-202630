@@ -5,9 +5,27 @@
     "noEmit": true,
     "strict": true,
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "types": [],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
   },
-  "files": ["src/utils/requestContext.js"]
+  "files": [
+    "src/utils/requestContext.js",
+    "src/api/client.js",
+    "src/contracts/guards.js",
+    "src/features/courseware/api.js",
+    "src/features/courseware/eventSync.js",
+    "src/features/generation/api.js",
+    "src/features/generation/useGenerationCommands.js",
+    "src/features/runs/queryApi.js",
+    "src/features/runs/api.js",
+    "src/features/reports/api.js",
+    "src/features/reports/reportStreamClient.js"
+  ]
 }

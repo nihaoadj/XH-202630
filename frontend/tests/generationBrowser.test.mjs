@@ -507,6 +507,11 @@ function scenarioState(name) {
   if (name === 'multi') {
     jobsByLearner['learner-1'].push(makeJob('learner-1', 'run-queued', 'queued', { batch_id: 'batch-learner-1-queued' }))
   }
+  if (name === 'command-race') {
+    jobsByLearner['learner-1'].push(makeJob('learner-1', 'run-other', 'completed', {
+      batch_id: 'batch-other', created_at: '2026-09-30T08:00:00Z',
+    }))
+  }
   if (name === 'followup-navigation') {
     jobsByLearner['learner-1'].push(makeJob('learner-1', 'followup-run', 'completed', {
       batch_id: 'batch-learner-1-followup',
@@ -539,6 +544,9 @@ function scenarioState(name) {
     ],
     'followup-run': [],
     'run-queued': [],
+    ...(name === 'command-race' ? {
+      'run-other': [resource('resource-other', 'learner-1', 'run-other', '复习清单', 'learning_document', '# 任务 B 的独立材料\n\n切换后应继续保留这份内容。')],
+    } : {}),
   }
   const executionsByRun = {
     [primaryRun]: ['no-output', 'queued'].includes(name) ? [] : name === 'resource-live' ? [
@@ -567,6 +575,9 @@ function scenarioState(name) {
     'run-alt': [execution('spec-alt', 'resource-alt', '复习清单', 'approved')],
     'followup-run': [],
     'run-queued': [],
+    ...(name === 'command-race' ? {
+      'run-other': [execution('spec-other', 'resource-other', '复习清单', 'approved', { run_id: 'run-other' })],
+    } : {}),
   }
   const longCourseware = name === 'courseware-long'
   const coursewareJob = {
@@ -612,6 +623,7 @@ function scenarioState(name) {
       'run-alt': timelineEvents('run-alt', 6),
       'followup-run': name === 'followup-navigation' ? timelineEvents('followup-run', 2) : [],
       'run-queued': [],
+      ...(name === 'command-race' ? { 'run-other': timelineEvents('run-other', 2) } : {}),
       'cw-existing': [],
     },
     timelineDetails: ['audit-visualization', 'followup-navigation'].includes(name) ? auditVisualizationTimeline(primaryRun) : null,
@@ -624,6 +636,8 @@ function scenarioState(name) {
     resourceFailureCount: 0,
     statusResourceExecutions: {},
     statusGetGate: null,
+    continuationGate: null,
+    jobsGetGate: null,
     resourceDelayMs: 0,
     jobsDelayMs: 0,
     timelineDelayMs: 0,
@@ -720,7 +734,8 @@ function eventSource(response, request, runId) {
   const terminal = ['completed', 'failed'].includes(job?.job_status)
   response.write('event: snapshot\ndata: ' + JSON.stringify({
     run_id: runId,
-    run_status: job?.job_status || 'running',
+    run_status: job?.job_status === 'queued' ? null : job?.job_status || 'running',
+    job_status: job?.job_status || 'running',
     is_terminal: terminal,
     last_event_sequence: events.at(-1)?.sequence || 0,
     replay_completeness: 'complete',
@@ -760,6 +775,22 @@ async function apiResponse(url, method, request, response) {
     return json(response, { nodes: [{ node_id: '节点A', tier: 1 }, { node_id: '节点B', tier: 2 }] })
   }
   if (pathname === '/api/generate/jobs' && method === 'GET') {
+    const items = structuredClone(state.jobsByLearner[url.searchParams.get('learner_id')] || [])
+    const gate = state.jobsGetGate
+    if (gate && !gate.started) {
+      // Two identical pending GET URLs need no-store headers up front, or the
+      // browser may serialize the second request behind its HTTP cache lock.
+      if (gate.flushHeaders) {
+        response.writeHead(gate.status || 200, {
+          'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
+        })
+        response.flushHeaders?.()
+      }
+      gate.started = true
+      await gate.promise
+      if (gate.flushHeaders) return response.end(JSON.stringify({ items }))
+      return json(response, { items }, gate.status || 200)
+    }
     if (state.jobsDelayMs) await new Promise((resolve) => setTimeout(resolve, state.jobsDelayMs))
     return json(response, { items: state.jobsByLearner[url.searchParams.get('learner_id')] || [] })
   }
@@ -796,7 +827,17 @@ async function apiResponse(url, method, request, response) {
     ;(state.jobsByLearner[created.learner_id] ||= []).unshift(created)
     state.timelines[runId] = []
     state.executionsByRun[runId] = []
-    return json(response, { run_id: runId, job_status: 'queued' })
+    const gate = state.continuationGate
+    if (gate && !gate.started) {
+      gate.started = true
+      gate.runId = runId
+      await gate.promise
+      if (gate.status) return json(response, { detail: 'Delayed fixture continuation failure' }, gate.status)
+    }
+    return json(response, {
+      run_id: runId, batch_id: created.batch_id, learner_id: created.learner_id,
+      topic: created.topic || '工程验收任务', job_status: 'queued', status: 'success',
+    })
   }
   const decisionMatch = pathname.match(/^\/api\/resources\/items\/([^/]+)\/claim-publication-decision$/)
   if (decisionMatch && method === 'POST') {
@@ -3030,6 +3071,197 @@ async function testNaturalFallback(browser, base) {
   await page.close()
 }
 
+function commandRequestGate(status = 0) {
+  let release
+  const promise = new Promise(resolve => { release = resolve })
+  return { promise, release, status, started: false }
+}
+
+async function commandUiSnapshot(page) {
+  return page.evaluate(() => ({
+    run: localStorage.getItem('current_generation_run_id'),
+    status: localStorage.getItem('current_generation_status'),
+    summary: document.querySelector('.summary-code')?.textContent.trim(),
+    content: document.querySelector('.resource-stage')?.textContent,
+    notices: [...document.querySelectorAll('.el-message')].map(node => node.textContent.trim()),
+    appendBusy: document.querySelector('.status-action-append')?.classList.contains('is-loading'),
+  }))
+}
+
+async function settleCommandResponse(page, response) {
+  await response.finished()
+  // Let XHR promise callbacks and Vue rendering run without a fixed delay.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+}
+
+async function chooseCommandContext(page, name, optionName) {
+  // This matrix repeatedly selects an already focused field. Focus appearance
+  // is covered by the original layout matrix; here exercise the actual options.
+  await page.getByRole('combobox', { name }).click()
+  await page.getByRole('option', { name: optionName }).click()
+}
+
+async function testContinuationContextRaces(browser, base) {
+  const page = await newPage(browser, base, 'command-race')
+  const gate = commandRequestGate()
+  state.continuationGate = gate
+  await appendTextTypes(page, false, ['案例分析'])
+  await waitForFixture(() => gate.started, 'accepted continuation held before response')
+  assert.equal(findJob(gate.runId)?.job_status, 'queued', 'server task is accepted before switching the page')
+  await page.keyboard.press('Escape')
+  await page.getByRole('heading', { name: '追加学习资源' }).waitFor({ state: 'hidden' })
+  await chooseCommandContext(page, '资源批次', /run-othe/i)
+  await page.locator('.resource-stage').getByText('切换后应继续保留这份内容。', { exact: true }).waitFor()
+  const before = await commandUiSnapshot(page)
+  const requestsBefore = state.requests.length
+  const delivered = page.waitForResponse(response => response.url().endsWith('/continuations'))
+  gate.release()
+  await settleCommandResponse(page, await delivered)
+  const after = await commandUiSnapshot(page)
+  await capture(page, 'command-late-post-switch')
+  assert.equal(after.run, 'run-other', 'late continuation must preserve B persistent selection')
+  assert.equal(after.summary, 'RUN-OTHE', 'late continuation must preserve the selected B run')
+  assert.equal(after.content, before.content, 'late continuation must preserve B resources')
+  assert.deepEqual(after.notices, [], 'late continuation must not notify in B')
+  assert.equal(after.appendBusy, false, 'old context no longer owns the append button')
+  assert.equal(state.writes.length, 1, 'switching does not re-submit accepted generation')
+  assert.equal(state.requests.slice(requestsBefore).filter(item => item.path === '/api/generate/jobs'
+    || item.path.startsWith(`/api/runs/${gate.runId}/`)).length, 0,
+  'stale command does not refresh jobs or start a child subscription')
+  assert.ok(findJob(gate.runId), 'ignoring a response retains the accepted task')
+  evidence.interactionChecks.push({ scenario: 'command-late-post-switch', before, after, acceptedRun: gate.runId })
+  await chooseCommandContext(page, '学习画像', /周明远/)
+  await page.waitForFunction(() => document.querySelector('.summary-code')?.textContent.trim() === '-')
+  await chooseCommandContext(page, '学习画像', /林知行/)
+  await page.waitForFunction(() => document.querySelector('.summary-code')?.textContent.trim() === 'CONTINUE')
+  assert.equal(await page.evaluate(() => localStorage.getItem('current_generation_run_id')), gate.runId,
+    'returning to the learner discovers the accepted task through the ordinary list')
+  assert.equal(state.writes.length, 1, 'rediscovery cannot re-submit the command')
+  await assertNoExternalOrUnexpected('command-late-post-switch')
+  await page.close()
+
+  for (const mode of ['failed-post', 'ABA']) {
+    const racePage = await newPage(browser, base, 'command-race')
+    const postGate = commandRequestGate(mode === 'failed-post' ? 503 : 0)
+    state.continuationGate = postGate
+    await appendTextTypes(racePage, false, ['案例分析'])
+    await waitForFixture(() => postGate.started, `${mode} continuation held`)
+    await racePage.keyboard.press('Escape')
+    await racePage.getByRole('heading', { name: '追加学习资源' }).waitFor({ state: 'hidden' })
+    await chooseCommandContext(racePage, '资源批次', /run-othe/i)
+    await racePage.locator('.resource-stage').getByText('切换后应继续保留这份内容。', { exact: true }).waitFor()
+    if (mode === 'ABA') {
+      await chooseCommandContext(racePage, '资源批次', /run-main/i)
+      await racePage.locator('.resource-stage').getByText('从验收来源中完成一个可复核步骤。', { exact: true }).waitFor()
+    }
+    await openAppendDialog(racePage, '文本学习资源')
+    const beforeResponse = await commandUiSnapshot(racePage)
+    const response = racePage.waitForResponse(item => item.url().endsWith('/continuations'))
+    postGate.release()
+    await settleCommandResponse(racePage, await response)
+    const afterResponse = await commandUiSnapshot(racePage)
+    assert.deepEqual(afterResponse, beforeResponse, `${mode}: late completion leaves the current UI intact`)
+    assert.equal(await racePage.getByRole('heading', { name: '追加学习资源' }).isVisible(), true,
+      'an old completion cannot close a new append dialog')
+    assert.equal(state.writes.length, 1)
+    assert.equal(state.requests.some(item => item.path.startsWith(`/api/runs/${postGate.runId}/`)), false)
+    evidence.interactionChecks.push({ scenario: `command-${mode}`, before: beforeResponse, after: afterResponse })
+    await assertNoExternalOrUnexpected(`command-${mode}`)
+    await racePage.close()
+  }
+
+  for (const status of [200, 503]) {
+    const listPage = await newPage(browser, base, 'command-race')
+    const listGate = commandRequestGate(status)
+    state.jobsGetGate = listGate
+    await appendTextTypes(listPage, false, ['案例分析'])
+    await waitForFixture(() => listGate.started, 'command refresh held after continuation response')
+    await listPage.keyboard.press('Escape')
+    await listPage.getByRole('heading', { name: '追加学习资源' }).waitFor({ state: 'hidden' })
+    await chooseCommandContext(listPage, '资源批次', /run-othe/i)
+    await listPage.locator('.resource-stage').getByText('切换后应继续保留这份内容。', { exact: true }).waitFor()
+    await listPage.locator('.connection-state.is-terminal').waitFor()
+    const beforeList = await commandUiSnapshot(listPage)
+    const subscriptionReads = () => state.requests.filter(item => item.path === '/api/runs/run-other/events'
+      || (item.path === '/api/runs/run-other/timeline' && item.query.limit === '500')).length
+    const subscriptionReadsBefore = subscriptionReads()
+    const response = listPage.waitForResponse(item => new URL(item.url()).pathname === '/api/generate/jobs')
+    listGate.release()
+    await settleCommandResponse(listPage, await response)
+    const afterList = await commandUiSnapshot(listPage)
+    assert.deepEqual(afterList, beforeList, `list ${status}: old refresh cannot write selection/resources/errors/notice`)
+    assert.equal(subscriptionReads(), subscriptionReadsBefore,
+      'old command cannot restart even the newly selected run subscription')
+    assert.equal(state.requests.some(item => item.path.startsWith('/api/runs/continue-1/')), false)
+    assert.equal(state.writes.length, 1)
+    evidence.interactionChecks.push({ scenario: `command-stale-list-${status}`, before: beforeList, after: afterList })
+    await assertNoExternalOrUnexpected(`command-stale-list-${status}`)
+    await listPage.close()
+  }
+
+  const failedListPage = await newPage(browser, base, 'command-race')
+  const failedListGate = commandRequestGate(503)
+  state.jobsGetGate = failedListGate
+  await appendTextTypes(failedListPage, false, ['案例分析'])
+  await waitForFixture(() => failedListGate.started, 'current command refresh held')
+  const failedResponse = failedListPage.waitForResponse(item => new URL(item.url()).pathname === '/api/generate/jobs')
+  failedListGate.release()
+  await settleCommandResponse(failedListPage, await failedResponse)
+  assert.equal(await failedListPage.getByRole('heading', { name: '追加学习资源' }).isVisible(), true)
+  assert.equal(await failedListPage.getByRole('button', { name: '开始追加' }).evaluate(node => node.classList.contains('is-loading')), false)
+  const failedSnapshot = await commandUiSnapshot(failedListPage)
+  assert.deepEqual(failedSnapshot.notices, ['任务列表加载失败'], 'current list failure is explicit, never a command success')
+  assert.equal(state.requests.some(item => item.path.startsWith('/api/runs/continue-1/')), false)
+  assert.equal(state.writes.length, 1)
+  assert.ok(findJob('continue-1'), 'a list failure does not remove the accepted server task')
+  evidence.interactionChecks.push({ scenario: 'command-current-list-failure', after: failedSnapshot })
+  await assertNoExternalOrUnexpected('command-current-list-failure')
+  await failedListPage.close()
+
+  const ownerPage = await newPage(browser, base, 'command-race')
+  const oldListGate = commandRequestGate(), currentListGate = commandRequestGate()
+  try {
+    oldListGate.flushHeaders = currentListGate.flushHeaders = true
+    state.jobsGetGate = oldListGate
+    const oldResponse = ownerPage.waitForResponse(item => new URL(item.url()).pathname === '/api/generate/jobs')
+    await appendTextTypes(ownerPage, false, ['案例分析'])
+    await waitForFixture(() => oldListGate.started, 'old command list is pending')
+    await oldResponse
+    await ownerPage.keyboard.press('Escape')
+    await ownerPage.getByRole('heading', { name: '追加学习资源' }).waitFor({ state: 'hidden' })
+    await chooseCommandContext(ownerPage, '资源批次', /run-othe/i)
+    await ownerPage.locator('.resource-stage').getByText('切换后应继续保留这份内容。', { exact: true }).waitFor()
+    state.jobsGetGate = currentListGate
+    const currentResponse = ownerPage.waitForResponse(item => new URL(item.url()).pathname === '/api/generate/jobs')
+    await appendTextTypes(ownerPage, false, ['案例分析'])
+    await waitForFixture(() => currentListGate.started, 'new command list is pending')
+    assert.equal(state.writes.length, 2)
+    oldListGate.release()
+    await settleCommandResponse(ownerPage, await oldResponse)
+    assert.equal(await ownerPage.getByRole('button', { name: '开始追加' }).evaluate(node => node.classList.contains('is-loading')), true,
+      'old list finally must not clear the new command busy state')
+    assert.equal((await ownerPage.locator('.production-status').innerText()).trim(), '正在加载任务',
+      'old list finally must not clear a newer list request loading state')
+    assert.deepEqual((await commandUiSnapshot(ownerPage)).notices, [])
+    currentListGate.release()
+    await settleCommandResponse(ownerPage, await currentResponse)
+    await ownerPage.getByRole('heading', { name: '追加学习资源' }).waitFor({ state: 'hidden' })
+    await waitForFixture(() => state.requests.some(item => item.path === '/api/runs/continue-2/events'), 'new owner subscription')
+    const current = await commandUiSnapshot(ownerPage)
+    assert.equal(current.run, 'continue-2')
+    assert.equal(current.appendBusy, false)
+    assert.deepEqual(current.notices, ['已追加：案例分析'])
+    assert.equal(state.requests.some(item => item.path.startsWith('/api/runs/continue-1/')), false)
+    assert.equal(state.writes.length, 2)
+    evidence.interactionChecks.push({ scenario: 'command-list-loading-owner', after: current })
+    await assertNoExternalOrUnexpected('command-list-loading-owner')
+  } finally {
+    oldListGate.release()
+    currentListGate.release()
+    await ownerPage.close()
+  }
+}
+
 async function testSwitchesRefreshAndErrors(browser, base) {
   const page = await newPage(browser, base, 'multi', baseViewport, { delayJobsMs: 350 })
   await chooseOption(page, '资源批次', /run-queu/i)
@@ -5181,6 +5413,7 @@ async function run() {
   let failure = null
   try {
     browser = await chromium.launch(browserOptions('GENERATION_BROWSER_CHANNEL'))
+    await testContinuationContextRaces(browser, base)
     await testFullWorkflowChain(browser, base)
     await testIncompleteChainOrder(browser, base)
     await testWorkflowIconRoles(browser, base)
@@ -5217,6 +5450,8 @@ async function run() {
     console.error('generation browser tests failed:', error.stack || error)
   } finally {
     state.statusGetGate?.release?.()
+    state.continuationGate?.release?.()
+    state.jobsGetGate?.release?.()
     for (const response of state.sseClients) response.end()
     if (browser) await browser.close().catch(() => {})
     await new Promise((resolve) => server.close(resolve))

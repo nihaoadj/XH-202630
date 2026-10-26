@@ -265,10 +265,17 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Aim, ArrowDown, Download, ArrowRight, CircleCheck, Clock, Delete, DocumentChecked, Plus, Reading, Refresh, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { generateApi, knowledgeApi, profileApi, resourceApi, runApi } from '../../api'
+import { generateApi } from './api.js'
+import { knowledgeApi } from '../knowledge/api.js'
+import { profileApi } from '../learners/api.js'
+import { resourceApi } from '../learning-documents/api.js'
+import { runApi } from '../runs/queryApi.js'
 import { coursewareApi } from '../courseware/api'
 import { resourceLibraryApi } from '../resource-library/api'
 import { useGenerationProgress } from './useGenerationProgress.js'
+import { useGenerationResources } from './useGenerationResources.js'
+import { useGenerationCommands } from './useGenerationCommands.js'
+import { planRetryGeneration, planRegeneratePending, planAppendResources, planRetryResource, executeGenerationPlan } from './generationCommands.js'
 import { useGenerationClaims } from './useGenerationClaims.js'
 import { useGenerationAudit } from './useGenerationAudit.js'
 import { buildResourceStatusItems } from './resourceStatusPresentation.js'
@@ -324,26 +331,22 @@ const loadingJobs = ref(false)
 const jobsError = ref('')
 let jobsRequestVersion = 0
 let statusRequestVersion = 0
-let resourcesRequestVersion = 0
-let nodeTiersRequestVersion = 0
 let claimsRequestVersion = 0
 let profileChangeVersion = 0
 let taskChangeVersion = 0
 let generationMounted = true
-const loadingResources = ref(false)
-const resourcesLoaded = ref(false)
-const resources = ref([])
-const nodeTiers = ref({})
-const retrying = ref(false)
-const retryingResourceKey = ref('')
-const appendingResources = ref(false)
 const appendDialogVisible = ref(false)
 const selectedAppendResourceTypes = ref([])
 const appendIncludeClaimCheck = ref(true)
 const coursewareComposerVisible = ref(false)
 const coursewareWorkspace = ref(null)
 const selectedRunId = ref(initialRunId)
-const selectedResourceId = ref('')
+const { retrying, retryingResourceKey, appendingResources, run: runGenerationCommand, dispose: disposeGenerationCommands } = useGenerationCommands({
+  getContext: () => ({ learnerId: selectedLearnerId.value, runId: selectedRunId.value }),
+  selectRun: runId => { selectedRunId.value = runId },
+  refreshJobs: isCurrent => loadJobs(false, isCurrent),
+  startRealtime: runId => startRealtime(runId),
+})
 const profiles = ref([])
 const tracks = ref([])
 const coursewareJobs = ref([])
@@ -384,6 +387,23 @@ const selectedJob = computed(
 const selectedCoursewareJob = computed(
   () => coursewareJobs.value.find((item) => item.run_id === selectedRunId.value) || null
 )
+const {
+  resources, nodeTiers, loadingResources, resourcesLoaded, selectedResourceId,
+  resourceTierLabel, loadResourcesForSelectedJob, loadCoursewareSourceResources,
+  invalidateResources, invalidateNodeTiers,
+} = useGenerationResources({
+  getContext: () => ({
+    learnerId: selectedLearnerId.value, runId: selectedRunId.value,
+    textRunId: selectedJob.value?.run_id,
+    knowledgeBaseId: activeProfile.value?.knowledge_base_id,
+    sourceBatchId: selectedCoursewareJob.value?.source_batch_id,
+  }),
+  isMounted: () => generationMounted,
+  listNodes: knowledgeBaseId => knowledgeApi.listNodes(knowledgeBaseId),
+  listRunResources: (learnerId, params) => resourceApi.listByLearner(learnerId, params),
+  listLibraryResources: learnerId => resourceLibraryApi.listByLearner(learnerId),
+  messages: ElMessage,
+})
 const isCoursewareWorkspace = computed(() => coursewareComposerVisible.value || Boolean(selectedCoursewareJob.value))
 const shortRunId = computed(() => (selectedTask.value?.run_id ? selectedTask.value.run_id.slice(0, 8).toUpperCase() : '-'))
 const taskResourceCount = computed(() => selectedCoursewareJob.value ? (selectedCoursewareJob.value.resource_id ? 1 : 0) : resources.value.length)
@@ -546,35 +566,6 @@ function resourceLabel(resource) {
   return [resourceName, nodes.join('、'), tierLabel].filter(Boolean).join(' · ')
 }
 
-function resourceTierLabel(resource) {
-  const tiers = [...new Set((resource?.knowledge_points || [])
-    .map((point) => nodeTiers.value[String(point || '').trim()])
-    .filter((tier) => Number.isInteger(tier)))]
-  return tiers.length ? tiers.map((tier) => `第 ${tier} 阶`).join('、') : ''
-}
-
-async function loadNodeTiers() {
-  const version = ++nodeTiersRequestVersion
-  const learnerId = selectedLearnerId.value
-  const knowledgeBaseId = activeProfile.value?.knowledge_base_id
-  const isCurrent = () => generationMounted && version === nodeTiersRequestVersion && learnerId === selectedLearnerId.value && knowledgeBaseId === activeProfile.value?.knowledge_base_id
-  if (!knowledgeBaseId) {
-    nodeTiers.value = {}
-    return
-  }
-  try {
-    const nodesRes = await knowledgeApi.listNodes(knowledgeBaseId)
-    if (!isCurrent()) return
-    nodeTiers.value = Object.fromEntries((nodesRes.data?.nodes || nodesRes.data || [])
-      .map((node) => [node.node_id, node.tier])
-      .filter(([, tier]) => Number.isInteger(tier)))
-  } catch (error) {
-    if (!isCurrent()) return
-    nodeTiers.value = {}
-    console.warn('学习节点阶级加载失败，标题将隐藏阶级信息', error)
-  }
-}
-
 const { stopPolling, closeRealtime, cancelPublishedResourceRefresh, startRealtime, startPolling } = useGenerationProgress({
   selectedRunId, selectedJob, timelineState, connectionStatus,
   isMounted: () => generationMounted,
@@ -627,12 +618,13 @@ async function loadProfiles() {
   syncProfileContext()
 }
 
-async function loadJobs(preferDefault = false) {
+async function loadJobs(preferDefault = false, commandIsCurrent = () => true) {
+  if (!generationMounted || !commandIsCurrent()) return false
   const version = ++jobsRequestVersion
   const learnerId = selectedLearnerId.value
-  const isCurrent = () => generationMounted && version === jobsRequestVersion && learnerId === selectedLearnerId.value
+  const ownsLoading = () => generationMounted && version === jobsRequestVersion
+  const isCurrent = () => ownsLoading() && learnerId === selectedLearnerId.value && commandIsCurrent()
   jobsError.value = ''
-  if (!generationMounted) return false
   if (!learnerId) {
     jobs.value = []
     coursewareJobs.value = []
@@ -663,7 +655,7 @@ async function loadJobs(preferDefault = false) {
       resourcesLoaded.value = false
       selectedResourceId.value = ''
       stopPolling()
-      return true
+      return isCurrent()
     }
 
     if (
@@ -674,6 +666,7 @@ async function loadJobs(preferDefault = false) {
       selectedRunId.value = pickDefaultRunId(taskItems.value)
     }
 
+    if (!isCurrent()) return false
     persistSelectedJob()
     return true
   } catch (error) {
@@ -682,86 +675,7 @@ async function loadJobs(preferDefault = false) {
     ElMessage.error(jobsError.value)
     return false
   } finally {
-    if (isCurrent()) loadingJobs.value = false
-  }
-}
-
-async function loadResourcesForSelectedJob() {
-  const version = ++resourcesRequestVersion
-  const learnerId = selectedLearnerId.value
-  const runId = selectedJob.value?.run_id
-  const isCurrent = () => generationMounted && version === resourcesRequestVersion && learnerId === selectedLearnerId.value && runId === selectedJob.value?.run_id
-  if (!selectedLearnerId.value || !selectedJob.value?.run_id) {
-    resources.value = []
-    resourcesLoaded.value = true
-    selectedResourceId.value = ''
-    return
-  }
-
-  loadingResources.value = true
-  try {
-    await loadNodeTiers()
-    if (!isCurrent()) return
-    const res = await resourceApi.listByLearner(learnerId, {
-      // This page is scoped to the selected task Run. Cross-run aggregation
-      // belongs to the learner-facing Learning Resources page.
-      run_id: runId,
-      page: 1,
-      page_size: 100,
-    })
-    if (!isCurrent()) return
-    resources.value = (res.data.resources || []).map((resource) => ({
-      ...resource,
-      tier_label: resource.tier_label || resourceTierLabel(resource),
-    }))
-    resourcesLoaded.value = true
-    if (!resources.value.length) {
-      selectedResourceId.value = ''
-    } else if (!resources.value.some((item) => item.resource_id === selectedResourceId.value)) {
-      selectedResourceId.value = resources.value[0].resource_id
-    }
-  } catch (error) {
-    if (!isCurrent()) return
-    console.error(error)
-    ElMessage.error(error?.response?.data?.message || '资源列表加载失败')
-  } finally {
-    if (isCurrent()) loadingResources.value = false
-  }
-}
-
-async function loadCoursewareSourceResources() {
-  const version = ++resourcesRequestVersion
-  const learnerId = selectedLearnerId.value
-  const runId = selectedRunId.value
-  const batchId = selectedCoursewareJob.value?.source_batch_id
-  const isCurrent = () => generationMounted && version === resourcesRequestVersion && learnerId === selectedLearnerId.value && runId === selectedRunId.value
-  if (!selectedLearnerId.value || !batchId) {
-    resources.value = []
-    resourcesLoaded.value = true
-    return
-  }
-  loadingResources.value = true
-  try {
-    await loadNodeTiers()
-    if (!isCurrent()) return
-    const response = await resourceLibraryApi.listByLearner(learnerId)
-    if (!isCurrent()) return
-    resources.value = (response.data || []).filter((resource) => (
-      resource.resource_kind !== 'interactive_courseware'
-      && resource.batch_id === batchId
-    )).map((resource) => ({
-      ...resource,
-      tier_label: resource.tier_label || resourceTierLabel(resource),
-    }))
-    resourcesLoaded.value = true
-  } catch (error) {
-    if (!isCurrent()) return
-    console.error(error)
-    resources.value = []
-    resourcesLoaded.value = true
-    ElMessage.error(error?.response?.data?.message || '课件来源资源加载失败')
-  } finally {
-    if (isCurrent()) loadingResources.value = false
+    if (ownsLoading()) loadingJobs.value = false
   }
 }
 
@@ -854,7 +768,7 @@ async function handleTaskChange() {
   const learnerId = selectedLearnerId.value
   const runId = selectedRunId.value
   const version = ++taskChangeVersion
-  ++resourcesRequestVersion; ++claimsRequestVersion
+  invalidateResources(); ++claimsRequestVersion
   const isCurrent = () => generationMounted && version === taskChangeVersion && learnerId === selectedLearnerId.value && runId === selectedRunId.value
   closeRealtime()
   persistSelectedJob()
@@ -888,7 +802,7 @@ async function handleTaskChange() {
 
 async function handleProfileChange() {
   const version = ++profileChangeVersion
-  ++resourcesRequestVersion; ++claimsRequestVersion; ++nodeTiersRequestVersion; ++taskChangeVersion
+  invalidateResources(); ++claimsRequestVersion; invalidateNodeTiers(); ++taskChangeVersion
   syncProfileContext()
   jobs.value = []; coursewareJobs.value = []; nodeTiers.value = {}; claimReports.value = {}
   loadingResources.value = false
@@ -952,36 +866,27 @@ async function openChildRun(runId) {
 
 async function retryGeneration() {
   const failedJob = selectedJob.value
-  const payload = failedJob?.request_payload
-  if (!failedJob?.run_id || !payload?.learner_id || !Array.isArray(payload?.resource_types) || !payload.resource_types.length) {
+  const plan = planRetryGeneration(failedJob)
+  if (!plan) {
     ElMessage.warning('该任务缺少原始生成参数，无法保证重试内容一致')
     return
   }
 
-  retrying.value = true
-  resources.value = []
-  resourcesLoaded.value = false
-  selectedResourceId.value = ''
-  stopPolling()
-
-  try {
-    const batchId = selectedJob.value?.batch_id || selectedJob.value?.run_id
-    const res = await generateApi.continueBatch(batchId, {
-      learner_id: failedJob.learner_id,
-      resource_types: payload.resource_types,
-      instructions: payload.constraints?.continuation_instructions || '重新生成失败任务的学习材料。',
-      source_run_id: failedJob.run_id,
-    })
-    selectedRunId.value = res.data.run_id
-    await loadJobs(false)
-    await startRealtime(selectedRunId.value)
-    ElMessage.success('已在原资源批次中重新发起生成任务')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error?.response?.data?.message || '重新生成失败')
-  } finally {
-    retrying.value = false
-  }
+  return runGenerationCommand({
+    channel: 'retry',
+    beforeSubmit: () => {
+      resources.value = []
+      resourcesLoaded.value = false
+      selectedResourceId.value = ''
+      stopPolling()
+    },
+    execute: () => executeGenerationPlan(plan, generateApi.continueBatch),
+    succeeded: () => ElMessage.success('已在原资源批次中重新发起生成任务'),
+    failed: error => {
+      console.error(error)
+      ElMessage.error(error?.response?.data?.message || '重新生成失败')
+    },
+  })
 }
 
 function appendResources() {
@@ -1044,108 +949,72 @@ async function handleCoursewarePublished(coursewareJob) {
 async function regeneratePendingResources() {
   const sourceJob = selectedJob.value
   const resourceTypes = retryableResourceTypes.value
-  if (!sourceJob?.learner_id || !resourceTypes.length) {
+  const plan = planRegeneratePending(sourceJob, resourceTypes, appendIncludeClaimCheck.value)
+  if (!plan) {
     ElMessage.warning('当前任务没有可重新生成的资源')
     return
   }
-  retrying.value = true
-  try {
-    const batchId = sourceJob.batch_id || sourceJob.run_id
-    const response = await generateApi.continueBatch(batchId, {
-      learner_id: sourceJob.learner_id,
-      resource_types: appendIncludeClaimCheck.value ? [resourceTypes[0]] : resourceTypes,
-      source_run_id: sourceJob.run_id,
-      replace_existing_types: true,
-      instructions: `统一重新生成本任务中未通过审核的资源：${resourceTypes.join('、')}。`,
-    })
-    selectedRunId.value = response.data.run_id
-    localStorage.setItem('current_generation_run_id', selectedRunId.value)
-    resources.value = []
-    resourcesLoaded.value = false
-    selectedResourceId.value = ''
-    await loadJobs(false)
-    await startRealtime(selectedRunId.value)
-    ElMessage.success(`已创建一个新任务，统一重新生成：${resourceTypes.join('、')}`)
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error?.response?.data?.detail || '重新生成失败资源失败')
-  } finally {
-    retrying.value = false
-  }
+  return runGenerationCommand({
+    channel: 'retry',
+    execute: () => executeGenerationPlan(plan, generateApi.continueBatch),
+    accepted: applyAcceptedGeneration,
+    succeeded: () => ElMessage.success(`已创建一个新任务，统一重新生成：${resourceTypes.join('、')}`),
+    failed: error => {
+      console.error(error)
+      ElMessage.error(error?.response?.data?.detail || '重新生成失败资源失败')
+    },
+  })
+}
+
+function applyAcceptedGeneration(runId) {
+  localStorage.setItem('current_generation_run_id', runId)
+  resources.value = []
+  resourcesLoaded.value = false
+  selectedResourceId.value = ''
 }
 
 async function confirmAppendResources() {
   const sourceJob = selectedJob.value
   const resourceTypes = [...new Set(selectedAppendResourceTypes.value)]
-  if (!sourceJob?.learner_id || !resourceTypes.length) {
+  const plan = planAppendResources(sourceJob, resourceTypes, appendIncludeClaimCheck.value)
+  if (!plan) {
     ElMessage.warning('请至少选择一种要追加的资源类型')
     return
   }
-  appendingResources.value = true
-  try {
-    const batchId = sourceJob.batch_id || sourceJob.run_id
-    const requestResourceTypes = appendIncludeClaimCheck.value
-      ? resourceTypes.map((type) => [type])
-      : [resourceTypes]
-    const responses = await Promise.all(requestResourceTypes.map((types) =>
-      generateApi.continueBatch(batchId, {
-        learner_id: sourceJob.learner_id, resource_types: types,
-        instructions: '追加指定类型的学习资源，并与本批次已有资源保持衔接。',
-        source_run_id: sourceJob.run_id,
-        include_claim_check: appendIncludeClaimCheck.value,
-      })
-    ))
-    const response = responses[0]
-    selectedRunId.value = response.data.run_id
-    localStorage.setItem('current_generation_run_id', selectedRunId.value)
-    resources.value = []
-    resourcesLoaded.value = false
-    selectedResourceId.value = ''
-    await loadJobs(false)
-    await startRealtime(selectedRunId.value)
-    appendDialogVisible.value = false
-    ElMessage.success(`已追加：${resourceTypes.join('、')}`)
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(apiErrorMessage(error, '追加资源失败'))
-  } finally {
-    appendingResources.value = false
-  }
+  return runGenerationCommand({
+    channel: 'append',
+    execute: () => executeGenerationPlan(plan, generateApi.continueBatch),
+    accepted: applyAcceptedGeneration,
+    succeeded: () => {
+      appendDialogVisible.value = false
+      ElMessage.success(`已追加：${resourceTypes.join('、')}`)
+    },
+    failed: error => {
+      console.error(error)
+      ElMessage.error(apiErrorMessage(error, '追加资源失败'))
+    },
+  })
 }
 
 async function retryResource(item) {
   const sourceJob = selectedJob.value
-  const payload = sourceJob?.request_payload
-  if (!sourceJob?.learner_id || !payload || !item?.resource_type) {
+  const plan = planRetryResource(sourceJob, item)
+  if (!plan) {
     ElMessage.warning('该资源缺少重新生成所需的任务参数')
     return
   }
 
   const key = item.key || `${item.resource_spec_id}:${item.representation || 'text'}`
-  retryingResourceKey.value = key
-  try {
-    const batchId = sourceJob.batch_id || sourceJob.run_id
-    const response = await generateApi.continueBatch(batchId, {
-      learner_id: sourceJob.learner_id,
-      resource_types: [item.resource_type],
-      source_run_id: sourceJob.run_id,
-      replace_existing_types: true,
-      instructions: `重新生成本批次的${item.resource_type}，用新版本替换学习列表中的旧版本。`,
-    })
-    selectedRunId.value = response.data.run_id
-    localStorage.setItem('current_generation_run_id', selectedRunId.value)
-    resources.value = []
-    resourcesLoaded.value = false
-    selectedResourceId.value = ''
-    await loadJobs(false)
-    await startRealtime(selectedRunId.value)
-    ElMessage.success(`已在当前批次重新生成${item.resource_type}`)
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error?.response?.data?.detail || '重新生成资源失败')
-  } finally {
-    retryingResourceKey.value = ''
-  }
+  return runGenerationCommand({
+    channel: 'resource', busyValue: key,
+    execute: () => executeGenerationPlan(plan, generateApi.continueBatch),
+    accepted: applyAcceptedGeneration,
+    succeeded: () => ElMessage.success(`已在当前批次重新生成${item.resource_type}`),
+    failed: error => {
+      console.error(error)
+      ElMessage.error(error?.response?.data?.detail || '重新生成资源失败')
+    },
+  })
 }
 
 onMounted(async () => {
@@ -1167,7 +1036,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   generationMounted = false
-  ++jobsRequestVersion; ++resourcesRequestVersion; ++nodeTiersRequestVersion; ++claimsRequestVersion; ++profileChangeVersion; ++taskChangeVersion
+  disposeGenerationCommands()
+  ++jobsRequestVersion; invalidateResources(); invalidateNodeTiers(); ++claimsRequestVersion; ++profileChangeVersion; ++taskChangeVersion
   cancelPublishedResourceRefresh()
   closeRealtime()
   stopPolling()

@@ -388,6 +388,7 @@ class ChromaVectorSearchBackend:
         top_k: int,
         knowledge_base_id: str,
         allowed_chunk_ids: set[str] | None = None,
+        query_bindings: dict | None = None,
     ) -> list[VectorCandidate]:
         """Fuse per-query candidates, then execute one bounded CrossEncoder batch."""
 
@@ -399,6 +400,8 @@ class ChromaVectorSearchBackend:
         query_profiles: list[dict[str, object]] = []
         partial_failures = 0
         merged: dict[str, tuple[str, int, int, Document, float]] = {}
+        hits: dict[str, list[tuple]] = {query: [] for query in queries}
+        origins: dict[str, list[str]] = {}
         per_query_k = max(top_k, self.settings.rerank_per_query_k)
         for query_index, query in enumerate(queries):
             query_profile: dict[str, object] = {
@@ -413,9 +416,13 @@ class ChromaVectorSearchBackend:
                     profile=query_profile,
                     allowed_chunk_ids=allowed_chunk_ids,
                 )
+                query_profile["query_hit_count"] = len(results)
                 for hybrid_rank, (document, score) in enumerate(results, start=1):
                     key = _result_key(document)
                     candidate = (query, query_index, hybrid_rank, document, float(score))
+                    hits[query].append(candidate)
+                    if query not in origins.setdefault(key, []):
+                        origins[key].append(query)
                     previous = merged.get(key)
                     if previous is None or (score, -query_index, -hybrid_rank) > (
                         previous[4],
@@ -445,6 +452,8 @@ class ChromaVectorSearchBackend:
             merged.values(),
             key=lambda item: (-item[4], item[1], item[2], _result_key(item[3])),
         )[: self.settings.rerank_candidate_k]
+        if query_bindings is not None:
+            pool = _resource_aware_pool(hits, query_bindings, top_k=top_k)
         profile: dict[str, object] = {
             "query_count": len(queries),
             "allowed_chunk_count": len(allowed_chunk_ids or ()),
@@ -470,6 +479,7 @@ class ChromaVectorSearchBackend:
                 hybrid_results,
                 top_k=len(hybrid_results),
                 profile=profile,
+                **({"candidate_limit": 20} if query_bindings is not None else {}),
             )
         except Exception as exc:
             profile.update(
@@ -487,6 +497,13 @@ class ChromaVectorSearchBackend:
                 type(exc).__name__,
             )
         origin_by_chunk = {_result_key(item[3]): item for item in pool}
+        if query_bindings is not None:
+            # The reranker's document-diversity pass can defer a stronger hit.
+            # E1 ranks each owner's already bounded pool by its actual score.
+            results = sorted(results, key=lambda item: (
+                origin_by_chunk[_result_key(item[0])][1], -float(item[1]),
+                origin_by_chunk[_result_key(item[0])][2], _result_key(item[0]),
+            ))
         selected: list[tuple[str, int, Document, float]] = []
         per_query_counts: dict[str, int] = {}
         for document, score in results:
@@ -517,9 +534,48 @@ class ChromaVectorSearchBackend:
                 metric=self.settings.vector_distance_metric,
                 query=query,
                 query_rank=query_rank,
+                matched_queries=origins[_result_key(document)] if query_bindings is not None else [],
             )
             for query, query_rank, document, score in selected
         ]
+
+
+def _resource_aware_pool(hits: dict[str, list[tuple]], bindings: dict, *, top_k: int):
+    """Reserve a bounded pool; the actual selecting hit owns score and query."""
+    sort_key = lambda item: (-item[4], item[1], item[2], _result_key(item[3]))
+    selected: dict[str, tuple] = {}
+    counts: dict[str, int] = {}
+
+    def take(candidates):
+        for candidate in sorted(candidates, key=sort_key):
+            query = candidate[0]
+            key = _result_key(candidate[3])
+            if key in selected or counts.get(query, 0) >= top_k:
+                continue
+            if len(selected) >= 20:
+                return False
+            selected[key] = candidate
+            counts[query] = counts.get(query, 0) + 1
+            return True
+        return False
+
+    public_nodes = list(dict.fromkeys(p.node_id for values in bindings.values() for p in values
+                                      if p.resource_type is None and p.node_id))
+    for node in public_nodes or [None]:
+        take([hit for query, values in bindings.items()
+              if any(p.resource_type is None and p.node_id == node for p in values)
+              for hit in hits[query]])
+    types = list(dict.fromkeys(p.resource_type for values in bindings.values() for p in values if p.resource_type))
+    for resource_type in types:
+        take([hit for query, values in bindings.items()
+              if any(p.resource_type == resource_type for p in values) for hit in hits[query]])
+    while len(selected) < 20:
+        added = False
+        for candidates in hits.values():
+            added = take(candidates) or added
+        if not added:
+            break
+    return sorted(selected.values(), key=sort_key)
 
 
 def hybrid_search(

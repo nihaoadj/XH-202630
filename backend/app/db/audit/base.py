@@ -50,6 +50,9 @@ class BaseAuditRepository(ABC):
     def save_review(self, resource_id: str, review: dict[str, Any], run_id: Optional[str]) -> str:
         pass
 
+    def get_reviews_by_resources(self, resource_ids: list[str]) -> dict:
+        return {resource_id: self.get_review_by_resource(resource_id) for resource_id in dict.fromkeys(resource_ids)}
+
     @abstractmethod
     def get_review_by_resource(self, resource_id: str) -> Optional[ReviewSummary]:
         """获取资源最近一次审核及其 Claim 证据。"""

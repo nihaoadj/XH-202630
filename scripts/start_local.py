@@ -105,12 +105,14 @@ def bootstrap_environment(python: Path, initialize: bool) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="一键启动本地 Web、互动课件 Worker 和前端")
+    parser = argparse.ArgumentParser(description="一键启动本地 Web、文本/互动课件 Worker 和前端")
     parser.add_argument("--install", action="store_true", help="安装后端与前端依赖；不会下载模型或初始化数据")
     parser.add_argument("--bootstrap", action="store_true", help="缺少 backend/.env 时从模板创建；可与 --initialize 合用")
     parser.add_argument("--initialize", action="store_true", help="显式入库知识库并初始化示例数据；可能耗时")
     parser.add_argument("--check", action="store_true", help="仅校验本地前置条件，不启动任何进程")
     parser.add_argument("--no-worker", action="store_true", help="不启动互动课件 Worker")
+    parser.add_argument("--no-generation-worker", action="store_true", help="不启动文本生成 Worker；持久任务将保留排队")
+    parser.add_argument("--generation-worker-health-port", type=int, default=8082)
     parser.add_argument("--no-frontend", action="store_true", help="不启动 Vite 前端")
     parser.add_argument("--no-reload", action="store_true", help="后端不使用 Uvicorn reload")
     parser.add_argument("--host", default="127.0.0.1", help="Web 与前端监听地址，默认仅本机")
@@ -120,6 +122,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--worker-health-port", type=int, default=8081)
     parser.add_argument("--startup-timeout", type=float, default=45.0, help="各健康检查最长等待秒数")
     return parser.parse_args()
+
+
+def generation_worker_required(python: Path) -> bool:
+    result = subprocess.run([str(python), "-c", "from app.config import get_settings; print(get_settings().db_type)"],
+                            cwd=BACKEND, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError("无法读取运行配置；请检查 backend/.env。")
+    return result.stdout.strip() == "sqlite"
 
 
 def main() -> int:
@@ -151,6 +161,12 @@ def main() -> int:
     pids: dict[str, int] = {}
     backend_url = f"http://{args.host}:{args.backend_port}"
     worker_url = f"http://{args.worker_health_host}:{args.worker_health_port}"
+    generation_url = f"http://{args.worker_health_host}:{args.generation_worker_health_port}"
+    try:
+        start_generation_worker = not args.no_generation_worker and generation_worker_required(python)
+    except RuntimeError as error:
+        print(str(error), file=sys.stderr)
+        return 2
 
     if port_is_open(args.host, args.backend_port):
         print(f"后端端口 {args.backend_port} 已在使用；不会替换现有服务。")
@@ -169,6 +185,15 @@ def main() -> int:
             with (LOG_DIR / "local-courseware-worker.log").open("ab") as log_handle:
                 pids["courseware_worker"] = launch("互动课件 Worker", command, ROOT, log_handle)
 
+    if start_generation_worker:
+        if port_is_open(args.worker_health_host, args.generation_worker_health_port):
+            print(f"文本 Worker 健康端口 {args.generation_worker_health_port} 已在使用；不会替换现有进程。")
+        else:
+            command = [str(python), str(BACKEND / "scripts" / "generation_worker.py"), "--health-host", args.worker_health_host,
+                       "--health-port", str(args.generation_worker_health_port)]
+            with (LOG_DIR / "local-generation-worker.log").open("ab") as log_handle:
+                pids["generation_worker"] = launch("文本生成 Worker", command, ROOT, log_handle)
+
     if not args.no_frontend:
         if port_is_open(args.host, args.frontend_port):
             print(f"前端端口 {args.frontend_port} 已在使用；不会替换现有前端。")
@@ -181,6 +206,9 @@ def main() -> int:
         STATE_FILE.write_text(json.dumps({"pids": pids, "started_at": time.time()}, ensure_ascii=False, indent=2), encoding="utf-8")
     backend_health = wait_for_json(f"{backend_url}/health", args.startup_timeout)
     worker_health = None if args.no_worker else wait_for_json(f"{worker_url}/health/ready", args.startup_timeout)
+    generation_health = wait_for_json(f"{generation_url}/health/ready", args.startup_timeout) if start_generation_worker else None
+    if start_generation_worker:
+        print(f"文本 Worker：{generation_health.get('status') if generation_health else '未就绪'}（{generation_url}/health/ready）")
     print(f"后端健康：{backend_health.get('status') if backend_health else '不可用'}（{backend_url}/health）")
     if not args.no_worker:
         print(f"课件 Worker：{worker_health.get('status') if worker_health else '未就绪'}（{worker_url}/health/ready）")
@@ -190,7 +218,7 @@ def main() -> int:
         print(f"进程记录：{STATE_FILE}；停止时请按部署文档中的正常停机方式操作。")
     else:
         print("本次未创建新进程，因此未改写进程记录。")
-    return 0 if backend_health and (args.no_worker or worker_health) else 1
+    return 0 if backend_health and (args.no_worker or worker_health) and (not start_generation_worker or generation_health) else 1
 
 
 if __name__ == "__main__":

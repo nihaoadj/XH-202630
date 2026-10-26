@@ -79,8 +79,9 @@ backend/logs/local-dev-processes.json
 /deliverables/debug-review-cover.png
 /deliverables/taskbook-render/
 
-# Local update plans and skills
+# Local update plans, extension ideas and skills
 /docs/update_plan/
+/docs/extension_ideas/
 /skills/
 /.skills/
 

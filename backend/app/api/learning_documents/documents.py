@@ -1,3 +1,4 @@
+from app.services.generation.dispatch import schedule_generation, submission_identity
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
@@ -83,16 +84,11 @@ def continue_resource_batch(
             payload,
             resource_service_factory=lambda: container.resource_service(),
             feedback_repo_factory=lambda: container.feedback_service().feedback_loop_repo,
+            **submission_identity(learner, payload, getattr(request, "headers", {}).get("Idempotency-Key"), f"continuation:{batch_id}"),
         )
     except BatchContinuationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    background_tasks.add_task(
-        generation_job_service.run_job,
-        learner,
-        generation_request,
-        job.run_id,
-        job.batch_id,
-    )
+    schedule_generation(generation_job_service, background_tasks, learner, generation_request, job.run_id, job.batch_id)
     return job
 
 

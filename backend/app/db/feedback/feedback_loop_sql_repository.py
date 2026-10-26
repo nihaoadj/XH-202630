@@ -17,6 +17,7 @@ from app.db.shared.models import (
     AbilityStateEventORM,
     FeedbackDecisionORM,
     FeedbackFollowUpRunORM,
+    GenerationJobORM,
     KnowledgeStateMutationORM,
     KnowledgeStateORM,
     LearnerProfileORM,
@@ -506,17 +507,24 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                 db.commit()
             return self._load_result(db, attempt_id, replay=False)
 
-    def list_attempts(self, learner_id: str, limit: int = 20) -> list[LearningAttempt]:
+    def list_attempts(self, learner_id: str, limit: int | None = 20) -> list[LearningAttempt]:
         with self.session_factory() as db:
             rows = db.query(LearningAttemptORM).filter_by(learner_id=learner_id).order_by(
-                LearningAttemptORM.submitted_at.desc()
+                LearningAttemptORM.submitted_at.desc(), LearningAttemptORM.attempt_id.desc(),
             ).limit(limit).all()
-            return [self._load_attempt(db, row) for row in rows]
+            points = {}
+            for start in range(0, len(rows), 500):
+                point_rows = db.query(LearningAttemptPointResultORM).filter(
+                    LearningAttemptPointResultORM.attempt_id.in_([row.attempt_id for row in rows[start:start + 500]]),
+                ).order_by(LearningAttemptPointResultORM.knowledge_point_id).all()
+                for point in point_rows:
+                    points.setdefault(point.attempt_id, []).append(point)
+            return [self._load_attempt(db, row, points.get(row.attempt_id, [])) for row in rows]
 
     def list_results(self, learner_id: str, limit: int = 20) -> list[FeedbackLoopResult]:
         with self.session_factory() as db:
             rows = db.query(LearningAttemptORM.attempt_id).filter_by(learner_id=learner_id).order_by(
-                LearningAttemptORM.submitted_at.desc()
+                LearningAttemptORM.submitted_at.desc(), LearningAttemptORM.attempt_id.desc(),
             ).limit(limit).all()
             return [self._load_result(db, row[0], replay=False) for row in rows]
 
@@ -553,6 +561,22 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                 "error_code": row.error_code,
             }
 
+    def reconcile_failed_generation_jobs(self, limit=100):
+        # Re-query failed facts so a crash after job reconciliation is repaired next poll.
+        from app.db.shared.models import GenerationJobORM
+        with self.session_factory() as db:
+            ids = [row[0] for row in db.query(FeedbackFollowUpRunORM.relation_id)
+                   .join(GenerationJobORM, GenerationJobORM.run_id == FeedbackFollowUpRunORM.child_run_id)
+                   .filter(FeedbackFollowUpRunORM.status == "queued", GenerationJobORM.status == "failed")
+                   .order_by(FeedbackFollowUpRunORM.relation_id).limit(limit)]
+            if not ids:
+                return 0
+            count = db.query(FeedbackFollowUpRunORM).filter(
+                FeedbackFollowUpRunORM.relation_id.in_(ids), FeedbackFollowUpRunORM.status == "queued",
+            ).update({"status": "failed", "error_code": "GENERATION_JOB_INTERRUPTED"}, synchronize_session=False)
+            db.commit()
+            return count
+
     def reconcile_incomplete_followups(
         self,
         *,
@@ -583,10 +607,11 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
             db.commit()
         return reconciled
 
-    def _load_attempt(self, db: Session, row: LearningAttemptORM) -> LearningAttempt:
-        points = db.query(LearningAttemptPointResultORM).filter_by(attempt_id=row.attempt_id).order_by(
-            LearningAttemptPointResultORM.knowledge_point_id
-        ).all()
+    def _load_attempt(self, db: Session, row: LearningAttemptORM, points=None) -> LearningAttempt:
+        if points is None:
+            points = db.query(LearningAttemptPointResultORM).filter_by(attempt_id=row.attempt_id).order_by(
+                LearningAttemptPointResultORM.knowledge_point_id
+            ).all()
         return LearningAttempt(
             attempt_id=row.attempt_id,
             request_hash=row.request_hash,
@@ -694,7 +719,12 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
         )
         version = db.query(LearnerProfileVersionORM).filter_by(source_attempt_id=attempt_id).one()
         followups = db.query(FeedbackFollowUpRunORM).filter_by(attempt_id=attempt_id).order_by(FeedbackFollowUpRunORM.created_at, FeedbackFollowUpRunORM.child_run_id).all()
-        followup = followups[0] if followups else None
+        superseded = {item[0] for item in db.query(GenerationJobORM.run_id).filter(
+            GenerationJobORM.run_id.in_([item.child_run_id for item in followups if item.child_run_id]),
+            GenerationJobORM.superseded_by_run_id.is_not(None),
+        )}
+        active_followups = [item for item in followups if item.child_run_id not in superseded]
+        followup = active_followups[0] if active_followups else None
         return FeedbackLoopResult(
             attempt=attempt,
             decision=decision,
@@ -706,7 +736,7 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
             followup_run_id=followup.child_run_id if followup else None,
             followup_job_id=followup.child_run_id if followup else None,
             followup_error_code=followup.error_code if followup else None,
-            followup_run_ids=[item.child_run_id for item in followups if item.child_run_id],
+            followup_run_ids=[item.child_run_id for item in active_followups if item.child_run_id],
             followup_relations=[{
                 "relation_id": item.relation_id, "attempt_id": item.attempt_id,
                 "decision_id": item.decision_id, "parent_run_id": item.parent_run_id,

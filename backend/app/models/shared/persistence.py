@@ -503,6 +503,7 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "claim_revision_count",
         "claim_check_status",
         "retrieval_status",
+        "retrieval_strategy_version",
         "retrieval_config_hash",
         "retrieval_candidate_count",
         "retrieval_dropped_candidate_count",
@@ -537,6 +538,8 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         }
     )
     projection["diagnosis"] = _jsonable(dict(state.get("diagnosis", {})))
+    projection["evidence_allocation"] = _jsonable(state.get("evidence_allocation"))
+    projection["node_evidence_map"] = _jsonable(dict(state.get("node_evidence_map", {})))
     projection["learning_plan"] = _jsonable(dict(state.get("learning_plan", {})))
     projection["resource_specs"] = _jsonable(list(state.get("resource_specs", []))[:100])
     projection["resource_executions"] = _jsonable(

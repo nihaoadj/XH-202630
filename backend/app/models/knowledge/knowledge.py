@@ -10,11 +10,14 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.core.retrieval.knowledge_ids import normalize_source_path, normalize_text
+from app.core.retrieval.knowledge_ids import normalize_source_path, normalize_text, retrieval_config_hash
+from app.models.learning_documents.types import GENERAL_GENERATION_RESOURCE_TYPES
 from app.models.shared.common import ErrorInfo
 
 
 Scalar = Union[str, int, float, bool]
+RESOURCE_AWARE_STRATEGY = "resource-aware-v1"
+LEGACY_RETRIEVAL_STRATEGY = "legacy"
 
 
 class StrictKnowledgeModel(BaseModel):
@@ -131,6 +134,85 @@ class KnowledgeChunk(StrictKnowledgeModel):
         return self
 
 
+class QueryPurpose(StrictKnowledgeModel):
+    node_id: Optional[str] = Field(default=None, min_length=1)
+    resource_type: Optional[str] = None
+
+    @field_validator("resource_type")
+    @classmethod
+    def validate_resource_type(cls, value):
+        if value is not None and value not in GENERAL_GENERATION_RESOURCE_TYPES:
+            raise ValueError("query purpose requires a general resource type")
+        return value
+
+
+class EvidenceAllocation(StrictKnowledgeModel):
+    """ID-only assignment belonging to exactly one validated retrieval batch."""
+
+    strategy_version: Literal["resource-aware-v1"] = RESOURCE_AWARE_STRATEGY
+    step_id: str = Field(min_length=1)
+    config_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    resource_types: List[str] = Field(min_length=1, max_length=5)
+    evidence_ids: List[str] = Field(min_length=1, max_length=20)
+    common_evidence_ids: List[str] = Field(min_length=1, max_length=20)
+    resource_specific_evidence_ids: Dict[str, List[str]]
+    query_bindings: Dict[str, List[QueryPurpose]]
+    evidence_query_hashes: Dict[str, List[str]]
+    gaps: List[Dict[str, str]] = Field(default_factory=list)
+    binding_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    allocation_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_assignment(self) -> "EvidenceAllocation":
+        types = self.resource_types
+        if len(types) != len(set(types)) or not set(types) <= set(GENERAL_GENERATION_RESOURCE_TYPES):
+            raise ValueError("allocation resource types must be unique general types")
+        if set(self.resource_specific_evidence_ids) != set(types):
+            raise ValueError("allocation must include exactly the requested types")
+        ids = set(self.evidence_ids)
+        if len(ids) != len(self.evidence_ids) or any(not item.strip() for item in ids):
+            raise ValueError("allocation evidence IDs must be non-empty and unique")
+        assigned = set()
+        for group in [self.common_evidence_ids, *self.resource_specific_evidence_ids.values()]:
+            if len(group) != len(set(group)) or not set(group) <= ids:
+                raise ValueError("allocation references must be unique and in E")
+            if group != [item for item in self.evidence_ids if item in set(group)]:
+                raise ValueError("allocation references must follow frozen E order")
+            assigned.update(group)
+        if assigned != ids or set(self.evidence_query_hashes) != ids:
+            raise ValueError("allocation must account for all frozen evidence")
+        for key, bindings in self.query_bindings.items():
+            if len(key) != 64 or any(char not in "0123456789abcdef" for char in key) or not bindings:
+                raise ValueError("allocation requires hashed queries and purposes")
+            if any(binding.resource_type is not None and binding.resource_type not in types for binding in bindings):
+                raise ValueError("query binding type is outside request")
+        for hashes in self.evidence_query_hashes.values():
+            if not hashes or len(hashes) != len(set(hashes)) or not set(hashes) <= set(self.query_bindings):
+                raise ValueError("evidence query bindings are invalid")
+        dumped = self.model_dump(mode="json")
+        if self.binding_hash != retrieval_config_hash(dumped["query_bindings"]):
+            raise ValueError("query binding fingerprint mismatch")
+        if self.allocation_hash != retrieval_config_hash({key: value for key, value in dumped.items() if key != "allocation_hash"}):
+            raise ValueError("allocation fingerprint mismatch")
+        return self
+
+    def available_ids(self, resource_type: str) -> List[str]:
+        if resource_type not in self.resource_types:
+            raise ValueError("resource type is outside allocation")
+        allowed = set(self.common_evidence_ids) | set(self.resource_specific_evidence_ids[resource_type])
+        return [item for item in self.evidence_ids if item in allowed]
+
+    def validate_evidence(self, evidence, resource_types=None) -> None:
+        # Revalidate even model_copy/model_construct values at trust boundaries.
+        self.__class__.model_validate(self.model_dump(mode="python"))
+        if [item.evidence_id for item in evidence] != self.evidence_ids:
+            raise ValueError("allocation is not bound to this frozen evidence set")
+        if any(item.config_hash != self.config_hash for item in evidence):
+            raise ValueError("allocation config hash differs from evidence")
+        if resource_types is not None and list(resource_types) != self.resource_types:
+            raise ValueError("allocation resource types differ from request")
+
+
 class RetrievalPolicy(StrictKnowledgeModel):
     top_k_per_query: int = Field(default=3, ge=1, le=10)
     max_query_count: int = Field(default=6, ge=1, le=10)
@@ -141,6 +223,7 @@ class RetrievalPolicy(StrictKnowledgeModel):
     distance_metric: Literal["cosine"] = "cosine"
     query_strategy_version: str = "deterministic-v1"
     ranking_strategy_version: str = "normalized-score-v1"
+    strategy_version: Literal["legacy", "resource-aware-v1"] = LEGACY_RETRIEVAL_STRATEGY
 
     @model_validator(mode="after")
     def validate_counts(self) -> "RetrievalPolicy":
@@ -158,6 +241,9 @@ class RetrievalRequest(StrictKnowledgeModel):
     # records which node-scoped query produced a hit so the result can expose
     # a safe, many-to-many node -> evidence projection after global dedupe.
     query_node_ids: Dict[str, str] = Field(default_factory=dict)
+    query_bindings: Dict[str, List[QueryPurpose]] = Field(default_factory=dict)
+    resource_types: List[str] = Field(default_factory=list)
+    query_gaps: List[Dict[str, str]] = Field(default_factory=list)
     allowed_chunk_ids: Optional[List[str]] = Field(default=None, max_length=10000)
     retrieval_scope: Literal["global", "node_scoped"] = "global"
     policy: RetrievalPolicy = Field(default_factory=RetrievalPolicy)
@@ -189,6 +275,25 @@ class RetrievalRequest(StrictKnowledgeModel):
                 raise ValueError("allowed_chunk_ids cannot be empty when provided")
         if self.retrieval_scope == "node_scoped" and self.allowed_chunk_ids is None:
             raise ValueError("node_scoped retrieval requires allowed_chunk_ids")
+        if self.policy.strategy_version == RESOURCE_AWARE_STRATEGY:
+            if not self.resource_types or len(set(self.resource_types)) != len(self.resource_types):
+                raise ValueError("resource-aware request requires unique resource types")
+            if not set(self.resource_types) <= set(GENERAL_GENERATION_RESOURCE_TYPES):
+                raise ValueError("resource-aware request requires general resource types")
+            merged = {}
+            for query, purposes in self.query_bindings.items():
+                normalized = normalize_text(query)
+                group = merged.setdefault(normalized, [])
+                for purpose in purposes:
+                    if purpose not in group:
+                        group.append(purpose)
+            self.query_bindings = merged
+            if set(merged) != set(self.queries) or any(not values for values in merged.values()):
+                raise ValueError("resource-aware queries require complete bindings")
+            if any(p.resource_type is not None and p.resource_type not in self.resource_types for values in merged.values() for p in values):
+                raise ValueError("query purpose is outside requested resource types")
+            if len(self.queries) > self.policy.max_query_count:
+                raise ValueError("resource-aware query budget exceeded")
         return self
 
 
@@ -201,6 +306,7 @@ class VectorCandidate(StrictKnowledgeModel):
     metric: str = Field(min_length=1, max_length=32)
     query: str = Field(min_length=1, max_length=2000)
     query_rank: int = Field(ge=1)
+    matched_queries: List[str] = Field(default_factory=list)
 
     @field_validator("raw_score")
     @classmethod
@@ -257,6 +363,7 @@ class EvidenceBatch(StrictKnowledgeModel):
     # This is a classification of the one immutable evidence snapshot, not a
     # second evidence store.  One evidence ID may appear under multiple nodes.
     node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
+    evidence_allocation: Optional[EvidenceAllocation] = None
     query_hashes: List[str] = Field(default_factory=list)
     query_count: int = Field(ge=0)
     candidate_count: int = Field(ge=0)
@@ -287,6 +394,10 @@ class EvidenceBatch(StrictKnowledgeModel):
                 raise ValueError("node evidence bindings must be non-empty and unique")
             if not set(ids) <= evidence_ids:
                 raise ValueError("node evidence bindings must belong to the batch")
+        if self.evidence_allocation is not None:
+            self.evidence_allocation.validate_evidence(self.evidence)
+            if self.config_hash != self.evidence_allocation.config_hash:
+                raise ValueError("allocation differs from batch config")
         return self
 
 

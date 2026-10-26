@@ -6,7 +6,6 @@ import json
 import uuid
 from pathlib import Path
 from time import monotonic
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -17,7 +16,6 @@ from app.core.courseware.components import is_registered_component
 from app.core.courseware.runtime import RENDERER_VERSION, RUNTIME_VERSION
 from app.core.courseware.security import browser_smoke_check
 from app.core.courseware.evaluation import quality_gate_report
-from app.core.courseware.learning_design import build_learning_design
 from app.core.courseware.quality_summary import build_quality_summary
 from app.core.courseware.page_quality import page_quality_issues
 from app.core.courseware.storage import save_courseware_artifact, save_courseware_html
@@ -45,8 +43,11 @@ from app.agents.resource_workflows.interactive_courseware.planner_agent import b
 from app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent import review_courseware_quality_decision, resolve_review_targets
 from app.agents.resource_workflows.interactive_courseware.runtime import courseware_ai_available
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import compose_courseware_scene
-from app.agents.resource_workflows.interactive_courseware.validators import validate_scene_shape, validate_storyboard_bindings
+from app.agents.resource_workflows.interactive_courseware.validators import validate_scene_shape
 from app.agents.resource_workflows.interactive_courseware.budget import CoursewareBudgetCoordinator
+from app.agents.resource_workflows.interactive_courseware.stages import (
+    StageFailure, prepare_design, validate_scene_candidates, resolve_scene_candidates,
+)
 from app.agents.resource_workflows.interactive_courseware.composition import compose_scenes, default_title, resource_courseware_title
 from app.agents.resource_workflows.interactive_courseware.lineage import reconcile_stale_resources
 from app.core.courseware.review import quality_review, source_trace_review
@@ -334,46 +335,11 @@ class InteractiveCoursewareWorkflow:
                     knowledge_base_id=knowledge_base_id)
         self._control_guard(run_id)
         learner_context = self._learner_context(job.get("learner_id"))
-        practice_step_structures: dict[str, list[dict[str, Any]]] = {}
-        for source in snapshots:
-            if source.get("role") != "practice":
-                continue
-            package = source.get("practice_guide_payload")
-            if not isinstance(package, dict) or package.get("schema_version") != "3.0":
-                row = self.repo.update_job(
-                    run_id, status="rejected_admission", error_code="COURSEWARE_PRACTICE_JSON_REQUIRED",
-                    error_message="实操课件必须使用已校验的 V3 固定阶段 JSON，禁止从 Markdown 拆分步骤",
-                    warnings=warnings,
-                )
-                self._event(run_id, "practice_structure", "rejected", {"error_code": "COURSEWARE_PRACTICE_JSON_REQUIRED"})
-                return self._job_response(row)
-            blocks_by_step = {
-                str(block.get("practice_step_id")): str(block.get("block_id"))
-                for block in source.get("blocks") or [] if block.get("practice_step_id") and block.get("block_id")
-            }
-            extracted = [
-                {"title": str(step.get("title") or step["step_id"]), "source_block_ids": [blocks_by_step[str(step["step_id"])]]}
-                for step in (package.get("practice") or {}).get("steps") or []
-                if isinstance(step, dict) and str(step.get("step_id") or "") in blocks_by_step
-            ]
-            if not extracted:
-                row = self.repo.update_job(
-                    run_id, status="quarantined", error_code="COURSEWARE_PRACTICE_JSON_BINDING_INVALID",
-                    error_message="实操指南 JSON 步骤无法与冻结来源块一一绑定",
-                    warnings=warnings,
-                )
-                self._event(run_id, "practice_structure", "quarantined", {"error_code": "COURSEWARE_PRACTICE_JSON_BINDING_INVALID"})
-                return self._job_response(row)
-            practice_step_structures[str(source["resource_id"])] = extracted
-        learning_design = build_learning_design(
-            snapshots, learner_context, job.get("request_options") or {}, practice_step_structures,
-        )
-        for usage in learning_design.resource_usage_plan:
-            if usage.get("adopted") is False:
-                warnings.append({
-                    "code": "ASSESSMENT_SCENE_OPTIONAL" if usage.get("unused_reason") == "missing_verifiable_exercise" else "COURSEWARE_RESOURCE_UNUSED",
-                    "message": f"资源 {usage['resource_id']} 未进入课程主线：{usage.get('unused_reason') or '未采用'}",
-                })
+        design_stage = prepare_design(snapshots, learner_context, job.get("request_options") or {})
+        if design_stage.failure:
+            return self._stage_failure(run_id, design_stage.failure, warnings)
+        learning_design = design_stage.design
+        warnings.extend(design_stage.warnings)
         resource_bundle = [
             ResourceBundleSnapshot.from_snapshot(item).model_dump(mode="json") for item in snapshots
         ]
@@ -391,21 +357,9 @@ class InteractiveCoursewareWorkflow:
                 snapshots, plan, learning_design=learning_design,
                 plan_enrichment=plan.enrichment if plan and plan.enrichment else plan_enrichment,
             )
-            design_payload = learning_design.model_dump(mode="json")
-            for candidate in scenes:
-                binding_errors = validate_storyboard_bindings(candidate, design_payload)
-                if binding_errors:
-                    error_code = "COURSEWARE_STORYBOARD_SLOT_MISMATCH"
-                    row = self.repo.update_job(
-                        run_id, status="quarantined", error_code=error_code,
-                        error_message="场景未严格填充冻结 Storyboard 槽位: " + ",".join(binding_errors),
-                        warnings=warnings,
-                    )
-                    self._event(run_id, "composing", "quarantined", {
-                        "error_code": error_code,
-                        "binding_errors": binding_errors,
-                    })
-                    return self._job_response(row)
+            binding_failure = validate_scene_candidates(scenes, learning_design)
+            if binding_failure:
+                return self._stage_failure(run_id, binding_failure, warnings)
         if plan_warning:
             warnings.append(plan_warning)
         warnings.extend(scene_warnings)
@@ -419,46 +373,19 @@ class InteractiveCoursewareWorkflow:
                 sources_by_id=sources_by_id, learning_design=learning_design, job=job,
             )
 
-        enhanced_scenes: list[dict[str, Any] | None] = [None] * len(scenes)
-        scene_hard_gate_code: str | None = None
-        ai_enabled = courseware_ai_available(self.llm_gateway)
-        if recovered_scenes:
-            results = [(index, scene, None) for index, scene in enumerate(scenes)]
-            ai_enabled = any((row.get("agent_version") or "").startswith("ai") for row in recovered_scenes)
-        elif ai_enabled and len(scenes) > 1:
-            with ThreadPoolExecutor(max_workers=min(2, len(scenes)), thread_name_prefix="courseware-scene") as executor:
-                results = list(executor.map(lambda item: compose_one(*item), enumerate(scenes)))
-        else:
-            results = [compose_one(index, scene) for index, scene in enumerate(scenes)]
-        for index, resolved_scene, scene_warning in results:
-            base_scene = scenes[index]
-            scene_warning = self._record_agent_trace(run_id, scene_warning, "courseware_scene_composer",
-                                                      f"{spec_id}_scene_{index + 1}")
-            if scene_warning:
-                warnings.append({**scene_warning, "scene_id": base_scene.get("scene_id")})
-                if scene_warning.get("code") in {"AI_SCENE_UNKNOWN_COMPONENT", "AI_SCENE_UNKNOWN_SOURCE_BLOCK"}:
-                    scene_hard_gate_code = scene_warning["code"]
-            slot = list(learning_design.storyboard.scenes)[index] if index < len(learning_design.storyboard.scenes) else None
-            if resolved_scene is not None:
-                # Model prose may enrich a slot, but cannot mutate frozen
-                # objective/source/component bindings.
-                resolved_scene = {
-                    **resolved_scene,
-                    "scene_id": base_scene.get("scene_id") or (slot.scene_id if slot else None),
-                    "objective_ids": list(base_scene.get("objective_ids") or (slot.objective_ids if slot else [])),
-                    "allowed_component_ids": list(base_scene.get("allowed_component_ids") or (slot.allowed_component_ids if slot else [])),
-                    "source_refs": list(base_scene.get("source_refs") or []),
-                    "source_block_ids": list(base_scene.get("source_block_ids") or []),
-                }
-            enhanced_scenes[index] = resolved_scene
-        scenes = [scene for scene in enhanced_scenes if scene is not None]
-        if scene_hard_gate_code:
-            row = self.repo.update_job(
-                run_id, status="quarantined", error_code=scene_hard_gate_code,
-                error_message="AI 场景契约引用了未注册组件或未冻结来源块，未发布", warnings=warnings,
-            )
-            self._event(run_id, "composing", "quarantined", {"error_code": scene_hard_gate_code})
-            return self._job_response(row)
+        scene_stage = resolve_scene_candidates(
+            scenes, learning_design,
+            recovered_scenes=recovered_scenes,
+            ai_enabled=courseware_ai_available(self.llm_gateway),
+            compose_one=compose_one,
+            record_trace=lambda index, warning: self._record_agent_trace(
+                run_id, warning, "courseware_scene_composer", f"{spec_id}_scene_{index + 1}",
+            ),
+        )
+        warnings.extend(scene_stage.warnings)
+        if scene_stage.failure:
+            return self._stage_failure(run_id, scene_stage.failure, warnings)
+        scenes, ai_enabled = scene_stage.scenes, scene_stage.ai_enabled
         self._persist_approved_scenes(run_id, spec_id, scenes, snapshots, ai_enabled)
         if not scenes:
             row = self.repo.update_job(run_id, status="failed", error_code="COURSEWARE_NO_RENDERABLE_SCENES",
@@ -637,6 +564,15 @@ class InteractiveCoursewareWorkflow:
         state = "published_with_warnings" if warnings else "published"
         row = self.repo.get_job(run_id)
         self._checkpoint_completed(run_id, "release", state_json={"resource_id": resource_id, "status": state})
+        return self._job_response(row)
+
+    def _stage_failure(self, run_id: str, failure: StageFailure, warnings: list[dict[str, Any]]):
+        """Persist the existing failure outcome at the workflow orchestration boundary."""
+        row = self.repo.update_job(
+            run_id, status=failure.status, error_code=failure.code,
+            error_message=failure.message, warnings=warnings,
+        )
+        self._event(run_id, failure.event_stage, failure.event_status, failure.event_payload)
         return self._job_response(row)
 
     def _prepare_candidate_artifact(

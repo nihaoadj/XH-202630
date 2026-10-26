@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { runApi } from '../../api/index.js'
+import { runApi } from '../runs/queryApi.js'
 import { createRunEventClient } from '../runs/api.js'
 import {
   applyRunSnapshot, createInitialTimelineState, hydrateWorkflowTimeline, reduceWorkflowEvent,

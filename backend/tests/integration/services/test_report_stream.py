@@ -1,4 +1,5 @@
 import asyncio
+import json
 import socket
 import threading
 import time
@@ -11,6 +12,7 @@ from fastapi import FastAPI
 
 from app.api.reports.report import stream_report
 from app.models.learning_documents.schemas import LearnerProfile
+from app.models.reports.contracts import ReportInvalidation
 
 
 class _Profiles:
@@ -79,6 +81,9 @@ def test_report_stream_over_real_http_emits_snapshot_then_changed():
             assert "event: report_snapshot" in lines
             assert "event: report_changed" in lines
             assert any(item.startswith("data:") and "changed_domains" in item for item in lines)
+            invalidations = [ReportInvalidation.model_validate(json.loads(item.removeprefix("data:")))
+                             for item in lines if item.startswith("data:")]
+            assert all(item.learner_id == "learner" and item.window_days == 30 for item in invalidations)
     finally:
         server.should_exit = True
         thread.join(timeout=5)

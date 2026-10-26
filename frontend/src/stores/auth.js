@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { authApi } from '../api'
+import { authApi } from '../features/auth/api.js'
 import { useAppStore } from './app'
 
 

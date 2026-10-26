@@ -36,7 +36,8 @@
     "test:courseware-events": "node tests/coursewareEvents.test.mjs",
     "test:courseware-journey": "node tests/coursewareUserJourney.test.mjs",
     "test:courseware-source-policy": "node tests/coursewareSourcePolicy.test.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:courseware-sync-browser": "node tests/coursewareSyncBrowser.test.mjs"
   },
   "dependencies": {
     "axios": "^1.7.2",

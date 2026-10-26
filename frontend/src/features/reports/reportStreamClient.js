@@ -1,22 +1,35 @@
+import { isRecord, isReportInvalidation } from '../../contracts/guards.js'
+
 // Deliberately local to the report feature: this is a current-state invalidator,
 // not a durable event ledger.
 export class ReportStreamClient {
+  /** @param {{fetchReport: (context: import('../../contracts/ports').ReportFetchRequest) => Promise<import('../../contracts/ports').ReportSnapshot | null>, onStatus?: (status: string) => void, onReport?: (report: import('../../contracts/generated/contracts').CurrentReportResponse) => void, pollMs?: number}} options */
   constructor({ fetchReport, onStatus, onReport, pollMs = 30000 }) {
     this.fetchReport = fetchReport
     this.onStatus = onStatus || (() => {})
     this.onReport = onReport || (() => {})
     this.pollMs = pollMs
+    /** @type {EventSource | null} */
     this.source = null
+    /** @type {number | null} */
     this.timer = null
+    /** @type {number | undefined} */
+    this.debounce = undefined
+    this.learnerId = ''
+    /** @type {import('../../contracts/generated/contracts').ReportWindowDays} */
+    this.windowDays = 30
+    /** @type {string | null} */
+    this.revision = null
     this.errors = 0
     this.generation = 0
     this.pending = false
     this.pendingRefresh = false
   }
 
+  /** @param {import('../../contracts/ports').ReportContext} context */
   start({ learnerId, windowDays, revision }) {
     this.stop()
-    this.learnerId = learnerId; this.windowDays = windowDays; this.revision = revision
+    this.learnerId = learnerId; this.windowDays = windowDays; this.revision = revision ?? null
     this.generation += 1; this.errors = 0
     this._connect(this.generation)
   }
@@ -25,22 +38,26 @@ export class ReportStreamClient {
     this.generation += 1
     if (this.source) this.source.close()
     this.source = null
-    clearInterval(this.timer); this.timer = null; clearTimeout(this.debounce)
+    if (this.timer !== null) clearInterval(this.timer)
+    this.timer = null; clearTimeout(this.debounce)
     this.pending = false; this.pendingRefresh = false
     this.onStatus('closed')
   }
   refresh(force = false) { return this._refresh(this.generation, force) }
 
+  /** @param {number} generation */
   _connect(generation) {
     if (!this.learnerId || typeof EventSource === 'undefined') return this._poll(generation)
     this.onStatus('connecting')
-    const query = new URLSearchParams({ window_days: this.windowDays })
+    const query = new URLSearchParams({ window_days: String(this.windowDays) })
     if (this.revision) query.set('after_revision', this.revision)
     const source = new EventSource(`/api/report/${encodeURIComponent(this.learnerId)}/events?${query}`)
     this.source = source
     source.onopen = () => { if (generation === this.generation) this.onStatus('live') }
+    /** @param {unknown} payload @param {{onlyWhenRevisionChanges: boolean}} options */
     const scheduleRefresh = (payload, { onlyWhenRevisionChanges }) => {
       if (generation !== this.generation) return
+      if (!isReportInvalidation(payload)) return
       if (payload.learner_id !== this.learnerId || payload.window_days !== this.windowDays) return
       const revisionChanged = payload.report_revision !== this.revision
       this.pendingRefresh = this.pendingRefresh || this.pending
@@ -52,8 +69,14 @@ export class ReportStreamClient {
       // the server correctly responds 304, leaving stale charts on screen.
       clearTimeout(this.debounce); this.debounce = setTimeout(() => this._refresh(generation, true), 250)
     }
-    source.addEventListener('report_snapshot', (event) => scheduleRefresh(JSON.parse(event.data), { onlyWhenRevisionChanges: true }))
-    source.addEventListener('report_changed', (event) => scheduleRefresh(JSON.parse(event.data), { onlyWhenRevisionChanges: false }))
+    /** @param {unknown} event @param {boolean} onlyWhenRevisionChanges */
+    const receive = (event, onlyWhenRevisionChanges) => {
+      if (!isRecord(event) || typeof event.data !== 'string') return
+      try { scheduleRefresh(JSON.parse(event.data), { onlyWhenRevisionChanges }) }
+      catch { /* A malformed frame cannot replace current report state. */ }
+    }
+    source.addEventListener('report_snapshot', event => receive(event, true))
+    source.addEventListener('report_changed', event => receive(event, false))
     source.onerror = () => {
       if (generation !== this.generation) return
       this.errors += 1
@@ -61,7 +84,13 @@ export class ReportStreamClient {
     }
   }
 
-  _poll(generation) { this.onStatus('polling'); clearInterval(this.timer); this.timer = setInterval(() => this._refresh(generation), this.pollMs) }
+  /** @param {number} generation */
+  _poll(generation) {
+    this.onStatus('polling')
+    if (this.timer !== null) clearInterval(this.timer)
+    this.timer = setInterval(() => this._refresh(generation), this.pollMs)
+  }
+  /** @param {number} generation @param {boolean} force @returns {Promise<void>} */
   async _refresh(generation, force = false) {
     if (generation !== this.generation || !this._online()) return
     if (this.pending) { this.pendingRefresh = true; return }

@@ -1,4 +1,5 @@
-import { resourceApi, runApi } from '../../api/index.js'
+import { resourceApi } from '../learning-documents/api.js'
+import { runApi } from '../runs/queryApi.js'
 import { watch } from 'vue'
 import { buildClaimRows, claimAuditSummary } from './generationAudit.js'
 import { buildResourceStatusItems } from './resourceStatusPresentation.js'

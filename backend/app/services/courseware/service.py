@@ -102,6 +102,27 @@ class CoursewareService:
     def get_job_detail(self, run_id: str) -> CoursewareJobDetail | None:
         return self.workflow.get_job_detail(run_id)
 
+    def get_scene_review(self, run_id: str, scene_id: str) -> dict[str, Any] | None:
+        """Project the existing review response after checking scene membership."""
+        detail = self.get_job_detail(run_id)
+        if detail is None or all(scene.scene_id != scene_id for scene in detail.scenes):
+            return None
+        spec = self.repo.get_spec_by_run(run_id)
+        stored = self.repo.get_scene(scene_id)
+        if spec is None or stored is None:
+            return None
+        return {
+            "scene_id": scene_id,
+            "scene": stored["scene_json"],
+            "status": stored["status"],
+            "attempt": stored["attempt"],
+            "input_snapshot_hash": stored.get("input_snapshot_hash"),
+            "agent_version": stored.get("agent_version"),
+            "prompt_version": stored.get("prompt_version"),
+            "reviews": [review for review in detail.reviews if review.get("scene_id") in {None, scene_id}],
+            "revisions": self.repo.list_scene_revisions(scene_id),
+        }
+
     def events(self, run_id: str, after_sequence: int = 0) -> list[dict[str, Any]]:
         return self.workflow.events(run_id, after_sequence)
 

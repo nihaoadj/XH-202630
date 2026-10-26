@@ -4,7 +4,7 @@
 
 题目编号：XH-202630  
 文档版本：2.1\
-文档核对日期：2026-10-10（T14 整改、依赖门禁与验收记录同步）
+文档核对日期：2026-10-23（任务持久投递与学习进度同步更新）
 
 本项目面向多领域技能学习者，构建“学习者画像输入 → 能力诊断 → 多 Agent 协同决策 → 个性化资源生成 → 审核纠偏与知识溯源 → 学情报告 → 学习反馈 → 动态调整学习路径”的领域知识个性化生成系统。RAG 工程训练是当前示例知识库和比赛分工中的一个方向，实际生成方向由用户输入的学习主题、学习者画像和所接入的知识库共同决定。
 
@@ -19,6 +19,7 @@
 - 个性化适配：基于学习者画像动态匹配资源难度、生成学习路径与分阶测试。
 - 可视化决策：提供 Agent 调度过程、学情报告、资源难度匹配曲线等可视化能力。
 - 可回放运行记录：Run 在模型调用前建档，节点 Step/Event/Evidence/Checkpoint 持续落库，可跨进程只读查询并识别中断。
+- 文本持久投递：冻结请求与画像随任务落库，独立单实例 Worker 领取；执行前退出可恢复，执行中断后以关联的新尝试重试。
 - 互动课件：将单份已发布文本资源转换为结构化、可追溯的互动 HTML；由独立 Durable Worker 执行自动审核、修订和发布。
 - 学习工作区：提供五步新建方向、资源生产、专注阅读、测评反馈、学习旅程和动态学情报告；共享响应式外壳与减少动态效果支持。
 
@@ -32,7 +33,7 @@
 | 大模型 | 国产大模型 API（通义千问 / 文心一言 / DeepSeek 等，可配置） |
 | 向量数据库 | ChromaDB |
 | 关系数据库 | SQLite（当前开发、演示和部署） |
-| 部署 | 本地 Web + 独立课件 Worker + Vite；Dockerfile 仅提供后端 Web 镜像 |
+| 部署 | 本地 Web + 文本 Worker + 课件 Worker + Vite；Dockerfile 仅提供后端 Web 镜像 |
 
 ## 快速开始
 
@@ -52,15 +53,15 @@ py -3.11 -m venv .venv
 # 首次初始化知识库、目录、问卷、诊断题与示例画像；已有数据时按部署说明处理
 .\.venv\Scripts\python.exe scripts\start_local.py --initialize --check
 
-# 3. 启动 Web、互动课件 Durable Worker 与前端
+# 3. 启动 Web、文本 Worker、互动课件 Worker 与前端
 .\.venv\Scripts\python.exe scripts\start_local.py
 ```
 
 便携式 Windows 环境将 `.venv\Scripts\python.exe` 换为 `.venv\python.exe`；Linux/macOS 使用 `.venv/bin/python`，完整首次准备命令见 [部署说明](docs/deployment.md)。`--check` 只检查本地启动前置条件；运行时依赖 readiness 使用 `python scripts/check_environment.py` 检查。后续文档中的 `python` 命令均应在项目虚拟环境内执行。
 
-启动器会等待后端 `/health` 与课件 Worker `/health/ready`，并把日志写入 `backend/logs/`。互动课件 Worker 默认在 `127.0.0.1:8081` 提供 `/health/live`、`/health/ready` 和安全的 `/metrics`；Web 进程不会自动启动它。当前 SQLite Worker 每轮只 claim 一个任务，`COURSEWARE_WORKER_BATCH_SIZE` 大于 `1` 会被安全归一为 `1`，不能作为并发或横向扩容手段。
+SQLite 启动器会等待后端 `/health`、课件 Worker（`127.0.0.1:8081`）与文本 Worker（`127.0.0.1:8082`）的 `/health/ready`，日志写入 `backend/logs/`。Web 不执行这两类长任务；两个 Worker 各自并发 1。文本 Worker 按数据库文件加单实例进程锁，`GENERATION_DISPATCH_MODE=worker` 为 SQLite 必需配置。memory 模式保留非持久 `BackgroundTasks`，启动器自动跳过文本 Worker。
 
-完整的一键启动、首次安装、手动三进程启动、Worker 健康检查、停机和 SQLite 数据保护方案见 [部署说明](docs/deployment.md)。
+完整的一键启动、首次安装、手动四进程启动、Worker 健康检查、升级与 SQLite 数据保护方案见 [部署说明](docs/deployment.md)。
 
 知识索引异常后，可按知识库 ID 显式重新入库并对账 SQL/Chroma：
 
@@ -74,7 +75,7 @@ python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
 |---|---|---|---|
 | `development` | 默认禁止，可显式开启 | SQLite | not-ready 时保留 `/health`，生成返回 503 |
 | `demo` | 仅显式 `ALLOW_DEGRADED_GENERATION=true` | SQLite | fallback 必须标记 degraded |
-| `production` | 永远禁止 | SQLite | 核心依赖或默认 KB not-ready 时 fail-fast；同一数据库只运行一个 Durable Worker |
+| `production` | 永远禁止 | SQLite | 核心依赖或默认 KB not-ready 时 fail-fast；同一数据库每类只运行一个 Worker |
 
 `scripts/check_environment.py` 不调用计费 LLM、不下载 Embedding，退出码为 0=ready、2=degraded、1=not-ready。公共 `/health` 与 `/health/ready` 只检查默认 KB 和核心依赖；其他 KB 的异常不会轻易把整个服务变成 503。全 KB 详情位于 token 保护的管理员接口，见 `docs/api.md`。
 
@@ -107,7 +108,7 @@ backend/
 │   ├── config.py                  # 应用配置
 │   ├── containers.py              # 依赖注入组合根
 │   └── main.py                    # FastAPI 入口
-├── scripts/                      # 独立课件 Worker、冻结评测与比赛评测工具
+├── scripts/                      # 独立文本/课件 Worker、冻结评测与比赛评测工具
 ├── tests/                        # 分层测试套件
 │   ├── unit/                    # Agent、核心组件、模型契约与纯策略
 │   ├── integration/             # API、持久化、服务与工作流集成
@@ -135,7 +136,7 @@ version1/
 ├── frontend/                    # Vue3 前端可视化界面
 │   ├── public/                  # 品牌图片、字体等静态资产
 │   ├── src/
-│   │   ├── api/                 # axios 接口封装
+│   │   ├── api/                 # 共享 Axios 客户端与旧入口兼容导出
 │   │   ├── components/          # PreparationPanel、PreparationWorkspace 等共享展示
 │   │   ├── features/<domain>/   # 按领域组织的页面与交互逻辑
 │   │   ├── router/              # Vue Router 路由配置
@@ -145,7 +146,7 @@ version1/
 │   │   ├── utils/              # 事件归并、资源排序等工具
 │   │   ├── App.vue             # 公共页、学习外壳与专注模式分支
 │   │   └── main.js
-│   ├── tests/                  # 9 项 Node 单元专项与 13 项浏览器专项
+│   ├── tests/                  # 13 项 Node 单元专项与 15 项浏览器专项
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
@@ -190,6 +191,12 @@ version1/
 | `examples/` | 示例学习者画像等静态示例数据 | 是 |
 | `knowledge_base/` | 领域知识库原文档 | 是 |
 
+### 可选资源证据分配（E1）
+
+`RESOURCE_AWARE_RETRIEVAL_ENABLED=false` 默认沿用原检索。启用后，新普通文本 Run 冻结 `resource-aware-v1`：公共查询优先，五类资源按用途补充查询，分配同一批 Evidence 中的公共／专属 ID；Planner 一次读取完整最终证据，生成、来源投影、审核、Claim 与修订均使用各资源原 spec 的证据范围。缺类型及内部纠错包继续旧策略；不改变工作流节点和公开请求限制。
+
+独立查询预算 `RESOURCE_AWARE_RETRIEVAL_MAX_QUERIES=10`，精排最多20个唯一chunk且每owner最多top_k，最终证据数及摘录上限仍由原配置控制（默认8条×1200字符）。启用前必须明确填写 `RESOURCE_AWARE_PLANNER_CONTEXT_TOKENS` 为部署模型窗口；完整 messages、schema 和1024预留的UTF-8字节数作为保守 token 估计，与 `RESOURCE_AWARE_PLANNER_INPUT_BUDGET_TOKENS=32768` 和实际输出预留核对。未配置窗口／超预算沿原严格失败或显式规则降级，不删证据。策略在实际执行建立 Run 时冻结，尚在队列中的 job 仍按执行时配置选择；关闭开关不改历史 Evidence/spec。已实施功能和验证结果见 [项目更新说明](docs/project-update-2026-10-26.md)；详细计划与证据保留在本地，真实模型质量、时延及净成本尚待另行授权对照，保持默认关闭。
+
 ## 测试运行
 
 完整的层级、功能覆盖矩阵、数据/证据规范见 [项目测试方案](docs/testing/README.md)，比赛54用例、来源快照与三指标口径见 [比赛评测方案](docs/testing/competition.md)。统一入口按套件运行，默认关闭真实模型调用，每次输出独立日志、JUnit 和 JSON/Markdown 摘要：
@@ -202,7 +209,17 @@ python scripts/run_tests.py --profile acceptance
 python scripts/run_tests.py --suite backend-api --suite backend-migration
 ```
 
-`quick` 用于快速定位；`regression` 包括 Ruff、全前端 ESLint、请求上下文 JSDoc 类型检查、Python 声明/锁/环境检查、后端全量、比赛金标、课件冻结评测、前端十项单元与构建；`acceptance` 追加十四项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
+`quick` 包含架构导入、生成契约漂移、核心回归、比赛金标与前端单元；`regression` 另含 Ruff、全前端 ESLint、关键 API/SSE/请求上下文 JSDoc 类型检查、Python 声明/锁/环境检查、后端全量、课件冻结评测与生产构建。前端共十三项单元，`acceptance` 追加十五项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
+
+报告读取提供独立的合成基准（临时SQLite、固定时钟/种子、100/1000/10000条正式历史，不调用模型或读取业务库）：
+
+```powershell
+python backend/scripts/report_benchmark.py --output output/test-runs/report-benchmark --sizes 100 1000 10000 --repeats 3
+```
+
+它记录 GET/304/分页/单与三订阅 poll 的 SQL次数、ORM装载对象、build次数、小样本P95和内存；不等于数据库物理扫描行数或线上容量。报告迁移、快照失效和完整历史的专项入口见 [测试方案](docs/testing/README.md)。
+
+关键前端契约由后端 DTO/枚举导出：修改后执行 `python scripts/export_frontend_contracts.py`，再以 `python scripts/export_frontend_contracts.py --check` 核对产物。`python scripts/check_architecture.py` 检查共享层、API、models 与 db 的导入边界；业务 HTTP wrapper 归各 `features/<domain>/api.js`，旧集中入口只兼容转出，内部静态导入由 ESLint 约束。范围、兼容例外与负例验证见 [统一测试方案](docs/testing/README.md)。后端必需 CI 使用 Python 3.11/3.12 矩阵，各自安装哈希锁并运行回归；本地结果与远端 CI 结果分别判定。
 
 安装入口、CI 和 Docker 消费 `backend/requirements.lock.txt`（精确版本与 SHA256），工程工具单独锁在 `backend/requirements-dev.lock.txt`；前端使用 `npm ci`。更新依赖后重新生成锁文件，再运行 `python scripts/check_dependencies.py` 与 `python -m pip check`。锁文件再生成命令见 [部署说明](docs/deployment.md)，不会自动升级正在运行的服务。
 
@@ -301,7 +318,7 @@ npm --prefix frontend run test:tutor-ui-browser
 
 截图和 `summary.json` 位于 `frontend/tests/test-results/tutor-ui/`；Windows 默认使用 Edge，可通过 `TUTOR_BROWSER_CHANNEL` 或 `TEST_BROWSER_CHANNEL` 选择通道。
 
-学习历史、学习报告、用户资料、四页画像请求归属及页面动效专项都使用本地 HTTP fixture。先构建后可单项运行；聚合浏览器入口会执行全部十四项专项：
+学习历史、学习报告、用户资料、四页画像请求归属及页面动效专项都使用本地 HTTP fixture。先构建后可单项运行；聚合浏览器入口会执行全部十五项专项：
 
 ```powershell
 npm --prefix frontend run build
@@ -329,16 +346,15 @@ node frontend/tests/run.mjs browser --output frontend/tests/test-results/ui-repa
 
 - [功能与页面](docs/features.md)：当前功能边界、真实路由和前端交互。
 - [总体架构](docs/architecture.md)：系统分层、模块职责、运行路径和主流程。
-- [工程质量优化记录](docs/engineering-quality-update.md)：T13 结构、规范及复杂度调整的实际范围、兼容证据与分步验收。
+- [2026-10-25 结构优化](docs/architecture-optimization-2026-10-25.md)：系统性结构审查、成熟实践依据、本轮职责重构与验证范围。
 - [API 契约](docs/api.md)：认证、HTTP/DTO、反馈证据入口和事件。
 - [知识库与数据库](docs/knowledge_base_database.md)：源文件、问卷、诊断与持久化。
-- [部署说明](docs/deployment.md)：首次安装、三进程启动、Worker 健康检查与停机。
+- [部署说明](docs/deployment.md)：首次安装、四进程启动、Worker 健康检查与停机。
 - [测试方案](docs/testing/README.md)：套件、浏览器专项与证据边界。
 - [Git 规范](git-workflow.md)：分支、提交信息、禁止提交内容和文档同步规则。
 - [Demo Runbook](docs/demo-runbook.md)：比赛 fixture、主 Demo、故障恢复与人工 checklist。
-- [本次文档同步核对](docs/documentation-sync.md)：同步依据、修正内容与代码侧遗留问题。
 
-`docs/update_plan/` 保存本地计划与 `archive.md` 历史摘要，详细计划保留最近两次（T13、T14，含 T13 分步记录）。该目录为本地资料，已由 Git 忽略；可分发的更新结果见 [T13 实施记录](docs/engineering-quality-update.md) 和 [T14 实施记录](docs/engineering-quality-optimization.md)，当前功能状态以源码及专题文档为准。
+`docs/update_plan/` 保存本地计划、实施与验收记录以及 `archive.md` 历史摘要，历史计划按编号保留，不覆盖其他更新。该目录及 `output/test-runs/` 验收产物均为本地忽略资料，不随仓库分发；当前功能状态以源码及专题文档为准。
 
 ## P0-09 比赛验收
 

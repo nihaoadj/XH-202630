@@ -23,6 +23,7 @@ from app.db.learners.curriculum import create_curriculum_repository
 from app.db.learners.tier_progress import create_tier_progress_repository
 from app.db.questionnaire.repository import create_questionnaire_repository
 from app.db.learning_documents.repository import create_resource_repository
+from app.db.reports.repository import SQLReportReadRepository
 from app.db.courseware.repository import create_courseware_repository
 from app.db.tutor.repository import create_tutor_repository
 from app.db.users.repository import create_user_repository
@@ -228,6 +229,7 @@ class Container(containers.DeclarativeContainer):
         job_repo=generation_job_repository,
         generation_service=generation_service,
         mastery_service=mastery_service,
+        dispatch_mode=config.generation_dispatch_mode,
     )
     resource_service = providers.Singleton(ResourceService, repo=resource_repository)
     courseware_service = providers.Singleton(
@@ -267,6 +269,7 @@ class Container(containers.DeclarativeContainer):
         mastery_service=mastery_service,
         resource_repo=resource_repository,
     )
+    report_read_repository = providers.Singleton(SQLReportReadRepository, session_factory=db_session_factory)
     report_service = providers.Singleton(
         ReportService,
         resource_repo=resource_repository,
@@ -277,6 +280,8 @@ class Container(containers.DeclarativeContainer):
         claim_repo=claim_repository,
         audit_repo=audit_repository,
         diagnosis_repo=diagnosis_repository,
+        read_repo=report_read_repository,
+        profile_repo=learner_repository,
     )
     tutor_context_builder = providers.Singleton(
         TutorContextBuilder,

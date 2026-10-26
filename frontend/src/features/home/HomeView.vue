@@ -133,7 +133,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, ChatDotRound, Check, Clock, Collection, Compass, DataAnalysis, Document, Plus, Reading, Switch, User } from '@element-plus/icons-vue'
-import { generateApi, knowledgeApi, profileApi, resourceApi } from '../../api'
+import { generateApi } from '../generation/api.js'
+import { knowledgeApi } from '../knowledge/api.js'
+import { profileApi } from '../learners/api.js'
+import { resourceApi } from '../learning-documents/api.js'
 import { useAppStore } from '../../stores/app'
 import { formatDateTime } from '../../utils/generationDisplay'
 

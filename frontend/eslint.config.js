@@ -21,8 +21,25 @@ export default [
       'no-unreachable': 'error',
       'no-unsafe-finally': 'error',
       'valid-typeof': 'error',
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          regex: '^(?:\\.\\./)+api(?:/index(?:\\.js)?)?/?$',
+          message: 'Import the owning features/<domain>/api.js or the shared api/client.js.',
+        }],
+      }],
       // Vue's single-name route views are established public names.
       'vue/multi-word-component-names': 'off',
+    },
+  },
+  {
+    files: ['src/*.{js,vue}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          regex: '^\\./api(?:/index(?:\\.js)?)?/?$',
+          message: 'Import the owning features/<domain>/api.js or the shared api/client.js.',
+        }],
+      }],
     },
   },
 ]

@@ -1,0 +1,7787 @@
+{
+  "$defs": {
+    "AbilityConfidence": {
+      "enum": [
+        "none",
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "AbilityConfidence",
+      "type": "string"
+    },
+    "AbilityEvidenceSource": {
+      "enum": [
+        "onboarding_self_report",
+        "courseware_self_report",
+        "diagnosis",
+        "learning_attempt",
+        "legacy_import"
+      ],
+      "title": "AbilityEvidenceSource",
+      "type": "string"
+    },
+    "AbilityMasteryStateV2": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Attempt Count",
+          "type": "integer"
+        },
+        "confidence": {
+          "$ref": "#/$defs/AbilityConfidence",
+          "default": "none"
+        },
+        "distinct_objective_source_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Distinct Objective Source Count",
+          "type": "integer"
+        },
+        "knowledge_base_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Knowledge Base Id",
+          "type": "string"
+        },
+        "last_evidence_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Evidence Id"
+        },
+        "last_evidence_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AbilityEvidenceSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "last_updated": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Updated"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "mastery_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mastery Score"
+        },
+        "objective_evidence_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Objective Evidence Count",
+          "type": "integer"
+        },
+        "row_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Row Version",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "enum": [
+            "2.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "self_report_prior": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Self Report Prior"
+        },
+        "skill_node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Skill Node Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AbilityStatus",
+          "default": "unassessed"
+        }
+      },
+      "required": [
+        "learner_id",
+        "knowledge_base_id",
+        "skill_node_id"
+      ],
+      "title": "AbilityMasteryStateV2",
+      "type": "object"
+    },
+    "AbilityNodeProjectionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Children",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level"
+        },
+        "mastery": {
+          "$ref": "#/$defs/AbilityMasteryStateV2"
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "prerequisites": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Prerequisites",
+          "type": "array"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority"
+        },
+        "skill_node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Skill Node Id",
+          "type": "string"
+        },
+        "tier": {
+          "default": 1,
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Tier",
+          "type": "integer"
+        },
+        "tier_label": {
+          "default": "零基础",
+          "maxLength": 64,
+          "title": "Tier Label",
+          "type": "string"
+        },
+        "trend_delta": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend Delta"
+        }
+      },
+      "required": [
+        "skill_node_id",
+        "name",
+        "mastery"
+      ],
+      "title": "AbilityNodeProjectionV1",
+      "type": "object"
+    },
+    "AbilityStatus": {
+      "enum": [
+        "unassessed",
+        "self_reported",
+        "weak",
+        "learning",
+        "mastered"
+      ],
+      "title": "AbilityStatus",
+      "type": "string"
+    },
+    "AgentStepRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Action",
+          "type": "string"
+        },
+        "agent_name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "decision_reason": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Reason"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "finish_reason": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason"
+        },
+        "generation_attempt": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Generation Attempt",
+          "type": "integer"
+        },
+        "input_summary": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Summary"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "llm_attempts": {
+          "items": {
+            "$ref": "#/$defs/LLMAttemptRecord"
+          },
+          "maxItems": 10,
+          "title": "Llm Attempts",
+          "type": "array"
+        },
+        "llm_call_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Call Id"
+        },
+        "llm_duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Duration Ms"
+        },
+        "model_name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Name"
+        },
+        "node_name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Node Name",
+          "type": "string"
+        },
+        "output_summary": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Summary"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "payload_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Hash"
+        },
+        "provider_request_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Request Id"
+        },
+        "resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Resource Ids",
+          "type": "array"
+        },
+        "retrieval_candidate_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Candidate Count"
+        },
+        "retrieval_config_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Config Hash"
+        },
+        "retrieval_dropped_candidate_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Dropped Candidate Count"
+        },
+        "retrieval_partial_failure_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Partial Failure Count"
+        },
+        "retrieval_profile": {
+          "title": "Retrieval Profile",
+          "type": "object"
+        },
+        "retrieval_query_hashes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Retrieval Query Hashes",
+          "type": "array"
+        },
+        "retrieval_status": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Status"
+        },
+        "retry_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Retry Count",
+          "type": "integer"
+        },
+        "review_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Review Ids",
+          "type": "array"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Status",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Step Id",
+          "type": "string"
+        },
+        "step_sequence": {
+          "minimum": 1,
+          "title": "Step Sequence",
+          "type": "integer"
+        },
+        "structured_output_mode": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Structured Output Mode"
+        },
+        "total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Tokens"
+        },
+        "workflow_elapsed_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Elapsed Ms"
+        },
+        "workflow_remaining_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Remaining Ms"
+        }
+      },
+      "required": [
+        "step_id",
+        "run_id",
+        "step_sequence",
+        "agent_name",
+        "node_name",
+        "action",
+        "status",
+        "started_at"
+      ],
+      "title": "AgentStepRecord",
+      "type": "object"
+    },
+    "AgentTrace": {
+      "description": "Agent 执行轨迹",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "agent_name": {
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "attempt": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "decision_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Reason"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "finish_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason"
+        },
+        "input_payload": {
+          "title": "Input Payload",
+          "type": "object"
+        },
+        "input_summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Summary"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "llm_attempts": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Llm Attempts",
+          "type": "array"
+        },
+        "llm_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Call Id"
+        },
+        "llm_duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Duration Ms"
+        },
+        "model_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Name"
+        },
+        "node_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Name"
+        },
+        "output_payload": {
+          "title": "Output Payload",
+          "type": "object"
+        },
+        "output_summary": {
+          "title": "Output Summary",
+          "type": "string"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "provider_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Request Id"
+        },
+        "resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resource Ids",
+          "type": "array"
+        },
+        "retrieval_candidate_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Candidate Count"
+        },
+        "retrieval_config_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Config Hash"
+        },
+        "retrieval_dropped_candidate_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Dropped Candidate Count"
+        },
+        "retrieval_dropped_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Dropped Count"
+        },
+        "retrieval_evidence_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Evidence Count"
+        },
+        "retrieval_partial_failure_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Partial Failure Count"
+        },
+        "retrieval_profile": {
+          "title": "Retrieval Profile",
+          "type": "object"
+        },
+        "retrieval_query_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Query Count"
+        },
+        "retrieval_query_hashes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Retrieval Query Hashes",
+          "type": "array"
+        },
+        "retrieval_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Status"
+        },
+        "retry_count": {
+          "default": 0,
+          "title": "Retry Count",
+          "type": "integer"
+        },
+        "review_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Review Ids",
+          "type": "array"
+        },
+        "review_summary": {
+          "title": "Review Summary",
+          "type": "object"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sequence": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sequence"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "success",
+            "degraded",
+            "retryable_error",
+            "failed",
+            "human_review",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "step_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Id"
+        },
+        "structured_output_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Structured Output Mode"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Tokens"
+        },
+        "workflow_elapsed_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Elapsed Ms"
+        },
+        "workflow_remaining_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Remaining Ms"
+        }
+      },
+      "required": [
+        "agent_name",
+        "action",
+        "output_summary",
+        "status"
+      ],
+      "title": "AgentTrace",
+      "type": "object"
+    },
+    "BlindSpotCellV1": {
+      "properties": {
+        "confidence": {
+          "title": "Confidence",
+          "type": "string"
+        },
+        "dimension": {
+          "enum": [
+            "concept",
+            "scenario",
+            "misconception",
+            "practice"
+          ],
+          "title": "Dimension",
+          "type": "string"
+        },
+        "objective_evidence_count": {
+          "minimum": 0,
+          "title": "Objective Evidence Count",
+          "type": "integer"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "skill_node_id": {
+          "title": "Skill Node Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "verified_weak",
+            "learning",
+            "mastered",
+            "needs_evidence",
+            "unassessed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_node_id",
+        "dimension",
+        "status",
+        "confidence",
+        "objective_evidence_count"
+      ],
+      "title": "BlindSpotCellV1",
+      "type": "object"
+    },
+    "BlindSpotNodeV1": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "prerequisite_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prerequisite Ids",
+          "type": "array"
+        },
+        "skill_node_id": {
+          "title": "Skill Node Id",
+          "type": "string"
+        },
+        "stable_order": {
+          "title": "Stable Order",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "skill_node_id",
+        "name",
+        "stable_order"
+      ],
+      "title": "BlindSpotNodeV1",
+      "type": "object"
+    },
+    "ContinueResourceBatchRequest": {
+      "description": "在既有资源批次内追加或替换指定资源。",
+      "properties": {
+        "include_claim_check": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选：覆盖源任务的 Claim 审核设置；省略时沿用源任务",
+          "title": "Include Claim Check"
+        },
+        "instructions": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instructions"
+        },
+        "learner_id": {
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "replace_existing_types": {
+          "default": false,
+          "description": "在当前批次中用本次产物替换相同资源类型的已发布版本",
+          "title": "Replace Existing Types",
+          "type": "boolean"
+        },
+        "replace_source_run": {
+          "default": false,
+          "description": "完整批次重生成时替代源运行；单项重生成保持同一批次而不替代其他资源",
+          "title": "Replace Source Run",
+          "type": "boolean"
+        },
+        "resource_types": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Resource Types",
+          "type": "array"
+        },
+        "source_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选：明确复用该生成任务的原始请求",
+          "title": "Source Run Id"
+        }
+      },
+      "required": [
+        "learner_id",
+        "resource_types"
+      ],
+      "title": "ContinueResourceBatchRequest",
+      "type": "object"
+    },
+    "CoursewareBatchCreateRequest": {
+      "description": "Create one independent interactive courseware job per selected resource.",
+      "properties": {
+        "expected_duration_minutes": {
+          "anyOf": [
+            {
+              "maximum": 240,
+              "minimum": 5,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Duration Minutes"
+        },
+        "idempotency_key": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Idempotency Key"
+        },
+        "interaction_intensity": {
+          "default": "medium",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Interaction Intensity",
+          "type": "string"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "learning_goal": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Learning Goal"
+        },
+        "resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Resource Ids",
+          "type": "array"
+        },
+        "visual_style_id": {
+          "anyOf": [
+            {
+              "enum": [
+                "editorial",
+                "midnight",
+                "paper"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Visual Style Id"
+        }
+      },
+      "required": [
+        "learner_id",
+        "resource_ids"
+      ],
+      "title": "CoursewareBatchCreateRequest",
+      "type": "object"
+    },
+    "CoursewareBatchJobResponse": {
+      "description": "The jobs created from one user multi-selection, in selection order.",
+      "properties": {
+        "jobs": {
+          "items": {
+            "$ref": "#/$defs/CoursewareJobResponse"
+          },
+          "title": "Jobs",
+          "type": "array"
+        }
+      },
+      "title": "CoursewareBatchJobResponse",
+      "type": "object"
+    },
+    "CoursewareJobCreateRequest": {
+      "properties": {
+        "expected_duration_minutes": {
+          "anyOf": [
+            {
+              "maximum": 240,
+              "minimum": 5,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Duration Minutes"
+        },
+        "idempotency_key": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Idempotency Key"
+        },
+        "interaction_intensity": {
+          "default": "medium",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Interaction Intensity",
+          "type": "string"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "learning_goal": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Learning Goal"
+        },
+        "publish_mode": {
+          "default": "automatic",
+          "enum": [
+            "manual",
+            "automatic"
+          ],
+          "title": "Publish Mode",
+          "type": "string"
+        },
+        "source_resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "title": "Source Resource Ids",
+          "type": "array"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "visual_style_id": {
+          "anyOf": [
+            {
+              "enum": [
+                "editorial",
+                "midnight",
+                "paper"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Visual Style Id"
+        }
+      },
+      "required": [
+        "learner_id",
+        "source_resource_ids"
+      ],
+      "title": "CoursewareJobCreateRequest",
+      "type": "object"
+    },
+    "CoursewareJobDetail": {
+      "properties": {
+        "artifacts": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "publish_mode": {
+          "default": "automatic",
+          "enum": [
+            "manual",
+            "automatic"
+          ],
+          "title": "Publish Mode",
+          "type": "string"
+        },
+        "quality_summary": {
+          "title": "Quality Summary",
+          "type": "object"
+        },
+        "request_options": {
+          "title": "Request Options",
+          "type": "object"
+        },
+        "resource_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Id"
+        },
+        "reviews": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Reviews",
+          "type": "array"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "scene_revisions": {
+          "additionalProperties": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "title": "Scene Revisions",
+          "type": "object"
+        },
+        "scenes": {
+          "items": {
+            "$ref": "#/$defs/CoursewareSceneStatus"
+          },
+          "title": "Scenes",
+          "type": "array"
+        },
+        "source_batch_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Batch Id"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "admitting",
+            "snapshotting",
+            "design_reviewing",
+            "composing",
+            "trace_reviewing",
+            "quality_reviewing",
+            "auto_revising",
+            "rendering",
+            "validating",
+            "publishing",
+            "approved_pending_publish",
+            "published",
+            "published_with_warnings",
+            "rejected_admission",
+            "failed",
+            "quarantined",
+            "release_blocked",
+            "cancelled",
+            "timed_out"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "warnings": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "learner_id",
+        "status"
+      ],
+      "title": "CoursewareJobDetail",
+      "type": "object"
+    },
+    "CoursewareJobListResponse": {
+      "description": "Courseware runs visible in the generation workspace for one learner.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/CoursewareJobResponse"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "title": "CoursewareJobListResponse",
+      "type": "object"
+    },
+    "CoursewareJobResponse": {
+      "properties": {
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "publish_mode": {
+          "default": "automatic",
+          "enum": [
+            "manual",
+            "automatic"
+          ],
+          "title": "Publish Mode",
+          "type": "string"
+        },
+        "quality_summary": {
+          "title": "Quality Summary",
+          "type": "object"
+        },
+        "request_options": {
+          "title": "Request Options",
+          "type": "object"
+        },
+        "resource_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Id"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "source_batch_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Batch Id"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "admitting",
+            "snapshotting",
+            "design_reviewing",
+            "composing",
+            "trace_reviewing",
+            "quality_reviewing",
+            "auto_revising",
+            "rendering",
+            "validating",
+            "publishing",
+            "approved_pending_publish",
+            "published",
+            "published_with_warnings",
+            "rejected_admission",
+            "failed",
+            "quarantined",
+            "release_blocked",
+            "cancelled",
+            "timed_out"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "warnings": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "learner_id",
+        "status"
+      ],
+      "title": "CoursewareJobResponse",
+      "type": "object"
+    },
+    "CoursewareLearningEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "component_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Component Id"
+        },
+        "component_version": {
+          "default": "1.0",
+          "maxLength": 16,
+          "title": "Component Version",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Event Schema Version",
+          "type": "string"
+        },
+        "event_type": {
+          "enum": [
+            "scene_viewed",
+            "scene_completed",
+            "answer_submitted",
+            "answer_correct",
+            "answer_retry",
+            "hint_opened",
+            "courseware_completed",
+            "flashcard_flipped",
+            "flashcard_known",
+            "flashcard_review",
+            "matching_attempt",
+            "ordering_submitted",
+            "review_answer_revealed",
+            "review_self_assessed"
+          ],
+          "title": "Event Type",
+          "type": "string"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "occurrence_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Occurrence Id"
+        },
+        "release_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Release Id",
+          "type": "string"
+        },
+        "release_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Release Version",
+          "type": "integer"
+        },
+        "resource_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Resource Id",
+          "type": "string"
+        },
+        "resource_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Resource Version",
+          "type": "integer"
+        },
+        "scene_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scene Id"
+        },
+        "scene_version": {
+          "default": "1.0",
+          "maxLength": 16,
+          "title": "Scene Version",
+          "type": "string"
+        },
+        "state": {
+          "title": "State",
+          "type": "object"
+        }
+      },
+      "required": [
+        "event_id",
+        "event_type",
+        "resource_id",
+        "release_id"
+      ],
+      "title": "CoursewareLearningEvent",
+      "type": "object"
+    },
+    "CoursewareLearningEventAck": {
+      "description": "The HTTP acknowledgement envelope, without transport wrapper fields.",
+      "properties": {
+        "acknowledged_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Acknowledged Event Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "acknowledged_event_ids"
+      ],
+      "title": "CoursewareLearningEventAck",
+      "type": "object"
+    },
+    "CoursewareLearningEventBatch": {
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/CoursewareLearningEvent"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "events"
+      ],
+      "title": "CoursewareLearningEventBatch",
+      "type": "object"
+    },
+    "CoursewareSceneStatus": {
+      "properties": {
+        "agent_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Version"
+        },
+        "attempt": {
+          "default": 0,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "input_snapshot_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Snapshot Hash"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "review_instruction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Instruction"
+        },
+        "scene_id": {
+          "title": "Scene Id",
+          "type": "string"
+        },
+        "scene_order": {
+          "title": "Scene Order",
+          "type": "integer"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "required": [
+        "scene_id",
+        "scene_order",
+        "kind",
+        "status"
+      ],
+      "title": "CoursewareSceneStatus",
+      "type": "object"
+    },
+    "CurrentReportResponse": {
+      "description": "Typed current projection; the historical ReportResponse remains additive.",
+      "properties": {
+        "ability_nodes": {
+          "items": {
+            "$ref": "#/$defs/AbilityNodeProjectionV1"
+          },
+          "title": "Ability Nodes",
+          "type": "array"
+        },
+        "agent_flow": {
+          "items": {
+            "$ref": "#/$defs/AgentTrace"
+          },
+          "title": "Agent Flow",
+          "type": "array"
+        },
+        "as_of_profile_version": {
+          "default": 1,
+          "title": "As Of Profile Version",
+          "type": "integer"
+        },
+        "assessment_conclusions": {
+          "title": "Assessment Conclusions",
+          "type": "object"
+        },
+        "blind_spot_heatmap": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Blind Spot Heatmap",
+          "type": "array"
+        },
+        "current_learning_path": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Learning Path"
+        },
+        "current_learning_state": {
+          "title": "Current Learning State",
+          "type": "object"
+        },
+        "data_as_of": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data As Of"
+        },
+        "data_warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Warnings",
+          "type": "array"
+        },
+        "diagnostic_measurements": {
+          "title": "Diagnostic Measurements",
+          "type": "object"
+        },
+        "difficulty_curve": {
+          "items": {
+            "$ref": "#/$defs/DifficultyCurveItem"
+          },
+          "title": "Difficulty Curve",
+          "type": "array"
+        },
+        "evidence_coverage": {
+          "title": "Evidence Coverage",
+          "type": "object"
+        },
+        "feedback_analysis": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Feedback Analysis",
+          "type": "array"
+        },
+        "feedback_trend": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Feedback Trend",
+          "type": "array"
+        },
+        "freshness": {
+          "title": "Freshness",
+          "type": "object"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "generation_options": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NextGenerationOptionsV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "initial_diagnostic": {
+          "title": "Initial Diagnostic",
+          "type": "object"
+        },
+        "knowledge_blind_spot_map": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnowledgeBlindSpotMapV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "knowledge_mastery": {
+          "title": "Knowledge Mastery",
+          "type": "object"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "learning_activity": {
+          "title": "Learning Activity",
+          "type": "object"
+        },
+        "learning_goal": {
+          "title": "Learning Goal",
+          "type": "string"
+        },
+        "learning_node_mastery_map": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearningNodeMasteryMapV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "learning_path": {
+          "items": {
+            "$ref": "#/$defs/LearningPathItem"
+          },
+          "title": "Learning Path",
+          "type": "array"
+        },
+        "learning_path_graph": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearningPathGraphV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mastery_overview": {
+          "title": "Mastery Overview",
+          "type": "object"
+        },
+        "mastery_summary": {
+          "title": "Mastery Summary",
+          "type": "object"
+        },
+        "mastery_trend": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Mastery Trend",
+          "type": "array"
+        },
+        "mastery_trends": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Mastery Trends",
+          "type": "array"
+        },
+        "metric_summary": {
+          "title": "Metric Summary",
+          "type": "object"
+        },
+        "next_resource_focus": {
+          "title": "Next Resource Focus",
+          "type": "object"
+        },
+        "next_suggestions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Suggestions",
+          "type": "array"
+        },
+        "profile_version": {
+          "default": 1,
+          "title": "Profile Version",
+          "type": "integer"
+        },
+        "profile_versions": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Profile Versions",
+          "type": "array"
+        },
+        "radar": {
+          "$ref": "#/$defs/ReportRadar"
+        },
+        "recent_attempts": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Attempts",
+          "type": "array"
+        },
+        "recent_feedback": {
+          "items": {
+            "$ref": "#/$defs/FeedbackRecord"
+          },
+          "title": "Recent Feedback",
+          "type": "array"
+        },
+        "recent_feedback_decisions": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Feedback Decisions",
+          "type": "array"
+        },
+        "recent_followup_runs": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Followup Runs",
+          "type": "array"
+        },
+        "recent_knowledge_state_mutations": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Knowledge State Mutations",
+          "type": "array"
+        },
+        "recent_resource_credibility": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Resource Credibility",
+          "type": "array"
+        },
+        "recent_resources": {
+          "items": {
+            "$ref": "#/$defs/LearningResource"
+          },
+          "title": "Recent Resources",
+          "type": "array"
+        },
+        "report_availability": {
+          "title": "Report Availability",
+          "type": "object"
+        },
+        "report_revision": {
+          "pattern": "^rpt_[0-9a-f]{64}$",
+          "title": "Report Revision",
+          "type": "string"
+        },
+        "report_schema_version": {
+          "default": "4.1",
+          "title": "Report Schema Version",
+          "type": "string"
+        },
+        "resource_credibility_summary": {
+          "title": "Resource Credibility Summary",
+          "type": "object"
+        },
+        "resource_difficulty_curve": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceDifficultyCurveV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resource_difficulty_match": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Resource Difficulty Match",
+          "type": "array"
+        },
+        "review_summary": {
+          "title": "Review Summary",
+          "type": "object"
+        },
+        "skill_level": {
+          "title": "Skill Level",
+          "type": "string"
+        },
+        "strong_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Strong Points",
+          "type": "array"
+        },
+        "tier_progress": {
+          "title": "Tier Progress",
+          "type": "object"
+        },
+        "weak_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Weak Points",
+          "type": "array"
+        },
+        "weakness_groups": {
+          "additionalProperties": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "title": "Weakness Groups",
+          "type": "object"
+        },
+        "weakness_priorities": {
+          "items": {
+            "$ref": "#/$defs/WeaknessPriorityV1"
+          },
+          "title": "Weakness Priorities",
+          "type": "array"
+        },
+        "window": {
+          "$ref": "#/$defs/ReportWindow"
+        }
+      },
+      "required": [
+        "report_revision",
+        "window",
+        "generated_at",
+        "learner_id",
+        "radar",
+        "weak_points",
+        "strong_points",
+        "skill_level",
+        "learning_goal",
+        "difficulty_curve"
+      ],
+      "title": "CurrentReportResponse",
+      "type": "object"
+    },
+    "CurriculumProgressSummaryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "completed_count": {
+          "minimum": 0,
+          "title": "Completed Count",
+          "type": "integer"
+        },
+        "exposed_count": {
+          "minimum": 0,
+          "title": "Exposed Count",
+          "type": "integer"
+        },
+        "reinforcement_due_count": {
+          "minimum": 0,
+          "title": "Reinforcement Due Count",
+          "type": "integer"
+        },
+        "scheduled_count": {
+          "minimum": 0,
+          "title": "Scheduled Count",
+          "type": "integer"
+        },
+        "total_count": {
+          "minimum": 0,
+          "title": "Total Count",
+          "type": "integer"
+        },
+        "unplanned_count": {
+          "minimum": 0,
+          "title": "Unplanned Count",
+          "type": "integer"
+        },
+        "verification_pending_count": {
+          "minimum": 0,
+          "title": "Verification Pending Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total_count",
+        "unplanned_count",
+        "scheduled_count",
+        "exposed_count",
+        "verification_pending_count",
+        "completed_count",
+        "reinforcement_due_count"
+      ],
+      "title": "CurriculumProgressSummaryV1",
+      "type": "object"
+    },
+    "DifficultyCurveItem": {
+      "properties": {
+        "recommended_difficulty": {
+          "title": "Recommended Difficulty",
+          "type": "string"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic",
+        "score",
+        "recommended_difficulty"
+      ],
+      "title": "DifficultyCurveItem",
+      "type": "object"
+    },
+    "ExerciseItem": {
+      "description": "资源内练习项",
+      "properties": {
+        "answer": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer"
+        },
+        "diagnostic_dimension": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Diagnostic Dimension"
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty"
+        },
+        "explanation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Explanation"
+        },
+        "knowledge_point": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Point"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "question_id": {
+          "title": "Question Id",
+          "type": "string"
+        },
+        "question_type": {
+          "default": "short_answer",
+          "title": "Question Type",
+          "type": "string"
+        },
+        "skill_node_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Node Id"
+        }
+      },
+      "required": [
+        "question_id",
+        "question"
+      ],
+      "title": "ExerciseItem",
+      "type": "object"
+    },
+    "FeedbackAnswer": {
+      "description": "单题答题详情",
+      "properties": {
+        "answer": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "学习者作答内容",
+          "title": "Answer"
+        },
+        "correct": {
+          "title": "Correct",
+          "type": "boolean"
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty"
+        },
+        "error_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Type"
+        },
+        "expected_answer": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Answer"
+        },
+        "knowledge_point": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Point"
+        },
+        "question_id": {
+          "title": "Question Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question_id",
+        "correct"
+      ],
+      "title": "FeedbackAnswer",
+      "type": "object"
+    },
+    "FeedbackRecord": {
+      "description": "学习反馈历史记录",
+      "properties": {
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/FeedbackAnswer"
+          },
+          "title": "Answers",
+          "type": "array"
+        },
+        "completed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed"
+        },
+        "correct_rate": {
+          "title": "Correct Rate",
+          "type": "number"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "decision": {
+          "title": "Decision",
+          "type": "string"
+        },
+        "decision_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Reason"
+        },
+        "feedback_id": {
+          "title": "Feedback Id",
+          "type": "string"
+        },
+        "feedback_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback Type"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "next_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Action"
+        },
+        "practice_result": {
+          "title": "Practice Result",
+          "type": "object"
+        },
+        "recommended_topics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recommended Topics",
+          "type": "array"
+        },
+        "regenerate_suggestion": {
+          "title": "Regenerate Suggestion",
+          "type": "object"
+        },
+        "resource_id": {
+          "title": "Resource Id",
+          "type": "string"
+        },
+        "self_rating": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Self Rating"
+        },
+        "time_spent_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Spent Seconds"
+        },
+        "updated_knowledge_states": {
+          "additionalProperties": {
+            "$ref": "#/$defs/KnowledgeState"
+          },
+          "title": "Updated Knowledge States",
+          "type": "object"
+        }
+      },
+      "required": [
+        "feedback_id",
+        "learner_id",
+        "resource_id",
+        "correct_rate",
+        "decision"
+      ],
+      "title": "FeedbackRecord",
+      "type": "object"
+    },
+    "GenerateRequest": {
+      "description": "生成资源请求模型",
+      "properties": {
+        "claim_max_iterations": {
+          "default": 0,
+          "description": "Claim 审核专用最大返工次数；当前默认不返工",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Claim Max Iterations",
+          "type": "integer"
+        },
+        "constraints": {
+          "description": "生成约束",
+          "title": "Constraints",
+          "type": "object"
+        },
+        "diagnostic_result_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "诊断结果 ID",
+          "title": "Diagnostic Result Id"
+        },
+        "difficulty_preference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "难度偏好",
+          "title": "Difficulty Preference"
+        },
+        "generation_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "draft",
+                "standard",
+                "strict"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "standard",
+          "description": "生成模式：draft | standard | strict",
+          "title": "Generation Mode"
+        },
+        "include_claim_check": {
+          "default": false,
+          "description": "是否进行 Claim 级审核；开启后建议每任务只生成一个资源",
+          "title": "Include Claim Check",
+          "type": "boolean"
+        },
+        "include_review": {
+          "default": true,
+          "description": "是否进入审核",
+          "title": "Include Review",
+          "type": "boolean"
+        },
+        "knowledge_base_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "当前知识库 ID",
+          "title": "Knowledge Base Id"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "max_iterations": {
+          "default": 2,
+          "description": "最大业务返工次数",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "profile_focus_mode": {
+          "default": "auto",
+          "description": "画像薄弱点注入模式",
+          "enum": [
+            "auto",
+            "off"
+          ],
+          "title": "Profile Focus Mode",
+          "type": "string"
+        },
+        "resource_types": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Resource Types",
+          "type": "array"
+        },
+        "target_skill_nodes": {
+          "description": "目标能力节点（最多两个）",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Target Skill Nodes",
+          "type": "array"
+        },
+        "topic": {
+          "description": "学习主题",
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "learner_id",
+        "topic"
+      ],
+      "title": "GenerateRequest",
+      "type": "object"
+    },
+    "GenerationJobCreateResponse": {
+      "description": "异步资源生成任务创建响应",
+      "properties": {
+        "batch_id": {
+          "title": "Batch Id",
+          "type": "string"
+        },
+        "focus_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearnerFocusSnapshotV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "job_status": {
+          "default": "queued",
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed"
+          ],
+          "title": "Job Status",
+          "type": "string"
+        },
+        "knowledge_base_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Base Id"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "响应消息",
+          "title": "Message"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "status": {
+          "default": "success",
+          "description": "响应状态",
+          "title": "Status",
+          "type": "string"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "batch_id",
+        "learner_id",
+        "topic"
+      ],
+      "title": "GenerationJobCreateResponse",
+      "type": "object"
+    },
+    "GenerationJobListResponse": {
+      "description": "学习者生成任务列表响应",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/GenerationJobStatusResponse"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "learner_id",
+        "total"
+      ],
+      "title": "GenerationJobListResponse",
+      "type": "object"
+    },
+    "GenerationJobStatusResponse": {
+      "description": "异步资源生成任务状态响应",
+      "properties": {
+        "batch_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Id"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "finished_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finished At"
+        },
+        "focus_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearnerFocusSnapshotV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "job_status": {
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed"
+          ],
+          "title": "Job Status",
+          "type": "string"
+        },
+        "knowledge_base_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Base Id"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "request_payload": {
+          "title": "Request Payload",
+          "type": "object"
+        },
+        "resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resource Ids",
+          "type": "array"
+        },
+        "resource_progress_summary": {
+          "$ref": "#/$defs/RunResourceProgressSummary"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "superseded_by_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Superseded By Run Id"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "learner_id",
+        "topic",
+        "job_status"
+      ],
+      "title": "GenerationJobStatusResponse",
+      "type": "object"
+    },
+    "KnowledgeBlindSpotMapV1": {
+      "properties": {
+        "cells": {
+          "items": {
+            "$ref": "#/$defs/BlindSpotCellV1"
+          },
+          "title": "Cells",
+          "type": "array"
+        },
+        "dimensions": {
+          "items": {
+            "enum": [
+              "concept",
+              "scenario",
+              "misconception",
+              "practice"
+            ],
+            "type": "string"
+          },
+          "title": "Dimensions",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/BlindSpotNodeV1"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "object"
+        }
+      },
+      "required": [
+        "dimensions"
+      ],
+      "title": "KnowledgeBlindSpotMapV1",
+      "type": "object"
+    },
+    "KnowledgeState": {
+      "description": "通用知识点掌握状态",
+      "properties": {
+        "attempt_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Attempt Count",
+          "type": "integer"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "correct_question_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Correct Question Count",
+          "type": "integer"
+        },
+        "covered_dimensions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Covered Dimensions",
+          "type": "array"
+        },
+        "distinct_objective_source_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Distinct Objective Source Count",
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "状态依据",
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "last_evidence_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Evidence Id"
+        },
+        "last_evidence_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Evidence Type"
+        },
+        "last_updated": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "最近更新时间",
+          "title": "Last Updated"
+        },
+        "latest_observed_accuracy": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latest Observed Accuracy"
+        },
+        "measurement_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "measured",
+                "needs_evidence"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measurement Status"
+        },
+        "objective_evidence_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Objective Evidence Count",
+          "type": "integer"
+        },
+        "row_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Row Version",
+          "type": "integer"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "掌握度，建议 0-1",
+          "title": "Score"
+        },
+        "self_report_prior": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Self Report Prior"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "掌握状态",
+          "title": "Status"
+        },
+        "valid_question_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Valid Question Count",
+          "type": "integer"
+        }
+      },
+      "title": "KnowledgeState",
+      "type": "object"
+    },
+    "LLMAttemptRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "latency_ms": {
+          "minimum": 0,
+          "title": "Latency Ms",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "status": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Status",
+          "type": "string"
+        },
+        "structured_output_mode": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Structured Output Mode",
+          "type": "string"
+        },
+        "total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Tokens"
+        }
+      },
+      "required": [
+        "attempt",
+        "status",
+        "latency_ms",
+        "structured_output_mode"
+      ],
+      "title": "LLMAttemptRecord",
+      "type": "object"
+    },
+    "LearnerFocusSkippedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "reason_code": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "skill_node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Skill Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_node_id",
+        "reason_code"
+      ],
+      "title": "LearnerFocusSkippedV1",
+      "type": "object"
+    },
+    "LearnerFocusSnapshotV1": {
+      "additionalProperties": false,
+      "properties": {
+        "adopted_node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Adopted Node Ids",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "focus_mode": {
+          "enum": [
+            "auto",
+            "off",
+            "explicit"
+          ],
+          "title": "Focus Mode",
+          "type": "string"
+        },
+        "knowledge_base_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Knowledge Base Id",
+          "type": "string"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "mastery_snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Mastery Snapshot Hash",
+          "type": "string"
+        },
+        "profile_version": {
+          "minimum": 1,
+          "title": "Profile Version",
+          "type": "integer"
+        },
+        "ranked_priorities": {
+          "items": {
+            "$ref": "#/$defs/WeaknessPriorityV1"
+          },
+          "maxItems": 256,
+          "title": "Ranked Priorities",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "skipped": {
+          "items": {
+            "$ref": "#/$defs/LearnerFocusSkippedV1"
+          },
+          "maxItems": 256,
+          "title": "Skipped",
+          "type": "array"
+        }
+      },
+      "required": [
+        "learner_id",
+        "knowledge_base_id",
+        "profile_version",
+        "mastery_snapshot_hash",
+        "focus_mode"
+      ],
+      "title": "LearnerFocusSnapshotV1",
+      "type": "object"
+    },
+    "LearnerTierProgressV1": {
+      "additionalProperties": false,
+      "properties": {
+        "active_tier": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Active Tier",
+          "type": "integer"
+        },
+        "highest_unlocked_tier": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Highest Unlocked Tier",
+          "type": "integer"
+        },
+        "knowledge_base_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Knowledge Base Id",
+          "type": "string"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "placement_tier": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Placement Tier",
+          "type": "integer"
+        },
+        "profile_version": {
+          "minimum": 1,
+          "title": "Profile Version",
+          "type": "integer"
+        },
+        "remediation_return_tier": {
+          "anyOf": [
+            {
+              "maximum": 3,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remediation Return Tier"
+        },
+        "row_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Row Version",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        }
+      },
+      "required": [
+        "learner_id",
+        "knowledge_base_id",
+        "placement_tier",
+        "active_tier",
+        "highest_unlocked_tier",
+        "profile_version"
+      ],
+      "title": "LearnerTierProgressV1",
+      "type": "object"
+    },
+    "LearningNodeMasteryMapV1": {
+      "properties": {
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/LearningNodeMasteryPointV1"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "object"
+        }
+      },
+      "title": "LearningNodeMasteryMapV1",
+      "type": "object"
+    },
+    "LearningNodeMasteryPointV1": {
+      "description": "Node-level mastery projection for the ongoing learning report.",
+      "properties": {
+        "conclusion": {
+          "enum": [
+            "unassessed",
+            "baseline_observation",
+            "awaiting_confirmation",
+            "confirmed_mastery",
+            "needs_reinforcement"
+          ],
+          "title": "Conclusion",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "string"
+        },
+        "high_score_session_count": {
+          "minimum": 0,
+          "title": "High Score Session Count",
+          "type": "integer"
+        },
+        "independent_form_count": {
+          "minimum": 0,
+          "title": "Independent Form Count",
+          "type": "integer"
+        },
+        "independent_session_count": {
+          "minimum": 0,
+          "title": "Independent Session Count",
+          "type": "integer"
+        },
+        "last_evidence_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Evidence At"
+        },
+        "latest_observed_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latest Observed Score"
+        },
+        "mastery_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mastery Score"
+        },
+        "mastery_status": {
+          "enum": [
+            "unassessed",
+            "self_reported",
+            "weak",
+            "learning",
+            "mastered"
+          ],
+          "title": "Mastery Status",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "next_action": {
+          "enum": [
+            "learn",
+            "remediate",
+            "practice",
+            "verify",
+            "maintain"
+          ],
+          "title": "Next Action",
+          "type": "string"
+        },
+        "objective_evidence_count": {
+          "minimum": 0,
+          "title": "Objective Evidence Count",
+          "type": "integer"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "skill_node_id": {
+          "title": "Skill Node Id",
+          "type": "string"
+        },
+        "tier": {
+          "anyOf": [
+            {
+              "maximum": 3,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tier"
+        },
+        "tier_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tier Label"
+        },
+        "trend_delta": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend Delta"
+        },
+        "trust_status": {
+          "enum": [
+            "none",
+            "provisional",
+            "medium",
+            "high"
+          ],
+          "title": "Trust Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_node_id",
+        "name",
+        "mastery_status",
+        "conclusion",
+        "trust_status",
+        "confidence",
+        "objective_evidence_count",
+        "independent_session_count",
+        "independent_form_count",
+        "high_score_session_count",
+        "next_action"
+      ],
+      "title": "LearningNodeMasteryPointV1",
+      "type": "object"
+    },
+    "LearningPathGraphEdgeV1": {
+      "properties": {
+        "relation": {
+          "enum": [
+            "prerequisite",
+            "remedial",
+            "next",
+            "challenge",
+            "verification"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "source_skill_node_id": {
+          "title": "Source Skill Node Id",
+          "type": "string"
+        },
+        "target_skill_node_id": {
+          "title": "Target Skill Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_skill_node_id",
+        "target_skill_node_id",
+        "relation"
+      ],
+      "title": "LearningPathGraphEdgeV1",
+      "type": "object"
+    },
+    "LearningPathGraphNodeV1": {
+      "properties": {
+        "blocked": {
+          "title": "Blocked",
+          "type": "boolean"
+        },
+        "blocked_by_node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocked By Node Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "string"
+        },
+        "is_current_batch": {
+          "default": false,
+          "title": "Is Current Batch",
+          "type": "boolean"
+        },
+        "mastery_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mastery Score"
+        },
+        "mastery_status": {
+          "title": "Mastery Status",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "placement_verification_status": {
+          "default": "not_applicable",
+          "enum": [
+            "not_applicable",
+            "placement_exempt",
+            "verification_required",
+            "formally_reverified"
+          ],
+          "title": "Placement Verification Status",
+          "type": "string"
+        },
+        "prerequisite_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prerequisite Ids",
+          "type": "array"
+        },
+        "progress_status": {
+          "title": "Progress Status",
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "recommended_resource_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recommended Resource Types",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "prerequisite",
+            "current",
+            "remedial",
+            "next",
+            "challenge",
+            "verification"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "skill_node_id": {
+          "title": "Skill Node Id",
+          "type": "string"
+        },
+        "stable_order": {
+          "title": "Stable Order",
+          "type": "integer"
+        },
+        "tier": {
+          "anyOf": [
+            {
+              "maximum": 3,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tier"
+        }
+      },
+      "required": [
+        "skill_node_id",
+        "name",
+        "progress_status",
+        "mastery_status",
+        "confidence",
+        "role",
+        "blocked",
+        "stable_order"
+      ],
+      "title": "LearningPathGraphNodeV1",
+      "type": "object"
+    },
+    "LearningPathGraphV1": {
+      "properties": {
+        "current_node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Current Node Ids",
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/LearningPathGraphEdgeV1"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "focus_node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Focus Node Ids",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/LearningPathGraphNodeV1"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "path_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path Id"
+        },
+        "path_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path Version"
+        },
+        "recommended_next_node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recommended Next Node Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "object"
+        }
+      },
+      "title": "LearningPathGraphV1",
+      "type": "object"
+    },
+    "LearningPathItem": {
+      "description": "学习路径数据项",
+      "properties": {
+        "order": {
+          "title": "Order",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "order",
+        "topic",
+        "reason"
+      ],
+      "title": "LearningPathItem",
+      "type": "object"
+    },
+    "LearningResource": {
+      "description": "学习资源模型",
+      "properties": {
+        "assessment_payload": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assessment Payload"
+        },
+        "assessment_payload_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assessment Payload Hash"
+        },
+        "batch_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Id"
+        },
+        "claim_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Count"
+        },
+        "claim_degraded_publish": {
+          "default": false,
+          "title": "Claim Degraded Publish",
+          "type": "boolean"
+        },
+        "claim_factual_pass_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Factual Pass Rate"
+        },
+        "claim_hallucination_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Hallucination Rate"
+        },
+        "claim_metric_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Metric Status"
+        },
+        "claim_publish_decision": {
+          "anyOf": [
+            {
+              "enum": [
+                "pending",
+                "published_by_user",
+                "rejected_by_user"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Publish Decision"
+        },
+        "claim_publish_decision_pending": {
+          "default": false,
+          "title": "Claim Publish Decision Pending",
+          "type": "boolean"
+        },
+        "claim_warning_publish": {
+          "default": false,
+          "title": "Claim Warning Publish",
+          "type": "boolean"
+        },
+        "content_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "文本内容或文件摘要",
+          "title": "Content Text"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "difficulty": {
+          "title": "Difficulty",
+          "type": "string"
+        },
+        "difficulty_match": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty Match"
+        },
+        "exercise_items": {
+          "items": {
+            "$ref": "#/$defs/ExerciseItem"
+          },
+          "title": "Exercise Items",
+          "type": "array"
+        },
+        "file_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "文件相对路径（文件类资源）",
+          "title": "File Path"
+        },
+        "file_size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "文件大小（字节）",
+          "title": "File Size"
+        },
+        "hallucination_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hallucination Rate"
+        },
+        "knowledge_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Knowledge Points",
+          "type": "array"
+        },
+        "learner_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Learner Id"
+        },
+        "learning_path_node": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Learning Path Node"
+        },
+        "legacy_reviewer_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Legacy Reviewer Score"
+        },
+        "mime_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "文件 MIME 类型",
+          "title": "Mime Type"
+        },
+        "parent_resource_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Resource Id"
+        },
+        "practice_guide_payload": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Practice Guide Payload"
+        },
+        "practice_guide_payload_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Practice Guide Payload Hash"
+        },
+        "publication_status": {
+          "default": "unpublished",
+          "enum": [
+            "unpublished",
+            "published"
+          ],
+          "title": "Publication Status",
+          "type": "string"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "representation": {
+          "$ref": "#/$defs/ResourceRepresentation",
+          "default": "text"
+        },
+        "resource_family_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Family Id"
+        },
+        "resource_id": {
+          "title": "Resource Id",
+          "type": "string"
+        },
+        "resource_spec_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Spec Id"
+        },
+        "resource_type": {
+          "title": "Resource Type",
+          "type": "string"
+        },
+        "review_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Id"
+        },
+        "review_practice_payload": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Practice Payload"
+        },
+        "review_practice_payload_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Practice Payload Hash"
+        },
+        "review_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Status"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "storage_type": {
+          "default": "text",
+          "description": "存储方式：text | file",
+          "title": "Storage Type",
+          "type": "string"
+        },
+        "topic": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Topic"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resource_id",
+        "resource_type",
+        "difficulty",
+        "knowledge_points",
+        "source_refs"
+      ],
+      "title": "LearningResource",
+      "type": "object"
+    },
+    "NextGenerationCandidateV1": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_by_node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Blocked By Node Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/AbilityConfidence"
+        },
+        "eligibility_status": {
+          "default": "available",
+          "enum": [
+            "available",
+            "blocked",
+            "placement_exempt"
+          ],
+          "title": "Eligibility Status",
+          "type": "string"
+        },
+        "mastery_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mastery Score"
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "prerequisite_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Prerequisite Ids",
+          "type": "array"
+        },
+        "priority_group": {
+          "enum": [
+            "learned_not_mastered",
+            "unlearned",
+            "learned"
+          ],
+          "title": "Priority Group",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "skill_node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Skill Node Id",
+          "type": "string"
+        },
+        "tier": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Tier",
+          "type": "integer"
+        },
+        "tier_label": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Tier Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_node_id",
+        "name",
+        "priority_group",
+        "rank",
+        "reason_codes",
+        "confidence",
+        "tier",
+        "tier_label"
+      ],
+      "title": "NextGenerationCandidateV1",
+      "type": "object"
+    },
+    "NextGenerationOptionsV1": {
+      "additionalProperties": false,
+      "description": "Server calculated, mutually exclusive candidate sets for the next step.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "cross_tier_new_knowledge": {
+          "items": {
+            "$ref": "#/$defs/NextGenerationCandidateV1"
+          },
+          "title": "Cross Tier New Knowledge",
+          "type": "array"
+        },
+        "cross_tier_prerequisite_review": {
+          "items": {
+            "$ref": "#/$defs/NextGenerationCandidateV1"
+          },
+          "title": "Cross Tier Prerequisite Review",
+          "type": "array"
+        },
+        "curriculum_progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CurriculumProgressSummaryV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "knowledge_base_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Knowledge Base Id",
+          "type": "string"
+        },
+        "learn_new_knowledge": {
+          "items": {
+            "$ref": "#/$defs/NextGenerationCandidateV1"
+          },
+          "title": "Learn New Knowledge",
+          "type": "array"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "learning_candidates": {
+          "items": {
+            "$ref": "#/$defs/NextGenerationCandidateV1"
+          },
+          "title": "Learning Candidates",
+          "type": "array"
+        },
+        "profile_version": {
+          "minimum": 1,
+          "title": "Profile Version",
+          "type": "integer"
+        },
+        "recommendation_type": {
+          "default": "current_tier",
+          "enum": [
+            "remedial",
+            "practice",
+            "current_tier",
+            "advance",
+            "complete"
+          ],
+          "title": "Recommendation Type",
+          "type": "string"
+        },
+        "recommended_node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Recommended Node Ids",
+          "type": "array"
+        },
+        "reinforce_weakness": {
+          "items": {
+            "$ref": "#/$defs/NextGenerationCandidateV1"
+          },
+          "title": "Reinforce Weakness",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        },
+        "tier_completion": {
+          "default": false,
+          "title": "Tier Completion",
+          "type": "boolean"
+        },
+        "tier_progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearnerTierProgressV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "learner_id",
+        "knowledge_base_id",
+        "profile_version",
+        "snapshot_hash"
+      ],
+      "title": "NextGenerationOptionsV1",
+      "type": "object"
+    },
+    "PersistedEvidenceSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "chunk_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chunk Id",
+          "type": "string"
+        },
+        "config_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Config Hash",
+          "type": "string"
+        },
+        "document_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "document_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Document Version",
+          "type": "string"
+        },
+        "evidence_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "excerpt": {
+          "maxLength": 10000,
+          "minLength": 1,
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "excerpt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Excerpt Hash",
+          "type": "string"
+        },
+        "knowledge_base_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Knowledge Base Id",
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/SourceLocator"
+        },
+        "normalized_score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Normalized Score",
+          "type": "number"
+        },
+        "persisted_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Persisted At"
+        },
+        "query_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Query Hash",
+          "type": "string"
+        },
+        "query_rank": {
+          "minimum": 1,
+          "title": "Query Rank",
+          "type": "integer"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "raw_score": {
+          "title": "Raw Score",
+          "type": "number"
+        },
+        "retrieval_step_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Retrieval Step Id",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "format": "date-time",
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "score_kind": {
+          "title": "Score Kind",
+          "type": "string"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "run_id",
+        "retrieval_step_id",
+        "knowledge_base_id",
+        "document_id",
+        "document_version",
+        "chunk_id",
+        "query_hash",
+        "query_rank",
+        "rank",
+        "raw_score",
+        "score_kind",
+        "normalized_score",
+        "excerpt",
+        "excerpt_hash",
+        "locator",
+        "config_hash",
+        "snapshot_hash",
+        "retrieved_at"
+      ],
+      "title": "PersistedEvidenceSnapshot",
+      "type": "object"
+    },
+    "PublicRunEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "title": "Event Type",
+          "type": "string"
+        },
+        "node_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Name"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Payload",
+          "type": "object"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "step_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Id"
+        },
+        "step_sequence": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Sequence"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        }
+      },
+      "required": [
+        "run_id",
+        "event_id",
+        "sequence",
+        "event_type",
+        "occurred_at"
+      ],
+      "title": "PublicRunEvent",
+      "type": "object"
+    },
+    "PublicRunSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "current_node": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Node"
+        },
+        "current_step_sequence": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Current Step Sequence",
+          "type": "integer"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "final_decision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final Decision"
+        },
+        "generation_attempt": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Generation Attempt",
+          "type": "integer"
+        },
+        "is_terminal": {
+          "default": false,
+          "title": "Is Terminal",
+          "type": "boolean"
+        },
+        "job_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "queued",
+                "running",
+                "completed",
+                "failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Status"
+        },
+        "last_event_sequence": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Last Event Sequence",
+          "type": "integer"
+        },
+        "replay_completeness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReplayCompleteness"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "retrieval_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Status"
+        },
+        "revision_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Revision Count",
+          "type": "integer"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "workflow_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Status"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "PublicRunSnapshot",
+      "type": "object"
+    },
+    "ReplayCompleteness": {
+      "enum": [
+        "complete",
+        "legacy_partial"
+      ],
+      "title": "ReplayCompleteness",
+      "type": "string"
+    },
+    "ReportInvalidation": {
+      "description": "Shared receive contract for snapshot/changed, not ping/error frames.",
+      "properties": {
+        "as_of_profile_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "As Of Profile Version"
+        },
+        "changed_domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed Domains",
+          "type": "array"
+        },
+        "data_as_of": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data As Of"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "replay_mode": {
+          "anyOf": [
+            {
+              "const": "current_snapshot",
+              "enum": [
+                "current_snapshot"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Replay Mode"
+        },
+        "report_revision": {
+          "pattern": "^rpt_[0-9a-f]{64}$",
+          "title": "Report Revision",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "window_days": {
+          "enum": [
+            7,
+            30,
+            90
+          ],
+          "title": "Window Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "learner_id",
+        "report_revision",
+        "window_days"
+      ],
+      "title": "ReportInvalidation",
+      "type": "object"
+    },
+    "ReportRadar": {
+      "properties": {
+        "dimensions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dimensions",
+          "type": "array"
+        },
+        "measurement_statuses": {
+          "items": {
+            "enum": [
+              "measured",
+              "self_reported",
+              "unassessed"
+            ],
+            "type": "string"
+          },
+          "title": "Measurement Statuses",
+          "type": "array"
+        },
+        "values": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dimensions",
+        "values"
+      ],
+      "title": "ReportRadar",
+      "type": "object"
+    },
+    "ReportResponse": {
+      "properties": {
+        "ability_nodes": {
+          "items": {
+            "$ref": "#/$defs/AbilityNodeProjectionV1"
+          },
+          "title": "Ability Nodes",
+          "type": "array"
+        },
+        "agent_flow": {
+          "items": {
+            "$ref": "#/$defs/AgentTrace"
+          },
+          "title": "Agent Flow",
+          "type": "array"
+        },
+        "as_of_profile_version": {
+          "default": 1,
+          "title": "As Of Profile Version",
+          "type": "integer"
+        },
+        "assessment_conclusions": {
+          "title": "Assessment Conclusions",
+          "type": "object"
+        },
+        "blind_spot_heatmap": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Blind Spot Heatmap",
+          "type": "array"
+        },
+        "current_learning_path": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Learning Path"
+        },
+        "current_learning_state": {
+          "title": "Current Learning State",
+          "type": "object"
+        },
+        "data_as_of": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data As Of"
+        },
+        "data_warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Warnings",
+          "type": "array"
+        },
+        "diagnostic_measurements": {
+          "title": "Diagnostic Measurements",
+          "type": "object"
+        },
+        "difficulty_curve": {
+          "items": {
+            "$ref": "#/$defs/DifficultyCurveItem"
+          },
+          "title": "Difficulty Curve",
+          "type": "array"
+        },
+        "evidence_coverage": {
+          "title": "Evidence Coverage",
+          "type": "object"
+        },
+        "feedback_analysis": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Feedback Analysis",
+          "type": "array"
+        },
+        "feedback_trend": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Feedback Trend",
+          "type": "array"
+        },
+        "freshness": {
+          "title": "Freshness",
+          "type": "object"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "generation_options": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NextGenerationOptionsV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "initial_diagnostic": {
+          "title": "Initial Diagnostic",
+          "type": "object"
+        },
+        "knowledge_blind_spot_map": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnowledgeBlindSpotMapV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "knowledge_mastery": {
+          "title": "Knowledge Mastery",
+          "type": "object"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "learning_activity": {
+          "title": "Learning Activity",
+          "type": "object"
+        },
+        "learning_goal": {
+          "title": "Learning Goal",
+          "type": "string"
+        },
+        "learning_node_mastery_map": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearningNodeMasteryMapV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "learning_path": {
+          "items": {
+            "$ref": "#/$defs/LearningPathItem"
+          },
+          "title": "Learning Path",
+          "type": "array"
+        },
+        "learning_path_graph": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearningPathGraphV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mastery_overview": {
+          "title": "Mastery Overview",
+          "type": "object"
+        },
+        "mastery_summary": {
+          "title": "Mastery Summary",
+          "type": "object"
+        },
+        "mastery_trend": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Mastery Trend",
+          "type": "array"
+        },
+        "mastery_trends": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Mastery Trends",
+          "type": "array"
+        },
+        "metric_summary": {
+          "title": "Metric Summary",
+          "type": "object"
+        },
+        "next_resource_focus": {
+          "title": "Next Resource Focus",
+          "type": "object"
+        },
+        "next_suggestions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Suggestions",
+          "type": "array"
+        },
+        "profile_version": {
+          "default": 1,
+          "title": "Profile Version",
+          "type": "integer"
+        },
+        "profile_versions": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Profile Versions",
+          "type": "array"
+        },
+        "radar": {
+          "$ref": "#/$defs/ReportRadar"
+        },
+        "recent_attempts": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Attempts",
+          "type": "array"
+        },
+        "recent_feedback": {
+          "items": {
+            "$ref": "#/$defs/FeedbackRecord"
+          },
+          "title": "Recent Feedback",
+          "type": "array"
+        },
+        "recent_feedback_decisions": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Feedback Decisions",
+          "type": "array"
+        },
+        "recent_followup_runs": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Followup Runs",
+          "type": "array"
+        },
+        "recent_knowledge_state_mutations": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Knowledge State Mutations",
+          "type": "array"
+        },
+        "recent_resource_credibility": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Recent Resource Credibility",
+          "type": "array"
+        },
+        "recent_resources": {
+          "items": {
+            "$ref": "#/$defs/LearningResource"
+          },
+          "title": "Recent Resources",
+          "type": "array"
+        },
+        "report_availability": {
+          "title": "Report Availability",
+          "type": "object"
+        },
+        "report_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Revision"
+        },
+        "report_schema_version": {
+          "default": "4.1",
+          "title": "Report Schema Version",
+          "type": "string"
+        },
+        "resource_credibility_summary": {
+          "title": "Resource Credibility Summary",
+          "type": "object"
+        },
+        "resource_difficulty_curve": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceDifficultyCurveV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resource_difficulty_match": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Resource Difficulty Match",
+          "type": "array"
+        },
+        "review_summary": {
+          "title": "Review Summary",
+          "type": "object"
+        },
+        "skill_level": {
+          "title": "Skill Level",
+          "type": "string"
+        },
+        "strong_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Strong Points",
+          "type": "array"
+        },
+        "tier_progress": {
+          "title": "Tier Progress",
+          "type": "object"
+        },
+        "weak_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Weak Points",
+          "type": "array"
+        },
+        "weakness_groups": {
+          "additionalProperties": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "title": "Weakness Groups",
+          "type": "object"
+        },
+        "weakness_priorities": {
+          "items": {
+            "$ref": "#/$defs/WeaknessPriorityV1"
+          },
+          "title": "Weakness Priorities",
+          "type": "array"
+        },
+        "window": {
+          "title": "Window",
+          "type": "object"
+        }
+      },
+      "required": [
+        "generated_at",
+        "learner_id",
+        "radar",
+        "weak_points",
+        "strong_points",
+        "skill_level",
+        "learning_goal",
+        "difficulty_curve"
+      ],
+      "title": "ReportResponse",
+      "type": "object"
+    },
+    "ReportWindow": {
+      "description": "The window already emitted by the current report service.",
+      "properties": {
+        "end": {
+          "format": "date-time",
+          "title": "End",
+          "type": "string"
+        },
+        "start": {
+          "format": "date-time",
+          "title": "Start",
+          "type": "string"
+        },
+        "window_days": {
+          "enum": [
+            7,
+            30,
+            90
+          ],
+          "title": "Window Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "window_days",
+        "start",
+        "end"
+      ],
+      "title": "ReportWindow",
+      "type": "object"
+    },
+    "ResourceDifficultyCurveV1": {
+      "properties": {
+        "points": {
+          "items": {
+            "$ref": "#/$defs/ResourceDifficultyPointV1"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "strategy_version": {
+          "title": "Strategy Version",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "object"
+        }
+      },
+      "required": [
+        "strategy_version"
+      ],
+      "title": "ResourceDifficultyCurveV1",
+      "type": "object"
+    },
+    "ResourceDifficultyPointV1": {
+      "properties": {
+        "batch_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Id"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "string"
+        },
+        "credibility_grade": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credibility Grade"
+        },
+        "credibility_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credibility Level"
+        },
+        "credibility_score": {
+          "anyOf": [
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credibility Score"
+        },
+        "credibility_score_breakdown": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credibility Score Breakdown"
+        },
+        "default_resource_difficulty_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default Resource Difficulty Score"
+        },
+        "difficulty_adjustment": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Difficulty Adjustment",
+          "type": "number"
+        },
+        "difficulty_gap": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty Gap"
+        },
+        "difficulty_source": {
+          "enum": [
+            "declared_band",
+            "deterministic_features",
+            "calibrated_history",
+            "unavailable"
+          ],
+          "title": "Difficulty Source",
+          "type": "string"
+        },
+        "feedback_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Feedback Count",
+          "type": "integer"
+        },
+        "feedback_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback Score"
+        },
+        "learner_readiness_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Learner Readiness Score"
+        },
+        "match_status": {
+          "enum": [
+            "too_easy",
+            "matched",
+            "challenging",
+            "too_hard",
+            "not_measured"
+          ],
+          "title": "Match Status",
+          "type": "string"
+        },
+        "point_type": {
+          "default": "resource",
+          "enum": [
+            "resource",
+            "batch_average"
+          ],
+          "title": "Point Type",
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "resource_count": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Resource Count",
+          "type": "integer"
+        },
+        "resource_difficulty_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Difficulty Score"
+        },
+        "resource_id": {
+          "title": "Resource Id",
+          "type": "string"
+        },
+        "resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resource Ids",
+          "type": "array"
+        },
+        "resource_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Name"
+        },
+        "resource_type": {
+          "title": "Resource Type",
+          "type": "string"
+        },
+        "skill_name": {
+          "title": "Skill Name",
+          "type": "string"
+        },
+        "skill_node_id": {
+          "title": "Skill Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_id",
+        "skill_node_id",
+        "skill_name",
+        "match_status",
+        "confidence",
+        "difficulty_source",
+        "resource_type"
+      ],
+      "title": "ResourceDifficultyPointV1",
+      "type": "object"
+    },
+    "ResourceExecutionProgress": {
+      "properties": {
+        "agent_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Name"
+        },
+        "artifact_format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Format"
+        },
+        "attempt": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "publication_status": {
+          "default": "unpublished",
+          "enum": [
+            "unpublished",
+            "published"
+          ],
+          "title": "Publication Status",
+          "type": "string"
+        },
+        "renderer_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Renderer Version"
+        },
+        "representation": {
+          "$ref": "#/$defs/ResourceRepresentation",
+          "default": "text"
+        },
+        "resource_execution_state": {
+          "$ref": "#/$defs/ResourceExecutionState",
+          "default": "queued"
+        },
+        "resource_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Id"
+        },
+        "resource_spec_id": {
+          "title": "Resource Spec Id",
+          "type": "string"
+        },
+        "resource_type": {
+          "title": "Resource Type",
+          "type": "string"
+        },
+        "review_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Id"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "validation_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validation Status"
+        },
+        "worker_step_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Step Id"
+        }
+      },
+      "required": [
+        "resource_spec_id",
+        "resource_type"
+      ],
+      "title": "ResourceExecutionProgress",
+      "type": "object"
+    },
+    "ResourceExecutionState": {
+      "enum": [
+        "queued",
+        "generating",
+        "generated",
+        "reviewing",
+        "revision_requested",
+        "claim_checking",
+        "approved",
+        "human_review",
+        "failed"
+      ],
+      "title": "ResourceExecutionState",
+      "type": "string"
+    },
+    "ResourceRepresentation": {
+      "const": "text",
+      "enum": [
+        "text"
+      ],
+      "title": "ResourceRepresentation",
+      "type": "string"
+    },
+    "RunResourceProgressSummary": {
+      "properties": {
+        "approved": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Approved",
+          "type": "integer"
+        },
+        "can_finalize": {
+          "default": false,
+          "title": "Can Finalize",
+          "type": "boolean"
+        },
+        "counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Counts",
+          "type": "object"
+        },
+        "failed": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "human_review": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Human Review",
+          "type": "integer"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ResourceExecutionProgress"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "published": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Published",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "total": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "title": "RunResourceProgressSummary",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "created",
+        "running",
+        "finalizing",
+        "completed",
+        "degraded",
+        "human_review",
+        "failed",
+        "interrupted"
+      ]
+    },
+    "RunSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "current_node": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Node"
+        },
+        "current_step_sequence": {
+          "default": 0,
+          "title": "Current Step Sequence",
+          "type": "integer"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "execution_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Execution Status"
+        },
+        "final_decision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final Decision"
+        },
+        "generation_attempt": {
+          "default": 1,
+          "title": "Generation Attempt",
+          "type": "integer"
+        },
+        "knowledge_base_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Base Id"
+        },
+        "last_error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Error Code"
+        },
+        "learner_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Learner Id"
+        },
+        "replay_completeness": {
+          "$ref": "#/$defs/ReplayCompleteness"
+        },
+        "retrieval_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Status"
+        },
+        "revision_count": {
+          "default": 0,
+          "title": "Revision Count",
+          "type": "integer"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "status": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "topic": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Topic"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "workflow_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Status"
+        }
+      },
+      "required": [
+        "run_id",
+        "status",
+        "updated_at",
+        "replay_completeness"
+      ],
+      "title": "RunSummary",
+      "type": "object"
+    },
+    "RunTimeline": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoints": {
+          "items": {
+            "$ref": "#/$defs/WorkflowCheckpointSummary"
+          },
+          "title": "Checkpoints",
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/WorkflowEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/PersistedEvidenceSnapshot"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "next_event_sequence": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Event Sequence"
+        },
+        "replay_completeness": {
+          "$ref": "#/$defs/ReplayCompleteness"
+        },
+        "resource_versions": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Resource Versions",
+          "type": "array"
+        },
+        "reviews": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Reviews",
+          "type": "array"
+        },
+        "run": {
+          "$ref": "#/$defs/RunSummary"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/AgentStepRecord"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "trigger_relation": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger Relation"
+        }
+      },
+      "required": [
+        "run",
+        "steps",
+        "events",
+        "checkpoints",
+        "evidence",
+        "replay_completeness"
+      ],
+      "title": "RunTimeline",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "chunk_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chunk Id",
+          "type": "string"
+        },
+        "document_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "document_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Document Version",
+          "type": "string"
+        },
+        "knowledge_base_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Knowledge Base Id",
+          "type": "string"
+        },
+        "line_end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line End"
+        },
+        "line_start": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Start"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "source_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Source Path",
+          "type": "string"
+        },
+        "source_type": {
+          "$ref": "#/$defs/SourceType"
+        },
+        "timestamp_end_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp End Ms"
+        },
+        "timestamp_start_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp Start Ms"
+        },
+        "title": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "knowledge_base_id",
+        "document_id",
+        "document_version",
+        "chunk_id",
+        "source_type",
+        "source_path",
+        "title"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "SourceRef": {
+      "description": "知识溯源引用",
+      "properties": {
+        "chunk_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chunk Id"
+        },
+        "doc_id": {
+          "title": "Doc Id",
+          "type": "string"
+        },
+        "document_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document Version"
+        },
+        "evidence_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Id"
+        },
+        "excerpt_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excerpt Hash"
+        },
+        "knowledge_base_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Base Id"
+        },
+        "knowledge_point": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Point"
+        },
+        "line_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line End"
+        },
+        "line_start": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Start"
+        },
+        "metadata": {
+          "title": "Metadata",
+          "type": "object"
+        },
+        "normalized_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Score"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "provenance_status": {
+          "default": "legacy",
+          "enum": [
+            "legacy",
+            "verified"
+          ],
+          "title": "Provenance Status",
+          "type": "string"
+        },
+        "query_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query Hash"
+        },
+        "rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank"
+        },
+        "raw_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Score"
+        },
+        "retrieval_config_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Config Hash"
+        },
+        "retrieval_query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieval Query"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "score_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score Kind"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "snippet": {
+          "title": "Snippet",
+          "type": "string"
+        },
+        "source_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Path"
+        },
+        "source_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Type"
+        },
+        "timestamp_end_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp End Ms"
+        },
+        "timestamp_start_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp Start Ms"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doc_id",
+        "title",
+        "snippet",
+        "score"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "markdown",
+        "text",
+        "pdf",
+        "web",
+        "audio",
+        "video",
+        "other"
+      ],
+      "title": "SourceType",
+      "type": "string"
+    },
+    "WeaknessPriorityV1": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/AbilityConfidence"
+        },
+        "coverage_status": {
+          "default": "uncovered",
+          "enum": [
+            "uncovered",
+            "covered"
+          ],
+          "title": "Coverage Status",
+          "type": "string"
+        },
+        "downstream_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Downstream Count",
+          "type": "integer"
+        },
+        "mastery_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mastery Score"
+        },
+        "priority_group": {
+          "enum": [
+            "confirmed_weak",
+            "regressing_learning",
+            "ready_uncovered",
+            "low_self_report",
+            "blocked_uncovered",
+            "maintain_mastery"
+          ],
+          "title": "Priority Group",
+          "type": "string"
+        },
+        "published_resource_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Published Resource Count",
+          "type": "integer"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "skill_node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Skill Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_node_id",
+        "rank",
+        "priority_group",
+        "reason_codes",
+        "confidence"
+      ],
+      "title": "WeaknessPriorityV1",
+      "type": "object"
+    },
+    "WorkflowCheckpointSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_id": {
+          "title": "Checkpoint Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "event_sequence": {
+          "title": "Event Sequence",
+          "type": "integer"
+        },
+        "node_name": {
+          "title": "Node Name",
+          "type": "string"
+        },
+        "state_hash": {
+          "title": "State Hash",
+          "type": "string"
+        },
+        "step_id": {
+          "title": "Step Id",
+          "type": "string"
+        },
+        "step_sequence": {
+          "title": "Step Sequence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "checkpoint_id",
+        "event_sequence",
+        "step_id",
+        "step_sequence",
+        "node_name",
+        "state_hash",
+        "created_at"
+      ],
+      "title": "WorkflowCheckpointSummary",
+      "type": "object"
+    },
+    "WorkflowEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "event_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_sequence": {
+          "minimum": 1,
+          "title": "Event Sequence",
+          "type": "integer"
+        },
+        "event_type": {
+          "$ref": "#/$defs/WorkflowEventType"
+        },
+        "node_name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Name"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "payload_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "persisted_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Persisted At"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "step_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Id"
+        },
+        "step_sequence": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Sequence"
+        }
+      },
+      "required": [
+        "event_id",
+        "run_id",
+        "event_sequence",
+        "event_type",
+        "payload_hash",
+        "occurred_at"
+      ],
+      "title": "WorkflowEvent",
+      "type": "object"
+    },
+    "WorkflowEventType": {
+      "enum": [
+        "run_created",
+        "run_started",
+        "step_started",
+        "step_succeeded",
+        "step_degraded",
+        "step_failed",
+        "evidence_snapshot_saved",
+        "checkpoint_saved",
+        "run_finalizing",
+        "resource_persisted",
+        "workflow_finalization_failed",
+        "resource_version_created",
+        "review_persisted",
+        "revision_requested",
+        "claim_extraction_started",
+        "claim_extraction_completed",
+        "claim_judgement_completed",
+        "claim_review_failed",
+        "claim_metric_computed",
+        "attempt_submitted",
+        "feedback_decision_started",
+        "feedback_decision_completed",
+        "knowledge_state_updated",
+        "profile_updated",
+        "path_mutated",
+        "followup_generation_created",
+        "followup_generation_failed",
+        "resource_published",
+        "resource_publication_decided",
+        "resource_execution_queued",
+        "resource_generation_started",
+        "resource_generated",
+        "resource_human_review_requested",
+        "run_completed",
+        "run_failed",
+        "run_interrupted"
+      ],
+      "title": "WorkflowEventType",
+      "type": "string"
+    }
+  },
+  "contract_schema_version": "1.0",
+  "roots": {
+    "ContinueResourceBatchRequest": {
+      "$ref": "#/$defs/ContinueResourceBatchRequest"
+    },
+    "CoursewareBatchCreateRequest": {
+      "$ref": "#/$defs/CoursewareBatchCreateRequest"
+    },
+    "CoursewareBatchJobResponse": {
+      "$ref": "#/$defs/CoursewareBatchJobResponse"
+    },
+    "CoursewareJobCreateRequest": {
+      "$ref": "#/$defs/CoursewareJobCreateRequest"
+    },
+    "CoursewareJobDetail": {
+      "$ref": "#/$defs/CoursewareJobDetail"
+    },
+    "CoursewareJobListResponse": {
+      "$ref": "#/$defs/CoursewareJobListResponse"
+    },
+    "CoursewareJobResponse": {
+      "$ref": "#/$defs/CoursewareJobResponse"
+    },
+    "CoursewareLearningEvent": {
+      "$ref": "#/$defs/CoursewareLearningEvent"
+    },
+    "CoursewareLearningEventAck": {
+      "$ref": "#/$defs/CoursewareLearningEventAck"
+    },
+    "CoursewareLearningEventBatch": {
+      "$ref": "#/$defs/CoursewareLearningEventBatch"
+    },
+    "CurrentReportResponse": {
+      "$ref": "#/$defs/CurrentReportResponse"
+    },
+    "GenerateRequest": {
+      "$ref": "#/$defs/GenerateRequest"
+    },
+    "GenerationJobCreateResponse": {
+      "$ref": "#/$defs/GenerationJobCreateResponse"
+    },
+    "GenerationJobListResponse": {
+      "$ref": "#/$defs/GenerationJobListResponse"
+    },
+    "GenerationJobStatusResponse": {
+      "$ref": "#/$defs/GenerationJobStatusResponse"
+    },
+    "PublicRunEvent": {
+      "$ref": "#/$defs/PublicRunEvent"
+    },
+    "PublicRunSnapshot": {
+      "$ref": "#/$defs/PublicRunSnapshot"
+    },
+    "ReportInvalidation": {
+      "$ref": "#/$defs/ReportInvalidation"
+    },
+    "ReportResponse": {
+      "$ref": "#/$defs/ReportResponse"
+    },
+    "ReportWindow": {
+      "$ref": "#/$defs/ReportWindow"
+    },
+    "RunSummary": {
+      "$ref": "#/$defs/RunSummary"
+    },
+    "RunTimeline": {
+      "$ref": "#/$defs/RunTimeline"
+    }
+  }
+}

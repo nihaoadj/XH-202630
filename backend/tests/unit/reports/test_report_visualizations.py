@@ -122,7 +122,7 @@ def test_resource_credibility_scores_reuse_review_claim_and_source_evidence(monk
     service.audit_repo = SimpleNamespace(get_review_by_resource=lambda _resource_id: SimpleNamespace(
         review_id="review", status="approved", issues=[],
     ))
-    service._claims_for_resource = lambda _resource: ([object()], [object()])
+    service._claims_for_resource = lambda _resource, *_batch: ([object()], [object()])
     monkeypatch.setattr(reports_module, "compute_claim_metric", lambda _claims, _judgements: SimpleNamespace(
         metric_status=SimpleNamespace(value="complete"), claim_hallucination_rate=0.0,
         factual_claim_total=1, supported_claim_total=1, contradicted_claim_total=0,
@@ -158,7 +158,7 @@ def test_resource_credibility_normalizes_workflow_approve_status(monkeypatch):
 
     service = _service()
     service.audit_repo = audit
-    service._claims_for_resource = lambda _resource: ([object()], [object()])
+    service._claims_for_resource = lambda _resource, *_batch: ([object()], [object()])
     monkeypatch.setattr(reports_module, "compute_claim_metric", lambda _claims, _judgements: SimpleNamespace(
         metric_status=SimpleNamespace(value="complete"), claim_hallucination_rate=0.0,
         factual_claim_total=1, supported_claim_total=1, contradicted_claim_total=0,
@@ -180,7 +180,7 @@ def test_resource_credibility_caps_claim_missing_and_hard_failures(monkeypatch):
     service.audit_repo = SimpleNamespace(get_review_by_resource=lambda _resource_id: SimpleNamespace(
         review_id="review", status="approved", issues=[],
     ))
-    service._claims_for_resource = lambda _resource: ([], [])
+    service._claims_for_resource = lambda _resource, *_batch: ([], [])
 
     capped = service._resource_credibility([_credibility_resource(source_refs=[_verified_ref()])], knowledge_base_id="kb")["items"][0]
     assert capped["credibility_score"] == 80.0

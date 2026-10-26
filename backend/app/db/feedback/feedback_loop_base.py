@@ -72,7 +72,7 @@ class BaseFeedbackLoopRepository(ABC):
         pass
 
     @abstractmethod
-    def list_attempts(self, learner_id: str, limit: int = 20) -> list[LearningAttempt]:
+    def list_attempts(self, learner_id: str, limit: int | None = 20) -> list[LearningAttempt]:
         pass
 
     @abstractmethod

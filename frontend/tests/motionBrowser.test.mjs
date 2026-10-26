@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -52,7 +53,7 @@ function writeJson(response, value, status = 200) {
 function fixtureReport(windowDays) {
   return {
     learner_id: 'learner-A', window: { window_days: windowDays }, skill_level: '初级',
-    report_revision: `motion-report-${windowDays}-${reportRevision}`.padEnd(64, '0'),
+    report_revision: 'rpt_' + createHash('sha256').update(`motion:${windowDays}:${reportRevision}`).digest('hex'),
     metric_summary: { resource_count: reportResourceCount, feedback_count: 3, weak_point_count: 1, average_correct_rate: 0.72 },
     learning_activity: { verified_accuracy: 0.72 },
     learning_node_mastery_map: { nodes: [], summary: { total_node_count: 0, measured_node_count: 0 } },
@@ -155,7 +156,7 @@ async function createPage(routePath, { reducedMotion, apiMode = 'native', width 
   activeContexts.add(context)
   context.setDefaultTimeout(10000)
   await context.addInitScript(({ apiMode: mode }) => {
-    window.__motionAudit = { starts: 0, animations: [], unhandled: [], throwStart: mode === 'throw', pauseModules: false, pausePageEnter: false, pausePageExit: false }
+    window.__motionAudit = { starts: 0, animations: [], unhandled: [], throwStart: mode === 'throw', pauseModules: false, pausePageEnter: false, pausePageExit: false, pauseNative: false, nativeAnimations: [], nativeTimings: [] }
     const nativeStart = document.startViewTransition
     if (mode === 'disabled') {
       Object.defineProperty(document, 'startViewTransition', { configurable: true, writable: true, value: undefined })
@@ -165,7 +166,25 @@ async function createPage(routePath, { reducedMotion, apiMode = 'native', width 
         value: function (callback, options) {
           window.__motionAudit.starts += 1
           if (window.__motionAudit.throwStart) throw new Error('fixture startViewTransition failure')
-          return nativeStart.call(this, callback, options)
+          const transition = nativeStart.call(this, callback, options)
+          transition.ready.then(() => {
+            const audit = window.__motionAudit
+            if (!audit.pauseNative) return
+            // Hold the real CSS pseudo-element animations at one shared time.
+            // A slow render can otherwise skip the entire 120ms exit interval.
+            const pseudos = ['::view-transition-old(app-page)', '::view-transition-new(app-page)']
+            audit.nativeAnimations = document.getAnimations().filter((animation) =>
+              animation.effect?.target === document.documentElement && pseudos.includes(animation.effect?.pseudoElement))
+            audit.nativeTimings = audit.nativeAnimations.map((animation) => ({
+              pseudo: animation.effect.pseudoElement, name: animation.animationName,
+              duration: animation.effect.getTiming().duration,
+            }))
+            for (const animation of audit.nativeAnimations) {
+              animation.pause()
+              animation.currentTime = 60
+            }
+          }).catch(() => {})
+          return transition
         },
       })
     }
@@ -403,49 +422,67 @@ async function focusLayoutTransition(page, entering) {
 }
 
 async function measureNativeTransition(page, selector, name, { screenshot = false } = {}) {
-  await page.evaluate(() => {
-    window.__shellBefore = ['.sidebar', '.topbar', '.main-area'].map((selector) => {
-      const rect = document.querySelector(selector)?.getBoundingClientRect()
-      return rect && [rect.x, rect.y, rect.width, rect.height]
-    })
-  })
   const targetPath = selector.startsWith('/') ? selector : ({
     '学习历史': '/learning/history', '学习报告': '/report', '用户资料': '/user/profile',
   })[selector]
   assert.ok(targetPath, `unknown native navigation target: ${selector}`)
   const targetUrl = new URL(targetPath, baseUrl)
-  const navigation = page.waitForFunction((pathname) => location.pathname === pathname, targetUrl.pathname)
-  // Start sampling before the click: production transitions are only 120/260ms.
-  const samplePromise = page.waitForFunction(() => {
-    const oldStyle = getComputedStyle(document.documentElement, '::view-transition-old(app-page)')
-    const newStyle = getComputedStyle(document.documentElement, '::view-transition-new(app-page)')
-    const oldOpacity = Number(oldStyle.opacity)
-    const newOpacity = Number(newStyle.opacity)
-    if (!oldStyle.animationName.includes('page-depart') || !newStyle.animationName.includes('page-arrive')) return false
-    if (!(oldOpacity > 0.1 && oldOpacity < 0.95 && newOpacity > 0.1 && newOpacity < 0.95)) return false
-    const shellNow = ['.sidebar', '.topbar', '.main-area'].map((item) => {
-      const rect = document.querySelector(item)?.getBoundingClientRect()
+  await page.evaluate(() => {
+    window.__motionAudit.pauseNative = true
+    window.__motionAudit.nativeAnimations = []
+    window.__motionAudit.nativeTimings = []
+    window.__shellBefore = ['.sidebar', '.topbar', '.main-area'].map((selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect()
       return rect && [rect.x, rect.y, rect.width, rect.height]
     })
-    return { oldName: oldStyle.animationName, newName: newStyle.animationName,
-      oldDuration: oldStyle.animationDuration, newDuration: newStyle.animationDuration,
-      oldOpacity, newOpacity, oldTransform: oldStyle.transform, newTransform: newStyle.transform,
-      shellBefore: window.__shellBefore, shellNow }
-  }, null, { timeout: 5000 })
-  await page.locator(selector.startsWith('/learning') || selector.startsWith('/generate') || selector.startsWith('/resources') || selector.startsWith('/feedback') || selector.startsWith('/dashboard')
-    ? `a.nav-item[href="${selector}"]`
-    : `.topbar-actions .el-button:has-text("${selector}")`).click()
-  const [sampleHandle] = await Promise.all([samplePromise, navigation])
-  const sample = await sampleHandle.jsonValue()
-  assert.ok(sample.oldOpacity > 0 && sample.oldOpacity < 1, `${selector}: outgoing pseudo-element must be sampled mid-animation`)
-  assert.ok(sample.newOpacity > 0 && sample.newOpacity < 1, `${selector}: incoming pseudo-element must be sampled mid-animation`)
-  assert.equal(sample.oldName, 'page-depart')
-  assert.equal(sample.newName, 'page-arrive')
-  for (let index = 0; index < sample.shellBefore.length; index += 1) {
-    for (let axis = 0; axis < 4; axis += 1) assert.ok(Math.abs(sample.shellBefore[index][axis] - sample.shellNow[index][axis]) <= 1, `${selector}: fixed shell geometry changed`)
+  })
+  try {
+    const navigation = page.waitForFunction((pathname) => location.pathname === pathname, targetUrl.pathname)
+    // Sample real native animations; the init hook holds their original timelines at 60ms.
+    const samplePromise = page.waitForFunction(() => {
+      const oldStyle = getComputedStyle(document.documentElement, '::view-transition-old(app-page)')
+      const newStyle = getComputedStyle(document.documentElement, '::view-transition-new(app-page)')
+      const oldOpacity = Number(oldStyle.opacity)
+      const newOpacity = Number(newStyle.opacity)
+      if (!oldStyle.animationName.includes('page-depart') || !newStyle.animationName.includes('page-arrive')) return false
+      if (!(oldOpacity > 0.1 && oldOpacity < 0.95 && newOpacity > 0.1 && newOpacity < 0.95)) return false
+      const shellNow = ['.sidebar', '.topbar', '.main-area'].map((item) => {
+        const rect = document.querySelector(item)?.getBoundingClientRect()
+        return rect && [rect.x, rect.y, rect.width, rect.height]
+      })
+      return { oldName: oldStyle.animationName, newName: newStyle.animationName,
+        oldDuration: oldStyle.animationDuration, newDuration: newStyle.animationDuration,
+        oldOpacity, newOpacity, oldTransform: oldStyle.transform, newTransform: newStyle.transform,
+        shellBefore: window.__shellBefore, shellNow, nativeTimings: window.__motionAudit.nativeTimings }
+    }, null, { timeout: 5000 })
+    await page.locator(selector.startsWith('/learning') || selector.startsWith('/generate') || selector.startsWith('/resources') || selector.startsWith('/feedback') || selector.startsWith('/dashboard')
+      ? `a.nav-item[href="${selector}"]`
+      : `.topbar-actions .el-button:has-text("${selector}")`).click()
+    const [sampleHandle] = await Promise.all([samplePromise, navigation])
+    const sample = await sampleHandle.jsonValue()
+    assert.ok(sample.oldOpacity > 0 && sample.oldOpacity < 1, `${selector}: outgoing pseudo-element must be sampled mid-animation`)
+    assert.ok(sample.newOpacity > 0 && sample.newOpacity < 1, `${selector}: incoming pseudo-element must be sampled mid-animation`)
+    assert.equal(sample.oldName, 'page-depart')
+    assert.equal(sample.newName, 'page-arrive')
+    assert.deepEqual([...sample.nativeTimings].sort((a, b) => a.pseudo.localeCompare(b.pseudo)), [
+      { pseudo: '::view-transition-new(app-page)', name: 'page-arrive', duration: 260 },
+      { pseudo: '::view-transition-old(app-page)', name: 'page-depart', duration: 120 },
+    ], 'sample the platform CSS animations without replacing their timing')
+    for (let index = 0; index < sample.shellBefore.length; index += 1) {
+      for (let axis = 0; axis < 4; axis += 1) assert.ok(Math.abs(sample.shellBefore[index][axis] - sample.shellNow[index][axis]) <= 1, `${selector}: fixed shell geometry changed`)
+    }
+    summary.nativeTransitions.push({ to: targetUrl.pathname, ...sample })
+    if (screenshot) await writeScreenshot(page, name)
+  } finally {
+    await page.evaluate(() => {
+      const audit = window.__motionAudit
+      audit.pauseNative = false
+      for (const animation of audit.nativeAnimations) {
+        if (animation.playState === 'paused') animation.play()
+      }
+      audit.nativeAnimations = []
+    })
   }
-  summary.nativeTransitions.push({ to: targetUrl.pathname, ...sample })
-  if (screenshot) await writeScreenshot(page, name)
   await page.waitForSelector(selector.startsWith('/learning') ? '.onboarding-page'
     : selector.startsWith('/generate') ? '.generate-page'
       : selector.startsWith('/resources') ? '.resources-layout'

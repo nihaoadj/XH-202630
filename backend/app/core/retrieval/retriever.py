@@ -18,6 +18,7 @@ from app.core.retrieval.knowledge_ids import (
     sha256_hex,
 )
 from app.core.retrieval.vector_store import ChromaVectorSearchBackend
+from app.core.retrieval.resource_allocation import build_evidence_allocation, select_resource_chunks, purposes_for_chunk
 from app.db.shared.database import get_session_factory
 from app.db.knowledge.base import KnowledgeChunkRepository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
@@ -30,6 +31,7 @@ from app.models.knowledge.knowledge import (
     RetrievalStatus,
     ScoreKind,
     VectorCandidate,
+    RESOURCE_AWARE_STRATEGY,
 )
 
 
@@ -85,13 +87,23 @@ def _config_payload(
     *,
     retrieval_scope: str,
 ) -> dict:
-    return {
+    policy_payload = policy.model_dump(mode="json")
+    policy_payload.pop("strategy_version")
+    payload = {
         "schema_version": "1.0",
         "collection_resolver_version": "kb-hash-v1",
         "embedding_model": settings.embedding_model,
         "retrieval_scope": retrieval_scope,
-        **policy.model_dump(mode="json"),
+        **policy_payload,
     }
+    if policy.strategy_version == RESOURCE_AWARE_STRATEGY:
+        payload.update(strategy_version=policy.strategy_version, candidate_limit=20,
+                       owner_policy="unique-chunk-top-k-v1", allocation_version=RESOURCE_AWARE_STRATEGY)
+        payload["rerank"] = {key: getattr(settings, key) for key in (
+            "rerank_enabled", "rerank_model", "rerank_per_query_k", "rerank_batch_size",
+            "rerank_max_length", "rerank_max_chunks_per_document", "rerank_device",
+        )}
+    return payload
 
 
 def _error_info(failure: _EvidenceFailure) -> ErrorInfo:
@@ -160,6 +172,10 @@ class EvidenceRetriever:
         if (
             candidate.query not in request.queries
             or candidate.query_rank > request.policy.top_k_per_query
+            or (request.policy.strategy_version == RESOURCE_AWARE_STRATEGY and (
+                bool(set(candidate.matched_queries) - set(request.queries))
+                or (candidate.matched_queries and candidate.query not in candidate.matched_queries)
+            ))
         ):
             raise _EvidenceFailure(
                 ErrorCode.RETRIEVAL_QUERY_INVALID,
@@ -264,6 +280,7 @@ class EvidenceRetriever:
     def retrieve(self, request: RetrievalRequest) -> EvidenceBatch:
         retrieval_started = perf_counter()
         policy = request.policy
+        resource_aware = policy.strategy_version == RESOURCE_AWARE_STRATEGY
         queries = request.queries[: policy.max_query_count]
         query_hashes = [query_hash(query) for query in queries]
         config_hash = retrieval_config_hash(
@@ -286,6 +303,7 @@ class EvidenceRetriever:
                     top_k=policy.top_k_per_query,
                     knowledge_base_id=request.knowledge_base_id,
                     allowed_chunk_ids=allowed_chunk_ids or None,
+                    **({"query_bindings": request.query_bindings} if resource_aware else {}),
                 ))
                 backend_profile = getattr(self.backend, "last_profile", None)
                 if isinstance(backend_profile, dict):
@@ -317,6 +335,8 @@ class EvidenceRetriever:
                     partial_failures += 1
 
         retrieval_profile = {
+            "retrieval_strategy_version": policy.strategy_version,
+            "query_gaps": request.query_gaps,
             "query_count": len(queries),
             "retrieval_scope": request.retrieval_scope,
             "allowed_chunk_count": len(allowed_chunk_ids),
@@ -361,8 +381,13 @@ class EvidenceRetriever:
         # A chunk can support several nodes even though the immutable evidence
         # snapshot stores it only once.
         node_validated: dict[str, dict[str, tuple[VectorCandidate, object, float]]] = {}
+        origins: dict[str, list[str]] = {}
+        raw_query_hits: set[str] = set()
+        valid_query_hits: set[str] = set()
         try:
             for candidate in candidates:
+                matched = candidate.matched_queries or [candidate.query]
+                raw_query_hits.update(matched)
                 if allowed_chunk_ids and candidate.chunk_id not in allowed_chunk_ids:
                     # The backend receives the same constraint, but retain a
                     # deterministic defense-in-depth boundary before a hit
@@ -372,8 +397,15 @@ class EvidenceRetriever:
                 normalized_score = self._normalize_score(candidate)
                 if normalized_score < policy.min_normalized_score:
                     continue
-                node_id = request.query_node_ids.get(candidate.query)
-                if node_id:
+                valid_query_hits.update(matched)
+                for query in matched:
+                    if query not in origins.setdefault(candidate.chunk_id, []):
+                        origins[candidate.chunk_id].append(query)
+                node_ids = ([p.node_id for query in matched for p in request.query_bindings[query] if p.node_id]
+                            if resource_aware else [request.query_node_ids.get(candidate.query)])
+                for node_id in dict.fromkeys(node_ids):
+                    if not node_id:
+                        continue
                     per_node = node_validated.setdefault(node_id, {})
                     node_previous = per_node.get(candidate.chunk_id)
                     node_key = (normalized_score, -candidate.query_rank)
@@ -426,7 +458,9 @@ class EvidenceRetriever:
         # filling the remaining global budget.  This prevents one broad topic
         # query from starving a selected node while retaining one total pool.
         selected_chunk_ids: list[str] = []
-        node_order = list(dict.fromkeys(request.query_node_ids.values()))
+        node_order = list(dict.fromkeys(
+            p.node_id for values in request.query_bindings.values() for p in values if p.node_id
+        )) if resource_aware else list(dict.fromkeys(request.query_node_ids.values()))
         for node_id in node_order:
             candidates_for_node = sorted(
                 node_validated.get(node_id, {}).values(),
@@ -441,6 +475,31 @@ class EvidenceRetriever:
             if candidate.chunk_id not in selected_chunk_ids:
                 selected_chunk_ids.append(candidate.chunk_id)
         selected_chunk_set = set(selected_chunk_ids)
+        common_chunks = []
+        allocation_gaps = list(request.query_gaps)
+        if resource_aware:
+            selected_chunk_ids, common_chunks, promotions = select_resource_chunks(request, globally_ranked, origins)
+            selected_chunk_set = set(selected_chunk_ids)
+            allocation_gaps.extend(promotions)
+            selected_queries = {query for chunk in selected_chunk_ids for query in origins[chunk]}
+            for query, purposes in request.query_bindings.items():
+                reason = None
+                if query not in raw_query_hits:
+                    profiles = [p for p in query_profiles if p.get("query_hash") == query_hash(query)[:20]]
+                    if any(p.get("query_status") == "failed" for p in profiles):
+                        reason = "query_failed"
+                    elif any(p.get("query_hit_count", 0) for p in profiles):
+                        reason = "candidate_budget"
+                    else:
+                        reason = "query_no_hit"
+                elif query not in valid_query_hits:
+                    reason = "candidate_filtered"
+                elif query not in selected_queries:
+                    reason = "evidence_not_selected"
+                if reason:
+                    for purpose in purposes:
+                        allocation_gaps.append({"reason": reason, "query_hash": query_hash(query),
+                                                "resource_type": purpose.resource_type or "", "node_id": purpose.node_id or ""})
         ranked = [item for item in globally_ranked if item[0].chunk_id in selected_chunk_set]
         if len(ranked) < policy.min_evidence_count:
             if partial_failures:
@@ -515,14 +574,20 @@ class EvidenceRetriever:
             )
             ids = [evidence_by_chunk[item[0].chunk_id] for item in ordered
                    if item[0].chunk_id in evidence_by_chunk]
+            if resource_aware:
+                member_ids = set(ids)
+                ids = [item.evidence_id for item in evidence if item.evidence_id in member_ids]
             if ids:
                 node_evidence_map[node_id] = list(dict.fromkeys(ids))
+        allocation = (build_evidence_allocation(request, evidence, origins, common_chunks, allocation_gaps)
+                      if resource_aware else None)
         return EvidenceBatch(
             status=RetrievalStatus.AVAILABLE,
             knowledge_base_id=request.knowledge_base_id,
             retrieval_scope=request.retrieval_scope,
             evidence=evidence,
             node_evidence_map=node_evidence_map,
+            evidence_allocation=allocation,
             query_hashes=query_hashes,
             query_count=len(queries),
             candidate_count=len(candidates),
@@ -531,6 +596,7 @@ class EvidenceRetriever:
             config_hash=config_hash,
             retrieval_profile={
                 **retrieval_profile,
+                **({"evidence_allocation": allocation.model_dump(mode="json")} if allocation else {}),
                 "total_retrieval_ms": round((perf_counter() - retrieval_started) * 1000, 3),
                 "unique_candidate_count": len(validated),
                 "final_evidence_count": len(evidence),
