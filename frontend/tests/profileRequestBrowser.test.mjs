@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -59,7 +60,7 @@ function journey(learnerId, offset) {
 }
 function report(learnerId, days) {
   return { learner_id: learnerId, window: { window_days: days }, skill_level: learnerId.endsWith('A') ? '初级' : '中级',
-    report_revision: `rpt_${learnerId}_${days}`.padEnd(68, '0'),
+    report_revision: `rpt_${createHash('sha256').update(`${learnerId}:${days}`).digest('hex')}`,
     metric_summary: { resource_count: (learnerId.endsWith('A') ? 100 : 200) + days, feedback_count: 1, weak_point_count: 1 },
     next_suggestions: [`报告建议${learnerId.at(-1)}-${days}`] }
 }

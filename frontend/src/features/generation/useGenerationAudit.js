@@ -1,5 +1,5 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { runApi } from '../../api/index.js'
+import { runApi } from '../runs/queryApi.js'
 import { createRequestGuard } from '../../utils/requestContext.js'
 import { associatedStepResources } from './generationAudit.js'
 import { canInspectStep } from './workflowPresentation.js'

@@ -1,5 +1,7 @@
 import { api } from '../../api/client.js'
+import { requireAckResponse } from '../../contracts/guards.js'
 
+/** @type {import('../../contracts/ports').CoursewareApi} */
 export const coursewareApi = {
   createJob: (data) => api.post('/resources/courseware/jobs', data),
   createJobs: (data) => api.post('/resources/courseware/jobs/batch', data),
@@ -20,6 +22,6 @@ export const coursewareApi = {
   },
   downloadUrl: (resourceId) => `/api/resources/courseware/items/${encodeURIComponent(resourceId)}/file`,
   packageUrl: (resourceId, format) => `/api/resources/courseware/items/${encodeURIComponent(resourceId)}/packages/${encodeURIComponent(format)}`,
-  ingestLearningEvents: (resourceId, events) => api.post(`/resources/courseware/items/${encodeURIComponent(resourceId)}/learning-events`, { events }),
+  ingestLearningEvents: (resourceId, events) => api.post(`/resources/courseware/items/${encodeURIComponent(resourceId)}/learning-events`, { events }).then(requireAckResponse),
   learningProgress: (resourceId, releaseId) => api.get(`/resources/courseware/items/${encodeURIComponent(resourceId)}/learning-progress?release_id=${encodeURIComponent(releaseId)}`),
 }

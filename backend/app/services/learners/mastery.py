@@ -1,4 +1,4 @@
-"""Single policy surface for learner ability state, priorities and projections."""
+"""Learner ability use cases and persistence orchestration."""
 
 from __future__ import annotations
 
@@ -14,17 +14,14 @@ from app.core.learning_tiers import MAX_TIER, label_for_tier, tier_for_level
 from app.db.learning_documents.base import BaseResourceRepository
 from app.models.learners.mastery import (
     MASTERY_CONFIRMATION_THRESHOLD,
-    AbilityConfidence,
     AbilityEvidenceSource,
     AbilityEvidenceV1,
-    AbilityNodeProjectionV1,
     AbilityNodesResponseV1,
     AbilityNodeSummaryV1,
     AbilityStatus,
     CurriculumNodeProgressV1,
     CurriculumProgressStatus,
     CurriculumProgressSummaryV1,
-    LearnerFocusSkippedV1,
     LearnerFocusSnapshotV1,
     LearnerTierProgressV1,
     LearningIntent,
@@ -35,6 +32,10 @@ from app.models.learners.mastery import (
 from app.models.learning_documents.schemas import LearnerProfile
 from app.services.knowledge.knowledge import KnowledgeService
 from app.services.learners.generation_options import build_generation_options
+from app.services.learners.ability_projection import (
+    objective_mastery_history, project_ability_nodes, rank_weakness_priorities,
+    select_focus_nodes, summarize_curriculum,
+)
 
 
 def _canonical_hash(value: Any) -> str:
@@ -177,19 +178,7 @@ class MasteryService:
             evidence_id=source_id, now=datetime.now(timezone.utc),
         )
 
-    @staticmethod
-    def _curriculum_summary(nodes: list[CurriculumNodeProgressV1]) -> CurriculumProgressSummaryV1:
-        counts = {status: 0 for status in CurriculumProgressStatus}
-        for node in nodes:
-            counts[node.progress_status] += 1
-        return CurriculumProgressSummaryV1(
-            total_count=len(nodes), unplanned_count=counts[CurriculumProgressStatus.UNPLANNED],
-            scheduled_count=counts[CurriculumProgressStatus.SCHEDULED],
-            exposed_count=counts[CurriculumProgressStatus.EXPOSED],
-            verification_pending_count=counts[CurriculumProgressStatus.VERIFICATION_PENDING],
-            completed_count=counts[CurriculumProgressStatus.COMPLETED],
-            reinforcement_due_count=counts[CurriculumProgressStatus.REINFORCEMENT_DUE],
-        )
+    _curriculum_summary = staticmethod(summarize_curriculum)
 
     def curriculum_progress(self, profile: LearnerProfile) -> tuple[list[CurriculumNodeProgressV1], CurriculumProgressSummaryV1 | None]:
         if not profile.knowledge_base_id:
@@ -790,52 +779,18 @@ class MasteryService:
         nodes = self._nodes(profile.knowledge_base_id)
         names = {node.node_id: node.name for node in nodes}
         states = self.repository.ensure_states(profile.learner_id, profile.knowledge_base_id, names)
-        state_by_id = {item.skill_node_id: item for item in states}
         events = self.repository.list_events(profile.learner_id, profile.knowledge_base_id)
-        objective_after: dict[str, list[float]] = {}
-        for event in events:
-            if event.verified and event.source_type in {
-                AbilityEvidenceSource.DIAGNOSIS, AbilityEvidenceSource.LEARNING_ATTEMPT,
-            } and event.after_state.mastery_score is not None:
-                objective_after.setdefault(event.skill_node_id, []).append(event.after_state.mastery_score)
+        objective_after = objective_mastery_history(events)
         priorities = self.weakness_priorities(profile)
         curriculum_nodes, curriculum_summary = self.curriculum_progress(profile)
-        priority_by_id = {item.skill_node_id: item.rank for item in priorities}
-        projected = []
-        for node in nodes:
-            values = objective_after.get(node.node_id, [])
-            trend_delta = round(values[-1] - values[-2], 6) if len(values) >= 2 else None
-            projected.append(AbilityNodeProjectionV1(
-                skill_node_id=node.node_id,
-                name=node.name,
-                description=node.description,
-                level=node.level,
-                tier=self._node_tier(node),
-                tier_label=label_for_tier(self._node_tier(node)),
-                prerequisites=node.prerequisites,
-                children=node.children,
-                mastery=state_by_id[node.node_id],
-                trend_delta=trend_delta,
-                priority=priority_by_id.get(node.node_id),
-            ))
-        counts = {status: 0 for status in AbilityStatus}
-        for state in states:
-            counts[state.status] += 1
+        projected, summary = project_ability_nodes(
+            nodes, states, objective_after, priorities, get_node_tier=self._node_tier,
+        )
         return AbilityNodesResponseV1(
             learner_id=profile.learner_id,
             knowledge_base_id=profile.knowledge_base_id,
             as_of_profile_version=profile.profile_version,
-            summary=AbilityNodeSummaryV1(
-                total_count=len(states),
-                mastered_count=counts[AbilityStatus.MASTERED],
-                learning_count=counts[AbilityStatus.LEARNING],
-                weak_count=counts[AbilityStatus.WEAK],
-                self_reported_count=counts[AbilityStatus.SELF_REPORTED],
-                unassessed_count=counts[AbilityStatus.UNASSESSED],
-                medium_or_high_confidence_count=sum(
-                    item.confidence in {AbilityConfidence.MEDIUM, AbilityConfidence.HIGH} for item in states
-                ),
-            ),
+            summary=summary,
             nodes=projected,
             edges=[
                 {"from": prerequisite, "to": node.node_id}
@@ -859,71 +814,9 @@ class MasteryService:
         nodes = self._nodes(profile.knowledge_base_id)
         names = {node.node_id: node.name for node in nodes}
         states = self.repository.ensure_states(profile.learner_id, profile.knowledge_base_id, names)
-        state_by_id = {item.skill_node_id: item for item in states}
         published_counts = self._published_node_counts(profile.learner_id, names)
-        covered = {node_id for node_id, count in published_counts.items() if count > 0}
         events = self.repository.list_events(profile.learner_id, profile.knowledge_base_id)
-        observed: dict[str, list[float]] = {}
-        for event in events:
-            if event.verified and event.source_type in {
-                AbilityEvidenceSource.DIAGNOSIS, AbilityEvidenceSource.LEARNING_ATTEMPT,
-            } and event.observed_score is not None:
-                observed.setdefault(event.skill_node_id, []).append(event.observed_score)
-        children = {node.node_id: list(node.children) for node in nodes}
-
-        def downstream(node_id: str) -> int:
-            seen: set[str] = set()
-            stack = list(children.get(node_id, []))
-            while stack:
-                candidate = stack.pop()
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                stack.extend(children.get(candidate, []))
-            return len(seen)
-
-        candidates = []
-        group_order = {
-            "confirmed_weak": 0, "regressing_learning": 1,
-            "ready_uncovered": 2, "low_self_report": 3,
-            "blocked_uncovered": 4, "maintain_mastery": 5,
-        }
-        def sort_time(value: datetime | None) -> datetime:
-            if value is None:
-                return datetime.min.replace(tzinfo=timezone.utc)
-            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-        for node in nodes:
-            state = state_by_id[node.node_id]
-            group = None
-            reasons: list[str] = []
-            if state.status == AbilityStatus.WEAK and state.objective_evidence_count > 0:
-                group, reasons = "confirmed_weak", ["OBJECTIVE_SCORE_BELOW_0_60"]
-            elif state.status == AbilityStatus.LEARNING and len(observed.get(node.node_id, [])) >= 2 \
-                    and observed[node.node_id][-1] < observed[node.node_id][-2]:
-                group, reasons = "regressing_learning", ["RECENT_OBJECTIVE_SCORE_REGRESSED"]
-            elif node.node_id not in covered and all(
-                prerequisite in covered for prerequisite in node.prerequisites if prerequisite in names
-            ):
-                group, reasons = "ready_uncovered", ["CURRICULUM_COVERAGE_PENDING", "PREREQUISITES_COVERED"]
-            elif state.status == AbilityStatus.SELF_REPORTED and (state.self_report_prior or 0) < 0.60:
-                group, reasons = "low_self_report", ["LOW_CONFIDENCE_SELF_REPORT_BELOW_0_60"]
-            elif node.node_id not in covered:
-                missing = [prerequisite for prerequisite in node.prerequisites if prerequisite in names and prerequisite not in covered]
-                group, reasons = "blocked_uncovered", ["CURRICULUM_COVERAGE_PENDING", "PREREQUISITE_REQUIRED", *missing]
-            else:
-                group, reasons = "maintain_mastery", ["CURRICULUM_NODE_COVERED"]
-            candidates.append((group_order[group], -downstream(node.node_id),
-                               state.mastery_score is None, state.mastery_score or 0.0,
-                               sort_time(state.last_updated),
-                               node.node_id, group, reasons, state))
-        candidates.sort(key=lambda item: item[:6])
-        return [WeaknessPriorityV1(
-            skill_node_id=item[5], rank=index, priority_group=item[6], reason_codes=item[7],
-            mastery_score=item[8].mastery_score, confidence=item[8].confidence,
-            downstream_count=-item[1],
-            coverage_status="covered" if item[5] in covered else "uncovered",
-            published_resource_count=published_counts[item[5]],
-        ) for index, item in enumerate(candidates, start=1)]
+        return rank_weakness_priorities(nodes, states, published_counts, events)
 
     def focus_snapshot(
         self,
@@ -942,44 +835,9 @@ class MasteryService:
         priorities = self.weakness_priorities(profile)
         states = self.repository.list_states(profile.learner_id, profile.knowledge_base_id)
         snapshot_hash = _canonical_hash([item.model_dump(mode="json") for item in states])
-        skipped: list[LearnerFocusSkippedV1] = []
-        if explicit_node_ids:
-            focus_mode = "explicit"
-            adopted = list(dict.fromkeys(explicit_node_ids))[:2]
-            skipped = [LearnerFocusSkippedV1(
-                skill_node_id=item.skill_node_id, reason_code="EXPLICIT_TARGETS_SELECTED"
-            ) for item in priorities if item.skill_node_id not in adopted]
-        elif mode == "off":
-            focus_mode = "off"
-            adopted = []
-            skipped = [LearnerFocusSkippedV1(
-                skill_node_id=item.skill_node_id, reason_code="PROFILE_FOCUS_DISABLED"
-            ) for item in priorities]
-        else:
-            focus_mode = "auto"
-            remediation = [
-                item for item in priorities
-                if item.priority_group in {"confirmed_weak", "regressing_learning"}
-            ]
-            ready_uncovered = [
-                item for item in priorities if item.priority_group == "ready_uncovered"
-            ]
-            # Reserve one slot for a ready, uncovered node whenever possible.
-            # This makes coverage progress even while a learner needs repeated
-            # remediation, instead of allowing weak nodes to monopolize every
-            # subsequent resource batch.
-            adopted = [item.skill_node_id for item in remediation[:1]]
-            if ready_uncovered and len(adopted) < 2:
-                adopted.append(ready_uncovered[0].skill_node_id)
-            for item in [*remediation[1:], *ready_uncovered[1:]]:
-                if len(adopted) >= 2:
-                    break
-                adopted.append(item.skill_node_id)
-            skipped = [LearnerFocusSkippedV1(
-                skill_node_id=item.skill_node_id, reason_code="MAX_FOCUS_NODES_REACHED"
-            ) for item in priorities if item.skill_node_id not in adopted]
-            if not priorities:
-                skipped = [LearnerFocusSkippedV1(skill_node_id="*", reason_code="NO_ELIGIBLE_WEAKNESS")]
+        focus_mode, adopted, skipped = select_focus_nodes(
+            priorities, mode=mode, explicit_node_ids=explicit_node_ids,
+        )
         return LearnerFocusSnapshotV1(
             learner_id=profile.learner_id,
             knowledge_base_id=profile.knowledge_base_id,

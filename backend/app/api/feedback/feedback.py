@@ -1,3 +1,4 @@
+from app.services.generation.dispatch import schedule_generation
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 
 from app.api.dependencies import ensure_profile_access
@@ -41,8 +42,8 @@ def submit_learning_attempt(
     def schedule(learner, generate_request, run_id):
         if service.generation_job_service is None:
             return
-        background_tasks.add_task(
-            service.generation_job_service.run_job,
+        schedule_generation(
+            service.generation_job_service, background_tasks,
             learner,
             generate_request,
             run_id,
@@ -83,8 +84,8 @@ def submit_run_attempt(
     def schedule(learner, generate_request, run_id):
         if feedback_service.generation_job_service is None:
             return
-        background_tasks.add_task(
-            feedback_service.generation_job_service.run_job,
+        schedule_generation(
+            feedback_service.generation_job_service, background_tasks,
             learner,
             generate_request,
             run_id,
@@ -149,8 +150,8 @@ def submit_batch_attempt(
 
     def schedule(learner, generate_request, run_id):
         if feedback_service.generation_job_service is not None:
-            background_tasks.add_task(
-                feedback_service.generation_job_service.run_job,
+            schedule_generation(
+                feedback_service.generation_job_service, background_tasks,
                 learner,
                 generate_request,
                 run_id,
@@ -185,7 +186,7 @@ def select_feedback_followup(
 
     def schedule(learner, generate_request, run_id):
         if service.generation_job_service is not None:
-            background_tasks.add_task(service.generation_job_service.run_job, learner, generate_request, run_id)
+            schedule_generation(service.generation_job_service, background_tasks, learner, generate_request, run_id)
 
     try:
         return service.choose_followup(profile, payload, schedule_followup=schedule)

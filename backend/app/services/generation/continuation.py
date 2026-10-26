@@ -157,6 +157,7 @@ def execute_continuation(
     *,
     feedback_repo_factory: Callable[[], BaseFeedbackLoopRepository],
     run_id: str | None = None,
+    submission_hash: str | None = None,
 ) -> tuple[GenerationJobCreateResponse, GenerateRequest]:
     """Create the job, attach feedback lineage, then supersede its source.
 
@@ -166,6 +167,8 @@ def execute_continuation(
     create_kwargs = {"batch_id": prepared.batch_id}
     if run_id is not None:
         create_kwargs["run_id"] = run_id
+    if submission_hash is not None:
+        create_kwargs["submission_hash"] = submission_hash
     job = generation_job_service.create_job(
         learner,
         prepared.generation_request,

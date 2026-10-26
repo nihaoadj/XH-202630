@@ -8,13 +8,13 @@ from app.models.learning_documents.types import SUPPORTED_RESOURCE_TYPES
 from app.models.learners.mastery import MASTERY_CONFIRMATION_THRESHOLD
 from app.models.reviews.claims import ClaimMetricStatus, compute_claim_metric
 from app.models.shared.workflow import normalize_review_status, review_status_is_approved
-from app.models.reports.contracts import ReportRevisionPartsV1
 from datetime import datetime, timedelta, timezone
 import base64
-import hashlib
 import json
+import time
 
 from app.services.reports import projections
+from app.services.reports.snapshots import ReportSnapshot, SnapshotCache, canonical_hash, next_boundary, revision_parts
 
 
 # Increment this whenever a report's client-visible projection changes without
@@ -22,7 +22,7 @@ from app.services.reports import projections
 # ETag/revision so a browser cannot retain a structurally stale report after a
 # deployment (for example, the radar changing from measured nodes to the full
 # knowledge graph).
-REPORT_PROJECTION_VERSION = "4.2-weighted-accuracy"
+REPORT_PROJECTION_VERSION = "4.3-complete-snapshots"
 
 
 class ReportSnapshotUnstable(RuntimeError):
@@ -49,6 +49,9 @@ class ReportService:
         claim_repo=None,
         audit_repo=None,
         diagnosis_repo=None,
+        read_repo=None,
+        profile_repo=None,
+        clock=None,
     ):
         self.resource_repo = resource_repo
         self.feedback_repo = feedback_repo
@@ -58,19 +61,62 @@ class ReportService:
         self.claim_repo = claim_repo
         self.audit_repo = audit_repo
         self.diagnosis_repo = diagnosis_repo
+        self.read_repo = read_repo
+        self.profile_repo = profile_repo
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._cache = SnapshotCache()
+
+    def _reader(self):
+        if self.read_repo is None:
+            return None
+        repositories = [self.resource_repo, self.feedback_repo, self.feedback_loop_repo,
+                        self.generation_job_repo, self.claim_repo, self.audit_repo,
+                        self.diagnosis_repo, self.profile_repo]
+        if self.mastery_service:
+            repositories.extend([self.mastery_service.repository, self.mastery_service.curriculum_repo,
+                                 self.mastery_service.tier_progress_repo,
+                                 self.mastery_service.resource_repo,
+                                 self.mastery_service.knowledge_service.catalog])
+            if self.mastery_service.knowledge_service.catalog is None:
+                return None
+        return self.read_repo if self.read_repo.supports(repositories) else None
+
+    @staticmethod
+    def _decode_cursor(cursor):
+        if not cursor:
+            return None
+        try:
+            raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode("utf-8")
+            boundary = json.loads(raw)
+            if not isinstance(boundary, dict) or not isinstance(boundary["resource_id"], str) or not boundary["resource_id"]:
+                raise ValueError("missing resource id")
+            if boundary["published_at"] is not None and not isinstance(boundary["published_at"], str):
+                raise ValueError("invalid publication time")
+            return boundary
+        except (ValueError, TypeError, KeyError, UnicodeDecodeError) as exc:
+            raise ReportCursorInvalid("报告分页游标无效") from exc
 
     def list_resource_credibility(self, learner_id: str, *, limit: int = 20, cursor: str | None = None) -> dict:
         """Return the existing ordered credibility projection and cursor page."""
-        items = self._resource_credibility(self._visible_resources(learner_id))["items"]
+        boundary = self._decode_cursor(cursor)
+        reader = self._reader()
         start = 0
-        if cursor:
+        if reader is not None:
             try:
-                decoded = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode("utf-8")
-                boundary = json.loads(decoded)
+                resources = reader.resource_page(learner_id, limit=limit, boundary=boundary,
+                                                 include_jobs=self.generation_job_repo is not None)
+            except ValueError as exc:
+                raise ReportCursorInvalid("报告分页游标无效") from exc
+            items = self._resource_credibility(resources)["items"]
+        else:
+            items = self._resource_credibility(self._visible_resources(learner_id))["items"]
+            if boundary:
                 key = (boundary["published_at"], boundary["resource_id"])
-                start = next(index + 1 for index, item in enumerate(items) if ((item["published_at"].isoformat() if item["published_at"] else None), item["resource_id"]) == key)
-            except (ValueError, KeyError, StopIteration, json.JSONDecodeError, UnicodeDecodeError):
-                raise ReportCursorInvalid("报告分页游标无效")
+                try:
+                    start = next(index + 1 for index, item in enumerate(items)
+                                 if ((item["published_at"].isoformat() if item["published_at"] else None), item["resource_id"]) == key)
+                except StopIteration as exc:
+                    raise ReportCursorInvalid("报告分页游标无效") from exc
         page = items[start:start + limit]
         next_cursor = None
         if start + limit < len(items) and page:
@@ -80,10 +126,78 @@ class ReportService:
         return {"items": page, "next_cursor": next_cursor}
 
     def build_report(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> dict:
+        return self.get_snapshot(profile, window_days=window_days, now=now).materialize()
+
+    def get_snapshot(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> ReportSnapshot:
+        if window_days not in {7, 30, 90}:
+            raise ValueError("window_days must be one of 7, 30, 90")
+        reader = self._reader()
+        if reader is None:
+            return self._uncached_snapshot(profile, window_days, now)
+        waited = 0.0
+        # Recheck after waiting: a write/time boundary can occur while another
+        # subscriber builds. All database work uses repository-owned Sessions.
+        while True:
+            stamp = self._utc(now if now is not None else self._clock())
+            token = reader.read_token()
+            if token is None:
+                return self._uncached_snapshot(profile, window_days, now)
+            current = reader.profiles.get(profile.learner_id)
+            if current is None or current.user_id != profile.user_id:
+                self._cache.discard_learner(profile.learner_id)
+                raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+            key = (current.learner_id, current.knowledge_base_id, current.user_id, window_days, REPORT_PROJECTION_VERSION)
+            cached = self._cache.get(key, token, stamp)
+            if cached is not None:
+                return cached
+            try:
+                wait_start = time.monotonic()
+                acquired = self._cache.acquire(key, timeout=self._cache.wait_seconds - waited)
+                if not acquired:
+                    waited += time.monotonic() - wait_start
+            except TimeoutError as exc:
+                raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE") from exc
+            if not acquired:
+                continue
+            try:
+                for _ in range(3):
+                    token = reader.read_token()
+                    if token is None:
+                        return self._uncached_snapshot(profile, window_days, now)
+                    current = reader.profiles.get(profile.learner_id)
+                    if current is None or current.user_id != profile.user_id:
+                        self._cache.discard_learner(profile.learner_id)
+                        raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+                    stamp = self._utc(now if now is not None else self._clock())
+                    context = {}
+                    report = self._build_report_once(current, window_days=window_days, now=stamp, read_context=context)
+                    boundary = context["valid_until"]
+                    finished = self._utc(now if now is not None else self._clock())
+                    if reader.read_token() == token and (boundary is None or finished < boundary) and finished >= stamp:
+                        snapshot = ReportSnapshot(report, valid_until=boundary)
+                        actual_key = (current.learner_id, current.knowledge_base_id, current.user_id, window_days, REPORT_PROJECTION_VERSION)
+                        self._cache.put(actual_key, token, snapshot)
+                        return snapshot
+                raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+            finally:
+                self._cache.release(key)
+
+    def _uncached_snapshot(self, profile, window_days, now):
         for _ in range(3):
-            report = self._build_report_once(profile, window_days=window_days, now=now)
-            if self._snapshot_is_current(profile, report, window_days):
-                return report
+            if self.profile_repo is not None:
+                current = self.profile_repo.get(profile.learner_id)
+                if current is None or current.user_id != profile.user_id:
+                    self._cache.discard_learner(profile.learner_id)
+                    raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+                profile = current
+            stamp = self._utc(now if now is not None else self._clock())
+            context = {}
+            report = self._build_report_once(profile, window_days=window_days, now=stamp, read_context=context)
+            current = self._snapshot_is_current(profile, report, window_days)
+            finished = self._utc(now if now is not None else self._clock())
+            boundary = context["valid_until"]
+            if current and finished >= stamp and (boundary is None or finished < boundary):
+                return ReportSnapshot(report, valid_until=boundary)
         raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
 
     @staticmethod
@@ -164,7 +278,7 @@ class ReportService:
             utc=ReportService._utc,
         )
 
-    def _build_report_once(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> dict:
+    def _build_report_once(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None, read_context: dict | None = None) -> dict:
         """构建学情报告"""
         if window_days not in {7, 30, 90}:
             raise ValueError("window_days must be one of 7, 30, 90")
@@ -174,6 +288,8 @@ class ReportService:
             self.mastery_service.next_generation_options(profile)
             if self.mastery_service and profile.knowledge_base_id else None
         )
+        if generation_options is not None:
+            generation_options = generation_options.model_copy(update={"created_at": generated_at})
         ordered_nodes = self._ordered_ability_nodes(
             ability_projection.nodes if ability_projection else []
         )
@@ -188,7 +304,7 @@ class ReportService:
         radar = projections.ability_radar(
             ordered_nodes, catalog_nodes, order_nodes=self._ordered_ability_nodes,
         )
-        resources = self._visible_resources(profile.learner_id)
+        resources = sorted(self._visible_resources(profile.learner_id), key=lambda item: (self._utc(item.created_at) if item.created_at else datetime.min.replace(tzinfo=timezone.utc), item.resource_id))
         feedback = self.feedback_repo.list_by_learner(profile.learner_id)
         weak_points = ([node.name for node in measured_nodes if node.mastery.status.value == "weak"]
                        if ability_projection else list(dict.fromkeys(profile.weak_points)))
@@ -197,7 +313,7 @@ class ReportService:
         # Aggregates must not silently become a "latest 10" view.  The UI
         # lists are bounded later; revision and activity consume all durable
         # formal attempts available from the repository.
-        attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10_000) if self.feedback_loop_repo else []
+        attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, None) if self.feedback_loop_repo else []
         diagnostic_runs = self.diagnosis_repo.list_runs_by_learner(profile.learner_id) if self.diagnosis_repo else []
         initial_flow = self._initial_diagnostic_flow(profile)
         loop_results = self.feedback_loop_repo.list_results(profile.learner_id, 10) if self.feedback_loop_repo else []
@@ -256,23 +372,17 @@ class ReportService:
         learning_path_graph = self._build_learning_path_graph(
             ability_projection, path, generation_options, current_batch_node_ids=current_batch_node_ids,
         )
-        revision_parts = self._revision_parts(
-            profile, ability_projection, attempts, resources, window_days, credibility["items"], diagnostic_runs=visible_diagnostic_runs,
-            resource_difficulty_curve=resource_difficulty_curve,
-            learning_path_graph=learning_path_graph,
-        )
-        report_revision = self._revision(revision_parts, window_days)
         data_as_of = self._data_as_of(profile, attempts, resources, mastery_events)
-        return {
+        report = {
             "report_schema_version": "4.1",
-            "report_revision": report_revision,
+            "report_revision": "",
             "data_as_of": data_as_of,
             "window": {
                 "window_days": window_days,
                 "start": activity["window_start"],
                 "end": activity["window_end"],
             },
-            "freshness": {"source_revisions": revision_parts, "warnings": []},
+            "freshness": {"source_revisions": {}, "warnings": []},
             "report_availability": {
                 "status": "calibration_pending" if calibration_pending else "ready",
                 "message": "初始诊断尚未完成，暂不生成正式学习结论" if calibration_pending else "报告已基于正式测评证据生成",
@@ -496,31 +606,24 @@ class ReportService:
             "data_warnings": ability_projection.data_warnings if ability_projection else ["MASTERY_PROJECTION_UNAVAILABLE"],
         }
 
+        parts = revision_parts(report)
+        report["freshness"]["source_revisions"] = parts
+        report["report_revision"] = self._revision(parts, window_days)
+        if read_context is not None:
+            read_context["valid_until"] = next_boundary(
+                (item.submitted_at for item in attempts), (item.occurred_at for item in mastery_events),
+                generated_at, window_days,
+            )
+        return report
+
     def _snapshot_is_current(self, profile, report, window_days):
-        projection = self.mastery_service.ability_nodes(profile) if self.mastery_service else None
-        generation_options = (
-            self.mastery_service.next_generation_options(profile)
-            if self.mastery_service and profile.knowledge_base_id else None
-        )
-        attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10_000) if self.feedback_loop_repo else []
-        diagnostic_runs = self.diagnosis_repo.list_runs_by_learner(profile.learner_id) if self.diagnosis_repo else []
-        if self._initial_diagnostic_flow(profile).get("status") in {"pending", "retest"}:
-            diagnostic_runs = []
-        resources = self._visible_resources(profile.learner_id)
-        path = self.feedback_loop_repo.get_current_path(profile.learner_id) if self.feedback_loop_repo else None
-        credibility = self._resource_credibility(resources, knowledge_base_id=profile.knowledge_base_id)
-        current_parts = self._revision_parts(
-            profile, projection, attempts, resources, window_days, credibility["items"], diagnostic_runs=diagnostic_runs,
-            resource_difficulty_curve=self._build_resource_difficulty_curve(
-                projection, resources, credibility_items=credibility["items"],
-                credibility_summary=credibility["summary"], attempts=attempts,
-            ),
-            learning_path_graph=self._build_learning_path_graph(
-                projection, path, generation_options,
-                current_batch_node_ids=self._latest_active_batch_target_ids(profile),
-            ),
-        )
-        return current_parts == report["freshness"]["source_revisions"]
+        if self.profile_repo is not None:
+            current = self.profile_repo.get(profile.learner_id)
+            if current is None or current.user_id != profile.user_id:
+                return False
+            profile = current
+        comparison = self._build_report_once(profile, window_days=window_days, now=report["generated_at"])
+        return comparison["report_revision"] == report["report_revision"]
 
     def _average_hallucination_rate(self, resources) -> float:
         values = [
@@ -536,8 +639,7 @@ class ReportService:
 
     @staticmethod
     def _canonical_hash(value: object) -> str:
-        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return canonical_hash(value)
 
     def _learning_activity(self, attempts, now: datetime, window_days: int) -> dict:
         end = now.astimezone(timezone.utc)
@@ -686,45 +788,6 @@ class ReportService:
             ordered_ability_nodes=self._ordered_ability_nodes,
         )
 
-    def _revision_parts(
-        self, profile, ability_projection, attempts, resources, window_days, credibility_items=None,
-        *, resource_difficulty_curve=None, learning_path_graph=None, diagnostic_runs=(),
-    ):
-        flow = self._initial_diagnostic_flow(profile)
-        calibration_pending = flow.get("status") in {"pending", "retest"}
-        profile_part = {"learner_id": profile.learner_id, "knowledge_base_id": profile.knowledge_base_id,
-                        "profile_version": "initial_calibration_pending" if calibration_pending else profile.profile_version,
-                        "skill_level": profile.skill_level,
-                        "learning_goal": profile.learning_goal}
-        mastery_part = [node.model_dump(mode="json") for node in sorted((ability_projection.nodes if ability_projection else []), key=lambda item: item.skill_node_id)]
-        activity_part = [{"id": item.attempt_id, "submitted_at": item.submitted_at, "results": [x.model_dump(mode="json") for x in item.knowledge_point_results],
-                          "assessment": {key: item.metadata.get(key) for key in ("assessment_kind", "assessment_session_id", "assessment_form_id", "scoring_audit")},
-                          "question_trace": [{key: trace.get(key) for key in ("question_id", "skill_node_id", "diagnostic_dimension")} for trace in item.metadata.get("question_trace", []) if isinstance(trace, dict)]}
-                         for item in sorted(attempts, key=lambda item: (self._utc(item.submitted_at), item.attempt_id))]
-        activity_part.append({"diagnostic_traces": [
-            {"id": run.diagnostic_result_id, "created_at": run.created_at,
-             "trace": (run.raw_result or {}).get("blind_spot_trace", [])}
-            for run in sorted(diagnostic_runs, key=lambda run: (self._utc(run.created_at) if run.created_at else datetime.min.replace(tzinfo=timezone.utc), run.diagnostic_result_id))
-        ]})
-        resource_part = [{"id": item.resource_id, "version": item.version, "publication": item.publication_status,
-                          "review": item.review_status, "review_id": item.review_id, "claim_metric": item.claim_metric_status,
-                          "claim_rate": item.claim_hallucination_rate, "refs": [ref.model_dump(mode="json") for ref in sorted(item.source_refs, key=lambda ref: (ref.evidence_id or "", ref.doc_id, ref.chunk_id or ""))]}
-                         for item in sorted(resources, key=lambda item: (item.resource_id, item.version))]
-        # Review issues and immutable Claim/Judgement verdicts live in their
-        # own repositories.  Projecting only their safe credibility summary
-        # ensures a quality correction changes revision even when the profile
-        # version is deliberately unchanged.
-        if credibility_items is not None:
-            resource_part.append({"credibility": credibility_items})
-        return ReportRevisionPartsV1(
-            profile=self._canonical_hash(profile_part),
-            mastery=self._canonical_hash(mastery_part),
-            activity=self._canonical_hash(activity_part),
-            text_resources=self._canonical_hash(resource_part),
-            resource_match=self._canonical_hash(resource_difficulty_curve or {}),
-            path=self._canonical_hash(learning_path_graph or {}),
-        ).model_dump()
-
     def _revision(self, parts, window_days):
         return "rpt_" + self._canonical_hash({
             "parts": parts,
@@ -783,10 +846,25 @@ class ReportService:
 
     def _resource_credibility(self, resources, *, knowledge_base_id: str | None = None):
         items = []
+        resources = [resource for resource in resources
+                     if resource.publication_status == "published" and str(resource.representation) in {"text", "ResourceRepresentation.TEXT"}
+                     and resource.resource_type in SUPPORTED_RESOURCE_TYPES]
+        resource_ids = [item.resource_id for item in resources]
+        reviews = {}
+        if self.audit_repo:
+            batch = getattr(self.audit_repo, "get_reviews_by_resources", None)
+            reviews = batch(resource_ids) if batch else {rid: self.audit_repo.get_review_by_resource(rid) for rid in dict.fromkeys(resource_ids)}
+        runs = list(dict.fromkeys(item.run_id for item in resources if item.run_id and item.review_id))
+        claim_groups, judgement_groups = {}, {}
+        if self.claim_repo:
+            for method, single, target in (("list_claims_by_runs", "list_claims_by_run", claim_groups),
+                                           ("list_judgements_by_runs", "list_judgements_by_run", judgement_groups)):
+                batch = getattr(self.claim_repo, method, None)
+                values = batch(runs) if batch else [item for run in runs for item in getattr(self.claim_repo, single)(run)]
+                for item in values:
+                    target.setdefault((item.run_id, item.resource_id, item.resource_version, item.review_id), []).append(item)
         for resource in resources:
-            if resource.publication_status != "published" or str(resource.representation) not in {"text", "ResourceRepresentation.TEXT"} or resource.resource_type not in SUPPORTED_RESOURCE_TYPES:
-                continue
-            review = self.audit_repo.get_review_by_resource(resource.resource_id) if self.audit_repo else None
+            review = reviews.get(resource.resource_id)
             review_matches = bool(review and review.review_id == resource.review_id)
             review_status_value = normalize_review_status(
                 review.status if review_matches else resource.review_status,
@@ -796,7 +874,7 @@ class ReportService:
             review_passed = review_matches and review_status_is_approved(review_status_value) and not blocking_count
             blocking = review_status_value in {"rejected", "human_review", "revision_requested"} or bool(blocking_count)
             review_status = "failed" if blocking else "passed" if review_passed else "not_measured"
-            claims, judgements = self._claims_for_resource(resource)
+            claims, judgements = self._claims_for_resource(resource, claim_groups, judgement_groups)
             if claims:
                 computed = compute_claim_metric(claims, judgements)
                 metric = computed.metric_status.value
@@ -889,15 +967,12 @@ class ReportService:
                 **{f"credibility_{level}_count": count for level, count in level_counts.items()},
                 "notice": "可信等级表示平台可验证的生成质量证据，不等价于来源机构权威性或绝对事实正确。"}}
 
-    def _claims_for_resource(self, resource):
-        if not self.claim_repo or not resource.run_id or not resource.review_id:
-            return [], []
-        claims = [item for item in self.claim_repo.list_claims_by_run(resource.run_id)
-                  if item.resource_id == resource.resource_id and item.resource_version == resource.version and item.review_id == resource.review_id]
+    @staticmethod
+    def _claims_for_resource(resource, claim_groups, judgement_groups):
+        binding = (resource.run_id, resource.resource_id, resource.version, resource.review_id)
+        claims = claim_groups.get(binding, [])
         claim_ids = {item.claim_id for item in claims}
-        judgements = [item for item in self.claim_repo.list_judgements_by_run(resource.run_id)
-                      if item.claim_id in claim_ids and item.resource_id == resource.resource_id and item.resource_version == resource.version and item.review_id == resource.review_id]
-        return claims, judgements
+        return claims, [item for item in judgement_groups.get(binding, []) if item.claim_id in claim_ids]
 
     def _visible_resources(self, learner_id: str):
         """Return the learner-facing projection, excluding superseded versions."""

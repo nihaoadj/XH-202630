@@ -1,3 +1,5 @@
+from app.core.execution import ExecutionFence, current_execution_fence, execution_fence
+from app.db.generation.fencing import install_execution_fencing
 import uuid
 import os
 import socket
@@ -9,6 +11,8 @@ from app.core.security.errors import ApplicationError, ErrorCode
 from app.core.storage.file_storage import save_text_resource
 from app.core.health import ensure_generation_ready
 from app.config import get_settings
+from app.models.knowledge.knowledge import RESOURCE_AWARE_STRATEGY, LEGACY_RETRIEVAL_STRATEGY
+from app.models.learning_documents.types import GENERAL_GENERATION_RESOURCE_TYPES
 from app.db.learning_documents.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
 from app.db.audit.base import PersistenceConflict
@@ -64,6 +68,12 @@ def build_workflow_state(
             diagnostic_result_id=req.diagnostic_result_id,
             target_skill_nodes=req.target_skill_nodes,
             resource_types=req.resource_types,
+            retrieval_strategy_version=(
+                RESOURCE_AWARE_STRATEGY
+                if settings.resource_aware_retrieval_enabled
+                and set(req.resource_types) <= set(GENERAL_GENERATION_RESOURCE_TYPES)
+                else LEGACY_RETRIEVAL_STRATEGY
+            ),
             difficulty_preference=req.difficulty_preference,
             generation_mode=req.generation_mode or "standard",
             include_review=req.include_review,
@@ -260,6 +270,7 @@ def _request_snapshot(req: GenerateRequest, state: WorkflowState) -> dict:
         "diagnostic_result_id": req.diagnostic_result_id,
         "target_skill_nodes": list(req.target_skill_nodes),
         "resource_types": list(req.resource_types),
+        "retrieval_strategy_version": state.get("retrieval_strategy_version", LEGACY_RETRIEVAL_STRATEGY),
         "difficulty_preference": req.difficulty_preference,
         "generation_mode": req.generation_mode or "standard",
         "include_review": req.include_review,
@@ -325,7 +336,15 @@ class GenerationService:
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         return self.generate_with_run_id(learner, req)
 
-    def generate_with_run_id(
+    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None):
+        if current_execution_fence() is not None or not hasattr(self.audit_repo, "session_factory"):
+            return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id)
+        install_execution_fencing()
+        run_id = run_id or str(uuid.uuid4())
+        with execution_fence(ExecutionFence(run_id, f"text-{uuid.uuid4()}")):
+            return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id)
+
+    def _generate_with_run_id(
         self,
         learner: LearnerProfile,
         req: GenerateRequest,
@@ -356,7 +375,7 @@ class GenerationService:
                     topic=req.topic,
                     request_snapshot=request_snapshot,
                     request_hash=canonical_hash(request_snapshot),
-                    owner_instance_id=f"{socket.gethostname()}:{os.getpid()}",
+                    owner_instance_id=(current_execution_fence().owner if current_execution_fence() else f"{socket.gethostname()}:{os.getpid()}"),
                     lease_expires_at=lease_expires_at,
                     occurred_at=started_at,
                 )

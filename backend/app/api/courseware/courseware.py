@@ -11,7 +11,7 @@ from app.core.courseware.security import security_policy_for_artifact
 from app.models.courseware import (
     CoursewareBatchCreateRequest, CoursewareBatchJobResponse, CoursewareJobCreateRequest, CoursewareJobDetail, CoursewareJobListResponse, CoursewareJobResponse, CoursewareResourceDetail,
 )
-from app.models.courseware.events import CoursewareLearningEventBatch
+from app.models.courseware.events import CoursewareLearningEventAck, CoursewareLearningEventBatch
 
 
 router = APIRouter()
@@ -143,25 +143,10 @@ def retry_courseware_scene(run_id: str, scene_id: str, request: Request):
 def get_courseware_scene_review(run_id: str, scene_id: str, request: Request):
     """Return review-safe scene diagnostics without exposing prompts or raw model output."""
     _authorized_job(run_id, request)
-    detail = _service(request).get_job_detail(run_id)
-    if detail is None or all(scene.scene_id != scene_id for scene in detail.scenes):
+    review = _service(request).get_scene_review(run_id, scene_id)
+    if review is None:
         raise HTTPException(status_code=404, detail="课件场景不存在")
-    service = _service(request)
-    spec = service.repo.get_spec_by_run(run_id)
-    stored = service.repo.get_scene(scene_id)
-    if spec is None or stored is None:
-        raise HTTPException(status_code=404, detail="课件场景不存在")
-    return {
-        "scene_id": scene_id,
-        "scene": stored["scene_json"],
-        "status": stored["status"],
-        "attempt": stored["attempt"],
-        "input_snapshot_hash": stored.get("input_snapshot_hash"),
-        "agent_version": stored.get("agent_version"),
-        "prompt_version": stored.get("prompt_version"),
-        "reviews": [review for review in detail.reviews if review.get("scene_id") in {None, scene_id}],
-        "revisions": service.repo.list_scene_revisions(scene_id),
-    }
+    return review
 
 
 @router.post("/courseware/jobs/{run_id}/publish", response_model=CoursewareJobResponse)
@@ -177,7 +162,7 @@ def get_courseware_resource(resource_id: str, request: Request):
     return _authorized_resource(resource_id, request)
 
 
-@router.post("/courseware/items/{resource_id}/learning-events")
+@router.post("/courseware/items/{resource_id}/learning-events", response_model=CoursewareLearningEventAck)
 def ingest_courseware_learning_events(resource_id: str, payload: CoursewareLearningEventBatch, request: Request):
     resource = _authorized_resource(resource_id, request)
     current_release = resource.released_release_id

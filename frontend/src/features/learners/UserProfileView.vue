@@ -116,7 +116,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
-import { userApi } from '../../api'
+import { userApi } from './api.js'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()

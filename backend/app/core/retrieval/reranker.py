@@ -161,6 +161,7 @@ def rerank_documents(
     top_k: int,
     *,
     profile: dict[str, object] | None = None,
+    candidate_limit: int | None = None,
 ) -> list[tuple[Document, float]]:
     """Score query-passage pairs, then select a diverse final evidence set."""
     if top_k <= 0:
@@ -175,14 +176,14 @@ def rerank_documents(
                 rerank_status="disabled",
                 rerank_model_load_ms=0.0,
                 rerank_inference_ms=0.0,
-                rerank_candidate_count=min(len(candidates), settings.rerank_candidate_k),
+                rerank_candidate_count=min(len(candidates), candidate_limit or settings.rerank_candidate_k),
                 rerank_pair_count=0,
                 rerank_fallback_count=1,
                 fallback_reason="reranker_disabled",
             )
         return mark_rerank_fallback(candidates, top_k, "disabled")
 
-    limited_candidates = candidates[: settings.rerank_candidate_k]
+    limited_candidates = candidates[: candidate_limit or settings.rerank_candidate_k]
     pair_queries = [query] * len(limited_candidates) if isinstance(query, str) else list(query)
     if len(pair_queries) != len(limited_candidates):
         raise ValueError("rerank query count must match candidate count")

@@ -3,6 +3,8 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.learning_documents.state import AgentState
+from app.agents.shared.evidence_scope import allocation_for_state
+from app.config import get_settings
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.agent_contracts import (
@@ -12,6 +14,7 @@ from app.models.shared.agent_contracts import (
     PlannerOutput,
     build_trace_item,
     require_agent_fallback,
+    make_error_info,
     start_step,
 )
 from app.models.shared.llm import LLMCallContext
@@ -98,16 +101,21 @@ def plan_node(
     if not evidence:
         raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
 
+    allocation = allocation_for_state(state)
     evidence_summary = [
         {
             "evidence_id": item.evidence_id,
             "source_path": item.locator.source_path,
             "section": item.locator.section,
-            "excerpt": item.excerpt[:160],
+            "excerpt": item.excerpt if allocation else item.excerpt[:160],
             "normalized_score": item.normalized_score,
         }
-        for item in evidence[:5]
+        for item in (evidence if allocation else evidence[:5])
     ]
+
+    if allocation:
+        for summary, item in zip(evidence_summary, evidence):
+            summary["locator"] = item.locator.model_dump(mode="json")
 
     user_input = f"""
 学习主题：{node_input.topic}
@@ -131,13 +139,28 @@ def plan_node(
 {json.dumps(evidence_summary, ensure_ascii=False)}
 """
 
+    if allocation:
+        user_input += "\n已选资源类型与冻结分配（正文仅在上述证据中提供）：\n" + json.dumps({
+            "resource_types": node_input.resource_types,
+            "allocation": allocation.model_dump(mode="json"),
+            "node_evidence_map": node_input.node_evidence_map,
+            "available_evidence_ids": {kind: allocation.available_ids(kind) for kind in node_input.resource_types},
+        }, ensure_ascii=False)
     llm_result = None
     error = None
     try:
         messages = [
-            SystemMessage(content=PLANNER_PROMPT),
+            SystemMessage(content=PLANNER_PROMPT + ("\n只为已选资源类型输出要求；各类型要求必须依据其 available_evidence_ids，不得调整冻结分配。" if allocation else "")),
             HumanMessage(content=user_input),
         ]
+        options = llm_gateway.options_for("planner", temperature=0.1)
+        if allocation:
+            settings = get_settings()
+            # UTF-8 bytes plus framing reserve bound tokens conservatively; this is not tokenization.
+            estimated = len(json.dumps({"messages": [message.content for message in messages], "schema": PlannerLLMOutput.model_json_schema()}, ensure_ascii=False).encode("utf-8")) + 1024
+            window = settings.resource_aware_planner_context_tokens
+            if window is None or estimated > settings.resource_aware_planner_input_budget_tokens or estimated + options.max_output_tokens > window:
+                raise LLMGatewayError(error=make_error_info(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, source="planner", category="input_budget", safe_detail="complete_planner_input_budget_exceeded_or_window_unconfigured"), call_id="planner-input-budget", retry_count=0, latency_ms=0, attempts=[])
         llm_result = llm_gateway.invoke_structured(
             messages=messages,
             output_schema=PlannerLLMOutput,
@@ -149,14 +172,18 @@ def plan_node(
                 generation_attempt=step_context["attempt"],
                 workflow_deadline_at=state.get("workflow_deadline_at"),
             ),
-            options=llm_gateway.options_for("planner", temperature=0.1),
+            options=options,
         )
         plan = llm_result.output.model_dump(mode="python")
     except LLMGatewayError as exc:
         error = require_agent_fallback(state, exc.error)
         llm_result = exc
         plan = _fallback_plan(state)
+        if exc.error.category == "input_budget":
+            plan["decision_reason"] = "完整输入预算预检未通过，未执行 AI 规划；使用显式降级规则规划。"
 
+    if allocation:
+        plan["resource_requirements"] = {kind: value for kind, value in plan.get("resource_requirements", {}).items() if kind in node_input.resource_types}
     path = plan.get("learning_path", [])
     target_nodes = list(node_input.target_skill_nodes)
     if target_nodes:
@@ -194,7 +221,7 @@ def plan_node(
         input_summary=f"目标节点：{node_input.target_skill_nodes}；诊断盲区：{diagnosis.get('weak_points', learner.weak_points)}；证据数：{len(evidence)}",
         output_summary=f"学习路径：{path_summary}",
         decision_reason=plan.get("decision_reason", "根据诊断盲区、知识库证据和学习目标规划资源生成顺序。"),
-        evidence_refs=[item.evidence_id for item in evidence[:5]],
+        evidence_refs=[item.evidence_id for item in (evidence if allocation else evidence[:5])],
         error=error,
         step_context=step_context,
         llm_metadata=llm_result.trace_metadata() if llm_result else None,

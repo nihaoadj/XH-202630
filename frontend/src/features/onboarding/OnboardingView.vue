@@ -114,7 +114,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { ElMessage } from 'element-plus'
 import { Aim, ArrowLeft, ArrowRight, Check, Collection, Connection, DataAnalysis, Document, EditPen, List, Lock, MagicStick, Monitor, Reading } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { diagnosisApi, generateApi, knowledgeApi, onboardingApi } from '../../api'
+import { diagnosisApi } from '../learners/api.js'
+import { generateApi } from '../generation/api.js'
+import { knowledgeApi } from '../knowledge/api.js'
+import { onboardingApi } from './api.js'
 import { useAuthStore } from '../../stores/auth'
 import { useAppStore } from '../../stores/app'
 

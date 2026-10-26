@@ -95,7 +95,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { diagnosisApi } from '../../api'
+import { diagnosisApi } from './api.js'
 import { useAppStore } from '../../stores/app'
 
 const store = useAppStore()

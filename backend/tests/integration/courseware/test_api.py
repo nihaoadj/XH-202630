@@ -6,6 +6,7 @@ import json
 from types import SimpleNamespace
 
 from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 
 from app.api.courseware import courseware
@@ -149,3 +150,54 @@ def test_reselecting_the_same_supported_resource_creates_a_new_courseware_run(tm
 
     assert first.status_code == 202 and second.status_code == 202
     assert first.json()["jobs"][0]["run_id"] != second.json()["jobs"][0]["run_id"]
+
+
+def _scene_review_fixture(client):
+    run_id = client.post("/api/resources/courseware/jobs/batch", json={
+        "learner_id": "courseware-learner", "resource_ids": ["guide"],
+    }).json()["jobs"][0]["run_id"]
+    repo = client.app.container.courseware_service().repo
+    repo.save_spec({"spec_id": f"spec-{run_id}", "run_id": run_id, "spec_json": {"internal": "synthetic"}})
+    repo.upsert_scene({
+        "scene_id": f"scene-{run_id}", "spec_id": f"spec-{run_id}", "scene_order": 0,
+        "kind": "source_overview", "scene_json": {"title": "合成场景"}, "status": "approved", "attempt": 2,
+        "input_snapshot_hash": "a" * 64, "agent_version": "agent-v1", "prompt_version": "prompt-v1",
+        "review_instruction": "internal", "raw_model_output": "internal", "lease_owner": "internal",
+    })
+    return run_id, f"scene-{run_id}", repo
+
+
+def test_scene_review_keeps_projection_review_filter_and_revision_contract(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    run_id, scene_id, repo = _scene_review_fixture(client)
+    for review_id, target in [("global", None), ("local", scene_id), ("other", "other-scene")]:
+        repo.save_review({"review_id": review_id, "run_id": run_id, "scene_id": target, "issues": []})
+    revision = repo.save_scene_revision({"revision_id": "rev", "scene_id": scene_id,
+                                         "reason": "existing review instruction", "scene_json": {"title": "旧版本"}})
+    response = client.get(f"/api/resources/courseware/jobs/{run_id}/scenes/{scene_id}/review")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"scene_id", "scene", "status", "attempt", "input_snapshot_hash",
+                         "agent_version", "prompt_version", "reviews", "revisions"}
+    assert (body["scene_id"], body["scene"], body["status"], body["attempt"]) == (
+        scene_id, {"title": "合成场景"}, "approved", 2,
+    )
+    assert (body["input_snapshot_hash"], body["agent_version"], body["prompt_version"]) == (
+        "a" * 64, "agent-v1", "prompt-v1",
+    )
+    assert [item["review_id"] for item in body["reviews"]] == ["global", "local"]
+    assert body["revisions"] == [jsonable_encoder(revision)]
+
+
+def test_scene_review_rejects_missing_cross_run_and_unowned_scenes(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    run_id, scene_id, repo = _scene_review_fixture(client)
+    _other_run, other_scene, _repo = _scene_review_fixture(client)
+    for target in ("missing", other_scene):
+        response = client.get(f"/api/resources/courseware/jobs/{run_id}/scenes/{target}/review")
+        assert (response.status_code, response.json()["detail"]) == (404, "课件场景不存在")
+    repo.specs.clear()
+    assert client.get(f"/api/resources/courseware/jobs/{run_id}/scenes/{scene_id}/review").status_code == 404
+    monkeypatch.setattr(courseware, "ensure_profile_access", lambda _request, _profile: None)
+    response = client.get(f"/api/resources/courseware/jobs/{run_id}/scenes/{scene_id}/review")
+    assert (response.status_code, response.json()["detail"]) == (404, "课件任务不存在")

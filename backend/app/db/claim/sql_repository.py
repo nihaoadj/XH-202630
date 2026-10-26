@@ -168,18 +168,32 @@ class SQLClaimRepository(BaseClaimRepository):
         )
 
     def list_claims_by_run(self, run_id: str) -> list[ClaimRecord]:
+        return self.list_claims_by_runs([run_id])
+
+    def list_claims_by_runs(self, run_ids: list[str]) -> list[ClaimRecord]:
+        ids = list(dict.fromkeys(run_ids))
+        result = []
         with self.session_factory() as db:
-            rows = db.query(ResourceClaimORM).filter_by(run_id=run_id, schema_version="2.0").order_by(
-                ResourceClaimORM.resource_id, ResourceClaimORM.resource_version, ResourceClaimORM.claim_index
-            ).all()
-            return [self._claim(row) for row in rows]
+            for start in range(0, len(ids), 500):
+                rows = db.query(ResourceClaimORM).filter(
+                    ResourceClaimORM.run_id.in_(ids[start:start + 500]), ResourceClaimORM.schema_version == "2.0",
+                ).order_by(ResourceClaimORM.resource_id, ResourceClaimORM.resource_version, ResourceClaimORM.claim_index).all()
+                result.extend(self._claim(row) for row in rows)
+        return result
 
     def list_judgements_by_run(self, run_id: str) -> list[ClaimJudgement]:
+        return self.list_judgements_by_runs([run_id])
+
+    def list_judgements_by_runs(self, run_ids: list[str]) -> list[ClaimJudgement]:
+        ids = list(dict.fromkeys(run_ids))
         with self.session_factory() as db:
-            rows = db.query(ClaimJudgementORM).filter_by(run_id=run_id).order_by(
-                ClaimJudgementORM.resource_id, ClaimJudgementORM.resource_version, ClaimJudgementORM.claim_id
-            ).all()
-            evidence = db.query(ClaimEvidenceORM).filter_by(run_id=run_id).all()
+            rows, evidence = [], []
+            for start in range(0, len(ids), 500):
+                chunk = ids[start:start + 500]
+                rows.extend(db.query(ClaimJudgementORM).filter(ClaimJudgementORM.run_id.in_(chunk)).order_by(
+                    ClaimJudgementORM.resource_id, ClaimJudgementORM.resource_version, ClaimJudgementORM.claim_id,
+                ).all())
+                evidence.extend(db.query(ClaimEvidenceORM).filter(ClaimEvidenceORM.run_id.in_(chunk)).all())
             by_judgement: dict[str, list[str]] = {}
             for item in evidence:
                 by_judgement.setdefault(item.judgement_id, []).append(item.evidence_id)

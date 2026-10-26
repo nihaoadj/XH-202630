@@ -727,3 +727,29 @@ def test_memory_continuation_failure_does_not_register_background_job(monkeypatc
         graph.job_repository.get("source-run")
     ]
     assert graph.job_repository.get("source-run").superseded_by_run_id is None
+
+
+def test_durable_continuation_submission_key_reuses_frozen_intent():
+    from app.core.security.errors import ApplicationError
+    from app.services.generation.dispatch import submission_identity
+    graph = _sql_fixture(feedback_ids=False)
+    graph.jobs.dispatch_mode = "worker"
+    payload = _continuation_payload()
+    identity = submission_identity(graph.learner, payload, "continuation-submit", "continuation:batch")
+    def submit(request):
+        return graph.jobs.create_continuation(graph.learner, "batch", request,
+            resource_service_factory=lambda: ResourceService(graph.resource_repository),
+            feedback_repo_factory=lambda: graph.feedback_repository,
+            **submission_identity(graph.learner, request, "continuation-submit", "continuation:batch"))[0]
+    try:
+        first = submit(payload)
+        replay = submit(payload)
+        assert first.run_id == replay.run_id == identity["run_id"]
+        assert graph.job_repository.get_dispatch(first.run_id)["dispatch_mode"] == "worker"
+        assert graph.job_repository.get_dispatch(first.run_id)["dispatch_snapshot"]["learner"]["learner_id"] == graph.learner.learner_id
+        assert len(graph.job_repository.list_by_learner(graph.learner.learner_id)) == 2
+        with pytest.raises(ApplicationError) as caught:
+            submit(payload.model_copy(update={"instructions": "another request"}))
+        assert caught.value.status_code == 409
+    finally:
+        graph.engine.dispose()
