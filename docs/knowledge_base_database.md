@@ -742,6 +742,8 @@ PDF转换固定使用已有锁定依赖pypdf5.1.0。新增 `page_spans` 显式�
 
 ### 7.5 T9当前物理目录与准备入口
 
+RAG知识库采用字节保真策略：根 `.gitattributes` 对 `knowledge_base/rag_engineering_training/**` 设置 `-text`，禁止 Git 在 Windows/Linux 检出与暂存时转换换行，不影响其他领域目录。原始资料、归档 `.source`、教材与问卷均保留既有物理字节，来源、历史基线与统一 registry 继续严格校验 SHA-256；不得通过忽略哈希或自动规范化原始文件消除漂移。修改资料后须同步对应 provenance，并单独审查冻结评测快照的证据与标注。
+
 T9 将资料直接迁移到按用途、语言、出版方和文档 slug 组织的物理目录；没有保留 `modules/`、`sources/` 或运行时 path alias。相对 `knowledge_base/rag_engineering_training/` 的当前布局：
 
 ```text

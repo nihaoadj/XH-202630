@@ -102,7 +102,7 @@
           "anchor_text": "Retrieval-Augmented Generation (RAG)",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -117,7 +117,7 @@
           "anchor_text": "A **knowledge base**",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -132,7 +132,7 @@
           "anchor_text": "Retrieval always happens before generation",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -147,7 +147,7 @@
           "anchor_text": "Agentic Retrieval-Augmented Generation (RAG)",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -162,7 +162,7 @@
           "anchor_text": "知识图谱",
           "source_snapshot": "references/zh/milvus/graph/original.md",
           "source_sha256": "778e4614378007bde6d4334f38ce897d6911be3af4a46cd9799aa8d08143a8f8",
-          "content_sha256": "c3b58a193a5cc0a3d0d279d27c57b9b33b32971ece8e54f5743d3c92ca486da1"
+          "content_sha256": "5949f9fb972f995b3b4f3ef9d2ff419310439553ee6642f18c30580aee843688"
         }
       ]
     },
@@ -177,7 +177,7 @@
           "anchor_text": "多模态",
           "source_snapshot": "references/zh/milvus/multi_vector/original.md",
           "source_sha256": "bc568a9c03e4a623eb578d3db8b28c641ca3a92ea7a3ca3ef047a79e875d3f70",
-          "content_sha256": "998f5977b098f516c6bf0fd9f7fd409c6e42780e92193fe5b3611b81a16ee15b"
+          "content_sha256": "bf2cd4688ae8d665e466ff120980530c52f77fe1392538d46ee8b791f038d3f6"
         }
       ]
     },
@@ -192,7 +192,7 @@
           "anchor_text": "Document loaders",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -207,7 +207,7 @@
           "anchor_text": "reading or parsing supported PDFs",
           "source_snapshot": "references/zh/mineru/overview/original.md",
           "source_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
-          "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9"
+          "content_sha256": "48ed24fc1c945820f9a37a0ddb5655cef05263bcf1eb3b7076feecb69b188bcf"
         }
       ]
     },
@@ -222,7 +222,7 @@
           "anchor_text": "preprocessing, filtering, cleaning",
           "source_snapshot": "references/en/sentence_transformers/training_overview/original.md",
           "source_sha256": "17fe1adab43dcac9f3664c314aea35c0cb21ad2c8ae9ddfbba37768bd659e54c",
-          "content_sha256": "b69e2c3a92118e9bbd42953826a89654f544770a557fa7de5a91b132eb0fe097"
+          "content_sha256": "1574863b965d617bbf41ac4c2399ae932efb89cfc1d653bd4cdf884639bc3ac5"
         }
       ]
     },
@@ -237,7 +237,7 @@
           "anchor_text": "OCR scanned PDFs or images",
           "source_snapshot": "references/zh/mineru/overview/original.md",
           "source_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
-          "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9"
+          "content_sha256": "48ed24fc1c945820f9a37a0ddb5655cef05263bcf1eb3b7076feecb69b188bcf"
         }
       ]
     },
@@ -252,7 +252,7 @@
           "anchor_text": "complex page layouts",
           "source_snapshot": "references/zh/mineru/overview/original.md",
           "source_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
-          "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9"
+          "content_sha256": "48ed24fc1c945820f9a37a0ddb5655cef05263bcf1eb3b7076feecb69b188bcf"
         }
       ]
     },
@@ -267,7 +267,7 @@
           "anchor_text": "html",
           "source_snapshot": "references/zh/huggingface/unstructured/original.ipynb",
           "source_sha256": "173922ff5a180cdcda2aa6ffa100f6acc8990ae71570e7fd5a8917f0c14193d1",
-          "content_sha256": "a71c28b19655b83a3bf2056e2ceb09e0c48bd8b68d939c0611cfbc6bceb8cdd8"
+          "content_sha256": "6e8b9c256ff283f8be09040f3fa828f91362cba6cad6b1a30c6d0b87911b8c57"
         }
       ]
     },
@@ -312,7 +312,7 @@
           "anchor_text": "locators",
           "source_snapshot": "references/zh/mineru/overview/original.md",
           "source_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
-          "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9"
+          "content_sha256": "48ed24fc1c945820f9a37a0ddb5655cef05263bcf1eb3b7076feecb69b188bcf"
         }
       ]
     },
@@ -342,7 +342,7 @@
           "anchor_text": "Text splitters",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -357,7 +357,7 @@
           "anchor_text": "RecursiveCharacterTextSplitter",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -372,7 +372,7 @@
           "anchor_text": "语义分块",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -387,7 +387,7 @@
           "anchor_text": "from_huggingface_tokenizer",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -402,7 +402,7 @@
           "anchor_text": "chunk_size",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -417,7 +417,7 @@
           "anchor_text": "chunk_overlap",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -432,7 +432,7 @@
           "anchor_text": "MarkdownHeaderTextSplitter",
           "source_snapshot": "references/en/langchain/markdown_splitter/original.mdx",
           "source_sha256": "9e74b44f9fe42bfb6f527b0cc261d234dd4b5858501caa508403f60e0c718d07",
-          "content_sha256": "d968d91a42a9b902ea58b931b9fbff3257ad96d8f8a27c7bab30edb7fd510943"
+          "content_sha256": "6f59ceeb4d78d5cef59769d1babbeb4c8239c4c41596b4563adf672c49c168d6"
         }
       ]
     },
@@ -447,7 +447,7 @@
           "anchor_text": "chunk_by_title",
           "source_snapshot": "references/zh/huggingface/unstructured/original.ipynb",
           "source_sha256": "173922ff5a180cdcda2aa6ffa100f6acc8990ae71570e7fd5a8917f0c14193d1",
-          "content_sha256": "a71c28b19655b83a3bf2056e2ceb09e0c48bd8b68d939c0611cfbc6bceb8cdd8"
+          "content_sha256": "6e8b9c256ff283f8be09040f3fa828f91362cba6cad6b1a30c6d0b87911b8c57"
         }
       ]
     },
@@ -462,7 +462,7 @@
           "anchor_text": "HTMLHeaderTextSplitter",
           "source_snapshot": "references/en/langchain/html_splitters/original.mdx",
           "source_sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
-          "content_sha256": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77"
+          "content_sha256": "206adb061eeb009906821941bfa0572e8362252a692d2c5cac286ce40a393941"
         }
       ]
     },
@@ -477,7 +477,7 @@
           "anchor_text": "HTMLSectionSplitter",
           "source_snapshot": "references/en/langchain/html_splitters/original.mdx",
           "source_sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
-          "content_sha256": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77"
+          "content_sha256": "206adb061eeb009906821941bfa0572e8362252a692d2c5cac286ce40a393941"
         }
       ]
     },
@@ -492,7 +492,7 @@
           "anchor_text": "HTMLSemanticPreservingSplitter",
           "source_snapshot": "references/en/langchain/html_splitters/original.mdx",
           "source_sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
-          "content_sha256": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77"
+          "content_sha256": "206adb061eeb009906821941bfa0572e8362252a692d2c5cac286ce40a393941"
         }
       ]
     },
@@ -507,7 +507,7 @@
           "anchor_text": "子块及其对应的父块",
           "source_snapshot": "references/zh/milvus/enhance/original.md",
           "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
-          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+          "content_sha256": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5"
         }
       ]
     },
@@ -522,7 +522,7 @@
           "anchor_text": "句子窗口检索",
           "source_snapshot": "references/zh/milvus/enhance/original.md",
           "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
-          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+          "content_sha256": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5"
         }
       ]
     },
@@ -537,7 +537,7 @@
           "anchor_text": "文档摘要索引",
           "source_snapshot": "references/zh/milvus/enhance/original.md",
           "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
-          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+          "content_sha256": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5"
         }
       ]
     },
@@ -552,7 +552,7 @@
           "anchor_text": "Remove duplicates",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -567,7 +567,7 @@
           "anchor_text": "add_start_index=True",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -582,7 +582,7 @@
           "anchor_text": "Embedding models",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -597,7 +597,7 @@
           "anchor_text": "documents are independently encoded",
           "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
           "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
-          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+          "content_sha256": "e6cd7741a507ebb2c57cbc55f9bf77a18520bcb3b9e1461b3adecc465d06d21a"
         }
       ]
     },
@@ -612,7 +612,7 @@
           "anchor_text": "encode_query",
           "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
           "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
-          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+          "content_sha256": "7e4c2b63089dfe9f50d80b841c8b655738829bd39e134f246bb00c71e546aef8"
         }
       ]
     },
@@ -627,7 +627,7 @@
           "anchor_text": "encode_document",
           "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
           "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
-          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+          "content_sha256": "7e4c2b63089dfe9f50d80b841c8b655738829bd39e134f246bb00c71e546aef8"
         }
       ]
     },
@@ -642,7 +642,7 @@
           "anchor_text": "asymmetric semantic search",
           "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
           "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
-          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+          "content_sha256": "7e4c2b63089dfe9f50d80b841c8b655738829bd39e134f246bb00c71e546aef8"
         }
       ]
     },
@@ -657,7 +657,7 @@
           "anchor_text": "symmetric semantic search",
           "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
           "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
-          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+          "content_sha256": "7e4c2b63089dfe9f50d80b841c8b655738829bd39e134f246bb00c71e546aef8"
         }
       ]
     },
@@ -672,7 +672,7 @@
           "anchor_text": "Query and document prompts",
           "source_snapshot": "references/en/langchain/sentence_transformers_embeddings/original.mdx",
           "source_sha256": "92a6838f4acc671ba4f631c8a288c06c44732d0d7150d541f5c7f228e059541c",
-          "content_sha256": "911397c385884a77c787161714b0b020976cfe1fe4138330823b85d23313c9e5"
+          "content_sha256": "98b89d90c918b6e2b2379d3aff385748cc5ec4a059e02fd0b1861b51674be94a"
         }
       ]
     },
@@ -717,7 +717,7 @@
           "anchor_text": "被截断",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -732,7 +732,7 @@
           "anchor_text": "多语言",
           "source_snapshot": "references/zh/flagembedding/bge/original.md",
           "source_sha256": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
-          "content_sha256": "e1ce1595136435dcaefeffa9914ddc2647c0bdc3d34aadb021bc242a498d6920"
+          "content_sha256": "19a5c9ddaf576ee8b5cc85de1b03606ac225a835c564e48eeeb81eccc0c4d55e"
         }
       ]
     },
@@ -747,7 +747,7 @@
           "anchor_text": "BGE-M3",
           "source_snapshot": "references/zh/flagembedding/bge/original.md",
           "source_sha256": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
-          "content_sha256": "e1ce1595136435dcaefeffa9914ddc2647c0bdc3d34aadb021bc242a498d6920"
+          "content_sha256": "19a5c9ddaf576ee8b5cc85de1b03606ac225a835c564e48eeeb81eccc0c4d55e"
         }
       ]
     },
@@ -762,7 +762,7 @@
           "anchor_text": "多向量",
           "source_snapshot": "references/zh/flagembedding/bge/original.md",
           "source_sha256": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
-          "content_sha256": "e1ce1595136435dcaefeffa9914ddc2647c0bdc3d34aadb021bc242a498d6920"
+          "content_sha256": "19a5c9ddaf576ee8b5cc85de1b03606ac225a835c564e48eeeb81eccc0c4d55e"
         }
       ]
     },
@@ -777,7 +777,7 @@
           "anchor_text": "Semantic search",
           "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
           "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
-          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+          "content_sha256": "7e4c2b63089dfe9f50d80b841c8b655738829bd39e134f246bb00c71e546aef8"
         }
       ]
     },
@@ -792,7 +792,7 @@
           "anchor_text": "cosine similarity",
           "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
           "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
-          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+          "content_sha256": "ddecf9912d6e07d23cfff7e9674e94b93b2d2bf4cb74d5b09f17223e48d07c3f"
         }
       ]
     },
@@ -822,7 +822,7 @@
           "anchor_text": "euclidean",
           "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
           "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
-          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+          "content_sha256": "ddecf9912d6e07d23cfff7e9674e94b93b2d2bf4cb74d5b09f17223e48d07c3f"
         }
       ]
     },
@@ -852,7 +852,7 @@
           "anchor_text": "nearest neighbor",
           "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
           "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
-          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+          "content_sha256": "7e4c2b63089dfe9f50d80b841c8b655738829bd39e134f246bb00c71e546aef8"
         }
       ]
     },
@@ -942,7 +942,7 @@
           "anchor_text": "HNSW",
           "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
           "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
-          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+          "content_sha256": "7e4c2b63089dfe9f50d80b841c8b655738829bd39e134f246bb00c71e546aef8"
         }
       ]
     },
@@ -957,7 +957,7 @@
           "anchor_text": "Vector stores",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -972,7 +972,7 @@
           "anchor_text": "with data persistence",
           "source_snapshot": "references/en/langchain/chroma_vectorstore/original.mdx",
           "source_sha256": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
-          "content_sha256": "4557e7051b3f75e33db3f980555eff495bb59f42b252dccb07fe26000ed1516d"
+          "content_sha256": "1237f03291e4f33f7cbbd0acceea2e96be50d2b214c7dba52cffcdef8fcbe69d"
         }
       ]
     },
@@ -987,7 +987,7 @@
           "anchor_text": "filtering on metadata",
           "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
           "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
-          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+          "content_sha256": "ddecf9912d6e07d23cfff7e9674e94b93b2d2bf4cb74d5b09f17223e48d07c3f"
         }
       ]
     },
@@ -1002,7 +1002,7 @@
           "anchor_text": "similarity_score_threshold",
           "source_snapshot": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
           "source_sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
-          "content_sha256": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a"
+          "content_sha256": "857a10f77dcf4ac296be805477a2d5385fe3fa1cf84a042c197c9e515133b97d"
         }
       ]
     },
@@ -1017,7 +1017,7 @@
           "anchor_text": "maximum marginal relevance",
           "source_snapshot": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
           "source_sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
-          "content_sha256": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a"
+          "content_sha256": "857a10f77dcf4ac296be805477a2d5385fe3fa1cf84a042c197c9e515133b97d"
         }
       ]
     },
@@ -1032,7 +1032,7 @@
           "anchor_text": "collection_name",
           "source_snapshot": "references/en/langchain/chroma_vectorstore/original.mdx",
           "source_sha256": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
-          "content_sha256": "4557e7051b3f75e33db3f980555eff495bb59f42b252dccb07fe26000ed1516d"
+          "content_sha256": "1237f03291e4f33f7cbbd0acceea2e96be50d2b214c7dba52cffcdef8fcbe69d"
         }
       ]
     },
@@ -1047,7 +1047,7 @@
           "anchor_text": "Generate deterministic IDs",
           "source_snapshot": "references/zh/milvus/pipeline/original.md",
           "source_sha256": "35321b091aca9ce9e0e8d61e521fe7b3b277409ba4d428ecda972713958505a3",
-          "content_sha256": "cc961e8a1370add8ac1c3c91fd8cf856e7257b52f387487e02d092b69f59f6a0"
+          "content_sha256": "7f3786ded8c20371f169c32d56749a777d0a1a1faff6fe757382b80507ae60ae"
         }
       ]
     },
@@ -1062,7 +1062,7 @@
           "anchor_text": "Lexical search looks for literal matches",
           "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
           "source_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
-          "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a"
+          "content_sha256": "d4c9f676cfb5a387781d9cfea85825d4d105d5721a708a5fde6a74137dc8fda0"
         }
       ]
     },
@@ -1077,7 +1077,7 @@
           "anchor_text": "dense retrieval",
           "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
           "source_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
-          "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a"
+          "content_sha256": "d4c9f676cfb5a387781d9cfea85825d4d105d5721a708a5fde6a74137dc8fda0"
         }
       ]
     },
@@ -1092,7 +1092,7 @@
           "anchor_text": "sparse vector retrieval",
           "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
           "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
-          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+          "content_sha256": "ddecf9912d6e07d23cfff7e9674e94b93b2d2bf4cb74d5b09f17223e48d07c3f"
         }
       ]
     },
@@ -1107,7 +1107,7 @@
           "anchor_text": "全文搜索",
           "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
           "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
-          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+          "content_sha256": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176"
         }
       ]
     },
@@ -1122,7 +1122,7 @@
           "anchor_text": "BM25",
           "source_snapshot": "references/en/papers/dpr/original.pdf",
           "source_sha256": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
-          "content_sha256": "fa9f0e633379995d2489393f68d1f9a57eae59a1b742a45f5d0b43811556d293"
+          "content_sha256": "d1d2b85602129737b5c59e8a9dd5436fa5fd7401ac9bbde8439f01379dfeffd6"
         }
       ]
     },
@@ -1137,7 +1137,7 @@
           "anchor_text": "Hybrid retrieval with dense vector and keyword search",
           "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
           "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
-          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+          "content_sha256": "ddecf9912d6e07d23cfff7e9674e94b93b2d2bf4cb74d5b09f17223e48d07c3f"
         }
       ]
     },
@@ -1152,7 +1152,7 @@
           "anchor_text": "Reciprocal Rank Fusion",
           "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
           "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
-          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+          "content_sha256": "ddecf9912d6e07d23cfff7e9674e94b93b2d2bf4cb74d5b09f17223e48d07c3f"
         }
       ]
     },
@@ -1167,7 +1167,7 @@
           "anchor_text": "加权排序器",
           "source_snapshot": "references/zh/milvus/multi_vector/original.md",
           "source_sha256": "bc568a9c03e4a623eb578d3db8b28c641ca3a92ea7a3ca3ef047a79e875d3f70",
-          "content_sha256": "998f5977b098f516c6bf0fd9f7fd409c6e42780e92193fe5b3611b81a16ee15b"
+          "content_sha256": "bf2cd4688ae8d665e466ff120980530c52f77fe1392538d46ee8b791f038d3f6"
         }
       ]
     },
@@ -1182,7 +1182,7 @@
           "anchor_text": "词法分析",
           "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
           "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
-          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+          "content_sha256": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176"
         }
       ]
     },
@@ -1197,7 +1197,7 @@
           "anchor_text": "tokenizer",
           "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
           "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
-          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+          "content_sha256": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176"
         }
       ]
     },
@@ -1212,7 +1212,7 @@
           "anchor_text": "停止词删除",
           "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
           "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
-          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+          "content_sha256": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176"
         }
       ]
     },
@@ -1227,7 +1227,7 @@
           "anchor_text": "词干分析",
           "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
           "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
-          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+          "content_sha256": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176"
         }
       ]
     },
@@ -1242,7 +1242,7 @@
           "anchor_text": "multi_analyzer_params",
           "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
           "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
-          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+          "content_sha256": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176"
         }
       ]
     },
@@ -1257,7 +1257,7 @@
           "anchor_text": "SPARSE_INVERTED_INDEX",
           "source_snapshot": "references/zh/milvus/fulltext/original.md",
           "source_sha256": "be6c00e9723e70b06f90e613694688a5deacb0e128398466b60d44aa0cfc3c78",
-          "content_sha256": "ced7c8072d4d055d718f38a77fe55e5b6b70feb2714550489aeb1847f2c80658"
+          "content_sha256": "de7644d039ec79b138022f9406ff3dca193e35f24ee520fefe593558271fd047"
         }
       ]
     },
@@ -1272,7 +1272,7 @@
           "anchor_text": "Query Rewriting",
           "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
           "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
-          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+          "content_sha256": "de8ddb76734001aec43909d4635429b429d62d6649319a7cbc8316db41724f81"
         }
       ]
     },
@@ -1287,7 +1287,7 @@
           "anchor_text": "multiple variations",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -1302,7 +1302,7 @@
           "anchor_text": "Query Decomposition",
           "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
           "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
-          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+          "content_sha256": "de8ddb76734001aec43909d4635429b429d62d6649319a7cbc8316db41724f81"
         }
       ]
     },
@@ -1317,7 +1317,7 @@
           "anchor_text": "Hypothetical Document",
           "source_snapshot": "references/en/papers/hyde/original.pdf",
           "source_sha256": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
-          "content_sha256": "d36028d9730b227cc37c5783da35d4a5119cff631fa6941fd86d8b4190bdf4ae"
+          "content_sha256": "ced84e848b804a4b2ea848e2333cced031e3fd96c84e12c3426e07d94313ec66"
         }
       ]
     },
@@ -1332,7 +1332,7 @@
           "anchor_text": "假设问题",
           "source_snapshot": "references/zh/milvus/enhance/original.md",
           "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
-          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+          "content_sha256": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5"
         }
       ]
     },
@@ -1347,7 +1347,7 @@
           "anchor_text": "回溯问题",
           "source_snapshot": "references/zh/milvus/enhance/original.md",
           "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
-          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+          "content_sha256": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5"
         }
       ]
     },
@@ -1362,7 +1362,7 @@
           "anchor_text": "refine the query and retrieve again",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -1377,7 +1377,7 @@
           "anchor_text": "Retrieval validation",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -1392,7 +1392,7 @@
           "anchor_text": "重新排序",
           "source_snapshot": "references/zh/milvus/rerank/original.md",
           "source_sha256": "f55e934335df3bf1983608224c04a52887806839f516f48f43b97b2085d96fce",
-          "content_sha256": "65160cb93521885efcfdadc060a863b6bb8e904822633c679ad7d5f46b07fd97"
+          "content_sha256": "7c115f14a0cbd613a79d65c204ab53fa77f2f610da6bd7e6b58c908deca3aa72"
         }
       ]
     },
@@ -1407,7 +1407,7 @@
           "anchor_text": "Cross-Encoder",
           "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
           "source_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
-          "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a"
+          "content_sha256": "d4c9f676cfb5a387781d9cfea85825d4d105d5721a708a5fde6a74137dc8fda0"
         }
       ]
     },
@@ -1422,7 +1422,7 @@
           "anchor_text": "retrieves a large list",
           "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
           "source_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
-          "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a"
+          "content_sha256": "d4c9f676cfb5a387781d9cfea85825d4d105d5721a708a5fde6a74137dc8fda0"
         }
       ]
     },
@@ -1437,7 +1437,7 @@
           "anchor_text": "hard negative",
           "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
           "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
-          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+          "content_sha256": "e6cd7741a507ebb2c57cbc55f9bf77a18520bcb3b9e1461b3adecc465d06d21a"
         }
       ]
     },
@@ -1452,7 +1452,7 @@
           "anchor_text": "in-batch negatives",
           "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
           "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
-          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+          "content_sha256": "e6cd7741a507ebb2c57cbc55f9bf77a18520bcb3b9e1461b3adecc465d06d21a"
         }
       ]
     },
@@ -1467,7 +1467,7 @@
           "anchor_text": "MultipleNegativesRankingLoss",
           "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
           "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
-          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+          "content_sha256": "e6cd7741a507ebb2c57cbc55f9bf77a18520bcb3b9e1461b3adecc465d06d21a"
         }
       ]
     },
@@ -1482,7 +1482,7 @@
           "anchor_text": "MarginMSE",
           "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
           "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
-          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+          "content_sha256": "e6cd7741a507ebb2c57cbc55f9bf77a18520bcb3b9e1461b3adecc465d06d21a"
         }
       ]
     },
@@ -1497,7 +1497,7 @@
           "anchor_text": "highly redundant",
           "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
           "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
-          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+          "content_sha256": "e6cd7741a507ebb2c57cbc55f9bf77a18520bcb3b9e1461b3adecc465d06d21a"
         }
       ]
     },
@@ -1512,7 +1512,7 @@
           "anchor_text": "提示(Prompt)",
           "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
           "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
-          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+          "content_sha256": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4"
         }
       ]
     },
@@ -1527,7 +1527,7 @@
           "anchor_text": "context window",
           "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
           "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
-          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+          "content_sha256": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41"
         }
       ]
     },
@@ -1542,7 +1542,7 @@
           "anchor_text": "Answer the user query based on the source documents",
           "source_snapshot": "references/zh/huggingface/grounded/original.ipynb",
           "source_sha256": "3e15593bd5550d10d79a41cae99958065af3c530aef8c23eaf7582c991f69f8b",
-          "content_sha256": "1e6d1094faa3d094fa0fb898ff76104fc282b7d8ff6931de6cfe3c5c06ecb8bd"
+          "content_sha256": "6dedc1352864317d92a599155ff7cf2f7dc81615cc27e1226b2f4941faa6d92d"
         }
       ]
     },
@@ -1557,7 +1557,7 @@
           "anchor_text": "citations",
           "source_snapshot": "references/en/papers/alce/original.pdf",
           "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
-          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+          "content_sha256": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372"
         }
       ]
     },
@@ -1572,7 +1572,7 @@
           "anchor_text": "source_snippets",
           "source_snapshot": "references/zh/huggingface/grounded/original.ipynb",
           "source_sha256": "3e15593bd5550d10d79a41cae99958065af3c530aef8c23eaf7582c991f69f8b",
-          "content_sha256": "1e6d1094faa3d094fa0fb898ff76104fc282b7d8ff6931de6cfe3c5c06ecb8bd"
+          "content_sha256": "6dedc1352864317d92a599155ff7cf2f7dc81615cc27e1226b2f4941faa6d92d"
         }
       ]
     },
@@ -1587,7 +1587,7 @@
           "anchor_text": "entails the sub-claims",
           "source_snapshot": "references/en/papers/alce/original.pdf",
           "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
-          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+          "content_sha256": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372"
         }
       ]
     },
@@ -1602,7 +1602,7 @@
           "anchor_text": "hallucinations",
           "source_snapshot": "references/en/papers/hyde/original.pdf",
           "source_sha256": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
-          "content_sha256": "d36028d9730b227cc37c5783da35d4a5119cff631fa6941fd86d8b4190bdf4ae"
+          "content_sha256": "ced84e848b804a4b2ea848e2333cced031e3fd96c84e12c3426e07d94313ec66"
         }
       ]
     },
@@ -1617,7 +1617,7 @@
           "anchor_text": "压缩 LLM 提示",
           "source_snapshot": "references/zh/milvus/enhance/original.md",
           "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
-          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+          "content_sha256": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5"
         }
       ]
     },
@@ -1632,7 +1632,7 @@
           "anchor_text": "Repacking",
           "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
           "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
-          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+          "content_sha256": "de8ddb76734001aec43909d4635429b429d62d6649319a7cbc8316db41724f81"
         }
       ]
     },
@@ -1647,7 +1647,7 @@
           "anchor_text": "Lost in the Middle",
           "source_snapshot": "references/en/papers/lost_middle/original.pdf",
           "source_sha256": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
-          "content_sha256": "9a94d0a2d3b4d993a3767b05cb8b14657e60a4f50e2f3e801bbe050f71f16e73"
+          "content_sha256": "270c28eae2c686b1c9c1077c3bfb942b0c5575fa4e3cf43e6438476e004af7ac"
         }
       ]
     },
@@ -1662,7 +1662,7 @@
           "anchor_text": "evaluation",
           "source_snapshot": "references/en/papers/ragas/original.pdf",
           "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
-          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+          "content_sha256": "774e173be38c04d61bb19ba55f70023ff92de246281e1d9de86abf018bc3a324"
         }
       ]
     },
@@ -1677,7 +1677,7 @@
           "anchor_text": "retrieval recall@k",
           "source_snapshot": "references/en/papers/alce/original.pdf",
           "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
-          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+          "content_sha256": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372"
         }
       ]
     },
@@ -1692,7 +1692,7 @@
           "anchor_text": "Hit Rate",
           "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
           "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
-          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+          "content_sha256": "de8ddb76734001aec43909d4635429b429d62d6649319a7cbc8316db41724f81"
         }
       ]
     },
@@ -1707,7 +1707,7 @@
           "anchor_text": "precision",
           "source_snapshot": "references/en/papers/ragas/original.pdf",
           "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
-          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+          "content_sha256": "774e173be38c04d61bb19ba55f70023ff92de246281e1d9de86abf018bc3a324"
         }
       ]
     },
@@ -1722,7 +1722,7 @@
           "anchor_text": "MRR@10",
           "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
           "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
-          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+          "content_sha256": "de8ddb76734001aec43909d4635429b429d62d6649319a7cbc8316db41724f81"
         }
       ]
     },
@@ -1737,7 +1737,7 @@
           "anchor_text": "nDCG@10",
           "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
           "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
-          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+          "content_sha256": "de8ddb76734001aec43909d4635429b429d62d6649319a7cbc8316db41724f81"
         }
       ]
     },
@@ -1752,7 +1752,7 @@
           "anchor_text": "Faithfulness",
           "source_snapshot": "references/en/papers/ragas/original.pdf",
           "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
-          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+          "content_sha256": "774e173be38c04d61bb19ba55f70023ff92de246281e1d9de86abf018bc3a324"
         }
       ]
     },
@@ -1767,7 +1767,7 @@
           "anchor_text": "Answer Relevancy",
           "source_snapshot": "references/en/papers/ragas/original.pdf",
           "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
-          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+          "content_sha256": "774e173be38c04d61bb19ba55f70023ff92de246281e1d9de86abf018bc3a324"
         }
       ]
     },
@@ -1782,7 +1782,7 @@
           "anchor_text": "Context relevance",
           "source_snapshot": "references/en/papers/ragas/original.pdf",
           "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
-          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+          "content_sha256": "774e173be38c04d61bb19ba55f70023ff92de246281e1d9de86abf018bc3a324"
         }
       ]
     },
@@ -1797,7 +1797,7 @@
           "anchor_text": "Citation Recall",
           "source_snapshot": "references/en/papers/alce/original.pdf",
           "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
-          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+          "content_sha256": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372"
         }
       ]
     },
@@ -1812,7 +1812,7 @@
           "anchor_text": "Citation Precision",
           "source_snapshot": "references/en/papers/alce/original.pdf",
           "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
-          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+          "content_sha256": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372"
         }
       ]
     },
@@ -1827,7 +1827,7 @@
           "anchor_text": "Claim Recall",
           "source_snapshot": "references/en/papers/alce/original.pdf",
           "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
-          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+          "content_sha256": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372"
         }
       ]
     },
@@ -1842,7 +1842,7 @@
           "anchor_text": "hallucination",
           "source_snapshot": "references/en/papers/alce/original.pdf",
           "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
-          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+          "content_sha256": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372"
         }
       ]
     },
@@ -1857,7 +1857,7 @@
           "anchor_text": "问题-答案对",
           "source_snapshot": "references/zh/huggingface/evaluation/original.ipynb",
           "source_sha256": "b460e3f1895fcbafc48c9ff34d855140c1afd6fc29b77473c01b72bae4f4f4d7",
-          "content_sha256": "b57100679a427503184ce988c70e160991fff0688f95730482cd5c701949964f"
+          "content_sha256": "6ece14fd7fbb433e017c2a67e31936a21aaf3d28af973fd45743d2dc5f275f1e"
         }
       ]
     },
@@ -1872,7 +1872,7 @@
           "anchor_text": "LLM-as-a-judge",
           "source_snapshot": "references/zh/huggingface/evaluation/original.ipynb",
           "source_sha256": "b460e3f1895fcbafc48c9ff34d855140c1afd6fc29b77473c01b72bae4f4f4d7",
-          "content_sha256": "b57100679a427503184ce988c70e160991fff0688f95730482cd5c701949964f"
+          "content_sha256": "6ece14fd7fbb433e017c2a67e31936a21aaf3d28af973fd45743d2dc5f275f1e"
         }
       ]
     },
@@ -1887,7 +1887,7 @@
           "anchor_text": "Ablation Study on Model Training",
           "source_snapshot": "references/en/papers/dpr/original.pdf",
           "source_sha256": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
-          "content_sha256": "fa9f0e633379995d2489393f68d1f9a57eae59a1b742a45f5d0b43811556d293"
+          "content_sha256": "d1d2b85602129737b5c59e8a9dd5436fa5fd7401ac9bbde8439f01379dfeffd6"
         }
       ]
     },
@@ -1902,7 +1902,7 @@
           "anchor_text": "hyperparameters",
           "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
           "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
-          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+          "content_sha256": "de8ddb76734001aec43909d4635429b429d62d6649319a7cbc8316db41724f81"
         }
       ]
     },
@@ -1917,7 +1917,7 @@
           "anchor_text": "语义缓存",
           "source_snapshot": "references/zh/huggingface/cache/original.ipynb",
           "source_sha256": "381ab837867fbcbd953944d79cc401b091e5edf0df2e43df7708581528b5d3ea",
-          "content_sha256": "9822de7d2f8941d5b6b3319845e418089b0a0cf126cf582acfc7685e42d4a5e8"
+          "content_sha256": "1793d8c2b1650fb616e2f5cf25756c77f511d215343ec2483135aa5efca7808f"
         }
       ]
     },
@@ -1932,7 +1932,7 @@
           "anchor_text": "coverage",
           "source_snapshot": "references/en/papers/alce/original.pdf",
           "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
-          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+          "content_sha256": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372"
         }
       ]
     },
@@ -1947,7 +1947,7 @@
           "anchor_text": "Vector search stores numeric vectors",
           "source_snapshot": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
           "source_sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
-          "content_sha256": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a"
+          "content_sha256": "857a10f77dcf4ac296be805477a2d5385fe3fa1cf84a042c197c9e515133b97d"
         }
       ]
     }

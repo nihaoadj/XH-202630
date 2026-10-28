@@ -240,6 +240,7 @@
     "references/zh/mineru/dify/content.md": "provenance/evidence-base/blobs/e9c0358ec58848ee6745f8c08552f4c31d85887bf6599b6ed131e3e9a82e2703.source",
     "references/zh/mineru/overview/content.md": "provenance/evidence-base/blobs/ff74960a15b825d4c8e678c386fcd3b4ef9d2e6d5e746515dddc525d14386a6b.source",
     "references/zh/mineru/quick_start/content.md": "provenance/evidence-base/blobs/bb4afa3cfa4b49fd7ac01f63bc05ba31ecafc911920a985f769286fc1e7ec2c7.source",
-    "references/zh/mineru/ragflow/content.md": "provenance/evidence-base/blobs/bddd9e38896606018f3aea2eccbd5ce42a2247948b26e57d18275a30b89b2005.source"
+    "references/zh/mineru/ragflow/content.md": "provenance/evidence-base/blobs/bddd9e38896606018f3aea2eccbd5ce42a2247948b26e57d18275a30b89b2005.source",
+    "provenance/query_aliases_sources.json": "provenance/evidence-base/blobs/b647cf61e7131b1e592ecdfef8c8232e8d9ec2e948eb5cce6e67193b6fcdbfe4.source"
   }
 }

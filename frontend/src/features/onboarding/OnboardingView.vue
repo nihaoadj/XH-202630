@@ -1236,26 +1236,26 @@ onBeforeRouteLeave(() => {
 }
 /* Compact only the direction step; the domain step keeps its existing sizing. */
 @media (min-width:1081px) {
-  .onboarding-page.is-track-stage { gap:12px; padding-top:12px; }
-  .is-track-stage .track-stage-card :deep(.el-card__header) { padding:14px 24px; }
-  .is-track-stage .track-stage-card :deep(.el-card__body) { padding:12px 24px 0; }
-  .is-track-stage .track-stage-card .card-kicker { margin-bottom:4px; }
-  .is-track-stage .track-stage-card .card-title { font-size:23px; line-height:1.3; }
-  .is-track-stage .track-stage-card .card-subtitle { margin-top:5px; font-size:12px; line-height:1.5; }
-  .is-track-stage .track-stage-card .overview-strip { margin-bottom:12px; padding-bottom:10px; }
-  .is-track-stage .track-stage-card .overview-chip { display:flex; align-items:baseline; gap:10px; }
-  .is-track-stage .track-stage-card .overview-chip strong { margin:0; font-size:20px; }
-  .is-track-stage .track-stage-card .overview-person strong { font-size:13px; }
-  .is-track-stage .track-grid { flex:0 0 auto; gap:10px; grid-auto-rows:auto; }
-  .is-track-stage .track-grid .choice-card { min-height:142px; padding:12px 16px; gap:6px; }
-  .is-track-stage .track-grid .choice-topline { position:static; margin:0; }
-  .is-track-stage .track-grid .track-number { font-size:19px; }
-  .is-track-stage .track-grid .choice-title { padding:0; font-size:16px; line-height:1.4; }
-  .is-track-stage .track-grid .choice-description { font-size:12px; line-height:1.55; }
-  .is-track-stage .track-grid .choice-bottom { margin-top:0; }
-  .is-track-stage .track-stage-card .insight-card { margin-top:12px; padding-top:10px; }
-  .is-track-stage .track-stage-card .insight-card p { margin-top:3px; font-size:11px; line-height:1.5; }
-  .is-track-stage .track-stage-card .action-row { margin-top:12px; padding-block:10px; }
+  .onboarding-page.is-track-stage:not(.is-fit-layout) { gap:12px; padding-top:12px; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card :deep(.el-card__header) { padding:14px 24px; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card :deep(.el-card__body) { padding:12px 24px 0; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .card-kicker { margin-bottom:4px; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .card-title { font-size:23px; line-height:1.3; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .card-subtitle { margin-top:5px; font-size:12px; line-height:1.5; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .overview-strip { margin-bottom:12px; padding-bottom:10px; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .overview-chip { display:flex; align-items:baseline; gap:10px; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .overview-chip strong { margin:0; font-size:20px; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .overview-person strong { font-size:13px; }
+  .is-track-stage:not(.is-fit-layout) .track-grid { flex:0 0 auto; gap:10px; grid-auto-rows:auto; }
+  .is-track-stage:not(.is-fit-layout) .track-grid .choice-card { min-height:142px; padding:12px 16px; gap:6px; }
+  .is-track-stage:not(.is-fit-layout) .track-grid .choice-topline { position:static; margin:0; }
+  .is-track-stage:not(.is-fit-layout) .track-grid .track-number { font-size:19px; }
+  .is-track-stage:not(.is-fit-layout) .track-grid .choice-title { padding:0; font-size:16px; line-height:1.4; }
+  .is-track-stage:not(.is-fit-layout) .track-grid .choice-description { font-size:12px; line-height:1.55; }
+  .is-track-stage:not(.is-fit-layout) .track-grid .choice-bottom { margin-top:0; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .insight-card { margin-top:12px; padding-top:10px; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .insight-card p { margin-top:3px; font-size:11px; line-height:1.5; }
+  .is-track-stage:not(.is-fit-layout) .track-stage-card .action-row { margin-top:12px; padding-block:10px; }
 }
 @media (prefers-reduced-motion:reduce) {
   .onboarding-page *, .onboarding-page *::before, .onboarding-page *::after { transition:none !important; animation:none !important; }

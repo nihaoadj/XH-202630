@@ -317,7 +317,7 @@ async function saveComposerScreenshot(page, name) {
 
 async function waitForResource(page) {
   await page.locator('.resource-content').getByText(quoteText, { exact: true }).waitFor()
-  await page.getByRole('button', { name: '向 Tutor 提问' }).waitFor()
+  await page.locator('.tutor-trigger').getByText('向 Tutor 提问', { exact: true }).waitFor()
 }
 
 async function createResourceTutor(page, { quote = false } = {}) {
@@ -338,7 +338,7 @@ async function createResourceTutor(page, { quote = false } = {}) {
     await page.getByRole('button', { name: '就这段向 Tutor 提问' }).waitFor()
     await page.getByRole('button', { name: '就这段向 Tutor 提问' }).click()
   } else {
-    await page.getByRole('button', { name: '向 Tutor 提问' }).evaluate(button => {
+    await page.locator('.tutor-trigger').evaluate(button => {
       button.click()
       button.click()
     })
@@ -539,10 +539,31 @@ async function checkResourceConversation() {
   const page = await openPage(resourceRoute(), { width: 1301, height: 871 })
   try {
     await waitForResource(page)
+    await page.locator('.tutor-trigger').scrollIntoViewIfNeeded()
+    await page.locator('.tutor-floating-trigger').waitFor({ state: 'hidden' })
+    // This short fixture fits on desktop; create a long reading area so a
+    // real scroll can move the original entry out of the scrollport.
+    await page.locator('.resource-content').evaluate(node => { node.style.minHeight = '1600px' })
+    await page.locator('.reader-footer').scrollIntoViewIfNeeded()
+    const floating = page.locator('.tutor-floating-trigger')
+    await floating.waitFor({ state: 'visible' })
+    const floatingBounds = await floating.boundingBox()
+    assert.ok(floatingBounds.x > 0 && floatingBounds.y >= 0 && floatingBounds.y < 180,
+      'the robot entry must remain in the upper-right viewport after scrolling')
+    await floating.click()
+    await page.locator('.tutor-panel').waitFor({ state: 'visible' })
+    await page.waitForFunction(() => !document.querySelector('.tutor-panel textarea')?.disabled)
+    await floating.waitFor({ state: 'hidden' })
+    await page.getByRole('button', { name: '关闭 Tutor', exact: true }).click()
+    await floating.waitFor({ state: 'visible' })
+    await page.locator('.tutor-trigger').scrollIntoViewIfNeeded()
+    await floating.waitFor({ state: 'hidden' })
+    await page.locator('.resource-content').evaluate(node => { node.style.minHeight = '' })
+    summary.checks.push({ name: 'floating-tutor-scroll-open-close', floatingBounds })
     await createResourceTutor(page, { quote: true })
     const sessionId = await checkSessionScope(page, 'resource_help')
     const textarea = page.locator('.tutor-panel textarea')
-    assert.equal(await page.locator('.tutor-welcome').count(), 1, 'new Tutor session should show an empty welcome state')
+    assert.equal(await page.locator('.tutor-welcome').count(), 1, 'Tutor session with no turns should show its welcome state')
     await page.getByText('已引用材料', { exact: true }).waitFor()
     await saveScreenshot(page, 'resource-empty-1301x871.png')
     await inspectTutor(page, 'resource-empty-1301x871')
@@ -602,7 +623,7 @@ async function checkResourceConversation() {
     await page.locator('.tutor-panel').waitFor({ state: 'hidden' })
     const getBeforeRestore = apiAudit.requests.filter(item => item.method === 'GET' && item.path === `/api/tutor/sessions/${sessionId}`).length
     const createsBeforeRestore = apiAudit.writes.filter(item => item.path === '/api/tutor/sessions').length
-    await page.getByRole('button', { name: '向 Tutor 提问' }).click()
+    await page.locator('.tutor-trigger').click()
     await page.locator('.tutor-panel').waitFor({ state: 'visible' })
     await page.getByText('EVIDENCE_INSUFFICIENT', { exact: true }).waitFor()
     const getAfterRestore = apiAudit.requests.filter(item => item.method === 'GET' && item.path === `/api/tutor/sessions/${sessionId}`).length

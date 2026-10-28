@@ -1183,21 +1183,21 @@ async function geometry(page, label, requireFit = false) {
     const selectorFields = [...document.querySelectorAll('.task-selector .selector-field')]
     const summaryItems = [...document.querySelectorAll('.job-summary .summary-item')]
     const status = document.querySelector('.job-summary .production-status')
-    const textActions = document.querySelector('.resources-panel > .resource-toolbar .task-actions')
+    const textActions = document.querySelector('.resources-panel [role="group"][aria-label="资源任务操作"]')
     const coursewareActions = document.querySelector('.courseware-generation-page .details-panel > .panel-title .task-actions')
     const actionToolbar = textActions || coursewareActions
     const readerCard = document.querySelector('.resource-stage .reader-card')
     const readerHeader = readerCard?.querySelector('.reader-header')
     const resourceToolbar = document.querySelector('.resources-panel .resource-toolbar')
     const resourceToolbarActions = resourceToolbar?.querySelector('.resource-toolbar-actions')
-    const readerTaskActions = resourceToolbarActions?.querySelector('.task-actions')
+    const readerTaskActions = textActions
     const readerToolbarActions = resourceToolbarActions?.querySelector('.reader-toolbar-actions')
     const readerActionAnchor = resourceToolbar?.querySelector('#generation-reader-actions.reader-resource-actions')
     const resourceDifficulty = resourceToolbar?.querySelector('#generation-resource-difficulty.resource-grade')
     const readerTitle = readerCard?.querySelector('.resource-content h1')
     const downloadButton = readerActionAnchor?.querySelector('.download-button')
     const learningModeButton = readerToolbarActions?.querySelector('.learning-mode-action')
-    const appendButton = document.querySelector('.resources-panel > .resource-toolbar .task-actions .status-action-append')
+    const appendButton = document.querySelector('.resources-panel [role="group"][aria-label="资源任务操作"] .status-action-append')
     const selectors = ['.task-selector', '.job-summary', '.studio-grid', '.courseware-generation-page .generation-grid']
     return {
       viewport: { width: innerWidth, height: innerHeight },
@@ -1212,7 +1212,7 @@ async function geometry(page, label, requireFit = false) {
       summaryStatus: status ? { ...rect(status), text: status.innerText.trim(), role: status.getAttribute('role'), ariaLive: status.getAttribute('aria-live'), ariaAtomic: status.getAttribute('aria-atomic'), iconCount: status.querySelectorAll('svg').length } : null,
       actionToolbar: actionToolbar ? {
         ...rect(actionToolbar),
-        container: rect(textActions ? resourceToolbar : coursewareActions.parentElement),
+        container: rect(textActions ? resourcesTitle : coursewareActions.parentElement),
         buttons: [...actionToolbar.querySelectorAll('button')].map((node) => ({ ...rect(node), text: node.innerText.trim(), visible: node.getClientRects().length > 0 })),
       } : null,
       actionToolbarKind: textActions ? 'text' : coursewareActions ? 'courseware' : null,
@@ -1238,9 +1238,10 @@ async function geometry(page, label, requireFit = false) {
           text: resourceDifficulty.innerText.trim(), visible: resourceDifficulty.getClientRects().length > 0,
           containsGrade: Boolean(resourceDifficulty.querySelector('.resource-difficulty')),
           inToolbarActions: resourceDifficulty.parentElement === resourceToolbarActions,
-          beforeTaskActions: Boolean(readerTaskActions && (resourceDifficulty.compareDocumentPosition(readerTaskActions) & Node.DOCUMENT_POSITION_FOLLOWING)),
+          afterTaskActions: Boolean(readerTaskActions && (resourceDifficulty.compareDocumentPosition(readerTaskActions) & Node.DOCUMENT_POSITION_PRECEDING)),
         } : null,
-        taskActionsInToolbarActions: Boolean(readerTaskActions && readerTaskActions.parentElement === resourceToolbarActions),
+        taskActionsInHeading: Boolean(readerTaskActions && readerTaskActions.parentElement === resourcesTitle),
+        taskActionsInToolbarCount: resourceToolbar?.querySelectorAll('.task-actions').length || 0,
         title: readerTitle ? { ...rect(readerTitle), text: readerTitle.innerText.trim(), whiteSpace: getComputedStyle(readerTitle).whiteSpace, textOverflow: getComputedStyle(readerTitle).textOverflow, overflowX: getComputedStyle(readerTitle).overflowX, overflowY: getComputedStyle(readerTitle).overflowY, scrollWidth: readerTitle.scrollWidth, clientWidth: readerTitle.clientWidth } : null,
         download: downloadButton ? { ...rect(downloadButton), text: downloadButton.innerText.trim(), visible: downloadButton.getClientRects().length > 0 } : null,
         learningMode: learningModeButton ? { ...rect(learningModeButton), text: learningModeButton.innerText.trim(), visible: learningModeButton.getClientRects().length > 0 } : null,
@@ -1259,7 +1260,9 @@ async function geometry(page, label, requireFit = false) {
           chineseBeforeEnglish: Boolean(chinese && english && (chinese.compareDocumentPosition(english) & Node.DOCUMENT_POSITION_FOLLOWING)),
           english: rect(english),
           englishText: english?.textContent.trim() || '',
-          actions: title.querySelectorAll('button, .task-actions, .output-count').length,
+          taskGroups: title.querySelectorAll('[role="group"][aria-label="资源任务操作"]').length,
+          buttons: title.querySelectorAll('button').length,
+          outputCounts: title.querySelectorAll('.output-count').length,
         }
       }) : [],
       processScroll: processScroll ? { top: processScroll.scrollTop, height: processScroll.scrollHeight, clientHeight: processScroll.clientHeight, width: processScroll.scrollWidth, clientWidth: processScroll.clientWidth } : null,
@@ -1298,7 +1301,9 @@ async function geometry(page, label, requireFit = false) {
     assert.ok(title.number.top < title.chinese.bottom && title.chinese.top < title.number.bottom
       && title.chinese.top < title.english.bottom && title.english.top < title.chinese.bottom,
     label + ': numbered bilingual title should share one line')
-    assert.equal(title.actions, 0, label + ': panel heading should reserve its space for the title')
+    assert.equal(title.taskGroups, index === 1 ? 1 : 0, label + ': only resource heading should contain the unique task action group')
+    assert.equal(title.buttons, index === 1 ? 2 : 0, label + ': resource heading should contain status and append actions only')
+    assert.equal(title.outputCounts, 0, label + ': panel headings should not restore legacy output counts')
   }
   if (requireFit) {
     assert.equal(metrics.fit, true, label + ': measured desktop should enable fit layout')
@@ -1372,8 +1377,9 @@ async function geometry(page, label, requireFit = false) {
     assert.ok(metrics.reader.difficulty?.className.split(/\s+/).includes('resource-grade'), label + ': difficulty anchor should retain its resource-grade class')
     assert.ok(metrics.reader.difficulty?.containsGrade, label + ': difficulty label should remain inside its Teleport anchor')
     assert.equal(metrics.reader.difficulty?.inToolbarActions, true, label + ': difficulty should belong to resource-toolbar-actions')
-    assert.equal(metrics.reader.taskActionsInToolbarActions, true, label + ': task actions should remain in resource-toolbar-actions')
-    assert.equal(metrics.reader.difficulty?.beforeTaskActions, true, label + ': difficulty anchor should precede task actions')
+    assert.equal(metrics.reader.taskActionsInHeading, true, label + ': task actions should belong to the resource heading')
+    assert.equal(metrics.reader.taskActionsInToolbarCount, 0, label + ': task actions must not be duplicated in the reader toolbar')
+    assert.equal(metrics.reader.difficulty?.afterTaskActions, true, label + ': reader difficulty should follow heading task actions in document order')
     assert.equal(metrics.reader.actionAnchorCount, 1, label + ': the download Teleport anchor should remain unique')
     assert.equal(metrics.reader.actionAnchor.id, 'generation-reader-actions', label + ': download should retain its Teleport target')
     assert.ok(metrics.reader.actionAnchor.className.split(/\s+/).includes('reader-resource-actions'), label + ': download target should retain its reader-resource-actions class')
@@ -1413,33 +1419,25 @@ async function geometry(page, label, requireFit = false) {
       if (metrics.reader.title.clientWidth > 0) assert.ok(metrics.reader.title.scrollWidth <= metrics.reader.title.clientWidth + 1, label + ': complete body title should fit its visible box')
     }
     if (metrics.viewport.width >= 1280) {
-      assert.ok(metrics.reader.append, label + ': append action should remain available in the reading toolbar')
-      assert.ok(Math.abs(metrics.reader.append.width - 112) <= 1, label + ': append action should retain its 112px target width')
-      assert.ok(Math.abs(metrics.reader.learningMode.width - metrics.reader.append.width) <= 1, label + ': learning mode and append actions should have equal widths')
+      assert.ok(metrics.reader.append, label + ': append action should remain available in the resource heading')
+      assert.ok(metrics.reader.append.width > 0 && metrics.reader.append.height >= 36, label + ': append action should retain its compact heading target')
+      assert.ok(Math.abs(metrics.reader.learningMode.width - metrics.reader.download.width) <= 1, label + ': learning mode and download actions should have equal widths')
       const overlapX = metrics.reader.append.left < metrics.reader.learningMode.right && metrics.reader.learningMode.left < metrics.reader.append.right
       const overlapY = metrics.reader.append.top < metrics.reader.learningMode.bottom && metrics.reader.learningMode.top < metrics.reader.append.bottom
       assert.ok(!(overlapX && overlapY), label + ': append and learning controls should not overlap')
       if (state.scenario === 'completed' && metrics.viewport.width >= 1393) {
         const buttons = [...metrics.actionToolbar.buttons, metrics.reader.download, metrics.reader.learningMode]
-        const orderedButtons = [...buttons].sort((left, right) => left.left - right.left)
-        assert.equal(buttons.length, 4, label + ': completed resource toolbar should expose four primary resource actions')
-        assert.ok(buttons.every((button) => Math.abs(button.top - buttons[0].top) <= 1),
-          label + ': all four resource actions should share the same tool row: ' + JSON.stringify(buttons))
-        assert.ok(metrics.reader.difficulty.right <= orderedButtons[0].left + 1,
-          label + ': difficulty should be the first item before all four resource actions: ' + JSON.stringify({ difficulty: metrics.reader.difficulty, buttons }))
-        assert.ok(metrics.reader.difficulty.top < orderedButtons[0].bottom && orderedButtons[0].top < metrics.reader.difficulty.bottom,
-          label + ': difficulty should share the four-button row: ' + JSON.stringify({ difficulty: metrics.reader.difficulty, buttons }))
-        for (const button of orderedButtons) {
-          if (/^重新生成失败资源/.test(button.text)) {
-            assert.ok(button.width > 112, label + ': long failed-resource retry should retain its adaptive width: ' + JSON.stringify(button))
-          } else {
-            assert.ok(Math.abs(button.width - 112) <= 1, label + ': resource action should retain its 112px width: ' + JSON.stringify(button))
-          }
-        }
-        for (let index = 1; index < orderedButtons.length; index += 1) {
-          const gap = orderedButtons[index].left - orderedButtons[index - 1].right
-          assert.ok(Math.abs(gap - 8) <= 1,
-            label + ': four resource actions should use an 8px gap within 1px: ' + JSON.stringify({ previous: orderedButtons[index - 1], current: orderedButtons[index], gap }))
+        assert.equal(buttons.length, 4, label + ': completed resource work area should expose four primary actions')
+        assert.equal(metrics.actionToolbar.buttons.length, 2, label + ': task heading should contain exactly two actions')
+        const readerButtons = [metrics.reader.download, metrics.reader.learningMode]
+        assert.ok(metrics.actionToolbar.buttons.every(button => button.bottom <= metrics.reader.toolbar.top + 1), label + ': task actions should stay above the reader toolbar')
+        assert.ok(metrics.reader.difficulty.right <= readerButtons[0].left + 1, label + ': difficulty should precede reader actions')
+        assert.ok(metrics.reader.difficulty.top < readerButtons[0].bottom && readerButtons[0].top < metrics.reader.difficulty.bottom, label + ': difficulty should share the reader action row')
+        for (const button of readerButtons) assert.ok(Math.abs(button.width - 112) <= 1, label + ': reader actions should retain their 112px width')
+        for (const group of [metrics.actionToolbar.buttons, readerButtons]) {
+          assert.ok(group.every(button => Math.abs(button.top - group[0].top) <= 1), label + ': each action group should share its own row')
+          const gap = group[1].left - group[0].right
+          assert.ok(Math.abs(gap - 8) <= 1, label + ': each action group should retain its 8px gap: ' + JSON.stringify(group))
         }
       }
     }
@@ -1464,7 +1462,7 @@ async function assertSummaryAndActions(page, label) {
   assert.ok(await statusLocator.locator('svg').count(), label + ': production state icon should remain visible')
   assert.equal(await page.locator('.production-intro, .production-banner, .production-context').count(), 0, label + ': top-level intro and banner should be removed')
   await assertNoLocalHistoryAction(page, label)
-  const localActions = page.locator('.resources-panel > .resource-toolbar .task-actions')
+  const localActions = page.getByRole('group', { name: '资源任务操作', exact: true })
   assert.equal(await localActions.count(), 1, label + ': task actions should live in the resource toolbar')
   assert.ok(await localActions.getByRole('button', { name: '刷新资源', exact: true }).count(), label + ': resource refresh should keep its full label')
   assert.ok(await localActions.getByRole('button', { name: '追加资源', exact: false }).count(), label + ': append action should remain in the resource toolbar')
@@ -2147,7 +2145,7 @@ async function chooseFilterableOptionWithKeyboard(page, select, searchText, expe
 }
 
 async function openAppendDialog(page, command) {
-  await page.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '追加资源', exact: false }).click()
+  await page.getByRole('group', { name: '资源任务操作', exact: true }).getByRole('button', { name: '追加资源', exact: false }).click()
   await page.getByRole('menuitem', { name: command, exact: true }).click()
   if (command === '文本学习资源') await page.getByRole('heading', { name: '追加学习资源' }).waitFor()
   else await page.getByRole('heading', { name: '创建互动课件' }).waitFor()
@@ -2456,7 +2454,7 @@ async function testStateMatrix(browser, base) {
     for (const semantic of ['学习方向', '任务编号', '任务状态', '可读资源', '创建时间', '完成时间']) {
       assert.ok(summary.includes(semantic), scenario + ': missing job summary fact ' + semantic)
     }
-    const actionToolbar = page.locator('.resources-panel > .resource-toolbar .task-actions')
+    const actionToolbar = page.getByRole('group', { name: '资源任务操作', exact: true })
     const shouldHaveActions = !['no-task', 'no-profile'].includes(scenario)
     assert.equal(await actionToolbar.count(), shouldHaveActions ? 1 : 0, scenario + ': conditional task controls should be placed in the resource toolbar')
     if (scenario === 'queued') {
@@ -2574,7 +2572,7 @@ async function testStateMatrix(browser, base) {
         && placeholderGeometry.panel.bottom <= placeholderGeometry.stage.bottom + 1,
       'no-output preparation should fit the resource reading region: ' + JSON.stringify(placeholderGeometry))
       assert.equal(await placeholder.locator('.el-empty').count(), 0, 'no-output state should not retain the legacy empty illustration')
-      assert.equal(await page.locator('.resource-toolbar').count(), 1, 'no-output state should retain its real task controls in the toolbar')
+      assert.equal(await page.getByRole('group', { name: '资源任务操作', exact: true }).count(), 1, 'no-output state should retain its real task controls in the resource heading')
       assert.equal(await page.locator('.resource-toolbar .resource-select, .resource-toolbar .reader-toolbar-actions').count(), 0,
         'no-output state should not fabricate a resource selector or reader actions')
       assert.equal(await page.locator('.resource-stage .reader-card').count(), 0, 'no-output state should not render a fabricated reader')
@@ -3282,7 +3280,7 @@ async function testSwitchesRefreshAndErrors(browser, base) {
   const page = await newPage(browser, base, 'multi', baseViewport, { delayJobsMs: 350 })
   await chooseOption(page, '资源批次', /run-queu/i)
   assert.ok((await page.locator('.generate-page').innerText()).includes('排队中'), 'batch selector should switch to queued run')
-  await page.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await page.getByRole('group', { name: '资源任务操作', exact: true }).getByRole('button', { name: '刷新状态', exact: true }).click()
   await waitForFixture(() => state.requests.some((item) => item.path === '/api/generate/jobs/run-queued'), 'selected run status refresh')
   const statusRequests = state.requests.filter((item) => item.path === '/api/generate/jobs/run-queued')
   assert.ok(statusRequests.length >= 1, 'refresh should request the selected job status')
@@ -3313,7 +3311,7 @@ async function testSwitchesRefreshAndErrors(browser, base) {
   await deletePage.close()
 
   const errorPage = await newPage(browser, base, 'running', baseViewport, { failStatus: 1 })
-  await errorPage.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await errorPage.getByRole('group', { name: '资源任务操作', exact: true }).getByRole('button', { name: '刷新状态', exact: true }).click()
   await errorPage.getByText('任务状态获取失败').waitFor({ state: 'visible' })
   assert.ok((await errorPage.locator('.generate-page').innerText()).includes('生成中'), 'a status failure should keep the current task readable')
   evidence.interactionChecks.push({ scenario: 'running-status-error', statusFailure: true })
@@ -3321,7 +3319,7 @@ async function testSwitchesRefreshAndErrors(browser, base) {
   await errorPage.close()
 
   const resourcePage = await newPage(browser, base, 'completed', baseViewport, { delayResourcesMs: 450, failResources: 1 })
-  await resourcePage.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '刷新资源', exact: true }).click()
+  await resourcePage.getByRole('group', { name: '资源任务操作', exact: true }).getByRole('button', { name: '刷新资源', exact: true }).click()
   assert.ok(await resourcePage.locator('.resource-stage .el-loading-mask').count(), 'resource refresh should expose a loading state')
   await resourcePage.getByText('资源列表加载失败').waitFor({ state: 'visible' })
   evidence.interactionChecks.push({ scenario: 'resource-load-error', loadingAndError: true })
@@ -4414,8 +4412,12 @@ async function testNodeDetailRoles(browser, base) {
         assert.equal(await result.count(), 1)
         const generationVersion = state.timelineDetails.resource_versions.find(item => item.resource_id === 'resource-guide')
         const originalBody = generationVersion.content_text
-        assert.equal(await result.locator('.generated-content').innerText(), originalBody,
-          'generation must show the full explicitly linked version body')
+        assert.equal(await result.locator('.generated-content h1').innerText(), '提交审计指南',
+          'generation must render the explicitly linked version Markdown heading')
+        assert.equal(await result.locator('.generated-content').innerText(), originalBody.replace(/^# /, ''),
+          'generation must preview the full linked version body without raw Markdown heading markers')
+        assert.equal(await result.locator('.generated-raw pre').textContent(), originalBody,
+          'the full original Markdown must remain unchanged in the raw disclosure')
         const literalMarkup = '<img data-ui-injected="literal" alt="should remain text"><script data-ui-injected="literal">window.__generationAuditLiteralMarkupExecuted = true</script>'
         generationVersion.content_text = literalMarkup
         await refresh('generate-literal-html')
@@ -4425,8 +4427,10 @@ async function testNodeDetailRoles(browser, base) {
         assert.equal(await page.evaluate(() => window.__generationAuditLiteralMarkupExecuted), undefined, 'literal resource script text must not execute')
         generationVersion.content_text = originalBody
         await refresh('generate-body-restored')
-        assert.equal(await dialog.locator('.node-result[data-role="generate"] .generated-content').innerText(), originalBody,
-          'restoring the actual resource body must keep full markdown output visible')
+        assert.equal(await dialog.locator('.node-result[data-role="generate"] .generated-content').innerText(), originalBody.replace(/^# /, ''),
+          'restoring the actual resource body must keep its full preview visible')
+        assert.equal(await dialog.locator('.node-result[data-role="generate"] .generated-raw pre').textContent(), originalBody,
+          'restoring the version must preserve its exact raw Markdown')
         assert.equal(await dialog.locator('.node-evidence-card, .claim-detail').count(), 0, 'generation should not duplicate source excerpts or judgements')
       } else if (key === 'review') {
         assert.ok(await dialog.locator('.review-card').count() > 0, 'review should show only its ordinary review record as the main result')
@@ -4549,7 +4553,7 @@ async function testRetriesAndCourseware(browser, base) {
   await partialPage.close()
 
   const retryPendingPage = await newPage(browser, base, 'partial')
-  await retryPendingPage.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: /重新生成失败资源/ }).click()
+  await retryPendingPage.getByRole('group', { name: '资源任务操作', exact: true }).getByRole('button', { name: /重新生成失败资源/ }).click()
   await waitForFixture(() => state.writes.some((item) => item.path.endsWith('/continuations')), 'batch retry of pending resources')
   const pendingRetry = state.writes.filter((item) => item.path.endsWith('/continuations'))
   assert.equal(pendingRetry.length, 1)
@@ -4560,7 +4564,7 @@ async function testRetriesAndCourseware(browser, base) {
   await retryPendingPage.close()
 
   const batchFailurePage = await newPage(browser, base, 'failed')
-  await batchFailurePage.locator('.resources-panel > .resource-toolbar .task-actions').getByRole('button', { name: '重新生成', exact: true }).click()
+  await batchFailurePage.getByRole('group', { name: '资源任务操作', exact: true }).getByRole('button', { name: '重新生成', exact: true }).click()
   await batchFailurePage.waitForFunction(() => document.querySelector('.el-message__content')?.textContent.includes('已在原资源批次中重新发起'))
   const batchRetry = state.writes.filter((item) => item.path.endsWith('/continuations'))
   assert.equal(batchRetry.length, 1)
@@ -5302,7 +5306,7 @@ async function testLiveResourceProgress(browser, base) {
   }
   delayedStatusGate.release = releaseDelayedStatus
   state.statusGetGate = delayedStatusGate
-  const statusAction = page.locator('.resources-panel > .resource-toolbar .task-actions')
+  const statusAction = page.getByRole('group', { name: '资源任务操作', exact: true })
     .getByRole('button', { name: '刷新状态', exact: true })
   const requestsBeforeDelayed = state.requests.filter(item => item.path === '/api/generate/jobs/run-main').length
   const delayedStatusResponsePromise = page.waitForResponse(response =>

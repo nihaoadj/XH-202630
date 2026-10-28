@@ -109,7 +109,8 @@ def test_pilot_sources_are_complete_pinned_and_licensed():
         assert len(doc.metadata["source_version"]) == 40
         assert all(set(points) <= known for points in doc.metadata["section_knowledge_points"].values())
     chunks = chunk_documents(sources)
-    assert chunks and all(c.metadata.get("chunking_strategy") == "markdown_structure_v1" for c in chunks)
+    assert chunks and all(c.metadata.get("chunking_strategy") == "markdown_evidence_v2" for c in chunks)
+    assert all(doc.metadata["chunking_strategy"] == "markdown_evidence_v2" for doc in sources)
     for chunk in chunks:
         doc = next(d for d in sources if d.metadata["document_id"] == chunk.metadata["document_id"])
         lines = doc.page_content.splitlines()[chunk.metadata["line_start"] - 1:chunk.metadata["line_end"]]

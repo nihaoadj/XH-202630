@@ -1,2 +1,4 @@
 # Generated contract drift checks compare deterministic UTF-8/LF bytes on every OS.
 frontend/src/contracts/generated/* text eol=lf
+# Knowledge provenance hashes describe exact bytes, including archived source files.
+knowledge_base/rag_engineering_training/** -text

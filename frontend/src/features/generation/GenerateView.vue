@@ -1105,8 +1105,11 @@ onBeforeUnmount(() => {
 .resource-toolbar { display:flex; flex-wrap:wrap; flex:none; align-items:center; gap:8px; padding:10px 0; min-width:0; }
 .resource-panel-heading { gap:12px; align-items:center; }
 .resource-panel-heading > .task-actions { flex:0 0 auto; justify-content:flex-end; margin-left:auto; }
-.resource-panel-heading :deep(.el-button) { margin:0; min-height:36px; padding:7px 11px; }
+.resource-panel-heading :deep(.el-button) { margin:0; min-height:44px; padding:7px 11px; }
 .resource-panel-heading .status-action-append { width:auto; }
+@media (min-width:1100px) {
+  .studio-grid > :is(.process-panel,.resources-panel) > .panel-title { min-height:53px; }
+}
 .resource-select { flex:1 1 160px; width:auto; }
 .resource-toolbar-actions { display:flex; flex:0 1 auto; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; min-width:0; max-width:100%; margin-left:auto; }
 .resource-grade { display:flex; flex:none; align-items:center; }

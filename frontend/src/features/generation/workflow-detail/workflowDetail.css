@@ -139,6 +139,7 @@
 /* Shared dossier rhythm across every stage; facts and execution states stay unchanged. */
 .workflow-detail-dialog .detail-content { padding:22px 24px 0; background:#f6f8fb; }
 .workflow-detail-dialog .detail-module { padding:22px; border:1px solid var(--detail-line); border-radius:12px; background:#fff; box-shadow:0 3px 12px #172c4504; }
+.workflow-detail-dialog .claim-verification { padding-top:12px; }
 .workflow-detail-dialog .detail-section-heading { gap:8px 12px; margin-bottom:16px; }
 .workflow-detail-dialog .detail-section-heading h3 { font-size:18px; }
 .workflow-detail-dialog .section-number { padding:4px 8px; border-radius:5px; background:var(--detail-tint); font-size:10px; }

@@ -335,7 +335,10 @@ def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs():
         text=document_chunk.page_content,
         source_path=metadata["source_path"],
     )
-    queries = ["RAG 基础概念", "RAG 基础概念 Embedding"]
+    queries = [
+        "RAG 基础概念 Embedding：工作原理、概念区别和适用条件是什么？",
+        "RAG 基础概念 Embedding：如何操作验证，常见错误和限制条件是什么？",
+    ]
     backend = ScriptedVectorSearchBackend({
         query: [make_vector_candidate(chunk, query=query, raw_score=0.12)]
         for query in queries
@@ -374,6 +377,7 @@ def test_retriever_passes_knowledge_base_filter_and_returns_stable_refs():
         call["knowledge_base_id"] == "rag_engineering_training"
         for call in backend.calls
     )
+    assert [call["query"] for call in backend.calls] == queries
     retrieved = result["retrieved_evidence"][0]
     assert retrieved.document_id == chunk.document_id
     assert retrieved.chunk_id == chunk.chunk_id

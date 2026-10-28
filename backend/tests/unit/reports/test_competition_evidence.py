@@ -35,13 +35,18 @@ def test_fixture_version_and_actual_background_usage_are_checked():
         module.validate_suite(suite)
 
 
-def test_snapshot_rejects_changed_knowledge_and_unknown_evidence(tmp_path):
+@pytest.mark.parametrize("source_path", [
+    "teaching/zh/01_rag_foundations_and_system_contracts.md",
+    "references/en/langchain/retrieval_architectures/content.md",
+    "assessment_questions.json",
+])
+def test_snapshot_rejects_changed_knowledge_and_unknown_evidence(tmp_path, source_path):
     suite = module.load_suite()
     kb = PROJECT_ROOT / "knowledge_base" / suite["knowledge_base_id"]
     clone = tmp_path / suite["knowledge_base_id"]
     shutil.copytree(kb, clone)
     module.validate_suite(suite, kb_root=tmp_path)
-    document = resolve_knowledge_file(clone, "teaching/zh/01_rag_foundations_and_system_contracts.md")
+    document = resolve_knowledge_file(clone, source_path)
     document.write_text(document.read_text(encoding="utf-8") + "\nchanged knowledge\n", encoding="utf-8")
     with pytest.raises(ValueError, match="snapshot drift"):
         module.validate_suite(suite, kb_root=tmp_path)

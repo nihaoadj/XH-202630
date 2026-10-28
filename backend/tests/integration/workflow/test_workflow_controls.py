@@ -353,7 +353,14 @@ def test_real_agent_nodes_receive_request_controls_and_share_trace_ids(monkeypat
     assert "node-a" in captured["generator"]
     assert "高级" in captured["reviewer"]
     retrieval_request = evidence_retriever.calls[0]
-    assert "控制流 node-a" in retrieval_request.queries
+    assert retrieval_request.queries == [
+        "控制流 node-a：工作原理、概念区别和适用条件是什么？",
+        "控制流 node-a：如何操作验证，常见错误和限制条件是什么？",
+    ]
+    assert retrieval_request.policy.query_strategy_version == "learning-tasks-v2"
+    assert retrieval_request.query_node_ids == {
+        query: "node-a" for query in retrieval_request.queries
+    }
     assert retrieval_request.policy.top_k_per_query == 4
     assert retrieval_request.knowledge_base_id == "kb-contract"
     assert result["generated_resources"][0].difficulty == "高级"

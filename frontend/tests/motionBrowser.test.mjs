@@ -30,7 +30,7 @@ const user = { user_id: 'motion-fixture-user', username: 'motion-fixture', displ
 let authMeUser = user
 const domainCatalog = {
   domains: [{
-    domain_id: 'domain-A', name: '人工智能', description: '本地动效 fixture 领域',
+    domain_id: 'ai_application', name: 'AI 应用开发', description: '本地动效 fixture 领域',
     tracks: [
       { track_id: 'track-A', knowledge_base_id: 'track-A', name: '检索增强生成', metadata: { available: true, document_count: 2, skill_node_count: 2 } },
       { track_id: 'track-B', knowledge_base_id: 'track-B', name: '知识图谱', metadata: { available: true, document_count: 1, skill_node_count: 1 } },
