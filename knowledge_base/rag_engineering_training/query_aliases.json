@@ -1,0 +1,1304 @@
+{
+  "version": "1.1.0",
+  "rules": [
+    {
+      "match_terms": [
+        "检索增强生成",
+        "RAG 基础概念",
+        "retrieval augmented generation",
+        "RAG",
+        "检索增强式生成",
+        "RAG基础概念"
+      ],
+      "english_keywords": "retrieval augmented generation"
+    },
+    {
+      "match_terms": [
+        "知识库构建",
+        "构建知识库",
+        "knowledge base",
+        "知识库建设"
+      ],
+      "english_keywords": "knowledge base external knowledge"
+    },
+    {
+      "match_terms": [
+        "两步RAG",
+        "两阶段RAG",
+        "2-Step RAG",
+        "先检索后生成"
+      ],
+      "english_keywords": "2-step RAG retrieval before generation"
+    },
+    {
+      "match_terms": [
+        "智能体RAG",
+        "代理式RAG",
+        "Agentic RAG",
+        "Agent决定检索"
+      ],
+      "english_keywords": "agentic RAG reasoning retrieval"
+    },
+    {
+      "match_terms": [
+        "图RAG",
+        "图谱增强检索",
+        "GraphRAG",
+        "Graph RAG",
+        "知识图谱检索"
+      ],
+      "english_keywords": "graph RAG knowledge graph"
+    },
+    {
+      "match_terms": [
+        "多模态RAG",
+        "多模态检索",
+        "multimodal RAG",
+        "multimodal retrieval",
+        "图文检索"
+      ],
+      "english_keywords": "multimodal RAG image text retrieval"
+    },
+    {
+      "match_terms": [
+        "文档加载",
+        "资料加载",
+        "document loader",
+        "document loaders",
+        "文档加载器"
+      ],
+      "english_keywords": "document loaders ingest data"
+    },
+    {
+      "match_terms": [
+        "文档解析",
+        "格式解析",
+        "document parsing",
+        "PDF解析",
+        "PDF parsing",
+        "文档抽取"
+      ],
+      "english_keywords": "document parsing PDF extraction"
+    },
+    {
+      "match_terms": [
+        "文本清洗",
+        "数据清洗",
+        "text cleaning",
+        "清洗文本",
+        "文本预处理"
+      ],
+      "english_keywords": "text preprocessing filtering cleaning"
+    },
+    {
+      "match_terms": [
+        "光学字符识别",
+        "OCR",
+        "扫描件识别",
+        "扫描PDF",
+        "扫描版PDF",
+        "scanned PDF"
+      ],
+      "english_keywords": "OCR scanned PDF images"
+    },
+    {
+      "match_terms": [
+        "版面分析",
+        "版式分析",
+        "布局分析",
+        "复杂版面",
+        "complex page layouts",
+        "layout analysis"
+      ],
+      "english_keywords": "document page layout parsing"
+    },
+    {
+      "match_terms": [
+        "表格抽取",
+        "表格解析",
+        "表格HTML",
+        "Table element",
+        "table extraction",
+        "表格识别"
+      ],
+      "english_keywords": "table element HTML metadata"
+    },
+    {
+      "match_terms": [
+        "跨页表格",
+        "表格续接",
+        "续表合并",
+        "cross-page table",
+        "table continuation"
+      ],
+      "english_keywords": "cross-page table merge"
+    },
+    {
+      "match_terms": [
+        "公式识别",
+        "公式抽取",
+        "行内公式",
+        "行间公式",
+        "formula extraction",
+        "inline formula",
+        "display equation"
+      ],
+      "english_keywords": "formula equation extraction"
+    },
+    {
+      "match_terms": [
+        "文档定位",
+        "块级定位",
+        "页内定位",
+        "stable locator",
+        "document locator",
+        "PDF边界框",
+        "bounding box",
+        "bbox"
+      ],
+      "english_keywords": "document location locator bounding box"
+    },
+    {
+      "match_terms": [
+        "结构化文档输出",
+        "Structured Content",
+        "structured_content",
+        "Content List",
+        "CONTENT_LIST_V1",
+        "CONTENT_LIST_V2",
+        "中间JSON",
+        "MiddleJson",
+        "ModelJson"
+      ],
+      "english_keywords": "structured content document output"
+    },
+    {
+      "match_terms": [
+        "Chunk 切分",
+        "文本切分",
+        "chunking",
+        "文本分块",
+        "文本切片",
+        "分块",
+        "切片",
+        "text splitting",
+        "text chunking",
+        "Chunk切分"
+      ],
+      "english_keywords": "text chunking text splitting"
+    },
+    {
+      "match_terms": [
+        "递归切分",
+        "递归分块",
+        "递归文本切分",
+        "RecursiveCharacterTextSplitter",
+        "recursive splitting",
+        "分隔符优先级"
+      ],
+      "english_keywords": "recursive character text splitting"
+    },
+    {
+      "match_terms": [
+        "语义分块",
+        "语义切分",
+        "semantic chunking",
+        "semantic chunker"
+      ],
+      "english_keywords": "semantic chunking semantic chunker"
+    },
+    {
+      "match_terms": [
+        "按token分块",
+        "按token切分",
+        "token分块",
+        "token chunking",
+        "token-aware splitting",
+        "from_huggingface_tokenizer"
+      ],
+      "english_keywords": "token-aware text splitting"
+    },
+    {
+      "match_terms": [
+        "chunk_size",
+        "chunk size",
+        "片段大小",
+        "分块大小",
+        "切片大小",
+        "块大小",
+        "片段长度"
+      ],
+      "english_keywords": "text chunking chunk size"
+    },
+    {
+      "match_terms": [
+        "chunk_overlap",
+        "chunk overlap",
+        "分块重叠",
+        "切片重叠",
+        "重叠长度",
+        "相邻片段重叠",
+        "overlap size"
+      ],
+      "english_keywords": "text chunking chunk overlap"
+    },
+    {
+      "match_terms": [
+        "Markdown标题切分",
+        "Markdown标题分块",
+        "Markdown分块",
+        "MarkdownHeaderTextSplitter",
+        "Markdown header splitter",
+        "按Markdown标题"
+      ],
+      "english_keywords": "MarkdownHeaderTextSplitter markdown headers"
+    },
+    {
+      "match_terms": [
+        "按标题分块",
+        "按标题切分",
+        "标题感知切分",
+        "chunk_by_title",
+        "title-based chunking"
+      ],
+      "english_keywords": "title-based document chunking"
+    },
+    {
+      "match_terms": [
+        "HTML标题切分",
+        "HTML标题分块",
+        "HTMLHeaderTextSplitter",
+        "HTML header splitter"
+      ],
+      "english_keywords": "HTMLHeaderTextSplitter header tags"
+    },
+    {
+      "match_terms": [
+        "HTML章节切分",
+        "HTML章节分块",
+        "HTMLSectionSplitter",
+        "HTML section splitter"
+      ],
+      "english_keywords": "HTMLSectionSplitter section splitting"
+    },
+    {
+      "match_terms": [
+        "HTML结构保留",
+        "HTML语义保留",
+        "HTMLSemanticPreservingSplitter",
+        "semantic preserving splitter",
+        "表格不跨块"
+      ],
+      "english_keywords": "HTMLSemanticPreservingSplitter structured elements"
+    },
+    {
+      "match_terms": [
+        "父子分块",
+        "父子块",
+        "父子切片",
+        "父子文档",
+        "parent child chunk",
+        "auto-merging",
+        "自动合并检索"
+      ],
+      "english_keywords": "parent child chunk auto merging"
+    },
+    {
+      "match_terms": [
+        "句子窗口",
+        "句子窗口检索",
+        "sentence window",
+        "sentence-window retrieval",
+        "上下文窗口扩展"
+      ],
+      "english_keywords": "sentence window retrieval context expansion"
+    },
+    {
+      "match_terms": [
+        "分层摘要",
+        "文档摘要索引",
+        "层次索引",
+        "hierarchical summary index",
+        "document summary index"
+      ],
+      "english_keywords": "hierarchical document summary index"
+    },
+    {
+      "match_terms": [
+        "重复片段去重",
+        "chunk去重",
+        "分块去重",
+        "重复chunk",
+        "deduplicate chunks",
+        "Remove duplicates"
+      ],
+      "english_keywords": "deduplicate identical text chunks"
+    },
+    {
+      "match_terms": [
+        "add_start_index",
+        "片段起始位置",
+        "片段起始索引",
+        "chunk start index",
+        "分块位置追踪"
+      ],
+      "english_keywords": "chunk start index metadata"
+    },
+    {
+      "match_terms": [
+        "向量表示",
+        "Embedding",
+        "embeddings",
+        "文本嵌入",
+        "嵌入",
+        "向量化",
+        "词嵌入",
+        "text embedding"
+      ],
+      "english_keywords": "embeddings vector representation semantic similarity"
+    },
+    {
+      "match_terms": [
+        "双编码器",
+        "双塔编码器",
+        "双塔模型",
+        "bi-encoder",
+        "bi encoder",
+        "独立编码"
+      ],
+      "english_keywords": "bi-encoder independently encoded embeddings"
+    },
+    {
+      "match_terms": [
+        "encode_query",
+        "查询编码",
+        "查询向量编码",
+        "query encoding"
+      ],
+      "english_keywords": "encode_query query encoding"
+    },
+    {
+      "match_terms": [
+        "encode_document",
+        "文档编码",
+        "文档向量编码",
+        "document encoding"
+      ],
+      "english_keywords": "encode_document document encoding"
+    },
+    {
+      "match_terms": [
+        "非对称语义检索",
+        "asymmetric semantic search",
+        "非对称语义搜索",
+        "短问题检索长段落",
+        "短查询长文档"
+      ],
+      "english_keywords": "asymmetric semantic search"
+    },
+    {
+      "match_terms": [
+        "对称语义检索",
+        "symmetric semantic search",
+        "对称语义搜索",
+        "相似问题检索",
+        "重复问题检测"
+      ],
+      "english_keywords": "symmetric semantic search"
+    },
+    {
+      "match_terms": [
+        "查询前缀",
+        "文档前缀",
+        "编码前缀",
+        "query prompt",
+        "document prompt",
+        "prompt_name",
+        "编码任务标记"
+      ],
+      "english_keywords": "query document prompts encoding"
+    },
+    {
+      "match_terms": [
+        "向量归一化",
+        "嵌入归一化",
+        "单位范数",
+        "单位长度向量",
+        "normalize_embeddings",
+        "normalized embeddings"
+      ],
+      "english_keywords": "normalized embeddings unit length"
+    },
+    {
+      "match_terms": [
+        "向量维度",
+        "嵌入维度",
+        "embedding dimension",
+        "embedding_size",
+        "embedding_dim",
+        "向量维数"
+      ],
+      "english_keywords": "embedding dimension vector size"
+    },
+    {
+      "match_terms": [
+        "嵌入截断",
+        "输入截断",
+        "最大序列长度",
+        "max_seq_length",
+        "sequence truncation",
+        "max sequence length"
+      ],
+      "english_keywords": "embedding max sequence length truncation"
+    },
+    {
+      "match_terms": [
+        "多语言嵌入",
+        "跨语言嵌入",
+        "多语种向量",
+        "multilingual embeddings",
+        "cross-lingual retrieval",
+        "跨语言检索"
+      ],
+      "english_keywords": "multilingual cross-lingual embeddings retrieval"
+    },
+    {
+      "match_terms": [
+        "BGE-M3",
+        "bge_m3",
+        "BGE M3",
+        "BGE多粒度"
+      ],
+      "english_keywords": "BGE-M3 multilingual dense sparse multi-vector"
+    },
+    {
+      "match_terms": [
+        "多向量",
+        "多表征检索",
+        "multi-vector",
+        "multi vector",
+        "多向量字段"
+      ],
+      "english_keywords": "multi-vector representation retrieval"
+    },
+    {
+      "match_terms": [
+        "相似度检索",
+        "similarity search",
+        "语义检索",
+        "语义搜索",
+        "semantic search",
+        "相似搜索",
+        "语义相似度"
+      ],
+      "english_keywords": "similarity search semantic search semantic similarity"
+    },
+    {
+      "match_terms": [
+        "余弦相似度",
+        "余弦距离",
+        "cosine similarity",
+        "cosine distance",
+        "COSINE"
+      ],
+      "english_keywords": "cosine similarity cosine distance"
+    },
+    {
+      "match_terms": [
+        "内积",
+        "点积",
+        "inner product",
+        "dot product",
+        "dot_product",
+        "内积相似度"
+      ],
+      "english_keywords": "inner product dot product"
+    },
+    {
+      "match_terms": [
+        "欧氏距离",
+        "欧几里得距离",
+        "L2距离",
+        "euclidean distance",
+        "L2 distance"
+      ],
+      "english_keywords": "euclidean L2 distance"
+    },
+    {
+      "match_terms": [
+        "Top-K",
+        "top k",
+        "top_k",
+        "TopK",
+        "前K",
+        "检索候选数量",
+        "返回条数"
+      ],
+      "english_keywords": "top-k retrieval results"
+    },
+    {
+      "match_terms": [
+        "最近邻搜索",
+        "kNN",
+        "k-nearest neighbors",
+        "近邻检索",
+        "K近邻"
+      ],
+      "english_keywords": "nearest neighbor search kNN"
+    },
+    {
+      "match_terms": [
+        "近似最近邻",
+        "近似近邻",
+        "ANN",
+        "ANN search",
+        "approximate nearest neighbor",
+        "近似搜索"
+      ],
+      "english_keywords": "approximate nearest neighbor ANN"
+    },
+    {
+      "match_terms": [
+        "精确最近邻",
+        "精确近邻",
+        "精确向量搜索",
+        "exact nearest neighbor",
+        "exact search"
+      ],
+      "english_keywords": "exact nearest neighbor search"
+    },
+    {
+      "match_terms": [
+        "FAISS",
+        "Faiss索引",
+        "Faiss向量检索"
+      ],
+      "english_keywords": "FAISS vector index"
+    },
+    {
+      "match_terms": [
+        "IVF索引",
+        "倒排聚类索引",
+        "IndexIVFFlat",
+        "IVFFlat",
+        "IVF flat"
+      ],
+      "english_keywords": "IndexIVFFlat inverted file clusters"
+    },
+    {
+      "match_terms": [
+        "nprobe",
+        "探测簇数",
+        "搜索簇数",
+        "ANN探测数量"
+      ],
+      "english_keywords": "nprobe clusters search time"
+    },
+    {
+      "match_terms": [
+        "HNSW",
+        "hnswlib",
+        "分层可导航小世界",
+        "HNSW索引"
+      ],
+      "english_keywords": "HNSW approximate nearest neighbor"
+    },
+    {
+      "match_terms": [
+        "向量数据库",
+        "向量存储",
+        "vector database",
+        "vector store",
+        "向量库",
+        "vector stores"
+      ],
+      "english_keywords": "vector database vector store"
+    },
+    {
+      "match_terms": [
+        "持久化向量",
+        "向量持久化",
+        "持久化存储",
+        "persist_directory",
+        "persistent client",
+        "向量索引落盘"
+      ],
+      "english_keywords": "vector store data persistence persist_directory"
+    },
+    {
+      "match_terms": [
+        "元数据过滤",
+        "元数据筛选",
+        "metadata filtering",
+        "metadata filter",
+        "按类别过滤",
+        "按年份过滤",
+        "标量过滤"
+      ],
+      "english_keywords": "metadata filtering"
+    },
+    {
+      "match_terms": [
+        "相似度阈值",
+        "分数阈值",
+        "阈值检索",
+        "similarity_score_threshold",
+        "similarity threshold",
+        "score threshold"
+      ],
+      "english_keywords": "similarity score threshold"
+    },
+    {
+      "match_terms": [
+        "最大边际相关性",
+        "最大边缘相关性",
+        "MMR",
+        "maximum marginal relevance",
+        "多样性检索",
+        "多样化召回"
+      ],
+      "english_keywords": "maximum marginal relevance MMR"
+    },
+    {
+      "match_terms": [
+        "向量集合",
+        "Chroma集合",
+        "collection_name",
+        "向量Collection",
+        "Milvus集合"
+      ],
+      "english_keywords": "vector store collection"
+    },
+    {
+      "match_terms": [
+        "确定性chunk ID",
+        "确定性片段ID",
+        "upsert",
+        "按主键更新",
+        "幂等入库",
+        "增量入库"
+      ],
+      "english_keywords": "deterministic chunk IDs upsert"
+    },
+    {
+      "match_terms": [
+        "关键词检索",
+        "词面检索",
+        "词法检索",
+        "lexical retrieval",
+        "lexical search",
+        "keyword search",
+        "字面匹配"
+      ],
+      "english_keywords": "lexical retrieval keyword search"
+    },
+    {
+      "match_terms": [
+        "稠密检索",
+        "密集检索",
+        "dense retrieval",
+        "dense vector search",
+        "稠密召回"
+      ],
+      "english_keywords": "dense retrieval dense vector search"
+    },
+    {
+      "match_terms": [
+        "稀疏检索",
+        "稀疏向量",
+        "稀疏嵌入",
+        "sparse retrieval",
+        "sparse embedding",
+        "sparse vector"
+      ],
+      "english_keywords": "sparse vector retrieval"
+    },
+    {
+      "match_terms": [
+        "全文检索",
+        "全文搜索",
+        "full-text search",
+        "full text search",
+        "fulltext search"
+      ],
+      "english_keywords": "full-text search"
+    },
+    {
+      "match_terms": [
+        "BM25",
+        "Okapi BM25",
+        "BM25检索",
+        "BM25排序",
+        "BM25算法"
+      ],
+      "english_keywords": "BM25 lexical retrieval"
+    },
+    {
+      "match_terms": [
+        "混合检索",
+        "hybrid retrieval",
+        "混合搜索",
+        "混合召回",
+        "hybrid search",
+        "稀疏稠密融合"
+      ],
+      "english_keywords": "hybrid retrieval hybrid search"
+    },
+    {
+      "match_terms": [
+        "RRF",
+        "reciprocal rank fusion",
+        "倒数排名融合",
+        "互惠排名融合",
+        "倒数秩融合",
+        "RRF排序器",
+        "RRFRanker"
+      ],
+      "english_keywords": "RRF reciprocal rank fusion"
+    },
+    {
+      "match_terms": [
+        "加权排序器",
+        "WeightedRanker",
+        "加权融合",
+        "加权重排",
+        "weighted ranker",
+        "weighted fusion"
+      ],
+      "english_keywords": "weighted ranker fusion weights"
+    },
+    {
+      "match_terms": [
+        "分析器",
+        "全文分析器",
+        "analyzer",
+        "analyzer_params",
+        "文本分析器"
+      ],
+      "english_keywords": "text analyzer lexical analysis"
+    },
+    {
+      "match_terms": [
+        "分词器",
+        "分词",
+        "tokenizer",
+        "tokenization",
+        "文本分词"
+      ],
+      "english_keywords": "tokenizer tokenization"
+    },
+    {
+      "match_terms": [
+        "停用词",
+        "停止词",
+        "stop words",
+        "stopwords",
+        "stop_words",
+        "停用词过滤"
+      ],
+      "english_keywords": "stop words stopword removal"
+    },
+    {
+      "match_terms": [
+        "词干分析",
+        "词干提取",
+        "stemming",
+        "stemmer",
+        "词形归一化"
+      ],
+      "english_keywords": "stemming lexical analysis"
+    },
+    {
+      "match_terms": [
+        "多语言分析器",
+        "多语种分词",
+        "multi_analyzer_params",
+        "语言字段分析器",
+        "language-aware analyzer"
+      ],
+      "english_keywords": "multilingual analyzer language field"
+    },
+    {
+      "match_terms": [
+        "倒排索引",
+        "稀疏倒排索引",
+        "SPARSE_INVERTED_INDEX",
+        "sparse inverted index"
+      ],
+      "english_keywords": "sparse inverted index"
+    },
+    {
+      "match_terms": [
+        "查询改写",
+        "查询重写",
+        "查询重构",
+        "query rewriting",
+        "query reformulation",
+        "rewrite query"
+      ],
+      "english_keywords": "query rewriting query reformulation"
+    },
+    {
+      "match_terms": [
+        "多查询",
+        "多路查询",
+        "多查询变体",
+        "multi-query",
+        "multiple query variations",
+        "MultiQueryRetriever"
+      ],
+      "english_keywords": "multiple query variations"
+    },
+    {
+      "match_terms": [
+        "查询分解",
+        "查询拆分",
+        "子查询",
+        "query decomposition",
+        "subquery",
+        "复杂问题拆分"
+      ],
+      "english_keywords": "query decomposition subqueries"
+    },
+    {
+      "match_terms": [
+        "假设文档",
+        "hypothetical document",
+        "HyDE",
+        "假设文档嵌入",
+        "假答案检索"
+      ],
+      "english_keywords": "HyDE hypothetical document embeddings"
+    },
+    {
+      "match_terms": [
+        "假设问题",
+        "假设问题索引",
+        "hypothetical questions",
+        "question-to-question",
+        "块级问题索引"
+      ],
+      "english_keywords": "hypothetical question indexing"
+    },
+    {
+      "match_terms": [
+        "回溯问题",
+        "后退式问题",
+        "step-back",
+        "step back query",
+        "问题抽象"
+      ],
+      "english_keywords": "step-back query abstraction"
+    },
+    {
+      "match_terms": [
+        "迭代检索",
+        "迭代召回",
+        "refine query",
+        "retrieve again",
+        "检索不足再查询"
+      ],
+      "english_keywords": "iterative retrieval refine query"
+    },
+    {
+      "match_terms": [
+        "检索充分性",
+        "检索结果验证",
+        "召回相关性验证",
+        "retrieval validation",
+        "证据充分性"
+      ],
+      "english_keywords": "retrieval validation relevant sufficient"
+    },
+    {
+      "match_terms": [
+        "重排序",
+        "精排",
+        "Rerank",
+        "reranking",
+        "重排",
+        "reranker",
+        "候选排序"
+      ],
+      "english_keywords": "reranking relevance ranking"
+    },
+    {
+      "match_terms": [
+        "Cross-Encoder",
+        "Cross Encoder",
+        "CrossEncoder",
+        "交叉编码器",
+        "跨编码器",
+        "查询段落联合编码"
+      ],
+      "english_keywords": "cross encoder reranking"
+    },
+    {
+      "match_terms": [
+        "候选集",
+        "候选池",
+        "初始候选",
+        "candidate set",
+        "candidate pool",
+        "candidate list"
+      ],
+      "english_keywords": "retrieval candidate set reranking"
+    },
+    {
+      "match_terms": [
+        "困难负样本",
+        "难负例",
+        "hard negative",
+        "hard negatives",
+        "困难负例"
+      ],
+      "english_keywords": "hard negative training"
+    },
+    {
+      "match_terms": [
+        "批内负样本",
+        "批内负例",
+        "in-batch negatives",
+        "in batch negatives"
+      ],
+      "english_keywords": "in-batch negatives"
+    },
+    {
+      "match_terms": [
+        "MultipleNegativesRankingLoss",
+        "MNRL",
+        "多负例排序损失",
+        "多重负样本排序损失"
+      ],
+      "english_keywords": "MultipleNegativesRankingLoss"
+    },
+    {
+      "match_terms": [
+        "MarginMSE",
+        "MarginMSELoss",
+        "分数差回归损失",
+        "边际均方误差"
+      ],
+      "english_keywords": "MarginMSE ranking loss"
+    },
+    {
+      "match_terms": [
+        "假负例",
+        "假负样本",
+        "false negatives",
+        "冗余负例",
+        "误标负样本"
+      ],
+      "english_keywords": "false negatives redundant passages"
+    },
+    {
+      "match_terms": [
+        "Prompt 组装",
+        "prompt assembly",
+        "提示词组装",
+        "提示模板",
+        "Prompt模板",
+        "prompt template",
+        "Prompt组装"
+      ],
+      "english_keywords": "prompt assembly template"
+    },
+    {
+      "match_terms": [
+        "上下文窗口",
+        "context window",
+        "上下文长度",
+        "context length",
+        "上下文预算"
+      ],
+      "english_keywords": "context window context length"
+    },
+    {
+      "match_terms": [
+        "指令约束",
+        "instructions",
+        "仅根据上下文",
+        "仅依据资料",
+        "回答约束"
+      ],
+      "english_keywords": "instructions answer source documents"
+    },
+    {
+      "match_terms": [
+        "引用溯源",
+        "source_ref",
+        "citation",
+        "source attribution",
+        "引用来源",
+        "来源追踪",
+        "引文溯源"
+      ],
+      "english_keywords": "citation source attribution"
+    },
+    {
+      "match_terms": [
+        "证据片段",
+        "来源片段",
+        "source snippets",
+        "source_snippets",
+        "原文片段",
+        "引用摘录"
+      ],
+      "english_keywords": "source snippets evidence passage"
+    },
+    {
+      "match_terms": [
+        "Claim 审核",
+        "Claim review",
+        "证据支持",
+        "grounded answer",
+        "factual evidence",
+        "主张核验",
+        "事实主张",
+        "声明审核",
+        "Claim审核"
+      ],
+      "english_keywords": "claim evidence support grounded answer"
+    },
+    {
+      "match_terms": [
+        "幻觉控制",
+        "幻觉",
+        "hallucination",
+        "hallucinations",
+        "编造事实",
+        "事实幻觉"
+      ],
+      "english_keywords": "hallucination factual grounding"
+    },
+    {
+      "match_terms": [
+        "上下文压缩",
+        "提示压缩",
+        "context compression",
+        "prompt compression",
+        "检索噪声压缩"
+      ],
+      "english_keywords": "context compression prompt compression"
+    },
+    {
+      "match_terms": [
+        "上下文重打包",
+        "文档重打包",
+        "document repacking",
+        "context repacking",
+        "检索结果重组"
+      ],
+      "english_keywords": "document repacking context ordering"
+    },
+    {
+      "match_terms": [
+        "中间丢失",
+        "迷失在中间",
+        "Lost in the Middle",
+        "上下文位置偏差",
+        "中间位置遗失"
+      ],
+      "english_keywords": "lost in the middle context position"
+    },
+    {
+      "match_terms": [
+        "RAG 评测",
+        "RAG评测",
+        "RAG evaluation",
+        "RAG评估",
+        "检索评估",
+        "检索评测"
+      ],
+      "english_keywords": "RAG evaluation retrieval evaluation"
+    },
+    {
+      "match_terms": [
+        "召回率",
+        "Recall",
+        "Recall@k",
+        "检索召回率",
+        "recall at k",
+        "召回覆盖率"
+      ],
+      "english_keywords": "Recall retrieval recall at k"
+    },
+    {
+      "match_terms": [
+        "命中率",
+        "hit rate",
+        "HitRate",
+        "HitRate@K",
+        "命中比例"
+      ],
+      "english_keywords": "hit rate retrieval"
+    },
+    {
+      "match_terms": [
+        "精确率",
+        "查准率",
+        "Precision",
+        "Precision@k",
+        "precision at k"
+      ],
+      "english_keywords": "precision retrieval relevance"
+    },
+    {
+      "match_terms": [
+        "MRR",
+        "Mean Reciprocal Rank",
+        "平均倒数排名",
+        "平均倒数秩",
+        "MRR@10",
+        "MRR@100"
+      ],
+      "english_keywords": "MRR mean reciprocal rank"
+    },
+    {
+      "match_terms": [
+        "NDCG",
+        "Normalized Discounted Cumulative Gain",
+        "归一化折损累计增益",
+        "归一化折扣累计增益",
+        "nDCG@10",
+        "NDCG@k"
+      ],
+      "english_keywords": "NDCG normalized discounted cumulative gain"
+    },
+    {
+      "match_terms": [
+        "忠实性",
+        "忠实度",
+        "faithfulness",
+        "faithfulness evaluation",
+        "答案忠实性"
+      ],
+      "english_keywords": "faithfulness grounded context"
+    },
+    {
+      "match_terms": [
+        "答案相关性",
+        "回答相关性",
+        "Answer Relevancy",
+        "Answer Relevance",
+        "回答切题性"
+      ],
+      "english_keywords": "answer relevancy answer relevance"
+    },
+    {
+      "match_terms": [
+        "上下文相关性",
+        "检索上下文相关性",
+        "Context Relevancy",
+        "Context Relevance",
+        "检索相关性"
+      ],
+      "english_keywords": "context relevance context relevancy"
+    },
+    {
+      "match_terms": [
+        "引文召回率",
+        "引用召回率",
+        "Citation Recall",
+        "引用覆盖率"
+      ],
+      "english_keywords": "citation recall"
+    },
+    {
+      "match_terms": [
+        "引文精确率",
+        "引用精确率",
+        "Citation Precision",
+        "引用准确率"
+      ],
+      "english_keywords": "citation precision"
+    },
+    {
+      "match_terms": [
+        "Claim Recall",
+        "主张覆盖率",
+        "声明覆盖率",
+        "事实覆盖率"
+      ],
+      "english_keywords": "claim recall coverage"
+    },
+    {
+      "match_terms": [
+        "幻觉率",
+        "hallucination rate",
+        "事实幻觉率",
+        "编造比例"
+      ],
+      "english_keywords": "hallucination rate evaluation"
+    },
+    {
+      "match_terms": [
+        "评测集",
+        "评测题集",
+        "评估数据集",
+        "QA pairs",
+        "问题答案对",
+        "evaluation dataset"
+      ],
+      "english_keywords": "evaluation dataset question answer pairs"
+    },
+    {
+      "match_terms": [
+        "LLM-as-a-judge",
+        "LLM裁判",
+        "大模型裁判",
+        "模型评审",
+        "LLM judge"
+      ],
+      "english_keywords": "LLM-as-a-judge evaluation rubric"
+    },
+    {
+      "match_terms": [
+        "消融实验",
+        "ablation study",
+        "ablation experiment",
+        "消融分析",
+        "对照消融"
+      ],
+      "english_keywords": "ablation study evaluation"
+    },
+    {
+      "match_terms": [
+        "RAG 调优",
+        "RAG tuning",
+        "参数调优",
+        "parameter tuning",
+        "检索调优",
+        "RAG优化"
+      ],
+      "english_keywords": "RAG tuning parameter tuning"
+    },
+    {
+      "match_terms": [
+        "语义缓存",
+        "相似问题缓存",
+        "semantic cache",
+        "semantic caching",
+        "语义响应缓存"
+      ],
+      "english_keywords": "semantic cache similarity retrieval"
+    },
+    {
+      "match_terms": [
+        "覆盖率",
+        "覆盖程度",
+        "coverage evaluation"
+      ],
+      "english_keywords": "coverage evaluation"
+    },
+    {
+      "match_terms": [
+        "向量检索",
+        "vector search",
+        "vector retrieval",
+        "向量搜索"
+      ],
+      "english_keywords": "vector search vector retrieval"
+    }
+  ]
+}

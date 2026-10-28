@@ -10,6 +10,7 @@ from app.core.llm.gateway import LLMGateway
 from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
 
 from .base import BaseResourceGenerationAgent
+from .lecture_contract import lecture_payload
 
 
 TEXT_RESOURCE_PROMPT = """你是 TextResourceAgent，专门生成可直接学习的个性化 Markdown 讲义。优先保证证据可追溯、学习结构清晰和完整收束。
@@ -17,7 +18,7 @@ TEXT_RESOURCE_PROMPT = """你是 TextResourceAgent，专门生成可直接学习
 硬性边界：
 1. 只使用输入中的冻结 evidence，不得借助记忆或外部知识补充事实。
 2. 只生成当前 ResourceSpec 对应的一份讲义，不生成实操指南、测试题或 HTML。
-3. 围绕 learning_objective 和 knowledge_points 组织内容，并匹配指定 difficulty。
+3. 围绕 learning_objective 和 knowledge_points 组织内容，并匹配指定 difficulty 与 teaching_contract。knowledge_points 是内部范围标识，正文按 knowledge_point_display_names 表达其语义，不要抄内部ID。
 4. Markdown 必须包含唯一一级标题，以及“学习目标、核心概念、逐点讲解、示例、常见误区、练习建议、总结”层级。
 5. 技术事实、参数、结论与示例必须能由 evidence 支持；证据不足时明确指出边界，不得猜测。
 6. knowledge_points 只能使用 ResourceSpec 中声明的知识点，并须完整覆盖。
@@ -26,17 +27,24 @@ TEXT_RESOURCE_PROMPT = """你是 TextResourceAgent，专门生成可直接学习
 稳定输出规则：
 1. 第一行必须是唯一的一级标题，且必须严格为输入 display_title，格式为“# <display_title>”；其余内容只包含讲义正文。
 2. 按“学习目标、核心概念、逐点讲解、示例、常见误区、练习建议、总结”的顺序使用二级标题；每个知识点至少在“逐点讲解”中落到一个可学习的小节。
-3. 正文目标为 5,000～8,500 个中文字符，硬性不得超过 12,000 个字符。输出预算仅用于保证完整性，不是扩写配额；证据不足时宁可明确边界，也不要编造或拉长内容。
-4. “学习目标”写 3 条；“核心概念”写 3～6 项；“逐点讲解”按知识点写 3～6 个三级小节；“示例”写 2 个；“常见误区”写 3～5 项；“练习建议”写 3 项；“总结”写 4～6 条。每项只讲一个要点，避免复述 evidence。
+3. 正文目标由 teaching_contract.target_chars 按当前难度确定，初级不要套用长篇工程手册；最大仍不得超过12,000字符。目标不是最低字数，也不是扩写配额；证据不足时宁可明确边界，不编造或拉长内容。
+4. “学习目标”写3条；“核心概念”写3～6项；“逐点讲解”按teaching_contract.explanation_subsections组织，单节点可以只讲2～4个递进小节，不为凑节数扩大知识范围。“示例”优先1个完整贯穿案例和1个简短对照，证据不足不凑第二个；“常见误区”3～5项；“练习建议”3项且所需材料和判断依据在本讲义内；“总结”4～6条。每项承担不同目的。
 5. 单个三级小节不超过 750 个字符，单个示例不超过 600 个字符，单个误区或练习建议不超过 200 个字符。完成最后一个必填字段后立即停止输出；不要为填满 token 预算重复说明、增加同义段落或扩展无关背景。
 6. 一次性完整输出整篇 Markdown，在“总结”结束后立即停止；不得拆成多段，不得在正文外附加说明。若篇幅接近上限，优先压缩措辞而非省略必填章节或知识点。
+
+教学加工规则：
+1. 严格落实teaching_contract.rules：示例自包含、受众匹配、展示名、通用与项目边界、递进和去重复。证据是事实材料，不是要照抄的课程脚本。
+2. 不得留下无法独立理解的lab-B、Q1–Q4或“参见前文”练习；沿用原例名称时，必须在当前讲义先完整提供材料和问题。主示例展示问题→最少材料→处理/检索→回答/结果→核对证据。
+3. 初级先解释概念和链路直觉，除非目标直接要求，不展开hash、模型revision、数据库迁移、冻结快照或生产治理细节；术语首次集中解释，不在每节附重复术语表、自检和相同警告。高级目标仍按显式难度处理。
+4. 本项目工程约定、实验设置必须明确限定，不能冒充通用规范；不伪造日期、API、参数或性能指标。内部节点/资源/运行/证据ID、存储路径不作教学内容，但保留真正需要学习的API术语。
+5. 输出前在内部完成teaching_contract.self_check；只输出讲义正文，不输出自检报告、证据清单或你掌握的来源数量。
 """
 
 
 class TextResourceAgent(BaseResourceGenerationAgent):
     resource_type = "讲义"
     agent_name = "TextResourceAgent"
-    prompt_version = "text-resource-v5-bounded-markdown"
+    prompt_version = "text-resource-v6-teaching-contract"
     artifact_format = "markdown"
     default_max_output_tokens = 32768
 
@@ -45,7 +53,7 @@ class TextResourceAgent(BaseResourceGenerationAgent):
         spec: ResourceSpec,
         context: ResourceGenerationContext,
     ):
-        payload = self.common_prompt_payload(spec, context)
+        payload = lecture_payload(self.common_prompt_payload(spec, context), spec, context)
         return [
             SystemMessage(content=TEXT_RESOURCE_PROMPT),
             HumanMessage(

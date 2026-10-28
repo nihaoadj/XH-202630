@@ -1,0 +1,186 @@
+# 用 LlamaIndex 构建一个 RAG 电子书库智能助手
+
+_作者: [Jonathan Jin](https://huggingface.co/jinnovation)_
+
+## 简介
+
+这份教程将指导你如何快速为你的电子书库创建一个基于 RAG 图书助手。
+就像图书馆的图书管理员帮你找书一样，这个助手也能帮你从你的电子书里找到你需要的书。
+
+## 要求
+这个助手要做得**轻巧**，**尽量在本地运行**，而且**不要用太多其他的东西**。我们会尽量用免费的开源软件，选择那种在**本地普通电脑上，比如 M1 型号的 MacBook 上就能运行的模型**。
+
+## 组件
+我们的解决方案将包括以下组件：
+- [LlamaIndex]，一个基于LLM的应用数据框架，与 [LangChain] 不同，它是专门为 RAG 设计的；
+- [Ollama]，一个简单易用的工具，可以让你在本地运行语言模型，比如Llama 2；
+- [`BAAI/bge-base-en-v1.5`](https://huggingface.co/BAAI/bge-base-en-v1.5) 嵌入模型，它的表现[相当好，并且大小适中](https://huggingface.co/spaces/mteb/leaderboard)；
+- [Llama 2]，我们将通过 [Ollama] 运行它。
+
+[LlamaIndex]: https://docs.llamaindex.ai/en/stable/index.html
+[LangChain]: https://python.langchain.com/docs/get_started/introduction
+[Ollama]: https://ollama.com/
+[Llama 2]: https://ollama.com/library/llama2
+
+
+
+## 依赖
+
+首先安装依赖库
+
+```python
+%pip install -q \
+    llama-index \
+    EbookLib \
+    html2text \
+    llama-index-embeddings-huggingface \
+    llama-index-llms-ollama
+```
+
+```python
+!brew install ollama
+```
+
+## 设置测试书库
+
+我们接下来要弄个测试用的“书库”。
+
+简单点说，我们的“书库”就是一个放有 `.epub` 格式电子书文件的**文件夹**。这个方法很容易就能扩展到像 Calibre 那种带有个 `metadata.db` 数据库文件的书库。怎么扩展这个问题，我们留给读者自己思考。😇
+
+现在，我们先从[古腾堡计划网站](https://www.gutenberg.org/)下载两本`.epub`格式的电子书放到我们的书库里。
+
+
+```python
+!mkdir -p ".test/library/jane-austen"
+!mkdir -p ".test/library/victor-hugo"
+!wget https://www.gutenberg.org/ebooks/1342.epub.noimages -O ".test/library/jane-austen/pride-and-prejudice.epub"
+!wget https://www.gutenberg.org/ebooks/135.epub.noimages -O ".test/library/victor-hugo/les-miserables.epub"
+```
+
+## 用 LlamaIndex 构建 RAG
+
+使用 LlamaIndex 的 RAG 主要包括以下三个阶段：
+
+1. **加载**，在这个阶段你告诉 LlamaIndex 你的数据在哪里以及如何加载它；
+2. **索引**，在这个阶段你扩充加载的数据以方便查询，例如使用向量嵌入；
+3. **查询**，在这个阶段你配置一个 LLM 作为你索引数据的查询接口。
+
+以上解释仅是对 LlamaIndex 可实现功能的表面说明。要想了解更多深入细节，我强烈推荐阅读 LlamaIndex 文档中的["高级概念"页面](https://docs.llamaindex.ai/en/stable/getting_started/concepts.html)。
+
+
+### 加载
+
+好的，我们首先从**加载**阶段开始。
+
+之前提到，LlamaIndex 是专为 RAG 这种混合检索生成模型设计的。这一点从它的[`SimpleDirectoryReader`](https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader.html)功能就可以明显看出，它能**神奇地**免费支持很多种文件类型。幸运的是， `.epub` 文件格式也在支持范围内。
+
+```python
+from llama_index.core import SimpleDirectoryReader
+
+loader = SimpleDirectoryReader(
+    input_dir="./.test/",
+    recursive=True,
+    required_exts=[".epub"],
+)
+
+documents = loader.load_data()
+```
+
+`SimpleDirectoryReader.load_data()` 将我们的电子书转换成一组 LlamaIndex 可以处理的 [`Document`s](https://docs.llamaindex.ai/en/stable/api/llama_index.core.schema.Document.html)。
+
+这里有一个重要的事情要注意，就是这个阶段的文档**还没有被分块**——这将在索引阶段进行。继续往下看...
+
+
+
+### 索引
+
+
+在把数据**加载**进来之后，接下来我们要做的是**建立索引**。这样我们的 RAG 系统就能找到与用户查询相关的信息，然后把这些信息传给语言模型（LLM），以便它能够**增强**回答的内容。同时，这一步也将对文档进行分块。
+
+在 LlamaIndex 中，[`VectorStoreIndex`](https://docs.llamaindex.ai/en/stable/module_guides/indexing/vector_store_index.html) 是用来建立索引的一个“默认”工具。这个工具默认使用一个简单、基于内存的字典来保存索引，但随着你的使用规模扩大，LlamaIndex 还支持
+[多种向量存储解决方案](https://docs.llamaindex.ai/en/stable/module_guides/storing/vector_stores.html)。
+
+<Tip>
+LlamaIndex 默认的块大小是 1024 个字符，块与块之间有 20 个字符的重叠。如果需要了解更多细节，可以查看 [LlamaIndex 的文档](https://docs.llamaindex.ai/en/stable/optimizing/basic_strategies/basic_strategies.html#chunk-sizes)。
+</Tip>
+
+如前所述，我们选择使用 [`BAAI/bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-base-en-v1.5) 生成嵌入，以避免使用默认的 OpenAI（特别是 gpt-3.5-turbo）模型，因为我们需要一个轻量级、可在本地运行的完整解决方案。
+
+幸运的是，LlamaIndex 可以通过 `HuggingFaceEmbedding` 类方便地从 Hugging Face 获取嵌入模型，因此我们将使用它。
+
+
+
+
+```python
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+embedding_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+```
+
+我们将把这个模型传递给 `VectorStoreIndex`，作为我们的嵌入模型，以绕过 OpenAI 的默认行为。
+
+```python
+from llama_index.core import VectorStoreIndex
+
+index = VectorStoreIndex.from_documents(
+    documents,
+    embed_model=embedding_model,
+)
+```
+
+### 查询
+
+现在我们要完成 RAG 智能助手的最后一部分——设置查询接口。
+
+在这个教程中，我们将使用 Llama 2 作为语言模型，但我建议你试试不同的模型，看看哪个能给出最好的回答。
+
+首先，我们需要在一个新的终端窗口中启动 Ollama 服务器。不过，[Ollama 的 Python 客户端](https://github.com/ollama/ollama-python)不支持直接启动和关闭服务器，所以我们需要在 Python 环境之外操作。
+
+打开一个新的终端窗口，输入命令：`ollama serve`。等我们这里操作完成后，别忘了关闭服务器！
+
+
+现在，让我们将 Llama 2 连接到 LlamaIndex，并使用它作为我们查询引擎的基础。
+
+```python
+from llama_index.llms.ollama import Ollama
+
+llama = Ollama(
+    model="llama2",
+    request_timeout=40.0,
+)
+
+query_engine = index.as_query_engine(llm=llama)
+```
+
+## 最终结果 
+
+有了这些，我们的基本的 RAG 电子书库智能助手就设置好了，我们可以开始询问有关我们电子书库的问题了。例如：
+
+
+```python
+print(query_engine.query("What are the titles of all the books available? Show me the context used to derive your answer."))
+```
+
+```python
+print(query_engine.query("Who is the main character of 'Pride and Prejudice'?"))
+```
+
+## 总结和未来可能的提升
+
+
+我们成功地展示了如何创建一个完全在本地运行的基本 RAG 的电子书库智能助手，甚至在苹果的 Apple silicon Macs 上也能运行。在这个过程中，我们还全面了解了 LlamaIndex 是如何帮助我们简化建立基于 RAG 的应用程序的。
+
+尽管如此，我们其实只是接触到了一些皮毛。下面是一些关于如何改进和在这个基础上进一步发展的想法。
+
+### 强制引用
+
+为了避免图书馆员的虚构响应，我们怎样才能要求它为其回答提供引用？
+
+### 使用扩充的元数据
+
+像 [Calibre](https://calibre-ebook.com/) 这样的电子书库管理工具会为电子书创建更多的元数据。这些元数据可以提供一些在书中文本里找不到的信息，比如出版商或版本。我们怎样才能扩展我们的 RAG 流程，使其也能利用那些不是 .epub 文件的额外信息源呢？
+
+
+### 高效索引
+
+如果我们把这里做的所有东西写成一个脚本或可执行程序，那么每次运行这个脚本时，它都会重新索引我们的图书馆。对于只有两个文件的微型测试库来说，这样还行，但对于稍大一点的图书馆来说，每次都重新索引会让用户感到非常烦恼。我们怎样才能让索引持久化，并且只在图书馆内容有重要变化时，比如添加了新书，才去更新索引呢？

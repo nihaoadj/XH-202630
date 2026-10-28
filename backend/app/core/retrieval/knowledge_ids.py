@@ -63,13 +63,29 @@ def document_version_id(
     knowledge_base_id: str,
     logical_document_id: str,
     normalized_content_hash: str,
+    *,
+    identity_revision: str | None = None,
 ) -> str:
-    return _identifier(
-        "dv",
+    """Build a stable version ID, optionally distinguishing provenance revisions.
+
+    Omitting ``identity_revision`` deliberately preserves the legacy ID material
+    byte-for-byte.  A non-empty revision is only needed when immutable source
+    identity metadata changes while the logical document and body stay the same.
+    """
+    parts: list[object] = [
         knowledge_base_id,
         logical_document_id,
         normalized_content_hash,
-    )
+    ]
+    if identity_revision is not None:
+        if (
+            not identity_revision
+            or identity_revision != identity_revision.strip()
+            or "|" in identity_revision
+        ):
+            raise ValueError("identity_revision must be a non-empty stable token")
+        parts.append(identity_revision)
+    return _identifier("dv", *parts)
 
 
 def chunking_config_hash(config: Mapping[str, Any]) -> str:

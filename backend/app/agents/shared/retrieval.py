@@ -24,6 +24,8 @@ from app.models.knowledge.knowledge import (
 from app.models.learning_documents.types import GENERAL_GENERATION_RESOURCE_TYPES, canonical_resource_type
 from app.core.retrieval.knowledge_ids import normalize_text, query_hash
 from app.models.shared.workflow import StepStatus
+from app.agents.shared.learning_queries import QUERY_VERSION, learning_queries
+from app.core.retrieval.source_balance import VERSION as SOURCE_BALANCE_VERSION
 
 
 def _node_descriptor(node_id: str) -> tuple[str, list[str]]:
@@ -154,6 +156,16 @@ def retrieve_node(
                     "query_strategy_version": strategy,
                     "ranking_strategy_version": "resource-aware-owner-v1",
                 })
+    refinement_reason = None
+    if strategy == LEGACY_RETRIEVAL_STRATEGY and node_input.retrieval_strategy_version != RESOURCE_AWARE_STRATEGY:
+        if getattr(evidence_retriever.settings, "learning_retrieval_refinement_enabled", False):
+            focused = learning_queries(node_input, _node_descriptor, policy.max_query_count)
+            if focused is None:
+                refinement_reason = "query_shape_or_budget_fallback"
+            else:
+                queries, query_node_ids = focused
+                policy = policy.model_copy(update={"query_strategy_version": QUERY_VERSION,
+                    "ranking_strategy_version": SOURCE_BALANCE_VERSION})
     request = RetrievalRequest(
         run_id=node_input.run_id,
         step_id=step_context["step_id"],
@@ -205,9 +217,12 @@ def retrieve_node(
         final_retrieval_source = "global"
     profile.update({
         "retrieval_strategy_version": strategy,
+        "learning_query_strategy": policy.query_strategy_version,
         "final_retrieval_source": final_retrieval_source,
         "node_mapped_chunk_count": len(allowed_chunk_ids),
     })
+    if refinement_reason:
+        profile["learning_refinement_fallback"] = refinement_reason
     if strategy_reason:
         profile["strategy_fallback_reason"] = strategy_reason
     if fallback_reason:

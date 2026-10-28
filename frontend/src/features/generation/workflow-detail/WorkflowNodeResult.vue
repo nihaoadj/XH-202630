@@ -7,14 +7,26 @@
         <ol class="planning-path"><li v-for="(topic, index) in result.topics" :key="index"><span class="path-index" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><div><span class="path-label">学习主题</span><p>{{ topic }}</p></div></li></ol>
       </template>
       <template v-else-if="result.kind === 'diagnosis'">
-        <div class="diagnosis-result"><div class="diagnosis-level"><span class="result-caption">推荐起点</span><strong>{{ result.difficulty }}</strong></div><div class="diagnosis-blindspots"><span class="result-caption">待加强的知识点</span><p>{{ result.blindspots }}</p></div></div>
+        <div class="diagnosis-result">
+          <div class="diagnosis-level"><span class="result-caption">推荐起点</span><strong>{{ result.difficulty }}</strong><small>按本次诊断安排学习起点</small></div>
+          <div class="diagnosis-blindspots"><span class="result-caption">待加强的知识点</span>
+            <template v-if="diagnosisItems !== null">
+              <ul v-if="diagnosisItems.length" class="diagnosis-point-list"><li v-for="(point, index) in diagnosisItems" :key="index"><span class="diagnosis-point-index">{{ String(index + 1).padStart(2, '0') }}</span><span>{{ point }}</span></li></ul>
+              <p v-else class="result-caption">本次摘要未列出待加强知识点。</p>
+            </template>
+            <p v-else>{{ result.blindspots }}</p>
+          </div>
+        </div>
         <p class="result-caption">来自本次诊断摘要；接口未提供完整诊断报告。</p>
       </template>
       <template v-else-if="role.key === 'generate'">
         <template v-if="resource">
           <div class="generated-heading"><strong>{{ resource.resource_type || '学习资源' }} <span>v{{ resource.version || '?' }}</span></strong><span class="result-caption">只读执行产物</span></div>
           <p v-if="resource.content_text == null" class="empty-note">此版本正文未记录，无法展示生成内容。</p>
-          <pre v-else class="generated-content">{{ resource.content_text }}</pre>
+          <template v-else>
+            <div class="generated-content generated-markdown detail-markdown" v-html="renderMarkdown(resource.content_text)" />
+            <details class="generated-raw detail-disclosure"><summary>查看原始 Markdown</summary><pre>{{ resource.content_text }}</pre></details>
+          </template>
         </template>
         <p v-else class="empty-note">本节点未关联可读取的生成版本，未使用其他资源替代。</p>
       </template>
@@ -25,8 +37,10 @@
 </template>
 <script setup>
 import { computed } from 'vue'
-import { detailRole, projectNodeResult } from '../workflowDetailPresentation.js'
+import { renderMarkdown } from '../../../utils/markdown.js'
+import { detailRole, projectNodeResult, diagnosisPointItems } from '../workflowDetailPresentation.js'
 const props = defineProps({ step: { type: Object, required: true }, resource: { type: Object, default: null } })
 const role = computed(() => detailRole(props.step))
 const result = computed(() => projectNodeResult(props.step))
+const diagnosisItems = computed(() => result.value.kind === 'diagnosis' ? diagnosisPointItems(result.value.blindspots) : null)
 </script>

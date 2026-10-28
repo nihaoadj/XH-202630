@@ -1,0 +1,1955 @@
+{
+  "schema_version": 1,
+  "alias_version": "1.1.0",
+  "purpose": "Human-curated retrieval aliases grounded in authoritative source snapshots, not translated documents or indexed knowledge.",
+  "terminology_policy": "Chinese triggers include manually curated equivalent search expressions; not every synonym is a verbatim source quote. Project compatibility triggers such as source_ref, Claim review and RAG 评测 retain their historical role and do not claim a source-defined API or metric.",
+  "compatibility_terms": [
+    "检索增强生成",
+    "RAG 基础概念",
+    "retrieval augmented generation",
+    "RAG",
+    "假设文档",
+    "hypothetical document",
+    "HyDE",
+    "文档解析",
+    "格式解析",
+    "文本清洗",
+    "document parsing",
+    "text cleaning",
+    "Chunk 切分",
+    "chunk_size",
+    "chunk_overlap",
+    "文本切分",
+    "chunking",
+    "向量表示",
+    "语义相似度",
+    "Embedding",
+    "非对称语义检索",
+    "asymmetric semantic search",
+    "encode_query",
+    "encode_document",
+    "向量数据库",
+    "向量存储",
+    "vector database",
+    "vector store",
+    "持久化向量",
+    "相似度检索",
+    "similarity search",
+    "Top-K",
+    "top k",
+    "召回率",
+    "Recall",
+    "混合检索",
+    "hybrid retrieval",
+    "关键词检索",
+    "向量检索",
+    "BM25",
+    "RRF",
+    "reciprocal rank fusion",
+    "Cross-Encoder",
+    "Cross Encoder",
+    "重排序",
+    "精排",
+    "Rerank",
+    "reranking",
+    "Prompt 组装",
+    "上下文窗口",
+    "指令约束",
+    "prompt assembly",
+    "context window",
+    "引用溯源",
+    "source_ref",
+    "证据片段",
+    "citation",
+    "source attribution",
+    "Claim 审核",
+    "Claim review",
+    "幻觉控制",
+    "证据支持",
+    "grounded answer",
+    "factual evidence",
+    "RAG 评测",
+    "RAG评测",
+    "RAG evaluation",
+    "命中率",
+    "覆盖率",
+    "幻觉率",
+    "hit rate",
+    "hallucination rate",
+    "MRR",
+    "NDCG",
+    "Mean Reciprocal Rank",
+    "Normalized Discounted Cumulative Gain",
+    "RAG 调优",
+    "参数调优",
+    "消融实验",
+    "RAG tuning",
+    "parameter tuning",
+    "ablation study",
+    "对称语义检索",
+    "symmetric semantic search"
+  ],
+  "scope_note": "Configuration only. No new parsing, retrieval, training, caching or evaluation algorithm is implemented by naming it here. Generic coverage/hallucination-rate aliases do not define a universal metric formula.",
+  "entries": [
+    {
+      "concept": "检索增强生成",
+      "category": "基础架构",
+      "english_keywords": "retrieval augmented generation",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "Retrieval-Augmented Generation (RAG)",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "知识库",
+      "category": "基础架构",
+      "english_keywords": "knowledge base external knowledge",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "A **knowledge base**",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "两步RAG",
+      "category": "基础架构",
+      "english_keywords": "2-step RAG retrieval before generation",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "Retrieval always happens before generation",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "智能体RAG",
+      "category": "基础架构",
+      "english_keywords": "agentic RAG reasoning retrieval",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "Agentic Retrieval-Augmented Generation (RAG)",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "图RAG",
+      "category": "基础架构",
+      "english_keywords": "graph RAG knowledge graph",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_graph",
+          "file": "references/zh/milvus/graph/content.md",
+          "anchor_text": "知识图谱",
+          "source_snapshot": "references/zh/milvus/graph/original.md",
+          "source_sha256": "778e4614378007bde6d4334f38ce897d6911be3af4a46cd9799aa8d08143a8f8",
+          "content_sha256": "c3b58a193a5cc0a3d0d279d27c57b9b33b32971ece8e54f5743d3c92ca486da1"
+        }
+      ]
+    },
+    {
+      "concept": "多模态RAG",
+      "category": "基础架构",
+      "english_keywords": "multimodal RAG image text retrieval",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_multi_vector",
+          "file": "references/zh/milvus/multi_vector/content.md",
+          "anchor_text": "多模态",
+          "source_snapshot": "references/zh/milvus/multi_vector/original.md",
+          "source_sha256": "bc568a9c03e4a623eb578d3db8b28c641ca3a92ea7a3ca3ef047a79e875d3f70",
+          "content_sha256": "998f5977b098f516c6bf0fd9f7fd409c6e42780e92193fe5b3611b81a16ee15b"
+        }
+      ]
+    },
+    {
+      "concept": "文档加载",
+      "category": "解析结构",
+      "english_keywords": "document loaders ingest data",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "Document loaders",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "文档解析",
+      "category": "解析结构",
+      "english_keywords": "document parsing PDF extraction",
+      "sources": [
+        {
+          "document_id": "source_zh_mineru_overview",
+          "file": "references/zh/mineru/overview/content.md",
+          "anchor_text": "reading or parsing supported PDFs",
+          "source_snapshot": "references/zh/mineru/overview/original.md",
+          "source_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
+          "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9"
+        }
+      ]
+    },
+    {
+      "concept": "文本清洗",
+      "category": "解析结构",
+      "english_keywords": "text preprocessing filtering cleaning",
+      "sources": [
+        {
+          "document_id": "source_sbert_training_overview",
+          "file": "references/en/sentence_transformers/training_overview/content.md",
+          "anchor_text": "preprocessing, filtering, cleaning",
+          "source_snapshot": "references/en/sentence_transformers/training_overview/original.md",
+          "source_sha256": "17fe1adab43dcac9f3664c314aea35c0cb21ad2c8ae9ddfbba37768bd659e54c",
+          "content_sha256": "b69e2c3a92118e9bbd42953826a89654f544770a557fa7de5a91b132eb0fe097"
+        }
+      ]
+    },
+    {
+      "concept": "OCR识别",
+      "category": "解析结构",
+      "english_keywords": "OCR scanned PDF images",
+      "sources": [
+        {
+          "document_id": "source_zh_mineru_overview",
+          "file": "references/zh/mineru/overview/content.md",
+          "anchor_text": "OCR scanned PDFs or images",
+          "source_snapshot": "references/zh/mineru/overview/original.md",
+          "source_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
+          "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9"
+        }
+      ]
+    },
+    {
+      "concept": "版面结构",
+      "category": "解析结构",
+      "english_keywords": "document page layout parsing",
+      "sources": [
+        {
+          "document_id": "source_zh_mineru_overview",
+          "file": "references/zh/mineru/overview/content.md",
+          "anchor_text": "complex page layouts",
+          "source_snapshot": "references/zh/mineru/overview/original.md",
+          "source_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
+          "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9"
+        }
+      ]
+    },
+    {
+      "concept": "表格结构抽取",
+      "category": "解析结构",
+      "english_keywords": "table element HTML metadata",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_unstructured",
+          "file": "references/zh/huggingface/unstructured/content.md",
+          "anchor_text": "html",
+          "source_snapshot": "references/zh/huggingface/unstructured/original.ipynb",
+          "source_sha256": "173922ff5a180cdcda2aa6ffa100f6acc8990ae71570e7fd5a8917f0c14193d1",
+          "content_sha256": "a71c28b19655b83a3bf2056e2ceb09e0c48bd8b68d939c0611cfbc6bceb8cdd8"
+        }
+      ]
+    },
+    {
+      "concept": "跨页表格",
+      "category": "解析结构",
+      "english_keywords": "cross-page table merge",
+      "sources": [
+        {
+          "document_id": "source_zh_mineru_usage",
+          "file": "references/zh/mineru/usage/content.md",
+          "anchor_text": "续接",
+          "source_snapshot": "references/zh/mineru/usage/original.md",
+          "source_sha256": "279a396168e2f7e6c8d7e55761b863b0576d1a905b9a6147fe42122be77e1e1f",
+          "content_sha256": "ebed28458c2cd1682ce9293adba4b7cfebec2f5a6faff1c59a92c45bb204c1a3"
+        }
+      ]
+    },
+    {
+      "concept": "公式抽取",
+      "category": "解析结构",
+      "english_keywords": "formula equation extraction",
+      "sources": [
+        {
+          "document_id": "source_zh_mineru_output",
+          "file": "references/zh/mineru/output/content.md",
+          "anchor_text": "行内公式",
+          "source_snapshot": "references/zh/mineru/output/original.md",
+          "source_sha256": "63291b35a65719469d3c89073050c7847fb424cf27be928824602b302bdd25c2",
+          "content_sha256": "4b313fc1d73227201a50929a6f9e89cc2e331e72a17ab050385768eca7aac813"
+        }
+      ]
+    },
+    {
+      "concept": "文档位置定位",
+      "category": "解析结构",
+      "english_keywords": "document location locator bounding box",
+      "sources": [
+        {
+          "document_id": "source_zh_mineru_overview",
+          "file": "references/zh/mineru/overview/content.md",
+          "anchor_text": "locators",
+          "source_snapshot": "references/zh/mineru/overview/original.md",
+          "source_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
+          "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9"
+        }
+      ]
+    },
+    {
+      "concept": "结构化内容输出",
+      "category": "解析结构",
+      "english_keywords": "structured content document output",
+      "sources": [
+        {
+          "document_id": "source_zh_mineru_output",
+          "file": "references/zh/mineru/output/content.md",
+          "anchor_text": "structured_content()",
+          "source_snapshot": "references/zh/mineru/output/original.md",
+          "source_sha256": "63291b35a65719469d3c89073050c7847fb424cf27be928824602b302bdd25c2",
+          "content_sha256": "4b313fc1d73227201a50929a6f9e89cc2e331e72a17ab050385768eca7aac813"
+        }
+      ]
+    },
+    {
+      "concept": "通用文本分块",
+      "category": "分块",
+      "english_keywords": "text chunking text splitting",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "Text splitters",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "递归字符分块",
+      "category": "分块",
+      "english_keywords": "recursive character text splitting",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "RecursiveCharacterTextSplitter",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "语义分块",
+      "category": "分块",
+      "english_keywords": "semantic chunking semantic chunker",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "语义分块",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "Token计数分块",
+      "category": "分块",
+      "english_keywords": "token-aware text splitting",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "from_huggingface_tokenizer",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "分块大小",
+      "category": "分块",
+      "english_keywords": "text chunking chunk size",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "chunk_size",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "分块重叠",
+      "category": "分块",
+      "english_keywords": "text chunking chunk overlap",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "chunk_overlap",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "Markdown标题分块",
+      "category": "分块",
+      "english_keywords": "MarkdownHeaderTextSplitter markdown headers",
+      "sources": [
+        {
+          "document_id": "source_langchain_markdown_splitter",
+          "file": "references/en/langchain/markdown_splitter/content.md",
+          "anchor_text": "MarkdownHeaderTextSplitter",
+          "source_snapshot": "references/en/langchain/markdown_splitter/original.mdx",
+          "source_sha256": "9e74b44f9fe42bfb6f527b0cc261d234dd4b5858501caa508403f60e0c718d07",
+          "content_sha256": "d968d91a42a9b902ea58b931b9fbff3257ad96d8f8a27c7bab30edb7fd510943"
+        }
+      ]
+    },
+    {
+      "concept": "标题感知分块",
+      "category": "分块",
+      "english_keywords": "title-based document chunking",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_unstructured",
+          "file": "references/zh/huggingface/unstructured/content.md",
+          "anchor_text": "chunk_by_title",
+          "source_snapshot": "references/zh/huggingface/unstructured/original.ipynb",
+          "source_sha256": "173922ff5a180cdcda2aa6ffa100f6acc8990ae71570e7fd5a8917f0c14193d1",
+          "content_sha256": "a71c28b19655b83a3bf2056e2ceb09e0c48bd8b68d939c0611cfbc6bceb8cdd8"
+        }
+      ]
+    },
+    {
+      "concept": "HTML标题分块",
+      "category": "分块",
+      "english_keywords": "HTMLHeaderTextSplitter header tags",
+      "sources": [
+        {
+          "document_id": "source_langchain_html_splitters",
+          "file": "references/en/langchain/html_splitters/content.md",
+          "anchor_text": "HTMLHeaderTextSplitter",
+          "source_snapshot": "references/en/langchain/html_splitters/original.mdx",
+          "source_sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+          "content_sha256": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77"
+        }
+      ]
+    },
+    {
+      "concept": "HTML章节分块",
+      "category": "分块",
+      "english_keywords": "HTMLSectionSplitter section splitting",
+      "sources": [
+        {
+          "document_id": "source_langchain_html_splitters",
+          "file": "references/en/langchain/html_splitters/content.md",
+          "anchor_text": "HTMLSectionSplitter",
+          "source_snapshot": "references/en/langchain/html_splitters/original.mdx",
+          "source_sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+          "content_sha256": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77"
+        }
+      ]
+    },
+    {
+      "concept": "HTML结构保留分块",
+      "category": "分块",
+      "english_keywords": "HTMLSemanticPreservingSplitter structured elements",
+      "sources": [
+        {
+          "document_id": "source_langchain_html_splitters",
+          "file": "references/en/langchain/html_splitters/content.md",
+          "anchor_text": "HTMLSemanticPreservingSplitter",
+          "source_snapshot": "references/en/langchain/html_splitters/original.mdx",
+          "source_sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+          "content_sha256": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77"
+        }
+      ]
+    },
+    {
+      "concept": "父子块合并",
+      "category": "分块",
+      "english_keywords": "parent child chunk auto merging",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_enhance",
+          "file": "references/zh/milvus/enhance/content.md",
+          "anchor_text": "子块及其对应的父块",
+          "source_snapshot": "references/zh/milvus/enhance/original.md",
+          "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+        }
+      ]
+    },
+    {
+      "concept": "句子窗口检索",
+      "category": "分块",
+      "english_keywords": "sentence window retrieval context expansion",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_enhance",
+          "file": "references/zh/milvus/enhance/content.md",
+          "anchor_text": "句子窗口检索",
+          "source_snapshot": "references/zh/milvus/enhance/original.md",
+          "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+        }
+      ]
+    },
+    {
+      "concept": "分层摘要索引",
+      "category": "分块",
+      "english_keywords": "hierarchical document summary index",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_enhance",
+          "file": "references/zh/milvus/enhance/content.md",
+          "anchor_text": "文档摘要索引",
+          "source_snapshot": "references/zh/milvus/enhance/original.md",
+          "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+        }
+      ]
+    },
+    {
+      "concept": "片段去重",
+      "category": "分块",
+      "english_keywords": "deduplicate identical text chunks",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "Remove duplicates",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "起始位置元数据",
+      "category": "分块",
+      "english_keywords": "chunk start index metadata",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "add_start_index=True",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "文本嵌入",
+      "category": "编码与向量",
+      "english_keywords": "embeddings vector representation semantic similarity",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "Embedding models",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "双编码器",
+      "category": "编码与向量",
+      "english_keywords": "bi-encoder independently encoded embeddings",
+      "sources": [
+        {
+          "document_id": "source_sbert_ms_marco_training",
+          "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+          "anchor_text": "documents are independently encoded",
+          "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
+          "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+        }
+      ]
+    },
+    {
+      "concept": "查询编码",
+      "category": "编码与向量",
+      "english_keywords": "encode_query query encoding",
+      "sources": [
+        {
+          "document_id": "source_sbert_semantic_search",
+          "file": "references/en/sentence_transformers/semantic_search/content.md",
+          "anchor_text": "encode_query",
+          "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
+          "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+        }
+      ]
+    },
+    {
+      "concept": "文档编码",
+      "category": "编码与向量",
+      "english_keywords": "encode_document document encoding",
+      "sources": [
+        {
+          "document_id": "source_sbert_semantic_search",
+          "file": "references/en/sentence_transformers/semantic_search/content.md",
+          "anchor_text": "encode_document",
+          "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
+          "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+        }
+      ]
+    },
+    {
+      "concept": "非对称检索",
+      "category": "编码与向量",
+      "english_keywords": "asymmetric semantic search",
+      "sources": [
+        {
+          "document_id": "source_sbert_semantic_search",
+          "file": "references/en/sentence_transformers/semantic_search/content.md",
+          "anchor_text": "asymmetric semantic search",
+          "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
+          "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+        }
+      ]
+    },
+    {
+      "concept": "对称检索",
+      "category": "编码与向量",
+      "english_keywords": "symmetric semantic search",
+      "sources": [
+        {
+          "document_id": "source_sbert_semantic_search",
+          "file": "references/en/sentence_transformers/semantic_search/content.md",
+          "anchor_text": "symmetric semantic search",
+          "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
+          "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+        }
+      ]
+    },
+    {
+      "concept": "编码提示前缀",
+      "category": "编码与向量",
+      "english_keywords": "query document prompts encoding",
+      "sources": [
+        {
+          "document_id": "source_langchain_sentence_transformers_embeddings",
+          "file": "references/en/langchain/sentence_transformers_embeddings/content.md",
+          "anchor_text": "Query and document prompts",
+          "source_snapshot": "references/en/langchain/sentence_transformers_embeddings/original.mdx",
+          "source_sha256": "92a6838f4acc671ba4f631c8a288c06c44732d0d7150d541f5c7f228e059541c",
+          "content_sha256": "911397c385884a77c787161714b0b020976cfe1fe4138330823b85d23313c9e5"
+        }
+      ]
+    },
+    {
+      "concept": "向量归一化",
+      "category": "编码与向量",
+      "english_keywords": "normalized embeddings unit length",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "normalize vectors to unit length",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "向量维度",
+      "category": "编码与向量",
+      "english_keywords": "embedding dimension vector size",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "embedding_size",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "编码输入截断",
+      "category": "编码与向量",
+      "english_keywords": "embedding max sequence length truncation",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "被截断",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "多语言嵌入",
+      "category": "编码与向量",
+      "english_keywords": "multilingual cross-lingual embeddings retrieval",
+      "sources": [
+        {
+          "document_id": "source_zh_flag_bge",
+          "file": "references/zh/flagembedding/bge/content.md",
+          "anchor_text": "多语言",
+          "source_snapshot": "references/zh/flagembedding/bge/original.md",
+          "source_sha256": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
+          "content_sha256": "e1ce1595136435dcaefeffa9914ddc2647c0bdc3d34aadb021bc242a498d6920"
+        }
+      ]
+    },
+    {
+      "concept": "BGE-M3模型",
+      "category": "编码与向量",
+      "english_keywords": "BGE-M3 multilingual dense sparse multi-vector",
+      "sources": [
+        {
+          "document_id": "source_zh_flag_bge",
+          "file": "references/zh/flagembedding/bge/content.md",
+          "anchor_text": "BGE-M3",
+          "source_snapshot": "references/zh/flagembedding/bge/original.md",
+          "source_sha256": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
+          "content_sha256": "e1ce1595136435dcaefeffa9914ddc2647c0bdc3d34aadb021bc242a498d6920"
+        }
+      ]
+    },
+    {
+      "concept": "多向量表征",
+      "category": "编码与向量",
+      "english_keywords": "multi-vector representation retrieval",
+      "sources": [
+        {
+          "document_id": "source_zh_flag_bge",
+          "file": "references/zh/flagembedding/bge/content.md",
+          "anchor_text": "多向量",
+          "source_snapshot": "references/zh/flagembedding/bge/original.md",
+          "source_sha256": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
+          "content_sha256": "e1ce1595136435dcaefeffa9914ddc2647c0bdc3d34aadb021bc242a498d6920"
+        }
+      ]
+    },
+    {
+      "concept": "相似度检索",
+      "category": "检索基础",
+      "english_keywords": "similarity search semantic search semantic similarity",
+      "sources": [
+        {
+          "document_id": "source_sbert_semantic_search",
+          "file": "references/en/sentence_transformers/semantic_search/content.md",
+          "anchor_text": "Semantic search",
+          "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
+          "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+        }
+      ]
+    },
+    {
+      "concept": "余弦相似度",
+      "category": "检索基础",
+      "english_keywords": "cosine similarity cosine distance",
+      "sources": [
+        {
+          "document_id": "source_langchain_elasticsearch_retrieval",
+          "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+          "anchor_text": "cosine similarity",
+          "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+          "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+        }
+      ]
+    },
+    {
+      "concept": "内积度量",
+      "category": "检索基础",
+      "english_keywords": "inner product dot product",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "Inner Product (dot-product)",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "欧氏距离",
+      "category": "检索基础",
+      "english_keywords": "euclidean L2 distance",
+      "sources": [
+        {
+          "document_id": "source_langchain_elasticsearch_retrieval",
+          "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+          "anchor_text": "euclidean",
+          "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+          "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+        }
+      ]
+    },
+    {
+      "concept": "TopK候选数",
+      "category": "检索基础",
+      "english_keywords": "top-k retrieval results",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "top_k_hits",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "K近邻",
+      "category": "检索基础",
+      "english_keywords": "nearest neighbor search kNN",
+      "sources": [
+        {
+          "document_id": "source_sbert_semantic_search",
+          "file": "references/en/sentence_transformers/semantic_search/content.md",
+          "anchor_text": "nearest neighbor",
+          "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
+          "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+        }
+      ]
+    },
+    {
+      "concept": "近似近邻ANN",
+      "category": "检索基础",
+      "english_keywords": "approximate nearest neighbor ANN",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "Approximate Nearest Neighbor (ANN)",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "精确近邻搜索",
+      "category": "检索基础",
+      "english_keywords": "exact nearest neighbor search",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "exact nearest neighbor search",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "FAISS索引",
+      "category": "检索基础",
+      "english_keywords": "FAISS vector index",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "FAISS",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "IVF聚类索引",
+      "category": "检索基础",
+      "english_keywords": "IndexIVFFlat inverted file clusters",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "IndexIVFFlat",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "ANN探测簇参数",
+      "category": "检索基础",
+      "english_keywords": "nprobe clusters search time",
+      "sources": [
+        {
+          "document_id": "source_sbert_faiss_semantic_search",
+          "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+          "anchor_text": "index.nprobe",
+          "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+          "source_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+          "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71"
+        }
+      ]
+    },
+    {
+      "concept": "HNSW索引",
+      "category": "检索基础",
+      "english_keywords": "HNSW approximate nearest neighbor",
+      "sources": [
+        {
+          "document_id": "source_sbert_semantic_search",
+          "file": "references/en/sentence_transformers/semantic_search/content.md",
+          "anchor_text": "HNSW",
+          "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
+          "source_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+          "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2"
+        }
+      ]
+    },
+    {
+      "concept": "向量数据库",
+      "category": "存储与过滤",
+      "english_keywords": "vector database vector store",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "Vector stores",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "持久化向量",
+      "category": "存储与过滤",
+      "english_keywords": "vector store data persistence persist_directory",
+      "sources": [
+        {
+          "document_id": "source_langchain_chroma_vectorstore",
+          "file": "references/en/langchain/chroma_vectorstore/content.md",
+          "anchor_text": "with data persistence",
+          "source_snapshot": "references/en/langchain/chroma_vectorstore/original.mdx",
+          "source_sha256": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
+          "content_sha256": "4557e7051b3f75e33db3f980555eff495bb59f42b252dccb07fe26000ed1516d"
+        }
+      ]
+    },
+    {
+      "concept": "元数据过滤",
+      "category": "存储与过滤",
+      "english_keywords": "metadata filtering",
+      "sources": [
+        {
+          "document_id": "source_langchain_elasticsearch_retrieval",
+          "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+          "anchor_text": "filtering on metadata",
+          "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+          "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+        }
+      ]
+    },
+    {
+      "concept": "相似度阈值",
+      "category": "存储与过滤",
+      "english_keywords": "similarity score threshold",
+      "sources": [
+        {
+          "document_id": "source_langchain_pdf_semantic_search_rag",
+          "file": "references/en/langchain/pdf_semantic_search_rag/content.md",
+          "anchor_text": "similarity_score_threshold",
+          "source_snapshot": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
+          "source_sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+          "content_sha256": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a"
+        }
+      ]
+    },
+    {
+      "concept": "MMR多样性",
+      "category": "存储与过滤",
+      "english_keywords": "maximum marginal relevance MMR",
+      "sources": [
+        {
+          "document_id": "source_langchain_pdf_semantic_search_rag",
+          "file": "references/en/langchain/pdf_semantic_search_rag/content.md",
+          "anchor_text": "maximum marginal relevance",
+          "source_snapshot": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
+          "source_sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+          "content_sha256": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a"
+        }
+      ]
+    },
+    {
+      "concept": "向量集合",
+      "category": "存储与过滤",
+      "english_keywords": "vector store collection",
+      "sources": [
+        {
+          "document_id": "source_langchain_chroma_vectorstore",
+          "file": "references/en/langchain/chroma_vectorstore/content.md",
+          "anchor_text": "collection_name",
+          "source_snapshot": "references/en/langchain/chroma_vectorstore/original.mdx",
+          "source_sha256": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
+          "content_sha256": "4557e7051b3f75e33db3f980555eff495bb59f42b252dccb07fe26000ed1516d"
+        }
+      ]
+    },
+    {
+      "concept": "确定性ID与更新",
+      "category": "存储与过滤",
+      "english_keywords": "deterministic chunk IDs upsert",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_pipeline",
+          "file": "references/zh/milvus/pipeline/content.md",
+          "anchor_text": "Generate deterministic IDs",
+          "source_snapshot": "references/zh/milvus/pipeline/original.md",
+          "source_sha256": "35321b091aca9ce9e0e8d61e521fe7b3b277409ba4d428ecda972713958505a3",
+          "content_sha256": "cc961e8a1370add8ac1c3c91fd8cf856e7257b52f387487e02d092b69f59f6a0"
+        }
+      ]
+    },
+    {
+      "concept": "词面关键词检索",
+      "category": "词法与融合",
+      "english_keywords": "lexical retrieval keyword search",
+      "sources": [
+        {
+          "document_id": "source_sbert_retrieve_rerank",
+          "file": "references/en/sentence_transformers/retrieve_rerank/content.md",
+          "anchor_text": "Lexical search looks for literal matches",
+          "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
+          "source_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+          "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a"
+        }
+      ]
+    },
+    {
+      "concept": "稠密向量检索",
+      "category": "词法与融合",
+      "english_keywords": "dense retrieval dense vector search",
+      "sources": [
+        {
+          "document_id": "source_sbert_retrieve_rerank",
+          "file": "references/en/sentence_transformers/retrieve_rerank/content.md",
+          "anchor_text": "dense retrieval",
+          "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
+          "source_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+          "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a"
+        }
+      ]
+    },
+    {
+      "concept": "稀疏向量检索",
+      "category": "词法与融合",
+      "english_keywords": "sparse vector retrieval",
+      "sources": [
+        {
+          "document_id": "source_langchain_elasticsearch_retrieval",
+          "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+          "anchor_text": "sparse vector retrieval",
+          "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+          "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+        }
+      ]
+    },
+    {
+      "concept": "全文检索",
+      "category": "词法与融合",
+      "english_keywords": "full-text search",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_fulltext_tutorial",
+          "file": "references/zh/milvus/fulltext_tutorial/content.md",
+          "anchor_text": "全文搜索",
+          "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
+          "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+        }
+      ]
+    },
+    {
+      "concept": "BM25算法",
+      "category": "词法与融合",
+      "english_keywords": "BM25 lexical retrieval",
+      "sources": [
+        {
+          "document_id": "source_paper_dpr",
+          "file": "references/en/papers/dpr/content.md",
+          "anchor_text": "BM25",
+          "source_snapshot": "references/en/papers/dpr/original.pdf",
+          "source_sha256": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+          "content_sha256": "fa9f0e633379995d2489393f68d1f9a57eae59a1b742a45f5d0b43811556d293"
+        }
+      ]
+    },
+    {
+      "concept": "混合检索",
+      "category": "词法与融合",
+      "english_keywords": "hybrid retrieval hybrid search",
+      "sources": [
+        {
+          "document_id": "source_langchain_elasticsearch_retrieval",
+          "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+          "anchor_text": "Hybrid retrieval with dense vector and keyword search",
+          "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+          "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+        }
+      ]
+    },
+    {
+      "concept": "RRF融合",
+      "category": "词法与融合",
+      "english_keywords": "RRF reciprocal rank fusion",
+      "sources": [
+        {
+          "document_id": "source_langchain_elasticsearch_retrieval",
+          "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+          "anchor_text": "Reciprocal Rank Fusion",
+          "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+          "source_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+          "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+        }
+      ]
+    },
+    {
+      "concept": "加权融合",
+      "category": "词法与融合",
+      "english_keywords": "weighted ranker fusion weights",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_multi_vector",
+          "file": "references/zh/milvus/multi_vector/content.md",
+          "anchor_text": "加权排序器",
+          "source_snapshot": "references/zh/milvus/multi_vector/original.md",
+          "source_sha256": "bc568a9c03e4a623eb578d3db8b28c641ca3a92ea7a3ca3ef047a79e875d3f70",
+          "content_sha256": "998f5977b098f516c6bf0fd9f7fd409c6e42780e92193fe5b3611b81a16ee15b"
+        }
+      ]
+    },
+    {
+      "concept": "全文分析器",
+      "category": "词法与融合",
+      "english_keywords": "text analyzer lexical analysis",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_fulltext_tutorial",
+          "file": "references/zh/milvus/fulltext_tutorial/content.md",
+          "anchor_text": "词法分析",
+          "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
+          "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+        }
+      ]
+    },
+    {
+      "concept": "分词器",
+      "category": "词法与融合",
+      "english_keywords": "tokenizer tokenization",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_fulltext_tutorial",
+          "file": "references/zh/milvus/fulltext_tutorial/content.md",
+          "anchor_text": "tokenizer",
+          "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
+          "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+        }
+      ]
+    },
+    {
+      "concept": "停用词过滤",
+      "category": "词法与融合",
+      "english_keywords": "stop words stopword removal",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_fulltext_tutorial",
+          "file": "references/zh/milvus/fulltext_tutorial/content.md",
+          "anchor_text": "停止词删除",
+          "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
+          "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+        }
+      ]
+    },
+    {
+      "concept": "词干分析",
+      "category": "词法与融合",
+      "english_keywords": "stemming lexical analysis",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_fulltext_tutorial",
+          "file": "references/zh/milvus/fulltext_tutorial/content.md",
+          "anchor_text": "词干分析",
+          "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
+          "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+        }
+      ]
+    },
+    {
+      "concept": "多语言分析器",
+      "category": "词法与融合",
+      "english_keywords": "multilingual analyzer language field",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_fulltext_tutorial",
+          "file": "references/zh/milvus/fulltext_tutorial/content.md",
+          "anchor_text": "multi_analyzer_params",
+          "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
+          "source_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+          "content_sha256": "368e31b5a8ef0dba5b6b8f51275378dc437cec38928dbfd2b889234d6f1b0072"
+        }
+      ]
+    },
+    {
+      "concept": "稀疏倒排索引",
+      "category": "词法与融合",
+      "english_keywords": "sparse inverted index",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_fulltext",
+          "file": "references/zh/milvus/fulltext/content.md",
+          "anchor_text": "SPARSE_INVERTED_INDEX",
+          "source_snapshot": "references/zh/milvus/fulltext/original.md",
+          "source_sha256": "be6c00e9723e70b06f90e613694688a5deacb0e128398466b60d44aa0cfc3c78",
+          "content_sha256": "ced7c8072d4d055d718f38a77fe55e5b6b70feb2714550489aeb1847f2c80658"
+        }
+      ]
+    },
+    {
+      "concept": "查询改写",
+      "category": "查询增强",
+      "english_keywords": "query rewriting query reformulation",
+      "sources": [
+        {
+          "document_id": "source_paper_rag_best_practices",
+          "file": "references/en/papers/rag_best_practices/content.md",
+          "anchor_text": "Query Rewriting",
+          "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+          "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+        }
+      ]
+    },
+    {
+      "concept": "多查询变体",
+      "category": "查询增强",
+      "english_keywords": "multiple query variations",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "multiple variations",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "查询分解",
+      "category": "查询增强",
+      "english_keywords": "query decomposition subqueries",
+      "sources": [
+        {
+          "document_id": "source_paper_rag_best_practices",
+          "file": "references/en/papers/rag_best_practices/content.md",
+          "anchor_text": "Query Decomposition",
+          "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+          "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+        }
+      ]
+    },
+    {
+      "concept": "HyDE假设文档",
+      "category": "查询增强",
+      "english_keywords": "HyDE hypothetical document embeddings",
+      "sources": [
+        {
+          "document_id": "source_paper_hyde",
+          "file": "references/en/papers/hyde/content.md",
+          "anchor_text": "Hypothetical Document",
+          "source_snapshot": "references/en/papers/hyde/original.pdf",
+          "source_sha256": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+          "content_sha256": "d36028d9730b227cc37c5783da35d4a5119cff631fa6941fd86d8b4190bdf4ae"
+        }
+      ]
+    },
+    {
+      "concept": "假设问题索引",
+      "category": "查询增强",
+      "english_keywords": "hypothetical question indexing",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_enhance",
+          "file": "references/zh/milvus/enhance/content.md",
+          "anchor_text": "假设问题",
+          "source_snapshot": "references/zh/milvus/enhance/original.md",
+          "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+        }
+      ]
+    },
+    {
+      "concept": "后退式问题",
+      "category": "查询增强",
+      "english_keywords": "step-back query abstraction",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_enhance",
+          "file": "references/zh/milvus/enhance/content.md",
+          "anchor_text": "回溯问题",
+          "source_snapshot": "references/zh/milvus/enhance/original.md",
+          "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+        }
+      ]
+    },
+    {
+      "concept": "迭代检索",
+      "category": "查询增强",
+      "english_keywords": "iterative retrieval refine query",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "refine the query and retrieve again",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "检索充分性验证",
+      "category": "查询增强",
+      "english_keywords": "retrieval validation relevant sufficient",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "Retrieval validation",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "通用重排",
+      "category": "精排与训练",
+      "english_keywords": "reranking relevance ranking",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_rerank",
+          "file": "references/zh/milvus/rerank/content.md",
+          "anchor_text": "重新排序",
+          "source_snapshot": "references/zh/milvus/rerank/original.md",
+          "source_sha256": "f55e934335df3bf1983608224c04a52887806839f516f48f43b97b2085d96fce",
+          "content_sha256": "65160cb93521885efcfdadc060a863b6bb8e904822633c679ad7d5f46b07fd97"
+        }
+      ]
+    },
+    {
+      "concept": "交叉编码器",
+      "category": "精排与训练",
+      "english_keywords": "cross encoder reranking",
+      "sources": [
+        {
+          "document_id": "source_sbert_retrieve_rerank",
+          "file": "references/en/sentence_transformers/retrieve_rerank/content.md",
+          "anchor_text": "Cross-Encoder",
+          "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
+          "source_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+          "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a"
+        }
+      ]
+    },
+    {
+      "concept": "候选池",
+      "category": "精排与训练",
+      "english_keywords": "retrieval candidate set reranking",
+      "sources": [
+        {
+          "document_id": "source_sbert_retrieve_rerank",
+          "file": "references/en/sentence_transformers/retrieve_rerank/content.md",
+          "anchor_text": "retrieves a large list",
+          "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
+          "source_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+          "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a"
+        }
+      ]
+    },
+    {
+      "concept": "困难负样本",
+      "category": "精排与训练",
+      "english_keywords": "hard negative training",
+      "sources": [
+        {
+          "document_id": "source_sbert_ms_marco_training",
+          "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+          "anchor_text": "hard negative",
+          "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
+          "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+        }
+      ]
+    },
+    {
+      "concept": "批内负样本",
+      "category": "精排与训练",
+      "english_keywords": "in-batch negatives",
+      "sources": [
+        {
+          "document_id": "source_sbert_ms_marco_training",
+          "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+          "anchor_text": "in-batch negatives",
+          "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
+          "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+        }
+      ]
+    },
+    {
+      "concept": "多负例排序损失",
+      "category": "精排与训练",
+      "english_keywords": "MultipleNegativesRankingLoss",
+      "sources": [
+        {
+          "document_id": "source_sbert_ms_marco_training",
+          "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+          "anchor_text": "MultipleNegativesRankingLoss",
+          "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
+          "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+        }
+      ]
+    },
+    {
+      "concept": "MarginMSE损失",
+      "category": "精排与训练",
+      "english_keywords": "MarginMSE ranking loss",
+      "sources": [
+        {
+          "document_id": "source_sbert_ms_marco_training",
+          "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+          "anchor_text": "MarginMSE",
+          "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
+          "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+        }
+      ]
+    },
+    {
+      "concept": "假负例",
+      "category": "精排与训练",
+      "english_keywords": "false negatives redundant passages",
+      "sources": [
+        {
+          "document_id": "source_sbert_ms_marco_training",
+          "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+          "anchor_text": "highly redundant",
+          "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
+          "source_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+          "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4"
+        }
+      ]
+    },
+    {
+      "concept": "Prompt组装",
+      "category": "上下文与证据",
+      "english_keywords": "prompt assembly template",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_advanced",
+          "file": "references/zh/huggingface/advanced/content.md",
+          "anchor_text": "提示(Prompt)",
+          "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+          "source_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+          "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b"
+        }
+      ]
+    },
+    {
+      "concept": "上下文窗口",
+      "category": "上下文与证据",
+      "english_keywords": "context window context length",
+      "sources": [
+        {
+          "document_id": "source_langchain_retrieval_architectures",
+          "file": "references/en/langchain/retrieval_architectures/content.md",
+          "anchor_text": "context window",
+          "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+          "source_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+          "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+        }
+      ]
+    },
+    {
+      "concept": "指令约束",
+      "category": "上下文与证据",
+      "english_keywords": "instructions answer source documents",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_grounded",
+          "file": "references/zh/huggingface/grounded/content.md",
+          "anchor_text": "Answer the user query based on the source documents",
+          "source_snapshot": "references/zh/huggingface/grounded/original.ipynb",
+          "source_sha256": "3e15593bd5550d10d79a41cae99958065af3c530aef8c23eaf7582c991f69f8b",
+          "content_sha256": "1e6d1094faa3d094fa0fb898ff76104fc282b7d8ff6931de6cfe3c5c06ecb8bd"
+        }
+      ]
+    },
+    {
+      "concept": "引用溯源",
+      "category": "上下文与证据",
+      "english_keywords": "citation source attribution",
+      "sources": [
+        {
+          "document_id": "source_paper_alce",
+          "file": "references/en/papers/alce/content.md",
+          "anchor_text": "citations",
+          "source_snapshot": "references/en/papers/alce/original.pdf",
+          "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+        }
+      ]
+    },
+    {
+      "concept": "原文证据片段",
+      "category": "上下文与证据",
+      "english_keywords": "source snippets evidence passage",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_grounded",
+          "file": "references/zh/huggingface/grounded/content.md",
+          "anchor_text": "source_snippets",
+          "source_snapshot": "references/zh/huggingface/grounded/original.ipynb",
+          "source_sha256": "3e15593bd5550d10d79a41cae99958065af3c530aef8c23eaf7582c991f69f8b",
+          "content_sha256": "1e6d1094faa3d094fa0fb898ff76104fc282b7d8ff6931de6cfe3c5c06ecb8bd"
+        }
+      ]
+    },
+    {
+      "concept": "主张证据审核",
+      "category": "上下文与证据",
+      "english_keywords": "claim evidence support grounded answer",
+      "sources": [
+        {
+          "document_id": "source_paper_alce",
+          "file": "references/en/papers/alce/content.md",
+          "anchor_text": "entails the sub-claims",
+          "source_snapshot": "references/en/papers/alce/original.pdf",
+          "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+        }
+      ]
+    },
+    {
+      "concept": "幻觉控制",
+      "category": "上下文与证据",
+      "english_keywords": "hallucination factual grounding",
+      "sources": [
+        {
+          "document_id": "source_paper_hyde",
+          "file": "references/en/papers/hyde/content.md",
+          "anchor_text": "hallucinations",
+          "source_snapshot": "references/en/papers/hyde/original.pdf",
+          "source_sha256": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+          "content_sha256": "d36028d9730b227cc37c5783da35d4a5119cff631fa6941fd86d8b4190bdf4ae"
+        }
+      ]
+    },
+    {
+      "concept": "上下文压缩",
+      "category": "上下文与证据",
+      "english_keywords": "context compression prompt compression",
+      "sources": [
+        {
+          "document_id": "source_zh_milvus_enhance",
+          "file": "references/zh/milvus/enhance/content.md",
+          "anchor_text": "压缩 LLM 提示",
+          "source_snapshot": "references/zh/milvus/enhance/original.md",
+          "source_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+          "content_sha256": "f6d7651caa953eda9f9705c6ebcc04ed21d9fba0ed907b7b8821f09aeed0cd04"
+        }
+      ]
+    },
+    {
+      "concept": "上下文重打包",
+      "category": "上下文与证据",
+      "english_keywords": "document repacking context ordering",
+      "sources": [
+        {
+          "document_id": "source_paper_rag_best_practices",
+          "file": "references/en/papers/rag_best_practices/content.md",
+          "anchor_text": "Repacking",
+          "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+          "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+        }
+      ]
+    },
+    {
+      "concept": "中间位置效应",
+      "category": "上下文与证据",
+      "english_keywords": "lost in the middle context position",
+      "sources": [
+        {
+          "document_id": "source_paper_lost_middle",
+          "file": "references/en/papers/lost_middle/content.md",
+          "anchor_text": "Lost in the Middle",
+          "source_snapshot": "references/en/papers/lost_middle/original.pdf",
+          "source_sha256": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+          "content_sha256": "9a94d0a2d3b4d993a3767b05cb8b14657e60a4f50e2f3e801bbe050f71f16e73"
+        }
+      ]
+    },
+    {
+      "concept": "RAG综合评测",
+      "category": "评测与调优",
+      "english_keywords": "RAG evaluation retrieval evaluation",
+      "sources": [
+        {
+          "document_id": "source_paper_ragas",
+          "file": "references/en/papers/ragas/content.md",
+          "anchor_text": "evaluation",
+          "source_snapshot": "references/en/papers/ragas/original.pdf",
+          "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+        }
+      ]
+    },
+    {
+      "concept": "召回率Recall",
+      "category": "评测与调优",
+      "english_keywords": "Recall retrieval recall at k",
+      "sources": [
+        {
+          "document_id": "source_paper_alce",
+          "file": "references/en/papers/alce/content.md",
+          "anchor_text": "retrieval recall@k",
+          "source_snapshot": "references/en/papers/alce/original.pdf",
+          "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+        }
+      ]
+    },
+    {
+      "concept": "命中率HitRate",
+      "category": "评测与调优",
+      "english_keywords": "hit rate retrieval",
+      "sources": [
+        {
+          "document_id": "source_paper_rag_best_practices",
+          "file": "references/en/papers/rag_best_practices/content.md",
+          "anchor_text": "Hit Rate",
+          "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+          "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+        }
+      ]
+    },
+    {
+      "concept": "精确率Precision",
+      "category": "评测与调优",
+      "english_keywords": "precision retrieval relevance",
+      "sources": [
+        {
+          "document_id": "source_paper_ragas",
+          "file": "references/en/papers/ragas/content.md",
+          "anchor_text": "precision",
+          "source_snapshot": "references/en/papers/ragas/original.pdf",
+          "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+        }
+      ]
+    },
+    {
+      "concept": "平均倒数排名MRR",
+      "category": "评测与调优",
+      "english_keywords": "MRR mean reciprocal rank",
+      "sources": [
+        {
+          "document_id": "source_paper_rag_best_practices",
+          "file": "references/en/papers/rag_best_practices/content.md",
+          "anchor_text": "MRR@10",
+          "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+          "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+        }
+      ]
+    },
+    {
+      "concept": "归一化折损累计增益NDCG",
+      "category": "评测与调优",
+      "english_keywords": "NDCG normalized discounted cumulative gain",
+      "sources": [
+        {
+          "document_id": "source_paper_rag_best_practices",
+          "file": "references/en/papers/rag_best_practices/content.md",
+          "anchor_text": "nDCG@10",
+          "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+          "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+        }
+      ]
+    },
+    {
+      "concept": "忠实性评估",
+      "category": "评测与调优",
+      "english_keywords": "faithfulness grounded context",
+      "sources": [
+        {
+          "document_id": "source_paper_ragas",
+          "file": "references/en/papers/ragas/content.md",
+          "anchor_text": "Faithfulness",
+          "source_snapshot": "references/en/papers/ragas/original.pdf",
+          "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+        }
+      ]
+    },
+    {
+      "concept": "答案相关性",
+      "category": "评测与调优",
+      "english_keywords": "answer relevancy answer relevance",
+      "sources": [
+        {
+          "document_id": "source_paper_ragas",
+          "file": "references/en/papers/ragas/content.md",
+          "anchor_text": "Answer Relevancy",
+          "source_snapshot": "references/en/papers/ragas/original.pdf",
+          "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+        }
+      ]
+    },
+    {
+      "concept": "上下文相关性",
+      "category": "评测与调优",
+      "english_keywords": "context relevance context relevancy",
+      "sources": [
+        {
+          "document_id": "source_paper_ragas",
+          "file": "references/en/papers/ragas/content.md",
+          "anchor_text": "Context relevance",
+          "source_snapshot": "references/en/papers/ragas/original.pdf",
+          "source_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+          "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+        }
+      ]
+    },
+    {
+      "concept": "引文召回率",
+      "category": "评测与调优",
+      "english_keywords": "citation recall",
+      "sources": [
+        {
+          "document_id": "source_paper_alce",
+          "file": "references/en/papers/alce/content.md",
+          "anchor_text": "Citation Recall",
+          "source_snapshot": "references/en/papers/alce/original.pdf",
+          "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+        }
+      ]
+    },
+    {
+      "concept": "引文精确率",
+      "category": "评测与调优",
+      "english_keywords": "citation precision",
+      "sources": [
+        {
+          "document_id": "source_paper_alce",
+          "file": "references/en/papers/alce/content.md",
+          "anchor_text": "Citation Precision",
+          "source_snapshot": "references/en/papers/alce/original.pdf",
+          "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+        }
+      ]
+    },
+    {
+      "concept": "主张覆盖率",
+      "category": "评测与调优",
+      "english_keywords": "claim recall coverage",
+      "sources": [
+        {
+          "document_id": "source_paper_alce",
+          "file": "references/en/papers/alce/content.md",
+          "anchor_text": "Claim Recall",
+          "source_snapshot": "references/en/papers/alce/original.pdf",
+          "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+        }
+      ]
+    },
+    {
+      "concept": "幻觉率",
+      "category": "评测与调优",
+      "english_keywords": "hallucination rate evaluation",
+      "sources": [
+        {
+          "document_id": "source_paper_alce",
+          "file": "references/en/papers/alce/content.md",
+          "anchor_text": "hallucination",
+          "source_snapshot": "references/en/papers/alce/original.pdf",
+          "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+        }
+      ]
+    },
+    {
+      "concept": "评测问答集",
+      "category": "评测与调优",
+      "english_keywords": "evaluation dataset question answer pairs",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_evaluation",
+          "file": "references/zh/huggingface/evaluation/content.md",
+          "anchor_text": "问题-答案对",
+          "source_snapshot": "references/zh/huggingface/evaluation/original.ipynb",
+          "source_sha256": "b460e3f1895fcbafc48c9ff34d855140c1afd6fc29b77473c01b72bae4f4f4d7",
+          "content_sha256": "b57100679a427503184ce988c70e160991fff0688f95730482cd5c701949964f"
+        }
+      ]
+    },
+    {
+      "concept": "LLM裁判评测",
+      "category": "评测与调优",
+      "english_keywords": "LLM-as-a-judge evaluation rubric",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_evaluation",
+          "file": "references/zh/huggingface/evaluation/content.md",
+          "anchor_text": "LLM-as-a-judge",
+          "source_snapshot": "references/zh/huggingface/evaluation/original.ipynb",
+          "source_sha256": "b460e3f1895fcbafc48c9ff34d855140c1afd6fc29b77473c01b72bae4f4f4d7",
+          "content_sha256": "b57100679a427503184ce988c70e160991fff0688f95730482cd5c701949964f"
+        }
+      ]
+    },
+    {
+      "concept": "消融实验",
+      "category": "评测与调优",
+      "english_keywords": "ablation study evaluation",
+      "sources": [
+        {
+          "document_id": "source_paper_dpr",
+          "file": "references/en/papers/dpr/content.md",
+          "anchor_text": "Ablation Study on Model Training",
+          "source_snapshot": "references/en/papers/dpr/original.pdf",
+          "source_sha256": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+          "content_sha256": "fa9f0e633379995d2489393f68d1f9a57eae59a1b742a45f5d0b43811556d293"
+        }
+      ]
+    },
+    {
+      "concept": "RAG参数调优",
+      "category": "评测与调优",
+      "english_keywords": "RAG tuning parameter tuning",
+      "sources": [
+        {
+          "document_id": "source_paper_rag_best_practices",
+          "file": "references/en/papers/rag_best_practices/content.md",
+          "anchor_text": "hyperparameters",
+          "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+          "source_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+          "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+        }
+      ]
+    },
+    {
+      "concept": "语义缓存",
+      "category": "工程优化",
+      "english_keywords": "semantic cache similarity retrieval",
+      "sources": [
+        {
+          "document_id": "source_zh_hf_cache",
+          "file": "references/zh/huggingface/cache/content.md",
+          "anchor_text": "语义缓存",
+          "source_snapshot": "references/zh/huggingface/cache/original.ipynb",
+          "source_sha256": "381ab837867fbcbd953944d79cc401b091e5edf0df2e43df7708581528b5d3ea",
+          "content_sha256": "9822de7d2f8941d5b6b3319845e418089b0a0cf126cf582acfc7685e42d4a5e8"
+        }
+      ]
+    },
+    {
+      "concept": "一般覆盖程度",
+      "category": "评测与调优",
+      "english_keywords": "coverage evaluation",
+      "sources": [
+        {
+          "document_id": "source_paper_alce",
+          "file": "references/en/papers/alce/content.md",
+          "anchor_text": "coverage",
+          "source_snapshot": "references/en/papers/alce/original.pdf",
+          "source_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+          "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+        }
+      ]
+    },
+    {
+      "concept": "中性向量检索",
+      "category": "检索基础",
+      "english_keywords": "vector search vector retrieval",
+      "sources": [
+        {
+          "document_id": "source_langchain_pdf_semantic_search_rag",
+          "file": "references/en/langchain/pdf_semantic_search_rag/content.md",
+          "anchor_text": "Vector search stores numeric vectors",
+          "source_snapshot": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
+          "source_sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+          "content_sha256": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a"
+        }
+      ]
+    }
+  ]
+}

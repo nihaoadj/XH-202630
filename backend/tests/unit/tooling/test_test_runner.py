@@ -59,7 +59,7 @@ def test_frontend_inventory_is_complete_and_disjoint():
               if "test-results" not in item.parts}
     assert len(registered) == len(set(registered))
     assert set(registered) == actual
-    assert len(groups["browser"]) == 15
+    assert set(groups) == {"unit", "browser"}
     assert {"historyUiBrowser.test.mjs", "reportUiBrowser.test.mjs",
             "userProfileUiBrowser.test.mjs", "profileRequestBrowser.test.mjs",
             "motionBrowser.test.mjs", "tutorUiBrowser.test.mjs",

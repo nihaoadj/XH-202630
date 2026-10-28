@@ -1,0 +1,887 @@
+# 全文搜索
+
+全文搜索可检索包含查询词或短语的文档，并按相关性对结果进行排序。它与语义搜索相辅相成——后者可能会忽略精确的术语——在检索增强生成（RAG）场景中尤为有用，因为在该场景中，与特定搜索词高度匹配的文档最为重要。
+
+借助全文搜索，您还可以省去嵌入模型的步骤：您只需提供原始文本，Milvus 便会自动将其转换为稀疏 Embeddings。
+
+通过将全文搜索与基于语义的稠密向量搜索相结合，您可以提高搜索结果的准确性和相关性。有关更多信息，请参阅[“混合搜索”](https://github.com/docs/zh/multi-vector-search.md)。
+
+## BM25 实现
+
+Milvus 采用 BM25 相关性算法实现全文搜索，该算法是信息检索系统中广泛采用的评分函数，并将其集成到搜索工作流中，以提供准确且按相关性排序的文本结果。
+
+Milvus 中的全文搜索遵循以下工作流：
+
+1. 
+
+原始文本输入：您可插入文本文档或使用纯文本提交查询，无需任何Embeddings模型。
+
+2. 
+
+文本分析：Milvus 使用[分析器](https://github.com/docs/zh/analyzer-overview.md)将文本处理为具有实际意义的术语，以便进行索引和搜索。
+
+3. 
+
+BM25 函数处理：内置函数将这些术语转换为针对 BM25 评分优化的稀疏向量表示。
+
+4. 
+
+Collection 存储：Milvus 将生成的稀疏 Embeddings 存储在 Collection 中，以便快速检索和排序。
+
+5. 
+
+BM25相关性评分：在搜索时，Milvus应用BM25评分函数计算文档的相关性，并返回与查询词匹配度最高的排序结果。
+
+   [图：Full Text Search](https://milvus-docs.s3.us-west-2.amazonaws.com/assets/full-text-search.png) 
+   全文搜索
+  
+要使用全文搜索，请按照以下主要步骤操作：
+
+1. 
+
+[创建 Collection](https://github.com/docs/zh/full-text-search.md#Create-a-collection-for-BM25-full-text-search)：设置所需字段，并定义一个将原始文本转换为稀疏 Embeddings 的 BM25 函数。
+
+2. 
+
+[插入数据](https://github.com/docs/zh/full-text-search.md#Insert-text-data)：将原始文本文档导入Collection。
+
+3. 
+
+[执行搜索](https://github.com/docs/zh/full-text-search.md#Perform-full-text-search)：使用自然语言查询文本，根据 BM25 相关性检索排序后的结果。
+
+## 为 BM25 全文搜索创建 Collection
+
+要启用基于 BM25 的全文搜索，您必须准备一个包含所需字段的 Collection，定义一个用于生成稀疏向量的 BM25 函数，配置索引，然后创建该 Collection。
+
+### 定义Schema字段
+
+您的Collection Schema必须包含至少三个必填字段：
+
+- 
+
+主字段：用于唯一标识Collection中的每个实体。
+
+- 
+
+字符串字段（`VARCHAR` 或`TEXT` ）：用于存储原始文本文档。您必须将`enable_analyzer=True` 设置为启用，以便Milvus能够处理文本以进行BM25相关性排序。默认情况下，Milvus使用[`standard` 分析器](https://github.com/docs/zh/standard-analyzer.md)；若要配置其他分析器，请参阅《[分析器概述》](https://github.com/docs/zh/analyzer-overview.md)。 本页示例使用`VARCHAR` ；对于长文本，请将字段定义为`TEXT` 并省略`max_length` 。完整示例请参阅[“文本字段”](https://github.com/docs/zh/text.md)。
+
+- 
+
+稀疏向量字段（`SPARSE_FLOAT_VECTOR` ）：存储由 BM25 函数自动生成的稀疏嵌入。
+
+   [Python](#python)
+ [   Java](#java)
+ [   Go](#go)
+ [   NodeJS](#javascript)
+ [   C++](#cpp)
+ [   cURL](#bash)
+
+```python
+from pymilvus import MilvusClient, DataType, Function, FunctionType
+
+client = MilvusClient(
+    uri="http://localhost:19530",
+    token="root:Milvus"
+)
+
+schema = client.create_schema()
+
+schema.add_field(field_name="id", datatype=DataType.INT64, is_primary=True, auto_id=True) # Primary field
+schema.add_field(field_name="text", datatype=DataType.VARCHAR, max_length=1000, enable_analyzer=True) # Text field
+schema.add_field(field_name="sparse", datatype=DataType.SPARSE_FLOAT_VECTOR) # Sparse vector field; no dim required for sparse vectors
+```
+
+```java
+import io.milvus.v2.common.DataType;
+import io.milvus.v2.service.collection.request.AddFieldReq;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
+
+CreateCollectionReq.CollectionSchema schema = CreateCollectionReq.CollectionSchema.builder()
+        .build();
+schema.addField(AddFieldReq.builder()
+        .fieldName("id")
+        .dataType(DataType.Int64)
+        .isPrimaryKey(true)
+        .autoID(true)
+        .build());
+schema.addField(AddFieldReq.builder()
+        .fieldName("text")
+        .dataType(DataType.VarChar)
+        .maxLength(1000)
+        .enableAnalyzer(true)
+        .build());
+schema.addField(AddFieldReq.builder()
+        .fieldName("sparse")
+        .dataType(DataType.SparseFloatVector)
+        .build());
+```
+
+```go
+import (
+    "context"
+    "fmt"
+
+    "github.com/milvus-io/milvus/client/v2/column"
+    "github.com/milvus-io/milvus/client/v2/entity"
+    "github.com/milvus-io/milvus/client/v2/index"
+    "github.com/milvus-io/milvus/client/v2/milvusclient"
+)
+
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+
+milvusAddr := "localhost:19530"
+client, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
+    Address: milvusAddr,
+})
+if err != nil {
+    fmt.Println(err.Error())
+    // handle error
+}
+defer client.Close(ctx)
+
+schema := entity.NewSchema()
+schema.WithField(entity.NewField().
+    WithName("id").
+    WithDataType(entity.FieldTypeInt64).
+    WithIsPrimaryKey(true).
+    WithIsAutoID(true),
+).WithField(entity.NewField().
+    WithName("text").
+    WithDataType(entity.FieldTypeVarChar).
+    WithEnableAnalyzer(true).
+    WithMaxLength(1000),
+).WithField(entity.NewField().
+    WithName("sparse").
+    WithDataType(entity.FieldTypeSparseVector),
+)
+```
+
+```javascript
+import { MilvusClient, DataType } from "@zilliz/milvus2-sdk-node";
+
+const address = "http://localhost:19530";
+const token = "root:Milvus";
+const client = new MilvusClient({address, token});
+const schema = [
+  {
+    name: "id",
+    data_type: DataType.Int64,
+    is_primary_key: true,
+  },
+  {
+    name: "text",
+    data_type: "VarChar",
+    enable_analyzer: true,
+    enable_match: true,
+    max_length: 1000,
+  },
+  {
+    name: "sparse",
+    data_type: DataType.SparseFloatVector,
+  },
+];
+
+console.log(schema);
+```
+
+```bash
+export schema='{
+        "autoId": true,
+        "enabledDynamicField": false,
+        "fields": [
+            {
+                "fieldName": "id",
+                "dataType": "Int64",
+                "isPrimary": true
+            },
+            {
+                "fieldName": "text",
+                "dataType": "VarChar",
+                "elementTypeParams": {
+                    "max_length": 1000,
+                    "enable_analyzer": true
+                }
+            },
+            {
+                "fieldName": "sparse",
+                "dataType": "SparseFloatVector"
+            }
+        ]
+    }'
+```
+
+```cpp
+#include "milvus/MilvusClientV2.h"
+
+auto client = milvus::MilvusClientV2::Create();
+
+milvus::ConnectParam connect_param{"http://localhost:19530", "root:Milvus"};
+auto status = client->Connect(connect_param);
+if (!status.IsOk()) {
+    std::cout << status.Message() << std::endl;
+}
+
+milvus::CollectionSchemaPtr schema = std::make_shared<milvus::CollectionSchema>();
+schema->AddField({"id", milvus::DataType::INT64, "", true, true});
+schema->AddField(milvus::FieldSchema("text", milvus::DataType::VARCHAR).WithMaxLength(1000).EnableAnalyzer(true));
+schema->AddField(milvus::FieldSchema("sparse", milvus::DataType::SPARSE_FLOAT_VECTOR));
+```
+
+在上述配置中，
+
+- 
+
+`id`：作为主键，并通过`auto_id=True` 自动生成。
+
+- 
+
+`text`：用于存储用于全文检索操作的原始文本数据。该字段可使用 ``VARCHAR` ` 存储有限长文本，或使用 ``TEXT` ` 存储长源内容。
+
+- 
+
+`sparse`：一个向量字段，专用于存储全文检索操作中内部生成的稀疏Embeddings。其数据类型必须为`SPARSE_FLOAT_VECTOR` 。
+
+### 定义 BM25 函数
+
+BM25 函数将分词后的文本转换为支持 BM25 评分算法的稀疏向量。
+
+定义该函数并将其添加到您的Schema中：
+
+   [Python](#python)
+ [   Java](#java)
+ [   Go](#go)
+ [   NodeJS](#javascript)
+ [   C++](#cpp)
+ [   cURL](#bash)
+
+```python
+bm25_function = Function(
+    name="text_bm25_emb", # Function name
+    input_field_names=["text"], # Name of the VARCHAR or TEXT field containing raw text data
+    output_field_names=["sparse"], # Name of the SPARSE_FLOAT_VECTOR field reserved to store generated embeddings
+    function_type=FunctionType.BM25, # Set to `BM25`
+)
+
+schema.add_function(bm25_function)
+```
+
+```java
+import io.milvus.common.clientenum.FunctionType;
+import io.milvus.v2.service.collection.request.CreateCollectionReq.Function;
+
+import java.util.*;
+
+schema.addFunction(Function.builder()
+        .functionType(FunctionType.BM25)
+        .name("text_bm25_emb")
+        .inputFieldNames(Collections.singletonList("text"))
+        .outputFieldNames(Collections.singletonList("sparse"))
+        .build());
+```
+
+```go
+function := entity.NewFunction().
+    WithName("text_bm25_emb").
+    WithInputFields("text").
+    WithOutputFields("sparse").
+    WithType(entity.FunctionTypeBM25)
+schema.WithFunction(function)
+```
+
+```javascript
+const functions = [
+    {
+      name: 'text_bm25_emb',
+      description: 'bm25 function',
+      type: FunctionType.BM25,
+      input_field_names: ['text'],
+      output_field_names: ['sparse'],
+      params: {},
+    },
+];
+```
+
+```bash
+export schema='{
+        "autoId": true,
+        "enabledDynamicField": false,
+        "fields": [
+            {
+                "fieldName": "id",
+                "dataType": "Int64",
+                "isPrimary": true
+            },
+            {
+                "fieldName": "text",
+                "dataType": "VarChar",
+                "elementTypeParams": {
+                    "max_length": 1000,
+                    "enable_analyzer": true
+                }
+            },
+            {
+                "fieldName": "sparse",
+                "dataType": "SparseFloatVector"
+            }
+        ],
+        "functions": [
+            {
+                "name": "text_bm25_emb",
+                "type": "BM25",
+                "inputFieldNames": ["text"],
+                "outputFieldNames": ["sparse"],
+                "params": {}
+            }
+        ]
+    }'
+```
+
+```cpp
+milvus::FunctionPtr function = std::make_shared<milvus::Function>("text_bm25_emb", milvus::FunctionType::BM25);
+function->AddInputFieldName("text");
+function->AddOutputFieldName("sparse");
+schema->AddFunction(function);
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| `name` | 函数名称。该函数将`text` 字段中的原始文本转换为与BM25兼容的稀疏向量，并将其存储在`sparse` 字段中。 |
+| `input_field_names` | 需要进行文本到稀疏向量转换的`VARCHAR` 或`TEXT` 字段的名称。对于`FunctionType.BM25` ，此参数仅接受一个字段名称。 |
+| `output_field_names` | 用于存储内部生成的稀疏向量的字段名称。对于`FunctionType.BM25` ，此参数仅接受一个字段名称。 |
+| `function_type` | 要使用的函数类型。必须为`FunctionType.BM25` 。 |
+
+如果多个文本字段需要进行 BM25 处理，请为每个字段定义一个 BM25 函数，每个函数都应具有唯一的名称和输出字段。
+
+### 配置索引
+
+在定义包含必要字段和内置函数的Schema后，请为您的Collection设置索引。
+
+   [Python](#python)
+ [   Java](#java)
+ [   Go](#go)
+ [   NodeJS](#javascript)
+ [   C++](#cpp)
+ [   cURL](#bash)
+
+```python
+index_params = client.prepare_index_params()
+
+index_params.add_index(
+    field_name="sparse",
+
+    index_type="SPARSE_INVERTED_INDEX",
+    metric_type="BM25",
+    params={
+        "inverted_index_algo": "DAAT_MAXSCORE",
+        "bm25_k1": 1.2,
+        "bm25_b": 0.75
+    }
+
+)
+```
+
+```java
+import io.milvus.v2.common.IndexParam;
+
+Map<String,Object> params = new HashMap<>();
+params.put("inverted_index_algo", "DAAT_MAXSCORE");
+params.put("bm25_k1", 1.2);
+params.put("bm25_b", 0.75);
+
+List<IndexParam> indexes = new ArrayList<>();
+indexes.add(IndexParam.builder()
+        .fieldName("sparse")
+        .indexType(IndexParam.IndexType.AUTOINDEX)
+        .metricType(IndexParam.MetricType.BM25)
+        .extraParams(params)
+        .build());    
+```
+
+```go
+indexOption := milvusclient.NewCreateIndexOption("my_collection", "sparse",
+    index.NewAutoIndex(entity.MetricType(entity.BM25)))
+    .WithExtraParam("inverted_index_algo", "DAAT_MAXSCORE")
+    .WithExtraParam("bm25_k1", 1.2)
+    .WithExtraParam("bm25_b", 0.75)
+```
+
+```javascript
+const index_params = [
+  {
+    field_name: "sparse",
+    metric_type: "BM25",
+    index_type: "SPARSE_INVERTED_INDEX",
+    params: {
+        "inverted_index_algo": "DAAT_MAXSCORE",
+        "bm25_k1": 1.2,
+        "bm25_b": 0.75
+    }
+  },
+];
+```
+
+```bash
+export indexParams='[
+        {
+            "fieldName": "sparse",
+            "metricType": "BM25",
+            "indexType": "AUTOINDEX",
+            "params":{
+               "inverted_index_algo": "DAAT_MAXSCORE",
+               "bm25_k1": 1.2,
+               "bm25_b": 0.75
+            }
+        }
+    ]'
+```
+
+```cpp
+auto index_params = milvus::IndexDesc("sparse", "", milvus::IndexType::SPARSE_INVERTED_INDEX, milvus::MetricType::BM25);
+index_params.AddExtraParam("inverted_index_algo", "DAAT_MAXSCORE");
+index_params.AddExtraParam("bm25_k1", "1.2");
+index_params.AddExtraParam("bm25_b", "0.75");
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| `field_name` | 要建立索引的向量字段名称。对于全文搜索，此字段应为存储生成的稀疏向量的字段。在此示例中，将该值设置为`sparse` 。 |
+| `index_type` | 要创建的索引类型。对于 Milvus 中的 BM25 全文搜索，请将此值设置为`SPARSE_INVERTED_INDEX` 。有关更多信息，请参阅[SPARSE_INVERTED_INDEX](https://github.com/docs/zh/sparse-inverted-index.md)。 |
+| `metric_type` | 此参数的值必须专门设置为`BM25` ，以启用全文搜索功能。 |
+| `params` | 该索引特有的附加参数字典。 |
+| `params.inverted_index_algo` | 用于构建和查询 BM25 稀疏倒排索引的算法。有效值： - `"DAAT_MAXSCORE"` （默认）：按文档逐个处理 MaxScore 查询。此选项适用于k值较高或包含大量术语的全文检索工作负载。有关背景信息，请参阅《[查询评估：策略与优化](https://dl.acm.org/doi/10.1016/0306-4573%2895%2900020-H)》。 - `"DAAT_WAND"`：按文档逐个处理的 WAND 查询处理。此选项适用于k值较小或查询较短的全文检索工作负载。有关背景信息，请参阅《[使用两级检索过程进行高效查询评估](https://dl.acm.org/doi/10.1145/956863.956944)》。 - `"TAAT_NAIVE"`：基本“逐词”查询处理。可将此选项用作基准，或在需要评分动态适应全局 Collection 统计信息（如平均文档长度）时使用。 - `"BLOCK_MAX_MAXSCORE"`: 采用块级最高得分元数据的 MaxScore 查询处理。有关背景信息，请参阅《[使用块级最高得分索引加快 Top-k 文档检索](https://dl.acm.org/doi/10.1145/2009916.2010048)》。 - `"BLOCK_MAX_WAND"`: 采用块级最大得分元数据的 WAND 查询处理。有关背景信息，请参阅《[使用块最大索引实现更快的 Top-k 文档检索](https://dl.acm.org/doi/10.1145/2009916.2010048)》。 |
+| `params.bm25_k1` | 控制术语频率饱和度。数值越高，术语频率在文档排名中的权重越大。推荐范围：[1.2, 2.0]。默认值：1.2。 |
+| `params.bm25_b` | 控制文档长度的归一化程度。通常使用 0 到 1 之间的值，默认值为 0.75。值为 0 表示不进行长度归一化，而值为 1 表示完全长度归一化。 |
+
+### 创建 Collection
+
+现在使用已定义的Schema和索引参数创建Collection。
+
+   [Python](#python)
+ [   Java](#java)
+ [   Go](#go)
+ [   NodeJS](#javascript)
+ [   C++](#cpp)
+ [   cURL](#bash)
+
+```python
+client.create_collection(
+    collection_name='my_collection', 
+    schema=schema, 
+    index_params=index_params
+)
+```
+
+```java
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
+
+CreateCollectionReq requestCreate = CreateCollectionReq.builder()
+        .collectionName("my_collection")
+        .collectionSchema(schema)
+        .indexParams(indexes)
+        .build();
+client.createCollection(requestCreate);
+```
+
+```go
+err = client.CreateCollection(ctx,
+    milvusclient.NewCreateCollectionOption("my_collection", schema).
+        WithIndexOptions(indexOption))
+if err != nil {
+    fmt.Println(err.Error())
+    // handle error
+}
+```
+
+```javascript
+await client.create_collection({
+    collection_name: 'my_collection',
+    schema: schema,
+    index_params: index_params,
+    functions: functions
+});
+```
+
+```bash
+export CLUSTER_ENDPOINT="http://localhost:19530"
+export TOKEN="root:Milvus"
+
+curl --request POST \
+--url "${CLUSTER_ENDPOINT}/v2/vectordb/collections/create" \
+--header "Authorization: Bearer ${TOKEN}" \
+--header "Content-Type: application/json" \
+--header "Request-Timeout: 10" \
+-d "{
+    \"collectionName\": \"my_collection\",
+    \"schema\": $schema,
+    \"indexParams\": $indexParams
+}"
+```
+
+```cpp
+auto status = client->CreateCollection(milvus::CreateCollectionRequest()
+                                    .WithCollectionName("my_collection")
+                                    .WithCollectionSchema(schema)
+                                    .AddIndex(std::move(index_params)));
+if (!status.IsOk()) {
+    std::cout << status.Message() << std::endl;
+}
+```
+
+## 插入文本数据
+
+配置好 Collection 和索引后，即可插入文本数据。您只需提供原始文本——之前定义的 BM25 函数会为每条文本条目自动生成相应的稀疏向量。
+
+   [Python](#python)
+ [   Java](#java)
+ [   Go](#go)
+ [   NodeJS](#javascript)
+ [   C++](#cpp)
+ [   cURL](#bash)
+
+```python
+client.insert('my_collection', [
+    {'text': 'information retrieval is a field of study.'},
+    {'text': 'information retrieval focuses on finding relevant information in large datasets.'},
+    {'text': 'data mining and information retrieval overlap in research.'},
+])
+```
+
+```java
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+
+import io.milvus.v2.service.vector.request.InsertReq;
+
+Gson gson = new Gson();
+List<JsonObject> rows = Arrays.asList(
+        gson.fromJson("{\"text\": \"information retrieval is a field of study.\"}", JsonObject.class),
+        gson.fromJson("{\"text\": \"information retrieval focuses on finding relevant information in large datasets.\"}", JsonObject.class),
+        gson.fromJson("{\"text\": \"data mining and information retrieval overlap in research.\"}", JsonObject.class)
+);
+
+client.insert(InsertReq.builder()
+        .collectionName("my_collection")
+        .data(rows)
+        .build());
+```
+
+```go
+_, err = client.Insert(ctx, milvusclient.NewColumnBasedInsertOption("my_collection").
+    WithVarcharColumn("text", []string{
+        "information retrieval is a field of study.",
+        "information retrieval focuses on finding relevant information in large datasets.",
+        "data mining and information retrieval overlap in research.",
+    }),
+)
+if err != nil {
+    fmt.Println(err.Error())
+    // handle error
+}
+```
+
+```javascript
+await client.insert({
+    collection_name: 'my_collection',
+    data: [
+        {'text': 'information retrieval is a field of study.'},
+        {'text': 'information retrieval focuses on finding relevant information in large datasets.'},
+        {'text': 'data mining and information retrieval overlap in research.'},
+    ],
+});
+```
+
+```bash
+curl --request POST \
+--url "${CLUSTER_ENDPOINT}/v2/vectordb/entities/insert" \
+--header "Authorization: Bearer ${TOKEN}" \
+--header "Content-Type: application/json" \
+--header "Request-Timeout: 10" \
+-d '{
+    "data": [
+        {"text": "information retrieval is a field of study."},
+        {"text": "information retrieval focuses on finding relevant information in large datasets."},
+        {"text": "data mining and information retrieval overlap in research."}       
+    ],
+    "collectionName": "my_collection"
+}'
+```
+
+```cpp
+milvus::EntityRows data = {
+    {{"text", "information retrieval is a field of study."}},
+    {{"text", "information retrieval focuses on finding relevant information in large datasets."}},
+    {{"text", "data mining and information retrieval overlap in research."}}
+};
+
+milvus::InsertResponse response;
+auto status = client->Insert(milvus::InsertRequest()
+                                .WithCollectionName("my_collection")
+                                .WithRowsData(std::move(data))
+                                , response);
+if (!status.IsOk()) {
+    std::cout << status.Message() << std::endl;
+}
+```
+
+## 执行全文搜索
+
+将数据插入 Collection 后，您即可使用原始文本查询进行搜索。Milvus 会自动将您的查询转换为稀疏向量，使用 BM25 算法对匹配结果进行排序，并返回排名前`limit` 的结果。
+
+您可以通过配置文本高亮器，在搜索结果中突出显示匹配的术语。详情请参阅[“文本高亮器”](https://github.com/docs/zh/text-highlighter.md)。
+
+   [Python](#python)
+ [   Java](#java)
+ [   Go](#go)
+ [   NodeJS](#javascript)
+ [   C++](#cpp)
+ [   cURL](#bash)
+
+```python
+res = client.search(
+    collection_name='my_collection', 
+    data=['whats the focus of information retrieval?'],
+    anns_field='sparse',
+    output_fields=['text'], # Fields to return in search results; sparse field cannot be output
+    limit=3,
+)
+
+print(res)
+```
+
+```java
+import io.milvus.v2.service.vector.request.SearchReq;
+import io.milvus.v2.service.vector.request.data.EmbeddedText;
+import io.milvus.v2.service.vector.response.SearchResp;
+
+Map<String,Object> searchParams = new HashMap<>();
+
+SearchResp searchResp = client.search(SearchReq.builder()
+        .collectionName("my_collection")
+        .data(Collections.singletonList(new EmbeddedText("whats the focus of information retrieval?")))
+        .annsField("sparse")
+        .topK(3)
+        .searchParams(searchParams)
+        .outputFields(Collections.singletonList("text"))
+        .build());
+```
+
+```go
+annSearchParams := index.NewCustomAnnParam()
+resultSets, err := client.Search(ctx, milvusclient.NewSearchOption(
+    "my_collection", // collectionName
+    3,               // limit
+    []entity.Vector{entity.Text("whats the focus of information retrieval?")},
+).WithConsistencyLevel(entity.ClStrong).
+    WithANNSField("sparse").
+    WithAnnParam(annSearchParams).
+    WithOutputFields("text"))
+if err != nil {
+    fmt.Println(err.Error())
+    // handle error
+}
+
+for _, resultSet := range resultSets {
+    fmt.Println("IDs: ", resultSet.IDs.FieldData().GetScalars())
+    fmt.Println("Scores: ", resultSet.Scores)
+    fmt.Println("text: ", resultSet.GetColumn("text").FieldData().GetScalars())
+}
+```
+
+```javascript
+await client.search({
+    collection_name: 'my_collection',
+    data: ['whats the focus of information retrieval?'],
+    anns_field: 'sparse',
+    output_fields: ['text'],
+    limit: 3,
+});
+```
+
+```bash
+curl --request POST \
+--url "${CLUSTER_ENDPOINT}/v2/vectordb/entities/search" \
+--header "Authorization: Bearer ${TOKEN}" \
+--header "Content-Type: application/json" \
+--header "Request-Timeout: 10" \
+--data-raw '{
+    "collectionName": "my_collection",
+    "data": [
+        "whats the focus of information retrieval?"
+    ],
+    "annsField": "sparse",
+    "limit": 3,
+    "outputFields": [
+        "text"
+    ],
+    "searchParams":{
+        "params":{}
+    }
+}'
+```
+
+```cpp
+auto request = milvus::SearchRequest()
+                       .WithCollectionName("my_collection")
+                       .AddEmbeddedText("whats the focus of information retrieval?")
+                       .WithLimit(3)
+                       .WithAnnsField("sparse")
+                       .AddOutputField("text");
+
+milvus::SearchResponse response;
+auto status = client->Search(request, response);
+if (!status.IsOk()) {
+    std::cout << status.Message() << std::endl;
+}
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| `search_params` | 包含搜索参数的字典。 |
+| `params.drop_ratio_search` | 搜索过程中需忽略的低重要性术语所占比例。该值必须在 [0.0, 1.0) 范围内。详情请参阅[“稀疏向量”](https://github.com/docs/zh/sparse_vector.md)。 |
+| `data` | 自然语言的原始查询文本。Milvus 会使用 BM25 函数自动将您的文本查询转换为稀疏向量——请勿提供预先计算好的向量。 |
+| `anns_field` | 包含内部生成的稀疏向量的字段名称。 |
+| `output_fields` | 搜索结果中要返回的字段名称列表。支持除包含由 BM25 生成的 Embeddings向量的稀疏向量字段以外的所有字段。常见的输出字段包括主键字段（例如，`id` ）和原始文本字段（例如，`text` ）。有关更多信息，请参阅[常见问题解答](https://github.com/docs/zh/full-text-search.md#Can-I-output-or-access-the-sparse-vectors-generated-by-the-BM25-function-in-full-text-search)。 |
+| `limit` | 要返回的前几条匹配结果的最大数量。 |
+
+## 常见问题解答
+
+### 我可以在全文搜索中输出或访问 BM25 函数生成的稀疏向量吗？
+
+不可以，在全文搜索中无法直接访问或返回由 BM25 函数生成的稀疏向量。具体说明如下：
+
+- 
+
+BM25 函数会在内部生成稀疏向量，用于排序和检索。
+
+- 
+
+这些向量存储在稀疏字段中，但无法包含在`output_fields` 中。
+
+- 
+
+您只能输出原始文本字段和元数据（如`id` 、`text` ）。
+
+示例：
+
+   [Python](#python)
+ [   Java](#java)
+ [   Go](#go)
+ [   NodeJS](#javascript)
+ [   C++](#cpp)
+ [   cURL](#bash)
+
+```python
+# ❌ This throws an error - you cannot output the sparse field
+client.search(
+    collection_name='my_collection',
+    data=['query text'],
+    anns_field='sparse',
+    output_fields=['text', 'sparse'],  # 'sparse' causes an error
+    limit=3,
+    search_params=search_params
+)
+
+# ✅ This works - output text fields only
+client.search(
+    collection_name='my_collection',
+    data=['query text'],
+    anns_field='sparse',
+    output_fields=['text'],
+    limit=3,
+    search_params=search_params
+)
+```
+
+```java
+// Searching with the sparse field in outputFields throws an error.
+// Only output the original text and metadata fields.
+SearchResp searchResp = client.search(SearchReq.builder()
+        .collectionName("my_collection")
+        .data(Collections.singletonList(new EmbeddedText("query text")))
+        .annsField("sparse")
+        .topK(3)
+        .outputFields(Collections.singletonList("text"))
+        .build());
+```
+
+```go
+// Searching with the sparse field in output_fields throws an error.
+// Only output the original text and metadata fields.
+resultSets, err := client.Search(ctx, milvusclient.NewSearchOption(
+    "my_collection",
+    3,
+    []entity.Vector{entity.Text("query text")},
+).WithConsistencyLevel(entity.ClStrong).
+    WithANNSField("sparse").
+    WithAnnParam(index.NewCustomAnnParam()).
+    WithOutputFields("text"))
+```
+
+```javascript
+// Searching with the sparse field in output_fields throws an error.
+// Only output the original text and metadata fields.
+await client.search({
+    collection_name: 'my_collection',
+    data: ['query text'],
+    anns_field: 'sparse',
+    output_fields: ['text'],
+    limit: 3,
+});
+```
+
+```bash
+curl --request POST \
+--url "${CLUSTER_ENDPOINT}/v2/vectordb/entities/search" \
+--header "Authorization: Bearer ${TOKEN}" \
+--header "Content-Type: application/json" \
+--header "Request-Timeout: 10" \
+--data-raw '{
+    "collectionName": "my_collection",
+    "data": ["query text"],
+    "annsField": "sparse",
+    "limit": 3,
+    "outputFields": ["text"]
+}'
+```
+
+```cpp
+// Searching with the sparse field in output_fields throws an error.
+// Only output the original text and metadata fields.
+milvus::SearchRequest request = milvus::SearchRequest()
+    .WithCollectionName("my_collection")
+    .AddEmbeddedText("query text")
+    .WithLimit(3)
+    .WithAnnsField("sparse")
+    .AddOutputField("text");
+```
+
+### 既然无法访问稀疏向量字段，为什么还需要定义它？
+
+稀疏向量字段充当内部搜索索引，类似于用户无法直接交互的数据库索引。
+
+设计依据：
+
+- 
+
+关注点分离：您只需处理文本输入和输出，而 Milvus 会在内部处理向量。
+
+- 
+
+性能：预计算的稀疏向量可在查询过程中实现快速的 BM25 排序。
+
+- 
+
+用户体验：复杂的向量运算被封装在简单的文本界面背后。
+
+若需访问向量：
+
+- 
+
+请使用手动稀疏向量操作，而非全文搜索。
+
+- 
+
+为自定义稀疏向量工作流创建独立的Collection。
+
+详情请参阅《[稀疏向量](https://github.com/docs/zh/sparse_vector.md)》。

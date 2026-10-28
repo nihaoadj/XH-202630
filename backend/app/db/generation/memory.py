@@ -60,9 +60,10 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         knowledge_base_id: Optional[str],
         request_payload: dict[str, Any],
         batch_id: str | None = None,
-        *, submission_hash: str | None = None,
+        *, submission_hash: str | None = None, dispatch_snapshot: dict | None = None,
     ) -> None:
-        self._dispatch_metadata[run_id] = {"submission_hash": submission_hash, "dispatch_mode": "legacy"}
+        self._dispatch_metadata[run_id] = {"submission_hash": submission_hash, "dispatch_mode": "legacy",
+                                         "dispatch_snapshot": dispatch_snapshot}
         self._store[run_id] = {
             "run_id": run_id,
             "batch_id": batch_id or run_id,

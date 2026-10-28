@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -139,7 +139,19 @@ for (const [name, source] of [
 }
 const copied = path.join(temporary, 'src/features/courseware')
 mkdirSync(copied, { recursive: true })
-cpSync(path.join(frontend, 'src/contracts'), path.join(temporary, 'src/contracts'), { recursive: true })
+// Node 24's native recursive cp can terminate the process on Windows paths.
+// Copy this controlled fixture tree explicitly, keeping the same test inputs.
+function copyFixtureTree(source, destination) {
+  mkdirSync(destination, { recursive: true })
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name)
+    const to = path.join(destination, entry.name)
+    if (entry.isDirectory()) copyFixtureTree(from, to)
+    else if (entry.isFile()) copyFileSync(from, to)
+    else throw new Error('Unexpected non-file contract fixture')
+  }
+}
+copyFixtureTree(path.join(frontend, 'src/contracts'), path.join(temporary, 'src/contracts'))
 const sender = readFileSync(path.join(frontend, 'src/features/courseware/eventSync.js'), 'utf8')
 const mutant = sender.replace('response?.data?.acknowledged_event_ids', 'response?.acknowledged_event_ids')
 assert.notEqual(mutant, sender)

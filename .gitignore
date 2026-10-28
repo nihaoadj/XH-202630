@@ -28,6 +28,7 @@ venv/
 !/backend/data/generated_resources/**/
 !/backend/data/generated_resources/**/.gitkeep
 backend/data/models/
+backend/data/chroma_bge_m3/
 
 # Vector store
 backend/chroma_db/*

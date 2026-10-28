@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 TEXT_WORKFLOW_VERSION = "learning_documents.v1"
+RESOURCE_RETRY_WORKFLOW_VERSION = "learning_documents.resource_retry.v1"
 
 
 @dataclass(frozen=True)

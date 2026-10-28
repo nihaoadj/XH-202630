@@ -3,6 +3,7 @@
 This is workflow evidence, not live generation or independent knowledge grading.
 """
 import json
+from app.core.retrieval.knowledge_paths import resolve_knowledge_file
 import os
 from pathlib import Path
 
@@ -30,7 +31,7 @@ def test_frozen_cases_preserve_input_agent_claim_and_output_chain(monkeypatch, t
                     if item["knowledge_point_id"] in plan.target_skill_nodes and item["verdict"] == "supported")
         evidence_id = gold["evidence_ids"][0]
         source = suite["sources_payload"]["evidence"][evidence_id]
-        text = (PROJECT_ROOT / "knowledge_base" / plan.knowledge_base_id / source["file"]).read_text(encoding="utf-8")
+        text = resolve_knowledge_file(PROJECT_ROOT / "knowledge_base" / plan.knowledge_base_id, source["file"]).read_text(encoding="utf-8")
         excerpt = "\n".join(text.splitlines()[source["start_line"] - 1:source["end_line"]])
         evidence = make_evidence(knowledge_base_id=plan.knowledge_base_id, evidence_id=evidence_id,
             document_id=source["document_id"], document_version="dv_" + suite["sources_payload"]["files"][source["file"]],

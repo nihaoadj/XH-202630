@@ -5,8 +5,10 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,10 +25,20 @@ from app.core.retrieval.knowledge_ids import (
     normalize_text,
     sha256_hex,
 )
+from app.core.retrieval.markdown_structure import (
+    MAX_ATOMIC_CHARS,
+    STRUCTURE_STRATEGY,
+    structural_chunks,
+)
+from app.core.retrieval.evidence_chunking import EVIDENCE_STRATEGY, evidence_chunks
+from app.core.retrieval.knowledge_paths import (
+    LAYOUT_VERSION, resolve_knowledge_file,
+)
 
 
 TEXT_EXTENSIONS = {".md", ".txt"}
 DEFAULT_CHUNKING_STRATEGY = "recursive-v1"
+_DOCUMENT_IDENTITY_REVISION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")
 
 
 def _read_json(path: Path) -> Dict[str, Any]:
@@ -82,13 +94,38 @@ def load_knowledge_base_manifest(kb_dir: Optional[str] = None) -> Dict[str, Any]
     raw = load_metadata(str(kb_path))
     kb_id = str(raw.get("knowledge_base_id") or raw.get("knowledge_base_name") or kb_path.name)
 
+    identity_revision = raw.get("document_identity_revision")
+    if identity_revision is not None and (
+        not isinstance(identity_revision, str)
+        or not _DOCUMENT_IDENTITY_REVISION.fullmatch(identity_revision)
+    ):
+        raise ValueError("document_identity_revision must be a stable token of at most 128 characters")
+
     raw_documents = raw.get("documents", [])
+    layout = raw.get("storage_layout", {})
+    if layout and (not isinstance(layout, dict) or layout.get("version") != LAYOUT_VERSION or layout.get("loading") != "manifest_only"):
+        raise ValueError("unsupported knowledge storage layout")
     document_specs: Dict[str, Dict[str, Any]] = {}
+    seen_ids: set[str] = set()
+    seen_physical: set[Path] = set()
+    if layout and not isinstance(raw_documents, list):
+        raise ValueError("manifest-only documents must be a list")
     if isinstance(raw_documents, list):
         for item in raw_documents:
             if not isinstance(item, dict) or not item.get("file"):
+                if layout:
+                    raise ValueError("manifest-only document requires a file")
                 continue
             relative_file = str(item["file"]).replace("\\", "/")
+            if layout:
+                physical = resolve_knowledge_file(kb_path, relative_file)
+                if physical.suffix.lower() not in TEXT_EXTENSIONS:
+                    raise ValueError("manifest-only body must be Markdown or text")
+                ident = str(item.get("id") or build_document_id(kb_id, relative_file))
+                if relative_file in document_specs or ident in seen_ids or physical in seen_physical:
+                    raise ValueError("duplicate manifest-only document identity or target")
+                seen_ids.add(ident)
+                seen_physical.add(physical)
             document_specs[relative_file] = dict(item)
 
     return {
@@ -101,9 +138,11 @@ def load_knowledge_base_manifest(kb_dir: Optional[str] = None) -> Dict[str, Any]
         "learner_levels": raw.get("learner_levels", []),
         "document_specs": document_specs,
         "index_schema_version": str(raw.get("index_schema_version") or "1.0"),
+        "document_identity_revision": identity_revision,
         "chunking": raw.get("chunking", {}),
         "smoke_queries": raw.get("smoke_queries", []),
         "raw_metadata": raw,
+        "storage_layout": layout,
     }
 
 
@@ -112,12 +151,21 @@ def _document_metadata(
     kb_path: Path,
     manifest: Dict[str, Any],
     content: str,
+    logical_path: str | None = None,
 ) -> Dict[str, Any]:
-    relative_path = normalize_source_path(path.relative_to(kb_path).as_posix())
+    relative_path = logical_path or normalize_source_path(path.relative_to(kb_path).as_posix())
     # 支持 metadata.json 中写 "01_x.md" 和 "raw/01_x.md" 两种格式。
     spec = manifest["document_specs"].get(relative_path)
     if spec is None:
         spec = manifest["document_specs"].get(path.name, {})
+    if spec.get("document_type") == "authoritative_original":
+        snapshot = resolve_knowledge_file(kb_path, str(spec.get("source_snapshot", "")))
+        if not snapshot.is_relative_to(kb_path.resolve()) or not snapshot.is_file():
+            raise ValueError("Authoritative source snapshot must be a local KB file")
+        if hashlib.sha256(snapshot.read_bytes()).hexdigest() != spec.get("source_hash"):
+            raise ValueError("Authoritative source snapshot hash mismatch")
+        if hashlib.sha256(path.read_bytes()).hexdigest() != spec.get("normalized_hash"):
+            raise ValueError("Authoritative normalized document hash mismatch")
     document_id = str(
         spec.get("id")
         or build_document_id(manifest["knowledge_base_id"], relative_path)
@@ -127,12 +175,13 @@ def _document_metadata(
         manifest["knowledge_base_id"],
         document_id,
         content_hash,
+        identity_revision=manifest.get("document_identity_revision"),
     )
     first_heading = next(
         (line.lstrip("#").strip() for line in content.splitlines() if line.startswith("#")),
         path.stem,
     )
-    return {
+    metadata = {
         "knowledge_base_id": manifest["knowledge_base_id"],
         "document_id": document_id,
         "title": str(spec.get("title") or first_heading),
@@ -149,6 +198,20 @@ def _document_metadata(
         "enabled": bool(spec.get("enabled", True)),
         "source_urls": spec.get("source_urls", []),
     }
+    # Do not add defaults to legacy metadata: immutable SQL versions compare
+    # the complete metadata payload, not just the document content hash.
+    for key in (
+        "chunking_strategy", "section_knowledge_points", "document_type",
+        "authority", "source_snapshot", "source_hash", "normalized_hash", "parser_version", "license",
+        "page_spans",
+    ):
+        if key in spec and (
+            "chunking_strategy" in spec or spec.get("document_type") == "authoritative_original"
+        ):
+            metadata[key] = spec[key]
+    if manifest.get("document_identity_revision") is not None:
+        metadata["document_identity_revision"] = manifest["document_identity_revision"]
+    return metadata
 
 
 def load_documents(kb_dir: Optional[str] = None) -> List[Document]:
@@ -156,13 +219,20 @@ def load_documents(kb_dir: Optional[str] = None) -> List[Document]:
     kb_path = resolve_knowledge_base_dir(kb_dir)
     manifest = load_knowledge_base_manifest(str(kb_path))
     documents: List[Document] = []
-    for path in sorted(kb_path.rglob("*")):
+    if manifest["storage_layout"]:
+        entries = [(logical, resolve_knowledge_file(kb_path, logical))
+                   for logical, spec in sorted(manifest["document_specs"].items()) if spec.get("enabled", True)]
+    else:
+        entries = [(None, path) for path in sorted(kb_path.rglob("*"))]
+    for logical, path in entries:
         if not path.is_file() or path.suffix.lower() not in TEXT_EXTENSIONS:
             continue
         with path.open("r", encoding="utf-8") as file:
             text = normalize_text(file.read())
+        if not text and manifest["storage_layout"]:
+            raise ValueError("manifest-only body must not be empty")
         if text:
-            metadata = _document_metadata(path, kb_path, manifest, text)
+            metadata = _document_metadata(path, kb_path, manifest, text, logical)
             if metadata["enabled"]:
                 documents.append(Document(page_content=text, metadata=metadata))
     return documents
@@ -210,7 +280,28 @@ def chunk_documents(
     )
     chunks: List[Document] = []
     for document in documents:
-        source_chunks = splitter.split_documents([document])
+        strategy = document.metadata.get("chunking_strategy", DEFAULT_CHUNKING_STRATEGY)
+        if strategy in {STRUCTURE_STRATEGY, EVIDENCE_STRATEGY}:
+            chunker = evidence_chunks if strategy == EVIDENCE_STRATEGY else structural_chunks
+            source_chunks = chunker(
+                document, chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+            )
+            structure_config = {
+                **config, "strategy": strategy,
+                "atomic_limit": MAX_ATOMIC_CHARS,
+                "mapping": document.metadata.get("section_knowledge_points", {}),
+            }
+            if strategy == EVIDENCE_STRATEGY:
+                structure_config.update(soft_max_chars=max(1200, chunk_size), min_chars=200,
+                                        unit_rules="teaching-units-v2")
+            if "page_spans" in document.metadata:
+                structure_config["page_spans"] = document.metadata["page_spans"]
+            document_config_hash = chunking_config_hash(structure_config)
+        elif strategy in {DEFAULT_CHUNKING_STRATEGY, "recursive_v1"}:
+            source_chunks = splitter.split_documents([document])
+            document_config_hash = config_hash
+        else:
+            raise ValueError(f"Unsupported document chunking strategy: {strategy}")
         kb_id = document.metadata.get("knowledge_base_id")
         document_id = document.metadata.get("document_id")
         document_version = document.metadata.get("document_version")
@@ -228,12 +319,15 @@ def chunk_documents(
                 knowledge_base_id=str(kb_id),
                 logical_document_id=str(document_id),
                 document_version=str(document_version),
-                chunking_hash=config_hash,
+                chunking_hash=document_config_hash,
                 ordinal=index,
                 text_hash=text_hash,
             )
+            piece_metadata = dict(chunk.metadata)
             chunk.page_content = normalized_chunk
             chunk.metadata.update(document.metadata)
+            if strategy in {STRUCTURE_STRATEGY, EVIDENCE_STRATEGY}:
+                chunk.metadata.update(piece_metadata)
             chunk.metadata.update(
                 {
                     "chunk_id": stable_chunk_id,
@@ -241,8 +335,11 @@ def chunk_documents(
                     "chunk_ordinal": index,
                     "content_hash": text_hash,
                     "text_hash": text_hash,
-                    "chunking_config_hash": config_hash,
-                    "section": _section_at(document.page_content, start_index),
+                    "chunking_config_hash": document_config_hash,
+                    "section": (
+                        piece_metadata.get("section") if strategy in {STRUCTURE_STRATEGY, EVIDENCE_STRATEGY}
+                        else _section_at(document.page_content, start_index)
+                    ),
                     "line_start": line_start,
                     "line_end": line_end,
                 }

@@ -59,7 +59,7 @@
             @ask-tutor="askTutorAboutSelection"
           >
             <template #header-end-actions>
-              <el-button class="tutor-trigger" @click="openTutor">
+              <el-button ref="tutorTriggerRef" class="tutor-trigger" @click="openTutor">
                 <el-icon><ChatDotRound /></el-icon>
                 <span>向 Tutor 提问</span>
               </el-button>
@@ -99,6 +99,25 @@
     </el-tooltip>
 
     </div>
+    <Teleport to="body">
+      <button
+        v-if="selectedResource && selectedResource.resource_kind !== 'interactive_courseware' && !tutorTriggerVisible && !tutorOpen"
+        type="button"
+        class="tutor-floating-trigger"
+        :style="{ top: `${tutorFloatingTop}px` }"
+        aria-label="向 Tutor 提问"
+        title="向 Tutor 提问"
+        @click="openTutor"
+      >
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M16 8V4m-2 0h4M6 17H3m26 0h-3" />
+          <rect x="6" y="8" width="20" height="18" rx="6" />
+          <circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none" />
+          <circle cx="20" cy="16" r="1.5" fill="currentColor" stroke="none" />
+          <path d="M12 21h8" />
+        </svg>
+      </button>
+    </Teleport>
     <TutorDrawer
     v-model="tutorOpen"
     :embedded="isFocusMode"
@@ -116,7 +135,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, ChatDotRound, Close, EditPen, FullScreen, Reading, Refresh } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -155,6 +174,33 @@ const resourceDetails = ref({})
 let detailRequestGeneration = 0
 const tutorOpen = ref(false)
 const tutorQuotedText = ref('')
+const tutorTriggerRef = ref(null)
+const tutorTriggerVisible = ref(true)
+const tutorFloatingTop = ref(88)
+let tutorTriggerObserver
+let tutorObserverVersion = 0
+
+function updateTutorFloatingPosition() {
+  const button = tutorTriggerRef.value?.$el
+  const viewport = button?.closest('.resources-page.is-focus-mode, .content-area')
+  tutorFloatingTop.value = Math.max(16, (viewport?.getBoundingClientRect().top || 0) + 16)
+}
+
+async function observeTutorTrigger() {
+  const version = ++tutorObserverVersion
+  tutorTriggerObserver?.disconnect()
+  tutorTriggerVisible.value = true
+  await nextTick()
+  if (!resourcesMounted || version !== tutorObserverVersion) return
+  const button = tutorTriggerRef.value?.$el
+  if (!button) return
+  updateTutorFloatingPosition()
+  tutorTriggerObserver = new IntersectionObserver(([entry]) => {
+    tutorTriggerVisible.value = entry.isIntersecting && entry.intersectionRatio >= 0.95
+    updateTutorFloatingPosition()
+  }, { threshold: [0, 0.95, 1] })
+  tutorTriggerObserver.observe(button)
+}
 
 const activeProfile = computed(() => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null)
 const isFocusMode = computed(() => route.query.focus === '1')
@@ -478,6 +524,8 @@ async function retryResources() {
   }
 }
 
+watch([tutorTriggerRef, isFocusMode], observeTutorTrigger, { flush: 'post' })
+
 watch(activeTask, () => {
   syncSelectedResource()
   void loadSelectedResourceDetail()
@@ -490,6 +538,7 @@ watch(selectedResourceId, () => {
   }
 })
 onMounted(async () => {
+  window.addEventListener('resize', updateTutorFloatingPosition)
   try {
     await loadProfiles()
     if (resourcesMounted) await loadResources()
@@ -499,10 +548,22 @@ onMounted(async () => {
     loaded.value = true
   }
 })
-onBeforeUnmount(() => { resourcesMounted = false; ++resourceListRequestVersion; ++detailRequestGeneration })
+onBeforeUnmount(() => {
+  resourcesMounted = false
+  ++resourceListRequestVersion
+  ++detailRequestGeneration
+  ++tutorObserverVersion
+  tutorTriggerObserver?.disconnect()
+  window.removeEventListener('resize', updateTutorFloatingPosition)
+})
 </script>
 
 <style scoped>
+.tutor-floating-trigger { position:fixed; right:36px; z-index:40; display:grid; place-items:center; width:52px; height:52px; padding:10px; border:1px solid #b6d8d6; border-radius:16px; background:#eff9f7; color:#176b70; box-shadow:0 6px 20px rgb(17 40 60 / 16%); cursor:pointer; }
+.tutor-floating-trigger svg { width:30px; height:30px; }
+.tutor-floating-trigger:hover { background:#dcf3ed; border-color:#176b70; }
+.tutor-floating-trigger:focus-visible { outline:3px solid #16758a; outline-offset:3px; }
+@media (max-width:720px) { .tutor-floating-trigger { right:28px; width:46px; height:46px; padding:8px; } }
 /* The existing toolbar, resource shelf and full-width reader keep their layout. */
 .resources-layout {
   --learn-ink: #132c40;

@@ -28,16 +28,25 @@ backend/tests/fixtures/competition/
   cases/rag_engineering_cases.json
   claims/rag_engineering_claims.json
 knowledge_base/rag_engineering_training/
-  metadata.json                       # 领域、6模块、13能力节点与先修关系
-  modules/*.md                        # 实际学习知识与工程实操资料
+  metadata.json                       # 领域、manifest、13能力节点与当前物理来源路径
+  teaching/zh/*.md                    # 6份项目整理的中文教学模块
+  references/{zh,en}/{publisher}/{slug}/
+    original.*                        # 原始来源快照
+    content.md                        # 检索正文
+  licenses/                           # 来源许可与归属
+  provenance/registry.json            # 统一来源与资产清单
   questionnaire.json
   diagnostic_questions.json
   assessment_questions.json
 ```
 
+T8 比赛来源快照冻结发生在 T9 直接移动之前，当时 `sources.json` 的文件键使用旧 `modules/`、`sources/` 路径。T9 将原件、正文和许可直接移动，并更新 manifest 中的 `file`、`source_snapshot`、`license` 路径；旧数据库/Chroma metadata 未随之改写。比赛 fixture 必须显式冻结并审阅当前磁盘路径与 hash；仅刷新快照不等于重建索引、更新 SQL/Chroma metadata 或完成独立专家复核。旧路径仅作 T8 历史记录，不是当前回放路径。
+
 `suite.json` 是测试数据入口。默认比赛套件必须保留来源快照；加载时校验 ID/version、子文件 fixture_version、KB 引用、真实使用的背景/资源类型、画像/目标节点、唯一 case/claim、Claim type/verdict、证据约束及门槛。相对路径不得越出 fixture/KB 根。至少50用例、幻觉上界≤0.05、适配下界≥0.85、覆盖下界≥0.90不可下调。
 
-`sources.json` 按 UTF-8/LF 规范化计算 SHA-256，因此 Windows/Linux Git 换行不影响快照。它冻结 metadata、三份问卷/题库、六份正文；每个 `ev-modNN-secN` 映射到实际文档、章节、行号与section hash，附 metadata 中的原始来源链接。任何正文/题库/metadata或证据映射漂移均加载失败。
+`sources.json` 按 UTF-8/LF 规范化计算 SHA-256，因此 Windows/Linux Git 换行不影响快照。T8 冻结包含66份文件：metadata、三份问卷/题库、六份教学正文、21份英文原始资料派生正文及35份官方中文派生正文；每个 `ev-modNN-secN` 映射到实际文档、章节、行号与section hash，附 metadata 中的原始来源链接。该66文件记录是迁移前历史口径；T9 后应使用 manifest 当前路径重冻，并保留显式审阅。任何正文/题库/metadata或证据映射漂移均加载失败。
+
+2026-10-26 T8 资料扩容后曾显式重新冻结来源快照：已逐项校验51个原evidence对象（章节/行号/hash/链接）完全一致，旧正文和三份问卷/题库hash不变，差异仅metadata清单及新增56份源正文。该冻结发生在 T9 直接移动前，不能作为当前物理路径快照；T9 路径更新如需重新冻结，Claim金标、画像、用例、评分门槛和Prompt仍须分别保护。路径快照更新不是重新标注或独立专家评审，也不把新增资料的存在当作教学质量提升的量化证据。禁止运行时自动刷新快照绕过漂移门禁。
 
 修改专业知识或标注后，先检查事实与岗位要求，修订金标并说明版本原因，再显式重新冻结：
 

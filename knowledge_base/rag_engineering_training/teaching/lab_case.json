@@ -1,0 +1,19 @@
+{
+  "case_version": "rag-lab-v2",
+  "provenance": "synthetic_teaching_fixture_not_business_policy_or_measured_results",
+  "documents": [
+    {"id":"lab-A","text":"课程RAG实验先检索资料，再根据证据回答；检索不保证答案正确。"},
+    {"id":"lab-B","text":"本实验切片基线是500字符、重叠100字符。它不是模型token上限，也不是所有资料的最佳值。"},
+    {"id":"lab-C","text":"实验候选用关键词与向量两路召回；RRF按排名融合，重排仅对已召回候选排序。"},
+    {"id":"lab-D","text":"练习未给出报名截止日期。证据不足时应说明缺少信息，不得编造日期。"}
+  ],
+  "questions": [
+    {"id":"Q1","question":"500/100表示什么单位，是否所有文档都最佳？","relevant_document_ids":["lab-B"],"answerable":true,"expected":"按字符计数，仅为合成实验基线，不是通用最优参数或模型token上限。"},
+    {"id":"Q2","question":"RRF是否直接相加BM25和向量分数？","relevant_document_ids":["lab-C"],"answerable":true,"expected":"不是，按各路排名倒数融合。"},
+    {"id":"Q3","question":"报名截止日期是哪一天？","relevant_document_ids":["lab-D"],"answerable":false,"expected":"练习资料没有日期，不得编造。"},
+    {"id":"Q4","question":"说明RAG与候选召回、融合、重排的关系。","relevant_document_ids":["lab-A","lab-C"],"answerable":true,"expected":"RAG利用检索证据辅助回答；多路召回后融合，重排只排序已有候选，仍需检查回答证据。"}
+  ],
+  "chunking_baseline":{"unit":"characters","chunk_size":500,"chunk_overlap":100,"note":"教学实验基线，不改变项目运行配置"},
+  "fusion_example":{"question_id":"Q2","lexical":["lab-A","lab-B","lab-C"],"dense":["lab-C","lab-A","lab-D"],"rrf_k":60,"expected_order":["lab-A","lab-C","lab-B","lab-D"],"synthetic_rerank_scores":{"lab-C":3.1,"lab-A":1.2,"lab-B":0.3,"lab-D":-0.5},"note":"候选排名/分数均人为构造，非真实模型输出，分数不是概率"},
+  "metric_example":{"question_id":"Q4","ranking":["lab-B","lab-A","lab-D","lab-C"],"relevant":["lab-A","lab-C"],"k":4,"recall":1.0,"precision":0.5,"reciprocal_rank":0.5,"ndcg_rounded":0.6509,"note":"人工标注与手算示例，非系统实测"}
+}

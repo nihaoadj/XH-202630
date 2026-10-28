@@ -10,6 +10,7 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 
 from app.agents.learning_agents.diagnosis_agent import diagnose_node
+from app.agents.resource_workflows.learning_documents.resource_retry import reuse_resource_context_node
 from app.agents.resource_workflows.learning_documents.generator_agent import generate_node, progress_summary
 from app.agents.resource_workflows.learning_documents.planner_agent import plan_node
 from app.agents.resource_workflows.learning_documents.reviewer_agent import review_node
@@ -692,6 +693,7 @@ def build_workflow(
         workflow.add_node(name, recorded_node(name, node, lifecycle_repository))
 
     add_recorded("diagnose", _bind_llm_gateway(diagnose_node, gateway))
+    add_recorded("reuse_context", reuse_resource_context_node)
     add_recorded("retrieve", _bind_evidence_retriever(retrieve_node, retriever))
     add_recorded("evidence_gate", evidence_gate_node)
     add_recorded("plan", _bind_llm_gateway(plan_node, gateway))
@@ -712,7 +714,11 @@ def build_workflow(
     add_recorded("finalize", decide_node)
     add_recorded("finalize_evidence_insufficient", finalize_evidence_insufficient_node)
 
-    workflow.set_entry_point("diagnose")
+    workflow.set_conditional_entry_point(
+        lambda state: "reuse_context" if state.get("resource_retry_context") else "diagnose",
+        {"reuse_context": "reuse_context", "diagnose": "diagnose"},
+    )
+    workflow.add_edge("reuse_context", "generate")
     workflow.add_edge("diagnose", "retrieve")
     workflow.add_edge("retrieve", "evidence_gate")
     workflow.add_conditional_edges(

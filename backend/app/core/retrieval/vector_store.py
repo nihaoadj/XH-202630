@@ -10,13 +10,14 @@ import os
 import re
 import logging
 from time import perf_counter
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 from langchain_community.vectorstores import Chroma
 from langchain.schema import Document
 
 from app.config import Settings, get_settings, resolve_backend_path
 from app.core.retrieval.embeddings import get_embeddings
+from app.core.retrieval.hnsw_windows import install_windows_hnsw_paths
 from app.core.retrieval.knowledge_base import load_knowledge_base_manifest
 from app.models.knowledge.knowledge import ScoreKind, VectorCandidate
 
@@ -265,8 +266,40 @@ def _result_key(document: Document) -> str:
     )
 
 
+def _bounded_candidate_pool(merged, dense_by_query, *, limit: int, reserve: int):
+    """Reserve a language-neutral dense floor across original queries, once.
+
+    The final global cap applies AFTER reservation. IDs count once even when
+    supported by several queries or by both original/alias probes.
+    """
+    protected = []
+    for rank in range(max((len(items) for items in dense_by_query), default=0)):
+        for items in dense_by_query:
+            if rank < len(items):
+                ident = items[rank]
+                if ident in merged and ident not in protected:
+                    protected.append(ident)
+                    if len(protected) >= min(limit, reserve):
+                        break
+        if len(protected) >= min(limit, reserve):
+            break
+    if reserve <= 0:
+        protected = []
+    ordered = sorted(merged, key=lambda key: (
+        -merged[key][4], merged[key][1], merged[key][2], key,
+    ))
+    selected = list(protected)
+    selected.extend(key for key in ordered if key not in protected)
+    selected = selected[:limit]
+    pool = sorted((merged[key] for key in selected), key=lambda item: (
+        -item[4], item[1], item[2], _result_key(item[3]),
+    ))
+    return pool, len(protected)
+
+
 def get_vector_store(knowledge_base_id: Optional[str] = None) -> Chroma:
     """获取指定知识库独立的持久化向量集合。"""
+    install_windows_hnsw_paths()
     settings = get_settings()
     vector_store_dir = resolve_backend_path(settings.vector_store_dir)
     os.makedirs(vector_store_dir, exist_ok=True)
@@ -390,10 +423,53 @@ class ChromaVectorSearchBackend:
         allowed_chunk_ids: set[str] | None = None,
         query_bindings: dict | None = None,
     ) -> list[VectorCandidate]:
+        return self._search_many(
+            queries=queries, top_k=top_k, knowledge_base_id=knowledge_base_id,
+            allowed_chunk_ids=allowed_chunk_ids,
+            query_bindings=query_bindings,
+        )
+
+    def search_many_verified(
+        self,
+        *,
+        queries: list[str],
+        top_k: int,
+        knowledge_base_id: str,
+        source_path_resolver: Callable[[str, Document], str],
+        allowed_chunk_ids: set[str] | None = None,
+        query_bindings: dict | None = None,
+    ) -> list[VectorCandidate]:
+        return self._search_many(
+            queries=queries, top_k=top_k, knowledge_base_id=knowledge_base_id,
+            allowed_chunk_ids=allowed_chunk_ids, source_path_resolver=source_path_resolver,
+            query_bindings=query_bindings,
+        )
+
+    def search_many_evidence_candidates(
+        self, *, queries: list[str], top_k: int, knowledge_base_id: str,
+        source_path_resolver: Callable[[str, Document], str], allowed_chunk_ids: set[str] | None = None,
+    ) -> list[VectorCandidate]:
+        """Learning-only full bounded pool; final limits follow SQL validation."""
+        return self._search_many(queries=queries, top_k=top_k, knowledge_base_id=knowledge_base_id,
+            allowed_chunk_ids=allowed_chunk_ids, source_path_resolver=source_path_resolver, defer_query_limit=True)
+
+    def _search_many(
+        self,
+        *,
+        queries: list[str],
+        top_k: int,
+        knowledge_base_id: str,
+        allowed_chunk_ids: set[str] | None = None,
+        source_path_resolver: Callable[[str, Document], str] | None = None,
+        query_bindings: dict | None = None,
+        defer_query_limit: bool = False,
+    ) -> list[VectorCandidate]:
         """Fuse per-query candidates, then execute one bounded CrossEncoder batch."""
 
         if not queries or any(not query.strip() for query in queries):
             raise ValueError("retrieval queries cannot be empty")
+        if defer_query_limit and query_bindings is not None:
+            raise ValueError("resource-aware owner quotas cannot be deferred")
         from app.core.retrieval.reranker import mark_rerank_fallback, rerank_documents
 
         started = perf_counter()
@@ -401,59 +477,106 @@ class ChromaVectorSearchBackend:
         partial_failures = 0
         merged: dict[str, tuple[str, int, int, Document, float]] = {}
         hits: dict[str, list[tuple]] = {query: [] for query in queries}
+        original_hits: dict[str, list[tuple]] = {query: [] for query in queries}
         origins: dict[str, list[str]] = {}
+        originals: dict[str, tuple[str, int, int, Document, float]] = {}
+        dense_by_query: list[list[str]] = []
+        balanced = bool(getattr(self.settings, "retrieval_balanced_candidates_enabled", False))
+        reserve = int(getattr(self.settings, "retrieval_dense_reserve", 0)) if balanced else 0
+        candidate_limit = 20 if query_bindings is not None else self.settings.rerank_candidate_k
+        if defer_query_limit:
+            candidate_limit = min(20, candidate_limit)
         per_query_k = max(top_k, self.settings.rerank_per_query_k)
+        if balanced:
+            # Do not cut each query to ten before the one bounded rerank batch.
+            per_query_k = max(per_query_k, candidate_limit)
+        alias_probe_count = 0
         for query_index, query in enumerate(queries):
             query_profile: dict[str, object] = {
                 "query_hash": hashlib.sha256(query.encode("utf-8")).hexdigest()[:20]
             }
             query_started = perf_counter()
-            try:
-                results = hybrid_search(
-                    query,
-                    top_k=per_query_k,
-                    knowledge_base_id=knowledge_base_id,
-                    profile=query_profile,
-                    allowed_chunk_ids=allowed_chunk_ids,
-                )
-                query_profile["query_hit_count"] = len(results)
-                for hybrid_rank, (document, score) in enumerate(results, start=1):
-                    key = _result_key(document)
-                    candidate = (query, query_index, hybrid_rank, document, float(score))
-                    hits[query].append(candidate)
-                    if query not in origins.setdefault(key, []):
-                        origins[key].append(query)
-                    previous = merged.get(key)
-                    if previous is None or (score, -query_index, -hybrid_rank) > (
-                        previous[4],
-                        -previous[1],
-                        -previous[2],
-                    ):
-                        merged[key] = candidate
-            except Exception as exc:
-                partial_failures += 1
-                query_profile.update(
-                    query_status="failed",
-                    fallback_reason="hybrid_search_unavailable",
-                    exception_type=type(exc).__name__,
-                    # Keep the concrete backend detail in the internal
-                    # retrieval profile so live acceptance reports can
-                    # distinguish a provider failure from a local Chroma or
-                    # embedding-runtime failure.  This is never exposed as a
-                    # public error message.
-                    exception_detail=str(exc)[:512],
-                )
+            variants = [query]
+            if balanced and getattr(self.settings, "rerank_enabled", True):
+                from app.core.retrieval.query_expansion import expand_query
+                aliases, expansion_profile = expand_query(query, knowledge_base_id)
+                query_profile.update(expansion_profile)
+                variants.extend(aliases[:1])
+                alias_probe_count += len(variants) - 1
+            original_dense: list[tuple[Document, float]] = []
+            variant_profiles = []
+            for variant_index, variant in enumerate(variants):
+                probe_profile = {} if balanced else query_profile
+                collector: list[tuple[Document, float]] = []
+                try:
+                    kwargs = {"dense_candidate_collector": collector} if balanced and variant_index == 0 else {}
+                    results = hybrid_search(
+                        variant, top_k=per_query_k, knowledge_base_id=knowledge_base_id,
+                        profile=probe_profile, allowed_chunk_ids=allowed_chunk_ids, **kwargs,
+                    )
+                    if variant_index == 0:
+                        original_dense = collector
+                    # Original dense hits outside RRF top-k remain eligible for
+                    # the global floor; an alias never changes their query owner.
+                    candidates = results + (collector if variant_index == 0 else [])
+                    for hybrid_rank, (source, score) in enumerate(candidates, start=1):
+                        key = _result_key(source)
+                        if allowed_chunk_ids and key not in allowed_chunk_ids:
+                            continue
+                        document = Document(page_content=source.page_content, metadata=dict(source.metadata))
+                        if balanced:
+                            document.metadata["retrieval_variant"] = "original" if variant_index == 0 else "bilingual_alias"
+                        candidate = (query, query_index, hybrid_rank, document, float(score))
+                        hits[query].append(candidate)
+                        if variant_index == 0:
+                            original_hits[query].append(candidate)
+                        if query not in origins.setdefault(key, []):
+                            origins[key].append(query)
+                        for target in ([merged, originals] if variant_index == 0 else [merged]):
+                            previous = target.get(key)
+                            if previous is None or (score, -query_index, -hybrid_rank) > (
+                                previous[4], -previous[1], -previous[2],
+                            ):
+                                target[key] = candidate
+                except Exception as exc:
+                    if variant_index == 0:
+                        partial_failures += 1
+                    probe_profile.update(
+                        query_status="failed", fallback_reason="hybrid_search_unavailable",
+                        exception_type=type(exc).__name__,
+                        exception_detail=str(exc)[:512],
+                    )
+                    if variant_index == 0:
+                        query_profile.update(probe_profile)
+                if balanced:
+                    probe_profile.update(
+                        variant="original" if variant_index == 0 else "bilingual_alias",
+                        query_hash=hashlib.sha256(variant.encode("utf-8")).hexdigest()[:20],
+                    )
+                    if variant_index == 0:
+                        query_profile.update(probe_profile)
+                    variant_profiles.append(probe_profile)
+            if balanced:
+                dense_by_query.append([_result_key(document) for document, _ in original_dense
+                                       if not allowed_chunk_ids or _result_key(document) in allowed_chunk_ids])
+                query_profile["variant_profiles"] = variant_profiles
             query_profile["query_total_ms"] = round(
                 (perf_counter() - query_started) * 1000, 3
             )
             query_profiles.append(query_profile)
 
-        pool = sorted(
-            merged.values(),
-            key=lambda item: (-item[4], item[1], item[2], _result_key(item[3])),
-        )[: self.settings.rerank_candidate_k]
+        pool, protected_count = _bounded_candidate_pool(
+            merged, dense_by_query, limit=candidate_limit, reserve=reserve,
+        )
         if query_bindings is not None:
-            pool = _resource_aware_pool(hits, query_bindings, top_k=top_k)
+            pool = _resource_aware_pool(
+                hits, query_bindings, top_k=top_k,
+                dense_by_query=dense_by_query, dense_reserve=reserve,
+            )
+            protected_count = sum(
+                _result_key(item[3]) in {key for ids in dense_by_query for key in ids}
+                for item in pool
+            )
         profile: dict[str, object] = {
             "query_count": len(queries),
             "allowed_chunk_count": len(allowed_chunk_ids or ()),
@@ -462,6 +585,15 @@ class ChromaVectorSearchBackend:
             "unique_candidate_count": len(merged),
             "bounded_candidate_count": len(pool),
         }
+        if balanced:
+            profile.update(candidate_selection_version="dense-protected-rrf-v2",
+                           dense_protected_count=protected_count, alias_probe_count=alias_probe_count)
+            if query_bindings is not None:
+                profile.update(
+                    dense_reserve_requested=reserve,
+                    dense_reserve_shortfall=max(0, reserve - protected_count),
+                    dense_reserve_constraint="purpose_reservations_and_owner_query_quota",
+                )
         if not pool:
             self.last_profile = {
                 **profile,
@@ -471,6 +603,18 @@ class ChromaVectorSearchBackend:
                 raise RuntimeError("RETRIEVAL_ALL_QUERIES_FAILED")
             return []
 
+        # Validate the complete pool BEFORE model ordering and TopK truncation.
+        # Metadata supplied by Chroma is never itself a verified language label.
+        profile["source_validation_count"] = 0
+        profile["source_validation_stage"] = "sql_pre_top_k" if source_path_resolver is not None else "unverified"
+        self.last_profile = profile
+        for original_query, _, _, document, _ in pool:
+            document.metadata["source_path_verified"] = False
+            document.metadata.pop("selection_min_relevance", None)
+            if source_path_resolver is not None:
+                document.metadata["source_path"] = source_path_resolver(original_query, document)
+                document.metadata["source_path_verified"] = True
+                profile["source_validation_count"] += 1
         hybrid_results = [(item[3], item[4]) for item in pool]
         pair_queries = [item[0] for item in pool]
         try:
@@ -479,7 +623,7 @@ class ChromaVectorSearchBackend:
                 hybrid_results,
                 top_k=len(hybrid_results),
                 profile=profile,
-                **({"candidate_limit": 20} if query_bindings is not None else {}),
+                **({"candidate_limit": candidate_limit} if query_bindings is not None or defer_query_limit else {}),
             )
         except Exception as exc:
             profile.update(
@@ -488,7 +632,7 @@ class ChromaVectorSearchBackend:
                 rerank_candidate_count=len(hybrid_results),
                 rerank_fallback_count=1,
             )
-            results = mark_rerank_fallback(hybrid_results, len(hybrid_results), "unavailable")
+            results = []
             logger.warning(
                 "Retrieval rerank fallback kb_id=%s query_count=%s reason=%s exception_type=%s",
                 knowledge_base_id,
@@ -496,12 +640,56 @@ class ChromaVectorSearchBackend:
                 "reranker_unavailable",
                 type(exc).__name__,
             )
+        if balanced and profile.get("rerank_status") != "available":
+            # An alias is only a retrieval probe. Without a semantic reranker,
+            # do not turn its keyword-only score into evidence relevance.
+            pool, protected_count = _bounded_candidate_pool(
+                originals, dense_by_query, limit=candidate_limit, reserve=reserve,
+            )
+            if query_bindings is not None:
+                pool = _resource_aware_pool(
+                    original_hits, query_bindings, top_k=top_k,
+                    dense_by_query=dense_by_query, dense_reserve=reserve,
+                )
+                protected_count = sum(
+                    _result_key(item[3]) in {key for ids in dense_by_query for key in ids}
+                    for item in pool
+                )
+                # Without semantic reranking, alias-only query matches must
+                # not grant a resource purpose to an otherwise original hit.
+                origins = {}
+                for query, values in original_hits.items():
+                    for item in values:
+                        matched = origins.setdefault(_result_key(item[3]), [])
+                        if query not in matched:
+                            matched.append(query)
+                profile["dense_reserve_shortfall"] = max(0, reserve - protected_count)
+            # Fallback may replace alias hits with original hits outside the
+            # first pool. Validate those too before downstream selection.
+            if source_path_resolver is not None:
+                for original_query, _, _, document, _ in pool:
+                    # The fallback pool can contain new objects from Chroma;
+                    # never accept their self-reported verification marker.
+                    document.metadata["source_path_verified"] = False
+                    document.metadata.pop("selection_min_relevance", None)
+                    document.metadata["source_path"] = source_path_resolver(original_query, document)
+                    document.metadata["source_path_verified"] = True
+                    profile["source_validation_count"] += 1
+            profile.update(bounded_candidate_count=len(pool), dense_protected_count=protected_count,
+                           alias_fallback_excluded=True)
+            results = mark_rerank_fallback([(item[3], item[4]) for item in pool], len(pool),
+                                          "disabled" if profile.get("rerank_status") == "disabled" else "unavailable")
+            if not pool and partial_failures == len(queries):
+                raise RuntimeError("RETRIEVAL_ALL_QUERIES_FAILED")
+        elif not results:
+            results = mark_rerank_fallback(hybrid_results, len(hybrid_results), "unavailable")
         origin_by_chunk = {_result_key(item[3]): item for item in pool}
         if query_bindings is not None:
             # The reranker's document-diversity pass can defer a stronger hit.
             # E1 ranks each owner's already bounded pool by its actual score.
             results = sorted(results, key=lambda item: (
-                origin_by_chunk[_result_key(item[0])][1], -float(item[1]),
+                origin_by_chunk[_result_key(item[0])][1],
+                -float(item[0].metadata.get("selection_score", item[1])), -float(item[1]),
                 origin_by_chunk[_result_key(item[0])][2], _result_key(item[0]),
             ))
         selected: list[tuple[str, int, Document, float]] = []
@@ -510,12 +698,14 @@ class ChromaVectorSearchBackend:
             origin = origin_by_chunk[_result_key(document)]
             query = origin[0]
             count = per_query_counts.get(query, 0)
-            if count >= top_k:
+            if not defer_query_limit and count >= top_k:
                 continue
             per_query_counts[query] = count + 1
             selected.append((query, count + 1, document, float(score)))
 
         profile["final_candidate_count"] = len(selected)
+        if defer_query_limit:
+            profile["query_limit_stage"] = "global_after_validation"
         profile["total_retrieval_ms"] = round((perf_counter() - started) * 1000, 3)
         self.last_profile = profile
         logger.info(
@@ -540,7 +730,10 @@ class ChromaVectorSearchBackend:
         ]
 
 
-def _resource_aware_pool(hits: dict[str, list[tuple]], bindings: dict, *, top_k: int):
+def _resource_aware_pool(
+    hits: dict[str, list[tuple]], bindings: dict, *, top_k: int,
+    dense_by_query: list[list[str]] | None = None, dense_reserve: int = 0,
+):
     """Reserve a bounded pool; the actual selecting hit owns score and query."""
     sort_key = lambda item: (-item[4], item[1], item[2], _result_key(item[3]))
     selected: dict[str, tuple] = {}
@@ -569,6 +762,21 @@ def _resource_aware_pool(hits: dict[str, list[tuple]], bindings: dict, *, top_k:
     for resource_type in types:
         take([hit for query, values in bindings.items()
               if any(p.resource_type == resource_type for p in values) for hit in hits[query]])
+    # Purpose reservations own their original hit/score. Dense protection only
+    # fills remaining capacity and obeys the same owner-query quota.
+    dense_reserved = 0
+    dense_lists = dense_by_query or []
+    for rank in range(max((len(ids) for ids in dense_lists), default=0)):
+        for ids in dense_lists:
+            if dense_reserved >= dense_reserve or len(selected) >= 20:
+                break
+            if rank >= len(ids) or ids[rank] in selected:
+                continue
+            key = ids[rank]
+            if take([hit for values in hits.values() for hit in values
+                     if _result_key(hit[3]) == key
+                     and hit[3].metadata.get("retrieval_variant") != "bilingual_alias"]):
+                dense_reserved += 1
     while len(selected) < 20:
         added = False
         for candidates in hits.values():
@@ -585,6 +793,7 @@ def hybrid_search(
     *,
     profile: dict[str, object] | None = None,
     allowed_chunk_ids: set[str] | None = None,
+    dense_candidate_collector: list[tuple[Document, float]] | None = None,
 ):
     """Fuse dense vector retrieval and lexical BM25 ranking with RRF.
 
@@ -684,7 +893,8 @@ def hybrid_search(
     )
 
     results: list[tuple[Document, float]] = []
-    for item in ranked[:top_k]:
+    dense_items: list[tuple[Document, float]] = []
+    for index, item in enumerate(ranked if dense_candidate_collector is not None else ranked[:top_k]):
         source_document = item["document"]
         if not isinstance(source_document, Document):
             continue
@@ -709,7 +919,12 @@ def hybrid_search(
                 "lexical_score": item["lexical_score"],
             }
         )
-        results.append((document, normalized_score))
+        if index < top_k:
+            results.append((document, normalized_score))
+        if dense_candidate_collector is not None and item["vector_rank"] is not None:
+            dense_items.append((document, normalized_score))
+    if dense_candidate_collector is not None:
+        dense_candidate_collector.extend(sorted(dense_items, key=lambda item: int(item[0].metadata["vector_rank"])))
     if profile is not None:
         profile["allowed_chunk_count"] = len(allowed_chunk_ids)
         profile["hybrid_fusion_ms"] = round((perf_counter() - fusion_started) * 1000, 3)

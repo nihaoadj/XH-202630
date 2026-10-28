@@ -52,7 +52,13 @@ async def test_report_stream_emits_snapshot_then_safe_changed_domain_only():
     assert "Prompt" not in payload and "content_text" not in payload
 
 
-def test_report_stream_over_real_http_emits_snapshot_then_changed():
+def test_report_stream_over_real_http_emits_snapshot_then_changed(monkeypatch):
+    # Local fixture traffic must not inherit system/CI proxies that can keep
+    # the upstream SSE socket alive after the client has already closed it.
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:1")
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.setenv(name, "")
     profile = LearnerProfile(learner_id="learner", learner_type="test", education="本科", major="软件", learning_goal="learn")
     reports = _Reports()
     app = FastAPI()
@@ -67,9 +73,9 @@ def test_report_stream_over_real_http_emits_snapshot_then_changed():
     deadline = time.monotonic() + 5
     while not server.started and time.monotonic() < deadline:
         time.sleep(0.02)
-    assert server.started
     try:
-        with httpx.stream("GET", f"http://127.0.0.1:{port}/api/report/learner/events", timeout=8) as response:
+        assert server.started
+        with httpx.stream("GET", f"http://127.0.0.1:{port}/api/report/learner/events", timeout=8, trust_env=False) as response:
             lines = []
             for line in response.iter_lines():
                 if line:
@@ -87,4 +93,8 @@ def test_report_stream_over_real_http_emits_snapshot_then_changed():
     finally:
         server.should_exit = True
         thread.join(timeout=5)
-        assert not thread.is_alive()
+        stopped_normally = not thread.is_alive()
+        if not stopped_normally:
+            server.force_exit = True
+            thread.join(timeout=2)
+        assert stopped_normally, "Report test server did not shut down normally within 5 seconds"

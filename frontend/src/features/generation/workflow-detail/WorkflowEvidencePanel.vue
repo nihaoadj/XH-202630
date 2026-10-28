@@ -14,7 +14,10 @@
           <span v-if="hasValue(source.locator?.line_start)"> · 行 {{ source.locator.line_start }}<template v-if="hasValue(source.locator?.line_end)">–{{ source.locator.line_end }}</template></span>
           <span v-else-if="hasValue(source.locator?.line_end)"> · 截止行 {{ source.locator.line_end }}</span>
         </p>
-        <blockquote v-if="hasValue(source.excerpt)" class="source-excerpt">{{ source.excerpt }}</blockquote>
+        <template v-if="hasValue(source.excerpt)">
+          <div class="source-excerpt source-markdown detail-markdown" v-html="renderMarkdown(source.excerpt)" />
+          <details class="source-raw detail-disclosure"><summary>查看原始 Markdown</summary><pre>{{ source.excerpt }}</pre></details>
+        </template>
         <p v-else class="empty-note">冻结证据未记录原文摘录。</p>
       </template>
       <details class="source-identity audit-identifiers">
@@ -27,6 +30,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { renderMarkdown } from '../../../utils/markdown.js'
 
 const props = defineProps({ sources: { type: Array, default: () => [] } })
 // Each row already corresponds to one explicitly referenced frozen Evidence ID.

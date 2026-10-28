@@ -1,0 +1,26 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>新建方向隔离流程验收</title></head><body><div id="app"></div><script type="module">
+import { createApp, h } from 'vue'
+import { createPinia } from 'pinia'
+import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
+import '../../src/styles/theme.css'
+import OnboardingView from '../../src/features/onboarding/OnboardingView.vue'
+import { useAuthStore } from '../../src/stores/auth.js'
+import { useAppStore } from '../../src/stores/app.js'
+const pinia = createPinia()
+const router = createRouter({ history: createMemoryHistory(), routes: [
+  { path: '/learning/new', component: OnboardingView },
+  ...['/other', '/learning/history', '/generate'].map(path => ({ path, component: { render: () => h('h2', { class:'fixture-other' }, '其他板块') } })),
+] })
+const app = createApp({ render: () => h('div', { class:'content-area' }, h(RouterView)) })
+app.directive('module-motion', {})
+app.use(pinia).use(router).use(ElementPlus)
+const auth = useAuthStore(pinia), store = useAppStore(pinia)
+auth.setCurrentUser({ user_id: 'account-a', username:'fixture', display_name:'测试学习者' })
+auth.initialized = true
+await router.push('/learning/new')
+await router.isReady()
+app.mount('#app')
+window.onboardingFixture = { auth, store, router }
+</script><style>body{margin:0;background:#f4f7fa}.content-area{height:100vh;padding:0 24px 20px;overflow:auto;box-sizing:border-box}@media(max-width:600px){.content-area{padding-inline:12px}}</style></body></html>

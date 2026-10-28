@@ -1,0 +1,274 @@
+# 使用自定义非结构化数据构建 RAG
+
+_作者: [Maria Khalusova](https://github.com/MKhalusova)_
+
+如果你是 RAG 的新手，请先在[这个其他笔记](https://huggingface.co/learn/cookbook/rag_zephyr_langchain)中探索 RAG 的基础知识，然后回到这里学习如何使用自定义数据构建 RAG。
+
+无论你是正在构建基于 RAG 的个人助理、宠物项目还是企业级 RAG 系统，你很快就会发现，许多重要的知识存储在各种格式中，如 PDF 文件、电子邮件、Markdown 文件、PowerPoint 演示文稿、HTML 页面、Word 文档等。
+
+你如何预处理所有这些数据，以便你能将其用于 RAG？
+
+在这个快速教程中，你将学习如何构建一个将包含多种数据类型的 RAG 系统。你将使用 [Unstructured](https://github.com/Unstructured-IO/unstructured) 进行数据预处理，Hugging Face Hub 上的开源模型进行嵌入和文本生成，ChromaDB 作为向量存储，以及 LangChain 将所有内容整合在一起。
+
+让我们开始吧！我们首先安装所需的依赖项：
+
+
+```python
+!pip install -q torch transformers accelerate bitsandbytes sentence-transformers unstructured[all-docs] langchain chromadb langchain_community
+```
+
+接下来，让我们获取一些文档的混合体。假设我想构建一个 RAG 系统，帮助我管理花园中的害虫。为此，我将使用涵盖 IPM（综合害虫管理）主题的多样化文档：
+* PDF: `https://www.gov.nl.ca/ecc/files/env-protection-pesticides-business-manuals-applic-chapter7.pdf`
+* PowerPoint: `https://ipm.ifas.ufl.edu/pdfs/Citrus_IPM_090913.pptx`
+* EPUB: `https://www.gutenberg.org/ebooks/45957`
+* HTML: `https://blog.fifthroom.com/what-to-do-about-harmful-garden-and-plant-insects-and-pests.html`
+
+请随意使用你自己选择的主题文档，这些文档类型由 Unstructured 支持：`.eml`, `.html`, `.md`, `.msg`, `.rst`, `.rtf`, `.txt`, `.xml`, `.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`, `.heic`, `.csv`, `.doc`, `.docx`, `.epub`, `.odt`, `.pdf`, `.ppt`, `.pptx`, `.tsv`, `.xlsx`。
+
+```python
+!mkdir -p "./documents"
+!wget https://www.gov.nl.ca/ecc/files/env-protection-pesticides-business-manuals-applic-chapter7.pdf -O "./documents/env-protection-pesticides-business-manuals-applic-chapter7.pdf"
+!wget https://ipm.ifas.ufl.edu/pdfs/Citrus_IPM_090913.pptx -O "./documents/Citrus_IPM_090913.pptx"
+!wget https://www.gutenberg.org/ebooks/45957.epub3.images -O "./documents/45957.epub"
+!wget https://blog.fifthroom.com/what-to-do-about-harmful-garden-and-plant-insects-and-pests.html -O "./documents/what-to-do-about-harmful-garden-and-plant-insects-and-pests.html"
+```
+
+## 非结构化数据预处理
+
+你可以使用 Unstructured 库逐个预处理文档，并编写自己的脚本来遍历一个目录，但使用本地源连接器（Local source connector）来摄取给定目录中的所有文档会更加简单。Unstructured 可以从本地目录、S3 存储桶、Blob 存储、SFTP 以及许多其他可能存储文档的地方摄取文档。从这些来源摄取文档的过程非常相似，主要区别在于认证选项。
+
+在这里，你将使用本地源连接器，但也可以自由探索[Unstructured 文档](https://docs.unstructured.io/open-source/ingest/source-connectors/overview)中的其他选项。
+可选地，你还可以为处理后的文档选择一个[目的地](https://docs.unstructured.io/open-source/ingest/destination-connectors/overview) - 这可以是 MongoDB、Pinecone、Weaviate 等。在这个 notebook 中，我们将保持所有内容为本地。
+
+
+```python
+# Optional cell to reduce the amount of logs
+
+import logging
+
+logger = logging.getLogger("unstructured.ingest")
+logger.root.removeHandler(logger.root.handlers[0])
+```
+
+```python
+import os
+
+from unstructured.ingest.connector.local import SimpleLocalConfig
+from unstructured.ingest.interfaces import PartitionConfig, ProcessorConfig, ReadConfig
+from unstructured.ingest.runner import LocalRunner
+
+output_path = "./local-ingest-output"
+
+runner = LocalRunner(
+    processor_config=ProcessorConfig(
+        # logs verbosity
+        verbose=True,
+        # the local directory to store outputs
+        output_dir=output_path,
+        num_processes=2,
+        ),
+    read_config=ReadConfig(),
+    partition_config=PartitionConfig(
+        partition_by_api=True,
+        api_key="YOUR_UNSTRUCTURED_API_KEY",
+        ),
+    connector_config=SimpleLocalConfig(
+        input_path="./documents",
+        # whether to get the documents recursively from given directory
+        recursive=False,
+        ),
+    )
+runner.run()
+```
+
+让我们更详细地看看这里的配置。
+
+`ProcessorConfig` 控制处理管道的各个方面，包括输出位置、工作线程数量、错误处理行为、日志详细程度等。这里的唯一必填参数是 `output_dir` - 你希望存储输出的本地目录。
+
+`ReadConfig` 可以用来为不同场景自定义数据读取过程，例如重新下载数据、保留已下载的文件或限制处理的文档数量。在大多数情况下，默认的 `ReadConfig` 将适用。
+
+在 `PartitionConfig` 中，你可以选择是在本地还是通过 API 对文档进行分区。这个例子使用 API，因此需要 Unstructured API 密钥。你可以在这里[获取](https://unstructured.io/api-key-free)。免费的 Unstructured API 限制为 1000 页，并且为基于图像的文档提供了比本地安装的 Unstructured 更好的 OCR 模型。
+
+如果你删除这两个参数，文档将本地处理，但如果文档需要 OCR 和/或文档理解模型，你可能需要安装额外的依赖项。具体来说，在这种情况下，你可能需要安装 poppler 和 tesseract，你可以使用 brew 来获取：
+
+```
+!brew install poppler
+!brew install tesseract
+```
+
+如果你使用的是 Windows 系统，你可以在[Unstructured 文档](https://docs.unstructured.io/open-source/installation/full-installation)中找到替代的安装说明。
+
+最后，在 `SimpleLocalConfig` 中，你需要指定原始文档所在的位置，以及你是否想要递归地遍历目录。
+
+
+一旦文档被处理，你将在 `local-ingest-output` 目录中找到 4 个 json 文件，每个被处理的文档对应一个。
+
+Unstructured 以统一的方式对所有类型的文档进行分区，并返回带有文档元素的 json。
+
+[文档元素](https://docs.unstructured.io/api-reference/api-services/document-elements) 有一个类型，例如 `NarrativeText`，`Title` 或 `Table`，它们包含提取的文本，以及 Unstructured 能够获取的元数据。一些元数据对所有元素都是通用的，比如元素所在的文档的文件名。其他元数据取决于文件类型或元素类型。例如，`Table` 元素将在元数据中包含表格的 html 表示，而电子邮件的元数据将包含关于发件人和收件人的信息。
+
+让我们从这些 json 文件中导入元素对象。
+
+```python
+from unstructured.staging.base import elements_from_json
+
+elements = []
+
+for filename in os.listdir(output_path):
+    filepath = os.path.join(output_path, filename)
+    elements.extend(elements_from_json(filepath))
+```
+
+现在你已经从文档中提取了元素，你可以将它们分块以适应嵌入模型的上下文窗口。
+
+## 分块
+
+如果你熟悉将长文本文档分割成较小块的分块方法，你会注意到 Unstructured 的分块方法略有不同，因为分区步骤已经将整个文档分割成其结构元素：标题、列表项、表格、文本等。通过这种方式对文档进行分区，你可以避免不相关的文本片段最终出现在同一个元素，甚至是同一个块中的情况。
+
+现在，当你使用 Unstructured 对文档元素进行分块时，单个元素已经是小的，因此只有当它们超过所需的最大块大小时才会被分割。否则，它们将保持原样。你还可以选择性地将连续的文本元素（例如列表项）组合在一起，使它们共同符合块大小限制。
+
+
+```python
+from unstructured.chunking.title import chunk_by_title
+
+chunked_elements = chunk_by_title(elements,
+                                  # maximum for chunk size
+                                  max_characters=512,
+                                  # You can choose to combine consecutive elements that are too small
+                                  # e.g. individual list items
+                                  combine_text_under_n_chars=200,
+                                  )
+```
+
+这些块已经准备好用于 RAG 了。为了将它们与 LangChain 一起使用，你可以轻松地将 Unstructured 元素转换为 LangChain 文档。
+
+```python
+from langchain_core.documents import Document
+
+documents = []
+for chunked_element in chunked_elements:
+    metadata = chunked_element.metadata.to_dict()
+    metadata["source"] = metadata["filename"]
+    del metadata["languages"]
+    documents.append(Document(page_content=chunked_element.text, metadata=metadata))
+```
+
+## 设置检索器
+
+这个例子使用 ChromaDB 作为向量存储，以及 [`BAAI/bge-base-en-v1.5`](https://huggingface.co/BAAI/bge-base-en-v1.5) 嵌入模型，你可以自由使用任何其他向量存储。
+
+
+```python
+from langchain_community.vectorstores import Chroma
+from langchain.embeddings import HuggingFaceEmbeddings
+
+from langchain.vectorstores import utils as chromautils
+
+# ChromaDB doesn't support complex metadata, e.g. lists, so we drop it here.
+# If you're using a different vector store, you may not need to do this
+docs = chromautils.filter_complex_metadata(documents)
+
+embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
+vectorstore = Chroma.from_documents(documents, embeddings)
+retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+```
+
+如果你打算使用 Hugging Face Hub 上的门控模型，无论是嵌入模型还是文本生成模型，你都需要使用你的 Hugging Face token 进行身份验证，你可以在你的 Hugging Face 个人资料设置中获取这个 token 。
+
+```python
+from huggingface_hub import notebook_login
+
+notebook_login()
+```
+
+## 使用 LangChain 构建 RAG
+
+让我们将所有内容整合在一起，使用 LangChain 构建 RAG。
+
+在这个例子中，我们将使用来自 Meta 的[`Llama-3-8B-Instruct`](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct)。为了确保它可以在 Google Colab 的免费 T4 运行时中顺利运行，你需要对其进行量化。
+
+```python
+from langchain.prompts import PromptTemplate
+from langchain.llms import HuggingFacePipeline
+from transformers import pipeline
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from langchain.chains import RetrievalQA
+```
+
+```python
+model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True, bnb_4bit_use_double_quant=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16
+)
+
+model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+terminators = [
+    tokenizer.eos_token_id,
+    tokenizer.convert_tokens_to_ids("<|eot_id|>")
+]
+
+text_generation_pipeline = pipeline(
+    model=model,
+    tokenizer=tokenizer,
+    task="text-generation",
+    temperature=0.2,
+    do_sample=True,
+    repetition_penalty=1.1,
+    return_full_text=False,
+    max_new_tokens=200,
+    eos_token_id=terminators,
+)
+
+llm = HuggingFacePipeline(pipeline=text_generation_pipeline)
+
+prompt_template = """
+<|start_header_id|>user<|end_header_id|>
+You are an assistant for answering questions using provided context.
+You are given the extracted parts of a long document and a question. Provide a conversational answer.
+If you don't know the answer, just say "I do not know." Don't make up an answer.
+Question: {question}
+Context: {context}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+"""
+
+prompt = PromptTemplate(
+    input_variables=["context", "question"],
+    template=prompt_template,
+)
+
+
+qa_chain = RetrievalQA.from_chain_type(
+    llm,
+    retriever=retriever,
+    chain_type_kwargs={"prompt": prompt}
+)
+```
+
+## 结果和下一步
+
+现在你已经有了 RAG 链，让我们问问它关于蚜虫的问题。在我的花园里，它们是害虫吗？
+
+
+```python
+question = "Are aphids a pest?"
+
+qa_chain.invoke(question)['result']
+```
+
+输出:
+
+```bash
+Yes, aphids are considered pests because they feed on the nutrient-rich liquids within plants, causing damage and potentially spreading disease. In fact, they're known to multiply quickly, which is why it's essential to control them promptly. As mentioned in the text, aphids can also attract ants, which are attracted to the sweet, sticky substance they produce called honeydew. So, yes, aphids are indeed a pest that requires attention to prevent further harm to your plants!
+```
+
+这看起来是一个很有希望的开始！现在你已经了解了预处理复杂非结构化数据以供 RAG 使用的基础知识，你可以继续改进这个例子。以下是一些建议：
+
+* 你可以连接到不同的源来摄取文档，例如，从一个 S3 存储桶。
+* 你可以在 `qa_chain` 参数中添加 `return_source_documents=True`，使链在返回答案时同时返回作为上下文传递给提示的文档。这有助于理解生成答案时使用了哪些源。
+* 如果你想要在检索阶段利用元素元数据，可以考虑使用 Hugging Face Agent 并创建一个自定义检索器工具，如[这个其他 notebook](https://huggingface.co/learn/cookbook/agents#2--rag-with-iterative-query-refinement--source-selection) 中所述。
+* 有许多方法可以改善搜索结果。例如，你可以使用混合搜索代替单一的相似性搜索检索器。混合搜索结合了多种搜索算法，以提高搜索结果的准确性和相关性。通常，它是基于关键词的搜索算法与向量搜索方法的结合。
+
+在使用非结构化数据构建 RAG 应用程序时玩得开心！

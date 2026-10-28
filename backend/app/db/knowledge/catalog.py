@@ -270,6 +270,7 @@ class KnowledgeCatalogRepository:
                     "source_type": metadata.get("source_type", "text"),
                     "source_version": metadata.get("source_version"),
                     "content_hash": values["content_hash"],
+                    "identity_revision": metadata.get("document_identity_revision", ""),
                     "enabled": metadata.get("enabled", True),
                     "is_current": activate,
                     "extra_metadata": dict(metadata),

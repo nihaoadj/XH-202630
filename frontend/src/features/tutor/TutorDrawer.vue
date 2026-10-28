@@ -42,10 +42,10 @@
             </div>
             <p>{{ turn.message }}</p>
             <blockquote v-if="turn.follow_up_question">{{ turn.follow_up_question }}</blockquote>
-            <div v-if="turn.source_refs?.length" class="turn-evidence">
-              <strong>参考材料</strong>
+            <details v-if="turn.source_refs?.length" class="turn-evidence">
+              <summary>查看参考来源</summary>
               <SourceRefList :refs="turn.source_refs" compact />
-            </div>
+            </details>
             <el-alert v-if="turn.grounding_status === 'evidence_insufficient'" type="warning" title="本轮未调用自由知识回答" :closable="false" show-icon />
           </div>
         </article>
@@ -320,7 +320,9 @@ watch(() => props.modelValue, (isOpen) => {
 .assistant-bubble > p { margin: 12px 0 0; color: var(--tutor-ink); font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; white-space: pre-wrap; }
 .assistant-bubble blockquote { margin: 14px 0 0; padding: 11px 14px; border-left: 2px solid #87b8b0; border-radius: 0 8px 8px 0; background: #f5f9f8; color: var(--tutor-ink); font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; white-space: pre-wrap; }
 .turn-evidence { min-width: 0; margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--tutor-line); }
-.turn-evidence > strong { display: block; margin-bottom: 8px; color: var(--tutor-muted); font-size: 12px; font-weight: 600; }
+.turn-evidence > summary { cursor: pointer; color: var(--tutor-muted); font-size: 12px; font-weight: 600; }
+.turn-evidence[open] > summary { margin-bottom: 8px; }
+.turn-evidence > summary:focus-visible { outline: 2px solid var(--tutor-ink); outline-offset: 4px; }
 .turn-evidence :deep(.source-ref-list li) { gap: 8px; padding: 9px 11px; border-color: var(--tutor-line); border-radius: 8px; background: var(--tutor-soft); color: var(--tutor-ink); }
 .turn-evidence :deep(.source-ref-list strong), .turn-evidence :deep(.source-ref-list small) { white-space: normal; overflow-wrap: anywhere; }
 .turn-evidence :deep(.source-ref-list small), .turn-evidence :deep(.source-ref-list li > span) { color: var(--tutor-muted); font-size: 12px; line-height: 1.6; }

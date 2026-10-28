@@ -7,7 +7,10 @@ import uuid
 
 from app.db.generation.base import BaseGenerationJobRepository
 from app.core.execution import ExecutionFence, execution_fence
-from app.models.generation.dispatch import TEXT_WORKFLOW_VERSION
+from app.models.generation.dispatch import TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION
+from app.models.generation.resource_retry import ResourceRetryContext
+from app.services.generation.resource_retry import prepare_resource_retry
+from app.services.generation.dispatch import submission_identity
 from app.models.shared.persistence import canonical_hash
 from app.db.generation.fencing import ExecutionLeaseLost
 from app.db.shared.retry import run_with_sqlite_retry
@@ -195,7 +198,20 @@ class GenerationJobService:
             batch_id=job.batch_id or job.run_id, learner_id=job.learner_id, topic=job.topic,
             knowledge_base_id=job.knowledge_base_id, job_status=job.job_status, focus_snapshot=job.focus_snapshot)
 
-    def create_job(self, learner, req, *, run_id=None, batch_id=None, retry_failed=False, submission_hash=None):
+    def create_resource_retry(self, learner, source_run_id, spec_id, representation, *, idempotency_key=None):
+        context = prepare_resource_retry(self, learner, source_run_id, spec_id, representation)
+        identity = submission_identity(
+            learner, context, idempotency_key if idempotency_key is not None else context.context_hash,
+            f"resource-retry:{source_run_id}:{spec_id}:{representation}",
+        )
+        source = self.job_repo.get(source_run_id)
+        job = self.create_job(context.learner, context.request.model_copy(deep=True),
+                              batch_id=source.batch_id or source_run_id,
+                              resource_retry_context=context.model_dump(mode="json"), **identity)
+        return job, context.request
+
+    def create_job(self, learner, req, *, run_id=None, batch_id=None, retry_failed=False, submission_hash=None,
+                   resource_retry_context=None):
         if run_id and submission_hash and not retry_failed:
             found = self._existing_submission(run_id, submission_hash)
             if found:
@@ -210,6 +226,7 @@ class GenerationJobService:
                     return uow.generation_job_service._create_job(
                         learner, req.model_copy(deep=True), run_id=run_id, batch_id=batch_id,
                         retry_failed=retry_failed, submission_hash=submission_hash,
+                        resource_retry_context=resource_retry_context,
                     )
             try:
                 return run_with_sqlite_retry(atomic_create)
@@ -218,7 +235,8 @@ class GenerationJobService:
                     return run_with_sqlite_retry(atomic_create)
                 raise
         return self._create_job(learner, req, run_id=run_id, batch_id=batch_id,
-                                retry_failed=retry_failed, submission_hash=submission_hash)
+                                retry_failed=retry_failed, submission_hash=submission_hash,
+                                resource_retry_context=resource_retry_context)
 
     def _create_job(
         self,
@@ -229,6 +247,7 @@ class GenerationJobService:
         batch_id: str | None = None,
         retry_failed: bool = False,
         submission_hash: str | None = None,
+        resource_retry_context: dict | None = None,
     ) -> GenerationJobCreateResponse:
         feedback_only = set(req.resource_types) & set(FEEDBACK_ONLY_RESOURCE_TYPES)
         correction_followup = (
@@ -261,7 +280,7 @@ class GenerationJobService:
         created_new = False
         rescheduled_retry = False
         focus_snapshot = None
-        if existing is None and self.mastery_service is not None:
+        if existing is None and self.mastery_service is not None and resource_retry_context is None:
             # The generic auto entry point must obey the same tier policy as a
             # feedback follow-up.  Do not let a three-node focus snapshot mix tiers.
             auto_targets = None
@@ -311,7 +330,7 @@ class GenerationJobService:
                 focus_snapshot = LearnerFocusSnapshotV1.model_validate(raw_snapshot)
                 req.target_skill_nodes = list(focus_snapshot.adopted_node_ids)
                 req.constraints = {**req.constraints, "learner_focus_snapshot": raw_snapshot}
-        if self.mastery_service is not None and req.target_skill_nodes:
+        if self.mastery_service is not None and req.target_skill_nodes and resource_retry_context is None:
             try:
                 if correction_followup:
                     tier = self.mastery_service.validate_correction_targets(
@@ -383,8 +402,8 @@ class GenerationJobService:
                 topic=req.topic,
                 knowledge_base_id=knowledge_base_id,
                 request_payload=req.model_dump(mode="json"),
-                **({"dispatch_snapshot": self._dispatch_snapshot(learner, req),
-                    "submission_hash": submission_hash} if self.durable_dispatch else
+                **({"dispatch_snapshot": self._dispatch_snapshot(learner, req, resource_retry_context),
+                    "submission_hash": submission_hash} if self.durable_dispatch or resource_retry_context is not None else
                    {"submission_hash": submission_hash} if submission_hash and hasattr(self.job_repo, "get_dispatch") else {}),
             )
             job_status = "queued"
@@ -413,9 +432,18 @@ class GenerationJobService:
         )
 
     @staticmethod
-    def _dispatch_snapshot(learner, request):
-        return {"workflow_version": TEXT_WORKFLOW_VERSION, "learner": learner.model_dump(mode="json"),
-                "request_hash": canonical_hash(request.model_dump(mode="json"))}
+    def _dispatch_snapshot(learner, request, resource_retry_context=None):
+        snapshot = {"workflow_version": TEXT_WORKFLOW_VERSION, "learner": learner.model_dump(mode="json"),
+                    "request_hash": canonical_hash(request.model_dump(mode="json"))}
+        if resource_retry_context is not None:
+            context = ResourceRetryContext.from_snapshot(resource_retry_context)
+            if context.request != request or context.learner != learner:
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            snapshot["resource_retry_context"] = context.model_dump(mode="json")
+            # Older workers must reject this dispatch instead of silently
+            # starting an ordinary diagnose/retrieve/plan workflow.
+            snapshot["workflow_version"] = RESOURCE_RETRY_WORKFLOW_VERSION
+        return snapshot
 
     def run_claim(self, claim):
         """Only a persisted, still-owned claim can execute the frozen submission."""
@@ -423,15 +451,21 @@ class GenerationJobService:
         resource_ids = []
         learner = None
         try:
-            if claim.snapshot.get("workflow_version") != TEXT_WORKFLOW_VERSION:
+            version = claim.snapshot.get("workflow_version")
+            if version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION}:
                 raise ValueError("unsupported frozen workflow")
+            if (version == RESOURCE_RETRY_WORKFLOW_VERSION) != (claim.snapshot.get("resource_retry_context") is not None):
+                raise ValueError("retry dispatch version mismatch")
             req = GenerateRequest.model_validate(claim.request_payload)
             learner = LearnerProfile.model_validate(claim.snapshot["learner"])
             if (req.learner_id != claim.learner_id or learner.learner_id != claim.learner_id
                     or canonical_hash(req.model_dump(mode="json")) != claim.snapshot.get("request_hash")):
                 raise ValueError("frozen generation input mismatch")
             with execution_fence(ExecutionFence(claim.run_id, claim.owner, claim.epoch)):
-                response = self.generation_service.generate_with_run_id(learner, req, run_id=claim.run_id, batch_id=claim.batch_id)
+                retry_context = claim.snapshot.get("resource_retry_context")
+                response = self.generation_service.generate_with_run_id(
+                    learner, req, run_id=claim.run_id, batch_id=claim.batch_id,
+                    **({"resource_retry_context": retry_context} if retry_context is not None else {}))
                 resource_ids = [item.resource_id for item in response.resources]
                 if getattr(response, "workflow_status", None) == "failed":
                     error_code = "GENERATION_EXECUTION_FAILED"
@@ -507,6 +541,7 @@ class GenerationJobService:
         run_id: str,
         batch_id: str | None = None,
     ) -> None:
+        metadata = {}
         if hasattr(self.job_repo, "get_dispatch"):
             metadata = self.job_repo.get_dispatch(run_id) or {}
             if metadata.get("dispatch_mode") == "worker":
@@ -519,11 +554,23 @@ class GenerationJobService:
         try:
             job = self.job_repo.get(run_id)
             effective_batch_id = batch_id or (job.batch_id if job else run_id)
+            snapshot = metadata.get("dispatch_snapshot") or {}
+            retry_context = snapshot.get("resource_retry_context")
+            if snapshot:
+                version = snapshot.get("workflow_version")
+                if (version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION}
+                        or (version == RESOURCE_RETRY_WORKFLOW_VERSION) != (retry_context is not None)):
+                    raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            if retry_context is not None:
+                learner = LearnerProfile.model_validate(snapshot["learner"])
+                if canonical_hash(req.model_dump(mode="json")) != snapshot.get("request_hash"):
+                    raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
             response = self.generation_service.generate_with_run_id(
                 learner,
                 req,
                 run_id=run_id,
                 batch_id=effective_batch_id,
+                **({"resource_retry_context": retry_context} if retry_context is not None else {}),
             )
             self.job_repo.mark_completed(
                 run_id,

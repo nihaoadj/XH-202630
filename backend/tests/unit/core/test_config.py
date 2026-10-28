@@ -34,6 +34,8 @@ def test_settings_safe_defaults():
     assert settings.claim_max_claims_per_resource == 10
     assert settings.claim_warning_publish_enabled is False
     assert settings.claim_warning_publish_min_factual_pass_rate == 0.80
+    assert settings.retrieval_top_k_default == 6
+    assert settings.retrieval_english_score_bonus == 0.08
     assert settings.llm_max_output_tokens == 16384
     assert settings.claim_max_output_tokens == 32768
     assert settings.claim_truncated_retry_output_tokens == 65536
@@ -256,6 +258,24 @@ def test_retrieval_min_evidence_cannot_exceed_maximum():
         make_settings(retrieval_min_evidence=4, retrieval_max_evidence=3)
 
 
+def test_retrieval_top_k_default_and_explicit_policy_override():
+    from app.core.retrieval.retriever import retrieval_policy_from_settings
+
+    settings = make_settings()
+
+    assert retrieval_policy_from_settings(settings).top_k_per_query == 6
+    assert retrieval_policy_from_settings(settings, top_k_override=3).top_k_per_query == 3
+
+
+@pytest.mark.parametrize(
+    "value",
+    [-0.01, 0.250001, float("nan"), float("inf"), float("-inf")],
+)
+def test_settings_reject_invalid_retrieval_english_score_bonus(value):
+    with pytest.raises(ValidationError):
+        make_settings(retrieval_english_score_bonus=value)
+
+
 @pytest.mark.parametrize(
     ("overrides", "code"),
     [
@@ -341,3 +361,9 @@ def test_debug_does_not_enable_sql_echo(monkeypatch, tmp_path):
 
     assert captured.get("echo", False) is False
     assert captured.get("hide_parameters", True) is True
+
+
+@pytest.mark.parametrize("threshold", [.84, 1.01, float("nan"), float("inf")])
+def test_redundancy_threshold_is_finite_and_conservative(threshold):
+    with pytest.raises(ValidationError):
+        make_settings(retrieval_redundancy_threshold=threshold)

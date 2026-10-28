@@ -1,9 +1,10 @@
 <template>
-  <div ref="setupRoot" class="onboarding-page" :class="{ 'is-fit-layout': fitLayout, 'is-contained-layout': containedLayout }">
+  <div ref="setupRoot" class="onboarding-page" :class="{ 'is-fit-layout': fitLayout, 'is-contained-layout': containedLayout, 'is-track-stage': stepStage === 'track' }">
     <header class="setup-intro">
       <div><span class="setup-eyebrow">BUILD YOUR LEARNING PATH</span><h2>让目标，成为你的学习路径。</h2></div>
       <p>选定方向，了解起点，开启专属于你的技能学习。</p>
     </header>
+    <el-alert v-if="recoveryError" :title="recoveryError" type="error" :closable="false"><el-button @click="initializeFlow">重试恢复</el-button></el-alert>
     <section class="wizard-layout" aria-label="新建学习方向">
       <aside class="progress-panel" aria-label="学习方向创建步骤">
         <div class="progress-heading"><el-icon aria-hidden="true"><Connection /></el-icon><div><span>LEARNING SETUP</span><strong>构建学习方向</strong></div></div>
@@ -28,34 +29,34 @@
             <div class="overview-chip overview-person"><span>为你创建</span><strong>{{ currentUser?.display_name || currentUser?.username || '未设置' }}</strong></div>
           </div>
           <div class="card-grid domain-grid" role="group" aria-label="选择培训领域">
-            <button v-for="(item, index) in domains" :key="item.domain_id" type="button" class="choice-card" :class="{ selected: selectedDomainId === item.domain_id }" :aria-pressed="selectedDomainId === item.domain_id" @click="selectDomain(item)">
+            <button v-for="(item, index) in domains" :key="item.domain_id" type="button" class="choice-card" :class="{ selected: selectedDomainId === item.domain_id, unavailable: !isDomainAvailable(item) }" :disabled="!isDomainAvailable(item) || busy" :aria-pressed="selectedDomainId === item.domain_id" @click="selectDomain(item)">
               <span class="choice-topline"><el-icon class="choice-icon" aria-hidden="true"><component :is="domainIcons[index % domainIcons.length]" /></el-icon><span class="choice-code" aria-hidden="true">FIELD / {{ String(index + 1).padStart(2, '0') }}</span><span class="choice-selector" aria-hidden="true"><el-icon v-if="selectedDomainId === item.domain_id"><Check /></el-icon></span></span>
               <span class="choice-title">{{ item.name }}</span><span class="choice-description">{{ item.description || '暂无描述' }}</span>
-              <span class="choice-bottom"><span class="choice-meta">{{ item.tracks?.length || 0 }} 个学习方向</span><el-icon aria-hidden="true"><ArrowRight /></el-icon></span>
+              <span class="choice-bottom"><span class="choice-meta">{{ isDomainAvailable(item) ? (item.tracks?.length || 0) + ' 个学习方向' : '暂不可用' }}</span><el-icon aria-hidden="true"><ArrowRight /></el-icon></span>
             </button>
           </div>
           <section class="insight-card" aria-label="选择提示"><el-icon aria-hidden="true"><MagicStick /></el-icon><div><strong>从你想解决的问题开始</strong><p>优先选择接下来想落地实践的业务领域。已有具体目标？你可以在后续补充个性化要求。</p></div></section>
-          <div class="action-row"><span class="action-hint">{{ selectedDomain ? '已选择：' + selectedDomain.name : '选择一个领域，继续探索' }}</span><el-button type="primary" :disabled="!selectedDomainId" @click="goStep('track')">下一步<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
+          <div class="action-row"><span class="action-hint">{{ selectedDomain ? '已选择：' + selectedDomain.name : '选择一个领域，继续探索' }}</span><el-button type="primary" :disabled="!isDomainAvailable(selectedDomain) || busy" @click="goStep('track')">下一步<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
         </el-card>
 
         <el-card v-else-if="stepStage === 'track'" class="work-card track-stage-card" shadow="never">
           <template #header><div class="card-head"><div><span class="card-kicker">02 / FOCUS</span><h3 class="card-title" tabindex="-1">找到你的训练方向</h3><p class="card-subtitle">围绕具体目标，让知识、诊断与练习形成一条清晰的路径。</p></div><span class="step-coordinate" aria-hidden="true">02<span>/ 05</span></span></div></template>
           <div class="overview-strip"><div class="overview-chip overview-person"><span>当前领域</span><strong>{{ selectedDomain?.name || '-' }}</strong></div><div class="overview-chip"><span>可选方向</span><strong>{{ tracks.length }}<small> 个</small></strong></div><div class="overview-chip"><span>资料总量</span><strong>{{ selectedDomainDocumentCount }}<small> 份</small></strong></div></div>
           <div class="card-grid track-grid" role="group" aria-label="选择学习方向">
-            <button v-for="(item, index) in tracks" :key="item.track_id" type="button" class="choice-card" :class="{ selected: selectedDirectionId === item.track_id, unavailable: !isTrackAvailable(item) }" :disabled="!isTrackAvailable(item)" :aria-pressed="selectedDirectionId === item.track_id" @click="selectDirection(item)">
+            <button v-for="(item, index) in tracks" :key="item.track_id" type="button" class="choice-card" :class="{ selected: selectedDirectionId === item.track_id, unavailable: !isTrackAvailable(item) }" :disabled="!isTrackAvailable(item) || busy" :aria-pressed="selectedDirectionId === item.track_id" @click="selectDirection(item)">
               <span class="choice-topline"><span class="track-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><span class="choice-code">{{ isTrackAvailable(item) ? 'TRAINING TRACK' : '暂不可用' }}</span><span class="choice-selector" aria-hidden="true"><el-icon v-if="selectedDirectionId === item.track_id"><Check /></el-icon></span></span>
               <span class="choice-title">{{ item.name }}</span><span class="choice-description">{{ item.description || '暂无描述' }}</span>
               <span class="choice-bottom"><span class="choice-meta">{{ item.metadata?.document_count || 0 }} 份资料<span class="meta-divider">/</span>{{ item.metadata?.skill_node_count || 0 }} 个能力节点</span><el-icon aria-hidden="true"><ArrowRight /></el-icon></span>
             </button>
           </div>
-          <section class="insight-card" aria-label="选择建议"><el-icon aria-hidden="true"><Aim /></el-icon><div><strong>聚焦一个具体的学习目标</strong><p>选择接下来最想训练的方向。系统会围绕该方向建立独立画像，持续记录你的学习与进步。</p></div></section>
-          <div class="action-row"><el-button class="back-button" :icon="ArrowLeft" @click="goStep('domain')">上一步</el-button><span class="action-hint">{{ selectedDirection ? '已选择：' + selectedDirection.name : '选择一个方向，开始建立画像' }}</span><el-button type="primary" :disabled="!selectedDirectionId" @click="prepareQuestionnaire">下一步<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
+          <section class="insight-card" aria-label="选择建议"><el-icon aria-hidden="true"><Aim /></el-icon><div><strong>聚焦一个具体的学习目标</strong><p>选择接下来最想训练的方向。系统会围绕该方向建立独立画像，持续记录你的学习与进步。</p><el-button v-if="currentProfile" link type="primary" :disabled="busy" @click="prepareQuestionnaire({ force: true })">管理已有进度 / 重新开始</el-button></div></section>
+          <div class="action-row"><el-button class="back-button" :icon="ArrowLeft" @click="goStep('domain')">上一步</el-button><span class="action-hint">{{ selectedDirection ? '已选择：' + selectedDirection.name : '选择一个方向，开始建立画像' }}</span><el-button type="primary" :disabled="!selectedDirectionId || busy" :loading="preparingQuestionnaire" @click="prepareQuestionnaire">下一步<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
         </el-card>
 
         <el-card v-else-if="stepStage === 'questionnaire'" class="work-card questionnaire-stage-card" shadow="never" :aria-busy="submittingProfile">
           <template #header><div class="card-head"><div><span class="card-kicker">03 / PROFILE</span><h3 class="card-title" tabindex="-1">让学习更了解你</h3><p class="card-subtitle">告诉我们你的目标与学习偏好，为当前方向建立初始画像。</p></div><span class="step-coordinate" aria-hidden="true">03<span>/ 05</span></span></div></template>
           <div class="form-context"><el-icon aria-hidden="true"><Aim /></el-icon><div><span>正在为此方向建立画像</span><strong>{{ selectedDirection?.name }}</strong></div><span class="form-context-count">{{ visibleQuestions.length }} 个问题</span></div>
-          <el-form label-position="top" class="questionnaire-form">
+          <el-form label-position="top" class="questionnaire-form" :disabled="busy">
             <el-form-item v-for="question in questions" :key="question.question_id" v-show="shouldShow(question)" class="question-block" :data-question-id="question.question_id" :label="question.title" :required="question.required">
               <template #label><span class="question-number" aria-hidden="true">{{ questionNumber(question) }}</span><span>{{ question.title }}</span><span class="question-kind">{{ questionTypeLabel(question.type) }}</span></template>
               <p v-if="question.hint" :id="'hint-' + question.question_id" class="question-hint">{{ question.hint }}</p>
@@ -63,7 +64,7 @@
               <el-select v-else-if="question.type === 'single_choice' || question.type === 'single_choice_or_other'" v-model="form[question.question_id]" :allow-create="question.type === 'single_choice_or_other'" filterable default-first-option placeholder="请选择" class="full-control" :aria-label="question.title" :aria-describedby="question.hint ? 'hint-' + question.question_id : undefined">
                 <el-option v-for="option in normalizedOptions(question)" :key="option.value" :label="option.label" :value="option.value" />
               </el-select>
-              <el-checkbox-group v-else-if="question.type === 'multiple_choice'" v-model="form[question.question_id]" class="answer-options" :aria-label="question.title" :aria-describedby="question.hint ? 'hint-' + question.question_id : undefined">
+              <el-checkbox-group v-else-if="question.type === 'multiple_choice'" :model-value="form[question.question_id]" @update:model-value="updateMultiple(form, question, $event)" class="answer-options" :aria-label="question.title" :aria-describedby="question.hint ? 'hint-' + question.question_id : undefined">
                 <el-checkbox v-for="option in normalizedOptions(question)" :key="option.value" :label="option.value" :value="option.value">{{ option.label }}</el-checkbox>
               </el-checkbox-group>
             </el-form-item>
@@ -78,7 +79,7 @@
             <div v-for="(question, index) in diagnosticQuestions" :key="question.question_id" class="diagnostic-item" :data-question-id="question.question_id">
               <div class="diagnostic-heading"><span class="question-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><h4 class="question-title" :id="'diagnosis-' + question.question_id">{{ question.question }}</h4><span class="question-kind">{{ questionTypeLabel(question.question_type) }}</span></div>
               <el-radio-group v-if="question.question_type === 'single_choice'" v-model="diagnosticAnswers[question.question_id]" class="answer-options" :aria-labelledby="'diagnosis-' + question.question_id"><el-radio v-for="option in question.options || []" :key="option" :label="option" :value="option">{{ option }}</el-radio></el-radio-group>
-              <el-checkbox-group v-else-if="question.question_type === 'multiple_choice'" v-model="diagnosticAnswers[question.question_id]" class="answer-options" :aria-labelledby="'diagnosis-' + question.question_id"><el-checkbox v-for="option in question.options || []" :key="option" :label="option" :value="option">{{ option }}</el-checkbox></el-checkbox-group>
+              <el-checkbox-group v-else-if="question.question_type === 'multiple_choice'" :model-value="diagnosticAnswers[question.question_id]" @update:model-value="updateMultiple(diagnosticAnswers, question, $event)" class="answer-options" :aria-labelledby="'diagnosis-' + question.question_id"><el-checkbox v-for="option in question.options || []" :key="option" :label="option" :value="option">{{ option }}</el-checkbox></el-checkbox-group>
               <el-input v-else v-model="diagnosticAnswers[question.question_id]" type="textarea" :rows="3" :aria-labelledby="'diagnosis-' + question.question_id" placeholder="写下你的理解或处理思路" />
             </div>
             <div class="action-row"><el-button class="back-button" :icon="ArrowLeft" @click="goStep('questionnaire')">上一步</el-button><span class="action-hint">诊断结果将用于推荐首个学习节点</span><el-button type="primary" :loading="submittingDiagnosis" @click="submitDiagnosis">提交诊断<el-icon v-if="!submittingDiagnosis" aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
@@ -105,21 +106,31 @@
       </div>
     </section>
     <footer class="setup-footer"><span>让知识有依据，让成长有路径。</span><span>智域匠学 / LEARNING WORKSPACE</span></footer>
+    <el-dialog v-model="existingProgressVisible" title="此方向已有学习记录" width="min(620px, calc(100vw - 24px))" :close-on-click-modal="false" :close-on-press-escape="!deletingProgress" :show-close="!deletingProgress" :before-close="closeExistingProgress">
+      <p>“{{ selectedDirection?.name }}”已有 {{ existingProfiles.length }} 份学习记录。请选择一份继续学习，或删除所选记录后重新开始；其他记录不会删除。</p>
+      <el-radio-group v-model="selectedExistingId" class="existing-progress-list" :disabled="deletingProgress" aria-label="选择已有学习记录">
+        <el-radio v-for="profile in existingProfiles" :key="profile.learner_id" :value="profile.learner_id" :label="profile.learner_id"><span>{{ profile.skill_level || '未诊断' }} · {{ profile.updated_at || profile.created_at || '时间未记录' }}</span><small>{{ profile.learner_id }}</small></el-radio>
+      </el-radio-group>
+      <el-alert v-if="existingProgressError" :title="existingProgressError" type="error" :closable="false" />
+      <template #footer><div class="existing-progress-actions"><el-button :disabled="deletingProgress" @click="existingProgressVisible = false">取消</el-button><el-button :disabled="!selectedExistingId || deletingProgress" @click="continueExistingProgress">保留进度并继续</el-button><el-button type="danger" :disabled="!selectedExistingId" :loading="deletingProgress" @click="restartSelectedProgress">删除所选记录并重新开始</el-button></div></template>
+    </el-dialog>
   </div>
 </template>
 
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Aim, ArrowLeft, ArrowRight, Check, Collection, Connection, DataAnalysis, Document, EditPen, List, Lock, MagicStick, Monitor, Reading } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
-import { diagnosisApi } from '../learners/api.js'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import { diagnosisApi, profileApi } from '../learners/api.js'
+import { coursewareApi } from '../courseware/api.js'
 import { generateApi } from '../generation/api.js'
 import { knowledgeApi } from '../knowledge/api.js'
 import { onboardingApi } from './api.js'
 import { useAuthStore } from '../../stores/auth'
 import { useAppStore } from '../../stores/app'
+import { answersFor, clearDraft, exclusiveSelection, findDirectionProfiles, isDomainAvailable, isTrackAvailable, jobsAllowRestart, optionsFor, profileMatchesDirection, readDraft, writeDraft } from './onboardingState.js'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -136,6 +147,20 @@ const submittingGeneration = ref(false)
 const selectedResourceTypes = ref(['讲义', '实操指南', '分阶测试题'])
 const includeClaimCheck = ref(false)
 const supplementalRequirements = ref('')
+const preparingQuestionnaire = ref(false)
+const deletingProgress = ref(false)
+const existingProgressVisible = ref(false)
+const existingProfiles = ref([])
+const selectedExistingId = ref('')
+const existingProgressError = ref('')
+const initializing = ref(true)
+const recoveryError = ref('')
+const busy = computed(() => Boolean(recoveryError.value) || initializing.value || preparingQuestionnaire.value || submittingProfile.value || submittingDiagnosis.value || submittingGeneration.value || deletingProgress.value)
+let requestVersion = 0
+let draftReady = false
+let draftCompleted = false
+let draftOwner = ''
+const restartAcknowledged = ref(false)
 const initialRecommendedNodeName = ref('')
 const initialRecommendedNodeLoading = ref(false)
 
@@ -147,12 +172,24 @@ const selectedDomain = computed(() => domains.value.find((item) => item.domain_i
 const tracks = computed(() => selectedDomain.value?.tracks || [])
 const selectedDirection = computed(() => tracks.value.find((item) => item.track_id === selectedDirectionId.value))
 const totalTrackCount = computed(() => domains.value.reduce((sum, item) => sum + (item.tracks?.length || 0), 0))
-const selectedDomainDocumentCount = computed(() =>
-  tracks.value.reduce((sum, item) => sum + (item.metadata?.document_count || 0), 0)
-)
-const currentProfile = computed(() => store.currentProfile)
-const diagnosticQuestions = computed(() => store.pendingDiagnosticQuestions || [])
-const diagnosisResult = computed(() => store.diagnosisResult)
+const selectedDomainDocumentCount = computed(() => {
+  const counts = new Map()
+  for (const item of tracks.value) {
+    if (!isTrackAvailable(item)) continue
+    const key = item.knowledge_base_id || item.track_id
+    counts.set(key, Math.max(counts.get(key) || 0, item.metadata?.document_count || 0))
+  }
+  return [...counts.values()].reduce((sum, count) => sum + count, 0)
+})
+const flowProfile = ref(null)
+const flowQuestions = ref([])
+const flowDiagnosis = ref(null)
+const currentProfile = computed(() => flowProfile.value)
+const diagnosticQuestions = computed(() => flowQuestions.value)
+const diagnosisResult = computed(() => flowDiagnosis.value)
+function setProfile(profile) { flowProfile.value = profile; store.setCurrentProfile(profile) }
+function setPendingQuestions(value) { flowQuestions.value = value || []; store.setPendingDiagnosis(value) }
+function setDiagnosis(value) { flowDiagnosis.value = value; store.setDiagnosisResult(value) }
 const initialRecommendedNodeId = computed(() => String(diagnosisResult.value?.initial_recommended_node_id || '').trim())
 const initialRecommendedNodeLabel = computed(() => initialRecommendedNodeName.value || initialRecommendedNodeId.value)
 const initialRecommendedNodeTier = computed(() => ({
@@ -165,7 +202,7 @@ const learnerId = computed(() => {
   if (!currentUser.value?.user_id || !selectedDirectionId.value) return ''
   return `${currentUser.value.user_id}__${selectedDirectionId.value}`
 })
-const activeLearnerId = computed(() => currentProfile.value?.learner_id || store.currentLearnerId || '')
+const activeLearnerId = computed(() => currentProfile.value?.learner_id || '')
 const learnerLabel = computed(() => {
   const userName = currentUser.value?.display_name || '当前用户'
   const directionName = selectedDirection.value?.name || '未选择方向'
@@ -284,6 +321,9 @@ onMounted(() => {
   scheduleSetupLayout()
 })
 onBeforeUnmount(() => {
+  saveDraft()
+  draftReady = false
+  ++requestVersion
   setupMounted = false
   ++setupLayoutVersion
   cancelAnimationFrame(setupLayoutFrame)
@@ -335,10 +375,13 @@ const completedStepCount = computed(() => {
 })
 
 function canEnter(stage) {
+  if (busy.value) return false
   if (!currentUser.value) return stage === 'domain'
   if (stage === 'domain') return true
-  if (stage === 'track') return Boolean(selectedDomainId.value)
-  if (stage === 'questionnaire') return Boolean(selectedDirectionId.value)
+  if (!isDomainAvailable(selectedDomain.value)) return false
+  if (stage === 'track') return true
+  if (!isTrackAvailable(selectedDirection.value)) return false
+  if (stage === 'questionnaire') return Boolean(questions.value.length)
   if (stage === 'diagnosis') return questionnaireCompleted.value
   if (stage === 'review') return Boolean(diagnosisResult.value)
   return false
@@ -369,15 +412,10 @@ function resetFormValues() {
 }
 
 function normalizedOptions(question) {
-  return (question.options || []).map((option) => {
-    if (typeof option === 'object' && option !== null) {
-      return {
-        label: option.label ?? option.value ?? '',
-        value: option.value ?? option.label ?? '',
-      }
-    }
-    return { label: option, value: option }
-  })
+  return optionsFor(question)
+}
+function updateMultiple(target, question, values) {
+  target[question.question_id] = exclusiveSelection(values, target[question.question_id], question)
 }
 
 function matchesShowRule(answer, rule) {
@@ -404,32 +442,41 @@ function shouldShow(question) {
   })
 }
 
-function isTrackAvailable(track) {
-  return track.metadata?.available !== false
+function resetFlow() {
+  ++requestVersion
+  flowProfile.value = null
+  flowQuestions.value = []
+  flowDiagnosis.value = null
+  questions.value = []
+  Object.keys(form).forEach(key => delete form[key])
+  Object.keys(diagnosticAnswers).forEach(key => delete diagnosticAnswers[key])
+  store.clearLearnerContext()
+  initialRecommendedNodeName.value = ''
+  existingProgressVisible.value = false
+  existingProfiles.value = []
+  selectedExistingId.value = ''
+  existingProgressError.value = ''
+  restartAcknowledged.value = false
+  selectedResourceTypes.value = ['讲义', '实操指南', '分阶测试题']
+  includeClaimCheck.value = false
+  supplementalRequirements.value = ''
 }
 
 function selectDomain(item) {
+  if (busy.value || !isDomainAvailable(item) || selectedDomainId.value === item.domain_id) return
+  resetFlow()
   selectedDomainId.value = item.domain_id
   selectedDirectionId.value = ''
-  questions.value = []
   stepStage.value = 'domain'
-  store.setLearningDirectionId('')
-  store.setLearningDirectionName('')
-  store.setCurrentProfile(null)
-  store.setPendingDiagnosis([])
-  store.setDiagnosisResult(null)
-  initialRecommendedNodeName.value = ''
   initialRecommendedNodeLoading.value = false
 }
 
 function selectDirection(item) {
+  if (busy.value || !isDomainAvailable(selectedDomain.value) || !isTrackAvailable(item) || selectedDirectionId.value === item.track_id) return
+  resetFlow()
   selectedDirectionId.value = item.track_id
   store.setLearningDirectionId(item.track_id)
   store.setLearningDirectionName(item.name)
-  store.setCurrentProfile(null)
-  store.setPendingDiagnosis([])
-  store.setDiagnosisResult(null)
-  initialRecommendedNodeName.value = ''
   initialRecommendedNodeLoading.value = false
 }
 
@@ -438,23 +485,94 @@ async function loadDomains() {
   domains.value = res.data.domains || []
 }
 
-async function loadQuestions() {
+async function loadQuestions(preserve = false) {
   if (!selectedDirectionId.value) {
     questions.value = []
     return
   }
+  const version = requestVersion
   const res = await onboardingApi.getQuestions(selectedDirectionId.value)
-  questions.value = res.data.questions || []
-  resetFormValues()
+  if (!setupMounted || version !== requestVersion) return false
+  if (!Array.isArray(res.data.questions) || !res.data.questions.length) throw new Error('当前方向的问卷尚不可用，请稍后重试')
+  questions.value = res.data.questions
+  if (preserve) replaceAnswers(form, answersFor(questions.value, form))
+  else resetFormValues()
+  return true
 }
 
-async function prepareQuestionnaire() {
-  if (!selectedDirectionId.value) return
-  await loadQuestions()
-  stepStage.value = 'questionnaire'
+async function prepareQuestionnaire(options = {}) {
+  if (busy.value || !isDomainAvailable(selectedDomain.value) || !isTrackAvailable(selectedDirection.value)) return
+  if (!options.force && currentProfile.value && questions.value.length) { stepStage.value = 'questionnaire'; return }
+  const version = ++requestVersion
+  const owner = currentUser.value.user_id
+  const isCurrent = () => setupMounted && version === requestVersion && currentUser.value?.user_id === owner
+  preparingQuestionnaire.value = true
+  try {
+    const profiles = await findDirectionProfiles(profileApi.list, selectedDirection.value, owner, isCurrent)
+    if (!isCurrent() || profiles === null) return
+    existingProfiles.value = profiles
+    if (profiles.length) {
+      selectedExistingId.value = ''
+      existingProgressError.value = ''
+      existingProgressVisible.value = true
+      return
+    }
+    if (await loadQuestions(Boolean(questions.value.length))) stepStage.value = 'questionnaire'
+  } catch (error) {
+    if (isCurrent()) ElMessage.error(error?.response?.data?.message || error.message || '检查已有进度失败，请重试')
+  } finally { if (isCurrent()) preparingQuestionnaire.value = false }
+}
+
+function closeExistingProgress(done) { if (!deletingProgress.value) done() }
+async function continueExistingProgress() {
+  const profile = existingProfiles.value.find(item => item.learner_id === selectedExistingId.value)
+  if (!profile || deletingProgress.value) return
+  store.resumeProfile(profile, selectedDirectionId.value, selectedDirection.value.name)
+  existingProgressVisible.value = false
+  await router.push('/learning/history')
+}
+
+async function restartSelectedProgress() {
+  const profile = existingProfiles.value.find(item => item.learner_id === selectedExistingId.value)
+  if (!profile || deletingProgress.value) return
+  const direction = selectedDirection.value
+  const owner = currentUser.value.user_id
+  deletingProgress.value = true
+  existingProgressError.value = ''
+  try {
+    try {
+      await ElMessageBox.confirm(`将永久删除所选记录“${profile.learner_id}”及其关联的问卷、诊断、学习进度、资源、反馈与运行记录。此操作无法恢复，其他记录不会删除。确认重新开始吗？`, '确认删除旧进度', { type: 'warning', confirmButtonText: '永久删除并重新开始', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger', closeOnClickModal: false })
+    } catch { return }
+    const [latest, textJobs, coursewareJobs] = await Promise.all([profileApi.get(profile.learner_id), generateApi.listJobs(profile.learner_id), coursewareApi.listJobs(profile.learner_id)])
+    if (!setupMounted || currentUser.value?.user_id !== owner || selectedDirectionId.value !== direction.track_id) return
+    if (!profileMatchesDirection(latest.data, direction, owner)) throw new Error('记录归属或方向已变化，请刷新后重试')
+    if (!jobsAllowRestart(textJobs, 'job_status') || !jobsAllowRestart(coursewareJobs, 'status')) throw new Error('该记录仍有进行中或状态未确认的任务，请等待任务结束后再重新开始')
+    // Read the new questionnaire before the irreversible operation; a fetch failure must not delete progress.
+    if (!await loadQuestions(true)) return
+    if (!setupMounted || currentUser.value?.user_id !== owner) return
+    await profileApi.delete(profile.learner_id)
+    if (!setupMounted || currentUser.value?.user_id !== owner) return
+    if (store.currentLearnerId === profile.learner_id || store.currentProfile?.learner_id === profile.learner_id) store.clearLearnerContext()
+    store.setLearningDirectionId(direction.track_id)
+    store.setLearningDirectionName(direction.name)
+    existingProfiles.value = existingProfiles.value.filter(item => item.learner_id !== profile.learner_id)
+    selectedExistingId.value = ''
+    restartAcknowledged.value = true
+    flowProfile.value = null
+    flowQuestions.value = []
+    flowDiagnosis.value = null
+    clearDraft(owner)
+    resetFormValues()
+    existingProgressVisible.value = false
+    stepStage.value = 'questionnaire'
+    ElMessage.success('所选旧记录已永久删除，请重新填写问卷；其他记录已保留')
+  } catch (error) {
+    existingProgressError.value = error?.response?.data?.message || error.message || '删除失败，未重新开始'
+  } finally { if (currentUser.value?.user_id === owner) { deletingProgress.value = false; saveDraft() } }
 }
 
 async function loadInitialRecommendedNodeName(result = diagnosisResult.value) {
+  const version = requestVersion
   const nodeId = String(result?.initial_recommended_node_id || '').trim()
   initialRecommendedNodeName.value = ''
   initialRecommendedNodeLoading.value = false
@@ -463,44 +581,63 @@ async function loadInitialRecommendedNodeName(result = diagnosisResult.value) {
   initialRecommendedNodeLoading.value = true
   try {
     const res = await knowledgeApi.listNodes(selectedDirectionId.value)
+    if (!setupMounted || version !== requestVersion) return
     const nodes = Array.isArray(res.data?.nodes) ? res.data.nodes : []
     const matchedNode = nodes.find((node) => String(node.node_id || '').trim() === nodeId)
     initialRecommendedNodeName.value = matchedNode?.name || ''
   } catch (error) {
     // 节点名称只是展示增强，接口不可用时仍保留节点 ID 作为可识别的兜底。
-    console.warn('加载初始推荐节点名称失败', error)
+    console.warn('加载初始推荐节点名称失败')
   } finally {
-    initialRecommendedNodeLoading.value = false
+    if (version === requestVersion) initialRecommendedNodeLoading.value = false
   }
 }
 
 async function submitQuestionnaire() {
+  if (busy.value || !isDomainAvailable(selectedDomain.value) || !isTrackAvailable(selectedDirection.value)) return
   if (!currentUser.value || !learnerId.value) {
     ElMessage.warning('请先选择学习方向')
     return
   }
 
   submittingProfile.value = true
+  const version = requestVersion
+  const owner = currentUser.value.user_id
   try {
-    const answers = questions.value.reduce((acc, question) => {
-      acc[question.question_id] = form[question.question_id]
-      return acc
-    }, {})
+    if (currentProfile.value) {
+      stepStage.value = diagnosticQuestions.value.length ? 'diagnosis' : diagnosisResult.value ? 'review' : 'questionnaire'
+      ElMessage.info('本次问卷已提交，请继续当前诊断；如需重填，请返回方向选择并明确重开旧记录')
+      return
+    }
+    if (!restartAcknowledged.value) {
+      const isCurrent = () => setupMounted && version === requestVersion && currentUser.value?.user_id === owner
+      const profiles = await findDirectionProfiles(profileApi.list, selectedDirection.value, owner, isCurrent)
+      if (!isCurrent() || profiles === null) return
+      if (profiles.length) {
+        existingProfiles.value = profiles
+        selectedExistingId.value = ''
+        existingProgressError.value = ''
+        existingProgressVisible.value = true
+        return
+      }
+    }
+    const answers = answersFor(questions.value, form)
 
     const res = await onboardingApi.createInitialProfile({
       learner_id: learnerId.value,
       learning_direction_id: selectedDirectionId.value,
       answers,
     })
+    if (!setupMounted || version !== requestVersion || currentUser.value?.user_id !== owner) return
 
     store.setLearnerId(res.data.learner_id)
-    store.setCurrentProfile(res.data.profile)
-    store.setPendingDiagnosis(res.data.diagnostic_questions || [])
-    store.setDiagnosisResult(null)
+    setProfile(res.data.profile)
+    setPendingQuestions(res.data.diagnostic_questions || [])
+    setDiagnosis(null)
     initDiagnosticAnswers()
     stepStage.value = diagnosticQuestions.value.length ? 'diagnosis' : 'review'
     if (!diagnosticQuestions.value.length) {
-      store.setDiagnosisResult({
+      setDiagnosis({
         ability_level: res.data.profile.skill_level,
         weak_points: res.data.profile.weak_points || [],
         strong_points: res.data.profile.strong_points || [],
@@ -510,20 +647,22 @@ async function submitQuestionnaire() {
     }
     ElMessage.success('问卷已提交')
   } catch (error) {
-    console.error(error)
     ElMessage.error(error?.response?.data?.message || '问卷提交失败')
   } finally {
-    submittingProfile.value = false
+    if (version === requestVersion) submittingProfile.value = false
   }
 }
 
 async function submitDiagnosis() {
-  if (!currentProfile.value) return
+  if (busy.value || !currentProfile.value) return
   submittingDiagnosis.value = true
+  const version = requestVersion
+  const owner = currentUser.value.user_id
   try {
+    const normalized = answersFor(diagnosticQuestions.value, diagnosticAnswers)
     const answers = diagnosticQuestions.value.map((question) => ({
       question_id: question.question_id,
-      answer: diagnosticAnswers[question.question_id],
+      answer: normalized[question.question_id],
     }))
 
     const res = await diagnosisApi.submit({
@@ -531,9 +670,10 @@ async function submitDiagnosis() {
       learning_direction_id: selectedDirectionId.value,
       answers,
     })
+    if (!setupMounted || version !== requestVersion || currentUser.value?.user_id !== owner) return
 
-    store.setDiagnosisResult(res.data)
-    store.setCurrentProfile({
+    setDiagnosis(res.data)
+    setProfile({
       ...currentProfile.value,
       skill_level: res.data.ability_level,
       weak_points: res.data.weak_points,
@@ -543,29 +683,33 @@ async function submitDiagnosis() {
         ...(res.data.knowledge_states || {}),
       },
     })
+    try {
+      const fresh = await profileApi.get(currentProfile.value.learner_id)
+      if (!setupMounted || version !== requestVersion || currentUser.value?.user_id !== owner) return
+      if (profileMatchesDirection(fresh.data, selectedDirection.value, owner)) setProfile(fresh.data)
+    } catch { ElMessage.warning('诊断已保存，画像版本暂未刷新，恢复时会再次核对') }
 
     if (res.data.initial_diagnostic_status === 'retest') {
-      store.setPendingDiagnosis(res.data.next_diagnostic_questions || [])
+      setPendingQuestions(res.data.next_diagnostic_questions || [])
       initDiagnosticAnswers()
       stepStage.value = 'diagnosis'
       ElMessage.info('本阶段校准未通过，已自动进入下一阶段复测')
       return
     }
 
-    store.setPendingDiagnosis([])
+    setPendingQuestions([])
     stepStage.value = 'review'
     await loadInitialRecommendedNodeName(res.data)
     ElMessage.success('诊断已完成')
   } catch (error) {
-    console.error(error)
     ElMessage.error(error?.response?.data?.message || '诊断提交失败')
   } finally {
-    submittingDiagnosis.value = false
+    if (version === requestVersion) submittingDiagnosis.value = false
   }
 }
 
 async function submitGeneration() {
-  if (submittingGeneration.value) return
+  if (busy.value) return
   if (!selectedResourceTypes.value.length) {
     ElMessage.warning('请至少选择一种资源类型')
     return
@@ -575,6 +719,8 @@ async function submitGeneration() {
     return
   }
   submittingGeneration.value = true
+  const version = requestVersion
+  const owner = currentUser.value.user_id
   try {
     const payload = {
       learner_id: activeLearnerId.value,
@@ -589,9 +735,13 @@ async function submitGeneration() {
     }
     localStorage.setItem('last_generation_request', JSON.stringify(payload))
     const responses = await generateApi.createJobsForClaim(payload)
+    if (!setupMounted || version !== requestVersion || currentUser.value?.user_id !== owner) return
     const res = responses[0]
     localStorage.setItem('current_generation_run_ids', JSON.stringify(responses.map((item) => item.data?.run_id).filter(Boolean)))
-    router.push({
+    draftCompleted = true
+    clearDraft(draftOwner)
+    if (version === requestVersion) submittingGeneration.value = false
+    await router.push({
       path: '/generate',
       query: {
         runId: res.data.run_id,
@@ -599,35 +749,140 @@ async function submitGeneration() {
       },
     })
   } catch (error) {
-    console.error(error)
     ElMessage({
       message: error?.response?.data?.message || '生成任务提交失败',
       type: 'error',
       grouping: true,
     })
   } finally {
-    submittingGeneration.value = false
+    if (version === requestVersion) submittingGeneration.value = false
   }
 }
 
-watch(diagnosticQuestions, initDiagnosticAnswers)
+watch(diagnosticQuestions, initDiagnosticAnswers, { flush: 'sync' })
 
-onMounted(async () => {
+function replaceAnswers(target, values) {
+  Object.keys(target).forEach(key => delete target[key])
+  Object.assign(target, values)
+}
+function saveDraft() {
+  if (!draftReady || draftCompleted || !draftOwner || draftOwner !== currentUser.value?.user_id) return
+  writeDraft(draftOwner, { stage: stepStage.value, domainId: selectedDomainId.value, directionId: selectedDirectionId.value, questionnaireLoaded: Boolean(questions.value.length),
+    form, diagnosticAnswers, profile: flowProfile.value, diagnosticQuestions: flowQuestions.value, diagnosis: flowDiagnosis.value,
+    resourceTypes: selectedResourceTypes.value, includeClaimCheck: includeClaimCheck.value, supplementalRequirements: supplementalRequirements.value, restartAcknowledged: restartAcknowledged.value })
+}
+watch([stepStage, selectedDomainId, selectedDirectionId, form, diagnosticAnswers, flowProfile, flowQuestions, flowDiagnosis, selectedResourceTypes, includeClaimCheck, supplementalRequirements], saveDraft, { deep: true })
+watch(() => currentUser.value?.user_id, (next, previous) => {
+  if (!previous || next === previous) return
+  draftReady = false
+  ++requestVersion
+  flowProfile.value = null
+  flowQuestions.value = []
+  flowDiagnosis.value = null
+  selectedDomainId.value = ''
+  selectedDirectionId.value = ''
+  questions.value = []
+  replaceAnswers(form, {})
+  replaceAnswers(diagnosticAnswers, {})
+  existingProgressVisible.value = false
+  existingProfiles.value = []
+  selectedExistingId.value = ''
+  initialRecommendedNodeName.value = ''
+  selectedResourceTypes.value = ['讲义', '实操指南', '分阶测试题']
+  includeClaimCheck.value = false
+  supplementalRequirements.value = ''
+  preparingQuestionnaire.value = false
+  submittingProfile.value = false
+  submittingDiagnosis.value = false
+  submittingGeneration.value = false
+  deletingProgress.value = false
+  restartAcknowledged.value = false
+  stepStage.value = 'domain'
+  if (next) initializeFlow()
+})
+
+async function initializeFlow() {
+  const version = ++requestVersion
+  const owner = currentUser.value?.user_id
+  const isCurrent = () => setupMounted && version === requestVersion && owner === currentUser.value?.user_id
+  initializing.value = true
+  recoveryError.value = ''
+  draftReady = false
+  draftOwner = owner || ''
   try {
-    store.setCurrentProfile(null)
-    store.setPendingDiagnosis([])
-    store.setDiagnosisResult(null)
-    initialRecommendedNodeName.value = ''
-    initialRecommendedNodeLoading.value = false
     await loadDomains()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('初始化学习方向页面失败')
+    if (!isCurrent()) return
+    const draft = readDraft(owner)
+    if (draft) {
+      const domain = domains.value.find(item => item.domain_id === draft.domainId)
+      if (isDomainAvailable(domain)) {
+        selectedDomainId.value = domain.domain_id
+        const direction = domain.tracks?.find(item => item.track_id === draft.directionId)
+        if (isTrackAvailable(direction)) {
+          selectedDirectionId.value = direction.track_id
+          restartAcknowledged.value = draft.restartAcknowledged === true
+          if (draft.questionnaireLoaded || ['questionnaire', 'diagnosis', 'review'].includes(draft.stage)) {
+            await loadQuestions()
+            if (!isCurrent()) return
+            replaceAnswers(form, answersFor(questions.value, draft.form))
+          }
+          if (!isCurrent()) return
+          stepStage.value = draft.stage === 'domain' ? 'domain' : 'track'
+          let profile = null
+          if (draft.profile && profileMatchesDirection(draft.profile, direction, owner)) {
+            try {
+              const response = await profileApi.get(draft.profile.learner_id)
+              if (!isCurrent()) return
+              if (profileMatchesDirection(response.data, direction, owner) && response.data.profile_version === draft.profile.profile_version) profile = response.data
+              else ElMessage.warning('学习记录已更新，已保留问卷答案，请重新确认')
+            } catch (error) {
+              if (error?.response?.status !== 404) throw error
+              ElMessage.warning('原学习记录已不存在，已恢复问卷答案')
+            }
+          }
+          if (profile) {
+            store.setLearnerId(profile.learner_id)
+            store.setLearningDirectionId(direction.track_id)
+            store.setLearningDirectionName(direction.name)
+            setProfile(profile)
+            setPendingQuestions(Array.isArray(draft.diagnosticQuestions) ? draft.diagnosticQuestions : [])
+            setDiagnosis(draft.diagnosis && typeof draft.diagnosis === 'object' ? draft.diagnosis : null)
+            replaceAnswers(diagnosticAnswers, answersFor(diagnosticQuestions.value, draft.diagnosticAnswers))
+          }
+          if (questions.value.length && ['questionnaire', 'diagnosis', 'review'].includes(draft.stage)) {
+            stepStage.value = draft.stage === 'review' && diagnosisResult.value ? 'review'
+              : draft.stage === 'diagnosis' && profile && diagnosticQuestions.value.length ? 'diagnosis' : 'questionnaire'
+            if (draft.profile && !profile) stepStage.value = 'track'
+          }
+          selectedResourceTypes.value = Array.isArray(draft.resourceTypes) ? draft.resourceTypes.filter(type => resourceTypeOptions.includes(type)) : selectedResourceTypes.value
+          includeClaimCheck.value = draft.includeClaimCheck === true
+          supplementalRequirements.value = typeof draft.supplementalRequirements === 'string' ? draft.supplementalRequirements : ''
+          await loadInitialRecommendedNodeName()
+        } else stepStage.value = 'track'
+      } else clearDraft(owner)
+    }
+    if (isCurrent()) draftReady = true
+  } catch {
+    if (isCurrent()) recoveryError.value = '初始化或恢复草稿失败，旧草稿已保留，请重试。'
+  } finally { if (isCurrent()) initializing.value = false }
+}
+onMounted(initializeFlow)
+onBeforeRouteLeave(() => {
+  if (submittingProfile.value || submittingDiagnosis.value || submittingGeneration.value || deletingProgress.value) {
+    ElMessage.warning('正在提交或删除，请完成后再离开')
+    return false
   }
+  saveDraft()
 })
 </script>
 
 <style scoped>
+.existing-progress-list { display:grid; width:100%; gap:10px; max-height:300px; overflow:auto; margin:16px 0; }
+.existing-progress-list :deep(.el-radio) { height:auto; margin:0; padding:12px; border:1px solid #dce3e9; border-radius:6px; white-space:normal; }
+.existing-progress-list :deep(.el-radio__label) { display:grid; gap:6px; min-width:0; overflow-wrap:anywhere; line-height:1.7; }
+.existing-progress-list small { color:#59697b; }
+.existing-progress-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+.existing-progress-actions :deep(.el-button) { margin:0; }
 .onboarding-page {
   --setup-ink:#172c45; --setup-muted:#59697b; --setup-line:#dce3e9;
   --setup-accent:#176b70; --setup-mint:#9cf2e0;
@@ -668,6 +923,11 @@ onMounted(async () => {
 .progress-footer p { margin:0; color:#c2d2e0; font-size:11px; line-height:1.9; }
 .progress-footer > span:last-child { grid-column:1/-1; color:#b8cadb; font-size:9px; }
 .step-panel { min-width:0; }
+@media (min-width:1081px) {
+  .onboarding-page:not(.is-fit-layout):not(.is-contained-layout) .wizard-layout { align-items:stretch; }
+  .onboarding-page:not(.is-fit-layout):not(.is-contained-layout) .progress-panel { position:static; align-self:stretch; }
+  .onboarding-page:not(.is-fit-layout):not(.is-contained-layout) .work-card { min-height:100%; }
+}
 .work-card { border:1px solid var(--setup-line); border-radius:6px; background:#fff; box-shadow:none; overflow:visible; }
 .work-card :deep(.el-card__header) { padding:26px 30px 23px; border-bottom:1px solid var(--setup-line); }
 .work-card :deep(.el-card__body) { min-width:0; padding:22px 30px 0; }
@@ -973,6 +1233,29 @@ onMounted(async () => {
   .is-contained-layout .card-kicker { margin-bottom:4px; font-size:9px; }
   .is-contained-layout .card-title { font-size:20px; }
   .is-contained-layout .card-subtitle { margin-top:5px; font-size:11px; line-height:1.6; }
+}
+/* Compact only the direction step; the domain step keeps its existing sizing. */
+@media (min-width:1081px) {
+  .onboarding-page.is-track-stage { gap:12px; padding-top:12px; }
+  .is-track-stage .track-stage-card :deep(.el-card__header) { padding:14px 24px; }
+  .is-track-stage .track-stage-card :deep(.el-card__body) { padding:12px 24px 0; }
+  .is-track-stage .track-stage-card .card-kicker { margin-bottom:4px; }
+  .is-track-stage .track-stage-card .card-title { font-size:23px; line-height:1.3; }
+  .is-track-stage .track-stage-card .card-subtitle { margin-top:5px; font-size:12px; line-height:1.5; }
+  .is-track-stage .track-stage-card .overview-strip { margin-bottom:12px; padding-bottom:10px; }
+  .is-track-stage .track-stage-card .overview-chip { display:flex; align-items:baseline; gap:10px; }
+  .is-track-stage .track-stage-card .overview-chip strong { margin:0; font-size:20px; }
+  .is-track-stage .track-stage-card .overview-person strong { font-size:13px; }
+  .is-track-stage .track-grid { flex:0 0 auto; gap:10px; grid-auto-rows:auto; }
+  .is-track-stage .track-grid .choice-card { min-height:142px; padding:12px 16px; gap:6px; }
+  .is-track-stage .track-grid .choice-topline { position:static; margin:0; }
+  .is-track-stage .track-grid .track-number { font-size:19px; }
+  .is-track-stage .track-grid .choice-title { padding:0; font-size:16px; line-height:1.4; }
+  .is-track-stage .track-grid .choice-description { font-size:12px; line-height:1.55; }
+  .is-track-stage .track-grid .choice-bottom { margin-top:0; }
+  .is-track-stage .track-stage-card .insight-card { margin-top:12px; padding-top:10px; }
+  .is-track-stage .track-stage-card .insight-card p { margin-top:3px; font-size:11px; line-height:1.5; }
+  .is-track-stage .track-stage-card .action-row { margin-top:12px; padding-block:10px; }
 }
 @media (prefers-reduced-motion:reduce) {
   .onboarding-page *, .onboarding-page *::before, .onboarding-page *::after { transition:none !important; animation:none !important; }

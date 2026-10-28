@@ -1,5 +1,11 @@
 # 总体架构文档
 
+T30讲义教学加工：`resource_agents/lecture_contract.py`拥有`lecture-pedagogy-v1`的受众、篇幅、自包含示例、去重复、通用/项目边界准则及节点显示名投影。TextResourceAgent升级`text-resource-v6-teaching-contract`，只投影Prompt展示文本，不改ResourceSpec、知识点真实ID或冻结Evidence。显示名仅取单一已分配KB的manifest已知目标节点，未知/混合KB不猜。既有reviewer只给讲义的同一次审核追加共享rubric及控制信息，其他资源System Prompt、调用次数、Claim/发布节点不变。这是生成/审核指导，不是新语义硬门，不能由单元测试声称真实模型已消除重复或悬空引用。
+
+T29学习检索：`agents/shared/learning_queries.py`确定性构造任务问题，不调用LLM；retrieve节点仅在legacy学习路径且新开关开启时选择新版本。`vector_store.search_many_evidence_candidates`提供来源预校验后的完整有界20候选，不按owner提前截断；`EvidenceRetriever`继续负责SQL版本/hash、原分门槛、去重，再调用纯`source_balance.py`按节点覆盖及来源软规则选材。来源由可信SQL路径与manifest的id/file/type匹配，分类清单hash纳入config hash。旧接口、Tutor与E1路径不变；新policy候选query_rank允许到min(20, rerank_candidate_k)，其余仍受原TopK约束。没有新表或跨层业务依赖。
+
+T28已激活T27分片文件：`core/retrieval/evidence_chunking.py::markdown_evidence_v2`由`knowledge_base.chunk_documents`按每文档manifest显式选择，旧默认策略不变，新活动资料采用独立身份epoch。策略按同物理页/同能力节点集合聚合教学单元、保代码/表格/数学与真实字符/行号，900目标/1200软限/overlap最多100，共62篇1121片（六教材44片）。离线`scripts/prepare_evidence_chunks.py`分离纯辅助URL并生成parent-context预览；文件激活由`scripts/evidence_corpus_promotion.py`备份、确定性重放及回滚，索引由独立维护入口更新，实际ready以维护receipt为准。父级回填尚未接运行时，Evidence摘录仍最多1200字符，长原子不保证完整入模，不能称已上线父子检索。`provenance/evidence-base`可重建T26，再经`cleaning-base`追溯更早采集基线；两层blob均不索引。
+
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
 > 文档版本：2.7
@@ -230,6 +236,10 @@ POST /api/generate/jobs
 ```
 
 SQLite 文本任务归 `generation`：`db/generation/dispatch.py` 管原子领取、owner/epoch 续租、唯一重试链与有界对账；`services/generation/worker.py` 管并发 1 的执行与持续 heartbeat。`core/execution.py` 只保存通用执行上下文，SQL flush/commit 隔离位于 `db/generation/fencing.py`，资源线程用 `copy_context` 保留归属。API 经 Service 保存冻结输入，不写 SQL 或运行模型。旧 legacy 无 Run 任务才适用排队年龄阈值；running 以 AgentRun 的租约和终态判断。开始前故障可重领，开始后过期明确中断，新尝试不复活旧终态。文本检查点没有自动重建/续跑入口。
+
+单份手动重生成（T23）是独立的新 Run 用例，不是恢复旧检查点执行：`services/generation/resource_retry.py` 校验终态任务、spec/执行项、源 dispatch、checkpoint 和冻结 Evidence 后构造内部 `ResourceRetryContext v1`；`GenerationJobService.create_resource_retry` 在既有 UOW 创建同 batch 的幂等任务，不重算画像焦点。可信上下文只存 dispatch_snapshot，使用 `learning_documents.resource_retry.v1` 分发版本，Worker/background 都校验版本与 context 双向一致性，缺失或损坏拒绝，不退回正常诊断。
+
+文本图新增条件入口：普通任务仍 `diagnose`，单份重生成经记录节点 `reuse_context -> generate`，跳过 diagnose/retrieve/plan，后续审核、Claim、发布沿原图。导入节点将源 Evidence 克隆到新 Run/step（新 ID/hash），重映射单份 spec 和 E1 分配并保持原范围；新 spec ID、旧 family，旧正文只经 regeneration_source 供生成参考，不混入新 Run 产物。RecordedNode、DurableWorkflowRunner、WorkflowArtifactRecorder 照常持久化新步骤、证据、版本和审核。旧请求没有完整冻结上下文返回 409；原批次 continuation 和整任务 retry 行为不变。
 
 Worker 在监护循环内处理续租与对账异常，当前线程仍运行时不返回新领取路径；异常期间 readiness 失败，成功续租/对账后恢复。明确 lease-lost 则停止领取，并保留错误原因；异常路径也检查既有退出预算。
 

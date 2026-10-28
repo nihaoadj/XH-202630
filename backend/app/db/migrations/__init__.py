@@ -30,6 +30,9 @@ from app.db.migrations.p0_30_feedback_followup_multi_run import apply_p0_30_feed
 from app.db.migrations.p0_31_claim_user_publication import apply_p0_31_claim_user_publication_migration
 from app.db.migrations.p0_32_review_status import apply_p0_32_review_status_migration
 from app.db.migrations.p0_33_chunk_skill_node_mappings import apply_p0_33_chunk_skill_node_mappings_migration
+from app.db.migrations.p0_34_knowledge_identity_revision import (
+    apply_p0_34_knowledge_identity_revision_migration,
+)
 from app.db.migrations.p0_34_generation_dispatch import apply_p0_34_generation_dispatch_migration
 from app.db.migrations.p0_35_report_read_model import apply_p0_35_report_read_model_migration
 from app.db.migrations.tutor import apply_tutor_migration
@@ -65,6 +68,7 @@ __all__ = [
     "apply_p0_31_claim_user_publication_migration",
     "apply_p0_32_review_status_migration",
     "apply_p0_33_chunk_skill_node_mappings_migration",
+    "apply_p0_34_knowledge_identity_revision_migration",
     "apply_p0_34_generation_dispatch_migration",
     "apply_p0_35_report_read_model_migration",
     "apply_tutor_migration",

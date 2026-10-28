@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from threading import RLock
 from typing import Callable
 
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.db.shared.models import GenerationJobORM, LearnerCurriculumNodeORM
@@ -214,14 +216,39 @@ class SQLCurriculumRepository(BaseCurriculumRepository):
 
     def ensure_nodes(self, learner_id, knowledge_base_id, node_ids):
         with self.session_factory() as db:
-            existing = {row.skill_node_id for row in db.query(LearnerCurriculumNodeORM).filter_by(
-                learner_id=learner_id, knowledge_base_id=knowledge_base_id).all()}
-            for node_id in sorted(set(node_ids) - existing):
-                db.add(LearnerCurriculumNodeORM(
-                    curriculum_node_id=_id(learner_id, knowledge_base_id, node_id), learner_id=learner_id,
-                    knowledge_base_id=knowledge_base_id, skill_node_id=node_id, progress_status="unplanned",
-                    wait_rounds=0, published_resource_count=0, verified_attempt_count=0, row_version=1,
-                ))
+            dialect = db.get_bind().dialect.name
+            insert = {"sqlite": sqlite_insert, "postgresql": postgresql_insert}.get(dialect)
+            if insert is not None:
+                rows = [
+                    {
+                        "curriculum_node_id": _id(learner_id, knowledge_base_id, node_id),
+                        "learner_id": learner_id,
+                        "knowledge_base_id": knowledge_base_id,
+                        "skill_node_id": node_id,
+                        "progress_status": "unplanned",
+                        "wait_rounds": 0,
+                        "published_resource_count": 0,
+                        "verified_attempt_count": 0,
+                        "row_version": 1,
+                    }
+                    for node_id in sorted(set(node_ids))
+                ]
+                if rows:
+                    # 由数据库原子处理同一节点的并发插入；仅跳过该业务唯一键，
+                    # 不覆盖已有进度，也不吞掉外键等其他完整性错误。
+                    statement = insert(LearnerCurriculumNodeORM).values(rows)
+                    db.execute(statement.on_conflict_do_nothing(index_elements=[
+                        "learner_id", "knowledge_base_id", "skill_node_id",
+                    ]))
+            else:
+                existing = {row.skill_node_id for row in db.query(LearnerCurriculumNodeORM).filter_by(
+                    learner_id=learner_id, knowledge_base_id=knowledge_base_id).all()}
+                for node_id in sorted(set(node_ids) - existing):
+                    db.add(LearnerCurriculumNodeORM(
+                        curriculum_node_id=_id(learner_id, knowledge_base_id, node_id), learner_id=learner_id,
+                        knowledge_base_id=knowledge_base_id, skill_node_id=node_id, progress_status="unplanned",
+                        wait_rounds=0, published_resource_count=0, verified_attempt_count=0, row_version=1,
+                    ))
             db.commit()
         return self.list_nodes(learner_id, knowledge_base_id)
 

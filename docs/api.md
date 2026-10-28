@@ -1,5 +1,7 @@
 # API 文档
 
+T29兼容说明：HTTP/DTO/状态码不变。新legacy学习检索使用`learning-tasks-v2`/`source-balanced-global-v2`内部版本；TopK在完整候选校验后参与最终预算`min(max_evidence, top_k_per_query×query_count)`。该版本Evidence.query_rank表示owner在完整有界窗口的名次，可能超过单query TopK，但不超过20；最终Evidence.rank仍连续，最多8条、每条摘录最多1200字符。旧Tutor/E1和冻结证据维持旧语义；现有retrieval_profile只增加追踪字段，不新增端点。
+
 > 项目编号：XH-202630
 > 文档版本：2.3
 > 文档更新时间：2026-10-23
@@ -83,8 +85,8 @@ POST /api/auth/register 或 POST /api/auth/login
 | 用户资料 | `GET` | `/api/users/{user_id}` | 查询单个用户 |
 | 用户资料 | `POST` | `/api/users/` | 兼容路由；主应用已登录调用返回 403，创建账号使用注册 |
 | 用户资料 | `PATCH` | `/api/users/{user_id}` | 更新用户资料 |
-| 知识目录 | `GET` | `/api/knowledge/domains` | 查询领域及学习方向 |
-| 知识目录 | `GET` | `/api/knowledge/directions` | 查询学习方向列表 |
+| 知识目录 | `GET` | `/api/knowledge/domains` | 查询领域及学习方向；已开放方向的 metadata.document_count/skill_node_count 从当前入库目录计数，不沿用静态旧值 |
+| 知识目录 | `GET` | `/api/knowledge/directions` | 查询学习方向列表；document_count/skill_node_count 与领域目录使用同一入库计数 |
 | 知识目录 | `GET` | `/api/knowledge/info` | 查询知识库信息 |
 | Onboarding | `GET` | `/api/onboarding/questions` | 获取入门问卷 |
 | Onboarding | `POST` | `/api/onboarding/initial-profile` | 创建初始画像并返回诊断题 |
@@ -446,9 +448,17 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 - 同一次生成任务产出的多个资源，会通过同一个 `run_id` 关联起来。
 - 默认资源列表只返回已经发布的资源；草稿、返工中、拒绝和人工审核资源不可预览。
 - 实操指南以审核后的 Markdown 文本形式提供阅读；该文本由内部严格 JSON（最多 8 个连续步骤、步骤 Evidence 绑定及 hash）确定性拼接。内部 JSON 不经通用 API 暴露，并直接作为互动 HTML 的逐步骤来源；旧实操指南仍兼容 Markdown 标题解析。
-- `source_refs[].score` 是 0 到 1 的最终相关度；精排可用时为 CrossEncoder logits 经 sigmoid 映射后的分数，降级时为归一化 RRF 分数，数值越大排名越靠前。
+- `source_refs[].score` 是 0 到 1 的原始归一化相关度；精排可用时为 CrossEncoder logits 经 sigmoid 映射后的分数，降级时为归一化 RRF 分数。T17英文选材偏好不改该值，最终选材名次不保证与此值单调一致；不要把分数当正确概率。
+- 新生成文本文档默认附带最多5条`source_refs`（此前3条），按已分配给该资源的Evidence顺序投影，少于5条则返回实际数量；不会从范围外补来源，不保证是5篇不同文档。前端来源列表展示返回的全部条目。显式内部limit仍优先，Tutor的独立预算不变；旧已保存资源不回填，需重新生成才采用新上限。DTO/分数/来源验证及检索Top6/总Evidence8不变。
+- T17单query默认TopK=6，全局证据仍最多8；英文偏好启用时ranking策略为`english-relevance-bonus-v1`。完整20池在TopK前经SQL身份/hash/active校验，以可信来源路径判定英文；成功精排且原分达门槛才有`selection_score=min(1,normalized_score+0.08)`，metadata不能伪造英文加分。config_hash绑定bonus/来源路径判定版本/门槛；内部metadata/profile分别记录原分/选材分/有效bonus/两种名次。Evidence原分、HTTP/DTO/认证/状态码不变，新增审计键不是所有公开引用的必有字段。前6仍须通过原始0.35门槛与去重，不保证模型收到6或8条。
 - `source_refs[].metadata.retrieval_method` 正常为 `hybrid_rrf_cross_encoder`，精排关闭或不可用时回退为 `hybrid_rrf`；`retrieval_channels` 标识片段来自 `vector`、`bm25` 或两路共同召回。
 - `source_refs[].metadata` 保留 `vector_rank`、`vector_score`、`lexical_rank`、`lexical_score`、`hybrid_rank`、`hybrid_score`、`rerank_rank`、`rerank_raw_score`、`rerank_score`、`reranker_model`、`rerank_latency_ms` 和 `rerank_candidate_count`，用于检索审计和消融评测。
+
+跨语言候选优化不增加请求参数或更改DTO/认证/状态码：内部英文术语probe不计作新的用户query，也不改变query_node_ids；返回候选的query及精排输入始终归属原query。T14基础策略为`deterministic-bilingual-v2`/`dense-protected-rrf-v2`；当前默认开启T17偏好时ranking策略改为`english-relevance-bonus-v1`，`config_hash`绑定开关对应的选择策略、dense预算、精排参数及KB词表hash。内部retrieval_profile新增`candidate_selection_version`、`dense_protected_count`、`alias_probe_count`、原query下的`variant_profiles`（状态/计时/计数/probe hash）、`query_expansion_status/version/config_hash/term_count`及必要fallback标记，原有字段保留；不记录query/probe正文，不把这些内部审计键承诺为每个公开SourceRef必有字段。scope/SQL版本/hash验证与最终相关度含义不变，alias-only结果不能在精排不可用时仅凭关键词分数放行。
+
+资源感知策略 E1 与上述优化兼容，默认仍关闭：开启时先保留公共节点与资源用途候选，再在剩余20条预算和每query配额内执行dense保护；不足时记录`dense_reserve_shortfall`，不牺牲用途保留来凑10条。`query_bindings`、候选owner、原始评分及冻结分配契约不变，SQL校验后的英文选材偏好同时作用于用途内排序。精排不可用时仅原查询命中可贡献用途归属，不能用alias-only匹配扩大资源证据范围。
+
+内容去冗余T19不增加请求字段或改变HTTP/DTO：在SQL校验及原门槛之后、最终节点/资源分配之前，抑制长文本完全重复与同文档/版本/章节内高度近似候选；独有节点和资源用途保护，不转移来源/query/Evidence ID。原相关分、Top6、最大8条及最小证据门禁不变，实际条数可减少；补位限已有合格候选。内部`retrieval_profile.redundancy`含计数及最多20条chunk-ID审计，不含正文；开启时配置hash绑定`sql-content-redundancy-v1`与阈值，关闭保留旧hash兼容。具体规则见[数据库说明16](knowledge_base_database.md#16-内容级去冗余t19)。
 
 ### 9.2 `GET /api/resources/file/{resource_id}`
 
@@ -479,11 +489,19 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 
 ### 9.6 `POST /api/resources/batches/{batch_id}/continuations`
 
-创建同一批次的新文本 Run，用于追加、全批重试或单资源重试。必填 `learner_id` 和 `resource_types`；可选 `instructions`、`include_claim_check`、`source_run_id`、`replace_source_run`、`replace_existing_types`。返回 `GenerationJobCreateResponse`，包含新 `run_id` 和沿用的 `batch_id`。追加不覆盖旧审计记录；完整重试可标记源 Run 被替代，单项重试仅替换对应类型的学习者可见投影。
+创建同一批次的新文本 Run，用于追加、全批重试或显式按类型重新走完整流程。必填 `learner_id` 和 `resource_types`；可选 `instructions`、`include_claim_check`、`source_run_id`、`replace_source_run`、`replace_existing_types`。返回 `GenerationJobCreateResponse`，包含新 `run_id` 和沿用的 `batch_id`。追加不覆盖旧审计记录；完整重试可标记源 Run 被替代，按类型重建可替换对应类型的学习者可见投影。
 
 标准 SQL/Memory 仓储下，任务创建、反馈关联、源 Run 替代及画像准备由用例事务协调；关联/提交失败会回滚，调度失败保留 failed 任务。相同成功请求再次调用仍创建新 Run；本接口没有新增请求体去重或幂等键。API 在事务成功后才注册后台执行，提交后进程中断的精确重放仍需独立部署证据。
 
-服务端从源任务冻结请求继承知识库、目标、难度和约束，验证源 Run 归属，再附加有界 continuation 摘要；省略 Claim 选项时沿用源请求，显式开启仍要求普通审核。源任务 / 批次不可访问为 404，冻结请求不可用为 409，输入非法为 422，依赖未就绪为 503。生成页的重试使用本路径；当前没有独立的 `resource-specs/.../representations/.../retry` 文本 API。
+服务端从源任务冻结请求继承知识库、目标、难度和约束，验证源 Run 归属，再附加有界 continuation 摘要；省略 Claim 选项时沿用源请求，显式开启仍要求普通审核。源任务 / 批次不可访问为 404，冻结请求不可用为 409，输入非法为 422，依赖未就绪为 503。生成页批量重生与追加仍使用本路径；每份资源行的“重新生成”使用 9.7，不再隐式重新诊断。
+
+### 9.7 `POST /api/generate/jobs/{run_id}/resource-specs/{resource_spec_id}/representations/{representation}/retry`
+
+单份失败文本资源重生成。无需请求体，客户端不能传入或覆盖冻结上下文；`representation` 目前只接受 `text`。可选 `Idempotency-Key`，按当前学习者和源 Run/spec/表示隔离；省略时由服务端冻结上下文 hash 生成稳定幂等键。同一输入重复提交返回同一 child Run，显式 key 与输入冲突返回 409。成功为 `200 + GenerationJobCreateResponse`，新 `run_id`、原 `batch_id`，仍经现有队列/后台调度。
+
+源任务须已 completed/failed，且指定执行项为 failed/human_review/revision_requested；已发布资源不接受该入口。复用原画像、诊断、学习计划、spec、证据和该份审核反馈，只从 `reuse_context -> generate` 开始，随后保留普通审核、Claim 和发布门禁。普通/Claim 自动返工次数重新计数，不修改原失败记录。已有正文作为上一版本，新资源保留 family、version+1 和 parent；无正文的生成失败从 v1 开始。
+
+不可访问或 spec 不属于该 Run 返回 404；源任务未终止、状态不允许、缺少完整可信冻结记录、hash/范围损坏或不支持跨资源依赖返回 409；非法表示或幂等键返回 422。不会自动降级到完整重新生成；用户可另行明确选择批次完整重生。新版本执行失败后，可针对该 child Run 再发起下一次手动尝试，不能用同一幂等请求制造重复任务。历史记录缺原查询正文时保留 query_hash 并显式标注缺失，不重新检索补造。
 
 ## 10. 学习历史接口
 
@@ -797,6 +815,12 @@ Turn 请求为：
 响应包含 `turn_id`、`sequence`、`hint_level`、`pedagogy_action`、`message`、`follow_up_question`、`grounding_status`、`grounding_source`、`source_refs` 和脱敏的模型调用摘要。相同 `client_message_id` 与相同 payload 返回已持久化结果；不同 payload 返回 409 `TUTOR_IDEMPOTENCY_CONFLICT`。Evidence 不足返回 HTTP 200 和 `grounding_status=evidence_insufficient`；会话不存在为 404，关闭会话继续提交为 409，模型超时/认证/请求或结构化输出失败沿用 LLMGateway 的脱敏 503 语义。响应不包含 raw prompt、raw provider response、Chain-of-Thought、密钥或异常堆栈。
 
 当前前端已提供服务端判分的 Formal Attempt、报告图表、Claim 审核报告与资源来源列表；来源列表不等同于完整 Evidence 审计页面。P0-09 Frontend Gate 已更新为现行源码连线检查，实际能力与端到端证据仍按浏览器专项和目标环境分别核对。
+
+T21按用户要求部分回退，当前仅保留生成契约：正常回答按服务端允许动作并在结构字段引用合法Evidence ID；证据不足可输出`evidence_insufficient`和空引用，服务端以固定安全拒答保存，HTTP200/空来源，幂等与已有错误契约不变。正文与内部引用分离，不主动列证据库存/ID/路径，模型输入只给id/title/snippet，不改变前端原来源展示。
+
+取证已恢复Frozen Evidence→SourceRef→仅缺失时Ready知识库检索的原优先级；没有独立事实支持审核/每轮补检索/双阶段预算或正文确定性拦截。Tutor恢复单阶段生成及原网关重试/错误语义，auto直接TEXT+严格schema解析以兼容接口，显式模式及其他Agent不变。合法引用ID依然不证明内容受支持，不宣称无幻觉；旧turn保留不改。
+
+T22仅前端展示：Tutor来源区默认收起，可主动展开；接口仍返回原`source_refs`全部条目，无新增参数或来源数量变化。
 
 ## 互动课件生成、发布与学习事件
 

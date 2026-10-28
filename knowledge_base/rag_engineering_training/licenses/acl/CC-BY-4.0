@@ -1,0 +1,11 @@
+ACL Anthology papers in this collection are ACL materials published after 2016.
+License: Creative Commons Attribution 4.0 International (CC BY 4.0).
+License text: https://creativecommons.org/licenses/by/4.0/legalcode.en
+Publisher policy: https://aclanthology.org/faq/copyright/
+
+The original PDF files retain authorship, title, publication year and publisher
+notices. Per-work titles, attribution, publisher URLs and content hashes are
+recorded in bulk_catalog.json and bulk_registry.json. This project extracts
+plain text and adds physical-page markers for retrieval; PDF text extraction
+is a modification and is not a substitute for figures or precise table layout.
+No author or publisher endorsement of this project is implied.

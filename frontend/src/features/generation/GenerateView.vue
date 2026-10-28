@@ -66,20 +66,20 @@
       <div class="resources-panel" v-module-motion="{ key: selectedRunId + ':' + selectedResourceId, ready: !loadingResources }">
         <div class="panel-title compact resource-panel-heading">
           <div class="panel-heading-copy"><span class="panel-section-number">02</span><h3>{{ selectedJob.job_status === 'completed' ? '任务资源' : '资源预览' }}</h3><span class="eyebrow">/ OUTPUT</span></div>
+          <div class="task-actions" role="group" aria-label="资源任务操作">
+            <el-button v-if="selectedJob.job_status === 'running' || selectedJob.job_status === 'queued'" class="status-action status-action-refresh" :icon="Refresh" @click="refreshStatus">刷新状态</el-button>
+            <el-button v-if="selectedJob.job_status === 'failed'" class="status-action status-action-retry" :icon="RefreshRight" @click="retryGeneration" :loading="retrying">重新生成</el-button>
+            <el-button v-if="selectedJob.job_status === 'completed'" class="status-action status-action-resource" :class="{ 'is-retry': hasRetryableResources }" :icon="hasRetryableResources ? RefreshRight : Refresh" @click="hasRetryableResources ? regeneratePendingResources() : loadResourcesForSelectedJob()" :loading="hasRetryableResources ? retrying : loadingResources">{{ hasRetryableResources ? `重新生成失败资源（${retryableResourceTypes.length}）` : '刷新资源' }}</el-button>
+            <el-dropdown trigger="click" @command="handleAppendCommand">
+              <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources">追加资源<el-icon><ArrowDown /></el-icon></el-button>
+              <template #dropdown><el-dropdown-menu><el-dropdown-item command="text" :disabled="!selectedJob">文本学习资源</el-dropdown-item><el-dropdown-item command="courseware" :disabled="!resources.length">HTML 互动课件</el-dropdown-item></el-dropdown-menu></template>
+            </el-dropdown>
+          </div>
         </div>
-        <div class="resource-toolbar">
+        <div v-if="resources.length" class="resource-toolbar">
           <el-select v-if="resources.length" v-model="selectedResourceId" aria-label="选择要阅读的资源" filterable placeholder="选择要阅读的资源" class="resource-select" popper-class="refined-select-dropdown"><el-option v-for="item in resources" :key="item.resource_id" :label="resourceLabel(item)" :value="item.resource_id" /></el-select>
           <div class="resource-toolbar-actions">
             <div v-if="resources.length" id="generation-resource-difficulty" class="resource-grade" />
-            <div class="task-actions" role="group" aria-label="资源任务操作">
-              <el-button v-if="selectedJob.job_status === 'running' || selectedJob.job_status === 'queued'" class="status-action status-action-refresh" :icon="Refresh" @click="refreshStatus">刷新状态</el-button>
-              <el-button v-if="selectedJob.job_status === 'failed'" class="status-action status-action-retry" :icon="RefreshRight" @click="retryGeneration" :loading="retrying">重新生成</el-button>
-              <el-button v-if="selectedJob.job_status === 'completed'" class="status-action status-action-resource" :class="{ 'is-retry': hasRetryableResources }" :icon="hasRetryableResources ? RefreshRight : Refresh" @click="hasRetryableResources ? regeneratePendingResources() : loadResourcesForSelectedJob()" :loading="hasRetryableResources ? retrying : loadingResources">{{ hasRetryableResources ? `重新生成失败资源（${retryableResourceTypes.length}）` : '刷新资源' }}</el-button>
-              <el-dropdown trigger="click" @command="handleAppendCommand">
-                <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources">追加资源<el-icon><ArrowDown /></el-icon></el-button>
-                <template #dropdown><el-dropdown-menu><el-dropdown-item command="text" :disabled="!selectedJob">文本学习资源</el-dropdown-item><el-dropdown-item command="courseware" :disabled="!resources.length">HTML 互动课件</el-dropdown-item></el-dropdown-menu></template>
-              </el-dropdown>
-            </div>
             <div v-if="resources.length" class="reader-toolbar-actions">
               <div id="generation-reader-actions" class="reader-resource-actions" role="group" aria-label="资源文件操作" />
               <el-button class="learning-mode-action" :icon="Reading" @click="enterLearningMode">学习模式<el-icon class="mode-arrow"><ArrowRight /></el-icon></el-button>
@@ -1000,19 +1000,21 @@ async function retryResource(item) {
   const sourceJob = selectedJob.value
   const plan = planRetryResource(sourceJob, item)
   if (!plan) {
-    ElMessage.warning('该资源缺少重新生成所需的任务参数')
+    ElMessage.warning('该资源缺少可复用的原任务上下文，请选择整任务重新生成')
     return
   }
 
   const key = item.key || `${item.resource_spec_id}:${item.representation || 'text'}`
   return runGenerationCommand({
     channel: 'resource', busyValue: key,
-    execute: () => executeGenerationPlan(plan, generateApi.continueBatch),
+    execute: () => executeGenerationPlan(plan, generateApi.continueBatch, generateApi.retryResourceRepresentation),
     accepted: applyAcceptedGeneration,
     succeeded: () => ElMessage.success(`已在当前批次重新生成${item.resource_type}`),
     failed: error => {
       console.error(error)
-      ElMessage.error(error?.response?.data?.detail || '重新生成资源失败')
+      ElMessage.error(error?.response?.status === 409
+        ? '原任务上下文不可用或当前资源不可重试，请选择整任务重新生成'
+        : apiErrorMessage(error, '重新生成资源失败'))
     },
   })
 }
@@ -1101,11 +1103,15 @@ onBeforeUnmount(() => {
 .process-scroll :deep(.el-card__header) { display:none; }
 .process-scroll :deep(.el-card__body) { padding:0; }
 .resource-toolbar { display:flex; flex-wrap:wrap; flex:none; align-items:center; gap:8px; padding:10px 0; min-width:0; }
+.resource-panel-heading { gap:12px; align-items:center; }
+.resource-panel-heading > .task-actions { flex:0 0 auto; justify-content:flex-end; margin-left:auto; }
+.resource-panel-heading :deep(.el-button) { margin:0; min-height:36px; padding:7px 11px; }
+.resource-panel-heading .status-action-append { width:auto; }
 .resource-select { flex:1 1 160px; width:auto; }
 .resource-toolbar-actions { display:flex; flex:0 1 auto; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; min-width:0; max-width:100%; margin-left:auto; }
 .resource-grade { display:flex; flex:none; align-items:center; }
 .resource-toolbar-actions :deep(.el-button) { margin:0; }
-.resource-toolbar-actions .task-actions .status-action:not(.is-retry),.resource-toolbar-actions .toolbar-download-action,.resource-toolbar-actions .learning-mode-action { width:112px; flex:none; }
+.resource-toolbar-actions .toolbar-download-action,.resource-toolbar-actions .learning-mode-action { width:112px; flex:none; }
 .resource-select :deep(.el-select__selection),.resource-select :deep(.el-select__selected-item) { min-width:0; max-width:100%; }
 .resource-select :deep(.el-select__selected-item > span) { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .reader-toolbar-actions,.reader-resource-actions { display:flex; min-width:0; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
@@ -1296,6 +1302,8 @@ onBeforeUnmount(() => {
   .summary-item strong { font-size:12px; }
   .resource-select { flex-basis:100%; }
   .resource-toolbar-actions { width:100%; }
+  .resource-panel-heading { flex-wrap:wrap; }
+  .resource-panel-heading > .task-actions { max-width:100%; }
   .reader-toolbar-actions { max-width:100%; }
   .resource-stage :deep(.reader-content),.resource-stage :deep(.reader-footer) { padding:18px; }
   .production-footer { flex-wrap:wrap; margin-top:-14px; font-size:9px; }

@@ -11,17 +11,26 @@
 ## 项目亮点
 
 - 多智能体协同：基于 LangGraph 实现学情诊断、知识库检索、学习路径规划、个性化资源生成、审核纠偏、反馈决策等 Agent 的协同闭环。
-- 证据约束 Tutor：已发布资源与测评题支持多轮启发式导学；提示等级由服务端递进，回答按 Frozen Evidence、SourceRef、受控检索顺序取证，证据不足时安全拒答。
+- 证据约束 Tutor：已发布资源与测评题支持多轮启发式导学；按Frozen Evidence、SourceRef、缺失时受控检索的原顺序取证，仅保留生成契约优化：正文与内部引用分离、证据不足可拒答。
 - 反馈真实闭环：服务端判分的正式 Attempt 会原子更新知识点掌握度、画像版本和持久化学习路径；学习者确认下一步方案后创建异步生成任务，并保留父子 Run 来源关系。
 - 实时 Agent 轨迹：生成页通过 SSE 只读持久化 WorkflowEvent，支持 queued snapshot、断线续传、事件去重、terminal close 与轮询降级。
 - 幻觉防控：引入冻结 Evidence、独立 Claim 抽取/判定、审核纠偏与可复核指标。
 - 节点优先检索：带能力目标的请求先在模块级 Chunk—节点映射范围内执行向量、BM25 与精排；无映射或证据不足时自动回退全库检索，底层故障保持原有错误语义。
+- 跨语言候选保护：知识库可配置有界英文术语提示，精排始终对照原问题；全局候选池为纯向量结果保留语言无关名额，避免被RRF在精排前全部挤出。默认精排预算仍为20，不强制英文比例，不调用LLM翻译或重新入库。
+- 英文选材偏好（T17）：原相关性>=0.35的可信英文片段可获0.08选材加分，原始分数及门槛不变。T29新学习路径让完整20候选先参与校验/去重/来源选材，单查询默认最多6、多个查询全局最多8，不提前按owner截6；旧Tutor/E1仍用原配额。不保证每题出现英文，`RETRIEVAL_ENGLISH_SCORE_BONUS=0`关闭偏好。
+- 学习检索细化（T29）：节点任务细化为原理/区别、操作验证/边界问题，最多6查询；选材先保护节点，再软保留合格原文、限制教材和单文档集中度。仅legacy学习文本文档生效，`LEARNING_RETRIEVAL_REFINEMENT_ENABLED=false`恢复旧逻辑；不换模型、不重建索引。
+- 内容去冗余（T19）：最终可信SQL候选在节点/资源分配前识别长文本完全重复和同源高度近似片段，按原选材顺序保留强者、以其余合格候选补位。独有节点/资源用途受保护，不重写来源、不删除原文、不额外调用模型；可用`RETRIEVAL_REDUNDANCY_ENABLED=false`关闭。
 - 个性化适配：基于学习者画像动态匹配资源难度、生成学习路径与分阶测试。
 - 可视化决策：提供 Agent 调度过程、学情报告、资源难度匹配曲线等可视化能力。
 - 可回放运行记录：Run 在模型调用前建档，节点 Step/Event/Evidence/Checkpoint 持续落库，可跨进程只读查询并识别中断。
 - 文本持久投递：冻结请求与画像随任务落库，独立单实例 Worker 领取；执行前退出可恢复，执行中断后以关联的新尝试重试。
+- 单份失败资源重生成：复用原画像、诊断、计划与冻结证据，从资源生成处创建同批次的新尝试；保留旧版本及审核记录，不再自动从学情诊断重跑。缺少可信历史上下文会明确拒绝，批量重生仍走完整流程。
 - 互动课件：将单份已发布文本资源转换为结构化、可追溯的互动 HTML；由独立 Durable Worker 执行自动审核、修订和发布。
 - 学习工作区：提供五步新建方向、资源生产、专注阅读、测评反馈、学习旅程和动态学情报告；共享响应式外壳与减少动态效果支持。
+
+知识库资料按教材、中文/英文官方原文及许可分层，见[资料入口](knowledge_base/rag_engineering_training/README.md)。六章教材修订为 `teaching-2026-10-v2`；多语言索引使用 `BAAI/bge-m3` dense（生成与精排模型不变），旧SQL/Chroma保留。换模与新资料入库流程、实际状态及回滚边界见[数据库说明7.7](docs/knowledge_base_database.md#77-多语言embedding与受控重建t112026-10-27)。
+
+全库分类型清洗提供文件候选构建入口`scripts/knowledge_corpus_cleaning.py`；T28已激活T27教学单元v2资料并完成本机入库，62篇/1121片（六教材44片），900字符目标/1200软限/100重叠，纯辅助URL移入独立元数据。SQL/Chroma均ready且ID/正文/完整metadata一致；bge-m3模型、端口与配置路径未变。原始资料、旧SQL版本及冻结Evidence保留；旧3177片输入可由`provenance/evidence-base`重放，再经`cleaning-base`追溯更早采集基线。父级回填未启用，Evidence摘录仍最多1200字符。构建与入库仍是两个明确步骤，见[部署说明3.2–3.5](docs/deployment.md)。
 
 ## 技术栈
 
@@ -91,7 +100,9 @@ python scripts/check_database_integrity.py
 
 `LLM_STRUCTURED_OUTPUT_MODE=auto` 会先尝试 function calling。若所用 OpenAI-compatible 服务明确不支持该能力，请在本地 `.env` 显式设为 `text`，避免每个 Agent 固定产生一次 BAD_REQUEST 后再回退；不要提交真实 `.env` 或 API Key。
 
-生成 Agent 与独立交互式 Tutor 统一通过可注入的 `LLMGateway` 调用模型。Tutor 不进入资源生成 LangGraph，也不直接修改画像、掌握度、路径或资源。默认 Tutor 请求预算为 25 秒、最近上下文 6 轮、Evidence 4 条、最高提示等级 3。结构化输出和 Evidence ID 子集均会严格校验。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
+配置模板使用 `LLM_MODEL=deepseek-flash`，实际运行以本机 `.env` 为准，本次同步不修改该文件或切换模型；Embedding仍是BGE-M3，精排配置不变。修改模型后重启Web/Worker即可，不需要重新入库；日常启动不要加`--initialize`。健康检查不调用计费LLM，不代表模型权限或实际生成质量已经验证。
+
+生成 Agent 与独立交互式 Tutor 统一通过可注入的 `LLMGateway` 调用模型。Tutor 不进入资源生成 LangGraph，也不直接修改画像、掌握度、路径或资源。默认Tutor单阶段生成预算25秒/4096输出tokens、最近6轮/Evidence4条/最高提示3，保留原网关重试与错误语义，不再独立审核或拆分预算。保留生成契约：正文不报内部证据清单，引用ID仅用于结构字段，允许证据不足时空引用安全拒答。auto在Tutor内直接使用JSON文本+严格schema解析，显式协议及其他Agent不变；不保证事实支持性已被验证。
 
 ## 后端目录说明
 
@@ -146,7 +157,7 @@ version1/
 │   │   ├── utils/              # 事件归并、资源排序等工具
 │   │   ├── App.vue             # 公共页、学习外壳与专注模式分支
 │   │   └── main.js
-│   ├── tests/                  # 13 项 Node 单元专项与 15 项浏览器专项
+│   ├── tests/                  # Node 单元与浏览器专项，成员以 tests/suites.json 为准
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
@@ -181,6 +192,10 @@ version1/
 
 ### 运行时数据说明
 
+Windows中文项目路径：当前锁定的`chroma-hnswlib 0.7.6`由检索入口适配原生文件路径编码，无需搬项目或更换Embedding。若旧索引报`Cannot open header file`，先停服并备份SQLite/Chroma，再从保留知识库资料重建；不要仅凭`count`判断索引健康。详见[知识库中文扩容与持久化说明](docs/knowledge_base_database.md#74-官方中文完整资料扩容)。系统ANSI代码页不能表示的路径字符仍需避免。
+
+T9知识库资料现按 `teaching/zh`、`references/{zh,en}`、`licenses/`、`provenance/` 直接存放，没有旧目录别名。离线源文件核验统一运行 `\.venv\Scripts\python.exe scripts\prepare_knowledge_sources.py --check`；路径与旧SQL/Chroma索引边界见[当前资料布局](docs/knowledge_base_database.md#75-t9当前物理目录与准备入口)。
+
 | 目录/文件 | 用途 | 是否进入版本控制 |
 |-----------|------|------------------|
 | `.venv/` | 项目根目录下的本地 Python 虚拟环境 | 否 |
@@ -209,7 +224,7 @@ python scripts/run_tests.py --profile acceptance
 python scripts/run_tests.py --suite backend-api --suite backend-migration
 ```
 
-`quick` 包含架构导入、生成契约漂移、核心回归、比赛金标与前端单元；`regression` 另含 Ruff、全前端 ESLint、关键 API/SSE/请求上下文 JSDoc 类型检查、Python 声明/锁/环境检查、后端全量、课件冻结评测与生产构建。前端共十三项单元，`acceptance` 追加十五项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
+`quick` 包含架构导入、生成契约漂移、核心回归、比赛金标与前端单元；`regression` 另含 Ruff、全前端 ESLint、关键 API/SSE/请求上下文 JSDoc 类型检查、Python 声明/锁/环境检查、后端全量、课件冻结评测与生产构建。`acceptance` 追加实际浏览器专项，单元与浏览器成员以 `tests/suites.json` 为准。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
 
 报告读取提供独立的合成基准（临时SQLite、固定时钟/种子、100/1000/10000条正式历史，不调用模型或读取业务库）：
 

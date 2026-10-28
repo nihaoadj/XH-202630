@@ -146,8 +146,8 @@ const retestQuestions = [
 const domainFixture = {
   domains: [
       {
-      domain_id: 'domain-clinical',
-      name: '临床研究与真实世界数据分析',
+      domain_id: 'ai_application',
+      name: 'AI 应用开发',
       description: '围绕研究设计、数据治理、稳健分析与结果表达建立可复现实践。',
       tracks: [
         {
@@ -483,6 +483,7 @@ async function apiResponse(url, method, request, response) {
       page_size: 50,
     })
   }
+  if (pathname.startsWith('/api/profiles/') && method === 'GET') return json(response, state.createdProfile || profileFixture(pathname.split('/').at(-1)))
   if (pathname === '/api/generate/jobs') return json(response, { items: [] })
   if (pathname === '/api/resources/courseware/jobs') return json(response, { items: [] })
 

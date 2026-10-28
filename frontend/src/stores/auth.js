@@ -3,6 +3,7 @@ import { ref } from 'vue'
 
 import { authApi } from '../features/auth/api.js'
 import { useAppStore } from './app'
+import { clearAllDrafts } from '../features/onboarding/onboardingState.js'
 
 
 export const useAuthStore = defineStore('auth', () => {
@@ -10,8 +11,13 @@ export const useAuthStore = defineStore('auth', () => {
   const initialized = ref(false)
 
   function syncUser(user) {
-    currentUser.value = user || null
     const appStore = useAppStore()
+    const previousId = currentUser.value?.user_id || appStore.currentUserId
+    if (!user || (previousId && previousId !== user.user_id)) {
+      clearAllDrafts()
+      if (user) appStore.clearLearnerContext()
+    }
+    currentUser.value = user || null
     if (user) {
       appStore.setCurrentUserProfile(user)
     } else {

@@ -1,0 +1,541 @@
+{
+  "schema_version": 1,
+  "repositories": {
+    "flag": {
+      "repository": "FlagOpen/FlagEmbedding",
+      "commit": "fd1a2bdf69488ffebe0327999d4400d8c8058a0b",
+      "license_path": "LICENSE",
+      "license_sha256": "587a673933425dbc36ec61268d3b954051b2d3ef3c9b322ede357976055ffdd5",
+      "license_id": "MIT",
+      "notice_paths": []
+    },
+    "mineru": {
+      "repository": "opendatalab/MinerU",
+      "commit": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "license_path": "LICENSE.md",
+      "license_sha256": "2d9aeb5d15159329a20dd804f251c64860ba954fbd26ec02f802220e6d71cf5c",
+      "license_id": "MinerU Open Source License (Apache-2.0 plus additional terms)",
+      "notice_paths": []
+    },
+    "milvus": {
+      "repository": "milvus-io/web-content",
+      "commit": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "license_path": "LICENSE",
+      "license_sha256": "1ca3cba938dffe5efeb13d44bf5482f318342f78a636eeca69779214bbae6d4c",
+      "license_id": "Apache-2.0",
+      "notice_paths": []
+    },
+    "hf": {
+      "repository": "huggingface/cookbook",
+      "commit": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "license_path": "LICENSE",
+      "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "license_id": "Apache-2.0",
+      "notice_paths": []
+    }
+  },
+  "supplemental_licenses": [
+    {
+      "id": "Apache-2.0-full-text",
+      "reuse_repository_license": "hf",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "used_by": [
+        "mineru"
+      ],
+      "local_path": "licenses/Apache-2.0"
+    }
+  ],
+  "sources": [
+    {
+      "id": "source_zh_flag_bge",
+      "repo": "flag",
+      "upstream_path": "README_zh.md",
+      "sha256": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
+      "kind": "markdown",
+      "title": "FlagEmbedding：BGE 向量模型与重排序官方中文说明",
+      "default_points": [
+        "Embedding",
+        "混合检索",
+        "Rerank"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_overview",
+      "repo": "mineru",
+      "upstream_path": "README_zh-CN.md",
+      "sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
+      "kind": "markdown",
+      "title": "MinerU 4.0 官方中文说明",
+      "default_points": [
+        "文档解析"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_quick_start",
+      "repo": "mineru",
+      "upstream_path": "docs/zh/quick_start/index.md",
+      "sha256": "b06ad352bbd4ea7cae2d90b4ba73ccf0f4851dec6ad95537cdbc3291bfe36cdb",
+      "kind": "markdown",
+      "title": "MinerU 快速入门",
+      "default_points": [
+        "文档解析"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_usage",
+      "repo": "mineru",
+      "upstream_path": "docs/zh/usage/quick_usage.md",
+      "sha256": "279a396168e2f7e6c8d7e55761b863b0576d1a905b9a6147fe42122be77e1e1f",
+      "kind": "markdown",
+      "title": "MinerU 基础使用",
+      "default_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_output",
+      "repo": "mineru",
+      "upstream_path": "docs/zh/reference/output_files.md",
+      "sha256": "63291b35a65719469d3c89073050c7847fb424cf27be928824602b302bdd25c2",
+      "kind": "markdown",
+      "title": "MinerU 输出格式与结果协议",
+      "default_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_sdk",
+      "repo": "mineru",
+      "upstream_path": "docs/zh/usage/sdk_api.md",
+      "sha256": "344394a5e225640e73e3d37562dc96362c6314f8e4c9a74a7f6875c5872e3b1f",
+      "kind": "markdown",
+      "title": "MinerU Python SDK",
+      "default_points": [
+        "文档解析"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_tiers",
+      "repo": "mineru",
+      "upstream_path": "docs/zh/usage/tiers.md",
+      "sha256": "15e5b3aa6acd58ff72cc1c33e3d21beaac29064c269facef2431bf60aedafd9c",
+      "kind": "markdown",
+      "title": "MinerU 档位与运行环境",
+      "default_points": [
+        "文档解析"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_ragflow",
+      "repo": "mineru",
+      "upstream_path": "docs/zh/usage/plugin/RagFlow.md",
+      "sha256": "15ab57b99a9f612651b1f74aa62339d783d80167db4d4d1b3a1cffe6a1ef0912",
+      "kind": "markdown",
+      "title": "MinerU 与 RAGFlow 集成说明",
+      "default_points": [
+        "文档解析",
+        "RAG 基础概念"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_dify",
+      "repo": "mineru",
+      "upstream_path": "docs/zh/usage/plugin/Dify.md",
+      "sha256": "8706993daaa7f228ba320550b28250e5666eeac535b32a1d987214e5185d6148",
+      "kind": "markdown",
+      "title": "MinerU 与 Dify 集成说明",
+      "default_points": [
+        "文档解析",
+        "RAG 基础概念"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_mineru_http",
+      "repo": "mineru",
+      "upstream_path": "docs/zh/usage/http_api.md",
+      "sha256": "e9b447ac154237c085f4858fcaab3eadad2851ea4a109714757d6080baf59164",
+      "kind": "markdown",
+      "title": "MinerU V1 HTTP API 文档",
+      "default_points": [
+        "文档解析"
+      ],
+      "language_origin": "official_chinese"
+    },
+    {
+      "id": "source_zh_milvus_rag",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/tutorials/build-rag-with-milvus.md",
+      "sha256": "0d1c2b65679d640a5d09347e93b50f32cbc4d0ff186a15a9a8d61e737069899b",
+      "kind": "html_markdown",
+      "title": "使用 Milvus 构建 RAG",
+      "default_points": [
+        "RAG 基础概念",
+        "文档解析",
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索",
+        "Prompt 组装"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_enhance",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/tutorials/how_to_enhance_your_rag.md",
+      "sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+      "kind": "html_markdown",
+      "title": "如何提高 RAG 管道的性能",
+      "default_points": [
+        "Chunk 切分",
+        "相似度检索",
+        "混合检索",
+        "Rerank",
+        "RAG 调优"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_hybrid",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/tutorials/hybrid_search_with_milvus.md",
+      "sha256": "2d47637096b0f22506701ab989ca66c7894ef1cff9cd87466f6089aa766ea8f7",
+      "kind": "html_markdown",
+      "title": "使用 Milvus 进行混合搜索",
+      "default_points": [
+        "混合检索",
+        "向量数据库",
+        "Rerank"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_fulltext_tutorial",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/tutorials/full_text_search_with_milvus.md",
+      "sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+      "kind": "html_markdown",
+      "title": "使用 LangChain 和 Milvus 进行全文检索",
+      "default_points": [
+        "混合检索",
+        "向量数据库"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_graph",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/tutorials/graph_rag_with_milvus.md",
+      "sha256": "778e4614378007bde6d4334f38ce897d6911be3af4a46cd9799aa8d08143a8f8",
+      "kind": "html_markdown",
+      "title": "使用 Milvus 构建图 RAG",
+      "default_points": [
+        "RAG 基础概念",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_multimodal",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/tutorials/multimodal_rag_with_milvus.md",
+      "sha256": "311b5d06718e773ecadb6fad5d2aabe8b1af4a71281b6dac0cba9e955b03ae38",
+      "kind": "html_markdown",
+      "title": "基于 Milvus 的多模态 RAG",
+      "default_points": [
+        "RAG 基础概念",
+        "文档解析",
+        "Embedding",
+        "向量数据库"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_fulltext",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/userGuide/search-query-get/full-text-search.md",
+      "sha256": "be6c00e9723e70b06f90e613694688a5deacb0e128398466b60d44aa0cfc3c78",
+      "kind": "html_markdown",
+      "title": "Milvus 全文搜索指南",
+      "default_points": [
+        "混合检索",
+        "向量数据库"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_multi_vector",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/userGuide/search-query-get/multi-vector-search.md",
+      "sha256": "bc568a9c03e4a623eb578d3db8b28c641ca3a92ea7a3ca3ef047a79e875d3f70",
+      "kind": "html_markdown",
+      "title": "Milvus 多向量混合搜索指南",
+      "default_points": [
+        "相似度检索",
+        "混合检索",
+        "向量数据库"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_rerank",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/userGuide/embeddings-reranking/reranking/model-ranker-overview.md",
+      "sha256": "f55e934335df3bf1983608224c04a52887806839f516f48f43b97b2085d96fce",
+      "kind": "html_markdown",
+      "title": "Milvus 模型重排序概述",
+      "default_points": [
+        "Rerank",
+        "RAG 调优"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_milvus_pipeline",
+      "repo": "milvus",
+      "upstream_path": "localization/v3.0.x/site/zh/aiTools/rag_pipeline.md",
+      "sha256": "35321b091aca9ce9e0e8d61e521fe7b3b277409ba4d428ecda972713958505a3",
+      "kind": "html_markdown",
+      "title": "Milvus RAG 管道",
+      "default_points": [
+        "RAG 基础概念",
+        "文档解析",
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索",
+        "混合检索"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_advanced",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/advanced_rag.ipynb",
+      "sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+      "kind": "notebook",
+      "title": "使用 LangChain 在 Hugging Face 文档上构建高级 RAG",
+      "default_points": [
+        "文档解析",
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索",
+        "Prompt 组装",
+        "引用溯源"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_evaluation",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/rag_evaluation.ipynb",
+      "sha256": "b460e3f1895fcbafc48c9ff34d855140c1afd6fc29b77473c01b72bae4f4f4d7",
+      "kind": "notebook",
+      "title": "使用合成数据和 LLM 作为裁判评估 RAG",
+      "default_points": [
+        "RAG 评测",
+        "RAG 调优",
+        "幻觉控制"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_milvus",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/rag_with_hf_and_milvus.ipynb",
+      "sha256": "51c742e90093e7af44638a49a743ccef57ee383ce47fc2edc6a94521eaf433ad",
+      "kind": "notebook",
+      "title": "使用 Hugging Face 和 Milvus 构建 RAG 系统",
+      "default_points": [
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_unstructured",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/rag_with_unstructured_data.ipynb",
+      "sha256": "173922ff5a180cdcda2aa6ffa100f6acc8990ae71570e7fd5a8917f0c14193d1",
+      "kind": "notebook",
+      "title": "使用自定义非结构化数据构建 RAG",
+      "default_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_elasticsearch",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/rag_with_hugging_face_gemma_elasticsearch.ipynb",
+      "sha256": "da83b0b87ce2f487c699cdeba9b77065b724ab2e39510abc94e1bafce13bdd38",
+      "kind": "notebook",
+      "title": "使用 Gemma、Elasticsearch 和 Hugging Face 模型构建 RAG",
+      "default_points": [
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_zephyr",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/rag_zephyr_langchain.ipynb",
+      "sha256": "5139bd699a69a1764b53db5424e24ef04873c11b0f545d85c9f90bd9a4aa7ef4",
+      "kind": "notebook",
+      "title": "使用 Zephyr 和 LangChain 针对 GitHub Issues 构建 RAG",
+      "default_points": [
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_librarian",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/rag_llamaindex_librarian.ipynb",
+      "sha256": "ead9648be92a94db68cd99f6637e21f4369d91b1aae643ff172cf2874700e4be",
+      "kind": "notebook",
+      "title": "使用 LlamaIndex 构建 RAG 电子书库智能助手",
+      "default_points": [
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_grounded",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/structured_generation.ipynb",
+      "sha256": "3e15593bd5550d10d79a41cae99958065af3c530aef8c23eaf7582c991f69f8b",
+      "kind": "notebook",
+      "title": "使用结构化生成进行带来源高亮的 RAG",
+      "default_points": [
+        "Prompt 组装",
+        "引用溯源",
+        "幻觉控制"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_sql_rerank",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/rag_with_sql_reranker.ipynb",
+      "sha256": "195611cfb2d6db72ee5257889f4f840ea78191afe7b79f7e2ce72736e76bfad4",
+      "kind": "notebook",
+      "title": "基于 SQL 和 Jina Reranker v2 的 RAG",
+      "default_points": [
+        "混合检索",
+        "Rerank",
+        "RAG 调优"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_graph",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/rag_with_knowledge_graphs_neo4j.ipynb",
+      "sha256": "c670b7a96019fb9722be0a6387fd52cd24c2c61202a936e0a3a67f66448e4494",
+      "kind": "notebook",
+      "title": "利用 Neo4j 知识图谱增强 RAG 推理",
+      "default_points": [
+        "RAG 基础概念",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_agent",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/agent_rag.ipynb",
+      "sha256": "c1ba4b4fff8cd97bb587ca1d548e379423462e2f7a45602540189686dab009b6",
+      "kind": "notebook",
+      "title": "Agentic RAG：查询重构与自查询",
+      "default_points": [
+        "混合检索",
+        "RAG 调优"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_multiagent",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/multiagent_rag_system.ipynb",
+      "sha256": "647a7c85d765527685339b7ddc230db51345652fe4778abe11e003c688dff193",
+      "kind": "notebook",
+      "title": "多智能体 RAG 系统",
+      "default_points": [
+        "RAG 基础概念",
+        "RAG 调优"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_multimodal",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/multimodal_rag_using_document_retrieval_and_vlms.ipynb",
+      "sha256": "eb97e93625c314d51022e46a7520687c4aeaffa16130d93d35febb058f57818a",
+      "kind": "notebook",
+      "title": "使用文档检索和视觉语言模型构建多模态 RAG",
+      "default_points": [
+        "文档解析",
+        "Embedding",
+        "向量数据库"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_cache",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/semantic_cache_chroma_vector_database.ipynb",
+      "sha256": "381ab837867fbcbd953944d79cc401b091e5edf0df2e43df7708581528b5d3ea",
+      "kind": "notebook",
+      "title": "使用 Chroma 语义缓存增强 RAG 性能",
+      "default_points": [
+        "相似度检索",
+        "RAG 调优"
+      ],
+      "language_origin": "official_translation"
+    },
+    {
+      "id": "source_zh_hf_semantic_rerank",
+      "repo": "hf",
+      "upstream_path": "notebooks/zh-CN/semantic_reranking_elasticsearch.ipynb",
+      "sha256": "62ba43121ec766f67e7b814dd48e4f99c9626798fe068a6208a04461a5081a37",
+      "kind": "notebook",
+      "title": "Elasticsearch 语义重排序",
+      "default_points": [
+        "Rerank",
+        "RAG 调优"
+      ],
+      "language_origin": "official_translation"
+    }
+  ],
+  "excluded": [
+    "未收录四站全部网站/导航/更新日志/无关部署章节；仅本清单35份完整来源",
+    "外链图片视频数据集不复制，notebook输出不作为规范教程正文；完整原始notebook仍保留",
+    "未将官方译本标为中文原创论文；未执行任何示例、API或模型调用",
+    "MinerU使用附加条款许可而非纯Apache2，保留原协议+Apache全文并在项目公开文档显著披露来源；没有集成MinerU软件"
+  ]
+}

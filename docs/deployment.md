@@ -56,6 +56,8 @@ python3.11 -m venv .venv
 
 ### 2.2 日常一键启动
 
+本机主模型已切为`deepseek-flash`（`LLM_MODEL`，官方最新Flash别名当前指向V4.1-Flash-1017），沿用原`LLM_BASE_URL`/API Key、思考模式与预算；此键由共享网关读取，会影响生成及共用该网关的Agent。Embedding/精排/SQL/向量配置不随此切换变化。改模型后重启Web及Worker，勿重新初始化或入库；启动健康检查不发计费LLM请求，因此模型账号权限与生成质量仍须后续由用户实际请求验证。真实.env和含密钥的备份不提交。Flash别名具体版本以[官方模型页](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)为准。
+
 在仓库根目录使用虚拟环境解释器执行：
 
 ```powershell
@@ -119,6 +121,90 @@ Worker 的三个只读端点为：
 文本 Worker 提供 `/health/live`、`/health/ready` 和 JSON `/metrics`。ready 要求依赖可执行、轮询近期正常且未停止；指标只含安全计数、active/concurrency 和错误码。`--once` 仅对账并尝试领取一条；`--shutdown-file <sentinel>` 可请求停止新领取，等待当前执行最多配置的退出时间；超时退出保留租约，后续按中断规则收敛。
 
 升级前停止旧 Web 的写入并等旧后台任务结束或租约到期，再启动新 Web 和唯一文本 Worker；新旧二进制不可混跑同一库。增量迁移保留旧行归属 legacy，不自动把旧请求当作新冻结任务执行。回滚前停止新领取并排空 worker queued 或保留兼容消费者，保留新增字段、尝试记录和发布资源；不能直接退回仅认识 BackgroundTasks 的旧代码而遗留无人消费的任务。
+
+T23 单份资源重生成不新增环境变量或数据库迁移，但 Web 与文本 Worker 必须同时更新并重启后才可使用新按钮。任务采用 `learning_documents.resource_retry.v1` 分发版本和内部冻结上下文；旧 Worker 不认识该版本会拒绝/失败，不应混跑或把它改写成普通生成版本。回滚前停止新任务提交与领取，排空此类 queued 任务或保留兼容消费者，再回滚 Web/Worker；保留历史 Run/Evidence/版本，不清理业务库。T23交付当轮没有自动重启；后续T24清洗维护已同步恢复本机Web/文本Worker，未用真实模型执行新任务。
+
+### 3.1 官方资料清洗维护（T24）
+
+清洗不换Embedding/精排/生成模型，也不改`.env`。先确认本项目没有排队、运行或finalizing任务，暂停已核验的Web及两个Worker（保留前端）；不要强杀活跃任务。使用同一虚拟环境运行：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/prepare_chinese_sources.py --refresh-derived --receipt output/test-runs/kb-cleaning/sources-before
+.\.venv\Scripts\python.exe scripts/refresh_cleaned_knowledge.py --apply --receipt output/test-runs/kb-cleaning/index-before
+.\.venv\Scripts\python.exe scripts/prepare_knowledge_sources.py --check
+```
+
+receipt目录必须不存在，每次维护用新目录；这里名称只是示例，不要覆盖现有备份。第一个命令只从已固定本地快照重建派生资产，保留原文/许可。第二个命令先校验当前本地模型文件receipt与SQL embedding profile、备份SQLite和Chroma，再核验旧索引ready/全集身份/正文与历史profile，最后经既有入库staging、少量smoke、activation对账。完全同文/同分块/profile的向量复用到新ID，其余只用原模型重编码；向量目录中的`knowledge-embedding-profile.json`随备份恢复，不能单独移植到其他模型库。
+
+只有receipt显示ready、历史hash核验通过后，才恢复原本运行的Web/Worker。失败保持服务停止，使用receipt的before资产恢复metadata/content/registry、SQLite备份和完整向量目录；先把失败向量目录移至同data目录下独立归档，再恢复备份，不能把两个目录直接混合或删除历史库。备份含用户数据，留在本机受忽略output目录，不进入Git。T11重建工具与fixture描述的是当时3222片历史快照；T24当前正文为3214片，日常清洗使用本节维护入口而非拿旧快照数量冒充当前状态。
+
+### 3.2 全库文件候选构建，不入库（T25）
+
+该流程不使用上一节的入库工具，不暂停服务、不换模型、不修改canonical/SQL/Chroma/.env。先预览，再输出一个新候选目录：
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+.\.venv\Scripts\python.exe scripts/knowledge_corpus_cleaning.py --output output/knowledge-cleaning/T25
+.\.venv\Scripts\python.exe scripts/knowledge_corpus_cleaning.py --apply --output output/knowledge-cleaning/T25
+.\.venv\Scripts\python.exe scripts/knowledge_corpus_cleaning.py --check --output output/knowledge-cleaning/T25
+```
+
+`--apply`只生成文件；默认dry-run不写，`--check`只读且缺少快照时失败，不补造文件。输出目录必须位于仓库`output/knowledge-cleaning/`下且不存在；本机T25目录已存在，重建必须换新目录名，禁止覆盖既有候选。失败的部分产物保留诊断，不能据此认为候选已完成。
+
+T25交付时是62篇/3177片候选、42篇修改/20篇原样，未入库。后续用户已授权T26激活，当前canonical/SQL/Chroma为3177片（见3.3）。冻结audit与candidate-snapshot仍保留构建时`ingested=false`，实际部署状态以T26维护receipt和health为准；不能直接覆盖旧SQL metadata。
+
+### 3.3 清洗候选激活、入库与运行（T26）
+
+操作前核验候选/source hash与项目端口/PID，确认没有queued/running/finalizing任务，停止已确认归属本项目的Web和Workers；不能终止无关或活跃任务。备份目录必须新建；以下本机T26目录已用，重做必须换新目录名。
+
+```powershell
+$env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'
+.\.venv\Scripts\python.exe scripts/knowledge_corpus_promotion.py --apply --output output/knowledge-cleaning/T25 --receipt backend/data/knowledge_backups/T26/source
+.\.venv\Scripts\python.exe scripts/prepare_knowledge_sources.py --check
+.\.venv\Scripts\python.exe scripts/refresh_cleaned_knowledge.py --apply --receipt backend/data/knowledge_backups/T26/index
+.\.venv\Scripts\python.exe scripts/start_local.py --no-reload
+```
+
+第一步只切换源文件并留完整before副本、公开可重放基线，不写索引；第三步沿既有SQL staging/vector/smoke/activate，在相同模型profile下复用同文向量，成功ready及历史hash核验后才运行最后一步。配置/端口/模型均未换，CPython UTF8是本机命令编码保障，不是新的业务`.env`字段。
+
+激活后`prepare_knowledge_sources.py --check`在受忽略的临时目录重建旧输入，原固定采集器离线检查后再重放当前清洗结果。`knowledge_corpus_cleaning.py --check`及新候选重建也使用保存基线；当前metadata、原文/许可、页跨度、来源节点和3177片身份必须一致。新baseline blob不进入manifest，不参与检索。
+
+私有业务备份必须放`backend/data/knowledge_backups/`，该目录及source receipt自带Git忽略；公开`provenance/cleaning-base`仅含知识源旧字节。资料切换中若检测并发编辑，拒绝覆盖，必要时标记`recovery_blocked`，保留服务停机和备份请求人工处理。无并发编辑时文件级失败会恢复before；可用`knowledge_corpus_promotion.py --rollback --receipt <source备份>`恢复文件。若索引已经改变，先停服务，再同时恢复SQLite与向量完整备份（失败目录移至已验证data下独立归档，不混合复制）；不得仅回滚文件却继续用新索引。
+
+### 3.4 教学单元分片候选（T27，构建时未入库，后由T28激活）
+
+`prepare_evidence_chunks.py --build --output <新目录>`只读T26资料，生成独立文件候选并内存分片；输出须为新的`output/knowledge-cleaning/`子目录，不覆盖已有候选。最终T27含62篇及原六教材，opt-in `markdown_evidence_v2`共1121片；T27交付时仍运行3177片，T28激活后自动重建保存的T26输入进行候选复核：
+
+```powershell
+$env:PYTHONUTF8='1'; $env:PYTHONPATH='backend'; $env:PYTHONIOENCODING='utf-8'
+.\.venv\Scripts\python.exe scripts/prepare_evidence_chunks.py --check --output output/knowledge-cleaning/T27
+```
+
+构建/check不调用Embedding/LLM、DB、向量库或服务生命周期。辅助链接不进正文，parent-context仅离线预览、运行时未回填。候选有独立身份epoch；后续T28使用专门的v2激活器及维护边界，不能直接拿T26 promotion假定新profile已受支持或覆盖旧不可变metadata。
+
+### 3.5 教学单元v2激活与入库（T28）
+
+先确认没有queued/running/finalizing任务，暂停已核实归属本项目的Web与Workers，保留前端。完整源备份与SQLite/Chroma备份存入受忽略的新目录（以下T28已用，不可重复覆盖）：
+
+```powershell
+$env:PYTHONUTF8 = '1'
+$env:PYTHONPATH = 'backend'
+.\.venv\Scripts\python.exe scripts/evidence_corpus_promotion.py --apply --output output/knowledge-cleaning/T27 --receipt backend/data/knowledge_backups/T28/source
+.\.venv\Scripts\python.exe scripts/prepare_knowledge_sources.py --check
+$env:HF_HUB_OFFLINE = '1'
+$env:TRANSFORMERS_OFFLINE = '1'
+.\.venv\Scripts\python.exe scripts/refresh_cleaned_knowledge.py --apply --receipt backend/data/knowledge_backups/T28/index
+# 仅在receipt ready且history_verified为true后恢复
+.\.venv\Scripts\python.exe scripts/start_local.py --no-reload --startup-timeout 60
+```
+
+预期62篇1121片（官方1077、六教材44），所有新片使用原本地bge-m3重编码；完整结果以index/receipt.json为准。新epoch不覆盖旧SQL版本，旧Run冻结Evidence不更新。活动源的`provenance/evidence-base`仅含知识资料重放差异，业务数据备份不得提交。文件回滚入口`evidence_corpus_promotion.py --rollback --receipt <source备份>`拒绝未知并发修改；索引若已变动，必须在服务停止下成组恢复database-before.db与vectors-before，不能只回滚源文件后重启。
+
+当前Evidence摘录上限仍1200字符，82个长原子可在SQL保留全文，但不保证完整进入模型；父context未启用。不新增环境配置、HTTP契约或表迁移；健康/本地查询通过不等于真实生成质量测试通过。
+
+若维护进程中断且receipt仍`backed_up`（本机T28曾完成864片后中断），先确认没有同一维护进程或Web/Worker，再使用同目录`refresh_cleaned_knowledge.py --apply --resume --receipt backend/data/knowledge_backups/T28/index`。仅支持当前evidence-v2资料；不会重新备份或覆盖原备份。它验证相同模型/profile/路径、原SQL历史hash、原向量备份完整副本的全部ID/正文/metadata/有限向量、活动源重放与现存部分向量，未知内容/损坏/变更均拒绝；原有864条稳定ID可直接保留，后续仍须原2smoke和SQL激活。原向量备份未直接打开修改，此次功能校验的文件hash清单绑定到receipt；不声称拥有中断前未记录的全文件hash。运行可用独立隐藏进程并保留PID/日志，最终以ready receipt为准，不能仅凭进度日志启动服务。
+
+本机T28最终已ready：1121/1121/1121，2smoke通过，history_verified=true，旧13条Evidence及旧SQL不可变行均保留。最终核对报告为`output/test-runs/kb-activate-t28/final-index-audit.json`；源重放指纹与入库snapshot是不同算法，不可混为一项。`start_local.py --no-reload --startup-timeout 60`恢复8000/8081/8082均ready及5173 HTTP200；本机通过不表示他人部署已更新。既有Windows中文HNSW路径适配必须随项目使用，单独外部脚本直接打开Chroma应先安装项目`install_windows_hnsw_paths()`进程内兼容层；不需因此重建或下载模型。
 
 ## 4. 手动四进程启动与停机
 
@@ -227,6 +313,10 @@ Web `/health=200` 不代表任何 Worker 已运行；还应分别核对 8081 和
 
 ## 6. SQLite 数据保护与模式边界
 
+Windows索引路径注意：当前`chroma-hnswlib 0.7.6`原生文件接口由`core/retrieval/hnsw_windows.py`按系统ANSI代码页适配，Python侧SQLite/Chroma配置路径仍不变，不需搬目录或更换模型。仅该版本/Windows/非ASCII str路径生效；系统代码页无法表示的字符仍显式报错，应选可表示路径。若已有`Cannot open header file`，兼容适配不会自动补出损坏索引，必须先停服、备份，再按知识库对账流程从保留原文重建目标集合；不能对所有集合做reset。重启验收应包含真实向量query和HNSW四文件，而不是只有SQL count/HTTP health。
+
+T9 知识库源资料已直接移动到 `teaching/zh`、`references/{zh,en}`、`licenses/`、`provenance/`，统一离线核验命令为 `\.venv\Scripts\python.exe scripts\prepare_knowledge_sources.py --check`。此命令核验源文件与registry，不迁移数据库。T9 更新了 manifest 中的来源物理路径，但既有 SQL/Chroma 仍保留旧 `source_path`/完整 metadata；部署或换模型前须创建新的知识库版本、完成数据库与向量索引备份，并受控重建和对账，禁止在同一知识库版本直接 reconcile 覆盖旧 metadata。直接移动使用的本地备份是 `output/test-runs/kb-layout-direct/backup-20261026-215648`；迁移时三端服务均停止，本次未自动启动服务。
+
 - 当前开发、演示和本轮部署使用 SQLite。PostgreSQL 分支仅为兼容基础，尚无驱动、迁移和并发验收，不能作为已支持部署方案。
 - SQLite 使用 WAL 与有界 busy timeout。Web、唯一文本 Worker 和唯一课件 Worker 必须指向同一个文件型 `DATABASE_URL`、同一资源根目录和同一 Chroma 配置。
 - 备份前必须停止 Web/Worker 写入；禁止复制正在写入的 `.db`、`-wal` 或 `-shm` 文件。
@@ -257,6 +347,20 @@ SSE 路由须关闭代理缓冲，read timeout 必须大于 `WORKFLOW_SSE_HEARTB
 报告当前快照流 `/api/report/{learner_id}/events` 使用独立的 `REPORT_SSE_*` 间隔，也需要关闭缓冲；它是 revision 失效通知，客户端重新拉取带 ETag 的报告。事实变更与滚动时间边界都可触发失效；每个 Web 进程独立共享快照，不需要 Redis，也不宣称跨进程只构建一次。课件事件流和文本 Run SSE 是各自的持久任务流，不能混用游标。
 
 课件本地故障矩阵、浏览器验证和发布候选证据以当前代码、测试目录和本部署文档为准；课件工作流的公开入口与启动方式由 `backend/scripts/courseware_worker.py` 和 [API 文档](api.md) 维护。
+
+## 多语言Embedding换模与资料入库
+
+检索候选保护默认`RETRIEVAL_BALANCED_CANDIDATES_ENABLED=true`、`RETRIEVAL_DENSE_RESERVE=10`：全局最多保留10条原查询dense结果，再按RRF填满`RERANK_CANDIDATE_K`（当前20），不是每query/每语言10条。reserve不得大于该全局预算，自定义较小预算时需相应下调reserve；设enabled=false并重启Web/Worker可恢复旧选择策略，不改DB/索引。每原query内部最多增加1条来自KB `query_aliases.json`的英文术语probe（最多6条术语规则合成、400字符），不是完整翻译；原query、节点与allowed范围不变，精排仍用原query，禁用/失败时不使用alias-only结果。缺失/非法配置显式降级原查询，配置/策略hash用于审计；不下载模型、不调用生成LLM，模型与阈值不变。单query候选可能从10增到20，另有probe召回成本，但精排总数仍受原有20预算约束；不保证时延完全不变。
+
+RAG示例库使用`BAAI/bge-m3`的dense向量（1024维、归一化），固定模型commit为`5617a9f61b028005a4858fdac845db406aefb181`；模型卡见[官方说明](https://huggingface.co/BAAI/bge-m3)。生成LLM和CrossEncoder保持原配置；不启用M3 sparse/ColBERT。默认`EMBEDDING_LOCAL_FILES_ONLY=true`，运行请求不承担联网下载。
+
+仓库根先执行`.venv/Scripts/python.exe scripts/rebuild_multilingual_index.py prepare-model`，下载约2.3GB的固定权重与所需配置/tokenizer到`backend/data/models/bge-m3/<commit>/`，核对上游权重SHA并做本地encode。已有库必须保留旧配置直至下述audit通过，再将`.env`的`EMBEDDING_MODEL`设为该快照**绝对路径**；不能假定项目目录中的模型自动出现在用户全局HuggingFace缓存。CPU `EMBEDDING_BATCH_SIZE=4`；长资料入库前检查token长度，模型8192上限不代表精排输入也扩大。运维脚本的进程预检使用已有开发依赖psutil，执行环境应安装仓库开发锁文件。
+
+已有SQLite演示库换模须先停止项目Web/Worker，在旧配置仍有效时执行`python scripts/rebuild_multilingual_index.py build`，再以新进程执行同脚本`audit`。默认生成新SQL`backend/data/domain_knowledge_m3.db`与独立向量目录`backend/data/chroma_bge_m3/`，只迁移影子库的P0-34；拒绝覆盖目标，失败保留现场且不改.env。审核通过后将本机配置同组切为：`DATABASE_URL=sqlite:///./data/domain_knowledge_m3.db`、`VECTOR_STORE_DIR=./data/chroma_bge_m3`、前述绝对模型路径及`EMBEDDING_LOCAL_FILES_ONLY=true`。源码中的默认数据库路径仍用于全新安装，不自动探测或迁移他人的本地库。
+
+P0-34为历史文档版本增加identity_revision区分来源元数据epoch，不伪造正文hash、不改变逻辑文档/知识库ID；历史SQL正文和冻结证据保留。迁移当前仅验收SQLite，其它方言明确拒绝。manifest的revision、模型快照、SQL和向量目录是成组部署资产；不能只切一个模型名，尤其两个模型同1024维也不能混用。其他已有知识库也必须重建，不能指向尚未迁移的旧空间。
+
+运行报告及敏感的旧.env备份位于`output/test-runs/kb-m3/`（Git忽略，不上传/打印密钥）。回滚前停机，恢复旧配置与旧manifest epoch，旧SQL和旧Chroma未删除；需匹配旧schema应用版本，或再复制旧SQL并仅在副本上执行P0-34，避免新代码启动链升级旧原件。上线后产生新学习记录则先迁移增量再回滚。小范围检索smoke不等于质量benchmark，检索阈值仍须后续正式标注集校准。新模型不意味着生成/审核能力已进行真实LLM验收。
 
 ## 8. Docker 与前端静态部署边界
 
@@ -306,3 +410,23 @@ python -m app.db.migrations.p0_35_report_read_model --database D:/path/to/backed
 ```
 
 该回滚仅删除本迁移拥有的水位/触发器/索引，不删除学习事实。临时副本的重复迁移、回滚、重装与身份更换由 migration 测试覆盖；是否已升级/已回滚实际部署库，必须以目标环境核验为准。本任务未操作部署库。
+
+## 英文选材配置
+
+### 学习检索细化与来源软平衡（T29）
+
+`LEARNING_RETRIEVAL_REFINEMENT_ENABLED=true`默认只作用于legacy学习文本文档：最多6查询、20精排候选，SQL验证/去重后一次全局选材，预算`min(max_evidence, top_k_per_query×query_count)`；默认单query最多6、多query最多8。`.constraints.retrieval_top_k`影响最终预算，不在该多query路径按owner提前截断。教材合计2、单文档2和合格原文预留2为软规则，节点覆盖及原0.35门槛优先；原文预留还要求原分不低于平衡前预算末位原分-0.15。先放宽软配额保质量，再必要回填，原因进入profile；没有英文硬配额。
+
+确认无queued/running/finalizing任务后空闲重启Web/两个Workers读取新逻辑，前端可保留。设`LEARNING_RETRIEVAL_REFINEMENT_ENABLED=false`并空闲重启恢复旧查询/截断/hash，不需迁移或入库。Tutor/E1、旧Run及单份retry冻结证据不受影响；显式E1即使预算回退legacy也不混入新调度。不新增模型调用、不改摘录上限或模型配置。
+
+新profile包含`learning_query_strategy=learning-tasks-v2`、`learning_candidate_window=full_pool`与`learning_source_balance`（来源数、节点保护、相对基准及回填原因）；`legacy_adapter`表示注入后端只支持旧窗口。分类以可信SQL路径与manifest匹配为准，不把unknown当原文；配置hash绑定来源清单和规则。健康与本地检索通过不等于真实生成质量已验证。
+
+### Tutor生成契约（T21部分回退后）
+
+当前按用户要求撤销独立支持审核、每轮补检索与双阶段预算，仅保留生成契约/正文与引用分离及无证据空引用拒答。`TUTOR_LLM_TIMEOUT_SECONDS=25`、`TUTOR_MAX_OUTPUT_TOKENS=4096`恢复单阶段生成，网关原重试/修复语义保持；auto在Tutor内预先使用TEXT，由网关注入JSON schema并严格解析，显式协议/其他Agent不改。不新增配置键、模型、入库或表迁移，Web需重启加载；旧turn不回填/覆盖。引用ID合法不代表回答事实已审核，无独立事实支持校验。
+
+内容去冗余T19默认`RETRIEVAL_REDUNDANCY_ENABLED=true`、`RETRIEVAL_REDUNDANCY_THRESHOLD=0.90`（有限0.85..1，1为只去完全重复）；仅影响生成前的新Evidence选材，无额外模型调用、入库或迁移。`false`关闭并恢复旧选材/hash逻辑；变更需Web与两个Worker空闲重启，不打断正在执行的任务。内容级规则和保护边界见[数据库说明16](knowledge_base_database.md#16-内容级去冗余t19)，本轮实现不自动重启现有进程。
+
+与E1兼容：`RESOURCE_AWARE_RETRIEVAL_ENABLED=false`仍是默认。启用时公共节点/资源用途候选保留优先，dense保护仅占剩余20条预算及每query配额，缺口见`dense_reserve_shortfall`。两项p34迁移（知识身份revision、生成调度）均保留，初始化链随后安装p35报告读模型。本次远程同步仅做副本演练，真实库未迁移，Web/Worker未自动恢复；实际启动会触发初始化，运行前须确认备份与迁移前置条件。
+
+T17选材配置：`RETRIEVAL_TOP_K_DEFAULT=6`（旧环境显式设3会覆盖新默认），`RETRIEVAL_ENGLISH_SCORE_BONUS=0.08`（有限0..0.25，0关闭）；总证据8、候选20、原始相关性门槛0.35不变。仅SQL可信`references/en/...`路径且成功精排/原分达门槛才加选材分；完整候选池在TopK前校验，普通无可信回调的原始向量检索不加分。不需要模型下载/入库/DB迁移，原分与历史Evidence不改；可设置bonus=0、TopK=3并空闲重启回滚。Web/Worker需空闲重启读取新源码与Settings，启动不加`--initialize`，不打断queued/running任务；健康检查不等于LLM生成质量已验证。

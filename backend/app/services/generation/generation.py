@@ -12,6 +12,7 @@ from app.core.storage.file_storage import save_text_resource
 from app.core.health import ensure_generation_ready
 from app.config import get_settings
 from app.models.knowledge.knowledge import RESOURCE_AWARE_STRATEGY, LEGACY_RETRIEVAL_STRATEGY
+from app.models.generation.resource_retry import ResourceRetryContext
 from app.models.learning_documents.types import GENERAL_GENERATION_RESOURCE_TYPES
 from app.db.learning_documents.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
@@ -336,13 +337,15 @@ class GenerationService:
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         return self.generate_with_run_id(learner, req)
 
-    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None):
+    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None, *, resource_retry_context=None):
         if current_execution_fence() is not None or not hasattr(self.audit_repo, "session_factory"):
-            return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id)
+            return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id,
+                                               resource_retry_context=resource_retry_context)
         install_execution_fencing()
         run_id = run_id or str(uuid.uuid4())
         with execution_fence(ExecutionFence(run_id, f"text-{uuid.uuid4()}")):
-            return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id)
+            return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id,
+                                               resource_retry_context=resource_retry_context)
 
     def _generate_with_run_id(
         self,
@@ -350,6 +353,7 @@ class GenerationService:
         req: GenerateRequest,
         run_id: str | None = None,
         batch_id: str | None = None,
+        resource_retry_context: dict | None = None,
     ) -> GenerateResponse:
         """Generate with a caller-owned Run ID while preserving durable lifecycle semantics."""
         readiness = (
@@ -360,12 +364,26 @@ class GenerationService:
             else ensure_generation_ready()
         )
         initial_state = build_workflow_state(learner, req, run_id=run_id, batch_id=batch_id)
+        if resource_retry_context is not None:
+            try:
+                retry = ResourceRetryContext.from_snapshot(resource_retry_context)
+                if retry.learner != learner or retry.request != req:
+                    raise ValueError("retry dispatch does not match frozen input")
+            except ValueError as exc:
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409) from exc
+            initial_state["resource_retry_context"] = retry.model_dump(mode="json")
+            initial_state["retrieval_strategy_version"] = retry.retrieval_strategy_version
         run_id = initial_state["run_id"]
         started_at = datetime.now(timezone.utc)
         lease_expires_at = started_at + timedelta(
             seconds=get_settings().workflow_run_lease_seconds
         )
         request_snapshot = _request_snapshot(req, initial_state)
+        if resource_retry_context is not None:
+            request_snapshot["resource_retry_lineage"] = {
+                key: resource_retry_context[key]
+                for key in ("source_run_id", "source_spec_id", "source_checkpoint_hash", "context_hash")
+            }
         try:
             self.audit_repo.create_run(
                 CreateRunCommand(

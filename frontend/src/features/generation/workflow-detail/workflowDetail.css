@@ -136,6 +136,59 @@
 .workflow-detail-dialog .version-after { background:var(--detail-tint); padding:14px 16px; }
 .workflow-detail-dialog .version-review-notes { font-size:14px; color:var(--detail-ink); line-height:1.9; overflow-wrap:anywhere; }
 .workflow-detail-dialog :is(summary,button):focus-visible { outline:2px solid var(--detail-accent); outline-offset:3px; }
+/* Shared dossier rhythm across every stage; facts and execution states stay unchanged. */
+.workflow-detail-dialog .detail-content { padding:22px 24px 0; background:#f6f8fb; }
+.workflow-detail-dialog .detail-module { padding:22px; border:1px solid var(--detail-line); border-radius:12px; background:#fff; box-shadow:0 3px 12px #172c4504; }
+.workflow-detail-dialog .detail-section-heading { gap:8px 12px; margin-bottom:16px; }
+.workflow-detail-dialog .detail-section-heading h3 { font-size:18px; }
+.workflow-detail-dialog .section-number { padding:4px 8px; border-radius:5px; background:var(--detail-tint); font-size:10px; }
+.workflow-detail-dialog .node-output,.workflow-detail-dialog .node-guidance p { font-size:14px; line-height:1.85; }
+.workflow-detail-dialog .node-guidance { margin-top:20px; padding:18px 20px; border:1px solid #e2e9ef; border-radius:9px; background:#f8fafc; }
+.workflow-detail-dialog .node-guidance h4 { margin:6px 0 10px; font-size:15px; }
+.workflow-detail-dialog .diagnosis-result { grid-template-columns:156px minmax(0,1fr); gap:24px; padding:20px; border:1px solid #d9e9eb; border-radius:10px; }
+.workflow-detail-dialog .diagnosis-level strong { font-size:30px; }
+.workflow-detail-dialog .diagnosis-level small { display:block; margin-top:10px; color:var(--detail-muted); font-size:11px; line-height:1.8; }
+.workflow-detail-dialog .diagnosis-blindspots { min-width:0; padding-left:24px; }
+.workflow-detail-dialog .diagnosis-blindspots p { font-size:14px; font-weight:400; }
+.workflow-detail-dialog .diagnosis-point-list { display:grid; gap:8px; margin:10px 0 0; padding:0; list-style:none; }
+.workflow-detail-dialog .diagnosis-point-list li { display:flex; align-items:flex-start; gap:10px; padding:9px 11px; border:1px solid #dfe8ee; border-radius:7px; background:#fff; font-size:14px; line-height:1.75; overflow-wrap:anywhere; }
+.workflow-detail-dialog .diagnosis-point-index { flex:none; padding-top:2px; font:11px/1.8 Consolas,monospace; color:var(--detail-accent); }
+.workflow-detail-dialog .planning-path { margin-top:16px; }
+.workflow-detail-dialog .planning-path li p { font-size:15px; }
+.workflow-detail-dialog .node-evidence-card { padding:18px; margin-top:14px; border:1px solid var(--detail-line); border-radius:9px; }
+.workflow-detail-dialog .source-excerpt { padding:14px 16px; font-size:14px; border-radius:0 7px 7px 0; }
+.workflow-detail-dialog .detail-markdown { min-width:0; white-space:normal; }
+.workflow-detail-dialog .detail-markdown > :first-child { margin-top:0; }
+.workflow-detail-dialog .detail-markdown > :last-child { margin-bottom:0; }
+.workflow-detail-dialog .detail-markdown :is(h1,h2,h3,h4,h5,h6) { margin:20px 0 10px; font-weight:700; line-height:1.5; }
+.workflow-detail-dialog .detail-markdown h1 { font-size:21px; }
+.workflow-detail-dialog .detail-markdown h2 { font-size:19px; }
+.workflow-detail-dialog .detail-markdown h3 { font-size:17px; }
+.workflow-detail-dialog .detail-markdown :is(h4,h5,h6) { font-size:15px; }
+.workflow-detail-dialog .detail-markdown :is(p,ul,ol,blockquote,pre) { margin:10px 0; }
+.workflow-detail-dialog .detail-markdown :is(ul,ol) { padding-left:24px; }
+.workflow-detail-dialog .detail-markdown li + li { margin-top:4px; }
+.workflow-detail-dialog .detail-markdown blockquote { padding:8px 14px; border-left:3px solid #a9c9cd; background:#ffffff85; }
+.workflow-detail-dialog .detail-markdown code { padding:2px 5px; border-radius:4px; background:#e1ecef; font:12px/1.7 Consolas,monospace; }
+.workflow-detail-dialog .detail-markdown pre { max-width:100%; padding:12px 14px; border:1px solid #d6e2e7; border-radius:6px; background:#f8fafc; overflow:auto; white-space:pre; }
+.workflow-detail-dialog .detail-markdown pre code { padding:0; background:none; }
+.workflow-detail-dialog .detail-markdown hr { margin:18px 0; border:0; border-top:1px solid #c7dadd; }
+.workflow-detail-dialog .detail-markdown .markdown-table-scroll { max-width:100%; margin:14px 0; overflow-x:auto; overscroll-behavior-x:contain; }
+.workflow-detail-dialog .detail-markdown table { width:100%; min-width:420px; border-collapse:collapse; border:1px solid #a9bec8; background:#fff; font-size:13px; line-height:1.8; }
+.workflow-detail-dialog .detail-markdown :is(th,td) { padding:9px 12px; border:1px solid #a9bec8; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+.workflow-detail-dialog .detail-markdown th { color:var(--detail-ink); background:#e3eff1; font-weight:650; }
+.workflow-detail-dialog .detail-markdown tbody tr:nth-child(even) { background:#f7fafb; }
+.workflow-detail-dialog .detail-markdown .markdown-table-scroll:focus-visible { outline:2px solid var(--detail-accent); outline-offset:2px; }
+.workflow-detail-dialog :is(.source-raw,.generated-raw) { margin:12px 0; color:var(--detail-muted); }
+.workflow-detail-dialog :is(.source-raw,.generated-raw) pre { max-width:100%; padding:12px; border:1px solid var(--detail-line); border-radius:6px; background:#f8fafc; color:var(--detail-ink); font:12px/1.8 Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+.workflow-detail-dialog .source-heading h4 { font-size:16px; }
+.workflow-detail-dialog .review-card { overflow:hidden; border:1px solid var(--detail-line); border-radius:9px; }
+.workflow-detail-dialog .review-card-heading { padding:16px 18px; }
+.workflow-detail-dialog .review-card-heading h4 { font-size:22px; }
+.workflow-detail-dialog .review-clear,.workflow-detail-dialog .review-issues { margin-inline:18px; }
+.workflow-detail-dialog .review-issue { gap:12px; padding:16px 0; }
+.workflow-detail-dialog .review-issue p { font-size:15px; }
+.workflow-detail-dialog .audit-context { margin:0 24px; }
 @media (max-width:760px) {
   .workflow-detail-dialog { max-height:94dvh; margin-top:3dvh!important; }
   .workflow-detail-dialog .el-dialog__header { padding:12px 58px 12px 16px; }
@@ -146,6 +199,7 @@
   .workflow-detail-dialog .detail-execution-status { width:100%; order:3; margin-left:34px; font-size:12px; }
   .workflow-detail-dialog .audit-refresh { padding:8px 10px; font-size:12px; }
   .workflow-detail-dialog .detail-content { padding:18px 16px 0; }
+  .workflow-detail-dialog .detail-module { padding:16px; }
   .workflow-detail-dialog .detail-section-heading { gap:6px 10px; margin-bottom:14px; }
   .workflow-detail-dialog .detail-section-heading h3 { font-size:17px; }
   .workflow-detail-dialog .section-number { font-size:10px; }
@@ -155,7 +209,7 @@
   .workflow-detail-dialog .context-fields { gap:12px 20px; }
   .workflow-detail-dialog .diagnosis-result { grid-template-columns:1fr; gap:18px; padding:20px; }
   .workflow-detail-dialog .diagnosis-blindspots { padding:16px 0 0; border-left:0; border-top:1px solid #c6dbe1; }
-  .workflow-detail-dialog .diagnosis-blindspots p { font-size:17px; }
+  .workflow-detail-dialog .diagnosis-blindspots p { font-size:14px; }
   .workflow-detail-dialog .planning-path li { grid-template-columns:42px minmax(0,1fr); gap:16px; }
   .workflow-detail-dialog .path-index { width:40px; height:40px; }
   .workflow-detail-dialog .planning-path li:not(:last-child)::before { left:20px; top:42px; }

@@ -653,6 +653,7 @@ class KnowledgeDocumentVersionORM(Base):
             "knowledge_base_id",
             "document_id",
             "content_hash",
+            "identity_revision",
             name="uq_kb_document_content_version",
         ),
     )
@@ -665,6 +666,7 @@ class KnowledgeDocumentVersionORM(Base):
     source_type = Column(String(32), nullable=False)
     source_version = Column(String(64), nullable=True)
     content_hash = Column(String(64), nullable=False, index=True)
+    identity_revision = Column(String(128), nullable=False, default="", server_default=text("''"))
     enabled = Column(Boolean, nullable=False, default=True)
     is_current = Column(Boolean, nullable=False, default=True, index=True)
     extra_metadata = Column("metadata", JSON, default=dict)

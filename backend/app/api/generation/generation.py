@@ -59,6 +59,26 @@ def get_generation_job(run_id: str, request: Request):
     return job
 
 
+@router.post("/jobs/{run_id}/resource-specs/{resource_spec_id}/representations/{representation}/retry",
+             response_model=GenerationJobCreateResponse)
+def retry_resource_representation(run_id: str, resource_spec_id: str, representation: str,
+                                  request: Request, background_tasks: BackgroundTasks):
+    container = request.app.container
+    service: GenerationJobService = container.generation_job_service()
+    source = service.get_job(run_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="生成任务不存在")
+    learner = ensure_profile_access(request, container.profile_service().get(source.learner_id))
+    if learner is None:
+        raise HTTPException(status_code=404, detail="生成任务不存在")
+    job, frozen_request = service.create_resource_retry(
+        learner, run_id, resource_spec_id, representation,
+        idempotency_key=request.headers.get("Idempotency-Key"),
+    )
+    schedule_generation(service, background_tasks, learner, frozen_request, job.run_id, job.batch_id)
+    return job
+
+
 @router.get("/jobs", response_model=GenerationJobListResponse)
 def list_generation_jobs(learner_id: str, request: Request):
     container = request.app.container

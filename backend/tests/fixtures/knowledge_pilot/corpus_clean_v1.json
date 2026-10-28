@@ -1,0 +1,9 @@
+{
+  "profile": "corpus-clean-v1",
+  "document_count": 62,
+  "chunk_count": 3177,
+  "official_chunk_count": 3051,
+  "identity_revision": "layout-v1-teaching-v2-m3-20261027",
+  "full_snapshot_sha256": "da701e22f430f2145276b6e4070f6a206711162247fda728bf9d689df83f3781",
+  "official_snapshot_sha256": "1f695b757746c32c715c844df481c242c4d5ffde3f5b577f83a449b1b1b78c20"
+}

@@ -1,0 +1,12 @@
+{
+  "profile": "evidence-units-v2",
+  "document_count": 62,
+  "chunk_count": 1121,
+  "official_chunk_count": 1077,
+  "teaching_chunk_count": 44,
+  "identity_revision": "layout-v1-teaching-v2-m3-20261027-evidence-v2",
+  "full_snapshot_sha256": "34b0954ab196f0224bdd4fc0c6b79a74fc49577bd7e16ef436dfd72376667809",
+  "official_snapshot_sha256": "5c1acf711cb76a19f011816b6d0b107f8fe1cadad6cbe2b243d9cf484a27773a",
+  "chunk_size": 900,
+  "chunk_overlap": 100
+}

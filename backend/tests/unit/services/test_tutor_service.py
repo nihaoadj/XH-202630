@@ -274,6 +274,24 @@ def test_service_fails_closed_without_evidence_and_does_not_call_llm():
     assert tutor_repo.list_turns(session.session_id)[0].model_name is None
 
 
+def test_service_persists_model_insufficient_without_sources_and_replays_once():
+    gateway = ScriptedLLMGateway([{
+        "pedagogy_action": "evidence_insufficient", "answer_text": "临时草稿",
+        "follow_up_question": "继续？", "cited_evidence_ids": [],
+    }])
+    service, learners, repo, _ = _service(gateway=gateway)
+    profile = learners.get("learner-tutor")
+    session = _create(service)
+    payload = TutorTurnSubmitRequest(client_message_id="contract-refusal-001", message="当前材料之外的问题")
+    first = service.submit_turn(profile, session.session_id, payload)
+    replay = service.submit_turn(profile, session.session_id, payload)
+    assert first.grounding_status == "evidence_insufficient"
+    assert first.source_refs == [] and first.follow_up_question is None
+    assert "临时草稿" not in first.message
+    assert replay.idempotent_replay and len(gateway.calls) == 1
+    assert len(repo.list_turns(session.session_id)) == 1
+
+
 def test_service_rejects_invalid_citation_without_persisting_false_success():
     gateway = ScriptedLLMGateway(
         [

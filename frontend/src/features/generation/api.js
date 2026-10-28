@@ -22,9 +22,9 @@ export const generateApi = {
   getJobStatus: runId => api.get(`/generate/jobs/${runId}`).then(requireJobResponse),
   /** @param {string} batchId @param {import('../../contracts/generated/contracts').ContinueResourceBatchRequest} data @returns {Promise<import('axios').AxiosResponse<CreatedJob>>} */
   continueBatch: (batchId, data) => api.post(`/resources/batches/${batchId}/continuations`, data).then(requireJobResponse),
-  /** @param {string} runId @param {string} resourceSpecId @param {string} representation @returns {Promise<import('axios').AxiosResponse<unknown>>} */
+  /** @param {string} runId @param {string} resourceSpecId @param {string} representation @returns {Promise<import('axios').AxiosResponse<CreatedJob>>} */
   retryResourceRepresentation: (runId, resourceSpecId, representation) => api.post(
     `/generate/jobs/${encodeURIComponent(runId)}/resource-specs/${encodeURIComponent(resourceSpecId)}`
       + `/representations/${encodeURIComponent(representation)}/retry`,
-  ),
+  ).then(requireJobResponse),
 }

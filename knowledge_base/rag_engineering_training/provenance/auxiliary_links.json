@@ -1,0 +1,1436 @@
+{
+  "profile": "evidence-units-v2",
+  "documents": {
+    "source_zh_flag_bge": [
+      {
+        "line": 7,
+        "label": "项目",
+        "url": "https://github.com/FlagOpen/FlagEmbedding/tree/master/research",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 11,
+        "label": "English",
+        "url": "https://github.com/FlagOpen/FlagEmbedding/blob/master/README.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 11,
+        "label": "中文",
+        "url": "https://github.com/FlagOpen/FlagEmbedding/blob/master/README_zh.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 15,
+        "label": "projects",
+        "url": "https://github.com/FlagOpen/FlagEmbedding/blob/fd1a2bdf69488ffebe0327999d4400d8c8058a0b/imgs/projects.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 19,
+        "label": "评估",
+        "url": "https://github.com/FlagOpen/FlagEmbedding/tree/master/examples/evaluation",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 20,
+        "label": "数据集",
+        "url": "https://github.com/FlagOpen/FlagEmbedding/tree/master/dataset",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 21,
+        "label": "教程",
+        "url": "https://github.com/FlagOpen/FlagEmbedding/tree/master/Tutorials",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 22,
+        "label": "研究",
+        "url": "https://github.com/FlagOpen/FlagEmbedding/tree/master/research",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 27,
+        "label": "bge_wechat_group",
+        "url": "https://raw.githubusercontent.com/FlagOpen/FlagEmbedding/fd1a2bdf69488ffebe0327999d4400d8c8058a0b/imgs/BGE_WeChat_Group.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 122,
+        "label": "图示，见原文",
+        "url": "https://raw.githubusercontent.com/FlagOpen/FlagEmbedding/fd1a2bdf69488ffebe0327999d4400d8c8058a0b/Tutorials/tutorial_map.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 152,
+        "text": "## 贡献者:",
+        "kind": "display_note"
+      },
+      {
+        "line": 154,
+        "text": "十分感谢所有参与FlagEmbedding社区成员的贡献，也欢迎新的成员加入！",
+        "kind": "display_note"
+      }
+    ],
+    "source_zh_mineru_overview": [
+      {
+        "line": 3,
+        "label": "配套示例：Colab",
+        "url": "https://colab.research.google.com/gist/myhloli/a3cb16570ab3cfeadf9d8f0ac91b4fca/mineru_demo.ipynb",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 4,
+        "label": "论文：arXiv",
+        "url": "https://arxiv.org/abs/2409.18839",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 5,
+        "label": "论文：arXiv",
+        "url": "https://arxiv.org/abs/2509.22186",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 6,
+        "label": "论文：arXiv",
+        "url": "https://arxiv.org/abs/2604.04771",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 8,
+        "label": "English",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/README.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 8,
+        "label": "简体中文",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/README_zh-CN.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 959,
+        "label": "DocVortex",
+        "url": "https://github.com/myhloli/docvortex",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 960,
+        "label": "metafile-render",
+        "url": "https://github.com/myhloli/metafile-render",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 961,
+        "label": "TableStructureRec",
+        "url": "https://github.com/RapidAI/TableStructureRec",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 962,
+        "label": "PaddleOCR",
+        "url": "https://github.com/PaddlePaddle/PaddleOCR",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 963,
+        "label": "PaddleOCR2Pytorch",
+        "url": "https://github.com/frotms/PaddleOCR2Pytorch",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 964,
+        "label": "pypdfium2",
+        "url": "https://github.com/pypdfium2-team/pypdfium2",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 965,
+        "label": "pypdf",
+        "url": "https://github.com/py-pdf/pypdf",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 966,
+        "label": "magika",
+        "url": "https://github.com/google/magika",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 967,
+        "label": "vLLM",
+        "url": "https://github.com/vllm-project/vllm",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 968,
+        "label": "LMDeploy",
+        "url": "https://github.com/InternLM/lmdeploy",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1007,
+        "label": "Star History Chart",
+        "url": "https://api.star-history.com/svg?repos=opendatalab/MinerU&type=Date",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1011,
+        "label": "Easy Data Preparation with latest LLMs-based Operators and Pipelines",
+        "url": "https://github.com/OpenDCAI/DataFlow",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1012,
+        "label": "Vis3 (OSS browser based on s3)",
+        "url": "https://github.com/opendatalab/Vis3",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1013,
+        "label": "LabelU (A Lightweight Multi-modal Data Annotation Tool)",
+        "url": "https://github.com/opendatalab/labelU",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1014,
+        "label": "LabelLLM (An Open-source LLM Dialogue Annotation Platform)",
+        "url": "https://github.com/opendatalab/LabelLLM",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1015,
+        "label": "PDF-Extract-Kit (A Comprehensive Toolkit for High-Quality PDF Content Extraction)",
+        "url": "https://github.com/opendatalab/PDF-Extract-Kit",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1016,
+        "label": "OmniDocBench (A Comprehensive Benchmark for Document Parsing and Evaluation)",
+        "url": "https://github.com/opendatalab/OmniDocBench",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1017,
+        "label": "Magic-HTML (Mixed web page extraction tool)",
+        "url": "https://github.com/opendatalab/magic-html",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1018,
+        "label": "Magic-Doc (Fast speed ppt/pptx/doc/docx/pdf extraction tool)",
+        "url": "https://github.com/InternLM/magic-doc",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 1019,
+        "label": "Dingo: A Comprehensive AI Data Quality Evaluation Tool",
+        "url": "https://github.com/MigoXLab/dingo",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_mineru_quick_start": [
+      {
+        "line": 97,
+        "label": "档位与运行环境",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/tiers.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 98,
+        "label": "模型下载与配置",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/model_source.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 99,
+        "label": "3.x → 4.0 迁移",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/reference/migration_4.md",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_mineru_usage": [],
+    "source_zh_mineru_output": [],
+    "source_zh_mineru_sdk": [],
+    "source_zh_mineru_tiers": [],
+    "source_zh_mineru_ragflow": [
+      {
+        "line": 11,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/RagFlow_01.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 86,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/RagFlow_02.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_mineru_dify": [
+      {
+        "line": 7,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_2.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 30,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_3.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 34,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_4.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 44,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_5.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 50,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_6.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 54,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_7.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 58,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_8.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 66,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_9.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 70,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_10.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 76,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_11.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 80,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_12.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 86,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_13.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 94,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_14.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 98,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_15.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 104,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_16.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 110,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_17.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 114,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_18.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 116,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_19.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 131,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_20.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 145,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_21.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 149,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_22.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 153,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_23.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 159,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_24.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 161,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_25.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 167,
+        "label": "新工具开源！Vis3大模型数据可视化利器：填 AK/SK 直接预览 S3 数据，JSON/视频/图片秒开！本地文件也可用",
+        "url": "https://mp.weixin.qq.com/s/p3rH4EaoJB-AK7RWeDvOhg",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 169,
+        "label": "img",
+        "url": "https://github.com/opendatalab/MinerU/blob/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/assets/images/Dify_26.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_mineru_http": [],
+    "source_zh_milvus_rag": [
+      {
+        "line": 3,
+        "label": "Colab Notebook",
+        "url": "https://colab.research.google.com/github/milvus-io/bootcamp/blob/master/tutorials/quickstart/build_RAG_with_milvus.ipynb",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 3,
+        "label": "GitHub Notebook",
+        "url": "https://github.com/milvus-io/bootcamp/blob/master/tutorials/quickstart/build_RAG_with_milvus.ipynb",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_milvus_enhance": [],
+    "source_zh_milvus_hybrid": [
+      {
+        "line": 3,
+        "label": "Colab Notebook",
+        "url": "https://colab.research.google.com/github/milvus-io/bootcamp/blob/master/tutorials/quickstart/hybrid_search_with_milvus.ipynb",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 3,
+        "label": "GitHub Notebook",
+        "url": "https://github.com/milvus-io/bootcamp/blob/master/tutorials/quickstart/hybrid_search_with_milvus.ipynb",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_milvus_fulltext_tutorial": [
+      {
+        "line": 3,
+        "label": "Colab Notebook",
+        "url": "https://colab.research.google.com/github/milvus-io/bootcamp/blob/master/tutorials/quickstart/full_text_search_with_milvus.ipynb",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 3,
+        "label": "GitHub Notebook",
+        "url": "https://github.com/milvus-io/bootcamp/blob/master/tutorials/quickstart/full_text_search_with_milvus.ipynb",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_milvus_graph": [
+      {
+        "line": 3,
+        "label": "Colab Notebook",
+        "url": "https://colab.research.google.com/github/milvus-io/bootcamp/blob/master/tutorials/quickstart/graph_rag_with_milvus.ipynb",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 3,
+        "label": "GitHub Notebook",
+        "url": "https://github.com/milvus-io/bootcamp/blob/master/tutorials/quickstart/graph_rag_with_milvus.ipynb",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_milvus_multimodal": [
+      {
+        "line": 3,
+        "label": "Colab Notebook",
+        "url": "https://colab.research.google.com/github/milvus-io/bootcamp/blob/master/tutorials/quickstart/multimodal_rag_with_milvus.ipynb",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 3,
+        "label": "GitHub Notebook",
+        "url": "https://github.com/milvus-io/bootcamp/blob/master/tutorials/quickstart/multimodal_rag_with_milvus.ipynb",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 334,
+        "label": "图：Create a panoramic view",
+        "url": "https://milvus-docs.s3.us-west-2.amazonaws.com/assets/multimodal_rag_with_milvus_22_0.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 434,
+        "label": "图：The best result",
+        "url": "https://milvus-docs.s3.us-west-2.amazonaws.com/assets/multimodal_rag_with_milvus_28_1.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_milvus_fulltext": [
+      {
+        "line": 35,
+        "label": "图：Full Text Search",
+        "url": "https://milvus-docs.s3.us-west-2.amazonaws.com/assets/full-text-search.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_milvus_multi_vector": [
+      {
+        "line": 5,
+        "label": "图：Hybrid Search Workflow",
+        "url": "https://milvus-docs.s3.us-west-2.amazonaws.com/assets/hybrid-search-workflow.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_milvus_rerank": [
+      {
+        "line": 19,
+        "label": "图：Model Ranker Overview",
+        "url": "https://milvus-docs.s3.us-west-2.amazonaws.com/assets/model-ranker-overview.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 68,
+        "label": "vLLM Ranker",
+        "url": "https://github.com/docs/zh/vllm-ranker.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 70,
+        "label": "TEI Ranker",
+        "url": "https://github.com/docs/zh/tei-ranker.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 72,
+        "label": "Cohere Ranker",
+        "url": "https://github.com/docs/zh/cohere-ranker.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 74,
+        "label": "Voyage AI Ranker",
+        "url": "https://github.com/docs/zh/voyage-ai-ranker.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 76,
+        "label": "SiliconFlow 排名器",
+        "url": "https://github.com/docs/zh/siliconflow-ranker.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 78,
+        "label": "DashScope 排名系统",
+        "url": "https://github.com/docs/zh/dashscope-ranker.md",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 80,
+        "label": "Hugging Face 排名器",
+        "url": "https://github.com/docs/zh/hugging-face-ranker.md",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_milvus_pipeline": [],
+    "source_zh_hf_advanced": [
+      {
+        "line": 10,
+        "label": "图示，见原文",
+        "url": "https://huggingface.co/datasets/huggingface/cookbook-images/resolve/main/RAG_workflow.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 328,
+        "label": "图示，见原文",
+        "url": "https://huggingface.co/datasets/huggingface/cookbook-images/resolve/main/PaCMAP_embeddings.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_hf_evaluation": [
+      {
+        "line": 10,
+        "label": "图示，见原文",
+        "url": "https://huggingface.co/datasets/huggingface/cookbook-images/resolve/main/RAG_workflow.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 712,
+        "text": "🚀 让我们运行一下测试和评估一下答案!👇",
+        "kind": "display_note"
+      },
+      {
+        "line": 823,
+        "label": "图示，见原文",
+        "url": "https://huggingface.co/datasets/huggingface/cookbook-images/resolve/main/RAG_settings_accuracy.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_hf_milvus": [],
+    "source_zh_hf_unstructured": [],
+    "source_zh_hf_elasticsearch": [
+      {
+        "line": 37,
+        "label": "Image of how to set up secrets using Google Colab",
+        "url": "https://huggingface.co/datasets/huggingface/cookbook-images/resolve/main/colab-secrets.jpeg",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 406,
+        "label": "MongoDB 的 RAG 指南",
+        "url": "https://huggingface.co/learn/cookbook/rag_with_hugging_face_gemma_mongodb",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_hf_zephyr": [
+      {
+        "line": 17,
+        "label": "RAG diagram",
+        "url": "https://huggingface.co/datasets/huggingface/cookbook-images/resolve/main/rag-diagram.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_hf_librarian": [],
+    "source_zh_hf_grounded": [],
+    "source_zh_hf_sql_rerank": [],
+    "source_zh_hf_graph": [
+      {
+        "line": 15,
+        "label": "图示，见原文",
+        "url": "https://raw.githubusercontent.com/dcarpintero/generative-ai-101/main/static/knowledge-graphs.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 95,
+        "label": "图示，见原文",
+        "url": "https://raw.githubusercontent.com/dcarpintero/generative-ai-101/main/static/kg_sample_00.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 191,
+        "label": "图示，见原文",
+        "url": "https://raw.githubusercontent.com/dcarpintero/generative-ai-101/main/static/kg_sample_01.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 214,
+        "label": "图示，见原文",
+        "url": "https://raw.githubusercontent.com/dcarpintero/generative-ai-101/main/static/kg_sample_02.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 238,
+        "label": "图示，见原文",
+        "url": "https://raw.githubusercontent.com/dcarpintero/generative-ai-101/main/static/kg_sample_03.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_hf_agent": [],
+    "source_zh_hf_multiagent": [
+      {
+        "line": 6,
+        "label": "智能体教程",
+        "url": "https://github.com/huggingface/cookbook/blob/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/agents",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 7,
+        "label": "高级 RAG 教程",
+        "url": "https://github.com/huggingface/cookbook/blob/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/advanced_rag",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 371,
+        "label": "智能体指南",
+        "url": "https://github.com/huggingface/cookbook/blob/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/agents",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 372,
+        "label": "高级 RAG 指南",
+        "url": "https://github.com/huggingface/cookbook/blob/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/advanced_rag",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 373,
+        "label": "更多指南",
+        "url": "https://huggingface.co/learn/cookbook/index",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 374,
+        "label": "了解更多关于 Agentic RAG",
+        "url": "https://weaviate.io/blog/what-is-agentic-rag",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_hf_multimodal": [
+      {
+        "line": 114,
+        "label": "ColPali 架构",
+        "url": "https://github.com/illuin-tech/colpali/blob/main/assets/colpali_architecture.webp?raw=true",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 188,
+        "label": "Qwen2_VL 架构",
+        "url": "https://qianwen-res.oss-accelerate-overseas.aliyuncs.com/Qwen2-VL/qwen2_vl.jpg",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 359,
+        "label": "使用 ColPali 进行文档相似度搜索",
+        "url": "https://huggingface.co/blog/fsommers/document-similarity-colpali",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 360,
+        "label": "ColPali 指南 👀",
+        "url": "https://github.com/tonywu71/colpali-cookbooks/tree/main",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 361,
+        "label": "ColPali 微调查询生成器",
+        "url": "https://huggingface.co/spaces/davanstrien/ColPali-Query-Generator",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 362,
+        "label": "为 UFO 数据集生成查询数据集并微调 ColPali",
+        "url": "https://danielvanstrien.xyz/posts/post-with-code/colpali/2024-09-23-generate_colpali_dataset.html",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 365,
+        "label": "超越文本：视觉驱动文档检索在 RAG 中的崛起",
+        "url": "https://blog.vespa.ai/the-rise-of-vision-driven-document-retrieval-for-rag/",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 366,
+        "label": "使用 Vespa 扩展 ColPali 至数十亿个 PDF",
+        "url": "https://blog.vespa.ai/scaling-colpali-to-billions/",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 369,
+        "label": "多模态 RAG 集合",
+        "url": "https://huggingface.co/collections/merve/multimodal-rag-66d97602e781122aae0a5139",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 372,
+        "label": "ColPali：利用视觉语言模型进行高效文档检索（论文）",
+        "url": "https://arxiv.org/pdf/2407.01449",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 373,
+        "label": "ColPali：利用视觉语言模型进行高效文档检索（代码库）",
+        "url": "https://github.com/illuin-tech/colpali",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_hf_cache": [
+      {
+        "line": 15,
+        "label": "图示，见原文",
+        "url": "https://huggingface.co/datasets/huggingface/cookbook-images/resolve/main/semantic_cache.jpg",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_zh_hf_semantic_rerank": [],
+    "source_paper_dpr": [],
+    "source_paper_hyde": [],
+    "source_paper_ragas": [],
+    "source_paper_alce": [],
+    "source_paper_lost_middle": [],
+    "source_paper_rag_best_practices": [],
+    "source_langchain_retrieval_architectures": [
+      {
+        "line": 212,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 237,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 239,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 256,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 262,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 338,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 339,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 413,
+        "text": ":::",
+        "kind": "format_only"
+      }
+    ],
+    "source_langchain_pdf_semantic_search_rag": [
+      {
+        "line": 35,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 51,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 53,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 69,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 86,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 98,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 104,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 108,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 109,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 113,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 119,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 134,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 135,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 151,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 159,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 170,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 171,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 182,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 198,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 200,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 201,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 203,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 209,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 233,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 234,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 263,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 271,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 284,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 285,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 298,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 308,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 312,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 313,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 317,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 323,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 332,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 334,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 343,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 351,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 369,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 370,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 384,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 386,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 405,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 411,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 435,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 436,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 452,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 458,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 481,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 482,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 505,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 518,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 545,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 549,
+        "text": ":::python",
+        "kind": "format_only"
+      },
+      {
+        "line": 569,
+        "text": ":::",
+        "kind": "format_only"
+      },
+      {
+        "line": 570,
+        "text": ":::js",
+        "kind": "format_only"
+      },
+      {
+        "line": 596,
+        "text": ":::",
+        "kind": "format_only"
+      }
+    ],
+    "source_langchain_html_splitters": [],
+    "source_langchain_docling_loader": [
+      {
+        "line": 300,
+        "text": "---",
+        "kind": "format_only"
+      },
+      {
+        "line": 304,
+        "label": "LangChain Docling integration GitHub",
+        "url": "https://github.com/docling-project/docling-langchain",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 305,
+        "label": "Docling GitHub",
+        "url": "https://github.com/docling-project/docling",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 306,
+        "label": "Docling docs",
+        "url": "https://docling-project.github.io/docling//",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_langchain_sentence_transformers_embeddings": [],
+    "source_langchain_chroma_vectorstore": [
+      {
+        "line": 12,
+        "label": "Get started with Chroma Cloud",
+        "url": "https://trychroma.com/signup",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 367,
+        "text": "---",
+        "kind": "format_only"
+      }
+    ],
+    "source_langchain_elasticsearch_retrieval": [
+      {
+        "line": 710,
+        "text": "---",
+        "kind": "format_only"
+      }
+    ],
+    "source_langchain_cross_encoder_reranker": [],
+    "source_sbert_training_overview": [
+      {
+        "line": 458,
+        "label": "<code>learning_rate</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.learning_rate",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 459,
+        "label": "<code>lr_scheduler_type</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.lr_scheduler_type",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 460,
+        "label": "<code>warmup_steps</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.warmup_steps",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 461,
+        "label": "<code>num_train_epochs</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.num_train_epochs",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 462,
+        "label": "<code>max_steps</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.max_steps",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 463,
+        "label": "<code>per_device_train_batch_size</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.per_device_train_batch_size",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 464,
+        "label": "<code>per_device_eval_batch_size</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.per_device_eval_batch_size",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 466,
+        "label": "<code>fp16</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.fp16",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 467,
+        "label": "<code>bf16</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.bf16",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 468,
+        "label": "<code>load_best_model_at_end</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.load_best_model_at_end",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 469,
+        "label": "<code>metric_for_best_model</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.metric_for_best_model",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 470,
+        "label": "<code>gradient_accumulation_steps</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.gradient_accumulation_steps",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 471,
+        "label": "<code>gradient_checkpointing</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.gradient_checkpointing",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 472,
+        "label": "<code>eval_accumulation_steps</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.eval_accumulation_steps",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 473,
+        "label": "<code>optim</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.optim",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 474,
+        "label": "<code>batch_sampler</code>",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/package_reference/sentence_transformer/training_args.html#sentence_transformers.sentence_transformer.training_args.SentenceTransformerTrainingArguments",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 475,
+        "label": "<code>multi_dataset_batch_sampler</code>",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/package_reference/sentence_transformer/training_args.html#sentence_transformers.sentence_transformer.training_args.SentenceTransformerTrainingArguments",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 476,
+        "label": "<code>prompts</code>",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/package_reference/sentence_transformer/training_args.html#sentence_transformers.sentence_transformer.training_args.SentenceTransformerTrainingArguments",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 477,
+        "label": "<code>router_mapping</code>",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/package_reference/sentence_transformer/training_args.html#sentence_transformers.sentence_transformer.training_args.SentenceTransformerTrainingArguments",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 478,
+        "label": "<code>learning_rate_mapping</code>",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/package_reference/sentence_transformer/training_args.html#sentence_transformers.sentence_transformer.training_args.SentenceTransformerTrainingArguments",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 484,
+        "label": "<code>eval_strategy</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.eval_strategy",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 485,
+        "label": "<code>eval_steps</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.eval_steps",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 486,
+        "label": "<code>save_strategy</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.save_strategy",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 487,
+        "label": "<code>save_steps</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.save_steps",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 488,
+        "label": "<code>save_total_limit</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.save_total_limit",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 489,
+        "label": "<code>report_to</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.report_to",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 490,
+        "label": "<code>run_name</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.run_name",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 491,
+        "label": "<code>log_level</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.log_level",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 492,
+        "label": "<code>logging_steps</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.logging_steps",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 493,
+        "label": "<code>push_to_hub</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.push_to_hub",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 494,
+        "label": "<code>hub_model_id</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.hub_model_id",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 495,
+        "label": "<code>hub_strategy</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.hub_strategy",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 496,
+        "label": "<code>hub_private_repo</code>",
+        "url": "https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.TrainingArguments.hub_private_repo",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_sbert_ms_marco_training": [
+      {
+        "line": 15,
+        "label": "BiEncoder",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/main/docs/img/BiEncoder.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 29,
+        "label": "MultipleNegativesRankingLoss",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/main/docs/img/MultipleNegativeRankingLoss.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_sbert_faiss_semantic_search": [],
+    "source_sbert_cross_encoder_reranking": [],
+    "source_langchain_markdown_splitter": [],
+    "source_sbert_semantic_search": [
+      {
+        "line": 9,
+        "label": "SemanticSearch",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/main/docs/img/SemanticSearch.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 143,
+        "label": "InformationRetrieval",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/main/docs/img/InformationRetrieval.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "source_sbert_retrieve_rerank": [
+      {
+        "line": 9,
+        "label": "InformationRetrieval",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/main/docs/img/InformationRetrieval.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 21,
+        "label": "SemanticSearch",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/main/docs/img/SemanticSearch.png",
+        "kind": "standalone_link"
+      },
+      {
+        "line": 29,
+        "label": "CrossEncoder",
+        "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/main/docs/img/CrossEncoder.png",
+        "kind": "standalone_link"
+      }
+    ],
+    "module_rag_foundations": [],
+    "module_ingestion_chunking": [],
+    "module_embeddings_vector_retrieval": [],
+    "module_hybrid_rerank": [],
+    "module_context_citation_grounding": [],
+    "module_evaluation_tuning": []
+  },
+  "note": "Auxiliary URLs remain traceable here; not text for embedding or frozen evidence."
+}

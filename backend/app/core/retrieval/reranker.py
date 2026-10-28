@@ -11,6 +11,7 @@ from typing import Sequence
 from langchain.schema import Document
 
 from app.config import get_settings, resolve_backend_path
+from app.core.retrieval.selection import SELECTION_VERSION, selection_score
 
 
 _RERANKER_LOAD_FAILURE_AT: float | None = None
@@ -120,6 +121,11 @@ def mark_rerank_fallback(
                 "rerank_raw_score": None,
                 "rerank_score": None,
                 "final_score": float(hybrid_score),
+                "source_path_verified": False,
+                "source_language": "unknown",
+                "language_bonus": 0.0,
+                "selection_score": float(hybrid_score),
+                "selection_rank": hybrid_rank,
             }
         )
         results.append((document, float(hybrid_score)))
@@ -237,6 +243,14 @@ def rerank_documents(
     ):
         document = Document(page_content=source.page_content, metadata=dict(source.metadata))
         rerank_score = _sigmoid(raw_score)
+        requested_floor = document.metadata.get("selection_min_relevance")
+        if not isinstance(requested_floor, (int, float)) or not math.isfinite(requested_floor):
+            requested_floor = None
+        preference = selection_score(
+            rerank_score, document.metadata.get("source_path"), settings,
+            verified=document.metadata.get("source_path_verified") is True,
+            minimum_score=requested_floor,
+        )
         document.metadata.update(
             {
                 "retrieval_method": "hybrid_rrf_cross_encoder",
@@ -249,6 +263,9 @@ def rerank_documents(
                 "rerank_query_hash": hashlib.sha256(pair_query.encode("utf-8")).hexdigest()[:20],
                 "rerank_latency_ms": latency_ms,
                 "rerank_candidate_count": len(limited_candidates),
+                "source_language": preference.language,
+                "language_bonus": preference.bonus,
+                "selection_score": preference.score,
             }
         )
         scored.append((document, rerank_score))
@@ -265,6 +282,22 @@ def rerank_documents(
         document.metadata["rerank_rank"] = rerank_rank
         document.metadata["final_score"] = rerank_score
 
+    scored.sort(
+        key=lambda item: (
+            float(item[0].metadata["selection_score"]), item[1],
+            float(item[0].metadata.get("hybrid_score", 0.0)),
+            str(item[0].metadata.get("chunk_id", "")),
+        ),
+        reverse=True,
+    )
+    for rank, (document, _) in enumerate(scored, start=1):
+        document.metadata["selection_rank"] = rank
+    if profile is not None:
+        profile.update(
+            selection_strategy_version=SELECTION_VERSION,
+            english_score_bonus=float(getattr(settings, "retrieval_english_score_bonus", 0.0)),
+            language_bonus_applied_count=sum(document.metadata["language_bonus"] > 0 for document, _ in scored),
+        )
     return _select_diverse_results(
         scored,
         top_k=top_k,

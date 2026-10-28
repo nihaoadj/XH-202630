@@ -214,7 +214,7 @@ class EvidenceAllocation(StrictKnowledgeModel):
 
 
 class RetrievalPolicy(StrictKnowledgeModel):
-    top_k_per_query: int = Field(default=3, ge=1, le=10)
+    top_k_per_query: int = Field(default=6, ge=1, le=10)
     max_query_count: int = Field(default=6, ge=1, le=10)
     min_normalized_score: float = Field(default=0.35, ge=0.0, le=1.0)
     min_evidence_count: int = Field(default=1, ge=1, le=20)

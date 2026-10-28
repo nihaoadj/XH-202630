@@ -159,12 +159,13 @@ class Settings(BaseSettings):
     tutor_max_context_turns: int = Field(default=6, ge=1, le=12)
     tutor_max_evidence_items: int = Field(default=4, ge=1, le=8)
     tutor_max_hint_level: int = Field(default=3, ge=0, le=3)
-    embedding_model: str = "BAAI/bge-large-zh-v1.5"
+    embedding_model: str = "BAAI/bge-m3"
     # The embedding model is part of the local runtime contract.  Do not turn
     # a generation request into a Hugging Face network dependency after a
     # restart; model provisioning is an explicit deployment step.
     embedding_local_files_only: bool = True
-    retrieval_top_k_default: int = Field(default=3, ge=1, le=10)
+    embedding_batch_size: int = Field(default=4, ge=1, le=64)
+    retrieval_top_k_default: int = Field(default=6, ge=1, le=10)
     retrieval_max_queries: int = Field(default=6, ge=1, le=10)
     resource_aware_retrieval_enabled: bool = False
     resource_aware_retrieval_max_queries: int = Field(default=10, ge=1, le=10)
@@ -174,6 +175,11 @@ class Settings(BaseSettings):
     retrieval_max_evidence: int = Field(default=8, ge=1, le=20)
     retrieval_min_evidence: int = Field(default=1, ge=1, le=20)
     retrieval_min_normalized_score: float = Field(default=0.35, ge=0, le=1)
+    retrieval_english_score_bonus: float = Field(default=0.08, ge=0, le=0.25, allow_inf_nan=False)
+    retrieval_balanced_candidates_enabled: bool = True
+    retrieval_dense_reserve: int = Field(default=10, ge=0, le=20)
+    retrieval_redundancy_enabled: bool = True
+    retrieval_redundancy_threshold: float = Field(default=0.90, ge=0.85, le=1, allow_inf_nan=False)
     evidence_max_excerpt_chars: int = Field(default=1200, ge=100, le=10000)
     generation_dispatch_mode: str = "worker"
     generation_worker_poll_seconds: float = Field(default=2.0, ge=0.1, le=60)
@@ -205,7 +211,7 @@ class Settings(BaseSettings):
     # driver default.
     sqlite_busy_timeout_seconds: int = Field(default=60, ge=1, le=300)
     knowledge_base_dir: str = "../knowledge_base/rag_engineering_training"
-    vector_store_dir: str = "./chroma_db"
+    vector_store_dir: str = "./data/chroma_bge_m3"
     chroma_collection_prefix: str = "kb"
     # Deprecated compatibility input. During the compatibility window this is
     # interpreted as a prefix, never as one fixed collection shared by all KBs.
@@ -220,6 +226,7 @@ class Settings(BaseSettings):
     rerank_batch_size: int = 4
     rerank_max_length: int = 512
     rerank_max_chunks_per_document: int = 2
+    learning_retrieval_refinement_enabled: bool = True
     resources_dir: str = "./data/generated_resources"
     admin_health_token: SecretStr = SecretStr("")
     auth_jwt_secret: SecretStr = SecretStr("development-only-change-me")
@@ -465,6 +472,8 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_CLAIM_RETRY_POLICY")
         if self.retrieval_min_evidence > self.retrieval_max_evidence:
             raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        if self.retrieval_balanced_candidates_enabled and self.retrieval_dense_reserve > self.rerank_candidate_k:
+            raise ValueError("CFG_INVALID_RETRIEVAL_DENSE_RESERVE")
         if self.workflow_sse_heartbeat_seconds <= self.workflow_sse_poll_interval_seconds:
             raise ValueError("CFG_INVALID_WORKFLOW_STREAMING_POLICY")
         if self.report_sse_heartbeat_seconds <= self.report_sse_poll_interval_seconds:

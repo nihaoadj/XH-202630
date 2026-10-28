@@ -533,6 +533,7 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
                 "language",
                 "max_length",
                 "retrieval_top_k",
+                "resource_retry_lineage",
             )
             if key in constraints
         }

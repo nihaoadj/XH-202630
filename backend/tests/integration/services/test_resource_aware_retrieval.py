@@ -134,7 +134,8 @@ def test_four_queries_top_k_three_cannot_inflate_to_twenty(monkeypatch):
 
 
 def test_real_reranker_diversity_does_not_change_owner_score_order(monkeypatch):
-    settings = Settings(_env_file=None, rerank_max_chunks_per_document=1, rerank_candidate_k=1)
+    settings = Settings(_env_file=None, rerank_max_chunks_per_document=1,
+                        rerank_candidate_k=1, retrieval_dense_reserve=0)
     chunks = [chunk(str(i)) for i in range(3)]
     docs = [document(item) for item in chunks]
     docs[2].metadata["document_id"] = "another-doc"
@@ -153,6 +154,69 @@ def test_real_reranker_diversity_does_not_change_owner_score_order(monkeypatch):
     assert [item.chunk_id for item in result] == ["0", "1", "2"]
     assert [item.query_rank for item in result] == [1, 2, 3]
     assert [item.raw_score for item in result] == sorted([item.raw_score for item in result], reverse=True)
+
+
+def test_resource_allocation_preserves_verified_language_preference_and_raw_scores(monkeypatch):
+    import math
+
+    english = make_knowledge_chunk(chunk_id="en", text="English source", source_path="references/en/real.md")
+    chinese = make_knowledge_chunk(chunk_id="zh", text="中文来源", source_path="references/zh/real.md")
+    scores = {english.text: .70, chinese.text: .74}
+    settings = Settings(_env_file=None, retrieval_balanced_candidates_enabled=False,
+                        retrieval_english_score_bonus=.08)
+    original_rerank = reranker.rerank_documents
+    retriever, backend, _ = setup_retriever(monkeypatch, {"public": [(chinese, .9), (english, .8)]}, settings=settings)
+
+    class Model:
+        def predict(self, pairs, **kwargs):
+            return [math.log(scores[text] / (1 - scores[text])) for _, text in pairs]
+
+    monkeypatch.setattr(reranker, "rerank_documents", original_rerank)
+    monkeypatch.setattr(reranker, "get_settings", lambda: settings)
+    monkeypatch.setattr(reranker, "get_reranker", lambda: Model())
+    bindings = {"public": [QueryPurpose(node_id="n1")]}
+    result = retriever.retrieve(request(bindings, count=1, top_k=2))
+    assert result.status == RetrievalStatus.AVAILABLE
+    assert result.evidence[0].chunk_id == "en"
+    assert result.evidence[0].normalized_score == pytest.approx(.70)
+    assert result.evidence_allocation.common_evidence_ids == [result.evidence[0].evidence_id]
+    assert result.node_evidence_map["n1"] == [result.evidence[0].evidence_id]
+    assert backend.last_profile["source_validation_count"] == 2
+
+
+def test_fallback_alias_match_cannot_grant_resource_purpose(monkeypatch):
+    from app.core.retrieval import query_expansion
+
+    shared = chunk("shared")
+    bindings = {"public": [QueryPurpose()], "specific": [QueryPurpose(resource_type=TYPES[0])]}
+    hits = {"public": [(shared, .9)], "specific": [], "alias-probe": [(shared, .95)]}
+    retriever, _, _ = setup_retriever(monkeypatch, hits, rerank_failure=True)
+    monkeypatch.setattr(query_expansion, "expand_query", lambda query, kb:
+                        (["alias-probe"] if query == "specific" else [], {}))
+    result = retriever.retrieve(request(bindings, types=[TYPES[0]]))
+    assert result.status == RetrievalStatus.AVAILABLE
+    assert len(result.evidence) == 1
+    assert result.evidence[0].query == "public"
+    assert result.evidence_allocation.resource_specific_evidence_ids[TYPES[0]] == []
+
+
+def test_content_redundancy_preserves_distinct_resource_purposes(monkeypatch):
+    text = ("Frozen source evidence remains bound to its actual query and resource purpose. " * 4).strip()
+    public = make_knowledge_chunk(chunk_id="public", text=text)
+    duplicate = make_knowledge_chunk(chunk_id="duplicate", document_id="other", document_version="v-other", text=text)
+    specific = make_knowledge_chunk(chunk_id="specific", document_id="specific", document_version="v-specific", text=text)
+    bindings = {"p": [QueryPurpose(node_id="n1")],
+                "s": [QueryPurpose(node_id="n1", resource_type=TYPES[0])]}
+    hits = {"p": [(public, .9), (duplicate, .8)], "s": [(specific, .7)]}
+    retriever, _, _ = setup_retriever(monkeypatch, hits)
+    result = retriever.retrieve(request(bindings, types=[TYPES[0]]))
+    assert {item.chunk_id for item in result.evidence} == {"public", "specific"}
+    assert result.retrieval_profile["redundancy"]["dropped_count"] == 1
+    assert result.retrieval_profile["redundancy"]["coverage_protected_count"] == 1
+    allocation = result.evidence_allocation
+    by_chunk = {item.chunk_id: item.evidence_id for item in result.evidence}
+    assert allocation.common_evidence_ids == [by_chunk["public"]]
+    assert allocation.resource_specific_evidence_ids[TYPES[0]] == [by_chunk["specific"]]
 
 
 def test_common_then_type_opportunities_precede_extra_public_evidence(monkeypatch):
@@ -229,7 +293,9 @@ def test_node_scope_fallback_selects_one_global_batch(monkeypatch, scoped_no_hit
                             [] if kwargs.get("allowed_chunk_ids") else hybrid(query, **kwargs))
     final = retrieval.retrieve_node(inputs.model_dump(), evidence_retriever=retriever)
     assert final["retrieval_profile"]["final_retrieval_source"] == "global_fallback"
-    assert final["retrieval_profile"]["node_scope_fallback_reason"] == ("no_hit" if scoped_no_hit else "evidence_insufficient")
+    # The adapter now rejects out-of-scope IDs before reranking as well as
+    # retaining the retriever's final SQL defense. Both cases have no hits.
+    assert final["retrieval_profile"]["node_scope_fallback_reason"] == "no_hit"
     allocation = final["evidence_allocation"]
     assert allocation.evidence_ids == [item.evidence_id for item in final["retrieved_evidence"]]
     assert allocation.config_hash == final["retrieval_config_hash"]

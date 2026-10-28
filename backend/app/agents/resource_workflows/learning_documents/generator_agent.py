@@ -91,7 +91,7 @@ def _context(
     # A revision must be able to preserve text that the reviewer did not ask
     # to change.  Keep the previous artifact scoped to the resource worker and
     # inject it only when a prior version exists (never on first generation).
-    if previous is not None and node_input.generation_attempt > 1:
+    if previous is not None and (node_input.generation_attempt > 1 or state.get("resource_retry_context")):
         constraints["previous_version_content"] = previous.content_text or ""
     return ResourceGenerationContext(
         run_id=node_input.run_id,
@@ -267,6 +267,12 @@ def generate_node(
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
     step_context = start_step(state, attempt=node_input.generation_attempt)
     previous = _previous(node_input.generated_resources)
+    source = state.get("regeneration_source")
+    if source is not None:
+        source = LearningResource.model_validate(source)
+        for spec in specs:
+            if spec.resource_type == source.resource_type:
+                previous.setdefault((spec.resource_spec_id, "text"), source)
     resources = [item for item in node_input.generated_resources
                  if item.resource_type not in active_types]
     generated_now: list[LearningResource] = []

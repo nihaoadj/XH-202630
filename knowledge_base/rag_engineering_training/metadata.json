@@ -3,6 +3,14 @@
   "knowledge_base_name": "rag_engineering_training",
   "version": "2.3.0",
   "index_schema_version": "1.0",
+  "document_identity_revision": "layout-v1-teaching-v2-m3-20261027-evidence-v2",
+  "embedding_index": {
+    "model_id": "BAAI/bge-m3",
+    "model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "mode": "dense_only",
+    "dimensions": 1024,
+    "normalize_embeddings": true
+  },
   "assessment_question_bank": {
     "file": "assessment_questions.json",
     "version": "1.0.0",
@@ -17,97 +25,5464 @@
   },
   "chunking": {
     "strategy": "recursive_v1",
-    "chunk_size": 500,
+    "chunk_size": 900,
     "chunk_overlap": 100
   },
   "smoke_queries": [
     {
       "query": "Embedding 向量集合与余弦距离",
-      "expected_document_ids": ["module_embeddings_vector_retrieval"]
+      "expected_document_ids": [
+        "module_embeddings_vector_retrieval"
+      ]
     },
     {
       "query": "Claim 审核与幻觉控制的引用证据",
-      "expected_document_ids": ["module_context_citation_grounding"]
+      "expected_document_ids": [
+        "module_context_citation_grounding"
+      ]
     }
   ],
   "domain": "RAG 工程链路",
   "description": "面向 RAG 工程学习的综合知识库。每个模块统一包含入门解释、权威依据、工程实践、诊断练习、验收标准和来源。",
   "documents": [
     {
+      "id": "source_zh_flag_bge",
+      "title": "FlagEmbedding：BGE 向量模型与重排序官方中文说明",
+      "file": "references/zh/flagembedding/bge/content.md",
+      "version": "fd1a2bdf69488ffebe0327999d4400d8c8058a0b",
+      "source_version": "fd1a2bdf69488ffebe0327999d4400d8c8058a0b",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "FlagOpen/FlagEmbedding",
+      "knowledge_points": [
+        "Embedding",
+        "混合检索",
+        "Rerank"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/FlagOpen/FlagEmbedding/fd1a2bdf69488ffebe0327999d4400d8c8058a0b/README_zh.md"
+      ],
+      "source_snapshot": "references/zh/flagembedding/bge/original.md",
+      "source_hash": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
+      "normalized_hash": "19a5c9ddaf576ee8b5cc85de1b03606ac225a835c564e48eeeb81eccc0c4d55e",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/flag/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / 更新": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / 安装": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / 安装 / 使用pip:": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / 安装 / 从源文件安装部署:": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / 快速开始": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / 社区": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / 模型列表": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / 贡献者:": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / Citation": [
+          "Embedding",
+          "混合检索",
+          "Rerank",
+          "引用溯源"
+        ],
+        "FlagEmbedding：BGE 向量模型与重排序官方中文说明 / License": [
+          "Embedding",
+          "混合检索",
+          "Rerank"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_overview",
+      "title": "MinerU 4.0 官方中文说明",
+      "file": "references/zh/mineru/overview/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/README_zh-CN.md"
+      ],
+      "source_snapshot": "references/zh/mineru/overview/original.md",
+      "source_hash": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
+      "normalized_hash": "48ed24fc1c945820f9a37a0ddb5655cef05263bcf1eb3b7076feecb69b188bcf",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "MinerU 4.0 官方中文说明": [
+          "文档解析"
+        ],
+        "MinerU 4.0": [
+          "文档解析"
+        ],
+        "MinerU 4.0 / 快速开始": [
+          "文档解析"
+        ],
+        "MinerU 4.0 / 快速开始 / 在 Agent 工作流中安装": [
+          "文档解析"
+        ],
+        "MinerU 4.0 / 快速开始 / 手动安装": [
+          "文档解析"
+        ],
+        "Agent Guide": [
+          "文档解析"
+        ],
+        "MinerU": [
+          "文档解析"
+        ],
+        "MinerU / When To Use MinerU": [
+          "文档解析"
+        ],
+        "MinerU / Supported Inputs": [
+          "文档解析"
+        ],
+        "MinerU / Do Not": [
+          "文档解析"
+        ],
+        "MinerU / Agent Contract": [
+          "文档解析"
+        ],
+        "MinerU / Core Decision Tree": [
+          "文档解析"
+        ],
+        "MinerU / Common Workflows": [
+          "文档解析"
+        ],
+        "MinerU / Common Workflows / First read from a file": [
+          "文档解析"
+        ],
+        "MinerU / Common Workflows / Continue progressively": [
+          "文档解析"
+        ],
+        "MinerU / Common Workflows / Read or inspect a known location": [
+          "文档解析"
+        ],
+        "MinerU / Common Workflows / Search local library, then read": [
+          "文档解析"
+        ],
+        "MinerU / Installation And Setup": [
+          "文档解析"
+        ],
+        "MinerU / Installation And Setup / Upgrade An Existing Installation": [
+          "文档解析"
+        ],
+        "MinerU / Installation And Setup / Install with `uv` (preferred)": [
+          "文档解析"
+        ],
+        "MinerU / Installation And Setup / Install with `pipx`": [
+          "文档解析"
+        ],
+        "MinerU / Installation And Setup / Install with global `pip`": [
+          "文档解析"
+        ],
+        "MinerU / Installation And Setup / If No Supported Installer Is Available": [
+          "文档解析"
+        ],
+        "MinerU / Installation And Setup / After Installation": [
+          "文档解析"
+        ],
+        "MinerU / Privacy Rules": [
+          "文档解析"
+        ],
+        "MinerU / Telemetry": [
+          "文档解析"
+        ],
+        "MinerU / Quality Tiers": [
+          "文档解析"
+        ],
+        "MinerU / Model Engines with Extras": [
+          "文档解析"
+        ],
+        "MinerU / Server Rules": [
+          "文档解析"
+        ],
+        "MinerU / Local Parse Server": [
+          "文档解析"
+        ],
+        "MinerU / Local Parse Server / Inspect Local Hardware": [
+          "文档解析"
+        ],
+        "MinerU / Local Parse Server / Choose Extra": [
+          "文档解析"
+        ],
+        "MinerU / Local Parse Server / Choose Local Tier": [
+          "文档解析"
+        ],
+        "MinerU / Local Parse Server / Recommend and Ask": [
+          "文档解析"
+        ],
+        "MinerU / Local Parse Server / Configure Managed Parse Server": [
+          "文档解析"
+        ],
+        "MinerU / First Read From A File": [
+          "文档解析"
+        ],
+        "MinerU / Continue Reading": [
+          "文档解析"
+        ],
+        "MinerU / Read By Locator": [
+          "文档解析"
+        ],
+        "MinerU / Read Page Or Block Images": [
+          "文档解析"
+        ],
+        "MinerU / Search And Find": [
+          "文档解析"
+        ],
+        "MinerU / Inspect Status": [
+          "文档解析"
+        ],
+        "MinerU / Watch, Scan, And Local Library Maintenance": [
+          "文档解析"
+        ],
+        "MinerU / Reparse And Cache Control": [
+          "文档解析"
+        ],
+        "MinerU / Configuration": [
+          "文档解析"
+        ],
+        "MinerU / Remote API Usage": [
+          "文档解析"
+        ],
+        "MinerU / JSON Output": [
+          "文档解析"
+        ],
+        "MinerU / Error Recovery": [
+          "文档解析"
+        ],
+        "MinerU / Error Recovery / Normal-Quality Recovery Gate": [
+          "文档解析"
+        ],
+        "MinerU / Answering Users With MinerU Output": [
+          "文档解析"
+        ],
+        "MinerU / Operating Rules": [
+          "文档解析"
+        ],
+        "All Thanks To Our Contributors": [
+          "文档解析"
+        ],
+        "License Information": [
+          "文档解析"
+        ],
+        "Acknowledgments": [
+          "文档解析"
+        ],
+        "Citation": [
+          "文档解析",
+          "引用溯源"
+        ],
+        "Star History": [
+          "文档解析"
+        ],
+        "Links": [
+          "文档解析"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_quick_start",
+      "title": "MinerU 快速入门",
+      "file": "references/zh/mineru/quick_start/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/quick_start/index.md"
+      ],
+      "source_snapshot": "references/zh/mineru/quick_start/original.md",
+      "source_hash": "b06ad352bbd4ea7cae2d90b4ba73ccf0f4851dec6ad95537cdbc3291bfe36cdb",
+      "normalized_hash": "d54077ee280d785f65ce7072f7478126169aa7a9268712556fc1c2b1af771477",
+      "parser_version": "official-zh-structure-v1+auxiliary-links-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "快速入门": [
+          "文档解析"
+        ],
+        "快速入门 / 安装 MinerU": [
+          "文档解析"
+        ],
+        "快速入门 / 第一次解析": [
+          "文档解析"
+        ],
+        "快速入门 / 文档库与 Agent": [
+          "文档解析"
+        ],
+        "快速入门 / WebUI 与 API": [
+          "文档解析"
+        ],
+        "快速入门 / 源码安装": [
+          "文档解析"
+        ],
+        "快速入门 / 继续阅读": [
+          "文档解析"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_usage",
+      "title": "MinerU 基础使用",
+      "file": "references/zh/mineru/usage/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/quick_usage.md"
+      ],
+      "source_snapshot": "references/zh/mineru/usage/original.md",
+      "source_hash": "279a396168e2f7e6c8d7e55761b863b0576d1a905b9a6147fe42122be77e1e1f",
+      "normalized_hash": "ebed28458c2cd1682ce9293adba4b7cfebec2f5a6faff1c59a92c45bb204c1a3",
+      "parser_version": "official-zh-structure-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用 MinerU": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用 MinerU / 快速配置模型源": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用 MinerU / 通过命令行快速使用": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用 MinerU / 文档库、搜索与继续阅读": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用 MinerU / 通过 API、WebUI 和服务进阶使用": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用 MinerU / 使用 config.yaml 配置 LLM 辅助后处理": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用 MinerU / 基于配置文件扩展 MinerU 功能": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用 MinerU / PDF 页码选择": [
+          "文档解析",
+          "Chunk 切分"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_output",
+      "title": "MinerU 输出格式与结果协议",
+      "file": "references/zh/mineru/output/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/reference/output_files.md"
+      ],
+      "source_snapshot": "references/zh/mineru/output/original.md",
+      "source_hash": "63291b35a65719469d3c89073050c7847fb424cf27be928824602b302bdd25c2",
+      "normalized_hash": "4b313fc1d73227201a50929a6f9e89cc2e331e72a17ab050385768eca7aac813",
+      "parser_version": "official-zh-structure-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "输出格式与结果协议": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "输出格式与结果协议 / 入口支持范围": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "输出格式与结果协议 / ZIP 图片命名": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "输出格式与结果协议 / 九种渲染目标": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "输出格式与结果协议 / 中间 JSON": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "输出格式与结果协议 / Structured Content": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "输出格式与结果协议 / 文件保存、ZIP 与素材": [
+          "文档解析",
+          "Chunk 切分"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_sdk",
+      "title": "MinerU Python SDK",
+      "file": "references/zh/mineru/sdk/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/sdk_api.md"
+      ],
+      "source_snapshot": "references/zh/mineru/sdk/original.md",
+      "source_hash": "344394a5e225640e73e3d37562dc96362c6314f8e4c9a74a7f6875c5872e3b1f",
+      "normalized_hash": "a3f57b6bef5b6f9c8633a34785bc6cc873401664de02f5805a61f2451df0ee1f",
+      "parser_version": "official-zh-structure-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Python SDK": [
+          "文档解析"
+        ],
+        "Python SDK / 本地 Python SDK": [
+          "文档解析"
+        ],
+        "Python SDK / 连接自部署 V1 API": [
+          "文档解析"
+        ],
+        "Python SDK / 连接自部署 V1 API / 批量处理与实例复用": [
+          "文档解析"
+        ],
+        "Python SDK / 不使用 SDK 的 HTTP 调用": [
+          "文档解析"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_tiers",
+      "title": "MinerU 档位与运行环境",
+      "file": "references/zh/mineru/tiers/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/tiers.md"
+      ],
+      "source_snapshot": "references/zh/mineru/tiers/original.md",
+      "source_hash": "15e5b3aa6acd58ff72cc1c33e3d21beaac29064c269facef2431bf60aedafd9c",
+      "normalized_hash": "107d22fea252be4c41971dbcb52dfdb5f0b862f45642631468af05d55a6ff4fd",
+      "parser_version": "official-zh-structure-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "档位与运行环境": [
+          "文档解析"
+        ],
+        "档位与运行环境 / 默认选择": [
+          "文档解析"
+        ],
+        "档位与运行环境 / 后端与引擎": [
+          "文档解析"
+        ],
+        "档位与运行环境 / 资源与平台边界": [
+          "文档解析"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_ragflow",
+      "title": "MinerU 与 RAGFlow 集成说明",
+      "file": "references/zh/mineru/ragflow/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析",
+        "RAG 基础概念"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/plugin/RagFlow.md"
+      ],
+      "source_snapshot": "references/zh/mineru/ragflow/original.md",
+      "source_hash": "15ab57b99a9f612651b1f74aa62339d783d80167db4d4d1b3a1cffe6a1ef0912",
+      "normalized_hash": "7e3aca4dc7be9474cd47535df9a1a9a5d2f4f07547c08e3bf3a75d7d5be8a61d",
+      "parser_version": "official-zh-structure-v1+auxiliary-links-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "MinerU 与 RAGFlow 集成说明": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 与 RAGFlow 集成说明 / RAGFlow": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 与 RAGFlow 集成说明 / 使用教程：如何在 RAGFlow 中使用 MinerU": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 与 RAGFlow 集成说明 / 使用教程：如何在 RAGFlow 中使用 MinerU / 一、安装配置": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 与 RAGFlow 集成说明 / 使用教程：如何在 RAGFlow 中使用 MinerU / 二、使用入口": [
+          "文档解析",
+          "RAG 基础概念"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_dify",
+      "title": "MinerU 与 Dify 集成说明",
+      "file": "references/zh/mineru/dify/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析",
+        "RAG 基础概念"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/plugin/Dify.md"
+      ],
+      "source_snapshot": "references/zh/mineru/dify/original.md",
+      "source_hash": "8706993daaa7f228ba320550b28250e5666eeac535b32a1d987214e5185d6148",
+      "normalized_hash": "c957d97efd9917e231f74d3ff18718c6ea492596173a9ca62ae45fb8be828724",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Dify 简介": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / 一、**新版MinerU Dify插件亮点 (v0.4.0)**": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手**": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / 准备": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例一：解析单文件，搭建Chat PDF应用**": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例一：解析单文件，搭建Chat PDF应用** / 第一步：创建空白应用，选择“Chatflow”": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例一：解析单文件，搭建Chat PDF应用** / 第二步：创建的初始模板中，选择“开始”节点": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例一：解析单文件，搭建Chat PDF应用** / 第三步：添加工具节点——MinerU插件来解析上一步开始节点上传的文件": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例一：解析单文件，搭建Chat PDF应用** / 第四步：设置MinerU的输入变量，选择上一步开始节点添加的 `input_file`": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例一：解析单文件，搭建Chat PDF应用** / 第五步：配置LLM模型": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例一：解析单文件，搭建Chat PDF应用** / 第六步：预览，上传文件并提问机器人关于文档的内容": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例一：解析单文件，搭建Chat PDF应用** / **第七步：发布与测试**": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3**": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3** / 第一步：安装 botos3 插件": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3** / 第二步：配置 S3 bucket": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3** / 第三步：创建工作流": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3** / 第四步：添加“迭代”": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3** / 第五步：增加中间节点“代码执行”来转换MinerU的解析结果": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3** / 第六步：配置 Botos3 插件来上传内容": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3** / 第七步：预览效果": [
+          "文档解析",
+          "RAG 基础概念"
+        ],
+        "MinerU 在 Dify 中的使用方法 / **二、实战演练：两个案例带你快速上手** / **案例二：自动化批量处理文档，并上传至云端S3** / 第八步：Vis3查看文档": [
+          "文档解析",
+          "RAG 基础概念"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_mineru_http",
+      "title": "MinerU V1 HTTP API 文档",
+      "file": "references/zh/mineru/http/content.md",
+      "version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_version": "b7f3dd0c5f6e6d66a298239ffd02b328b873918e",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "opendatalab/MinerU",
+      "knowledge_points": [
+        "文档解析"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/http_api.md"
+      ],
+      "source_snapshot": "references/zh/mineru/http/original.md",
+      "source_hash": "e9b447ac154237c085f4858fcaab3eadad2851ea4a109714757d6080baf59164",
+      "normalized_hash": "bbd06433a1ab1582c2e11d562c5eb6607da2adcc554b26ff6befc88cf0a2e200",
+      "parser_version": "official-zh-structure-v1",
+      "license": "licenses/mineru/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "V1 HTTP API": [
+          "文档解析"
+        ],
+        "V1 HTTP API / 一次请求解析与异步 tasks": [
+          "文档解析"
+        ],
+        "V1 HTTP API / 经过测试的示例脚本": [
+          "文档解析"
+        ],
+        "V1 HTTP API / 鉴权与字节上传": [
+          "文档解析"
+        ],
+        "V1 HTTP API / 脚本刻意覆盖的请求周期细节": [
+          "文档解析"
+        ],
+        "V1 HTTP API / 生产部署注意事项": [
+          "文档解析"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_rag",
+      "title": "使用 Milvus 构建 RAG",
+      "file": "references/zh/milvus/rag/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "RAG 基础概念",
+        "文档解析",
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索",
+        "Prompt 组装"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/build-rag-with-milvus.md"
+      ],
+      "source_snapshot": "references/zh/milvus/rag/original.md",
+      "source_hash": "0d1c2b65679d640a5d09347e93b50f32cbc4d0ff186a15a9a8d61e737069899b",
+      "normalized_hash": "7d846edd4e273b3723123f0a29218b250f77c2ed566ce2d3f1b074ba9f21ae49",
+      "parser_version": "official-zh-structure-v2+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "用 Milvus 创建 RAG": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 准备工作": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 准备工作 / 依赖和环境": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 准备工作 / 准备数据": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 准备工作 / 准备嵌入模型": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 将数据载入 Milvus": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 将数据载入 Milvus / 创建 Collections": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 将数据载入 Milvus / 插入数据": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 构建 RAG": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 构建 RAG / 为查询检索数据": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 构建 RAG / 使用 LLM 获取 RAG 响应": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ],
+        "用 Milvus 创建 RAG / 快速部署": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_enhance",
+      "title": "如何提高 RAG 管道的性能",
+      "file": "references/zh/milvus/enhance/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "Chunk 切分",
+        "相似度检索",
+        "混合检索",
+        "Rerank",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/how_to_enhance_your_rag.md"
+      ],
+      "source_snapshot": "references/zh/milvus/enhance/original.md",
+      "source_hash": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+      "normalized_hash": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5",
+      "parser_version": "official-zh-structure-v2",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "如何提高 RAG 管道的性能": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 标准 RAG 管道": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 各类 RAG 增强技术": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 查询增强": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 查询增强 / 创建假设问题": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 查询增强 / HyDE（假设文档嵌入）": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 查询增强 / 创建子查询": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 查询增强 / 创建回退提示": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 增强索引": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 增强索引 / 自动合并文档块": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 增强索引 / 构建分层索引": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 增强索引 / 混合检索和重新排名": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 改进检索器": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 改进检索器 / 句子窗口检索": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 改进检索器 / 元数据过滤": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 生成器增强": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 生成器增强 / 压缩 LLM 提示": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 生成器增强 / 调整提示中的块顺序": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 增强 RAG 管道": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 增强 RAG 管道 / 自我反思": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 增强 RAG 管道 / 使用代理进行查询路由选择": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "如何提高 RAG 管道的性能 / 总结": [
+          "Chunk 切分",
+          "相似度检索",
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_hybrid",
+      "title": "使用 Milvus 进行混合搜索",
+      "file": "references/zh/milvus/hybrid/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "混合检索",
+        "向量数据库",
+        "Rerank"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/hybrid_search_with_milvus.md"
+      ],
+      "source_snapshot": "references/zh/milvus/hybrid/original.md",
+      "source_hash": "2d47637096b0f22506701ab989ca66c7894ef1cff9cd87466f6089aa766ea8f7",
+      "normalized_hash": "e7bd5327250541171081f42f8c3e919d492b5379f08ea1747382af1427e88ec1",
+      "parser_version": "official-zh-structure-v2+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用 Milvus 进行混合搜索": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 依赖关系和环境": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 下载数据集": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 加载和准备数据": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 使用 BGE-M3 模型进行嵌入": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 设置 Milvus Collections 和索引": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 将数据插入 Milvus Collections": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 输入搜索查询": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 运行搜索": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 显示搜索结果": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 Milvus 进行混合搜索 / 快速部署": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_fulltext_tutorial",
+      "title": "使用 LangChain 和 Milvus 进行全文检索",
+      "file": "references/zh/milvus/fulltext_tutorial/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "混合检索",
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/full_text_search_with_milvus.md"
+      ],
+      "source_snapshot": "references/zh/milvus/fulltext_tutorial/original.md",
+      "source_hash": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+      "normalized_hash": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176",
+      "parser_version": "official-zh-structure-v2+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用 LangChain 和 Milvus 进行全文检索": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 前提条件": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 使用 BM25 函数初始化": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 使用 BM25 函数初始化 / 混合搜索": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 使用 BM25 函数初始化 / 无嵌入的 BM25 搜索": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 自定义分析器": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 自定义分析器 / 多语言分析仪": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 在 RAG 中使用混合搜索和 Rerankers": [
+          "混合检索",
+          "向量数据库",
+          "Rerank"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 在 RAG 中使用混合搜索和 Rerankers / 准备数据": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 在 RAG 中使用混合搜索和 Rerankers / 将文档加载到 Milvus 向量存储中": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "使用 LangChain 和 Milvus 进行全文检索 / 在 RAG 中使用混合搜索和 Rerankers / 构建 RAG 链": [
+          "混合检索",
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_graph",
+      "title": "使用 Milvus 构建图 RAG",
+      "file": "references/zh/milvus/graph/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "RAG 基础概念",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/graph_rag_with_milvus.md"
+      ],
+      "source_snapshot": "references/zh/milvus/graph/original.md",
+      "source_hash": "778e4614378007bde6d4334f38ce897d6911be3af4a46cd9799aa8d08143a8f8",
+      "normalized_hash": "5949f9fb972f995b3b4f3ef9d2ff419310439553ee6642f18c30580aee843688",
+      "parser_version": "official-zh-structure-v2+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用 Milvus 构建图 RAG": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 先决条件": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 离线数据加载": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 离线数据加载 / 数据准备": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 离线数据加载 / 数据插入": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 在线查询": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 在线查询 / 相似度检索": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 在线查询 / 扩展子图": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 在线查询 / LLM重新排序": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Milvus 构建图 RAG / 在线查询 / 获取最终结果": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_multimodal",
+      "title": "基于 Milvus 的多模态 RAG",
+      "file": "references/zh/milvus/multimodal/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "RAG 基础概念",
+        "文档解析",
+        "Embedding",
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/multimodal_rag_with_milvus.md"
+      ],
+      "source_snapshot": "references/zh/milvus/multimodal/original.md",
+      "source_hash": "311b5d06718e773ecadb6fad5d2aabe8b1af4a71281b6dac0cba9e955b03ae38",
+      "normalized_hash": "57ecd29312878d10bab595f0ae58346f34de45493c70dbe07f5934ae737e2b1c",
+      "parser_version": "official-zh-structure-v2+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "基于Milvus的多模态RAG": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 准备工作": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 准备工作 / 安装依赖项": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 准备工作 / 下载数据": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 准备工作 / 加载嵌入模型": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 加载数据": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 加载数据 / 生成Embeddings": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 加载数据 / 插入到 Milvus": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 基于生成式Rerankers的多模态搜索": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库",
+          "Rerank"
+        ],
+        "基于Milvus的多模态RAG / 基于生成式Rerankers的多模态搜索 / 执行搜索": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 基于生成式Rerankers的多模态搜索 / 使用 GPT-4o 重新排序": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于Milvus的多模态RAG / 基于生成式Rerankers的多模态搜索 / 快速部署": [
+          "RAG 基础概念",
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_fulltext",
+      "title": "Milvus 全文搜索指南",
+      "file": "references/zh/milvus/fulltext/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "混合检索",
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/userGuide/search-query-get/full-text-search.md"
+      ],
+      "source_snapshot": "references/zh/milvus/fulltext/original.md",
+      "source_hash": "be6c00e9723e70b06f90e613694688a5deacb0e128398466b60d44aa0cfc3c78",
+      "normalized_hash": "de7644d039ec79b138022f9406ff3dca193e35f24ee520fefe593558271fd047",
+      "parser_version": "official-zh-structure-v2+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "全文搜索": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / BM25 实现": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 为 BM25 全文搜索创建 Collection": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 为 BM25 全文搜索创建 Collection / 定义Schema字段": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 为 BM25 全文搜索创建 Collection / 定义 BM25 函数": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 为 BM25 全文搜索创建 Collection / 配置索引": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 为 BM25 全文搜索创建 Collection / 创建 Collection": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 插入文本数据": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 执行全文搜索": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 常见问题解答": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 常见问题解答 / 我可以在全文搜索中输出或访问 BM25 函数生成的稀疏向量吗？": [
+          "混合检索",
+          "向量数据库"
+        ],
+        "全文搜索 / 常见问题解答 / 既然无法访问稀疏向量字段，为什么还需要定义它？": [
+          "混合检索",
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_multi_vector",
+      "title": "Milvus 多向量混合搜索指南",
+      "file": "references/zh/milvus/multi_vector/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "相似度检索",
+        "混合检索",
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/userGuide/search-query-get/multi-vector-search.md"
+      ],
+      "source_snapshot": "references/zh/milvus/multi_vector/original.md",
+      "source_hash": "bc568a9c03e4a623eb578d3db8b28c641ca3a92ea7a3ca3ef047a79e875d3f70",
+      "normalized_hash": "bf2cd4688ae8d665e466ff120980530c52f77fe1392538d46ee8b791f038d3f6",
+      "parser_version": "official-zh-structure-v2+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "多向量混合搜索": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 示例": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 创建包含多个向量字段的Collection": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 创建包含多个向量字段的Collection / 定义Schema": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 创建包含多个向量字段的Collection / 创建索引": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 创建包含多个向量字段的Collection / 创建Collection": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 插入数据": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 执行混合搜索": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 执行混合搜索 / 步骤 1：创建多个 AnnSearchRequest 实例": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 执行混合搜索 / 步骤 2：配置重新排序策略": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 执行混合搜索 / 步骤 3：执行混合搜索": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 高级用法": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ],
+        "多向量混合搜索 / 高级用法 / 为混合搜索临时设置时区": [
+          "相似度检索",
+          "混合检索",
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_rerank",
+      "title": "Milvus 模型重排序概述",
+      "file": "references/zh/milvus/rerank/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "Rerank",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/userGuide/embeddings-reranking/reranking/model-ranker-overview.md"
+      ],
+      "source_snapshot": "references/zh/milvus/rerank/original.md",
+      "source_hash": "f55e934335df3bf1983608224c04a52887806839f516f48f43b97b2085d96fce",
+      "normalized_hash": "7c115f14a0cbd613a79d65c204ab53fa77f2f610da6bd7e6b58c908deca3aa72",
+      "parser_version": "official-zh-structure-v2+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "模型排名器概述Compatible with Milvus 2.6.x": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "模型排名器概述Compatible with Milvus 2.6.x / 限制": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "模型排名器概述Compatible with Milvus 2.6.x / 工作原理": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "模型排名器概述Compatible with Milvus 2.6.x / 根据您的需求选择模型提供商": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "模型排名器概述Compatible with Milvus 2.6.x / 实现": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "模型排名器概述Compatible with Milvus 2.6.x / 实现 / 创建模型排序器": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "模型排名器概述Compatible with Milvus 2.6.x / 实现 / 应用于标准向量搜索": [
+          "Rerank",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_milvus_pipeline",
+      "title": "Milvus RAG 管道",
+      "file": "references/zh/milvus/pipeline/content.md",
+      "version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_version": "ef5f830cf84804a2cd317f3e7ca9940ba436f8c3",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "milvus-io/web-content",
+      "knowledge_points": [
+        "RAG 基础概念",
+        "文档解析",
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索",
+        "混合检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/aiTools/rag_pipeline.md"
+      ],
+      "source_snapshot": "references/zh/milvus/pipeline/original.md",
+      "source_hash": "35321b091aca9ce9e0e8d61e521fe7b3b277409ba4d428ecda972713958505a3",
+      "normalized_hash": "7f3786ded8c20371f169c32d56749a777d0a1a1faff6fe757382b80507ae60ae",
+      "parser_version": "official-zh-structure-v2",
+      "license": "licenses/milvus/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "RAG 管道": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "混合检索"
+        ],
+        "RAG 管道 / 如何使用此提示": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "混合检索"
+        ],
+        "RAG 管道 / 完整提示": [
+          "RAG 基础概念",
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "混合检索"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_advanced",
+      "title": "使用 LangChain 在 Hugging Face 文档上构建高级 RAG",
+      "file": "references/zh/huggingface/advanced/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "文档解析",
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索",
+        "Prompt 组装",
+        "引用溯源"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/advanced_rag.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/advanced/original.ipynb",
+      "source_hash": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+      "normalized_hash": "b06cdab0867ddd5a39d543257c102421c7f54f680137db02b1506aa2dfb0b2e4",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用 LangChain 在 HuggingFace 文档上构建高级 RAG": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "使用 LangChain 在 HuggingFace 文档上构建高级 RAG / 加载你的知识基础": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "1. 检索器- 嵌入 🗂️": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "1. 检索器- 嵌入 🗂️ / 1.1 将文档拆分为片段(chuncks)": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "1. 检索器- 嵌入 🗂️ / 1.2 构建向量数据库": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "1. 检索器- 嵌入 🗂️ / 1.2 构建向量数据库 / 检索的工作原理": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "1. 检索器- 嵌入 🗂️ / 1.2 构建向量数据库 / 检索的工作原理 / 最近邻搜索算法": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "1. 检索器- 嵌入 🗂️ / 1.2 构建向量数据库 / 检索的工作原理 / 距离度量": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "2. 阅读器- LLM 💬": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "2. 阅读器- LLM 💬 / 2.1. 阅读器模型": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "2. 阅读器- LLM 💬 / 2.2. 提示(Prompt)": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "2. 阅读器- LLM 💬 / 2.3. 重排序(rerank)": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源",
+          "Rerank"
+        ],
+        "3. 集成所有组件": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "进一步探索 🗺️": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "进一步探索 🗺️ / 设置评估流水线": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "进一步探索 🗺️ / 改进检索器": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ],
+        "进一步探索 🗺️ / 改进阅读器": [
+          "文档解析",
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索",
+          "Prompt 组装",
+          "引用溯源"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_evaluation",
+      "title": "使用合成数据和 LLM 作为裁判评估 RAG",
+      "file": "references/zh/huggingface/evaluation/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "RAG 评测",
+        "RAG 调优",
+        "幻觉控制"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_evaluation.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/evaluation/original.ipynb",
+      "source_hash": "b460e3f1895fcbafc48c9ff34d855140c1afd6fc29b77473c01b72bae4f4f4d7",
+      "normalized_hash": "6ece14fd7fbb433e017c2a67e31936a21aaf3d28af973fd45743d2dc5f275f1e",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "RAG 评估": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "RAG 评估 / 评估RAG性能": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "RAG 评估 / 加载你的知识基础": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "1. 为评估构建合成数据集": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "1. 为评估构建合成数据集 / 1.1. 准备源数据文档": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "1. 为评估构建合成数据集 / 1.2. 为问题生成设置智能体": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "1. 为评估构建合成数据集 / 1.3. 设置批判智能体": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "2. 构建我们的 RAG 系统": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "2. 构建我们的 RAG 系统 / 2.1. 预处理文档来构建我们的向量数据库": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "2. 构建我们的 RAG 系统 / 2.2.  检索器 - 嵌入 🗂️": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "2. 构建我们的 RAG 系统 / 2.3. 阅读器 - LLM 💬": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "3. 对 RAG 系统进行基准测试": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "3. 对 RAG 系统进行基准测试 / 检查结果": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ],
+        "3. 对 RAG 系统进行基准测试 / 结果示例": [
+          "RAG 评测",
+          "RAG 调优",
+          "幻觉控制"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_milvus",
+      "title": "使用 Hugging Face 和 Milvus 构建 RAG 系统",
+      "file": "references/zh/huggingface/milvus/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_hf_and_milvus.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/milvus/original.ipynb",
+      "source_hash": "51c742e90093e7af44638a49a743ccef57ee383ce47fc2edc6a94521eaf433ad",
+      "normalized_hash": "4a85815aba428f4454035e80eba6aa23fef19eefc103efea3f5d3b2993362522",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 准备": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 准备 / 依赖关系和环境": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 准备 / 准备数据": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 准备 / 准备 embedding 模型": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 将数据加载到 Milvus 中": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 将数据加载到 Milvus 中 / 创建 collection": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 将数据加载到 Milvus 中 / 插入数据": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 构建 RAG": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 构建 RAG / 检索查询数据": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "使用 Hugging Face 和 Milvus 构建 RAG 系统 / 构建 RAG / 使用 LLM 获取 RAG 回答": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_unstructured",
+      "title": "使用自定义非结构化数据构建 RAG",
+      "file": "references/zh/huggingface/unstructured/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_unstructured_data.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/unstructured/original.ipynb",
+      "source_hash": "173922ff5a180cdcda2aa6ffa100f6acc8990ae71570e7fd5a8917f0c14193d1",
+      "normalized_hash": "6e8b9c256ff283f8be09040f3fa828f91362cba6cad6b1a30c6d0b87911b8c57",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用自定义非结构化数据构建 RAG": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用自定义非结构化数据构建 RAG / 非结构化数据预处理": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用自定义非结构化数据构建 RAG / 分块": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用自定义非结构化数据构建 RAG / 设置检索器": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用自定义非结构化数据构建 RAG / 使用 LangChain 构建 RAG": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "使用自定义非结构化数据构建 RAG / 结果和下一步": [
+          "文档解析",
+          "Chunk 切分"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_elasticsearch",
+      "title": "使用 Gemma、Elasticsearch 和 Hugging Face 模型构建 RAG",
+      "file": "references/zh/huggingface/elasticsearch/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_hugging_face_gemma_elasticsearch.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/elasticsearch/original.ipynb",
+      "source_hash": "da83b0b87ce2f487c699cdeba9b77065b724ab2e39510abc94e1bafce13bdd38",
+      "normalized_hash": "3cbf0e907f2f630e70eb72d5f43b5424188981e73d3c5542611b092133f76189",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 1：安装相关库": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 2：设置": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 2：设置 / Hugging Face": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 2：设置 / Hugging Face / Elasticsearch 部署": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 3：数据获取和准备": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 4：使用向量化数据加载 Elasticsearch": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 4：使用向量化数据加载 Elasticsearch / 选择数据和查询向量化选项": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 4：使用向量化数据加载 Elasticsearch / 如有必要，将 Hugging Face 模型加载到 Elasticsearch 中": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 5：创建一个带有向量搜索映射的搜索索引。": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 6：对用户查询执行向量搜索": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 步骤 7：处理用户查询并加载 Gemma": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统 / 致谢": [
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_zephyr",
+      "title": "使用 Zephyr 和 LangChain 针对 GitHub Issues 构建 RAG",
+      "file": "references/zh/huggingface/zephyr/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_zephyr_langchain.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/zephyr/original.ipynb",
+      "source_hash": "5139bd699a69a1764b53db5424e24ef04873c11b0f545d85c9f90bd9a4aa7ef4",
+      "normalized_hash": "ad9d348c802dc2acb65216b20827e45a73918731f6be16da512faa6b41e5408f",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "用 Hugging Face Zephyr 和 LangChain 针对 Github issues 构建简单的 RAG": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 Hugging Face Zephyr 和 LangChain 针对 Github issues 构建简单的 RAG / 准备数据": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 Hugging Face Zephyr 和 LangChain 针对 Github issues 构建简单的 RAG / 创建嵌入和检索器": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 Hugging Face Zephyr 和 LangChain 针对 Github issues 构建简单的 RAG / 加载量化模型": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 Hugging Face Zephyr 和 LangChain 针对 Github issues 构建简单的 RAG / 设置 LLM 链": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 Hugging Face Zephyr 和 LangChain 针对 Github issues 构建简单的 RAG / 比较结果": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_librarian",
+      "title": "使用 LlamaIndex 构建 RAG 电子书库智能助手",
+      "file": "references/zh/huggingface/librarian/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "Chunk 切分",
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_llamaindex_librarian.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/librarian/original.ipynb",
+      "source_hash": "ead9648be92a94db68cd99f6637e21f4369d91b1aae643ff172cf2874700e4be",
+      "normalized_hash": "70a57f6754daa0b669d039ac69c36f4c9f828520f7e120051a4d4f330bc4207a",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 简介": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 要求": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 组件": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 依赖": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 设置测试书库": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 用 LlamaIndex 构建 RAG": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 用 LlamaIndex 构建 RAG / 加载": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 用 LlamaIndex 构建 RAG / 索引": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 用 LlamaIndex 构建 RAG / 查询": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 最终结果": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 总结和未来可能的提升": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 总结和未来可能的提升 / 强制引用": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 总结和未来可能的提升 / 使用扩充的元数据": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "用 LlamaIndex 构建一个 RAG 电子书库智能助手 / 总结和未来可能的提升 / 高效索引": [
+          "Chunk 切分",
+          "Embedding",
+          "向量数据库",
+          "相似度检索"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_grounded",
+      "title": "使用结构化生成进行带来源高亮的 RAG",
+      "file": "references/zh/huggingface/grounded/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "Prompt 组装",
+        "引用溯源",
+        "幻觉控制"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/structured_generation.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/grounded/original.ipynb",
+      "source_hash": "3e15593bd5550d10d79a41cae99958065af3c530aef8c23eaf7582c991f69f8b",
+      "normalized_hash": "6dedc1352864317d92a599155ff7cf2f7dc81615cc27e1226b2f4941faa6d92d",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用结构化生成进行带源高亮的 RAG": [
+          "Prompt 组装",
+          "引用溯源",
+          "幻觉控制"
+        ],
+        "使用结构化生成进行带源高亮的 RAG / 提示模型": [
+          "Prompt 组装",
+          "引用溯源",
+          "幻觉控制"
+        ],
+        "使用结构化生成进行带源高亮的 RAG / 👉 受限解码": [
+          "Prompt 组装",
+          "引用溯源",
+          "幻觉控制"
+        ],
+        "使用结构化生成进行带源高亮的 RAG / 👉 受限解码 / 使用 Outlines 在本地流水线上应用语法": [
+          "Prompt 组装",
+          "引用溯源",
+          "幻觉控制"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_sql_rerank",
+      "title": "基于 SQL 和 Jina Reranker v2 的 RAG",
+      "file": "references/zh/huggingface/sql_rerank/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "混合检索",
+        "Rerank",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_sql_reranker.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/sql_rerank/original.ipynb",
+      "source_hash": "195611cfb2d6db72ee5257889f4f840ea78191afe7b79f7e2ce72736e76bfad4",
+      "normalized_hash": "592fb92d2f32fefe8dbefe4676386c8590b88dc6acd5f350c988c8d180bfc212",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "基于 SQL 和 Jina Reranker v2 的 RAG": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 工作原理": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 数据库": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 软件和硬件要求": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 开始": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 开始 / 安装环境": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 开始 / 下载数据库": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 开始 / 下载并运行 Jina Reranker v2": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 开始 / 设置 Mistral Instruct 的接口": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 使用 SQL 感知的 Jina Reranker v2": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 使用 Mistral Instruct 生成 SQL 查询": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 运行 SQL 查询": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 获取自然语言回答": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 尝试自己动手": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ],
+        "基于 SQL 和 Jina Reranker v2 的 RAG / 复习与总结": [
+          "混合检索",
+          "Rerank",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_graph",
+      "title": "利用 Neo4j 知识图谱增强 RAG 推理",
+      "file": "references/zh/huggingface/graph/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "RAG 基础概念",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_knowledge_graphs_neo4j.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/graph/original.ipynb",
+      "source_hash": "c670b7a96019fb9722be0a6387fd52cd24c2c61202a936e0a3a67f66448e4494",
+      "normalized_hash": "997e75aeed724b273a9db2c77b29f4305358cc5b3c05f60f98231af156b6ac4c",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "利用知识图谱增强 RAG 推理能力": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 初始化": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 初始化 / 设置 Neo4j 实例": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 初始化 / 将数据集加载到图谱中": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 初始化 / 构建向量索引": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 基于相似性的问答": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 通过知识图谱进行推理": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 通过知识图谱进行推理 / Graph-Cypher-Chain 与 LangChain": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 通过知识图谱进行推理 / 使用自然语言的查询示例": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 通过知识图谱进行推理 / 使用自然语言的查询示例 / **\"*Emily Chen 发布了多少篇文章？*\"**": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 通过知识图谱进行推理 / 使用自然语言的查询示例 / **\"*是否有任何一对研究人员共同发布了超过三篇文章？*\"**": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ],
+        "利用知识图谱增强 RAG 推理能力 / 通过知识图谱进行推理 / 使用自然语言的查询示例 / **\"*哪位研究人员与最多的同行合作过？*\"**": [
+          "RAG 基础概念",
+          "向量数据库",
+          "相似度检索"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_agent",
+      "title": "Agentic RAG：查询重构与自查询",
+      "file": "references/zh/huggingface/agent/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "混合检索",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/agent_rag.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/agent/original.ipynb",
+      "source_hash": "c1ba4b4fff8cd97bb587ca1d548e379423462e2f7a45602540189686dab009b6",
+      "normalized_hash": "aa8ba3afdb096d602fab74915a224a3c00b1de519a9581e09d8ed4a0d2ddf636",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "智能体 RAG：通过查询重构和自查询来增强你的 RAG ！🚀": [
+          "混合检索",
+          "RAG 调优"
+        ],
+        "智能体 RAG：通过查询重构和自查询来增强你的 RAG ！🚀 / 智能体RAG与标准RAG的比较": [
+          "混合检索",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_multiagent",
+      "title": "多智能体 RAG 系统",
+      "file": "references/zh/huggingface/multiagent/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "RAG 基础概念",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/multiagent_rag_system.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/multiagent/original.ipynb",
+      "source_hash": "647a7c85d765527685339b7ddc230db51345652fe4778abe11e003c688dff193",
+      "normalized_hash": "2f9480a82eb459d38504f04c8b109747d8e46ef657f3f7e9f84de7d033d989fc",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "多智能体 RAG 系统 🤖🤝🤖": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "多智能体 RAG 系统 🤖🤝🤖 / 什么是多智能体 RAG 系统？ 🤔": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "1. 安装依赖": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "2. 创建我们的多智能体 RAG 系统": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "2. 创建我们的多智能体 RAG 系统 / 2.1 网络搜索智能体 🔍": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "2. 创建我们的多智能体 RAG 系统 / 2.1 网络搜索智能体 🔍 / 2.1.1 构建我们的多工具网络智能体 🤖": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "2. 创建我们的多智能体 RAG 系统 / 2.2 检索智能体 🤖🔍": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "2. 创建我们的多智能体 RAG 系统 / 2.2 检索智能体 🤖🔍 / 2.2.1 HF 文档检索工具 📚": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "2. 创建我们的多智能体 RAG 系统 / 2.2 检索智能体 🤖🔍 / 2.2.2 PEFT 问题检索工具": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "2. 创建我们的多智能体 RAG 系统 / 2.2 检索智能体 🤖🔍 / 2.2.3 构建检索智能体": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "2. 创建我们的多智能体 RAG 系统 / 2.3 图像生成智能体 🎨": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "3. 添加中央智能体管理器来协调系统": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "3. 添加中央智能体管理器来协调系统 / 3.1 示例：触发搜索智能体": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "3. 添加中央智能体管理器来协调系统 / 3.2  示例：触发图像生成智能体": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "3. 添加中央智能体管理器来协调系统 / 3.3 示例：触发检索智能体以访问 Hugging Face 文档知识库": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "3. 添加中央智能体管理器来协调系统 / 3.4 示例：触发检索智能体以访问 PEFT 问题知识库": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_multimodal",
+      "title": "使用文档检索和视觉语言模型构建多模态 RAG",
+      "file": "references/zh/huggingface/multimodal/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "文档解析",
+        "Embedding",
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/multimodal_rag_using_document_retrieval_and_vlms.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/multimodal/original.ipynb",
+      "source_hash": "eb97e93625c314d51022e46a7520687c4aeaffa16130d93d35febb058f57818a",
+      "normalized_hash": "1950ae7901e3c5cf4dc43b36862433919e4d137168f4436390ab818ce5f8498c",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG）": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 1. 安装依赖": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 2. 加载数据集 📁": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 3. 初始化 ColPali 多模态文档检索模型 🤖": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 4. 使用文档检索模型检索文档 🤔": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 5. 初始化用于问答的视觉语言模型 (VLM) 🙋": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 6. 组装 VLM 模型并测试系统 🔧": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 7. 整合所有组件！🧑‍🏭️": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 8. 继续探索之旅 🧑‍🎓️": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 8. 继续探索之旅 🧑‍🎓️ / 🔍 进一步探索 ColPali：": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 8. 继续探索之旅 🧑‍🎓️ / 📖 额外阅读：": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 8. 继续探索之旅 🧑‍🎓️ / 💡 有用的集合：": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ],
+        "基于文档检索（ColPali）和视觉语言模型（VLMs）的多模态检索增强生成（RAG） / 8. 继续探索之旅 🧑‍🎓️ / 📝 论文与原始代码：": [
+          "文档解析",
+          "Embedding",
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_cache",
+      "title": "使用 Chroma 语义缓存增强 RAG 性能",
+      "file": "references/zh/huggingface/cache/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "相似度检索",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/semantic_cache_chroma_vector_database.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/cache/original.ipynb",
+      "source_hash": "381ab837867fbcbd953944d79cc401b091e5edf0df2e43df7708581528b5d3ea",
+      "normalized_hash": "1793d8c2b1650fb616e2f5cf25756c77f511d215343ec2483135aa5efca7808f",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "通过引入语义缓存到 FAISS 中以增强 RAG 系统的性能": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "导入并加载库。": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "加载数据集": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "导入并配置向量数据库": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "填充和查询 ChromaDB 数据库": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "填充和查询 ChromaDB 数据库 / 创建语义缓存系统": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "填充和查询 ChromaDB 数据库 / 创建语义缓存系统 / 测试 semantic_cache 类。": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "加载模型并创建提示": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "加载模型并创建提示 / 创建扩展提示": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "结论": [
+          "相似度检索",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_zh_hf_semantic_rerank",
+      "title": "Elasticsearch 语义重排序",
+      "file": "references/zh/huggingface/semantic_rerank/content.md",
+      "version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_version": "b23df069425fe24cd9a38f8a86c5cb9e163917a0",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/cookbook",
+      "knowledge_points": [
+        "Rerank",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/semantic_reranking_elasticsearch.ipynb"
+      ],
+      "source_snapshot": "references/zh/huggingface/semantic_rerank/original.ipynb",
+      "source_hash": "62ba43121ec766f67e7b814dd48e4f99c9626798fe068a6208a04461a5081a37",
+      "normalized_hash": "ba9b54c06df84bb9f31b093a480e42e1d3226d4096927239b2ebea48010c3e96",
+      "parser_version": "official-zh-structure-v1+corpus-clean-v1",
+      "license": "licenses/huggingface/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 🧰 必备条件": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 安装并导入包": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 初始化 Elasticsearch Python 客户端": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 测试连接": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 使用 Eland 上传 Hugging Face 模型": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 创建推理端点": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 词汇查询": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 词汇查询 / 使用 `query_string` 查询进行词汇匹配": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 词汇查询 / 简单的 `multi_match` 查询": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 语义重排序": [
+          "Rerank",
+          "RAG 调优"
+        ],
+        "使用 Elasticsearch 和 Hugging Face 进行语义重排序 / 了解更多": [
+          "Rerank",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_paper_dpr",
+      "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+      "file": "references/en/papers/dpr/content.md",
+      "version": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "source_version": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "Embedding",
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2020.emnlp-main.550.pdf"
+      ],
+      "source_snapshot": "references/en/papers/dpr/original.pdf",
+      "source_hash": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "normalized_hash": "d1d2b85602129737b5c59e8a9dd5436fa5fd7401ac9bbde8439f01379dfeffd6",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 74
+        },
+        {
+          "page": 2,
+          "line_start": 75,
+          "line_end": 170
+        },
+        {
+          "page": 3,
+          "line_start": 171,
+          "line_end": 265
+        },
+        {
+          "page": 4,
+          "line_start": 266,
+          "line_end": 352
+        },
+        {
+          "page": 5,
+          "line_start": 353,
+          "line_end": 433
+        },
+        {
+          "page": 6,
+          "line_start": 434,
+          "line_end": 520
+        },
+        {
+          "page": 7,
+          "line_start": 521,
+          "line_end": 615
+        },
+        {
+          "page": 8,
+          "line_start": 616,
+          "line_end": 682
+        },
+        {
+          "page": 9,
+          "line_start": 683,
+          "line_end": 761
+        },
+        {
+          "page": 10,
+          "line_start": 762,
+          "line_end": 840
+        },
+        {
+          "page": 11,
+          "line_start": 841,
+          "line_end": 919
+        },
+        {
+          "page": 12,
+          "line_start": 920,
+          "line_end": 999
+        },
+        {
+          "page": 13,
+          "line_start": 1000,
+          "line_end": 1048
+        }
+      ]
+    },
+    {
+      "id": "source_paper_hyde",
+      "title": "Precise Zero-Shot Dense Retrieval without Relevance Labels",
+      "file": "references/en/papers/hyde/content.md",
+      "version": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "source_version": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "相似度检索",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2023.acl-long.99.pdf"
+      ],
+      "source_snapshot": "references/en/papers/hyde/original.pdf",
+      "source_hash": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "normalized_hash": "ced84e848b804a4b2ea848e2333cced031e3fd96c84e12c3426e07d94313ec66",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "PDF page 5": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "PDF page 15": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 73
+        },
+        {
+          "page": 2,
+          "line_start": 74,
+          "line_end": 166
+        },
+        {
+          "page": 3,
+          "line_start": 167,
+          "line_end": 245
+        },
+        {
+          "page": 4,
+          "line_start": 246,
+          "line_end": 320
+        },
+        {
+          "page": 5,
+          "line_start": 321,
+          "line_end": 411
+        },
+        {
+          "page": 6,
+          "line_start": 412,
+          "line_end": 475
+        },
+        {
+          "page": 7,
+          "line_start": 476,
+          "line_end": 563
+        },
+        {
+          "page": 8,
+          "line_start": 564,
+          "line_end": 627
+        },
+        {
+          "page": 9,
+          "line_start": 628,
+          "line_end": 718
+        },
+        {
+          "page": 10,
+          "line_start": 719,
+          "line_end": 807
+        },
+        {
+          "page": 11,
+          "line_start": 808,
+          "line_end": 904
+        },
+        {
+          "page": 12,
+          "line_start": 905,
+          "line_end": 1000
+        },
+        {
+          "page": 13,
+          "line_start": 1001,
+          "line_end": 1039
+        },
+        {
+          "page": 14,
+          "line_start": 1040,
+          "line_end": 1117
+        },
+        {
+          "page": 15,
+          "line_start": 1118,
+          "line_end": 1160
+        },
+        {
+          "page": 16,
+          "line_start": 1161,
+          "line_end": 1190
+        }
+      ]
+    },
+    {
+      "id": "source_paper_ragas",
+      "title": "RAGAs: Automated Evaluation of Retrieval Augmented Generation",
+      "file": "references/en/papers/ragas/content.md",
+      "version": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "source_version": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "RAG 评测",
+        "幻觉控制"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2024.eacl-demo.16.pdf"
+      ],
+      "source_snapshot": "references/en/papers/ragas/original.pdf",
+      "source_hash": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "normalized_hash": "774e173be38c04d61bb19ba55f70023ff92de246281e1d9de86abf018bc3a324",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 2": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 3": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 4": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 5": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 6": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 7": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 8": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 9": [
+          "RAG 评测",
+          "幻觉控制"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 79
+        },
+        {
+          "page": 2,
+          "line_start": 80,
+          "line_end": 157
+        },
+        {
+          "page": 3,
+          "line_start": 158,
+          "line_end": 240
+        },
+        {
+          "page": 4,
+          "line_start": 241,
+          "line_end": 322
+        },
+        {
+          "page": 5,
+          "line_start": 323,
+          "line_end": 407
+        },
+        {
+          "page": 6,
+          "line_start": 408,
+          "line_end": 474
+        },
+        {
+          "page": 7,
+          "line_start": 475,
+          "line_end": 569
+        },
+        {
+          "page": 8,
+          "line_start": 570,
+          "line_end": 665
+        },
+        {
+          "page": 9,
+          "line_start": 666,
+          "line_end": 675
+        }
+      ]
+    },
+    {
+      "id": "source_paper_alce",
+      "title": "Enabling Large Language Models to Generate Text with Citations",
+      "file": "references/en/papers/alce/content.md",
+      "version": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "source_version": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "引用溯源",
+        "幻觉控制"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2023.emnlp-main.398.pdf"
+      ],
+      "source_snapshot": "references/en/papers/alce/original.pdf",
+      "source_hash": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "normalized_hash": "3639f21542e32ef2430b4b8531af8e291bce2bbc62fe0e7747e89067b4eef372",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 15": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 18": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 19": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 20": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 21": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 22": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 23": [
+          "引用溯源",
+          "幻觉控制"
+        ],
+        "PDF page 24": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 86
+        },
+        {
+          "page": 2,
+          "line_start": 87,
+          "line_end": 158
+        },
+        {
+          "page": 3,
+          "line_start": 159,
+          "line_end": 244
+        },
+        {
+          "page": 4,
+          "line_start": 245,
+          "line_end": 365
+        },
+        {
+          "page": 5,
+          "line_start": 366,
+          "line_end": 453
+        },
+        {
+          "page": 6,
+          "line_start": 454,
+          "line_end": 545
+        },
+        {
+          "page": 7,
+          "line_start": 546,
+          "line_end": 635
+        },
+        {
+          "page": 8,
+          "line_start": 636,
+          "line_end": 744
+        },
+        {
+          "page": 9,
+          "line_start": 745,
+          "line_end": 822
+        },
+        {
+          "page": 10,
+          "line_start": 823,
+          "line_end": 914
+        },
+        {
+          "page": 11,
+          "line_start": 915,
+          "line_end": 1005
+        },
+        {
+          "page": 12,
+          "line_start": 1006,
+          "line_end": 1099
+        },
+        {
+          "page": 13,
+          "line_start": 1100,
+          "line_end": 1125
+        },
+        {
+          "page": 14,
+          "line_start": 1126,
+          "line_end": 1214
+        },
+        {
+          "page": 15,
+          "line_start": 1215,
+          "line_end": 1296
+        },
+        {
+          "page": 16,
+          "line_start": 1297,
+          "line_end": 1369
+        },
+        {
+          "page": 17,
+          "line_start": 1370,
+          "line_end": 1412
+        },
+        {
+          "page": 18,
+          "line_start": 1413,
+          "line_end": 1461
+        },
+        {
+          "page": 19,
+          "line_start": 1462,
+          "line_end": 1510
+        },
+        {
+          "page": 20,
+          "line_start": 1511,
+          "line_end": 1559
+        },
+        {
+          "page": 21,
+          "line_start": 1560,
+          "line_end": 1614
+        },
+        {
+          "page": 22,
+          "line_start": 1615,
+          "line_end": 1668
+        },
+        {
+          "page": 23,
+          "line_start": 1669,
+          "line_end": 1723
+        },
+        {
+          "page": 24,
+          "line_start": 1724,
+          "line_end": 1777
+        }
+      ]
+    },
+    {
+      "id": "source_paper_lost_middle",
+      "title": "Lost in the Middle: How Language Models Use Long Contexts",
+      "file": "references/en/papers/lost_middle/content.md",
+      "version": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "source_version": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "Prompt 组装",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2024.tacl-1.9.pdf"
+      ],
+      "source_snapshot": "references/en/papers/lost_middle/original.pdf",
+      "source_hash": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "normalized_hash": "270c28eae2c686b1c9c1077c3bfb942b0c5575fa4e3cf43e6438476e004af7ac",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "Prompt 组装",
+          "RAG 调优"
+        ],
+        "PDF page 15": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 75
+        },
+        {
+          "page": 2,
+          "line_start": 76,
+          "line_end": 143
+        },
+        {
+          "page": 3,
+          "line_start": 144,
+          "line_end": 230
+        },
+        {
+          "page": 4,
+          "line_start": 231,
+          "line_end": 273
+        },
+        {
+          "page": 5,
+          "line_start": 274,
+          "line_end": 340
+        },
+        {
+          "page": 6,
+          "line_start": 341,
+          "line_end": 403
+        },
+        {
+          "page": 7,
+          "line_start": 404,
+          "line_end": 473
+        },
+        {
+          "page": 8,
+          "line_start": 474,
+          "line_end": 538
+        },
+        {
+          "page": 9,
+          "line_start": 539,
+          "line_end": 596
+        },
+        {
+          "page": 10,
+          "line_start": 597,
+          "line_end": 674
+        },
+        {
+          "page": 11,
+          "line_start": 675,
+          "line_end": 758
+        },
+        {
+          "page": 12,
+          "line_start": 759,
+          "line_end": 850
+        },
+        {
+          "page": 13,
+          "line_start": 851,
+          "line_end": 937
+        },
+        {
+          "page": 14,
+          "line_start": 938,
+          "line_end": 1034
+        },
+        {
+          "page": 15,
+          "line_start": 1035,
+          "line_end": 1093
+        },
+        {
+          "page": 16,
+          "line_start": 1094,
+          "line_end": 1136
+        },
+        {
+          "page": 17,
+          "line_start": 1137,
+          "line_end": 1158
+        }
+      ]
+    },
+    {
+      "id": "source_paper_rag_best_practices",
+      "title": "Searching for Best Practices in Retrieval-Augmented Generation",
+      "file": "references/en/papers/rag_best_practices/content.md",
+      "version": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "source_version": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "RAG 基础概念",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2024.emnlp-main.981.pdf"
+      ],
+      "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+      "source_hash": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "normalized_hash": "de8ddb76734001aec43909d4635429b429d62d6649319a7cbc8316db41724f81",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "PDF page 2": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "PDF page 14": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 15": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 18": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 19": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 20": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 21": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 64
+        },
+        {
+          "page": 2,
+          "line_start": 65,
+          "line_end": 138
+        },
+        {
+          "page": 3,
+          "line_start": 139,
+          "line_end": 294
+        },
+        {
+          "page": 4,
+          "line_start": 295,
+          "line_end": 373
+        },
+        {
+          "page": 5,
+          "line_start": 374,
+          "line_end": 458
+        },
+        {
+          "page": 6,
+          "line_start": 459,
+          "line_end": 538
+        },
+        {
+          "page": 7,
+          "line_start": 539,
+          "line_end": 613
+        },
+        {
+          "page": 8,
+          "line_start": 614,
+          "line_end": 673
+        },
+        {
+          "page": 9,
+          "line_start": 674,
+          "line_end": 758
+        },
+        {
+          "page": 10,
+          "line_start": 759,
+          "line_end": 850
+        },
+        {
+          "page": 11,
+          "line_start": 851,
+          "line_end": 939
+        },
+        {
+          "page": 12,
+          "line_start": 940,
+          "line_end": 1033
+        },
+        {
+          "page": 13,
+          "line_start": 1034,
+          "line_end": 1092
+        },
+        {
+          "page": 14,
+          "line_start": 1093,
+          "line_end": 1172
+        },
+        {
+          "page": 15,
+          "line_start": 1173,
+          "line_end": 1297
+        },
+        {
+          "page": 16,
+          "line_start": 1298,
+          "line_end": 1369
+        },
+        {
+          "page": 17,
+          "line_start": 1370,
+          "line_end": 1437
+        },
+        {
+          "page": 18,
+          "line_start": 1438,
+          "line_end": 1523
+        },
+        {
+          "page": 19,
+          "line_start": 1524,
+          "line_end": 1588
+        },
+        {
+          "page": 20,
+          "line_start": 1589,
+          "line_end": 1643
+        },
+        {
+          "page": 21,
+          "line_start": 1644,
+          "line_end": 1663
+        }
+      ]
+    },
+    {
+      "id": "source_langchain_retrieval_architectures",
+      "title": "Retrieval architectures",
+      "file": "references/en/langchain/retrieval_architectures/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "RAG 基础概念"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/deepagents/retrieval.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+      "source_hash": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+      "normalized_hash": "cdddeef5b6d4c6071a0178128796bd4754afd54e5f778b500c95a8b35c1d6f41",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Retrieval": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / Building a knowledge base / From retrieval to RAG": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base / Retrieval pipeline": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base / Building blocks": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / 2-step RAG": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / Agentic RAG": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / Hybrid RAG": [
+          "RAG 基础概念",
+          "混合检索"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_pdf_semantic_search_rag",
+      "title": "Build a semantic search engine with LangChain",
+      "file": "references/en/langchain/pdf_semantic_search_rag/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/langchain/knowledge-base.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
+      "source_hash": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+      "normalized_hash": "857a10f77dcf4ac296be805477a2d5385fe3fa1cf84a042c197c9e515133b97d",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Build a semantic search engine with LangChain": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Overview": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Overview / Concepts": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup / Install dependencies": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup / Configure LangSmith": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Create documents": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Generate embeddings": [
+          "相似度检索",
+          "Embedding"
+        ],
+        "Build a semantic search engine with LangChain / Select a vector store": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Load and split a PDF": [
+          "相似度检索",
+          "Chunk 切分",
+          "文档解析"
+        ],
+        "Build a semantic search engine with LangChain / Index documents": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Search by string": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Return scores": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Search by vector": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Use retrievers": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Next steps": [
+          "相似度检索"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_html_splitters",
+      "title": "Split HTML",
+      "file": "references/en/langchain/html_splitters/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/splitters/split_html.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/html_splitters/original.mdx",
+      "source_hash": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+      "normalized_hash": "206adb061eeb009906821941bfa0572e8362252a692d2c5cac286ce40a393941",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Split HTML - text splitter integration": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLHeaderTextSplitter](#using-htmlheadertextsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLSectionSplitter](#using-htmlsectionsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLSemanticPreservingSplitter](#using-htmlsemanticpreservingsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / Choosing the right splitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Example HTML document": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / How to split from a URL or HTML file:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / How to constrain chunk sizes:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / Limitations": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter / How to split HTML strings:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter / How to constrain chunk sizes:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Preserving tables and lists": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Preserving tables and lists / Explanation": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler / Explanation": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler to analyze an image with an LLM": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler to analyze an image with an LLM / Explanation:": [
+          "文档解析",
+          "Chunk 切分"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_docling_loader",
+      "title": "Docling document loading",
+      "file": "references/en/langchain/docling_loader/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "文档解析"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_loaders/docling.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/docling_loader/original.mdx",
+      "source_hash": "664e6248db534402a98f698b5465d72cd14f37da8c006a201af95938c977215d",
+      "normalized_hash": "37690e756cbf27465c7de7517499f17faab55f6c11275a7590efe5d07dc13285",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Docling integration": [
+          "文档解析"
+        ],
+        "Docling integration / Overview": [
+          "文档解析"
+        ],
+        "Docling integration / Overview / Integration details": [
+          "文档解析"
+        ],
+        "Docling integration / Overview / Loader features": [
+          "文档解析"
+        ],
+        "Docling integration / Setup": [
+          "文档解析"
+        ],
+        "Docling integration / Initialization": [
+          "文档解析"
+        ],
+        "Docling integration / Load": [
+          "文档解析"
+        ],
+        "Docling integration / Lazy load": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example / Ingestion": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example / RAG": [
+          "文档解析"
+        ],
+        "Docling integration / API reference": [
+          "文档解析"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_sentence_transformers_embeddings",
+      "title": "Sentence Transformers embeddings integration",
+      "file": "references/en/langchain/sentence_transformers_embeddings/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "Embedding"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/embeddings/sentence_transformers.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/sentence_transformers_embeddings/original.mdx",
+      "source_hash": "92a6838f4acc671ba4f631c8a288c06c44732d0d7150d541f5c7f228e059541c",
+      "normalized_hash": "98b89d90c918b6e2b2379d3aff385748cc5ec4a059e02fd0b1861b51674be94a",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "HuggingFaceEmbeddings (Sentence Transformers) integration": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Setup": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Basic usage": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Choosing a model": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Normalize embeddings": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Device and throughput": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Query and document prompts": [
+          "Embedding",
+          "Prompt 组装"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Deploy for production": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Reranking": [
+          "Embedding",
+          "Rerank"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Troubleshooting": [
+          "Embedding"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_chroma_vectorstore",
+      "title": "Chroma vector store integration",
+      "file": "references/en/langchain/chroma_vectorstore/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/chroma.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/chroma_vectorstore/original.mdx",
+      "source_hash": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
+      "normalized_hash": "1237f03291e4f33f7cbbd0acceea2e96be50d2b214c7dba52cffcdef8fcbe69d",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Chroma integration": [
+          "向量数据库"
+        ],
+        "Chroma integration / Setup": [
+          "向量数据库"
+        ],
+        "Chroma integration / Setup / Credentials": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Running locally (In-Memory)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Running locally (with data persistence)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Connecting to a chroma Server": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Chroma cloud": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Running locally (In-Memory)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Running locally (with data persistence)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Connecting to a chroma Server": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Chroma cloud": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Access your chroma DB": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Create a chroma vectorstore": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Add items to vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Update items in vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Delete items from vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Similarity search": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Similarity search with score": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Search by vector": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Other search methods": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query by turning into retriever": [
+          "向量数据库"
+        ],
+        "Chroma integration / Usage for retrieval-augmented generation": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "Chroma integration / API reference": [
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_elasticsearch_retrieval",
+      "title": "Elasticsearch retrieval strategies",
+      "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/elasticsearch.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+      "source_hash": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+      "normalized_hash": "ddecf9912d6e07d23cfff7e9674e94b93b2d2bf4cb74d5b09f17223e48d07c3f",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Elasticsearch integration": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Credentials": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running Elasticsearch locally": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication / How to obtain a password for the default \"elastic\" user?": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication / How to obtain an API key?": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Elastic cloud": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Initialization": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store / Add items to vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store / Delete items from vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly / Similarity search": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly / Similarity search with score": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query by turning into retriever": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Distance similarity algorithm": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy / Example: Hybrid retrieval with dense vector and keyword search": [
+          "向量数据库",
+          "混合检索",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy / Example: Dense vector search with embedding model in Elasticsearch": [
+          "向量数据库",
+          "Embedding"
+        ],
+        "Elasticsearch integration / Retrieval strategies / SparseVectorStrategy (ELSER)": [
+          "向量数据库",
+          "文档解析",
+          "混合检索"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorScriptScoreStrategy": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies / BM25Strategy": [
+          "向量数据库",
+          "混合检索"
+        ],
+        "Elasticsearch integration / Retrieval strategies / BM25RetrievalStrategy": [
+          "向量数据库",
+          "混合检索",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Customise the query": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Customize the document builder": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Usage for retrieval-augmented generation": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "FAQ": [
+          "向量数据库"
+        ],
+        "FAQ / Question: Im getting timeout errors when indexing documents into Elasticsearch. how do I fix this?": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / What's new?": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / I am using ElasticKNNSearch": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / I am using ElasticVectorSearch": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / API reference": [
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_cross_encoder_reranker",
+      "title": "Cross-encoder reranker integration",
+      "file": "references/en/langchain/cross_encoder_reranker/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "Rerank"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_transformers/cross_encoder_reranker.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/cross_encoder_reranker/original.mdx",
+      "source_hash": "6757aa92dc9972f258179564caa885270cc25d0857219850799dff75c802b0d0",
+      "normalized_hash": "ebaef24f64b2c03d47190f1a4e8ce8005d604ec3577646c3a8a5cf8e09072682",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Cross encoder reranker integration": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Setup": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Build a base retriever": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Rerank with a cross-encoder": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Picking a cross-encoder": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Deploying to SageMaker": [
+          "Rerank"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_training_overview",
+      "title": "Sentence Transformer training overview",
+      "file": "references/en/sentence_transformers/training_overview/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [
+        "Embedding",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/sentence_transformer/training_overview.md"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/training_overview/original.md",
+      "source_hash": "17fe1adab43dcac9f3664c314aea35c0cb21ad2c8ae9ddfbba37768bd659e54c",
+      "normalized_hash": "1574863b965d617bbf41ac4c2399ae932efb89cfc1d653bd4cdf884639bc3ac5",
+      "parser_version": "passthrough-frontmatter-h1-v1-rst-tabs+corpus-clean-v1+auxiliary-links-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Training Overview": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Why Finetune?": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Training Components": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Model": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset / Dataset Format": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset / Multimodal Datasets": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Loss Function": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Training Arguments": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Evaluator": [
+          "Embedding",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "Training Overview / Trainer": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Trainer / Callbacks": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Multi-Dataset Training": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Deprecated Training": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Best Base Embedding Models": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Comparisons with CrossEncoder Training": [
+          "Embedding",
+          "RAG 调优",
+          "Rerank"
+        ],
+        "Training Overview / End-to-End Example": [
+          "Embedding",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_ms_marco_training",
+      "title": "MS MARCO dense retrieval training",
+      "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [
+        "Embedding"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/training/ms_marco/README.md"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
+      "source_hash": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+      "normalized_hash": "e6cd7741a507ebb2c57cbc55f9bf77a18520bcb3b9e1461b3adecc465d06d21a",
+      "parser_version": "passthrough-frontmatter-h1-v1+auxiliary-links-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "MS MARCO": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MultipleNegativesRankingLoss": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MarginMSE": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MarginMSE + MultipleNegativesRanking": [
+          "Embedding"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_faiss_semantic_search",
+      "title": "FAISS semantic search complete implementation",
+      "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [
+        "向量数据库",
+        "相似度检索",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/semantic-search/semantic_search_quora_faiss.py"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+      "source_hash": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+      "normalized_hash": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71",
+      "parser_version": "passthrough-frontmatter-h1-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "FAISS semantic search complete implementation": [
+          "向量数据库",
+          "相似度检索",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_cross_encoder_reranking",
+      "title": "Cross-encoder reranking complete implementation",
+      "file": "references/en/sentence_transformers/cross_encoder_reranking/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [
+        "相似度检索",
+        "Rerank"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/cross_encoder/applications/cross_encoder_reranking.py"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/cross_encoder_reranking/original.py",
+      "source_hash": "c5efce937ddc0e441ffba2c310aab1fa2643f99179a177ec81f29ca0fcc64b8c",
+      "normalized_hash": "cd85776774c5b27dcead37f338b8b54c8babc5c7633d674dff70a608e10a0ef5",
+      "parser_version": "passthrough-frontmatter-h1-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Cross-encoder reranking complete implementation": [
+          "相似度检索",
+          "Rerank"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_markdown_splitter",
+      "title": "LangChain 官方原文：Markdown 结构切分",
+      "file": "references/en/langchain/markdown_splitter/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [],
+      "learner_levels": [
+        "零基础",
+        "Python 基础",
+        "进阶 RAG"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/splitters/markdown_header_metadata_splitter.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/markdown_splitter/original.mdx",
+      "source_hash": "9e74b44f9fe42bfb6f527b0cc261d234dd4b5858501caa508403f60e0c718d07",
+      "normalized_hash": "6f59ceeb4d78d5cef59769d1babbeb4c8239c4c41596b4563adf672c49c168d6",
+      "parser_version": "passthrough-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Split markdown - text splitter integration": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split markdown - text splitter integration / Basic usage:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split markdown - text splitter integration / How to return markdown lines as separate documents": [
+          "Chunk 切分"
+        ],
+        "Split markdown - text splitter integration / How to constrain chunk size:": [
+          "Chunk 切分"
+        ],
+        "Split markdown - text splitter integration / Troubleshooting: `chunk_overlap` doesn't seem to apply": [
+          "Chunk 切分"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_semantic_search",
+      "title": "Sentence Transformers 官方原文：Semantic Search",
+      "file": "references/en/sentence_transformers/semantic_search/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [],
+      "learner_levels": [
+        "零基础",
+        "Python 基础",
+        "进阶 RAG"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/semantic-search/README.md"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/semantic_search/original.md",
+      "source_hash": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+      "normalized_hash": "7e4c2b63089dfe9f50d80b841c8b655738829bd39e134f246bb00c71e546aef8",
+      "parser_version": "passthrough-v1+auxiliary-links-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Semantic Search": [
+          "相似度检索"
+        ],
+        "Semantic Search / Background": [
+          "Embedding",
+          "相似度检索"
+        ],
+        "Semantic Search / Symmetric vs. Asymmetric Semantic Search": [
+          "Embedding",
+          "相似度检索"
+        ],
+        "Semantic Search / Manual Implementation": [
+          "Embedding",
+          "相似度检索"
+        ],
+        "Semantic Search / Optimized Implementation": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "Semantic Search / Speed Optimization": [
+          "Embedding",
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "Semantic Search / Elasticsearch": [
+          "向量数据库",
+          "相似度检索"
+        ],
+        "Semantic Search / OpenSearch": [
+          "向量数据库",
+          "相似度检索",
+          "混合检索"
+        ],
+        "Semantic Search / Approximate Nearest Neighbor": [
+          "向量数据库",
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "Semantic Search / Retrieve & Re-Rank": [
+          "相似度检索",
+          "Rerank"
+        ],
+        "Semantic Search / Examples": [],
+        "Semantic Search / Examples / Similar Questions Retrieval": [
+          "相似度检索"
+        ],
+        "Semantic Search / Examples / Similar Publication Retrieval": [
+          "相似度检索"
+        ],
+        "Semantic Search / Examples / Question & Answer Retrieval": [
+          "相似度检索",
+          "Rerank"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_retrieve_rerank",
+      "title": "Sentence Transformers 官方原文：Retrieve & Re-Rank",
+      "file": "references/en/sentence_transformers/retrieve_rerank/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [],
+      "learner_levels": [
+        "零基础",
+        "Python 基础",
+        "进阶 RAG"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/retrieve_rerank/README.md"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/retrieve_rerank/original.md",
+      "source_hash": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+      "normalized_hash": "d4c9f676cfb5a387781d9cfea85825d4d105d5721a708a5fde6a74137dc8fda0",
+      "parser_version": "passthrough-v1+auxiliary-links-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_evidence_v2",
+      "section_knowledge_points": {
+        "Retrieve & Re-Rank": [
+          "相似度检索",
+          "Rerank"
+        ],
+        "Retrieve & Re-Rank / Retrieve & Re-Rank Pipeline": [
+          "相似度检索",
+          "Rerank"
+        ],
+        "Retrieve & Re-Rank / Retrieval: Bi-Encoder": [
+          "Embedding",
+          "相似度检索"
+        ],
+        "Retrieve & Re-Rank / Re-Ranker: Cross-Encoder": [
+          "Rerank"
+        ],
+        "Retrieve & Re-Rank / Example Scripts": [
+          "相似度检索",
+          "Rerank"
+        ],
+        "Retrieve & Re-Rank / Pre-trained Bi-Encoders (Retrieval)": [
+          "Embedding",
+          "相似度检索"
+        ],
+        "Retrieve & Re-Rank / Pre-trained Cross-Encoders (Re-Ranker)": [
+          "Rerank"
+        ]
+      }
+    },
+    {
       "id": "module_rag_foundations",
       "title": "综合学习模块 01：RAG 原理、系统边界与工程契约",
-      "file": "modules/01_rag_foundations_and_system_contracts.md",
+      "file": "teaching/zh/01_rag_foundations_and_system_contracts.md",
       "document_type": "integrated_learning_module",
       "module_number": 1,
-      "knowledge_points": ["RAG 基础概念"],
-      "learner_levels": ["零基础", "Python 基础", "进阶 RAG"],
-      "source_urls": ["https://arxiv.org/abs/2005.11401", "https://arxiv.org/abs/2004.04906", "https://arxiv.org/abs/2310.11511", "https://docs.langchain.com/oss/python/langchain/retrieval"]
+      "version": "teaching-2026-10-v2",
+      "knowledge_points": [
+        "RAG 基础概念"
+      ],
+      "learner_levels": [
+        "零基础",
+        "Python 基础",
+        "进阶 RAG"
+      ],
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2004.04906",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/oss/python/langchain/retrieval"
+      ],
+      "chunking_strategy": "markdown_evidence_v2"
     },
     {
       "id": "module_ingestion_chunking",
       "title": "综合学习模块 02：资料治理、文档解析与 Chunk 实验",
-      "file": "modules/02_ingestion_parsing_and_chunking.md",
+      "file": "teaching/zh/02_ingestion_parsing_and_chunking.md",
       "document_type": "integrated_learning_module",
       "module_number": 2,
-      "knowledge_points": ["文档解析", "Chunk 切分"],
-      "learner_levels": ["零基础", "Python 基础"],
-      "source_urls": ["https://docs.langchain.com/oss/python/integrations/splitters/index", "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter", "https://docs.langchain.com/oss/python/langchain/knowledge-base", "https://docs.trychroma.com/reference/python/collection"]
+      "version": "teaching-2026-10-v2",
+      "knowledge_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "learner_levels": [
+        "零基础",
+        "Python 基础"
+      ],
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/integrations/splitters/index",
+        "https://docs.langchain.com/oss/python/integrations/splitters/recursive_text_splitter",
+        "https://docs.langchain.com/oss/python/langchain/knowledge-base",
+        "https://docs.trychroma.com/reference/python/collection"
+      ],
+      "chunking_strategy": "markdown_evidence_v2"
     },
     {
       "id": "module_embeddings_vector_retrieval",
       "title": "综合学习模块 03：Embedding、向量数据库与相似度检索",
-      "file": "modules/03_embeddings_vector_store_and_retrieval.md",
+      "file": "teaching/zh/03_embeddings_vector_store_and_retrieval.md",
       "document_type": "integrated_learning_module",
       "module_number": 3,
-      "knowledge_points": ["Embedding", "向量数据库", "相似度检索"],
-      "learner_levels": ["零基础", "Python 基础"],
-      "source_urls": ["https://www.sbert.net/docs/sentence_transformer/usage/usage.html", "https://sbert.net/docs/sentence_transformer/pretrained_models.html", "https://docs.trychroma.com/docs/querying-collections/query-and-get", "https://docs.trychroma.com/docs/querying-collections/metadata-filtering", "https://docs.trychroma.com/docs/collections/manage-collections"]
+      "version": "teaching-2026-10-v2",
+      "knowledge_points": [
+        "Embedding",
+        "向量数据库",
+        "相似度检索"
+      ],
+      "learner_levels": [
+        "零基础",
+        "Python 基础"
+      ],
+      "source_urls": [
+        "https://www.sbert.net/docs/sentence_transformer/usage/usage.html",
+        "https://sbert.net/docs/sentence_transformer/pretrained_models.html",
+        "https://docs.trychroma.com/docs/querying-collections/query-and-get",
+        "https://docs.trychroma.com/docs/querying-collections/metadata-filtering",
+        "https://docs.trychroma.com/docs/collections/manage-collections"
+      ],
+      "chunking_strategy": "markdown_evidence_v2"
     },
     {
       "id": "module_hybrid_rerank",
       "title": "综合学习模块 04：查询改写、混合召回与 Rerank",
-      "file": "modules/04_query_hybrid_retrieval_and_rerank.md",
+      "file": "teaching/zh/04_query_hybrid_retrieval_and_rerank.md",
       "document_type": "integrated_learning_module",
       "module_number": 4,
-      "knowledge_points": ["混合检索", "Rerank"],
-      "learner_levels": ["Python 基础", "进阶 RAG"],
-      "source_urls": ["https://arxiv.org/abs/2212.10496", "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html", "https://www.sbert.net/docs/package_reference/cross_encoder/model.html", "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html", "https://docs.trychroma.com/cloud/search-api/hybrid-search"]
+      "version": "teaching-2026-10-v2",
+      "knowledge_points": [
+        "混合检索",
+        "Rerank"
+      ],
+      "learner_levels": [
+        "Python 基础",
+        "进阶 RAG"
+      ],
+      "source_urls": [
+        "https://arxiv.org/abs/2212.10496",
+        "https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/model.html",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html",
+        "https://docs.trychroma.com/cloud/search-api/hybrid-search"
+      ],
+      "chunking_strategy": "markdown_evidence_v2"
     },
     {
       "id": "module_context_citation_grounding",
       "title": "综合学习模块 05：上下文组装、引用与忠实生成",
-      "file": "modules/05_context_citation_and_grounded_generation.md",
+      "file": "teaching/zh/05_context_citation_and_grounded_generation.md",
       "document_type": "integrated_learning_module",
       "module_number": 5,
-      "knowledge_points": ["Prompt 组装", "引用溯源", "幻觉控制"],
-      "learner_levels": ["Python 基础", "进阶 RAG"],
-      "source_urls": ["https://arxiv.org/abs/2005.11401", "https://arxiv.org/abs/2310.11511", "https://docs.langchain.com/langsmith/evaluate-rag-tutorial", "https://docs.langchain.com/langsmith/evaluation-approaches"]
+      "version": "teaching-2026-10-v2",
+      "knowledge_points": [
+        "Prompt 组装",
+        "引用溯源",
+        "幻觉控制"
+      ],
+      "learner_levels": [
+        "Python 基础",
+        "进阶 RAG"
+      ],
+      "source_urls": [
+        "https://arxiv.org/abs/2005.11401",
+        "https://arxiv.org/abs/2310.11511",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-approaches"
+      ],
+      "chunking_strategy": "markdown_evidence_v2"
     },
     {
       "id": "module_evaluation_tuning",
       "title": "综合学习模块 06：RAG 评测、消融实验与生产运营",
-      "file": "modules/06_evaluation_ablation_and_operations.md",
+      "file": "teaching/zh/06_evaluation_ablation_and_operations.md",
       "document_type": "integrated_learning_module",
       "module_number": 6,
-      "knowledge_points": ["RAG 评测", "RAG 调优"],
-      "learner_levels": ["进阶 RAG"],
-      "source_urls": ["https://arxiv.org/abs/2309.15217", "https://arxiv.org/abs/2408.08067", "https://docs.langchain.com/langsmith/evaluate-rag-tutorial", "https://docs.langchain.com/langsmith/evaluation-concepts", "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"]
+      "version": "teaching-2026-10-v2",
+      "knowledge_points": [
+        "RAG 评测",
+        "RAG 调优"
+      ],
+      "learner_levels": [
+        "进阶 RAG"
+      ],
+      "source_urls": [
+        "https://arxiv.org/abs/2309.15217",
+        "https://arxiv.org/abs/2408.08067",
+        "https://docs.langchain.com/langsmith/evaluate-rag-tutorial",
+        "https://docs.langchain.com/langsmith/evaluation-concepts",
+        "https://www.sbert.net/docs/package_reference/cross_encoder/evaluation.html"
+      ],
+      "chunking_strategy": "markdown_evidence_v2"
     }
   ],
   "skill_nodes": [
-    {"node_id": "rag_basics", "name": "RAG 基础概念", "level": "零基础", "tier": 1, "knowledge_points": ["检索增强生成", "上下文"], "assessment_methods": ["单选题", "概念解释"]},
-    {"node_id": "document_parsing", "name": "文档解析", "level": "零基础", "tier": 1, "prerequisites": ["RAG 基础概念"], "knowledge_points": ["格式解析", "文本清洗"], "assessment_methods": ["实操题"]},
-    {"node_id": "chunking", "name": "Chunk 切分", "level": "Python 基础", "tier": 2, "prerequisites": ["文档解析"], "knowledge_points": ["chunk_size", "chunk_overlap"], "assessment_methods": ["参数对比题"]},
-    {"node_id": "embedding", "name": "Embedding", "level": "零基础", "tier": 1, "prerequisites": ["RAG 基础概念"], "knowledge_points": ["向量表示", "语义相似度"], "assessment_methods": ["概念题"]},
-    {"node_id": "vector_store", "name": "向量数据库", "level": "Python 基础", "tier": 2, "prerequisites": ["Embedding"], "knowledge_points": ["索引", "持久化"], "assessment_methods": ["实操题"]},
-    {"node_id": "similarity_retrieval", "name": "相似度检索", "level": "Python 基础", "tier": 2, "prerequisites": ["向量数据库", "Chunk 切分"], "knowledge_points": ["Top-K", "召回率"], "assessment_methods": ["参数题"]},
-    {"node_id": "hybrid_retrieval", "name": "混合检索", "level": "进阶 RAG", "tier": 3, "prerequisites": ["相似度检索"], "knowledge_points": ["关键词检索", "向量检索"], "assessment_methods": ["方案设计题"]},
-    {"node_id": "rerank", "name": "Rerank", "level": "进阶 RAG", "tier": 3, "prerequisites": ["相似度检索"], "knowledge_points": ["重排序", "精排"], "assessment_methods": ["对比题"]},
-    {"node_id": "prompt_assembly", "name": "Prompt 组装", "level": "Python 基础", "tier": 2, "prerequisites": ["相似度检索"], "knowledge_points": ["上下文窗口", "指令约束"], "assessment_methods": ["实操题"]},
-    {"node_id": "citation", "name": "引用溯源", "level": "Python 基础", "tier": 2, "prerequisites": ["Prompt 组装"], "knowledge_points": ["source_ref", "证据片段"], "assessment_methods": ["溯源题"]},
-    {"node_id": "hallucination_control", "name": "幻觉控制", "level": "进阶 RAG", "tier": 3, "prerequisites": ["引用溯源"], "knowledge_points": ["Claim", "证据支持"], "assessment_methods": ["审核题"]},
-    {"node_id": "rag_evaluation", "name": "RAG 评测", "level": "进阶 RAG", "tier": 3, "prerequisites": ["幻觉控制"], "knowledge_points": ["命中率", "覆盖率", "幻觉率"], "assessment_methods": ["指标计算题"]},
-    {"node_id": "rag_tuning", "name": "RAG 调优", "level": "进阶 RAG", "tier": 3, "prerequisites": ["RAG 评测", "混合检索", "Rerank"], "knowledge_points": ["参数调优", "消融实验"], "assessment_methods": ["综合实操题"]}
+    {
+      "node_id": "rag_basics",
+      "name": "RAG 基础概念",
+      "level": "零基础",
+      "tier": 1,
+      "knowledge_points": [
+        "检索增强生成",
+        "上下文"
+      ],
+      "assessment_methods": [
+        "单选题",
+        "概念解释"
+      ]
+    },
+    {
+      "node_id": "document_parsing",
+      "name": "文档解析",
+      "level": "零基础",
+      "tier": 1,
+      "prerequisites": [
+        "RAG 基础概念"
+      ],
+      "knowledge_points": [
+        "格式解析",
+        "文本清洗"
+      ],
+      "assessment_methods": [
+        "实操题"
+      ]
+    },
+    {
+      "node_id": "chunking",
+      "name": "Chunk 切分",
+      "level": "Python 基础",
+      "tier": 2,
+      "prerequisites": [
+        "文档解析"
+      ],
+      "knowledge_points": [
+        "chunk_size",
+        "chunk_overlap"
+      ],
+      "assessment_methods": [
+        "参数对比题"
+      ]
+    },
+    {
+      "node_id": "embedding",
+      "name": "Embedding",
+      "level": "零基础",
+      "tier": 1,
+      "prerequisites": [
+        "RAG 基础概念"
+      ],
+      "knowledge_points": [
+        "向量表示",
+        "语义相似度"
+      ],
+      "assessment_methods": [
+        "概念题"
+      ]
+    },
+    {
+      "node_id": "vector_store",
+      "name": "向量数据库",
+      "level": "Python 基础",
+      "tier": 2,
+      "prerequisites": [
+        "Embedding"
+      ],
+      "knowledge_points": [
+        "索引",
+        "持久化"
+      ],
+      "assessment_methods": [
+        "实操题"
+      ]
+    },
+    {
+      "node_id": "similarity_retrieval",
+      "name": "相似度检索",
+      "level": "Python 基础",
+      "tier": 2,
+      "prerequisites": [
+        "向量数据库",
+        "Chunk 切分"
+      ],
+      "knowledge_points": [
+        "Top-K",
+        "召回率"
+      ],
+      "assessment_methods": [
+        "参数题"
+      ]
+    },
+    {
+      "node_id": "hybrid_retrieval",
+      "name": "混合检索",
+      "level": "进阶 RAG",
+      "tier": 3,
+      "prerequisites": [
+        "相似度检索"
+      ],
+      "knowledge_points": [
+        "关键词检索",
+        "向量检索"
+      ],
+      "assessment_methods": [
+        "方案设计题"
+      ]
+    },
+    {
+      "node_id": "rerank",
+      "name": "Rerank",
+      "level": "进阶 RAG",
+      "tier": 3,
+      "prerequisites": [
+        "相似度检索"
+      ],
+      "knowledge_points": [
+        "重排序",
+        "精排"
+      ],
+      "assessment_methods": [
+        "对比题"
+      ]
+    },
+    {
+      "node_id": "prompt_assembly",
+      "name": "Prompt 组装",
+      "level": "Python 基础",
+      "tier": 2,
+      "prerequisites": [
+        "相似度检索"
+      ],
+      "knowledge_points": [
+        "上下文窗口",
+        "指令约束"
+      ],
+      "assessment_methods": [
+        "实操题"
+      ]
+    },
+    {
+      "node_id": "citation",
+      "name": "引用溯源",
+      "level": "Python 基础",
+      "tier": 2,
+      "prerequisites": [
+        "Prompt 组装"
+      ],
+      "knowledge_points": [
+        "source_ref",
+        "证据片段"
+      ],
+      "assessment_methods": [
+        "溯源题"
+      ]
+    },
+    {
+      "node_id": "hallucination_control",
+      "name": "幻觉控制",
+      "level": "进阶 RAG",
+      "tier": 3,
+      "prerequisites": [
+        "引用溯源"
+      ],
+      "knowledge_points": [
+        "Claim",
+        "证据支持"
+      ],
+      "assessment_methods": [
+        "审核题"
+      ]
+    },
+    {
+      "node_id": "rag_evaluation",
+      "name": "RAG 评测",
+      "level": "进阶 RAG",
+      "tier": 3,
+      "prerequisites": [
+        "幻觉控制"
+      ],
+      "knowledge_points": [
+        "命中率",
+        "覆盖率",
+        "幻觉率"
+      ],
+      "assessment_methods": [
+        "指标计算题"
+      ]
+    },
+    {
+      "node_id": "rag_tuning",
+      "name": "RAG 调优",
+      "level": "进阶 RAG",
+      "tier": 3,
+      "prerequisites": [
+        "RAG 评测",
+        "混合检索",
+        "Rerank"
+      ],
+      "knowledge_points": [
+        "参数调优",
+        "消融实验"
+      ],
+      "assessment_methods": [
+        "综合实操题"
+      ]
+    }
   ],
-  "learner_levels": ["零基础", "Python 基础", "进阶 RAG"]
+  "learner_levels": [
+    "零基础",
+    "Python 基础",
+    "进阶 RAG"
+  ],
+  "storage_layout": {
+    "version": "purpose_language_source_v1",
+    "loading": "manifest_only",
+    "registry": "provenance/registry.json"
+  },
+  "staged_evidence_chunking": {
+    "profile": "evidence-units-v2",
+    "strategy": "markdown_evidence_v2",
+    "target_chars": 900,
+    "soft_max_chars": 1200,
+    "overlap_chars": 100,
+    "ingested": false,
+    "parent_context_runtime_enabled": false
+  },
+  "active_evidence_chunking": {
+    "profile": "evidence-units-v2",
+    "base_descriptor": "provenance/evidence-base/manifest.json",
+    "snapshot_hash": "25b1f2cd0fd553b11836b9521aba78d093047609acda04f7c08254a3d0ae32dc",
+    "parent_context_runtime_enabled": false
+  }
 }

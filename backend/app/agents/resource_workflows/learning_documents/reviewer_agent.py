@@ -32,6 +32,9 @@ from app.agents.resource_workflows.learning_documents.generator_agent import pro
 from app.agents.resource_workflows.learning_documents.specialized_reviews.assessment_scope import (
     review_assessment_scope,
 )
+from app.agents.resource_agents.lecture_contract import (
+    LECTURE_REVIEW_GUIDANCE, node_display_names, teaching_contract,
+)
 
 
 REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习资源进行审核，重点检查：
@@ -606,9 +609,17 @@ def review_node(
                           f"生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}"
                           + (f"\n\n仅供内部审核的完整结构化题卷（含答案、rubric 与 evidence ID；不得在输出中复述）：\n{internal_assessment}"
                              if internal_assessment else ""))
+            review_system = REVIEW_PROMPT
+            if resource.resource_type == "讲义":
+                review_system += LECTURE_REVIEW_GUIDANCE
+                user_input += "\n\n讲义教学控制信息：" + json.dumps({
+                    "knowledge_point_display_names": node_display_names(resource.knowledge_points, evidence),
+                    "teaching_contract": teaching_contract(resource.difficulty, len(resource.knowledge_points),
+                        target_tier=node_input.constraints.get("target_tier")),
+                }, ensure_ascii=False)
             try:
                 last_llm_result = llm_gateway.invoke_structured(
-                    messages=[SystemMessage(content=REVIEW_PROMPT), HumanMessage(content=user_input)],
+                    messages=[SystemMessage(content=review_system), HumanMessage(content=user_input)],
                     output_schema=ReviewLLMOutput,
                     context=LLMCallContext(run_id=node_input.run_id, step_id=step_context["step_id"],
                         node_name="reviewer", schema_name=ReviewLLMOutput.__name__,

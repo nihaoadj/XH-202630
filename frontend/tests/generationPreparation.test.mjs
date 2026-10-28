@@ -23,10 +23,12 @@ assert.deepEqual(planRegeneratePending(job, ['复习清单', '讲义'], true)[0]
   instructions: '统一重新生成本任务中未通过审核的资源：复习清单、讲义。',
 })
 assert.deepEqual(planRegeneratePending(job, ['复习清单', '讲义'], false)[0].data.resource_types, ['复习清单', '讲义'])
-assert.deepEqual(planRetryResource({ ...job, batch_id: null }, { resource_type: '讲义' }), [{ batchId: 'run-A', data: {
-  learner_id: 'learner-A', resource_types: ['讲义'], source_run_id: 'run-A', replace_existing_types: true,
-  instructions: '重新生成本批次的讲义，用新版本替换学习列表中的旧版本。',
-} }])
+assert.equal(planRetryResource(job, { resource_type: '讲义', representation: 'text' }), null)
+assert.equal(planRetryResource(job, { resource_spec_id: 'spec-A', representation: 'interactive_courseware' }), null)
+assert.equal(planRetryResource({ learner_id: 'learner-A' }, { resource_spec_id: 'spec-A', representation: 'text' }), null)
+assert.deepEqual(planRetryResource(job, { resource_spec_id: 'spec-A', representation: 'text' }), [
+  { kind: 'resource_retry', runId: 'run-A', resourceSpecId: 'spec-A', representation: 'text' },
+])
 const split = planAppendResources(job, ['复习清单', '讲义', '复习清单'], true)
 assert.deepEqual(split.map(item => item.data.resource_types), [['复习清单'], ['讲义']])
 assert.deepEqual(planAppendResources(job, ['复习清单', '讲义'], false).map(item => item.data.resource_types), [['复习清单', '讲义']])
@@ -65,6 +67,13 @@ try {
   const failed = executeGenerationPlan(split.slice(0, 1), generateApi.continueBatch)
   pending[2].reject(Object.assign(new Error('synthetic HTTP failure'), { response: { status: 503 } }))
   await assert.rejects(failed, /synthetic HTTP failure/)
+  api.defaults.adapter = async config => ({ data: JSON.stringify({ run_id: 'child', learner_id: 'learner-A',
+    batch_id: 'batch-A', topic: '合成', job_status: 'queued' }), status: 200, statusText: 'OK', headers: {}, config })
+  const retry = await generateApi.retryResourceRepresentation('run/A', 'spec A', 'text')
+  assert.equal(retry.config.url, '/generate/jobs/run%2FA/resource-specs/spec%20A/representations/text/retry')
+  assert.equal(retry.data.run_id, 'child')
+  api.defaults.adapter = async config => ({ data: '{}', status: 200, statusText: 'OK', headers: {}, config })
+  await assert.rejects(generateApi.retryResourceRepresentation('run-A', 'spec-A', 'text'))
 } finally { api.defaults.adapter = previousAdapter; globalThis.window = previousWindow }
 
 function harness(overrides = {}) {
@@ -169,10 +178,10 @@ function commandHarness({ listGate, streamGate } = {}) {
   })
   api.defaults.adapter = config => {
     const held = deferred()
-    const body = JSON.parse(config.data)
+    const body = config.data ? JSON.parse(config.data) : undefined
     const index = pending.length
     pending.push({ ...held, body, config,
-      succeed: () => held.resolve({ data: JSON.stringify({ run_id: `created-${index}`, learner_id: body.learner_id,
+      succeed: () => held.resolve({ data: JSON.stringify({ run_id: `created-${index}`, learner_id: body?.learner_id || 'learner-A',
         batch_id: 'batch-A', topic: '合成', job_status: 'queued' }),
       status: 200, statusText: 'OK', config, headers: {} }),
       fail: () => held.reject(Object.assign(new Error('command failed'), { response: { status: 503 } })),
@@ -186,11 +195,11 @@ function commandHarness({ listGate, streamGate } = {}) {
     const plan = kind === 'retry' ? planRetryGeneration(source)
       : kind === 'pending' ? planRegeneratePending(source, ['复习清单', '讲义'], claim)
         : kind === 'append' ? planAppendResources(source, ['复习清单', '讲义', '复习清单'], claim)
-          : planRetryResource(source, { resource_type: '讲义' })
+          : planRetryResource(source, { resource_spec_id: key.split(':')[0], representation: 'text' })
     const command = {
       channel: kind === 'pending' ? 'retry' : kind,
       busyValue: kind === 'resource' ? key : '',
-      execute: () => executeGenerationPlan(plan, generateApi.continueBatch),
+      execute: () => executeGenerationPlan(plan, generateApi.continueBatch, generateApi.retryResourceRepresentation),
       succeeded: () => { if (kind === 'append') ui.dialog = false; ui.notices.push(`success:${kind}`) },
       failed: () => ui.notices.push(`error:${kind}`),
     }
@@ -217,7 +226,9 @@ try {
     const { done, plan } = h.start(kind, { claim })
     assert.ok(h.busy(kind), `${kind}: busy starts before POST`)
     assert.deepEqual(h.pending.map(item => item.body), plan.map(item => item.data))
-    assert.ok(h.pending.every(item => item.config.url === '/resources/batches/batch-A/continuations'))
+    assert.ok(h.pending.every(item => item.config.url === (kind === 'resource'
+      ? '/generate/jobs/run-A/resource-specs/spec-A/representations/text/retry'
+      : '/resources/batches/batch-A/continuations')))
     const count = h.pending.length
     assert.equal(await h.start(kind, { claim }).done, false, `${kind}: same busy action cannot duplicate POST`)
     assert.equal(h.pending.length, count)

@@ -1,0 +1,1108 @@
+{
+  "schema_version": 1,
+  "layout_version": "purpose_language_source_v1",
+  "document_count": 62,
+  "documents": [
+    {
+      "id": "source_zh_flag_bge",
+      "title": "FlagEmbedding：BGE 向量模型与重排序官方中文说明",
+      "language": "zh",
+      "publisher": "flagembedding",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/flagembedding/bge/content.md",
+      "content_sha256": "e1ce1595136435dcaefeffa9914ddc2647c0bdc3d34aadb021bc242a498d6920",
+      "original": "references/zh/flagembedding/bge/original.md",
+      "original_sha256": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
+      "license": "licenses/flag/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/FlagOpen/FlagEmbedding/fd1a2bdf69488ffebe0327999d4400d8c8058a0b/README_zh.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_overview",
+      "title": "MinerU 4.0 官方中文说明",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/overview/content.md",
+      "content_sha256": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9",
+      "original": "references/zh/mineru/overview/original.md",
+      "original_sha256": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/README_zh-CN.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_quick_start",
+      "title": "MinerU 快速入门",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/quick_start/content.md",
+      "content_sha256": "bb4afa3cfa4b49fd7ac01f63bc05ba31ecafc911920a985f769286fc1e7ec2c7",
+      "original": "references/zh/mineru/quick_start/original.md",
+      "original_sha256": "b06ad352bbd4ea7cae2d90b4ba73ccf0f4851dec6ad95537cdbc3291bfe36cdb",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/quick_start/index.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_usage",
+      "title": "MinerU 基础使用",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/usage/content.md",
+      "content_sha256": "ebed28458c2cd1682ce9293adba4b7cfebec2f5a6faff1c59a92c45bb204c1a3",
+      "original": "references/zh/mineru/usage/original.md",
+      "original_sha256": "279a396168e2f7e6c8d7e55761b863b0576d1a905b9a6147fe42122be77e1e1f",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/quick_usage.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_output",
+      "title": "MinerU 输出格式与结果协议",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/output/content.md",
+      "content_sha256": "4b313fc1d73227201a50929a6f9e89cc2e331e72a17ab050385768eca7aac813",
+      "original": "references/zh/mineru/output/original.md",
+      "original_sha256": "63291b35a65719469d3c89073050c7847fb424cf27be928824602b302bdd25c2",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/reference/output_files.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_sdk",
+      "title": "MinerU Python SDK",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/sdk/content.md",
+      "content_sha256": "a3f57b6bef5b6f9c8633a34785bc6cc873401664de02f5805a61f2451df0ee1f",
+      "original": "references/zh/mineru/sdk/original.md",
+      "original_sha256": "344394a5e225640e73e3d37562dc96362c6314f8e4c9a74a7f6875c5872e3b1f",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/sdk_api.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_tiers",
+      "title": "MinerU 档位与运行环境",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/tiers/content.md",
+      "content_sha256": "107d22fea252be4c41971dbcb52dfdb5f0b862f45642631468af05d55a6ff4fd",
+      "original": "references/zh/mineru/tiers/original.md",
+      "original_sha256": "15e5b3aa6acd58ff72cc1c33e3d21beaac29064c269facef2431bf60aedafd9c",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/tiers.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_ragflow",
+      "title": "MinerU 与 RAGFlow 集成说明",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/ragflow/content.md",
+      "content_sha256": "bddd9e38896606018f3aea2eccbd5ce42a2247948b26e57d18275a30b89b2005",
+      "original": "references/zh/mineru/ragflow/original.md",
+      "original_sha256": "15ab57b99a9f612651b1f74aa62339d783d80167db4d4d1b3a1cffe6a1ef0912",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/plugin/RagFlow.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_dify",
+      "title": "MinerU 与 Dify 集成说明",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/dify/content.md",
+      "content_sha256": "ae8ff94877ed12982ee6f9102fb74beb37dca46fc9d13ddb5641146abac344e8",
+      "original": "references/zh/mineru/dify/original.md",
+      "original_sha256": "8706993daaa7f228ba320550b28250e5666eeac535b32a1d987214e5185d6148",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/plugin/Dify.md"
+      ]
+    },
+    {
+      "id": "source_zh_mineru_http",
+      "title": "MinerU V1 HTTP API 文档",
+      "language": "zh",
+      "publisher": "mineru",
+      "kind": "authoritative_original",
+      "language_origin": "official_chinese",
+      "file": "references/zh/mineru/http/content.md",
+      "content_sha256": "bbd06433a1ab1582c2e11d562c5eb6607da2adcc554b26ff6befc88cf0a2e200",
+      "original": "references/zh/mineru/http/original.md",
+      "original_sha256": "e9b447ac154237c085f4858fcaab3eadad2851ea4a109714757d6080baf59164",
+      "license": "licenses/mineru/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/opendatalab/MinerU/b7f3dd0c5f6e6d66a298239ffd02b328b873918e/docs/zh/usage/http_api.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_rag",
+      "title": "使用 Milvus 构建 RAG",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/rag/content.md",
+      "content_sha256": "7d846edd4e273b3723123f0a29218b250f77c2ed566ce2d3f1b074ba9f21ae49",
+      "original": "references/zh/milvus/rag/original.md",
+      "original_sha256": "0d1c2b65679d640a5d09347e93b50f32cbc4d0ff186a15a9a8d61e737069899b",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/build-rag-with-milvus.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_enhance",
+      "title": "如何提高 RAG 管道的性能",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/enhance/content.md",
+      "content_sha256": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5",
+      "original": "references/zh/milvus/enhance/original.md",
+      "original_sha256": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/how_to_enhance_your_rag.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_hybrid",
+      "title": "使用 Milvus 进行混合搜索",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/hybrid/content.md",
+      "content_sha256": "e7bd5327250541171081f42f8c3e919d492b5379f08ea1747382af1427e88ec1",
+      "original": "references/zh/milvus/hybrid/original.md",
+      "original_sha256": "2d47637096b0f22506701ab989ca66c7894ef1cff9cd87466f6089aa766ea8f7",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/hybrid_search_with_milvus.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_fulltext_tutorial",
+      "title": "使用 LangChain 和 Milvus 进行全文检索",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/fulltext_tutorial/content.md",
+      "content_sha256": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176",
+      "original": "references/zh/milvus/fulltext_tutorial/original.md",
+      "original_sha256": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/full_text_search_with_milvus.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_graph",
+      "title": "使用 Milvus 构建图 RAG",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/graph/content.md",
+      "content_sha256": "5949f9fb972f995b3b4f3ef9d2ff419310439553ee6642f18c30580aee843688",
+      "original": "references/zh/milvus/graph/original.md",
+      "original_sha256": "778e4614378007bde6d4334f38ce897d6911be3af4a46cd9799aa8d08143a8f8",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/graph_rag_with_milvus.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_multimodal",
+      "title": "基于 Milvus 的多模态 RAG",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/multimodal/content.md",
+      "content_sha256": "ecafa0a029cfa401af04ed4b28d374d41e5c45da9479c68a043540a91245ab3f",
+      "original": "references/zh/milvus/multimodal/original.md",
+      "original_sha256": "311b5d06718e773ecadb6fad5d2aabe8b1af4a71281b6dac0cba9e955b03ae38",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/tutorials/multimodal_rag_with_milvus.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_fulltext",
+      "title": "Milvus 全文搜索指南",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/fulltext/content.md",
+      "content_sha256": "5f09ab9966f1494c5c66d3354444c65847e8e23ead6d0d2356cda07c14a6fc5b",
+      "original": "references/zh/milvus/fulltext/original.md",
+      "original_sha256": "be6c00e9723e70b06f90e613694688a5deacb0e128398466b60d44aa0cfc3c78",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/userGuide/search-query-get/full-text-search.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_multi_vector",
+      "title": "Milvus 多向量混合搜索指南",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/multi_vector/content.md",
+      "content_sha256": "46b3e602f6a9ff663f9ea25ee5520d17a85341fc6eb396f9acf1bde4f239ba1c",
+      "original": "references/zh/milvus/multi_vector/original.md",
+      "original_sha256": "bc568a9c03e4a623eb578d3db8b28c641ca3a92ea7a3ca3ef047a79e875d3f70",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/userGuide/search-query-get/multi-vector-search.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_rerank",
+      "title": "Milvus 模型重排序概述",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/rerank/content.md",
+      "content_sha256": "d08426cb3bdb53118a2f76a2ed42036b3819ed46df72e3d2f7b6e00edfc45b79",
+      "original": "references/zh/milvus/rerank/original.md",
+      "original_sha256": "f55e934335df3bf1983608224c04a52887806839f516f48f43b97b2085d96fce",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/userGuide/embeddings-reranking/reranking/model-ranker-overview.md"
+      ]
+    },
+    {
+      "id": "source_zh_milvus_pipeline",
+      "title": "Milvus RAG 管道",
+      "language": "zh",
+      "publisher": "milvus",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/milvus/pipeline/content.md",
+      "content_sha256": "7f3786ded8c20371f169c32d56749a777d0a1a1faff6fe757382b80507ae60ae",
+      "original": "references/zh/milvus/pipeline/original.md",
+      "original_sha256": "35321b091aca9ce9e0e8d61e521fe7b3b277409ba4d428ecda972713958505a3",
+      "license": "licenses/milvus/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/milvus-io/web-content/ef5f830cf84804a2cd317f3e7ca9940ba436f8c3/localization/v3.0.x/site/zh/aiTools/rag_pipeline.md"
+      ]
+    },
+    {
+      "id": "source_zh_hf_advanced",
+      "title": "使用 LangChain 在 Hugging Face 文档上构建高级 RAG",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/advanced/content.md",
+      "content_sha256": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b",
+      "original": "references/zh/huggingface/advanced/original.ipynb",
+      "original_sha256": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/advanced_rag.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_evaluation",
+      "title": "使用合成数据和 LLM 作为裁判评估 RAG",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/evaluation/content.md",
+      "content_sha256": "b57100679a427503184ce988c70e160991fff0688f95730482cd5c701949964f",
+      "original": "references/zh/huggingface/evaluation/original.ipynb",
+      "original_sha256": "b460e3f1895fcbafc48c9ff34d855140c1afd6fc29b77473c01b72bae4f4f4d7",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_evaluation.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_milvus",
+      "title": "使用 Hugging Face 和 Milvus 构建 RAG 系统",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/milvus/content.md",
+      "content_sha256": "9c4df2a1aada427ffe9e7f0ceed020bd368488c35dc38859ae291947ddbf0537",
+      "original": "references/zh/huggingface/milvus/original.ipynb",
+      "original_sha256": "51c742e90093e7af44638a49a743ccef57ee383ce47fc2edc6a94521eaf433ad",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_hf_and_milvus.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_unstructured",
+      "title": "使用自定义非结构化数据构建 RAG",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/unstructured/content.md",
+      "content_sha256": "a71c28b19655b83a3bf2056e2ceb09e0c48bd8b68d939c0611cfbc6bceb8cdd8",
+      "original": "references/zh/huggingface/unstructured/original.ipynb",
+      "original_sha256": "173922ff5a180cdcda2aa6ffa100f6acc8990ae71570e7fd5a8917f0c14193d1",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_unstructured_data.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_elasticsearch",
+      "title": "使用 Gemma、Elasticsearch 和 Hugging Face 模型构建 RAG",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/elasticsearch/content.md",
+      "content_sha256": "f5a78448010243098e84b21a010a82ebf32ac7e0282c8c249c182e201f45634e",
+      "original": "references/zh/huggingface/elasticsearch/original.ipynb",
+      "original_sha256": "da83b0b87ce2f487c699cdeba9b77065b724ab2e39510abc94e1bafce13bdd38",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_hugging_face_gemma_elasticsearch.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_zephyr",
+      "title": "使用 Zephyr 和 LangChain 针对 GitHub Issues 构建 RAG",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/zephyr/content.md",
+      "content_sha256": "fd829b736ededfe5350215ec618f1bea9ddd76202fcd06f8dddf9fb6d41db715",
+      "original": "references/zh/huggingface/zephyr/original.ipynb",
+      "original_sha256": "5139bd699a69a1764b53db5424e24ef04873c11b0f545d85c9f90bd9a4aa7ef4",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_zephyr_langchain.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_librarian",
+      "title": "使用 LlamaIndex 构建 RAG 电子书库智能助手",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/librarian/content.md",
+      "content_sha256": "dda78c0f03a8cc6062144cfbd7809838b63213277213854f6740209c4a829737",
+      "original": "references/zh/huggingface/librarian/original.ipynb",
+      "original_sha256": "ead9648be92a94db68cd99f6637e21f4369d91b1aae643ff172cf2874700e4be",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_llamaindex_librarian.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_grounded",
+      "title": "使用结构化生成进行带来源高亮的 RAG",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/grounded/content.md",
+      "content_sha256": "1e6d1094faa3d094fa0fb898ff76104fc282b7d8ff6931de6cfe3c5c06ecb8bd",
+      "original": "references/zh/huggingface/grounded/original.ipynb",
+      "original_sha256": "3e15593bd5550d10d79a41cae99958065af3c530aef8c23eaf7582c991f69f8b",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/structured_generation.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_sql_rerank",
+      "title": "基于 SQL 和 Jina Reranker v2 的 RAG",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/sql_rerank/content.md",
+      "content_sha256": "f8dee8ece6e8df5e53c897ce01435c3e7eba6868b0769df4e1896649da447d86",
+      "original": "references/zh/huggingface/sql_rerank/original.ipynb",
+      "original_sha256": "195611cfb2d6db72ee5257889f4f840ea78191afe7b79f7e2ce72736e76bfad4",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_sql_reranker.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_graph",
+      "title": "利用 Neo4j 知识图谱增强 RAG 推理",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/graph/content.md",
+      "content_sha256": "aa353d2c36d8ae4ce860835345966e1fb71ba21bc67efd551291e699d488d23d",
+      "original": "references/zh/huggingface/graph/original.ipynb",
+      "original_sha256": "c670b7a96019fb9722be0a6387fd52cd24c2c61202a936e0a3a67f66448e4494",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/rag_with_knowledge_graphs_neo4j.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_agent",
+      "title": "Agentic RAG：查询重构与自查询",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/agent/content.md",
+      "content_sha256": "e7a44ccdc76d8ae481f59454af37cd92567e756b4d8fa3167a4356dddd743fd6",
+      "original": "references/zh/huggingface/agent/original.ipynb",
+      "original_sha256": "c1ba4b4fff8cd97bb587ca1d548e379423462e2f7a45602540189686dab009b6",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/agent_rag.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_multiagent",
+      "title": "多智能体 RAG 系统",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/multiagent/content.md",
+      "content_sha256": "ca148acfa79be95c4491c3c3f290d48239cf8da76b56f5436653534225d85e34",
+      "original": "references/zh/huggingface/multiagent/original.ipynb",
+      "original_sha256": "647a7c85d765527685339b7ddc230db51345652fe4778abe11e003c688dff193",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/multiagent_rag_system.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_multimodal",
+      "title": "使用文档检索和视觉语言模型构建多模态 RAG",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/multimodal/content.md",
+      "content_sha256": "29161f98657aaac0606b7dcdf2cabaac19f9e3030d63bb08eb95868a701e2a89",
+      "original": "references/zh/huggingface/multimodal/original.ipynb",
+      "original_sha256": "eb97e93625c314d51022e46a7520687c4aeaffa16130d93d35febb058f57818a",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/multimodal_rag_using_document_retrieval_and_vlms.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_cache",
+      "title": "使用 Chroma 语义缓存增强 RAG 性能",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/cache/content.md",
+      "content_sha256": "9822de7d2f8941d5b6b3319845e418089b0a0cf126cf582acfc7685e42d4a5e8",
+      "original": "references/zh/huggingface/cache/original.ipynb",
+      "original_sha256": "381ab837867fbcbd953944d79cc401b091e5edf0df2e43df7708581528b5d3ea",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/semantic_cache_chroma_vector_database.ipynb"
+      ]
+    },
+    {
+      "id": "source_zh_hf_semantic_rerank",
+      "title": "Elasticsearch 语义重排序",
+      "language": "zh",
+      "publisher": "huggingface",
+      "kind": "authoritative_original",
+      "language_origin": "official_translation",
+      "file": "references/zh/huggingface/semantic_rerank/content.md",
+      "content_sha256": "80a852458f8659ccc888432bfa5b677016c11a1035d5b51a863103bd2e593185",
+      "original": "references/zh/huggingface/semantic_rerank/original.ipynb",
+      "original_sha256": "62ba43121ec766f67e7b814dd48e4f99c9626798fe068a6208a04461a5081a37",
+      "license": "licenses/huggingface/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/cookbook/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/semantic_reranking_elasticsearch.ipynb"
+      ]
+    },
+    {
+      "id": "source_paper_dpr",
+      "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+      "language": "en",
+      "publisher": "papers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/papers/dpr/content.md",
+      "content_sha256": "fa9f0e633379995d2489393f68d1f9a57eae59a1b742a45f5d0b43811556d293",
+      "original": "references/en/papers/dpr/original.pdf",
+      "original_sha256": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "license": "licenses/acl/CC-BY-4.0",
+      "source_urls": [
+        "https://aclanthology.org/2020.emnlp-main.550.pdf"
+      ]
+    },
+    {
+      "id": "source_paper_hyde",
+      "title": "Precise Zero-Shot Dense Retrieval without Relevance Labels",
+      "language": "en",
+      "publisher": "papers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/papers/hyde/content.md",
+      "content_sha256": "d36028d9730b227cc37c5783da35d4a5119cff631fa6941fd86d8b4190bdf4ae",
+      "original": "references/en/papers/hyde/original.pdf",
+      "original_sha256": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "license": "licenses/acl/CC-BY-4.0",
+      "source_urls": [
+        "https://aclanthology.org/2023.acl-long.99.pdf"
+      ]
+    },
+    {
+      "id": "source_paper_ragas",
+      "title": "RAGAs: Automated Evaluation of Retrieval Augmented Generation",
+      "language": "en",
+      "publisher": "papers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/papers/ragas/content.md",
+      "content_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383",
+      "original": "references/en/papers/ragas/original.pdf",
+      "original_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "license": "licenses/acl/CC-BY-4.0",
+      "source_urls": [
+        "https://aclanthology.org/2024.eacl-demo.16.pdf"
+      ]
+    },
+    {
+      "id": "source_paper_alce",
+      "title": "Enabling Large Language Models to Generate Text with Citations",
+      "language": "en",
+      "publisher": "papers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/papers/alce/content.md",
+      "content_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2",
+      "original": "references/en/papers/alce/original.pdf",
+      "original_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "source_urls": [
+        "https://aclanthology.org/2023.emnlp-main.398.pdf"
+      ]
+    },
+    {
+      "id": "source_paper_lost_middle",
+      "title": "Lost in the Middle: How Language Models Use Long Contexts",
+      "language": "en",
+      "publisher": "papers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/papers/lost_middle/content.md",
+      "content_sha256": "9a94d0a2d3b4d993a3767b05cb8b14657e60a4f50e2f3e801bbe050f71f16e73",
+      "original": "references/en/papers/lost_middle/original.pdf",
+      "original_sha256": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "license": "licenses/acl/CC-BY-4.0",
+      "source_urls": [
+        "https://aclanthology.org/2024.tacl-1.9.pdf"
+      ]
+    },
+    {
+      "id": "source_paper_rag_best_practices",
+      "title": "Searching for Best Practices in Retrieval-Augmented Generation",
+      "language": "en",
+      "publisher": "papers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/papers/rag_best_practices/content.md",
+      "content_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719",
+      "original": "references/en/papers/rag_best_practices/original.pdf",
+      "original_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "license": "licenses/acl/CC-BY-4.0",
+      "source_urls": [
+        "https://aclanthology.org/2024.emnlp-main.981.pdf"
+      ]
+    },
+    {
+      "id": "source_langchain_retrieval_architectures",
+      "title": "Retrieval architectures",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/retrieval_architectures/content.md",
+      "content_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da",
+      "original": "references/en/langchain/retrieval_architectures/original.mdx",
+      "original_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/deepagents/retrieval.mdx"
+      ]
+    },
+    {
+      "id": "source_langchain_pdf_semantic_search_rag",
+      "title": "Build a semantic search engine with LangChain",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/pdf_semantic_search_rag/content.md",
+      "content_sha256": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a",
+      "original": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
+      "original_sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/langchain/knowledge-base.mdx"
+      ]
+    },
+    {
+      "id": "source_langchain_html_splitters",
+      "title": "Split HTML",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/html_splitters/content.md",
+      "content_sha256": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77",
+      "original": "references/en/langchain/html_splitters/original.mdx",
+      "original_sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/splitters/split_html.mdx"
+      ]
+    },
+    {
+      "id": "source_langchain_docling_loader",
+      "title": "Docling document loading",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/docling_loader/content.md",
+      "content_sha256": "768e318b2e906c1c00e7aabb2be560968258ed1e303d7d7ec8983a488749dd25",
+      "original": "references/en/langchain/docling_loader/original.mdx",
+      "original_sha256": "664e6248db534402a98f698b5465d72cd14f37da8c006a201af95938c977215d",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_loaders/docling.mdx"
+      ]
+    },
+    {
+      "id": "source_langchain_sentence_transformers_embeddings",
+      "title": "Sentence Transformers embeddings integration",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/sentence_transformers_embeddings/content.md",
+      "content_sha256": "911397c385884a77c787161714b0b020976cfe1fe4138330823b85d23313c9e5",
+      "original": "references/en/langchain/sentence_transformers_embeddings/original.mdx",
+      "original_sha256": "92a6838f4acc671ba4f631c8a288c06c44732d0d7150d541f5c7f228e059541c",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/embeddings/sentence_transformers.mdx"
+      ]
+    },
+    {
+      "id": "source_langchain_chroma_vectorstore",
+      "title": "Chroma vector store integration",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/chroma_vectorstore/content.md",
+      "content_sha256": "4557e7051b3f75e33db3f980555eff495bb59f42b252dccb07fe26000ed1516d",
+      "original": "references/en/langchain/chroma_vectorstore/original.mdx",
+      "original_sha256": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/chroma.mdx"
+      ]
+    },
+    {
+      "id": "source_langchain_elasticsearch_retrieval",
+      "title": "Elasticsearch retrieval strategies",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+      "content_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0",
+      "original": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+      "original_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/elasticsearch.mdx"
+      ]
+    },
+    {
+      "id": "source_langchain_cross_encoder_reranker",
+      "title": "Cross-encoder reranker integration",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/cross_encoder_reranker/content.md",
+      "content_sha256": "9778bc4f5737f7bdf9f1f010861f75169c40bab2c8356b6906aa6eb2050e8302",
+      "original": "references/en/langchain/cross_encoder_reranker/original.mdx",
+      "original_sha256": "6757aa92dc9972f258179564caa885270cc25d0857219850799dff75c802b0d0",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_transformers/cross_encoder_reranker.mdx"
+      ]
+    },
+    {
+      "id": "source_sbert_training_overview",
+      "title": "Sentence Transformer training overview",
+      "language": "en",
+      "publisher": "sentence_transformers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/sentence_transformers/training_overview/content.md",
+      "content_sha256": "b69e2c3a92118e9bbd42953826a89654f544770a557fa7de5a91b132eb0fe097",
+      "original": "references/en/sentence_transformers/training_overview/original.md",
+      "original_sha256": "17fe1adab43dcac9f3664c314aea35c0cb21ad2c8ae9ddfbba37768bd659e54c",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/sentence_transformer/training_overview.md"
+      ]
+    },
+    {
+      "id": "source_sbert_ms_marco_training",
+      "title": "MS MARCO dense retrieval training",
+      "language": "en",
+      "publisher": "sentence_transformers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+      "content_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+      "original": "references/en/sentence_transformers/ms_marco_training/original.md",
+      "original_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/training/ms_marco/README.md"
+      ]
+    },
+    {
+      "id": "source_sbert_faiss_semantic_search",
+      "title": "FAISS semantic search complete implementation",
+      "language": "en",
+      "publisher": "sentence_transformers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+      "content_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71",
+      "original": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+      "original_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/semantic-search/semantic_search_quora_faiss.py"
+      ]
+    },
+    {
+      "id": "source_sbert_cross_encoder_reranking",
+      "title": "Cross-encoder reranking complete implementation",
+      "language": "en",
+      "publisher": "sentence_transformers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/sentence_transformers/cross_encoder_reranking/content.md",
+      "content_sha256": "cd85776774c5b27dcead37f338b8b54c8babc5c7633d674dff70a608e10a0ef5",
+      "original": "references/en/sentence_transformers/cross_encoder_reranking/original.py",
+      "original_sha256": "c5efce937ddc0e441ffba2c310aab1fa2643f99179a177ec81f29ca0fcc64b8c",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/cross_encoder/applications/cross_encoder_reranking.py"
+      ]
+    },
+    {
+      "id": "source_langchain_markdown_splitter",
+      "title": "LangChain 官方原文：Markdown 结构切分",
+      "language": "en",
+      "publisher": "langchain",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/langchain/markdown_splitter/content.md",
+      "content_sha256": "d968d91a42a9b902ea58b931b9fbff3257ad96d8f8a27c7bab30edb7fd510943",
+      "original": "references/en/langchain/markdown_splitter/original.mdx",
+      "original_sha256": "9e74b44f9fe42bfb6f527b0cc261d234dd4b5858501caa508403f60e0c718d07",
+      "license": "licenses/langchain/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/splitters/markdown_header_metadata_splitter.mdx"
+      ]
+    },
+    {
+      "id": "source_sbert_semantic_search",
+      "title": "Sentence Transformers 官方原文：Semantic Search",
+      "language": "en",
+      "publisher": "sentence_transformers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/sentence_transformers/semantic_search/content.md",
+      "content_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+      "original": "references/en/sentence_transformers/semantic_search/original.md",
+      "original_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/semantic-search/README.md"
+      ]
+    },
+    {
+      "id": "source_sbert_retrieve_rerank",
+      "title": "Sentence Transformers 官方原文：Retrieve & Re-Rank",
+      "language": "en",
+      "publisher": "sentence_transformers",
+      "kind": "authoritative_original",
+      "language_origin": "official_original",
+      "file": "references/en/sentence_transformers/retrieve_rerank/content.md",
+      "content_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+      "original": "references/en/sentence_transformers/retrieve_rerank/original.md",
+      "original_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/retrieve_rerank/README.md"
+      ]
+    },
+    {
+      "id": "module_rag_foundations",
+      "title": "综合学习模块 01：RAG 原理、系统边界与工程契约",
+      "language": "zh",
+      "publisher": "project",
+      "kind": "teaching",
+      "language_origin": "project_curated",
+      "file": "teaching/zh/01_rag_foundations_and_system_contracts.md",
+      "content_sha256": "62b432788a562a5ba0e04af3894f3048355747816f1e9cb1fee2b63e8002becb"
+    },
+    {
+      "id": "module_ingestion_chunking",
+      "title": "综合学习模块 02：资料治理、文档解析与 Chunk 实验",
+      "language": "zh",
+      "publisher": "project",
+      "kind": "teaching",
+      "language_origin": "project_curated",
+      "file": "teaching/zh/02_ingestion_parsing_and_chunking.md",
+      "content_sha256": "7c928113c6f58f7e9f266d9e68abb329644145836fafb4810d821fbfeb086024"
+    },
+    {
+      "id": "module_embeddings_vector_retrieval",
+      "title": "综合学习模块 03：Embedding、向量数据库与相似度检索",
+      "language": "zh",
+      "publisher": "project",
+      "kind": "teaching",
+      "language_origin": "project_curated",
+      "file": "teaching/zh/03_embeddings_vector_store_and_retrieval.md",
+      "content_sha256": "b96892595138519db8dfc3adfec6a5f46a8f174eceddfb2ba4c4797a41ae4f5f"
+    },
+    {
+      "id": "module_hybrid_rerank",
+      "title": "综合学习模块 04：查询改写、混合召回与 Rerank",
+      "language": "zh",
+      "publisher": "project",
+      "kind": "teaching",
+      "language_origin": "project_curated",
+      "file": "teaching/zh/04_query_hybrid_retrieval_and_rerank.md",
+      "content_sha256": "e8a9eaa1b08f81bc18c408caf49aff2ab7e92ed3d868be9ee24c4863d056a756"
+    },
+    {
+      "id": "module_context_citation_grounding",
+      "title": "综合学习模块 05：上下文组装、引用与忠实生成",
+      "language": "zh",
+      "publisher": "project",
+      "kind": "teaching",
+      "language_origin": "project_curated",
+      "file": "teaching/zh/05_context_citation_and_grounded_generation.md",
+      "content_sha256": "38b69dfdb882bb08e1b81a7f2461f3ca9c15799d7e60aeb95bbea7e2806c2430"
+    },
+    {
+      "id": "module_evaluation_tuning",
+      "title": "综合学习模块 06：RAG 评测、消融实验与生产运营",
+      "language": "zh",
+      "publisher": "project",
+      "kind": "teaching",
+      "language_origin": "project_curated",
+      "file": "teaching/zh/06_evaluation_ablation_and_operations.md",
+      "content_sha256": "20b131c78741bd99de2f5a6a4cfab31b190d7c1ae9088b592154d420585f48a6"
+    }
+  ],
+  "asset_hashes": {
+    "assessment_questions.json": "b598ed6d021c309de050f7b3df5a0463c5a922daa3c6ea3c9646298cdf97f873",
+    "diagnostic_questions.json": "d3c8adf2e196342c86118c7b54192c09ba62df7c787b5308478abe7350acb23c",
+    "licenses/acl/CC-BY-4.0": "57879453e2e4f2eabbe3b8ba0a774443eec1f87076f3b7437c1ebda52c337414",
+    "licenses/Apache-2.0": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "licenses/flag/ATTRIBUTION": "c5aa838ad7224bd484954457a77efab95db5e51950f0caaa75e2b468e4555095",
+    "licenses/flag/LICENSE": "587a673933425dbc36ec61268d3b954051b2d3ef3c9b322ede357976055ffdd5",
+    "licenses/huggingface/ATTRIBUTION": "e51856c809ec864e21fc86c3daa1b46afb836494b96f2ea631c2ee25aa774c49",
+    "licenses/huggingface/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "licenses/langchain/LICENSE": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+    "licenses/milvus/ATTRIBUTION": "57e410513631042af5af1cf84f9a57acd348c706efc653fd3f04bf89a02171e8",
+    "licenses/milvus/LICENSE": "1ca3cba938dffe5efeb13d44bf5482f318342f78a636eeca69779214bbae6d4c",
+    "licenses/mineru/ATTRIBUTION": "d43f07bd839a8fb04502f75dff1f64db67dbd0ac7ae0019a6117b1805cb29518",
+    "licenses/mineru/LICENSE": "2d9aeb5d15159329a20dd804f251c64860ba954fbd26ec02f802220e6d71cf5c",
+    "licenses/sentence-transformers/LICENSE": "624b030fd62b8b989dd502d5bb6322cbc0dbb524ab9c9708f32efe33d7275735",
+    "metadata.json": "cacb49b66cfa8eb832a0fa4448ba17fbe416c6d12ecf4cb7c27fc18cd7942c26",
+    "provenance/catalogs/bulk.json": "8d90ecd07e212bff0785a8997369a71f12b5aec522757cc04f5b52c2490f72e0",
+    "provenance/catalogs/chinese.json": "515a18949b5ca94d80f9f7e41d86469f47df5d16357e82f4b9ba9d08efda88b3",
+    "provenance/import_batches/bulk.json": "49f4b56a69003c94d3c5d6190840ba2cc2b3c72237be344d277053ca3f8c10c5",
+    "provenance/import_batches/chinese.json": "9c8ecd2ca9cfcc3a32ded40b5cd67f8b479df0106c243c8d8f4b7a20396f9581",
+    "provenance/import_batches/pilot.json": "40c98501ffb30597d51d860ee83c94e5624a9ba151b59e71d201f145e2eac94f",
+    "provenance/query_aliases_sources.json": "b647cf61e7131b1e592ecdfef8c8232e8d9ec2e948eb5cce6e67193b6fcdbfe4",
+    "query_aliases.json": "623f9bc3f633f10fabec60122bec99eac52421e54d29b49a0775b26f8e77cf48",
+    "questionnaire.json": "5344e325dd356434efb0aecaf6138efb1d18a6fdf46aa750ecbb8c542e262a1c",
+    "README.md": "c226477c9e2864d9bfab205d782b58531d3bbda3aeb8aa00030844af5ed91b28",
+    "references/en/langchain/chroma_vectorstore/content.md": "4557e7051b3f75e33db3f980555eff495bb59f42b252dccb07fe26000ed1516d",
+    "references/en/langchain/chroma_vectorstore/original.mdx": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
+    "references/en/langchain/cross_encoder_reranker/content.md": "9778bc4f5737f7bdf9f1f010861f75169c40bab2c8356b6906aa6eb2050e8302",
+    "references/en/langchain/cross_encoder_reranker/original.mdx": "6757aa92dc9972f258179564caa885270cc25d0857219850799dff75c802b0d0",
+    "references/en/langchain/docling_loader/content.md": "768e318b2e906c1c00e7aabb2be560968258ed1e303d7d7ec8983a488749dd25",
+    "references/en/langchain/docling_loader/original.mdx": "664e6248db534402a98f698b5465d72cd14f37da8c006a201af95938c977215d",
+    "references/en/langchain/elasticsearch_retrieval/content.md": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0",
+    "references/en/langchain/elasticsearch_retrieval/original.mdx": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+    "references/en/langchain/html_splitters/content.md": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77",
+    "references/en/langchain/html_splitters/original.mdx": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+    "references/en/langchain/markdown_splitter/content.md": "d968d91a42a9b902ea58b931b9fbff3257ad96d8f8a27c7bab30edb7fd510943",
+    "references/en/langchain/markdown_splitter/original.mdx": "9e74b44f9fe42bfb6f527b0cc261d234dd4b5858501caa508403f60e0c718d07",
+    "references/en/langchain/pdf_semantic_search_rag/content.md": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a",
+    "references/en/langchain/pdf_semantic_search_rag/original.mdx": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+    "references/en/langchain/retrieval_architectures/content.md": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da",
+    "references/en/langchain/retrieval_architectures/original.mdx": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+    "references/en/langchain/sentence_transformers_embeddings/content.md": "911397c385884a77c787161714b0b020976cfe1fe4138330823b85d23313c9e5",
+    "references/en/langchain/sentence_transformers_embeddings/original.mdx": "92a6838f4acc671ba4f631c8a288c06c44732d0d7150d541f5c7f228e059541c",
+    "references/en/papers/alce/content.md": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2",
+    "references/en/papers/alce/original.pdf": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+    "references/en/papers/dpr/content.md": "fa9f0e633379995d2489393f68d1f9a57eae59a1b742a45f5d0b43811556d293",
+    "references/en/papers/dpr/original.pdf": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+    "references/en/papers/hyde/content.md": "d36028d9730b227cc37c5783da35d4a5119cff631fa6941fd86d8b4190bdf4ae",
+    "references/en/papers/hyde/original.pdf": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+    "references/en/papers/lost_middle/content.md": "9a94d0a2d3b4d993a3767b05cb8b14657e60a4f50e2f3e801bbe050f71f16e73",
+    "references/en/papers/lost_middle/original.pdf": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+    "references/en/papers/rag_best_practices/content.md": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719",
+    "references/en/papers/rag_best_practices/original.pdf": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+    "references/en/papers/ragas/content.md": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383",
+    "references/en/papers/ragas/original.pdf": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+    "references/en/sentence_transformers/cross_encoder_reranking/content.md": "cd85776774c5b27dcead37f338b8b54c8babc5c7633d674dff70a608e10a0ef5",
+    "references/en/sentence_transformers/cross_encoder_reranking/original.py": "c5efce937ddc0e441ffba2c310aab1fa2643f99179a177ec81f29ca0fcc64b8c",
+    "references/en/sentence_transformers/faiss_semantic_search/content.md": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71",
+    "references/en/sentence_transformers/faiss_semantic_search/original.py": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+    "references/en/sentence_transformers/ms_marco_training/content.md": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+    "references/en/sentence_transformers/ms_marco_training/original.md": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+    "references/en/sentence_transformers/retrieve_rerank/content.md": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+    "references/en/sentence_transformers/retrieve_rerank/original.md": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+    "references/en/sentence_transformers/semantic_search/content.md": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+    "references/en/sentence_transformers/semantic_search/original.md": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+    "references/en/sentence_transformers/training_overview/content.md": "b69e2c3a92118e9bbd42953826a89654f544770a557fa7de5a91b132eb0fe097",
+    "references/en/sentence_transformers/training_overview/original.md": "17fe1adab43dcac9f3664c314aea35c0cb21ad2c8ae9ddfbba37768bd659e54c",
+    "references/zh/flagembedding/bge/content.md": "e1ce1595136435dcaefeffa9914ddc2647c0bdc3d34aadb021bc242a498d6920",
+    "references/zh/flagembedding/bge/original.md": "2f8388a058157f4777bb8c9a46da120c0fa062b40fe1299bb5fa563fa8c941b1",
+    "references/zh/huggingface/advanced/content.md": "8871053fba309b12fcb4aa7c8cee1ad33e27ca36fe6c98f704752bac4487d75b",
+    "references/zh/huggingface/advanced/original.ipynb": "9b3822249b2e7e14ff2d04873a3a581941aa2e348a6aa9bb85dc989ad45e2b76",
+    "references/zh/huggingface/agent/content.md": "e7a44ccdc76d8ae481f59454af37cd92567e756b4d8fa3167a4356dddd743fd6",
+    "references/zh/huggingface/agent/original.ipynb": "c1ba4b4fff8cd97bb587ca1d548e379423462e2f7a45602540189686dab009b6",
+    "references/zh/huggingface/cache/content.md": "9822de7d2f8941d5b6b3319845e418089b0a0cf126cf582acfc7685e42d4a5e8",
+    "references/zh/huggingface/cache/original.ipynb": "381ab837867fbcbd953944d79cc401b091e5edf0df2e43df7708581528b5d3ea",
+    "references/zh/huggingface/elasticsearch/content.md": "f5a78448010243098e84b21a010a82ebf32ac7e0282c8c249c182e201f45634e",
+    "references/zh/huggingface/elasticsearch/original.ipynb": "da83b0b87ce2f487c699cdeba9b77065b724ab2e39510abc94e1bafce13bdd38",
+    "references/zh/huggingface/evaluation/content.md": "b57100679a427503184ce988c70e160991fff0688f95730482cd5c701949964f",
+    "references/zh/huggingface/evaluation/original.ipynb": "b460e3f1895fcbafc48c9ff34d855140c1afd6fc29b77473c01b72bae4f4f4d7",
+    "references/zh/huggingface/graph/content.md": "aa353d2c36d8ae4ce860835345966e1fb71ba21bc67efd551291e699d488d23d",
+    "references/zh/huggingface/graph/original.ipynb": "c670b7a96019fb9722be0a6387fd52cd24c2c61202a936e0a3a67f66448e4494",
+    "references/zh/huggingface/grounded/content.md": "1e6d1094faa3d094fa0fb898ff76104fc282b7d8ff6931de6cfe3c5c06ecb8bd",
+    "references/zh/huggingface/grounded/original.ipynb": "3e15593bd5550d10d79a41cae99958065af3c530aef8c23eaf7582c991f69f8b",
+    "references/zh/huggingface/librarian/content.md": "dda78c0f03a8cc6062144cfbd7809838b63213277213854f6740209c4a829737",
+    "references/zh/huggingface/librarian/original.ipynb": "ead9648be92a94db68cd99f6637e21f4369d91b1aae643ff172cf2874700e4be",
+    "references/zh/huggingface/milvus/content.md": "9c4df2a1aada427ffe9e7f0ceed020bd368488c35dc38859ae291947ddbf0537",
+    "references/zh/huggingface/milvus/original.ipynb": "51c742e90093e7af44638a49a743ccef57ee383ce47fc2edc6a94521eaf433ad",
+    "references/zh/huggingface/multiagent/content.md": "ca148acfa79be95c4491c3c3f290d48239cf8da76b56f5436653534225d85e34",
+    "references/zh/huggingface/multiagent/original.ipynb": "647a7c85d765527685339b7ddc230db51345652fe4778abe11e003c688dff193",
+    "references/zh/huggingface/multimodal/content.md": "29161f98657aaac0606b7dcdf2cabaac19f9e3030d63bb08eb95868a701e2a89",
+    "references/zh/huggingface/multimodal/original.ipynb": "eb97e93625c314d51022e46a7520687c4aeaffa16130d93d35febb058f57818a",
+    "references/zh/huggingface/semantic_rerank/content.md": "80a852458f8659ccc888432bfa5b677016c11a1035d5b51a863103bd2e593185",
+    "references/zh/huggingface/semantic_rerank/original.ipynb": "62ba43121ec766f67e7b814dd48e4f99c9626798fe068a6208a04461a5081a37",
+    "references/zh/huggingface/sql_rerank/content.md": "f8dee8ece6e8df5e53c897ce01435c3e7eba6868b0769df4e1896649da447d86",
+    "references/zh/huggingface/sql_rerank/original.ipynb": "195611cfb2d6db72ee5257889f4f840ea78191afe7b79f7e2ce72736e76bfad4",
+    "references/zh/huggingface/unstructured/content.md": "a71c28b19655b83a3bf2056e2ceb09e0c48bd8b68d939c0611cfbc6bceb8cdd8",
+    "references/zh/huggingface/unstructured/original.ipynb": "173922ff5a180cdcda2aa6ffa100f6acc8990ae71570e7fd5a8917f0c14193d1",
+    "references/zh/huggingface/zephyr/content.md": "fd829b736ededfe5350215ec618f1bea9ddd76202fcd06f8dddf9fb6d41db715",
+    "references/zh/huggingface/zephyr/original.ipynb": "5139bd699a69a1764b53db5424e24ef04873c11b0f545d85c9f90bd9a4aa7ef4",
+    "references/zh/milvus/enhance/content.md": "b06e677bbe6acb54cc64392fea151427274e050eeac796b0c0607e58bcfafbd5",
+    "references/zh/milvus/enhance/original.md": "6e3cfdaa539b1053aa0bbe677979655b76a006ee26116085e202e9ceaf047012",
+    "references/zh/milvus/fulltext/content.md": "5f09ab9966f1494c5c66d3354444c65847e8e23ead6d0d2356cda07c14a6fc5b",
+    "references/zh/milvus/fulltext/original.md": "be6c00e9723e70b06f90e613694688a5deacb0e128398466b60d44aa0cfc3c78",
+    "references/zh/milvus/fulltext_tutorial/content.md": "ee2e3d405331524cd5e48834adf41188955047783a55ae06ff5bd88a3783b176",
+    "references/zh/milvus/fulltext_tutorial/original.md": "e039752a8cc73020cc7ac2735ead327deedb81dd17cd12c078bb9a5509992209",
+    "references/zh/milvus/graph/content.md": "5949f9fb972f995b3b4f3ef9d2ff419310439553ee6642f18c30580aee843688",
+    "references/zh/milvus/graph/original.md": "778e4614378007bde6d4334f38ce897d6911be3af4a46cd9799aa8d08143a8f8",
+    "references/zh/milvus/hybrid/content.md": "e7bd5327250541171081f42f8c3e919d492b5379f08ea1747382af1427e88ec1",
+    "references/zh/milvus/hybrid/original.md": "2d47637096b0f22506701ab989ca66c7894ef1cff9cd87466f6089aa766ea8f7",
+    "references/zh/milvus/multi_vector/content.md": "46b3e602f6a9ff663f9ea25ee5520d17a85341fc6eb396f9acf1bde4f239ba1c",
+    "references/zh/milvus/multi_vector/original.md": "bc568a9c03e4a623eb578d3db8b28c641ca3a92ea7a3ca3ef047a79e875d3f70",
+    "references/zh/milvus/multimodal/content.md": "ecafa0a029cfa401af04ed4b28d374d41e5c45da9479c68a043540a91245ab3f",
+    "references/zh/milvus/multimodal/original.md": "311b5d06718e773ecadb6fad5d2aabe8b1af4a71281b6dac0cba9e955b03ae38",
+    "references/zh/milvus/pipeline/content.md": "7f3786ded8c20371f169c32d56749a777d0a1a1faff6fe757382b80507ae60ae",
+    "references/zh/milvus/pipeline/original.md": "35321b091aca9ce9e0e8d61e521fe7b3b277409ba4d428ecda972713958505a3",
+    "references/zh/milvus/rag/content.md": "7d846edd4e273b3723123f0a29218b250f77c2ed566ce2d3f1b074ba9f21ae49",
+    "references/zh/milvus/rag/original.md": "0d1c2b65679d640a5d09347e93b50f32cbc4d0ff186a15a9a8d61e737069899b",
+    "references/zh/milvus/rerank/content.md": "d08426cb3bdb53118a2f76a2ed42036b3819ed46df72e3d2f7b6e00edfc45b79",
+    "references/zh/milvus/rerank/original.md": "f55e934335df3bf1983608224c04a52887806839f516f48f43b97b2085d96fce",
+    "references/zh/mineru/dify/content.md": "ae8ff94877ed12982ee6f9102fb74beb37dca46fc9d13ddb5641146abac344e8",
+    "references/zh/mineru/dify/original.md": "8706993daaa7f228ba320550b28250e5666eeac535b32a1d987214e5185d6148",
+    "references/zh/mineru/http/content.md": "bbd06433a1ab1582c2e11d562c5eb6607da2adcc554b26ff6befc88cf0a2e200",
+    "references/zh/mineru/http/original.md": "e9b447ac154237c085f4858fcaab3eadad2851ea4a109714757d6080baf59164",
+    "references/zh/mineru/output/content.md": "4b313fc1d73227201a50929a6f9e89cc2e331e72a17ab050385768eca7aac813",
+    "references/zh/mineru/output/original.md": "63291b35a65719469d3c89073050c7847fb424cf27be928824602b302bdd25c2",
+    "references/zh/mineru/overview/content.md": "fcdf1af74748176c6957cd9288d2f9592331597ca81e97663e20c6606864a5e9",
+    "references/zh/mineru/overview/original.md": "768a9de411276a648ad7eb06ce4f4bfdcca3142685c933b304a390841eeacddd",
+    "references/zh/mineru/quick_start/content.md": "bb4afa3cfa4b49fd7ac01f63bc05ba31ecafc911920a985f769286fc1e7ec2c7",
+    "references/zh/mineru/quick_start/original.md": "b06ad352bbd4ea7cae2d90b4ba73ccf0f4851dec6ad95537cdbc3291bfe36cdb",
+    "references/zh/mineru/ragflow/content.md": "bddd9e38896606018f3aea2eccbd5ce42a2247948b26e57d18275a30b89b2005",
+    "references/zh/mineru/ragflow/original.md": "15ab57b99a9f612651b1f74aa62339d783d80167db4d4d1b3a1cffe6a1ef0912",
+    "references/zh/mineru/sdk/content.md": "a3f57b6bef5b6f9c8633a34785bc6cc873401664de02f5805a61f2451df0ee1f",
+    "references/zh/mineru/sdk/original.md": "344394a5e225640e73e3d37562dc96362c6314f8e4c9a74a7f6875c5872e3b1f",
+    "references/zh/mineru/tiers/content.md": "107d22fea252be4c41971dbcb52dfdb5f0b862f45642631468af05d55a6ff4fd",
+    "references/zh/mineru/tiers/original.md": "15e5b3aa6acd58ff72cc1c33e3d21beaac29064c269facef2431bf60aedafd9c",
+    "references/zh/mineru/usage/content.md": "ebed28458c2cd1682ce9293adba4b7cfebec2f5a6faff1c59a92c45bb204c1a3",
+    "references/zh/mineru/usage/original.md": "279a396168e2f7e6c8d7e55761b863b0576d1a905b9a6147fe42122be77e1e1f",
+    "teaching/lab_case.json": "cc3036c5ace1b163f1473b75a44fe7cbd1fac38a677ffc791090c246b7846ead",
+    "teaching/zh/01_rag_foundations_and_system_contracts.md": "62b432788a562a5ba0e04af3894f3048355747816f1e9cb1fee2b63e8002becb",
+    "teaching/zh/02_ingestion_parsing_and_chunking.md": "7c928113c6f58f7e9f266d9e68abb329644145836fafb4810d821fbfeb086024",
+    "teaching/zh/03_embeddings_vector_store_and_retrieval.md": "b96892595138519db8dfc3adfec6a5f46a8f174eceddfb2ba4c4797a41ae4f5f",
+    "teaching/zh/04_query_hybrid_retrieval_and_rerank.md": "e8a9eaa1b08f81bc18c408caf49aff2ab7e92ed3d868be9ee24c4863d056a756",
+    "teaching/zh/05_context_citation_and_grounded_generation.md": "38b69dfdb882bb08e1b81a7f2461f3ca9c15799d7e60aeb95bbea7e2806c2430",
+    "teaching/zh/06_evaluation_ablation_and_operations.md": "20b131c78741bd99de2f5a6a4cfab31b190d7c1ae9088b592154d420585f48a6"
+  }
+}

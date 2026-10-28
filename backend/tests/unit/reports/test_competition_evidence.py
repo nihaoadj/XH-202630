@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.config import PROJECT_ROOT
+from app.core.retrieval.knowledge_paths import resolve_knowledge_file
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.services.reports import competition_suite as module
 from app.services.reports.competition_evidence import confined_path
@@ -40,7 +41,7 @@ def test_snapshot_rejects_changed_knowledge_and_unknown_evidence(tmp_path):
     clone = tmp_path / suite["knowledge_base_id"]
     shutil.copytree(kb, clone)
     module.validate_suite(suite, kb_root=tmp_path)
-    document = next((clone / "modules").glob("*.md"))
+    document = resolve_knowledge_file(clone, "teaching/zh/01_rag_foundations_and_system_contracts.md")
     document.write_text(document.read_text(encoding="utf-8") + "\nchanged knowledge\n", encoding="utf-8")
     with pytest.raises(ValueError, match="snapshot drift"):
         module.validate_suite(suite, kb_root=tmp_path)

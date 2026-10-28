@@ -814,6 +814,22 @@ async function apiResponse(url, method, request, response) {
     recordUnexpected({ method, path: pathname, reason: 'GenerateView has no initial-job creation entry' })
     return json(response, { detail: 'Unexpected initial generation POST in /generate fixture' }, 501)
   }
+  const resourceRetryMatch = pathname.match(/^\/api\/generate\/jobs\/([^/]+)\/resource-specs\/([^/]+)\/representations\/text\/retry$/)
+  if (resourceRetryMatch && method === 'POST') {
+    recordWrite({ method, path: pathname })
+    const source = Object.values(state.jobsByLearner).flat().find(job => job.run_id === decodeURIComponent(resourceRetryMatch[1]))
+    const runId = 'resource-retry-' + (++state.nextRun)
+    const created = makeJob(source.learner_id, runId, 'queued', {
+      batch_id: source.batch_id || source.run_id,
+      request_payload: { ...source.request_payload, resource_types: ['实操指南'] },
+      resource_progress_summary: { total: 1, completed: 0, published: 0, failed: 0 },
+    })
+    state.jobsByLearner[created.learner_id].unshift(created)
+    state.timelines[runId] = []
+    state.executionsByRun[runId] = []
+    return json(response, { run_id: runId, batch_id: created.batch_id, learner_id: created.learner_id,
+      topic: created.topic || '工程验收任务', job_status: 'queued' })
+  }
   const continuationMatch = pathname.match(/^\/api\/resources\/batches\/([^/]+)\/continuations$/)
   if (continuationMatch && method === 'POST') {
     const body = await readBody(request)
@@ -4524,10 +4540,11 @@ async function testRetriesAndCourseware(browser, base) {
   await openResourceDelivery(partialPage)
   await partialPage.getByRole('button', { name: '重新生成此资源' }).first().click()
   await partialPage.waitForFunction(() => document.querySelector('.el-message__content')?.textContent.includes('已在当前批次重新生成'))
-  const itemRetry = state.writes.filter((item) => item.path.endsWith('/continuations'))
+  const itemRetry = state.writes.filter((item) => item.path.endsWith('/representations/text/retry'))
   assert.equal(itemRetry.length, 1)
-  assert.deepEqual(itemRetry[0].body.resource_types, ['实操指南'])
-  assert.equal(itemRetry[0].body.replace_existing_types, true)
+  assert.equal(itemRetry[0].path, '/api/generate/jobs/run-main/resource-specs/spec-guide/representations/text/retry')
+  assert.equal(state.writes.filter(item => item.path.endsWith('/continuations')).length, 0)
+  await partialPage.waitForFunction(() => localStorage.getItem('current_generation_run_id')?.startsWith('resource-retry-'))
   await assertNoExternalOrUnexpected('single-resource-retry')
   await partialPage.close()
 

@@ -18,7 +18,20 @@
 | 真实模型 | `backend/tests/live/` 与显式评测 CLI | 生产生成与模型自审的实际输出、耗时、失败 | 单独授权、有效凭据、隔离测试环境与预算 |
 | CI / 部署 | `.github/workflows/courseware-quality.yml`、demo-runbook | 干净 runner 与实际运行环境验收 | CI 必需 job；部署证据单独记录 |
 
-后端继续按目录自动添加 `unit`、`integration`、`migration`、`e2e`、`live_llm` marker，不搬动现有测试。前端目前十三个 unit 文件、十五个 browser 文件，聚合入口检查是否遗漏或重复注册；新增文件必须登记一次。`coursewareUserJourney.test.mjs` 是 Node 的用户流程状态验证，不能因名称而算作真实浏览器 e2e。
+后端继续按目录自动添加 `unit`、`integration`、`migration`、`e2e`、`live_llm` marker，不搬动现有测试。前端 unit/browser 文件成员以 `tests/suites.json` 为准，聚合入口检查是否遗漏或重复注册；新增文件必须登记一次。`coursewareUserJourney.test.mjs` 是 Node 的用户流程状态验证，不能因名称而算作真实浏览器 e2e。
+
+后端课件浏览器冒烟使用独立临时 Edge profile，通过仅绑定 `127.0.0.1` 的 CDP
+读取实际 DOM，检查页码、场景激活与 JavaScript 错误，并包含脚本异常及启动超时清理负例。
+它不依赖 Edge `--dump-dom` 的标准输出，也不要求 Node 或 Playwright；启动、连接、
+命令与关闭都有超时，结束后关闭本次浏览器；启动失败时仅按本次临时 profile
+精确识别并清理已分离的测试进程（进程管理使用开发锁中的 `psutil`，需安装开发依赖）。
+未安装 Edge 时沿用该项的可选跳过策略；
+浏览器已安装但启动失败、页面异常或关闭失败时会失败，不能跳过代替。
+
+报告 SSE 的真实 HTTP 测试显式使用 `trust_env=False` 直连临时本地服务，并在测试
+作用域设置无效代理来验证隔离。快照/变更事件及正常停机断言仍保留；不改动系统代理。
+前端清单校验以实际测试文件集合、唯一性与关键专项为依据，不再用固定数量断言，
+新增专项仍须在 `tests/suites.json` 登记。
 
 ## 二、统一命令
 

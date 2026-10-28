@@ -240,11 +240,19 @@ class TutorLLMOutput(StrictTutorModel):
         "scaffold",
         "explanation",
         "check_understanding",
+        "evidence_insufficient",
     ]
     answer_text: str = Field(min_length=1, max_length=12000)
     follow_up_question: str = Field(min_length=1, max_length=4000)
     target_knowledge_points: list[str] = Field(default_factory=list, max_length=50)
-    cited_evidence_ids: list[str] = Field(min_length=1, max_length=10)
+    cited_evidence_ids: list[str] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def validate_citation_requirement(self) -> "TutorLLMOutput":
+        refusal = self.pedagogy_action == "evidence_insufficient"
+        if refusal == bool(self.cited_evidence_ids):
+            raise ValueError("supported answers require citations; insufficient answers forbid them")
+        return self
 
     @field_validator("cited_evidence_ids")
     @classmethod

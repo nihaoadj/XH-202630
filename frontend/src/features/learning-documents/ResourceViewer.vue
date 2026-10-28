@@ -74,6 +74,7 @@
 import { computed, ref } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 import { resourceApi } from './api.js'
+import { renderMarkdown } from '../../utils/markdown.js'
 import SourceRefList from './SourceRefList.vue'
 
 const props = defineProps({
@@ -158,118 +159,6 @@ function contentWithResourceTitle(resource) {
   return `# ${resourceTitle(resource)}\n\n${body}`
 }
 
-function escapeHtml(text) {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-function renderInlineMarkdown(text) {
-  return text
-    .replace(/\\([\\`*_{}\[\]()#+.!-])/g, '$1')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-}
-
-function normalizeMarkdown(text) {
-  return String(text)
-    .replace(/\r\n/g, '\n')
-    // Some LLM responses escape Markdown block markers.  These escapes make
-    // valid block syntax render as literal text, so only remove them at line
-    // starts where they cannot represent prose.
-    .replace(/^(\s*)\\(?=[>|])/gm, '$1')
-    .replace(/^(\s*)\\(?=---+\s*$)/gm, '$1')
-    .replace(/^(\s*\d+)\\\.(?=\s)/gm, '$1.')
-    .replace(/^(\s*)\\([-*])(?=\s)/gm, '$1$2')
-    .replace(/^(\s*)\\(?=#)/gm, '$1')
-    .replace(/^(\s*)\\(?=\x60{3})/gm, '$1')
-    .replace(/(?<=\|)\\(?=\n|$)/g, '')
-    .replace(/^\s*\\?<!--\s*(?:section|step|code|checklist|quiz):[a-z][a-z0-9-]{1,63}\s*-->\s*$/gmi, '')
-}
-
-function renderMarkdown(text) {
-  const normalized = normalizeMarkdown(text)
-  const lines = escapeHtml(normalized).split('\n')
-  const blocks = []
-  let index = 0
-  while (index < lines.length) {
-    const line = lines[index]
-    if (!line.trim()) { index += 1; continue }
-    if (line.startsWith('```')) {
-      const codeLines = []
-      index += 1
-      while (index < lines.length && !lines[index].startsWith('```')) { codeLines.push(lines[index]); index += 1 }
-      if (index < lines.length) index += 1
-      blocks.push(`<pre><code>${codeLines.join('\n')}</code></pre>`)
-      continue
-    }
-    if (/^---+\s*$/.test(line)) { blocks.push('<hr />'); index += 1; continue }
-    const heading = line.match(/^(#{1,6})\s+(.*)$/)
-    if (heading) { blocks.push(`<h${heading[1].length}>${renderInlineMarkdown(heading[2])}</h${heading[1].length}>`); index += 1; continue }
-    if (line.startsWith('&gt;')) {
-      const quote = []
-      while (index < lines.length && lines[index].startsWith('&gt;')) {
-        quote.push(lines[index].replace(/^&gt;\s?/, ''))
-        index += 1
-      }
-      blocks.push(`<blockquote><p>${renderInlineMarkdown(quote.join('<br />'))}</p></blockquote>`)
-      continue
-    }
-    if (line.startsWith('|') && index + 1 < lines.length && /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(lines[index + 1])) {
-      const cells = value => value.trim().replace(/^\||\|$/g, '').split('|').map(cell => renderInlineMarkdown(cell.trim()))
-      const headers = cells(line)
-      index += 2
-      const rows = []
-      while (index < lines.length && lines[index].startsWith('|')) { rows.push(cells(lines[index])); index += 1 }
-      const headerHtml = headers.map(cell => `<th>${cell}</th>`).join('')
-      const rowsHtml = rows.map(row => `<tr>${headers.map((_, cellIndex) => `<td>${row[cellIndex] || ''}</td>`).join('')}</tr>`).join('')
-      blocks.push(`<table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>`)
-      continue
-    }
-    const listMatch = line.match(/^([-*]|\d+\.)\s+(.*)$/)
-    if (listMatch) {
-      const ordered = /^\d+\.$/.test(listMatch[1])
-      const matcher = ordered ? /^\d+\.\s+(.*)$/ : /^[-*]\s+(.*)$/
-      const items = []
-      while (index < lines.length) {
-        const item = lines[index].match(matcher)
-        if (item) {
-          items.push(`<li>${renderInlineMarkdown(item[1])}</li>`)
-          index += 1
-          continue
-        }
-        // Markdown permits a blank line between items. Keep those items in
-        // the same list so ordered numbering continues instead of restarting.
-        if (!lines[index].trim() && lines[index + 1]?.match(matcher)) {
-          index += 1
-          continue
-        }
-        break
-      }
-      blocks.push(`<${ordered ? 'ol' : 'ul'}>${items.join('')}</${ordered ? 'ol' : 'ul'}>`)
-      continue
-    }
-    const paragraph = []
-    while (index < lines.length && lines[index].trim()) {
-      if (
-        lines[index].startsWith('```') ||
-        /^(#{1,6})\s+/.test(lines[index]) ||
-        /^([-*]|\d+\.)\s+/.test(lines[index]) ||
-        lines[index].startsWith('&gt;') ||
-        /^---+\s*$/.test(lines[index]) ||
-        (lines[index].startsWith('|') && index + 1 < lines.length && /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(lines[index + 1]))
-      ) break
-      paragraph.push(lines[index])
-      index += 1
-    }
-    blocks.push(`<p>${renderInlineMarkdown(paragraph.join('<br />'))}</p>`)
-  }
-  return blocks.join('')
-}
 
 function renderedContent(resource) { return renderMarkdown(contentWithResourceTitle(resource)) }
 function download(resourceId) { window.open(resourceApi.downloadUrl(resourceId), '_blank') }
@@ -439,4 +328,10 @@ function askTutorAboutSelection() {
 .resource-content :deep(h3) { font-size: 21px; }
 .resource-content :deep(h4) { font-size: 19px; }
 .resource-content :deep(p), .resource-content :deep(ul), .resource-content :deep(ol), .resource-content :deep(pre) { margin-bottom: 16px; }
+.resource-content :deep(.markdown-table-scroll) { max-width: 100%; margin: 16px 0; overflow-x: auto; overscroll-behavior-x: contain; }
+.resource-content :deep(table) { width: 100%; min-width: 360px; border-collapse: collapse; border: 1px solid #9fb1c4; background: #fff; }
+.resource-content :deep(th), .resource-content :deep(td) { padding: 10px 12px; border: 1px solid #9fb1c4; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.resource-content :deep(th) { background: #edf3fa; color: #173858; font-weight: 700; }
+.resource-content :deep(tbody tr:nth-child(even) td) { background: #f8fafc; }
+.resource-content :deep(.markdown-table-scroll:focus-visible) { outline: 2px solid #2467b3; outline-offset: 2px; }
 </style>

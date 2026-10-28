@@ -201,6 +201,8 @@ class WorkflowState(TypedDict, total=False):
 
     # Compatibility alias retained while callers migrate to generation_attempt.
     iteration: int
+    resource_retry_context: Dict[str, Any]
+    regeneration_source: Optional[LearningResource]
 
 
 class WorkflowStateSnapshot(BaseModel):

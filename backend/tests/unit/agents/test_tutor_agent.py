@@ -289,3 +289,44 @@ def test_tutor_agent_rejects_invented_citation_or_level_escape(patch):
     gateway = ScriptedLLMGateway([output])
     with pytest.raises(TutorGroundingValidationError):
         TutorAgent(llm_gateway=gateway, settings=_settings()).invoke(_agent_input())
+
+
+def test_contract_allows_insufficient_without_forcing_citations_and_no_review_call():
+    gateway = ScriptedLLMGateway([{
+        "pedagogy_action": "evidence_insufficient", "answer_text": "我有ev-allowed但无法回答",
+        "follow_up_question": "继续？", "cited_evidence_ids": [],
+    }])
+    result = TutorAgent(llm_gateway=gateway, settings=_settings()).invoke(_agent_input())
+    assert result.output.pedagogy_action == "evidence_insufficient"
+    assert result.output.cited_evidence_ids == []
+    assert "ev-allowed" not in result.output.answer_text
+    assert len(gateway.calls) == 1
+    assert gateway.calls[0]["options"].max_output_tokens == _settings().tutor_max_output_tokens
+    assert gateway.calls[0]["options"].request_timeout_seconds == _settings().tutor_llm_timeout_seconds
+
+
+def test_contract_rejects_normal_answer_without_citation_and_refusal_with_citation():
+    from pydantic import ValidationError
+    from app.models.tutor.tutor import TutorLLMOutput
+
+    with pytest.raises(ValidationError):
+        TutorLLMOutput(pedagogy_action="hint", answer_text="提示", follow_up_question="继续？", cited_evidence_ids=[])
+    with pytest.raises(ValidationError):
+        TutorLLMOutput(pedagogy_action="evidence_insufficient", answer_text="不足", follow_up_question="继续？",
+                       cited_evidence_ids=["ev-allowed"])
+
+
+def test_contract_uses_one_generation_and_minimal_evidence_projection():
+    from app.models.shared.llm import LLMCallOptions, StructuredOutputMode
+
+    gateway = ScriptedLLMGateway([{
+        "pedagogy_action": "hint", "answer_text": "先关注召回结果。", "follow_up_question": "下一步是什么？",
+        "cited_evidence_ids": ["ev-allowed"],
+    }])
+    gateway.options_for = lambda *args, **kwargs: LLMCallOptions(structured_output_mode=StructuredOutputMode.AUTO)
+    TutorAgent(llm_gateway=gateway, settings=_settings()).invoke(_agent_input())
+    assert len(gateway.calls) == 1
+    assert gateway.calls[0]["options"].structured_output_mode == StructuredOutputMode.TEXT
+    context = gateway.calls[0]["messages"][1].content
+    assert "source_path" not in context and "chunk_id" not in context
+    assert "ev-allowed" in context

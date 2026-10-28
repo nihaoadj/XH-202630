@@ -9,6 +9,7 @@ from app.agents.learning_agents.tutor_agent import (
     TutorAgent,
     TutorContextBuilder,
     TutorGroundingValidationError,
+    SAFE_REFUSAL,
 )
 from app.agents.learning_agents.tutor_policy import decide_tutor_policy
 from app.config import Settings, get_settings
@@ -253,8 +254,7 @@ class TutorService:
                 request_hash=request_hash,
                 user_message=payload.message,
                 assistant_message=(
-                    "当前知识库证据不足，我暂时不能给出确定性的专业解释。"
-                    "你可以换一种问法，或回到当前学习资料核对相关知识点。"
+                    SAFE_REFUSAL
                 ),
                 pedagogy_action="evidence_insufficient",
                 hint_level=policy.hint_level,
@@ -306,6 +306,7 @@ class TutorService:
                 item for item in grounding.evidence if item.evidence_id in cited
             ]
             metadata = agent_result.llm_result.trace_metadata()
+            refused = agent_result.output.pedagogy_action == "evidence_insufficient"
             turn = TutorTurn(
                 turn_id=turn_id,
                 session_id=session_id,
@@ -316,11 +317,12 @@ class TutorService:
                 assistant_message=agent_result.output.answer_text,
                 pedagogy_action=agent_result.output.pedagogy_action,
                 hint_level=policy.hint_level,
-                follow_up_question=agent_result.output.follow_up_question,
+                follow_up_question=None if refused else agent_result.output.follow_up_question,
                 target_knowledge_points=agent_result.output.target_knowledge_points,
-                grounding_status="grounded",
-                grounding_source=grounding.source,
-                evidence_refs=evidence_refs,
+                grounding_status="evidence_insufficient" if refused else "grounded",
+                grounding_source="none" if refused else grounding.source,
+                evidence_refs=[] if refused else evidence_refs,
+                error_code=ErrorCode.EVIDENCE_INSUFFICIENT.value if refused else None,
                 retrieval_query_hash=grounding.retrieval_query_hash,
                 retrieval_status=grounding.retrieval_status,
                 llm_call_id=metadata.get("llm_call_id"),

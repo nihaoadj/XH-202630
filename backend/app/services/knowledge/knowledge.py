@@ -93,6 +93,7 @@ class KnowledgeService:
             for domain in self.catalog.list_learning_domains()
             if domain["domain_id"] not in HIDDEN_LEARNING_DOMAIN_IDS
         ]
+        counts_by_kb: dict[str, dict[str, int]] = {}
         for domain in domains:
             domain["tracks"] = [
                 track
@@ -101,6 +102,17 @@ class KnowledgeService:
             ]
             for track in domain["tracks"]:
                 track["is_default"] = track.get("knowledge_base_id") == default_id
+                kb_id = track.get("knowledge_base_id")
+                metadata = track.get("metadata", {})
+                if kb_id and metadata.get("available") is not False:
+                    if kb_id not in counts_by_kb:
+                        counts_by_kb[kb_id] = self.catalog.knowledge_base_counts(kb_id)
+                    counts = counts_by_kb[kb_id]
+                    track["metadata"] = {
+                        **metadata,
+                        "document_count": counts["document_count"],
+                        "skill_node_count": counts["skill_node_count"],
+                    }
         return domains
 
     def list_skill_nodes(self, knowledge_base_id: str | None = None, level: str | None = None) -> list[SkillNode]:

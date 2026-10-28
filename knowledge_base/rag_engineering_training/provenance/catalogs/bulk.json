@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "license_policy_url": "https://aclanthology.org/faq/copyright/",
+  "sources": [
+    {
+      "id": "source_paper_dpr",
+      "anthology": "2020.emnlp-main.550",
+      "url": "https://aclanthology.org/2020.emnlp-main.550.pdf",
+      "sha256": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "kind": "pdf",
+      "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+      "pages": 13,
+      "default_points": [
+        "Embedding",
+        "相似度检索"
+      ],
+      "authors": "Karpukhin et al. (2020)",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/"
+    },
+    {
+      "id": "source_paper_hyde",
+      "anthology": "2023.acl-long.99",
+      "url": "https://aclanthology.org/2023.acl-long.99.pdf",
+      "sha256": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "kind": "pdf",
+      "title": "Precise Zero-Shot Dense Retrieval without Relevance Labels",
+      "pages": 16,
+      "default_points": [
+        "相似度检索",
+        "RAG 调优"
+      ],
+      "authors": "Gao et al. (2023)",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/"
+    },
+    {
+      "id": "source_paper_ragas",
+      "anthology": "2024.eacl-demo.16",
+      "url": "https://aclanthology.org/2024.eacl-demo.16.pdf",
+      "sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "kind": "pdf",
+      "title": "RAGAs: Automated Evaluation of Retrieval Augmented Generation",
+      "pages": 9,
+      "default_points": [
+        "RAG 评测",
+        "幻觉控制"
+      ],
+      "authors": "Es et al. (2024)",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/"
+    },
+    {
+      "id": "source_paper_alce",
+      "anthology": "2023.emnlp-main.398",
+      "url": "https://aclanthology.org/2023.emnlp-main.398.pdf",
+      "sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "kind": "pdf",
+      "title": "Enabling Large Language Models to Generate Text with Citations",
+      "pages": 24,
+      "default_points": [
+        "引用溯源",
+        "幻觉控制"
+      ],
+      "authors": "Gao et al. (2023)",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/"
+    },
+    {
+      "id": "source_paper_lost_middle",
+      "anthology": "2024.tacl-1.9",
+      "url": "https://aclanthology.org/2024.tacl-1.9.pdf",
+      "sha256": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "kind": "pdf",
+      "title": "Lost in the Middle: How Language Models Use Long Contexts",
+      "pages": 17,
+      "default_points": [
+        "Prompt 组装",
+        "RAG 调优"
+      ],
+      "authors": "Liu et al. (2024)",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/"
+    },
+    {
+      "id": "source_paper_rag_best_practices",
+      "anthology": "2024.emnlp-main.981",
+      "url": "https://aclanthology.org/2024.emnlp-main.981.pdf",
+      "sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "kind": "pdf",
+      "title": "Searching for Best Practices in Retrieval-Augmented Generation",
+      "pages": 21,
+      "default_points": [
+        "RAG 基础概念",
+        "RAG 调优"
+      ],
+      "authors": "Wang et al. (2024)",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/"
+    },
+    {
+      "id": "source_langchain_retrieval_architectures",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/deepagents/retrieval.mdx",
+      "sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+      "kind": "mdx",
+      "title": "Retrieval architectures",
+      "default_points": [
+        "RAG 基础概念"
+      ],
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit"
+    },
+    {
+      "id": "source_langchain_pdf_semantic_search_rag",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/langchain/knowledge-base.mdx",
+      "sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+      "kind": "mdx",
+      "title": "Build a semantic search engine with LangChain",
+      "default_points": [
+        "相似度检索"
+      ],
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit"
+    },
+    {
+      "id": "source_langchain_html_splitters",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/splitters/split_html.mdx",
+      "sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+      "kind": "mdx",
+      "title": "Split HTML",
+      "default_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit"
+    },
+    {
+      "id": "source_langchain_docling_loader",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_loaders/docling.mdx",
+      "sha256": "664e6248db534402a98f698b5465d72cd14f37da8c006a201af95938c977215d",
+      "kind": "mdx",
+      "title": "Docling document loading",
+      "default_points": [
+        "文档解析"
+      ],
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit"
+    },
+    {
+      "id": "source_langchain_sentence_transformers_embeddings",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/embeddings/sentence_transformers.mdx",
+      "sha256": "92a6838f4acc671ba4f631c8a288c06c44732d0d7150d541f5c7f228e059541c",
+      "kind": "mdx",
+      "title": "Sentence Transformers embeddings integration",
+      "default_points": [
+        "Embedding"
+      ],
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit"
+    },
+    {
+      "id": "source_langchain_chroma_vectorstore",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/chroma.mdx",
+      "sha256": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
+      "kind": "mdx",
+      "title": "Chroma vector store integration",
+      "default_points": [
+        "向量数据库"
+      ],
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit"
+    },
+    {
+      "id": "source_langchain_elasticsearch_retrieval",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/elasticsearch.mdx",
+      "sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+      "kind": "mdx",
+      "title": "Elasticsearch retrieval strategies",
+      "default_points": [
+        "向量数据库"
+      ],
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit"
+    },
+    {
+      "id": "source_langchain_cross_encoder_reranker",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_transformers/cross_encoder_reranker.mdx",
+      "sha256": "6757aa92dc9972f258179564caa885270cc25d0857219850799dff75c802b0d0",
+      "kind": "mdx",
+      "title": "Cross-encoder reranker integration",
+      "default_points": [
+        "Rerank"
+      ],
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit"
+    },
+    {
+      "id": "source_sbert_training_overview",
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/sentence_transformer/training_overview.md",
+      "sha256": "17fe1adab43dcac9f3664c314aea35c0cb21ad2c8ae9ddfbba37768bd659e54c",
+      "kind": "markdown",
+      "title": "Sentence Transformer training overview",
+      "default_points": [
+        "Embedding",
+        "RAG 调优"
+      ],
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "source_sbert_ms_marco_training",
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/training/ms_marco/README.md",
+      "sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+      "kind": "markdown",
+      "title": "MS MARCO dense retrieval training",
+      "default_points": [
+        "Embedding"
+      ],
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "source_sbert_faiss_semantic_search",
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/semantic-search/semantic_search_quora_faiss.py",
+      "sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+      "kind": "python",
+      "title": "FAISS semantic search complete implementation",
+      "default_points": [
+        "向量数据库",
+        "相似度检索",
+        "RAG 调优"
+      ],
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "source_sbert_cross_encoder_reranking",
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/cross_encoder/applications/cross_encoder_reranking.py",
+      "sha256": "c5efce937ddc0e441ffba2c310aab1fa2643f99179a177ec81f29ca0fcc64b8c",
+      "kind": "python",
+      "title": "Cross-encoder reranking complete implementation",
+      "default_points": [
+        "相似度检索",
+        "Rerank"
+      ],
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ]
+}

@@ -2,12 +2,13 @@
 
 from pathlib import Path
 import shutil
-import subprocess
 
 import pytest
 
 from app.core.courseware.renderer import render_courseware
 from app.core.courseware.runtime import SCRIPT
+from tests import browser_cdp
+from tests.browser_cdp import read_edge_page
 
 
 def test_runtime_binds_messages_to_the_initializing_parent_origin():
@@ -72,6 +73,21 @@ def _edge() -> str | None:
     ) if candidate and Path(candidate).exists()), None)
 
 
+@pytest.mark.parametrize("style", ["equals", "separate"])
+def test_cleanup_profile_matching_is_exact_even_with_spaces(tmp_path, style):
+    profile = tmp_path / "edge profile with spaces"
+
+    def arguments(path):
+        return ([f"--user-data-dir={path}"] if style == "equals"
+                else ["--user-data-dir", str(path)])
+
+    assert browser_cdp._uses_profile(arguments(profile), profile)
+    assert not browser_cdp._uses_profile(arguments(str(profile) + "-other"), profile)
+    assert not browser_cdp._uses_profile(arguments(profile / "child"), profile)
+    assert not browser_cdp._uses_profile(["--user-data-dir"], profile)
+    assert not browser_cdp._uses_profile([], profile)
+
+
 def test_generated_courseware_boots_in_real_headless_browser(tmp_path):
     edge = _edge()
     if edge is None:
@@ -86,11 +102,42 @@ def test_generated_courseware_boots_in_real_headless_browser(tmp_path):
     })
     target = tmp_path / "index.html"
     target.write_bytes(artifact)
-    profile = tmp_path / "edge-profile"
-    result = subprocess.run(
-        [edge, "--headless=new", "--disable-gpu", "--no-first-run", "--virtual-time-budget=1000",
-         f"--user-data-dir={profile}", "--dump-dom", target.as_uri()],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, check=False,
+    page = read_edge_page(edge, target, tmp_path / "edge-profile")
+    assert page["progress"] == "第 1 / 3 页"
+    assert page["sceneCount"] == 3
+    assert page["activeSceneCount"] == 1
+    assert page["errors"] == []
+
+
+def test_browser_probe_captures_javascript_failures(tmp_path):
+    edge = _edge()
+    if edge is None:
+        pytest.skip("Edge is not installed on this runner")
+    target = tmp_path / "broken.html"
+    target.write_text(
+        '<!doctype html><meta charset="utf-8"><script>throw new Error("browser-probe-error")</script>',
+        encoding="utf-8",
     )
-    assert result.returncode == 0, result.stderr[-1000:]
-    assert "第 1 /" in result.stdout
+    page = read_edge_page(edge, target, tmp_path / "edge-profile")
+    assert any("browser-probe-error" in error for error in page["errors"])
+
+
+def test_browser_startup_timeout_closes_detached_profile(tmp_path, monkeypatch):
+    edge = _edge()
+    if edge is None:
+        pytest.skip("Edge is not installed on this runner")
+    profile = tmp_path / "edge profile with spaces"
+    target = tmp_path / "index.html"
+    target.write_text("<!doctype html><title>startup cleanup</title>", encoding="utf-8")
+    original_endpoint = browser_cdp._debug_endpoint
+
+    def hidden_endpoint(_profile):
+        raise FileNotFoundError("Simulated unavailable DevToolsActivePort")
+
+    monkeypatch.setattr(browser_cdp, "_debug_endpoint", hidden_endpoint)
+    monkeypatch.setattr(browser_cdp, "_STARTUP_TIMEOUT_SECONDS", 1)
+    with pytest.raises(TimeoutError, match="Edge CDP startup timed out"):
+        read_edge_page(edge, target, profile)
+    if (profile / "DevToolsActivePort").exists():
+        port, _ = original_endpoint(profile)
+        assert not browser_cdp._port_open(port)

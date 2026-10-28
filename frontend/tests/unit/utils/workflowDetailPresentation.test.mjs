@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { detailRole, projectNodeResult } from '../../../src/features/generation/workflowDetailPresentation.js'
+import { detailRole, projectNodeResult, diagnosisPointItems } from '../../../src/features/generation/workflowDetailPresentation.js'
 import { iconPaths } from '../../../src/features/generation/workflowNodeIcons.js'
 
 const step = key => ({ node_name: key })
@@ -31,6 +31,13 @@ const raw = "推荐难度：初级; 盲区：['Embedding', '文档解析']"
 assert.deepEqual(projectNodeResult({ ...step('diagnose'), output_summary: raw }), {
   kind: 'diagnosis', difficulty: '初级', blindspots: "['Embedding', '文档解析']", raw,
 })
+assert.deepEqual(diagnosisPointItems('["RAG 基础", "Embedding"]'), ['RAG 基础', 'Embedding'])
+assert.deepEqual(diagnosisPointItems("['RAG（20%，优先补强）', '文档解析',]"), ['RAG（20%，优先补强）', '文档解析'])
+assert.deepEqual(diagnosisPointItems(`["user's query", 'a, b', 'it\\'s fine']`), ["user's query", 'a, b', "it's fine"])
+assert.deepEqual(diagnosisPointItems('[]'), [])
+for (const value of [null, '未知', '[a, b]', '["not closed]', '["", "B"]', '[42]', '[{"a":1}]', "[__import__('os')]", "['a' 'b']", "['\\x41']", JSON.stringify(Array(31).fill('A')), JSON.stringify(['A'.repeat(1001)]), ' '.repeat(12001)]) {
+  assert.equal(diagnosisPointItems(value), null, `unsupported list must retain the original display: ${String(value).slice(0, 80)}`)
+}
 for (const output of ['推荐难度：初级；盲区：未知', '推荐难度：初级; 盲区：A\n失败详情', '无可用诊断', '推荐难度：; 盲区：A']) {
   assert.deepEqual(projectNodeResult({ ...step('diagnose'), output_summary: output }), { kind: 'text', raw: output }, 'unrecognized diagnosis summaries must be shown intact')
 }

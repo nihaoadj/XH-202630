@@ -24,6 +24,7 @@ from app.models.shared.persistence import (
 
 NODE_METADATA: dict[str, tuple[str, str]] = {
     "diagnose": ("diagnosis", "学情诊断"),
+    "reuse_context": ("supervisor", "复用冻结上下文"),
     "retrieve": ("retriever", "知识证据检索"),
     "evidence_gate": ("evidence_gate", "事实生成证据门禁"),
     "plan": ("planner", "学习路径规划"),

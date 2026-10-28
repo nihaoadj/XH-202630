@@ -1,0 +1,28 @@
+# RAG知识库：全库清洗版（T26）
+
+当前文件使用T25核验的62篇/3177片清洗资料；实际数据库是否激活以入库receipt和health为准。
+原始快照和许可保留，105个待核查断词保留；旧资料可由provenance/cleaning-base重放。
+所有教学正文只由metadata清单载入，基线blob不入索引。
+
+以下为切换前资料说明，数字与状态属于历史记录：
+
+# RAG知识库资料
+
+- teaching/zh：6份项目整理的中文模块，修订版 `teaching-2026-10-v2`；按入门、实现、进阶分层，含实验输入/步骤/预期、失败排查、练习与评分答案，以及本地官方来源ID和具体章节映射。
+- teaching/lab_case.json：六章共用的 `rag-lab-v2` 合成课堂案例（4份短文、4个问题、RRF与检索指标手算输入），不是业务政策或模型实测；不在文档manifest内，不单独索引。
+- references/zh：35份官方中文资料/译本。
+- references/en：21份英文官方资料（包括最初3篇短教程）。
+- 每篇original.*是原文，content.md是可检索正文。
+- T24清洗：10篇HTML派生中文正文使用`official-zh-structure-v2`，移除10处空徽章链接和2659个多余空白行；代码围栏内部、表格、有效链接与全部original快照不改。当前文件派生3214切片（英文1626＋中文1462＋教材126）；T10/T11的3222是清洗前历史数量，不再代表当前正文。
+- licenses：许可；provenance/registry.json：统一清单。
+- query_aliases.json：可选运行时中英术语扩展配置（非知识正文，不索引）。v1.1.0含124组细粒度概念、679个触发写法（407含中文、272英文术语/标识符），保留v1.0.0的84种旧写法。只产生有界英文检索提示，最终精排仍使用原问题；修改后无需重新编码或入库。策略和词表hash进入检索审计，未知/非法词表降级原查询。
+- provenance/query_aliases_sources.json：上述124组的原文定位，来自34份已入库权威资料，包含document_id、content.md内anchor、原始快照与hash；中文同义词是人工等价检索表达，不宣称每种说法都在原文逐字出现。此文件是词表追溯记录，不加入documents、不索引；新增技术名称不等于项目已实现该技术。
+- 术语规则分别区分BM25/RRF/稠密/稀疏/中性向量检索、各评测指标、分块方式与参数、查询增强及证据概念；最多6组合成1条400字符以内probe，规则总量上限仍128/64KiB。词表不翻译整句，不处理一般否定或问句推理，也不保证实际精排/生成质量提升；无网络或LLM翻译调用。配置按查询读取，下次检索读取新version/hash，不需重启，已开始的请求不保证切换。
+
+目录直接移动后的T9旧数据库路径与T10教材均不自动入库；须通过受控重建同步，不能覆盖旧版本metadata。
+
+T10教材修订时未换模型、未入库；其历史身份fixture `backend/tests/fixtures/knowledge_pilot/teaching_v2.json`保留。文件可派生3222切片（权威3096＋教材126），不可单凭这个数量判断数据库同步状态。
+
+T11多语言重建使用BAAI/bge-m3 dense固定commit `5617a9f61b028005a4858fdac845db406aefb181`。知识库/逻辑文档ID和原文正文不变；新增document_identity_revision，让新路径/来源metadata形成新版本及新chunk ID。旧SQL历史保留，新索引身份由`teaching_v2_m3.json`与`multilingual_index.json`单独冻结。生成模型、精排模型不变，不接入M3 sparse/ColBERT。
+
+本机已完成受控构建、精确对账及新进程6题检索验证，并切换配置；62文档/3222活动片/13节点覆盖，最长3816token、超模型8192上限0片。报告在`output/test-runs/kb-m3/`，详细状态见[数据库说明7.7](../../docs/knowledge_base_database.md#77-多语言embedding与受控重建t112026-10-27)。新SQL/向量路径为`backend/data/domain_knowledge_m3.db`、`backend/data/chroma_bge_m3/`；旧库/旧索引不删除。模型权重、索引和含密钥的本地.env备份不提交；其他人需要自行准备模型并执行受控重建，不是拉Git即可完成入库。Web/Worker本轮未启动，下次启动使用新配置。

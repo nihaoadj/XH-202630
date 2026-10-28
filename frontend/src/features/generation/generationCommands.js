@@ -30,15 +30,13 @@ export function planAppendResources(job, selectedTypes, includeClaimCheck) {
 }
 
 export function planRetryResource(job, item) {
-  if (!job?.learner_id || !job.request_payload || !item?.resource_type) return null
-  return [{ batchId: job.batch_id || job.run_id, data: {
-    learner_id: job.learner_id, resource_types: [item.resource_type], source_run_id: job.run_id,
-    replace_existing_types: true,
-    instructions: `重新生成本批次的${item.resource_type}，用新版本替换学习列表中的旧版本。`,
-  } }]
+  if (!job?.run_id || !job?.learner_id || !item?.resource_spec_id || item.representation !== 'text') return null
+  return [{ kind: 'resource_retry', runId: job.run_id, resourceSpecId: item.resource_spec_id, representation: 'text' }]
 }
 
 /** Preserve ordered responses even when Claim requests complete out of order. */
-export function executeGenerationPlan(plan, continueBatch) {
-  return Promise.all(plan.map(item => continueBatch(item.batchId, item.data)))
+export function executeGenerationPlan(plan, continueBatch, retryResourceRepresentation) {
+  return Promise.all(plan.map(item => item.kind === 'resource_retry'
+    ? retryResourceRepresentation(item.runId, item.resourceSpecId, item.representation)
+    : continueBatch(item.batchId, item.data)))
 }

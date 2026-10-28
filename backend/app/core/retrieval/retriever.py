@@ -18,7 +18,13 @@ from app.core.retrieval.knowledge_ids import (
     sha256_hex,
 )
 from app.core.retrieval.vector_store import ChromaVectorSearchBackend
-from app.core.retrieval.resource_allocation import build_evidence_allocation, select_resource_chunks, purposes_for_chunk
+from app.core.retrieval.resource_allocation import build_evidence_allocation, select_resource_chunks
+from app.core.retrieval.selection import LANGUAGE_PATH_VERSION, SELECTION_VERSION, selection_score
+from app.core.retrieval.redundancy import RedundancyCandidate, config_payload, filter_redundant
+from app.core.retrieval.source_balance import (
+    VERSION as SOURCE_BALANCE_VERSION, SourceCandidate, catalog_hash, select_sources, source_catalog, source_role,
+    config_payload as source_balance_config,
+)
 from app.db.shared.database import get_session_factory
 from app.db.knowledge.base import KnowledgeChunkRepository
 from app.db.knowledge.catalog import KnowledgeCatalogRepository
@@ -78,6 +84,11 @@ def retrieval_policy_from_settings(
         max_evidence_count=settings.retrieval_max_evidence,
         max_excerpt_chars=settings.evidence_max_excerpt_chars,
         distance_metric=settings.vector_distance_metric,
+        query_strategy_version=("deterministic-bilingual-v2" if getattr(settings, "retrieval_balanced_candidates_enabled", False)
+                                else "deterministic-v1"),
+        ranking_strategy_version=(SELECTION_VERSION if getattr(settings, "retrieval_english_score_bonus", 0.0) > 0
+                                  else "dense-protected-rrf-v2" if getattr(settings, "retrieval_balanced_candidates_enabled", False)
+                                  else "normalized-score-v1"),
     )
 
 
@@ -86,6 +97,8 @@ def _config_payload(
     policy: RetrievalPolicy,
     *,
     retrieval_scope: str,
+    knowledge_base_id: str | None = None,
+    source_catalog_fingerprint: str | None = None,
 ) -> dict:
     policy_payload = policy.model_dump(mode="json")
     policy_payload.pop("strategy_version")
@@ -103,6 +116,30 @@ def _config_payload(
             "rerank_enabled", "rerank_model", "rerank_per_query_k", "rerank_batch_size",
             "rerank_max_length", "rerank_max_chunks_per_document", "rerank_device",
         )}
+    if getattr(settings, "retrieval_english_score_bonus", 0.0) > 0:
+        payload.update(
+            english_score_bonus=settings.retrieval_english_score_bonus,
+            language_path_version=LANGUAGE_PATH_VERSION,
+            selection_relevance_floor=settings.retrieval_min_normalized_score,
+            selection_source_verification="sql_pre_top_k",
+        )
+    if getattr(settings, "retrieval_balanced_candidates_enabled", False):
+        payload.update(candidate_selection_version="dense-protected-rrf-v2",
+                       dense_reserve=settings.retrieval_dense_reserve,
+                       rerank_candidate_k=settings.rerank_candidate_k,
+                       rerank_enabled=settings.rerank_enabled,
+                       rerank_model=settings.rerank_model,
+                       rerank_max_length=settings.rerank_max_length,
+                       rerank_per_query_k=settings.rerank_per_query_k)
+        if knowledge_base_id:
+            from app.core.retrieval.query_expansion import expand_query
+            _, fingerprint = expand_query("", knowledge_base_id)
+            payload.update(query_expansion=fingerprint)
+    if getattr(settings, "retrieval_redundancy_enabled", False):
+        payload["redundancy"] = config_payload(settings.retrieval_redundancy_threshold)
+    if policy.ranking_strategy_version == SOURCE_BALANCE_VERSION:
+        payload["learning_refinement"] = {**source_balance_config(), "source_catalog": source_catalog_fingerprint,
+            "candidate_limit": min(20, settings.rerank_candidate_k)}
     return payload
 
 
@@ -169,9 +206,12 @@ class EvidenceRetriever:
         request: RetrievalRequest,
     ):
         metadata = candidate.metadata
+        rank_limit = (min(20, self.settings.rerank_candidate_k)
+            if request.policy.ranking_strategy_version == SOURCE_BALANCE_VERSION
+            and request.policy.strategy_version != RESOURCE_AWARE_STRATEGY else request.policy.top_k_per_query)
         if (
             candidate.query not in request.queries
-            or candidate.query_rank > request.policy.top_k_per_query
+            or candidate.query_rank > rank_limit
             or (request.policy.strategy_version == RESOURCE_AWARE_STRATEGY and (
                 bool(set(candidate.matched_queries) - set(request.queries))
                 or (candidate.matched_queries and candidate.query not in candidate.matched_queries)
@@ -281,6 +321,8 @@ class EvidenceRetriever:
         retrieval_started = perf_counter()
         policy = request.policy
         resource_aware = policy.strategy_version == RESOURCE_AWARE_STRATEGY
+        refined = not resource_aware and policy.ranking_strategy_version == SOURCE_BALANCE_VERSION
+        catalog = source_catalog(request.knowledge_base_id) if refined else {}
         queries = request.queries[: policy.max_query_count]
         query_hashes = [query_hash(query) for query in queries]
         config_hash = retrieval_config_hash(
@@ -288,6 +330,8 @@ class EvidenceRetriever:
                 self.settings,
                 policy,
                 retrieval_scope=request.retrieval_scope,
+                knowledge_base_id=request.knowledge_base_id,
+                source_catalog_fingerprint=catalog_hash(catalog) if refined else None,
             )
         )
         allowed_chunk_ids = set(request.allowed_chunk_ids or [])
@@ -295,15 +339,38 @@ class EvidenceRetriever:
         partial_failures = 0
         query_profiles: list[dict[str, object]] = []
 
+        def trusted_source_path(query, source):
+            candidate = VectorCandidate(
+                chunk_id=str(source.metadata.get("chunk_id") or ""),
+                text=source.page_content,
+                metadata={key: value for key, value in source.metadata.items()
+                          if isinstance(value, (str, int, float, bool))},
+                raw_score=0.0, score_kind=ScoreKind.SIMILARITY,
+                metric=self.settings.vector_distance_metric, query=query, query_rank=1,
+            )
+            chunk = self._validate_candidate(candidate, request)
+            source.metadata["selection_min_relevance"] = policy.min_normalized_score
+            return chunk.locator.source_path
+
         search_many = getattr(self.backend, "search_many", None)
+        verified_search = getattr(self.backend, "search_many_verified", None)
+        evidence_search = getattr(self.backend, "search_many_evidence_candidates", None)
+        full_window = refined and callable(evidence_search)
+        use_verified = full_window or (callable(verified_search) and getattr(self.settings, "retrieval_english_score_bonus", 0.0) > 0)
+        if full_window:
+            search_many = evidence_search
+        elif use_verified:
+            search_many = verified_search
         if callable(search_many):
             try:
+                kwargs = {"source_path_resolver": trusted_source_path} if use_verified else {}
                 candidates.extend(search_many(
                     queries=queries,
                     top_k=policy.top_k_per_query,
                     knowledge_base_id=request.knowledge_base_id,
                     allowed_chunk_ids=allowed_chunk_ids or None,
                     **({"query_bindings": request.query_bindings} if resource_aware else {}),
+                    **kwargs,
                 ))
                 backend_profile = getattr(self.backend, "last_profile", None)
                 if isinstance(backend_profile, dict):
@@ -313,6 +380,12 @@ class EvidenceRetriever:
                         if isinstance(item, dict)
                     ]
                     partial_failures = int(backend_profile.get("partial_failure_count", 0))
+            except _EvidenceFailure as failure:
+                return self._failed_batch(
+                    request=request, config_hash=config_hash, query_hashes=query_hashes,
+                    candidate_count=0, partial_failure_count=0, failure=failure,
+                    retrieval_profile=dict(getattr(self.backend, "last_profile", {}) or {}),
+                )
             except Exception as exc:
                 logger.warning("Vector retrieval search_many failed kb=%s queries=%s type=%s detail=%s",
                                request.knowledge_base_id, len(queries), type(exc).__name__, str(exc)[:256])
@@ -346,6 +419,9 @@ class EvidenceRetriever:
         backend_profile = getattr(self.backend, "last_profile", None)
         if isinstance(backend_profile, dict) and callable(search_many):
             retrieval_profile.update(backend_profile)
+        if refined:
+            retrieval_profile["learning_candidate_window"] = "full_pool" if full_window else "legacy_adapter"
+            retrieval_profile["source_catalog_available"] = bool(catalog)
 
         if not candidates:
             if partial_failures:
@@ -376,6 +452,15 @@ class EvidenceRetriever:
             )
 
         query_order = {query: index for index, query in enumerate(queries)}
+
+        def preference(item):
+            candidate, chunk, normalized = item
+            return selection_score(
+                normalized, chunk.locator.source_path, self.settings,
+                verified=candidate.metadata.get("rerank_status") == "available",
+                minimum_score=policy.min_normalized_score,
+            )
+
         validated: dict[str, tuple[VectorCandidate, object, float]] = {}
         # Preserve node-query provenance before the global chunk dedupe below.
         # A chunk can support several nodes even though the immutable evidence
@@ -408,15 +493,17 @@ class EvidenceRetriever:
                         continue
                     per_node = node_validated.setdefault(node_id, {})
                     node_previous = per_node.get(candidate.chunk_id)
-                    node_key = (normalized_score, -candidate.query_rank)
+                    node_key = (preference((candidate, chunk, normalized_score)).score,
+                                normalized_score, -candidate.query_rank)
                     node_previous_key = (
-                        (node_previous[2], -node_previous[0].query_rank)
+                        (preference(node_previous).score, node_previous[2], -node_previous[0].query_rank)
                         if node_previous is not None else None
                     )
                     if node_previous_key is None or node_key > node_previous_key:
                         per_node[candidate.chunk_id] = (candidate, chunk, normalized_score)
                 previous = validated.get(candidate.chunk_id)
                 key = (
+                    preference((candidate, chunk, normalized_score)).score,
                     normalized_score,
                     -query_order.get(candidate.query, len(queries)),
                     -candidate.query_rank,
@@ -424,6 +511,7 @@ class EvidenceRetriever:
                 previous_key = None
                 if previous is not None:
                     previous_key = (
+                        preference(previous).score,
                         previous[2],
                         -query_order.get(previous[0].query, len(queries)),
                         -previous[0].query_rank,
@@ -448,12 +536,34 @@ class EvidenceRetriever:
         globally_ranked = sorted(
             validated.values(),
             key=lambda item: (
+                -preference(item).score,
                 -item[2],
                 query_order.get(item[0].query, len(queries)),
                 item[0].query_rank,
                 item[0].chunk_id,
             ),
         )
+        if getattr(self.settings, "retrieval_redundancy_enabled", False):
+            def responsibilities(chunk_id):
+                matches = origins.get(chunk_id, [])
+                if resource_aware:
+                    return frozenset((p.node_id, p.resource_type)
+                                     for query in matches for p in request.query_bindings[query])
+                return frozenset((request.query_node_ids[query], None)
+                                 for query in matches if query in request.query_node_ids)
+
+            distinct_ids, redundancy_profile = filter_redundant([
+                RedundancyCandidate(
+                    chunk_id=candidate.chunk_id, text=chunk.text,
+                    document_id=chunk.document_id, document_version=chunk.document_version,
+                    section=chunk.locator.section, responsibilities=responsibilities(candidate.chunk_id),
+                ) for candidate, chunk, _score in globally_ranked
+            ], threshold=self.settings.retrieval_redundancy_threshold)
+            distinct = set(distinct_ids)
+            globally_ranked = [item for item in globally_ranked if item[0].chunk_id in distinct]
+            node_validated = {node: {key: value for key, value in values.items() if key in distinct}
+                              for node, values in node_validated.items()}
+            retrieval_profile["redundancy"] = redundancy_profile
         # Reserve the strongest valid chunk for every targeted node before
         # filling the remaining global budget.  This prevents one broad topic
         # query from starving a selected node while retaining one total pool.
@@ -464,7 +574,7 @@ class EvidenceRetriever:
         for node_id in node_order:
             candidates_for_node = sorted(
                 node_validated.get(node_id, {}).values(),
-                key=lambda item: (-item[2], item[0].query_rank, item[0].chunk_id),
+                key=lambda item: (-preference(item).score, -item[2], item[0].query_rank, item[0].chunk_id),
             )
             if candidates_for_node:
                 selected_chunk_ids.append(candidates_for_node[0][0].chunk_id)
@@ -474,6 +584,15 @@ class EvidenceRetriever:
                 break
             if candidate.chunk_id not in selected_chunk_ids:
                 selected_chunk_ids.append(candidate.chunk_id)
+        if refined:
+            selected_chunk_ids, balance_profile = select_sources([
+                SourceCandidate(candidate.chunk_id, chunk.document_id,
+                    source_role(chunk.document_id, chunk.locator.source_path, catalog), score,
+                    frozenset(node for node in node_order if candidate.chunk_id in node_validated.get(node, {})))
+                for candidate, chunk, score in globally_ranked
+            ], budget=min(policy.max_evidence_count, policy.top_k_per_query * len(queries)),
+               nodes=node_order, minimum_score=policy.min_normalized_score)
+            retrieval_profile["learning_source_balance"] = balance_profile
         selected_chunk_set = set(selected_chunk_ids)
         common_chunks = []
         allocation_gaps = list(request.query_gaps)
@@ -570,7 +689,7 @@ class EvidenceRetriever:
         for node_id in node_order:
             ordered = sorted(
                 node_validated.get(node_id, {}).values(),
-                key=lambda item: (-item[2], item[0].query_rank, item[0].chunk_id),
+                key=lambda item: (-preference(item).score, -item[2], item[0].query_rank, item[0].chunk_id),
             )
             ids = [evidence_by_chunk[item[0].chunk_id] for item in ordered
                    if item[0].chunk_id in evidence_by_chunk]
@@ -581,6 +700,18 @@ class EvidenceRetriever:
                 node_evidence_map[node_id] = list(dict.fromkeys(ids))
         allocation = (build_evidence_allocation(request, evidence, origins, common_chunks, allocation_gaps)
                       if resource_aware else None)
+        retrieval_profile["evidence_selection"] = {
+            "version": SELECTION_VERSION,
+            "english_score_bonus": float(getattr(self.settings, "retrieval_english_score_bonus", 0.0)),
+            "items": [
+                {"chunk_id": candidate.chunk_id, "raw_score": candidate.raw_score,
+                 "score_kind": candidate.score_kind.value, "normalized_score": score,
+                 "selection_score": preference((candidate, chunk, score)).score,
+                 "language_bonus": preference((candidate, chunk, score)).bonus,
+                 "source_language": preference((candidate, chunk, score)).language}
+                for candidate, chunk, score in ranked
+            ],
+        }
         return EvidenceBatch(
             status=RetrievalStatus.AVAILABLE,
             knowledge_base_id=request.knowledge_base_id,
