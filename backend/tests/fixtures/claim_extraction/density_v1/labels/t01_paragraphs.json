@@ -1,0 +1,13 @@
+{
+  "facts": [
+    {
+      "end": 29,
+      "fact_id": "t01_paragraphs-f1",
+      "start": 6,
+      "text": "本段用于验证密度约束先于 token 上限触发"
+    }
+  ],
+  "python_chars": 1447,
+  "text": "t01_paragraphs.md",
+  "text_sha256": "6b4bbda1a7100487d938b9e21a1207c9a1e8e28fdcc6904f71bc6e48e5b64ca3"
+}

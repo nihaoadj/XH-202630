@@ -2,8 +2,9 @@
 
 import asyncio
 import json
+from enum import Enum
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
 from app.api.dependencies import ensure_profile_access
@@ -12,9 +13,27 @@ from app.models.courseware import (
     CoursewareBatchCreateRequest, CoursewareBatchJobResponse, CoursewareJobCreateRequest, CoursewareJobDetail, CoursewareJobListResponse, CoursewareJobResponse, CoursewareResourceDetail,
 )
 from app.models.courseware.events import CoursewareLearningEventAck, CoursewareLearningEventBatch
+from app.models.shared.llm_accounting import TaskLLMAccountingResponseV1
+from app.services.runs.llm_accounting import LLMAccountingQueryService
 
 
 router = APIRouter()
+
+_COURSEWARE_TERMINAL_STATUSES = {
+    "approved_pending_publish", "published", "published_with_warnings",
+    "rejected_admission", "failed", "quarantined", "release_blocked",
+    "cancelled", "timed_out",
+}
+
+
+class CoursewareAccountingStage(str, Enum):
+    """Controlled stage filter for the courseware accounting endpoint."""
+
+    planning = "planning"
+    composing = "composing"
+    quality_review = "quality_review"
+    content_review = "content_review"
+    scene_retry = "scene_retry"
 
 
 def _service(request: Request):
@@ -69,6 +88,39 @@ def list_courseware_jobs(learner_id: str, request: Request):
 @router.get("/courseware/jobs/{run_id}", response_model=CoursewareJobResponse)
 def get_courseware_job(run_id: str, request: Request):
     return _authorized_job(run_id, request)
+
+
+@router.get("/courseware/jobs/{run_id}/llm-accounting", response_model=TaskLLMAccountingResponseV1)
+def get_courseware_llm_accounting(
+    run_id: str,
+    request: Request,
+    include_calls: bool = Query(default=False),
+    stage: CoursewareAccountingStage | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """Read-only full-chain LLM-call accounting for one courseware job.
+
+    Authorization reuses the existing ``_authorized_job`` visibility check so
+    missing or invisible jobs keep the original 404 semantics.
+    """
+
+    job = _authorized_job(run_id, request)
+    accounting_service: LLMAccountingQueryService = (
+        request.app.container.llm_accounting_query_service()
+    )
+    # A job rejected at admission provably never entered a model stage.
+    expected_llm_stages: set[str] | None = set() if job.status == "rejected_admission" else None
+    return accounting_service.query_task(
+        domain="courseware",
+        run_id=run_id,
+        include_calls=include_calls,
+        stage=stage.value if stage is not None else None,
+        cursor=cursor,
+        limit=limit,
+        task_terminal=job.status in _COURSEWARE_TERMINAL_STATUSES,
+        expected_llm_stages=expected_llm_stages,
+    )
 
 
 @router.get("/courseware/jobs/{run_id}/detail", response_model=CoursewareJobDetail)

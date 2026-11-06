@@ -1,0 +1,13 @@
+{
+  "facts": [
+    {
+      "end": 86,
+      "fact_id": "t05_headings-f1",
+      "start": 67,
+      "text": "混合检索把稀疏与稠密分数加权求和后排序"
+    }
+  ],
+  "python_chars": 88,
+  "text": "t05_headings.md",
+  "text_sha256": "4a9533a6fd3c223b9021df90f1b3c5a9934a784f50ad7e3ce88716aa9d3ebb88"
+}

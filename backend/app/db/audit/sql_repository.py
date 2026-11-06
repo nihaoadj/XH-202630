@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.audit.base import (
     BaseAuditRepository,
     PersistenceConflict,
+    PersistenceError,
     RunNotFound,
 )
 from app.db.shared.models import (
@@ -24,6 +25,9 @@ from app.db.shared.models import (
     RetrievalEvidenceSnapshotORM,
     WorkflowCheckpointORM,
     WorkflowEventORM,
+)
+from app.models.reviews.review_audit import (
+    audit_namespace, select_audit_envelope, read_review_audit, step_review_audit_envelope,
 )
 from app.models.shared.persistence import (
     AgentRunRecord,
@@ -41,6 +45,7 @@ from app.models.shared.persistence import (
     require_run_transition,
 )
 from app.models.shared.workflow import normalize_review_status, review_status_is_approved
+from app.db.claim.extraction import add_sql_creation, read_sql
 from app.models.knowledge.knowledge import SourceLocator, SourceType
 from app.models.learning_documents.schemas import ResourceClaim, ReviewSummary, SourceRef
 
@@ -62,6 +67,17 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 
 class SQLAuditRepository(BaseAuditRepository):
+    def validate_review_execution_epoch(self, run_id: str, owner: str, epoch: int) -> None:
+        from app.db.shared.models import GenerationJobORM
+
+        with self.session_factory() as db:
+            job = db.get(GenerationJobORM, run_id)
+            lease = job.lease_expires_at if job is not None else None
+            if (job is None or job.status != "running" or job.claim_owner != owner
+                    or job.claim_epoch != epoch or lease is None
+                    or lease.replace(tzinfo=timezone.utc) <= _utcnow()):
+                raise PersistenceConflict("review execution epoch or dispatch lease lost")
+
     def __init__(self, session_factory: Callable[[], Session]):
         self.session_factory = session_factory
 
@@ -210,7 +226,14 @@ class SQLAuditRepository(BaseAuditRepository):
         orm = db.query(AgentRunORM).filter_by(run_id=run_id).with_for_update().first()
         if orm is None:
             raise RunNotFound("run not found")
+        read_sql(db, orm)
         return orm
+
+    @staticmethod
+    def _validate_run_projection(db, run_id):
+        run = db.get(AgentRunORM, run_id)
+        if run:
+            read_sql(db, run)
 
     def _append_event(
         self,
@@ -268,6 +291,7 @@ class SQLAuditRepository(BaseAuditRepository):
         with self.session_factory() as db:
             existing = db.get(AgentRunORM, command.run_id)
             if existing is not None:
+                read_sql(db, existing)
                 if existing.request_hash != command.request_hash:
                     raise PersistenceConflict("run id conflicts with another request")
                 return self._run_record(existing)
@@ -297,6 +321,7 @@ class SQLAuditRepository(BaseAuditRepository):
                 row_version=1,
             )
             db.add(orm)
+            add_sql_creation(db, orm, command.request_snapshot)
             db.flush()
             # Older SQLite schemas may retain a server default on started_at.
             orm.started_at = None
@@ -404,6 +429,8 @@ class SQLAuditRepository(BaseAuditRepository):
             step = db.query(AgentStepORM).filter_by(step_id=command.step_id).with_for_update().first()
             if step is None:
                 raise RunNotFound("step not found")
+            if step.run_id != command.run_id:
+                raise PersistenceConflict("step run id mismatch")
             trace = dict(command.trace)
             if trace.get("run_id") not in {None, command.run_id}:
                 raise PersistenceConflict("trace run id mismatch")
@@ -424,6 +451,16 @@ class SQLAuditRepository(BaseAuditRepository):
                 )
                 if trace.get(key) is not None
             }
+            try:
+                envelope = step_review_audit_envelope(
+                    audit=command.review_audit, run_id=command.run_id, step_id=command.step_id,
+                    node_name=step.node_name,
+                    generation_attempt=int(trace.get("attempt") or step.generation_attempt), trace=trace,
+                    request_snapshot=run.input_payload or {})
+            except ValueError as exc:
+                raise PersistenceConflict("review audit validation failed") from exc
+            if envelope is not None:
+                hash_payload["review_audit_hash"] = envelope["audit_hash"]
             payload_hash = canonical_hash(hash_payload)
             if step.status != "running":
                 if step.payload_hash == payload_hash:
@@ -459,6 +496,9 @@ class SQLAuditRepository(BaseAuditRepository):
             step.retrieval_profile = trace.get("retrieval_profile") or {}
             step.workflow_elapsed_ms = trace.get("workflow_elapsed_ms")
             step.workflow_remaining_ms = trace.get("workflow_remaining_ms")
+            if envelope is not None:
+                # Assign a fresh dictionary: ordinary JSON columns do not track nested mutation.
+                step.output_payload = {**(step.output_payload or {}), audit_namespace(envelope): envelope}
             step.payload_hash = payload_hash
             step.ended_at = command.ended_at
             started_at = _as_utc(step.started_at) or command.ended_at
@@ -529,6 +569,21 @@ class SQLAuditRepository(BaseAuditRepository):
                 raise PersistenceConflict("step completion conflict") from exc
             db.refresh(step)
             return self._step_record(step)
+
+    def get_step_review_audit(self, run_id: str, step_id: str):
+        with self.session_factory() as db:
+            run = self._require_run(db, run_id)
+            step = db.query(AgentStepORM).filter_by(run_id=run_id, step_id=step_id).first()
+            if step is None:
+                raise RunNotFound("step not found")
+            checkpoints = [self._checkpoint_record(item) for item in db.query(WorkflowCheckpointORM).filter_by(run_id=run_id, step_id=step_id).all()]
+            try:
+                return read_review_audit(
+                    envelope=select_audit_envelope(step.output_payload or {}), run_id=run_id,
+                    step_id=step_id, node_name=step.node_name or step.agent_name, status=step.status,
+                    request_snapshot=run.input_payload or {}, checkpoints=checkpoints)
+            except ValueError as exc:
+                raise PersistenceError(str(exc)) from exc
 
     def save_checkpoint(
         self,
@@ -726,13 +781,21 @@ class SQLAuditRepository(BaseAuditRepository):
             db.refresh(event)
             return self._event_record(event)
 
+    def get_run_creation_snapshot(self, run_id: str) -> dict:
+        import copy
+        with self.session_factory() as db:
+            return copy.deepcopy(self._require_run(db, run_id).input_payload)
+
     def get_run(self, run_id: str) -> AgentRunRecord | None:
         with self.session_factory() as db:
             orm = db.get(AgentRunORM, run_id)
+            if orm:
+                read_sql(db, orm)
             return self._run_record(orm) if orm else None
 
     def list_steps(self, run_id: str) -> list[AgentStepRecord]:
         with self.session_factory() as db:
+            self._validate_run_projection(db, run_id)
             rows = db.query(AgentStepORM).filter_by(run_id=run_id).order_by(AgentStepORM.step_no).all()
             return [self._step_record(item) for item in rows]
 
@@ -744,6 +807,7 @@ class SQLAuditRepository(BaseAuditRepository):
         limit: int = 100,
     ) -> list[WorkflowEvent]:
         with self.session_factory() as db:
+            self._validate_run_projection(db, run_id)
             rows = (
                 db.query(WorkflowEventORM)
                 .filter(WorkflowEventORM.run_id == run_id)
@@ -756,6 +820,9 @@ class SQLAuditRepository(BaseAuditRepository):
 
     def list_checkpoints(self, run_id: str) -> list[WorkflowCheckpoint]:
         with self.session_factory() as db:
+            run = db.get(AgentRunORM, run_id)
+            if run:
+                read_sql(db, run)
             rows = (
                 db.query(WorkflowCheckpointORM)
                 .filter_by(run_id=run_id)
@@ -766,6 +833,7 @@ class SQLAuditRepository(BaseAuditRepository):
 
     def list_evidence(self, run_id: str) -> list[PersistedEvidenceSnapshot]:
         with self.session_factory() as db:
+            self._validate_run_projection(db, run_id)
             rows = (
                 db.query(RetrievalEvidenceSnapshotORM)
                 .filter_by(run_id=run_id)
@@ -944,6 +1012,7 @@ class SQLAuditRepository(BaseAuditRepository):
 
     def list_reviews_by_run(self, run_id: str) -> list[dict[str, Any]]:
         with self.session_factory() as db:
+            self._validate_run_projection(db, run_id)
             reviews = (
                 db.query(ResourceReviewORM)
                 .filter_by(run_id=run_id)

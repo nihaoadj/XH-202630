@@ -3040,8 +3040,8 @@
       "description": "生成资源请求模型",
       "properties": {
         "claim_max_iterations": {
-          "default": 0,
-          "description": "Claim 审核专用最大返工次数；当前默认不返工",
+          "default": 1,
+          "description": "Claim 审核专用最大返工次数；默认1次，0关闭专用返工，不借用普通返工额度",
           "maximum": 3,
           "minimum": 0,
           "title": "Claim Max Iterations",
@@ -3662,6 +3662,229 @@
       "title": "KnowledgeState",
       "type": "object"
     },
+    "LLMAttemptEvidenceV1": {
+      "description": "One gateway attempt as observed from summary and/or transport helper.",
+      "properties": {
+        "error_category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Category"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "gateway_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gateway Status"
+        },
+        "helper_error_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helper Error Class"
+        },
+        "helper_finish_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helper Finish Reason"
+        },
+        "helper_observed": {
+          "default": false,
+          "title": "Helper Observed",
+          "type": "boolean"
+        },
+        "helper_provider_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helper Provider Request Id"
+        },
+        "helper_raw_success": {
+          "default": false,
+          "title": "Helper Raw Success",
+          "type": "boolean"
+        },
+        "helper_usage_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helper Usage Input Tokens"
+        },
+        "helper_usage_output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helper Usage Output Tokens"
+        },
+        "helper_usage_total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helper Usage Total Tokens"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "provider_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Request Id"
+        },
+        "structured_output_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Structured Output Mode"
+        },
+        "usage_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage Input Tokens"
+        },
+        "usage_output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage Output Tokens"
+        },
+        "usage_source": {
+          "default": "none",
+          "enum": [
+            "summary",
+            "raw",
+            "both",
+            "none",
+            "conflict"
+          ],
+          "title": "Usage Source",
+          "type": "string"
+        },
+        "usage_total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage Total Tokens"
+        }
+      },
+      "required": [
+        "ordinal"
+      ],
+      "title": "LLMAttemptEvidenceV1",
+      "type": "object"
+    },
     "LLMAttemptRecord": {
       "additionalProperties": false,
       "properties": {
@@ -3747,6 +3970,401 @@
         "structured_output_mode"
       ],
       "title": "LLMAttemptRecord",
+      "type": "object"
+    },
+    "LLMCallObservationV1": {
+      "description": "One logical call into the real LLMGateway public entry point.",
+      "properties": {
+        "attempt_complete": {
+          "default": true,
+          "title": "Attempt Complete",
+          "type": "boolean"
+        },
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/LLMAttemptEvidenceV1"
+          },
+          "title": "Attempts",
+          "type": "array"
+        },
+        "attribution": {
+          "default": "unknown",
+          "enum": [
+            "task",
+            "resource",
+            "resource_set",
+            "unknown"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "attribution_complete": {
+          "default": true,
+          "title": "Attribution Complete",
+          "type": "boolean"
+        },
+        "capture_complete": {
+          "default": true,
+          "title": "Capture Complete",
+          "type": "boolean"
+        },
+        "domain": {
+          "title": "Domain",
+          "type": "string"
+        },
+        "error_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Class"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "gateway_attempt_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gateway Attempt Count"
+        },
+        "gateway_retry_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gateway Retry Count"
+        },
+        "known_input_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Known Input Tokens",
+          "type": "integer"
+        },
+        "known_llm_duration_ms": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Known Llm Duration Ms",
+          "type": "integer"
+        },
+        "known_output_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Known Output Tokens",
+          "type": "integer"
+        },
+        "known_total_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Known Total Tokens",
+          "type": "integer"
+        },
+        "model_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Name"
+        },
+        "node_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Name"
+        },
+        "observation_id": {
+          "minimum": 1,
+          "title": "Observation Id",
+          "type": "integer"
+        },
+        "observed_attempt_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Observed Attempt Count",
+          "type": "integer"
+        },
+        "outcome": {
+          "default": "success",
+          "enum": [
+            "success",
+            "gateway_error",
+            "exception"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "recorded_at": {
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "resource_labels": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Resource Labels",
+          "type": "array"
+        },
+        "run_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema Name"
+        },
+        "schema_version": {
+          "default": "llm-accounting-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Segment Id",
+          "type": "string"
+        },
+        "source_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Call Id"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage"
+        },
+        "stage_sequence": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Sequence"
+        },
+        "step_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Id"
+        },
+        "structured_output_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Structured Output Mode"
+        },
+        "usage_complete": {
+          "default": false,
+          "title": "Usage Complete",
+          "type": "boolean"
+        },
+        "usage_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage Input Tokens"
+        },
+        "usage_mismatch": {
+          "default": false,
+          "title": "Usage Mismatch",
+          "type": "boolean"
+        },
+        "usage_output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage Output Tokens"
+        },
+        "usage_total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage Total Tokens"
+        }
+      },
+      "required": [
+        "domain",
+        "run_id",
+        "segment_id",
+        "observation_id"
+      ],
+      "title": "LLMCallObservationV1",
+      "type": "object"
+    },
+    "LLMUsageSummaryV1": {
+      "properties": {
+        "complete_input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Complete Input Tokens"
+        },
+        "complete_output_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Complete Output Tokens"
+        },
+        "complete_total_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Complete Total Tokens"
+        },
+        "known_input_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Known Input Tokens",
+          "type": "integer"
+        },
+        "known_llm_duration_ms": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Known Llm Duration Ms",
+          "type": "integer"
+        },
+        "known_output_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Known Output Tokens",
+          "type": "integer"
+        },
+        "known_total_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Known Total Tokens",
+          "type": "integer"
+        },
+        "observed_calls": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Observed Calls",
+          "type": "integer"
+        },
+        "usage_complete_calls": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Usage Complete Calls",
+          "type": "integer"
+        }
+      },
+      "title": "LLMUsageSummaryV1",
       "type": "object"
     },
     "LearnerFocusSkippedV1": {
@@ -6610,6 +7228,32 @@
       "title": "ResourceExecutionState",
       "type": "string"
     },
+    "ResourcePartitionSummaryV1": {
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "partition": {
+          "enum": [
+            "exclusive",
+            "shared",
+            "unallocated"
+          ],
+          "title": "Partition",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/LLMUsageSummaryV1"
+        }
+      },
+      "required": [
+        "partition",
+        "label"
+      ],
+      "title": "ResourcePartitionSummaryV1",
+      "type": "object"
+    },
     "ResourceRepresentation": {
       "const": "text",
       "enum": [
@@ -6965,6 +7609,47 @@
         "replay_completeness"
       ],
       "title": "RunTimeline",
+      "type": "object"
+    },
+    "SegmentInfoV1": {
+      "properties": {
+        "call_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Call Count",
+          "type": "integer"
+        },
+        "capacity_exceeded": {
+          "default": false,
+          "title": "Capacity Exceeded",
+          "type": "boolean"
+        },
+        "incomplete_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Incomplete Reasons",
+          "type": "array"
+        },
+        "recorded_at": {
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "sealed": {
+          "default": false,
+          "title": "Sealed",
+          "type": "boolean"
+        },
+        "segment_id": {
+          "title": "Segment Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "segment_id",
+        "recorded_at"
+      ],
+      "title": "SegmentInfoV1",
       "type": "object"
     },
     "SourceLocator": {
@@ -7407,6 +8092,186 @@
       "title": "SourceType",
       "type": "string"
     },
+    "StageSummaryV1": {
+      "properties": {
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/LLMUsageSummaryV1"
+        }
+      },
+      "required": [
+        "stage"
+      ],
+      "title": "StageSummaryV1",
+      "type": "object"
+    },
+    "TaskLLMAccountingResponseV1": {
+      "properties": {
+        "as_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "As Of"
+        },
+        "attempt_complete": {
+          "default": false,
+          "title": "Attempt Complete",
+          "type": "boolean"
+        },
+        "attribution_complete": {
+          "default": false,
+          "title": "Attribution Complete",
+          "type": "boolean"
+        },
+        "availability": {
+          "enum": [
+            "available",
+            "partial",
+            "pending",
+            "not_recorded",
+            "unavailable"
+          ],
+          "title": "Availability",
+          "type": "string"
+        },
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/LLMCallObservationV1"
+          },
+          "title": "Calls",
+          "type": "array"
+        },
+        "capture_complete": {
+          "default": false,
+          "title": "Capture Complete",
+          "type": "boolean"
+        },
+        "coverage_complete": {
+          "default": false,
+          "title": "Coverage Complete",
+          "type": "boolean"
+        },
+        "domain": {
+          "title": "Domain",
+          "type": "string"
+        },
+        "filtered_summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LLMUsageSummaryV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "has_more": {
+          "default": false,
+          "title": "Has More",
+          "type": "boolean"
+        },
+        "include_calls": {
+          "default": false,
+          "title": "Include Calls",
+          "type": "boolean"
+        },
+        "incomplete_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Incomplete Reasons",
+          "type": "array"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Cursor"
+        },
+        "resource_partition_summaries": {
+          "items": {
+            "$ref": "#/$defs/ResourcePartitionSummaryV1"
+          },
+          "title": "Resource Partition Summaries",
+          "type": "array"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "llm-accounting-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "const": "full_generation_workflow",
+          "default": "full_generation_workflow",
+          "enum": [
+            "full_generation_workflow"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/SegmentInfoV1"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "stage_filter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Filter"
+        },
+        "stage_summaries": {
+          "items": {
+            "$ref": "#/$defs/StageSummaryV1"
+          },
+          "title": "Stage Summaries",
+          "type": "array"
+        },
+        "task_summary": {
+          "$ref": "#/$defs/LLMUsageSummaryV1"
+        },
+        "usage_complete": {
+          "default": false,
+          "title": "Usage Complete",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "domain",
+        "run_id",
+        "availability"
+      ],
+      "title": "TaskLLMAccountingResponseV1",
+      "type": "object"
+    },
     "WeaknessPriorityV1": {
       "additionalProperties": false,
       "properties": {
@@ -7782,6 +8647,9 @@
     },
     "RunTimeline": {
       "$ref": "#/$defs/RunTimeline"
+    },
+    "TaskLLMAccountingResponseV1": {
+      "$ref": "#/$defs/TaskLLMAccountingResponseV1"
     }
   }
 }

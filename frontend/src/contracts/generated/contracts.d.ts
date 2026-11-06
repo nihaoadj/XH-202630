@@ -474,6 +474,28 @@ export type KnowledgeState = {
   "valid_question_count"?: number;
 };
 
+export type LLMAttemptEvidenceV1 = {
+  "error_category"?: (string) | (null);
+  "error_code"?: (string) | (null);
+  "gateway_status"?: (string) | (null);
+  "helper_error_class"?: (string) | (null);
+  "helper_finish_reason"?: (string) | (null);
+  "helper_observed"?: boolean;
+  "helper_provider_request_id"?: (string) | (null);
+  "helper_raw_success"?: boolean;
+  "helper_usage_input_tokens"?: (number) | (null);
+  "helper_usage_output_tokens"?: (number) | (null);
+  "helper_usage_total_tokens"?: (number) | (null);
+  "latency_ms"?: (number) | (null);
+  "ordinal": number;
+  "provider_request_id"?: (string) | (null);
+  "structured_output_mode"?: (string) | (null);
+  "usage_input_tokens"?: (number) | (null);
+  "usage_output_tokens"?: (number) | (null);
+  "usage_source"?: "summary" | "raw" | "both" | "none" | "conflict";
+  "usage_total_tokens"?: (number) | (null);
+};
+
 export type LLMAttemptRecord = {
   "attempt": number;
   "error_code"?: (string) | (null);
@@ -483,6 +505,56 @@ export type LLMAttemptRecord = {
   "status": string;
   "structured_output_mode": string;
   "total_tokens"?: (number) | (null);
+};
+
+export type LLMCallObservationV1 = {
+  "attempt_complete"?: boolean;
+  "attempts"?: Array<LLMAttemptEvidenceV1>;
+  "attribution"?: "task" | "resource" | "resource_set" | "unknown";
+  "attribution_complete"?: boolean;
+  "capture_complete"?: boolean;
+  "domain": string;
+  "error_class"?: (string) | (null);
+  "error_code"?: (string) | (null);
+  "gateway_attempt_count"?: (number) | (null);
+  "gateway_retry_count"?: (number) | (null);
+  "known_input_tokens"?: number;
+  "known_llm_duration_ms"?: number;
+  "known_output_tokens"?: number;
+  "known_total_tokens"?: number;
+  "model_name"?: (string) | (null);
+  "node_name"?: (string) | (null);
+  "observation_id": number;
+  "observed_attempt_count"?: number;
+  "outcome"?: "success" | "gateway_error" | "exception";
+  "recorded_at"?: string;
+  "resource_labels"?: Array<string>;
+  "run_id": string;
+  "schema_name"?: (string) | (null);
+  "schema_version"?: string;
+  "segment_id": string;
+  "source_call_id"?: (string) | (null);
+  "stage"?: (string) | (null);
+  "stage_sequence"?: (number) | (null);
+  "step_id"?: (string) | (null);
+  "structured_output_mode"?: (string) | (null);
+  "usage_complete"?: boolean;
+  "usage_input_tokens"?: (number) | (null);
+  "usage_mismatch"?: boolean;
+  "usage_output_tokens"?: (number) | (null);
+  "usage_total_tokens"?: (number) | (null);
+};
+
+export type LLMUsageSummaryV1 = {
+  "complete_input_tokens"?: (number) | (null);
+  "complete_output_tokens"?: (number) | (null);
+  "complete_total_tokens"?: (number) | (null);
+  "known_input_tokens"?: number;
+  "known_llm_duration_ms"?: number;
+  "known_output_tokens"?: number;
+  "known_total_tokens"?: number;
+  "observed_calls"?: number;
+  "usage_complete_calls"?: number;
 };
 
 export type LearnerFocusSkippedV1 = {
@@ -871,6 +943,12 @@ export type ResourceExecutionProgress = {
 
 export type ResourceExecutionState = "queued" | "generating" | "generated" | "reviewing" | "revision_requested" | "claim_checking" | "approved" | "human_review" | "failed";
 
+export type ResourcePartitionSummaryV1 = {
+  "label": string;
+  "partition": "exclusive" | "shared" | "unallocated";
+  "usage"?: LLMUsageSummaryV1;
+};
+
 export type ResourceRepresentation = "text";
 
 export type RunResourceProgressSummary = {
@@ -924,6 +1002,15 @@ export type RunTimeline = {
   "trigger_relation"?: (Record<string, unknown>) | (null);
 };
 
+export type SegmentInfoV1 = {
+  "call_count"?: number;
+  "capacity_exceeded"?: boolean;
+  "incomplete_reasons"?: Array<string>;
+  "recorded_at": string;
+  "sealed"?: boolean;
+  "segment_id": string;
+};
+
 export type SourceLocator = {
   "chunk_id": string;
   "document_id": string;
@@ -971,6 +1058,36 @@ export type SourceRef = {
 };
 
 export type SourceType = "markdown" | "text" | "pdf" | "web" | "audio" | "video" | "other";
+
+export type StageSummaryV1 = {
+  "stage": string;
+  "usage"?: LLMUsageSummaryV1;
+};
+
+export type TaskLLMAccountingResponseV1 = {
+  "as_of"?: (string) | (null);
+  "attempt_complete"?: boolean;
+  "attribution_complete"?: boolean;
+  "availability": "available" | "partial" | "pending" | "not_recorded" | "unavailable";
+  "calls"?: Array<LLMCallObservationV1>;
+  "capture_complete"?: boolean;
+  "coverage_complete"?: boolean;
+  "domain": string;
+  "filtered_summary"?: (LLMUsageSummaryV1) | (null);
+  "has_more"?: boolean;
+  "include_calls"?: boolean;
+  "incomplete_reasons"?: Array<string>;
+  "next_cursor"?: (string) | (null);
+  "resource_partition_summaries"?: Array<ResourcePartitionSummaryV1>;
+  "run_id": string;
+  "schema_version"?: string;
+  "scope"?: "full_generation_workflow";
+  "segments"?: Array<SegmentInfoV1>;
+  "stage_filter"?: (string) | (null);
+  "stage_summaries"?: Array<StageSummaryV1>;
+  "task_summary"?: LLMUsageSummaryV1;
+  "usage_complete"?: boolean;
+};
 
 export type WeaknessPriorityV1 = {
   "confidence": AbilityConfidence;

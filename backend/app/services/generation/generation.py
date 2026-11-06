@@ -1,4 +1,5 @@
-from app.core.execution import ExecutionFence, current_execution_fence, execution_fence
+from app.services.generation.lecture_policy import freeze_lecture_policy, lecture_fields
+from app.core.execution import ExecutionFence, current_execution_fence, execution_fence, execution_session
 from app.db.generation.fencing import install_execution_fencing
 import uuid
 import os
@@ -14,6 +15,10 @@ from app.config import get_settings
 from app.models.knowledge.knowledge import RESOURCE_AWARE_STRATEGY, LEGACY_RETRIEVAL_STRATEGY
 from app.models.generation.resource_retry import ResourceRetryContext
 from app.models.learning_documents.types import GENERAL_GENERATION_RESOURCE_TYPES
+from app.models.reviews.review_audit import ReviewPolicySnapshotV1
+from app.models.reviews.claim_extraction import policy_from_input
+from app.db.claim.extraction import extraction_repository
+from app.agents.resource_workflows.learning_documents.claim_extraction.budget import frozen_snapshot, snapshot_fields
 from app.db.learning_documents.base import BaseResourceRepository
 from app.db.audit.base import BaseAuditRepository
 from app.db.audit.base import PersistenceConflict
@@ -46,6 +51,8 @@ def build_workflow_state(
     *,
     run_id: str | None = None,
     batch_id: str | None = None,
+    claim_extraction_snapshot: dict | None = None,
+    lecture_review_snapshot: dict | None = None,
 ) -> WorkflowState:
     """Validate and map every public request control into workflow channels."""
     if learner.learner_id != req.learner_id:
@@ -53,6 +60,13 @@ def build_workflow_state(
 
     try:
         settings = get_settings()
+        if claim_extraction_snapshot is None:
+            if req.include_claim_check and settings.claim_extraction_strategy != "legacy_v3":
+                raise ValueError("neutral extraction requires submission preflight")
+            claim_extraction_snapshot = {}
+        if set(claim_extraction_snapshot) - {"claim_extraction_mode", "claim_extraction_policy", "claim_extraction_policy_hash"}:
+            raise ValueError("invalid frozen extraction fields")
+        policy_from_input({"include_claim_check": req.include_claim_check, **claim_extraction_snapshot})
         workflow_started_at = datetime.now(timezone.utc)
         constraints = WorkflowConstraints.model_validate(req.constraints).model_dump(
             mode="python",
@@ -60,6 +74,8 @@ def build_workflow_state(
         )
         effective_run_id = run_id or str(uuid.uuid4())
         snapshot = WorkflowStateSnapshot(
+            **claim_extraction_snapshot,
+            **lecture_fields(lecture_review_snapshot or {}),
             run_id=effective_run_id,
             batch_id=batch_id or effective_run_id,
             learner_id=req.learner_id,
@@ -69,6 +85,11 @@ def build_workflow_state(
             diagnostic_result_id=req.diagnostic_result_id,
             target_skill_nodes=req.target_skill_nodes,
             resource_types=req.resource_types,
+            review_policy=ReviewPolicySnapshotV1(
+                assessment_strategy=settings.assessment_review_strategy,
+                combined_context_tokens=settings.assessment_review_context_tokens,
+                combined_max_output_tokens=settings.llm_max_output_tokens,
+            ).model_dump(mode="json"),
             retrieval_strategy_version=(
                 RESOURCE_AWARE_STRATEGY
                 if settings.resource_aware_retrieval_enabled
@@ -266,11 +287,14 @@ def _request_snapshot(req: GenerateRequest, state: WorkflowState) -> dict:
     }
     return {
         "learner_id": req.learner_id,
+        **snapshot_fields(state),
         "topic": req.topic,
         "knowledge_base_id": state.get("knowledge_base_id"),
         "diagnostic_result_id": req.diagnostic_result_id,
         "target_skill_nodes": list(req.target_skill_nodes),
         "resource_types": list(req.resource_types),
+        "review_policy": state.get("review_policy"),
+        **lecture_fields(state),
         "retrieval_strategy_version": state.get("retrieval_strategy_version", LEGACY_RETRIEVAL_STRATEGY),
         "difficulty_preference": req.difficulty_preference,
         "generation_mode": req.generation_mode or "standard",
@@ -327,25 +351,49 @@ class GenerationService:
         audit_repo: BaseAuditRepository | None = None,
         knowledge_catalog: KnowledgeCatalogRepository | None = None,
         claim_repo: BaseClaimRepository | None = None,
+        claim_extraction_gateway=None,
+        claim_extraction_counter=None,
     ):
         self.resource_repo = resource_repo
         self.workflow = workflow
         self.audit_repo = audit_repo or MemoryAuditRepository()
         self.knowledge_catalog = knowledge_catalog
         self.claim_repo = claim_repo or MemoryClaimRepository()
+        self.claim_extraction_gateway = claim_extraction_gateway or getattr(workflow, "claim_extraction_gateway", None)
+        self.claim_extraction_counter = claim_extraction_counter or getattr(workflow, "claim_extraction_counter", None)
+        if self.claim_extraction_counter is None and self.claim_extraction_gateway is not None:
+            from app.agents.resource_workflows.learning_documents.claim_extraction.profiles import load_counter
+            self.claim_extraction_counter = load_counter(get_settings(), self.claim_extraction_gateway)
+        self.claim_extraction_repository = extraction_repository(self.audit_repo)
+        configure = getattr(workflow, "configure_claim_extraction", None)
+        if configure is not None:
+            configure(llm_gateway=self.claim_extraction_gateway, repository=self.claim_extraction_repository,
+                      counter=self.claim_extraction_counter)
+
+    def freeze_claim_extraction(self, req):
+        try:
+            snapshot = frozen_snapshot(get_settings(), req, self.claim_extraction_gateway, self.claim_extraction_counter)
+            if snapshot and self.claim_extraction_repository is None:
+                raise ValueError("neutral extraction repository missing")
+            return snapshot
+        except ValueError as exc:
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422) from exc
+
+    def freeze_lecture_review(self, req):
+        return freeze_lecture_policy(req, get_settings())
 
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         return self.generate_with_run_id(learner, req)
 
-    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None, *, resource_retry_context=None):
+    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None, *, resource_retry_context=None, claim_extraction_snapshot=None, lecture_review_snapshot=None, lecture_dispatch_snapshot=None):
         if current_execution_fence() is not None or not hasattr(self.audit_repo, "session_factory"):
             return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id,
-                                               resource_retry_context=resource_retry_context)
+                                               resource_retry_context=resource_retry_context, claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot, lecture_dispatch_snapshot=lecture_dispatch_snapshot)
         install_execution_fencing()
         run_id = run_id or str(uuid.uuid4())
         with execution_fence(ExecutionFence(run_id, f"text-{uuid.uuid4()}")):
             return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id,
-                                               resource_retry_context=resource_retry_context)
+                                               resource_retry_context=resource_retry_context, claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot, lecture_dispatch_snapshot=lecture_dispatch_snapshot)
 
     def _generate_with_run_id(
         self,
@@ -354,6 +402,9 @@ class GenerationService:
         run_id: str | None = None,
         batch_id: str | None = None,
         resource_retry_context: dict | None = None,
+        claim_extraction_snapshot: dict | None = None,
+        lecture_review_snapshot: dict | None = None,
+        lecture_dispatch_snapshot: dict | None = None,
     ) -> GenerateResponse:
         """Generate with a caller-owned Run ID while preserving durable lifecycle semantics."""
         readiness = (
@@ -363,7 +414,27 @@ class GenerationService:
             if self.knowledge_catalog is not None
             else ensure_generation_ready()
         )
-        initial_state = build_workflow_state(learner, req, run_id=run_id, batch_id=batch_id)
+        if claim_extraction_snapshot is None:
+            existing = self.audit_repo.get_run(run_id) if run_id else None
+            if existing is not None and self.claim_extraction_repository is not None:
+                saved = self.claim_extraction_repository.get(run_id)
+                claim_extraction_snapshot = (dict(claim_extraction_mode=saved.policy.strategy,
+                    claim_extraction_policy=saved.policy.model_dump(mode="json"), claim_extraction_policy_hash=saved.policy_hash) if saved else {})
+            else:
+                claim_extraction_snapshot = self.freeze_claim_extraction(req)
+        existing_run = self.audit_repo.get_run(run_id) if run_id else None
+        if existing_run is not None:
+            saved_snapshot = self.audit_repo.get_run_creation_snapshot(run_id)
+            saved_fields = lecture_fields(saved_snapshot)
+            if lecture_review_snapshot is not None and saved_fields != lecture_fields(lecture_review_snapshot):
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            lecture_review_snapshot = saved_fields
+        elif lecture_review_snapshot is None:
+            lecture_review_snapshot = freeze_lecture_policy(req, get_settings())
+        initial_state = build_workflow_state(learner, req, run_id=run_id, batch_id=batch_id,
+            claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot)
+        if lecture_dispatch_snapshot is not None:
+            initial_state["lecture_dispatch_snapshot"] = lecture_dispatch_snapshot
         if resource_retry_context is not None:
             try:
                 retry = ResourceRetryContext.from_snapshot(resource_retry_context)
@@ -384,6 +455,28 @@ class GenerationService:
                 key: resource_retry_context[key]
                 for key in ("source_run_id", "source_spec_id", "source_checkpoint_hash", "context_hash")
             }
+        from app.agents.shared.llm_accounting import text_run_segment
+
+        # Bypass LLM-call accounting (T41): the outermost text-generation
+        # execution boundary owns the task segment; the sealed snapshot is
+        # produced only after the original success/failure handling finishes.
+        with text_run_segment(run_id):
+            return self._generate_run_and_finalize(
+                learner, req, initial_state, run_id, request_snapshot, readiness,
+                started_at, lease_expires_at,
+            )
+
+    def _generate_run_and_finalize(
+        self,
+        learner: LearnerProfile,
+        req: GenerateRequest,
+        initial_state: dict,
+        run_id: str,
+        request_snapshot: dict,
+        readiness,
+        started_at: datetime,
+        lease_expires_at: datetime,
+    ) -> GenerateResponse:
         try:
             self.audit_repo.create_run(
                 CreateRunCommand(
@@ -409,11 +502,16 @@ class GenerationService:
             raise ApplicationError(ErrorCode.WORKFLOW_PERSISTENCE_UNAVAILABLE) from exc
 
         try:
-            result = DurableWorkflowRunner(
-                self.workflow,
-                self.audit_repo,
-                WorkflowArtifactRecorder(self.resource_repo, self.audit_repo, self.claim_repo),
-            ).invoke(initial_state)
+            owner = self.audit_repo.get_run(run_id).owner_instance_id
+            with execution_session(run_id, owner):
+                result = DurableWorkflowRunner(
+                    self.workflow,
+                    self.audit_repo,
+                    WorkflowArtifactRecorder(self.resource_repo, self.audit_repo, self.claim_repo),
+                ).invoke(initial_state)
+                if initial_state.get("claim_extraction_policy"):
+                    from app.agents.resource_workflows.learning_documents.claim_extraction.budget import close_session
+                    close_session(run_id, self.claim_extraction_repository)
         except Exception as exc:
             error_code = (
                 exc.code.value if isinstance(exc, ApplicationError) else ErrorCode.INTERNAL_ERROR.value

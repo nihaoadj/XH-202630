@@ -15,6 +15,8 @@ def test_review_endpoint_returns_claim_evidence_and_handles_missing_resource():
         "resource_001",
         {
             "passed": True,
+            "specialized_reviews": {"assessment_combined": {"private": "PRIVATE_REVIEW_SENTINEL"}},
+            "review_audit": {"private": "PRIVATE_REVIEW_SENTINEL"},
             "claims": [
                 {
                     "claim_id": "claim_001",
@@ -34,5 +36,7 @@ def test_review_endpoint_returns_claim_evidence_and_handles_missing_resource():
     response = client.get("/api/reviews/resource_001")
     assert response.status_code == 200
     assert response.json()["review_id"] == review_id
+    assert "PRIVATE_REVIEW_SENTINEL" not in response.text
+    assert "PRIVATE_REVIEW_SENTINEL" not in str(repository.list_reviews_by_run(None))
     assert response.json()["claims"][0]["evidence_refs"][0]["chunk_id"] == "chunk_001"
     assert client.get("/api/reviews/missing").status_code == 404

@@ -58,14 +58,21 @@ class ClaimCandidate(StrictClaimModel):
     claim_text: str = Field(min_length=1, max_length=4000)
     claim_type: ClaimType
     source_text: str = Field(min_length=1, max_length=2000)
+    # Offsets stay advisory: materialize_claims() re-locates the span from the
+    # exact source_text and overwrites both values.  A provider that omits the
+    # whole pair (0/0) is accepted and rebased; a partially filled or inverted
+    # pair is still rejected, and ClaimRecord keeps requiring a positive span.
     source_start: int = Field(ge=0)
-    source_end: int = Field(gt=0)
+    source_end: int = Field(ge=0)
     knowledge_point_id: Optional[str] = Field(default=None, max_length=256)
     source_evidence_ids: list[str] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def validate_span(self) -> "ClaimCandidate":
-        if self.source_end <= self.source_start:
+        if self.source_end == 0:
+            if self.source_start > 0:
+                raise ValueError("source offset pair is incomplete")
+        elif self.source_end <= self.source_start:
             raise ValueError("source_end must be greater than source_start")
         if len(self.source_evidence_ids) != len(set(self.source_evidence_ids)):
             raise ValueError("source_evidence_ids must be unique")
@@ -82,6 +89,20 @@ class ResourceClaimCandidates(StrictClaimModel):
 
 class ClaimExtractionLLMOutput(StrictClaimModel):
     resources: list[ResourceClaimCandidates] = Field(min_length=1, max_length=20)
+
+
+class ClaimSourceRepairItem(StrictClaimModel):
+    claim_index: int = Field(ge=0)
+    source_text: str = Field(min_length=1, max_length=200)
+
+
+class ClaimSourceRepairLLMOutput(StrictClaimModel):
+    """Bounded envelope for re-copying only the spans that failed the substring gate."""
+
+    claims: list[ClaimSourceRepairItem] = Field(
+        min_length=1,
+        max_length=MAX_CLAIMS_PER_RESOURCE,
+    )
 
 
 class ClaimRecord(StrictClaimModel):

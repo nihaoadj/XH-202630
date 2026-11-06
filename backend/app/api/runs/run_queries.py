@@ -1,14 +1,32 @@
-from fastapi import APIRouter, Header, Query, Request
+from enum import Enum
+
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from app.api.dependencies import ensure_profile_access
 from app.config import get_settings
+from app.models.shared.llm_accounting import TaskLLMAccountingResponseV1
 from app.models.shared.persistence import PersistedEvidenceSnapshot, RunSummary, RunTimeline
 from app.models.reviews.claims import RunClaimsResponse
+from app.services.runs.llm_accounting import LLMAccountingQueryService
 from app.services.runs.queries import RunQueryService
 from app.services.runs.events import RunEventStreamService
 
 
 router = APIRouter()
+
+_TEXT_RUN_TERMINAL_STATUSES = {"completed", "degraded", "human_review", "failed", "interrupted"}
+
+
+class TextAccountingStage(str, Enum):
+    """Controlled stage filter for the text-generation accounting endpoint."""
+
+    diagnose = "diagnose"
+    plan = "plan"
+    generate = "generate"
+    review = "review"
+    claim_extract = "claim_extract"
+    claim_judge = "claim_judge"
 
 
 @router.get("/{run_id}/events")
@@ -73,3 +91,51 @@ def get_run_evidence(run_id: str, request: Request):
 def get_run_claims(run_id: str, request: Request):
     service: RunQueryService = request.app.container.run_query_service()
     return service.get_claims(run_id)
+
+
+@router.get("/{run_id}/llm-accounting", response_model=TaskLLMAccountingResponseV1)
+def get_run_llm_accounting(
+    run_id: str,
+    request: Request,
+    include_calls: bool = Query(default=False),
+    stage: TextAccountingStage | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """Read-only full-chain LLM-call accounting for one text generation run.
+
+    The new endpoint adds the profile-visibility check the legacy run
+    endpoints do not perform; missing/invisible runs stay a uniform 404.
+    """
+
+    run_service: RunQueryService = request.app.container.run_query_service()
+    run = run_service.get_run(run_id)
+    learner_id = getattr(run, "learner_id", None)
+    profile = (
+        request.app.container.profile_service().get(learner_id) if learner_id else None
+    )
+    if ensure_profile_access(request, profile) is None:
+        raise HTTPException(status_code=404, detail="工作流任务不存在")
+
+    try:
+        timeline = run_service.get_timeline(run_id, limit=500)
+        expected_llm_stages = {
+            step.node_name for step in timeline.steps if step.llm_call_id
+        }
+        status = str(getattr(timeline.run.status, "value", timeline.run.status))
+    except Exception:
+        expected_llm_stages = None
+        status = "running"
+    accounting_service: LLMAccountingQueryService = (
+        request.app.container.llm_accounting_query_service()
+    )
+    return accounting_service.query_task(
+        domain="learning_documents",
+        run_id=run_id,
+        include_calls=include_calls,
+        stage=stage.value if stage is not None else None,
+        cursor=cursor,
+        limit=limit,
+        task_terminal=status in _TEXT_RUN_TERMINAL_STATUSES,
+        expected_llm_stages=expected_llm_stages,
+    )

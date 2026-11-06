@@ -189,3 +189,24 @@ def compose_courseware_scene(
         elif "来源块" in detail or "source" in detail.lower():
             code = "AI_SCENE_UNKNOWN_SOURCE_BLOCK"
         return None, {"code": code, "message": f"场景 {scene_id} 的 AI 内容不可用，已保留可追溯的确定性版本"}
+
+
+# ---------------------------------------------------------------------------
+# Bypass LLM-call accounting (T41): bind the composing stage with an
+# exclusive scene label.  The original function body is unchanged.
+# ---------------------------------------------------------------------------
+import functools as _functools
+
+from app.agents.shared.llm_accounting import stage_labeled_scope as _stage_labeled_scope
+
+_compose_courseware_scene = compose_courseware_scene
+
+
+@_functools.wraps(_compose_courseware_scene)
+def compose_courseware_scene(*args, **kwargs):
+    run_id = kwargs.get("run_id")
+    scene_id = kwargs.get("scene_id")
+    if run_id is None and len(args) >= 3:
+        scene_id = args[2]
+    with _stage_labeled_scope("composing", labels=[scene_id]):
+        return _compose_courseware_scene(*args, **kwargs)

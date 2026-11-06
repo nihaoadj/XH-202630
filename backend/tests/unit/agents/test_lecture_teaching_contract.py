@@ -12,7 +12,8 @@ from app.agents.resource_agents.lecture_contract import (
     node_display_names, teaching_contract,
 )
 from app.agents.resource_agents.text import TEXT_RESOURCE_PROMPT
-from app.agents.resource_workflows.learning_documents.reviewer_agent import REVIEW_PROMPT, review_node
+from app.agents.resource_workflows.learning_documents.reviewer_agent import review_node
+from app.agents.resource_workflows.learning_documents.reviewing import build_review_prompt, resolve_review_profile
 from app.core.retrieval.evidence import source_refs_from_evidence
 from app.core.security.errors import ApplicationError
 from app.models.learning_documents.schemas import LearningResource
@@ -98,8 +99,13 @@ def test_existing_review_call_gets_rubric_only_for_lecture(kind):
         "generated_resources": [resource], "retrieved_evidence": [evidence], "trace": []}, llm_gateway=gateway)
     assert len(gateway.calls) == 1 and result["review_result"]["decision"] == "approve"
     system = gateway.calls[0]["messages"][0].content
+    profile = resolve_review_profile(resource_type=kind, phase="content_v2")
+    assert system == build_review_prompt(profile=profile).system_text
     if kind == "讲义":
-        assert system == REVIEW_PROMPT + LECTURE_REVIEW_GUIDANCE
-        assert "讲义教学控制信息" in gateway.calls[0]["messages"][1].content
+        assert LECTURE_REVIEW_GUIDANCE in system
+        control = json.loads(gateway.calls[0]["messages"][1].content.split("讲义教学控制信息：", 1)[1])
+        assert control["teaching_contract"]["version"] == LECTURE_CONTRACT_VERSION
+        assert control["teaching_contract"]["audience"] == "中级"
     else:
-        assert system == REVIEW_PROMPT and "讲义教学控制信息" not in gateway.calls[0]["messages"][1].content
+        assert LECTURE_REVIEW_GUIDANCE not in system
+        assert "讲义教学控制信息" not in gateway.calls[0]["messages"][1].content

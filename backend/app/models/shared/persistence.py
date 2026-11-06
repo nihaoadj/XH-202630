@@ -426,6 +426,7 @@ class BeginStepCommand(StrictPersistenceModel):
 
 
 class CompleteStepCommand(StrictPersistenceModel):
+    review_audit: dict[str, Any] | None = None
     run_id: str
     step_id: str
     trace: dict[str, Any]
@@ -483,6 +484,22 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
     """Build the bounded allow-list projection used for read-only replay."""
 
     projection: dict[str, Any] = {}
+    if state.get("claim_extraction_policy") is not None:
+        for key in ("claim_extraction_mode", "claim_extraction_policy", "claim_extraction_policy_hash"):
+            projection[key] = _jsonable(state[key])
+    if state.get("claim_extraction_refs"):
+        projection["claim_extraction_refs"] = _jsonable(state["claim_extraction_refs"])
+    if state.get("lecture_review_contract_version") is not None:
+        for key in ("lecture_review_contract_version", "lecture_review_policy", "lecture_review_policy_hash"):
+            if key not in state or state[key] is None:
+                raise ValueError("lecture checkpoint frozen fields missing")
+            projection[key] = _jsonable(state[key])
+        if state.get("lecture_stop_reasons"):
+            projection["lecture_stop_reasons"] = _jsonable(state["lecture_stop_reasons"])
+    if state.get("review_policy") is not None:
+        projection["review_policy"] = _jsonable(state["review_policy"])
+    if state.get("review_audit_refs"):
+        projection["review_audit_refs"] = _jsonable(state["review_audit_refs"])
     scalar_fields = (
         "schema_version",
         "run_id",

@@ -1,6 +1,10 @@
 # 本地启动与部署说明
 
-> 文档核对日期：2026-10-23。
+T42 修复部署边界：既有来源定位配置与默认值不变，仅新建中立任务冻结 locator-v2；旧排队/运行任务按已保存的 locator-v1 执行，已完成结果不重算。回滚前停止新建任务并处理新任务，保留能读取两种算法版本及 location_failures 的兼容 reader；旧二进制不能被假定能读取新私有 JSON，不通过删字段/重算 hash 降级。本轮未修改实际 .env 或启动进程。
+
+T41 LLM 调用旁路计量：新增两个可选配置 `LLM_ACCOUNTING_ENABLED`（默认 `true`，false 时观察与发布均 no-op）与 `LLM_ACCOUNTING_DB_PATH`（默认 `backend/data/llm_accounting.db`）。该路径为独立 SQLite 计量库，不得等于任何业务 SQLite/知识库文件或落在资源产物目录；相对路径按后端约定解析并校验。每个 Web、文本 Worker、课件 Worker 宿主进程至多启动一个 spawn writer 子进程（仅导入独立计量数据层，不初始化业务容器/模型），只在应用/Worker 启动阶段安装；writer 失败降级为 no-op，不影响业务 readiness/健康检查。业务不等待计量存储：提交为非阻塞 `put_nowait`，队列满/消费者挂起/DB 锁均快速丢弃并标 partial/unavailable。宿主退出对计量进程 join 预算 200ms，超时终止。代码回滚时关闭可选 runtime，保留独立计量文件（旧代码不读取），业务库无须降级。异步可见性与硬崩丢失使缺失行可能延迟或永不出现，不得据此判 0。
+
+> 文档核对日期：2026-10-27。
 
 > 当前 SQLite 拓扑：一个 FastAPI Web、一个文本 Worker、一个互动课件 Worker 和一个 Vite 前端。每类 Worker 均为单实例、并发 1；这不是同类多消费者或生产集群的扩容方案。
 
@@ -56,7 +60,9 @@ python3.11 -m venv .venv
 
 ### 2.2 日常一键启动
 
-本机主模型已切为`deepseek-flash`（`LLM_MODEL`，官方最新Flash别名当前指向V4.1-Flash-1017），沿用原`LLM_BASE_URL`/API Key、思考模式与预算；此键由共享网关读取，会影响生成及共用该网关的Agent。Embedding/精排/SQL/向量配置不随此切换变化。改模型后重启Web及Worker，勿重新初始化或入库；启动健康检查不发计费LLM请求，因此模型账号权限与生成质量仍须后续由用户实际请求验证。真实.env和含密钥的备份不提交。Flash别名具体版本以[官方模型页](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)为准。
+本机主模型已切为阿里云百炼平台（`LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`），模型 `LLM_MODEL=deepseek-v4.1-flash`；三者（Key/Base URL/Model）同属一个共享网关，会影响生成及共用该网关的Agent。Embedding/精排/SQL/向量配置不随此切换变化，BGE-M3 与 reranker 均为本地模型，切换供应商不需要重建索引。改配置后重启Web及Worker，勿重新初始化或入库；启动健康检查只校验本地字段、不发计费LLM请求，因此账户余额、限流额度与生成质量仍须由实际请求验证。真实.env和含密钥的备份不提交。
+
+两处换供应商时的特殊约束：① 百炼默认开启思考，必须保持 `LLM_THINKING_MODE=disabled`（下发 `thinking:{"type":"disabled"}` 已实测被接受），否则会先烧满输出预算再以 `finish_reason=length` 截断；② 手工用 `curl` 验证百炼端点时必须加 `--noproxy '*'`，本机系统代理会让 `dashscope.aliyuncs.com` 的 CONNECT 隧道无响应而误报不可达；应用侧因传输层 `trust_env=False` 不受影响，确需代理只能显式配置 `LLM_PROXY_URL`。模型具体版本以[百炼模型列表](https://help.aliyun.com/zh/model-studio/models)为准。
 
 在仓库根目录使用虚拟环境解释器执行：
 
@@ -286,9 +292,25 @@ COURSEWARE_WORKER_HEALTH_PORT=8081
 |---|---|---|---|
 | `LLM_STRUCTURED_OUTPUT_MODE` | `auto` | `json_mode` | 新建本地配置使用模板值；`auto` 才先尝试 function calling |
 | `CLAIM_PARTIAL_PUBLISH` | `false` | `true` | 模板显式允许符合策略的 partial Claim 发布，保留 `incomplete` 指标；不能计作完整事实审核 |
-| `LLM_BASE_URL` / `LLM_MODEL` | DashScope / Qwen | DeepSeek 示例 | 示例 Provider 选择可覆盖；真实运行必须填写对应凭据 |
+| `LLM_MODEL` | `qwen-max` | `deepseek-v4.1-flash` | 端点同为百炼兼容模式；模板选 DeepSeek 系列以在关闭思考后取得更好的长文性价比 |
+| `LLM_THINKING_MODE` | `auto` | `disabled` | 关闭 Provider 思考以降低 token 与时延；质量优先时改 `enabled` 并重算预算 |
+| `LLM_REQUEST_TIMEOUT_SECONDS` / `LLM_WORKFLOW_TIMEOUT_SECONDS` / `WORKFLOW_RUN_LEASE_SECONDS` | `120` / `1200` / `1260` | `180` / `1800` / `1860` | 模板为整 Run 与一次重试留时间；须保持「租约 ≥ 整 Run 时限 > 单请求时限」 |
 
-讲义默认输出上限 65536 token / 240 秒，实操指南默认 65536 token / 300 秒；通用资源输出预算由 `LLM_RESOURCE_GENERATOR_MAX_OUTPUT_TOKENS` 控制，普通审核和 Claim 使用独立的重试 / 超时配置。以上是调用预算，实际内容受 DTO、Evidence 和整 Run 时限约束。完整字段以 [配置源码](../backend/app/config.py) 和模板为准。
+讲义默认输出上限 24576 token / 240 秒，实操指南 32768 token / 300 秒；调用预算统一按「输出上限 ≤ 单请求时限 × 实测吞吐」配置，超出时限内可产出量的上限只会落成 `LLM_TIMEOUT` 或无效的截断重试。模板以约 120 token/s 估算：辅助节点与测评／清单 16384 token / 180 秒（`LLM_RESOURCE_GENERATOR_MAX_OUTPUT_TOKENS` 只约束 assessment、checklist 这类非 strict 调用），Claim 抽取 24576 / 240 秒，Claim 截断重试 49152 / 480 秒（`CLAIM_TRUNCATED_RETRY_OUTPUT_TOKENS` / `CLAIM_RETRY_REQUEST_TIMEOUT_SECONDS`）。整 Run 时限 1800 秒、租约 1860 秒，配置校验要求租约不低于整 Run 时限且整 Run 时限高于单请求时限。吞吐须按部署模型与区域实测重算：实测明显低于 120 token/s 时必须同时下调上限或上调时限。
+
+T34 追加三层保护，均不放宽原预算：① 网关「最小可用尝试」门禁 `LLM_MIN_ATTEMPT_SECONDS`（默认45，上限300）——剩余 Run 预算低于 `min(配置值, 0.5×该次时限)` 时不再发起注定超时的调用，按 `LLM_TIMEOUT`/`deadline_budget_insufficient` 结束；设极大值（如100000）可关闭。② Claim 抽取与判定按剩余资源数公平分片剩余时间（`_resource_deadline`），单资源不再可能吃光整段 Claim 预算，`CLAIM_MAX_ATTEMPTS=3` 等次数配置不变。③ 检索硬时限 `RETRIEVAL_TIMEOUT_SECONDS`（默认120，上限600，须小于整 Run 时限）——卡住的检索返回既有 `RETRIEVAL_UPSTREAM_UNAVAILABLE` 失败批次（`retrieval_profile.deadline_exceeded=true`），由原降级策略决定成败，不再等租约到期；测评节点单知识点调用上限已从 4 次收敛为 2 次（验证重试保留、传输重试降为 1）。以上是调用预算，实际内容受 DTO、Evidence 和整 Run 时限约束。完整字段以 [配置源码](../backend/app/config.py) 和模板为准。
+
+当前默认组合（百炼兼容模式 + `deepseek-v4.1-flash` + 关闭思考）实测吞吐约 **137 token/s**，按该值复核 7 组预算的时限产能占用为 70%–84%，仍全部满足「上限 ≤ 时限 × 吞吐」，无需上调 token 上限；其中实操指南（32768 / 300 秒，84%）最紧，若真实运行出现 `LLM_TIMEOUT` 应单独下调该项而非放宽时限。换到吞吐更低的模型或区域时，同一组上限会直接变成超时，必须重算后再放量。
+
+`LLM_THINKING_MODE` 接受 `auto`、`enabled`、`disabled`，只有后两者会向 Provider 下发 `thinking` 字段。模板取 `disabled`：实测同一结构化任务开启思考时输出 token 约 5 倍、时延约 3 倍，长文档更容易在输出上限处被截断并触发重试。切回 `enabled` 必须按同一规则重算时限与上限，否则会重新引入超时；`auto` 保持不干预 Provider 默认。
+
+文本审核配置 `ASSESSMENT_REVIEW_STRATEGY` 默认为 `two_stage_v1`，仅允许该值或候选 `combined_v2`。当前候选未启用，须在真实质量对照通过并获得配置切换授权后使用。combined 必须填写已核实的部署模型窗口 `ASSESSMENT_REVIEW_CONTEXT_TOKENS` 正整数，不能凭模型名称推测，也不能写空环境变量。候选按完整 messages 和 schema 的 UTF-8 字节数加 1024 估计输入，再预留冻结的 `LLM_MAX_OUTPUT_TOKENS`（默认 16384）；不足时不调用、不截断、不切换策略，保持未发布并记录 `input_budget`。普通/实操及整卷审核输出上限 12288，原 scope 沿网关配置。
+
+策略在实际创建 Run 时冻结，同 Run 修订不重读配置；已排队 job 在创建 Run 时冻结。实操每份新增一次语义调用，不提供模型失败后结构批准开关。测评回滚只影响新 Run：恢复 `two_stage_v1`，已冻结 Run 保持原策略或按原中断机制结束。代码回滚先停新任务并处理运行中的 Worker；回到仅结构审核的旧代码时须暂停实操自动发布，或保留语义门禁修复，未完成语义审核的资源不得恢复后直接批准。无数据库 schema 迁移，旧代码可忽略私有 JSON 命名空间。
+
+审核对照工具 `python backend/scripts/resource_review_eval.py --output <新报告路径>` 默认离线、无凭据/网络，只验证 60 份合成资源的结构、契约和固定响应政策，报告 `NOT_RUN_OFFLINE`。`--preflight --model-name <实际模型> --context-tokens <已核实窗口> --output <preflight.json>` 完全离线生成 396 次逻辑调用/792 次 transport 尝试的上界、逐请求估计及所需 token 预留。获得真实模型授权后，重新 preflight 并显式冻结 `--max-total-tokens`、`--max-transport-attempts`（最多 792）、`--max-seconds`（最多 7200），同时指定 `--budget-record <budget.json>`。预算必须容纳完整清单；报告不覆盖旧文件。
+
+live 需同时传 `--live`、`RUN_LIVE_LLM=1`、相同 manifest/模型/窗口/预算参数、`--preflight-report` 和 `--budget-record`；冻结内容不符时联网前拒绝，调用前预占最多两次尝试配额，未知用量不释放预留，预算或时间不足终止为 `INCOMPLETE_BUDGET`。两策略按资源级 108 个观测比较成本和 nearest-rank P95，实操单列 72 个观测；缺失 token 为 `INCONCLUSIVE_USAGE`，缺观测不判通过。工具不执行生产修订或自动切换配置。当前未运行 live，离线通过不能作为模型质量或供应商账单证据。
 
 启动前的只读检查不会调用计费 LLM、下载 Embedding 或创建 collection：
 
@@ -349,6 +371,19 @@ SSE 路由须关闭代理缓冲，read timeout 必须大于 `WORKFLOW_SSE_HEARTB
 课件本地故障矩阵、浏览器验证和发布候选证据以当前代码、测试目录和本部署文档为准；课件工作流的公开入口与启动方式由 `backend/scripts/courseware_worker.py` 和 [API 文档](api.md) 维护。
 
 ## 多语言Embedding换模与资料入库
+
+首次从旧 BGE-zh 同步当前 evidence-v2 时，`rebuild_multilingual_index.py` 支持固定身份的 62 篇 / 1121 片快照，按 manifest 的 900/100 分片参数及版本化 fixture 全量 hash 核验；旧 3222 片已知身份继续兼容，未知身份、数量或正文/metadata 漂移均拒绝。使用项目 Python（标准环境 `.venv/Scripts/python.exe`，便携环境 `.venv/python.exe`）。构建前及最终切换前确认项目 Python 进程、系统 TCP 监听表和在途任务（含 created Run 与未投递 outbox）为空，不能将连接超时当作端口空闲。
+
+`build` 仅新建影子 SQLite/Chroma，不激活配置；`audit` 必须在新进程执行。旧业务按冻结源库全部原列/原行/计数比较，兼容迁移新增的默认列单独核验；旧源 schema/数据任何漂移均阻断。`report_read_watermarks` 是派生缓存失效状态，目标端 epoch 可递增，倒退须更换 installation_id；源端仍完整核验。缺少原始 schema 基线的旧 receipt 默认拒绝，不能仅根据空表行 hash 推断 schema 没变。
+
+构建旧版本运行库的副本后，在正式 audit 前可补齐影子库当前启动迁移；以下命令不读取或修改真实 `.env`，也不运行入库初始化、示例数据或 Worker：
+
+```powershell
+.\.venv\python.exe -c "from scripts import rebuild_multilingual_index as r; assert r.TARGET_DB.is_file(); r.configure_shadow(); from app.db.shared.database import init_database; init_database()"
+.\.venv\python.exe scripts/rebuild_multilingual_index.py audit
+```
+
+只有 audit、SQLite 完整性/外键、旧学习数据及历史保留、SQL/向量 ID/正文/完整 metadata 全量对账和检索 smoke 全通过后，才切换 DATABASE_URL、VECTOR_STORE_DIR、模型绝对路径、EMBEDDING_LOCAL_FILES_ONLY 与 EMBEDDING_BATCH_SIZE。最终切换须立即复核源库和配置未被外部修改，并持源库写锁完成最终核对与原子配置替换；保留私有备份。首次同步后不要重复 `build`，维护验收的冻结业务基线也不能用于判断后续产生新学习数据的运行库是否损坏。
 
 检索候选保护默认`RETRIEVAL_BALANCED_CANDIDATES_ENABLED=true`、`RETRIEVAL_DENSE_RESERVE=10`：全局最多保留10条原查询dense结果，再按RRF填满`RERANK_CANDIDATE_K`（当前20），不是每query/每语言10条。reserve不得大于该全局预算，自定义较小预算时需相应下调reserve；设enabled=false并重启Web/Worker可恢复旧选择策略，不改DB/索引。每原query内部最多增加1条来自KB `query_aliases.json`的英文术语probe（最多6条术语规则合成、400字符），不是完整翻译；原query、节点与allowed范围不变，精排仍用原query，禁用/失败时不使用alias-only结果。缺失/非法配置显式降级原查询，配置/策略hash用于审计；不下载模型、不调用生成LLM，模型与阈值不变。单query候选可能从10增到20，另有probe召回成本，但精排总数仍受原有20预算约束；不保证时延完全不变。
 
@@ -430,3 +465,64 @@ python -m app.db.migrations.p0_35_report_read_model --database D:/path/to/backed
 与E1兼容：`RESOURCE_AWARE_RETRIEVAL_ENABLED=false`仍是默认。启用时公共节点/资源用途候选保留优先，dense保护仅占剩余20条预算及每query配额，缺口见`dense_reserve_shortfall`。两项p34迁移（知识身份revision、生成调度）均保留，初始化链随后安装p35报告读模型。本次远程同步仅做副本演练，真实库未迁移，Web/Worker未自动恢复；实际启动会触发初始化，运行前须确认备份与迁移前置条件。
 
 T17选材配置：`RETRIEVAL_TOP_K_DEFAULT=6`（旧环境显式设3会覆盖新默认），`RETRIEVAL_ENGLISH_SCORE_BONUS=0.08`（有限0..0.25，0关闭）；总证据8、候选20、原始相关性门槛0.35不变。仅SQL可信`references/en/...`路径且成功精排/原分达门槛才加选材分；完整候选池在TopK前校验，普通无可信回调的原始向量检索不加分。不需要模型下载/入库/DB迁移，原分与历史Evidence不改；可设置bonus=0、TopK=3并空闲重启回滚。Web/Worker需空闲重启读取新源码与Settings，启动不加`--initialize`，不打断queued/running任务；健康检查不等于LLM生成质量已验证。
+
+## 统一课件内容审核配置与回滚
+
+`COURSEWARE_CONTENT_REVIEW_ENABLED=false` 默认关闭。`COURSEWARE_CONTENT_REVIEW_CONTEXT_TOKENS` 默认 None，启用候选策略前须提供经部署模型确认的整数窗口（至少16384）；新增输出上限8192、最多8批、最多一轮 enrichment 修订，仍共享原任务 token/时限，不自动增加总额。配置在创建时冻结，运行中开关/预算变化不改原策略。
+
+首版仅提供 `fixture-tokenizer-v1` 供显式注入的离线网关测试；真实 LLMGateway 即使伪装 fixture 标记也拒绝使用。生产 tokenizer、chat/tool 包装计数与精确模型配置尚无已验证 profile，当前不能仅切开关生产启用。需先补适用 profile、完成独立真实质量/用量/价格与标注报告，并取得明确切换授权。费用缺价格时是 unknown，不宣称已有生产金额硬上限。
+
+离线验收：`python scripts/run_tests.py --suite courseware-content-review-focused --suite courseware-content-review-eval --output output/test-runs/content-review-check`，再运行完整 `--profile acceptance` 和文本 `resource-review-eval`。预检工具 `backend/scripts/courseware_content_review_eval.py --preflight` 要求显式有限 token/attempt/时限、Decimal 金额/单价、币种、价格版本/日期和计费口径；生成 preflight/budget 绑定文件，缺生产 profile 报 NOT_READY_MODEL_PROFILE。`--live` 与 `COURSEWARE_LIVE_EVAL=1` 双门也不能绕过该依赖；未获授权不读凭据或发真实调用。
+
+回滚先关闭新任务开关，进行中的 content_v1 继续由识别双版本的代码处理；若回滚到不识别版本，先暂停这些任务的消费/发布，不伪造旧策略批准。已发布 release 不覆盖，无 schema 迁移、无批量回填。本次不重启 Web/Worker，不修改实际 .env、SQLite、Chroma 或 CI。
+
+
+## Claim 中立抽取候选
+
+默认 `CLAIM_EXTRACTION_STRATEGY=legacy_v3`；显式选择 `neutral_estimate_v1` 使用纯字符估算，无tokenizer、外部profile或校准PASS依赖。旧 `neutral_batch_v1` 已停止执行，保留1.0历史账本和审核查询；旧queued任务被Worker领取后按失败协议结束，运行中任务不抢租约/不自动接管。通过已有重试/单资源retry入口创建新run，重新冻结当前策略，不把旧policy静默转换为新策略。
+
+| 配置 | 默认及含义 |
+|---|---|
+| `CLAIM_EXTRACTION_CONTEXT_LIMIT` | 1048576，须按实际部署窗口配置；不查询供应商模型 |
+| `CLAIM_ESTIMATE_ASCII_WEIGHT` / `CJK_WEIGHT` / `UNICODE_WEIGHT` | 0.3 / 0.6 / 1；上述短名均沿用 `CLAIM_ESTIMATE_` 前缀 |
+| `CLAIM_ESTIMATE_MARGIN` | 0.15，只对完整实际请求统一加一次 |
+| `CLAIM_ESTIMATE_MESSAGE_OVERHEAD` / `REQUEST_OVERHEAD` | 8 / 128，消息与请求包装余量 |
+| `CLAIM_EXTRACTION_TARGET_TOKENS` / `CONTEXT_TOKENS` | 4096 / 512，完整首请求装批软目标及文内辅助上下文 |
+| `CLAIM_EXTRACTION_BATCH_CLAIMS` / `RESOURCE_CLAIMS` | 16 / 48，工程候选上限；触顶细分，不保证事实召回 |
+| `CLAIM_EXTRACTION_OUTPUT_TOKENS` | 32768（允许上限32768），抽取首次/修复相同cap |
+| `CLAIM_EXTRACTION_MAX_CALLS` / `MAX_ATTEMPTS` | 每run 8逻辑调用 / 24实际attempt，含父子批及同图返工 |
+| `CLAIM_EXTRACTION_MAX_TOKENS` / `MAX_REQUEST_SECONDS` | 每run 196608 / 480秒，按实际请求预留并核销 |
+| `CLAIM_EXTRACTION_ATTEMPT_TIMEOUT_SECONDS` | 默认及上限180秒，受网关超时、剩余预算、绝对deadline及租约进一步限制 |
+| `CLAIM_EXTRACTION_DENSITY_ENABLED` / `_PRIOR` / `RISK_SHARE` | true / 35 / 0.9；冻结进新 estimate Run，只影响此后冻结的任务，不改 `BATCH_CLAIMS`/`RESOURCE_CLAIMS` 上界 |
+| `CLAIM_EXTRACTION_SOURCE_LOCATING_MODE` | `tolerant_v1`；仅对新建 `neutral_estimate_v1` 请求生效。`exact_v1`=neutral-v2 无偏移输出且只做唯一精确定位；`tolerant_v1` 另启用受控格式(B)与受限文字编辑(C)层；显式空值保持历史 v1 Prompt、无定位子契约 |
+
+表中未展开的后缀沿用相同前缀。`CLAIM_EXTRACTION_PROFILE_PATH`和`CLAIM_EXTRACTION_PROFILE_ID`只作为被忽略的弃用环境输入接受，不再影响启用；无需删除本地资产。配置由Container给Service/图注入同一估算器并在提交时冻结。窗口/模型/endpoint/thinking/估算参数及Judge合同漂移受控失败。没有自动修改实际.env或重启服务；部署者在任务空闲时统一更新Web/Worker代码及配置。
+
+T37 密度参数的冻结时点与升级顺序：三项设置在**新建 estimate Run 时**写入快照的 `density_batching` 子契约（含 `enabled=false`），此后修改环境变量只影响再之后冻结的任务。升级须停止接收新任务、等待已有任务安全结束，然后**同批升级 Web 与 Worker**——旧 Worker 的严格模型不含该字段，会拒绝新快照（受控失败、不产生模型调用），不会静默误读。新代码可读旧快照并按原 token 装箱。回退时把 `CLAIM_EXTRACTION_DENSITY_ENABLED=false` 用于后续新 Run 即可，不要用极大 prior 冒充关闭，也不要把新快照删字段伪装成旧任务。本任务无数据库表/列迁移，历史 `policy_json` 与 hash 原样保留。
+
+每个实际attempt在网关完成TEXT/JSON/native包装后预留：完整输入估算加本次实际输出cap；只有真实发生repair/fallback时才计算下一份消息，不预留96000字符的假想修复。返回后可靠usage完整入账；低估不使有效结果失败，超支及偏差保留且下一请求失败。未知usage/超时/无法确认是否发送的请求保持预留并禁止同logical补发；不能称为精确token或严格金额上限。实际退避消耗累计时间，绝对deadline不刷新，另外为一次原Judge保留首timeout加30秒。Judge仍一次logical及原Prompt/schema/options/证据/重试，仅注入只读实际窗口检查；放不下不裁Evidence、删Claim或分批Judge。
+
+`p0_37_claim_estimate`在p036之后扩展run模式列约束，事务内保存并恢复旧模式；不删除旧表/记录，1.0/2.0私有JSON分别解析。SQLite需支持DROP COLUMN（>=3.35）；未知列依赖导致安全回滚。仅在既无estimate任务、也无2.0账本时允许p037回滚；回退优先保持表及历史记录、让新任务legacy，已有新快照不能静默降级。本轮仅在隔离库验证，不向实际运行库应用迁移。
+
+无网络预检：`python backend/scripts/claim_counting_profile.py`，成功仅表示估算配置能构造，不验证Key/余额/供应商可达。完整说明见[Claim估算配置](testing/claim-counting-profile.md)。本轮只做代码和离线验收；真实DeepSeek冒烟尚未执行，人工标注A/B/C质量/成本/时延对照也未执行，后者不阻塞开始独立冒烟。
+
+
+### 2026-11-05 T37 容量与验收修复
+
+EstimatePolicy原有resource_claims允许上界128，结果载体已同步支持128；持久read/CAS验证结果不超过冻结额度，旧1.0仍最多64。没有schema迁移或历史JSON/hash改写。验收不再强制把实际128降到64，也不限制正文内部重试为一次。只在新进程显式选择neutral_estimate_v1测试，实际.env与legacy默认不变。扩容结果产生后不能退回只识别64条的reader；升级/回滚须停新任务、排空并保留兼容reader。
+
+本次repair新增授权仅1个完整任务，固定预算`docs/evaluations/experiments/20261105-claim-density-t37-repair/generation-budget.json`、cap1；四个运行路径必须位于`output/test-runs/t37-repair-20261105/live/`。预检不调用Provider，画像定阶检查可能初始化隔离状态；失败不占槽位。内部返工/传输重试按实际合同，unknown不接管，不改旧3/3账本。
+
+### T38 策略部署与回滚
+
+`LECTURE_REVIEW_STRATEGY` 默认 `legacy_content_v2`；选择 `lecture_issue_v1` 或 `lecture_issue_v2` 必须配置 `LECTURE_REVIEW_CONTEXT_TOKENS`，不可猜测供应商窗口。审核输出预算冻结既有 reviewer cap，超窗失败关闭，不截断必要材料。V2 的物理尝试上限 M 在任务创建时从当时 reviewer options 冻结（1..3），一次业务纠正与首次请求共享该上限，不能靠改环境变量放大。未通过另行授权的真实质量验收前保留默认。回滚配置只影响新任务；在途新策略任务必须由支持 V2/V3 的兼容代码处理，不能删键换成 legacy。回退不支持 V2 的二进制前停止领取新策略任务并按既有中断语义隔离；保留原审计。本地离线通过不代表已部署。
+
+T40：Claim专用返工是请求参数`claim_max_iterations`，默认1，显式0禁用；额度耗尽不借普通返工预算，进入现有人工复核/未发布状态。此处不是新增环境变量。后端/Worker加载新代码后处理的新请求采用新默认；已有冻结请求保留原值。
+
+### T42 程序化来源定位与受限文字容错
+
+新版中立模型不再输出 `source_start/source_end`，程序在所属 target unit 内按 A（唯一精确）→ B（受控格式）→ C（受限文字编辑）分层定位并从冻结正文截取真实 `source_text`，再计算全文偏移与 hash。新版 Prompt/schema/payload 由单一契约选择入口按冻结策略选定，Judge 输入/Prompt/schema/options/判定与聚合逻辑不变，不新增来源核对模型调用。
+
+`CLAIM_EXTRACTION_SOURCE_LOCATING_MODE` 仅在**新建 neutral_estimate_v1 请求冻结时**读取，写入私有 `source_locating` 子契约（`None` 时序列化省略该键，复刻 `density_batching` 的兼容语义）。已有排队/运行/失败/完成任务继续原冻结快照，恢复不重冻、不回退为 exact_v1 或 legacy。规则表是版本化静态资产（`source_locating/rules_v1.json`），hash 随新 run 冻结；代码中的 Prompt/schema/规则资产 hash 与冻结值不一致即拒绝执行（`rules_drift`）。
+
+关闭容错：把新请求模式设为 `exact_v1`，仍输出无偏移 v2，只关闭 B/C；旧 v2 tolerant 任务继续冻结规则。回滚代码前停止接收新任务、排空或按既有策略终止新任务，并保留能读取 v2 输出与新子契约的兼容 reader；不删字段、不重算旧 hash、不改写历史记录。本任务无数据库表/列迁移，历史 `policy_json`/`state_json` 与各 hash 原样保留。

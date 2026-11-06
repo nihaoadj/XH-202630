@@ -7,6 +7,7 @@ from sqlalchemy.engine import Connection
 from app.db.audit.sql_repository import SQLAuditRepository
 from app.db.shared.models import AgentRunORM, GeneratedResourceORM, GenerationJobORM
 from app.models.generation.dispatch import GenerationClaim
+from app.models.shared.persistence import WorkflowEventType, require_run_transition, RunStatus
 
 
 def utc(value):
@@ -21,6 +22,7 @@ def begin_write(db):
 
 class GenerationDispatchMixin:
     supports_durable_dispatch = True
+    supports_frozen_rejection = True
 
     def get_dispatch(self, run_id):
         with self.session_factory() as db:
@@ -90,11 +92,36 @@ class GenerationDispatchMixin:
             db.commit()
             return True
 
-    def finish_claim(self, claim, *, resource_ids=None, error_code=None, now=None):
+    def finish_claim(self, claim, *, resource_ids=None, error_code=None, now=None, reject_frozen_snapshot=False):
         now = now or datetime.now(timezone.utc)
         with self.session_factory() as db:
             begin_write(db)
+            if self._owned(db, claim, now).first() is None:
+                db.rollback()
+                return False
             run = db.get(AgentRunORM, claim.run_id)
+            if (reject_frozen_snapshot and error_code and run
+                    and run.status in {"created", "running", "finalizing"}
+                    and run.owner_instance_id==claim.owner and utc(run.lease_expires_at) is not None
+                    and utc(run.lease_expires_at)>now):
+                # Same writer transaction and owned claim/epoch as job completion.
+                # Never take over another live run or overwrite terminal output.
+                if run.status=="created":
+                    require_run_transition(run.status,RunStatus.RUNNING)
+                    run.status="running"
+                    run.started_at=now
+                    SQLAuditRepository(self.session_factory)._append_event(db,run,WorkflowEventType.RUN_STARTED,
+                        payload={},occurred_at=now,status="running")
+                require_run_transition(run.status,RunStatus.FAILED)
+                run.status="failed"
+                run.workflow_status="failed"
+                run.execution_status="failed"
+                run.last_error_code=error_code
+                run.ended_at=now
+                run.heartbeat_at=now
+                run.lease_expires_at=None
+                SQLAuditRepository(self.session_factory)._append_event(db,run,WorkflowEventType.RUN_FAILED,
+                    payload={},occurred_at=now,status="failed",error_code=error_code)
             if run and run.status in {"completed", "degraded", "human_review"}:
                 # A response/transport failure after finalization cannot undo it.
                 error_code = None
@@ -144,7 +171,8 @@ class GenerationDispatchMixin:
             begin_write(db)
             job, run = GenerationJobORM, AgentRunORM
             rows = db.query(job, run).outerjoin(run, run.run_id == job.run_id).filter(
-                job.status.in_(("queued", "running")),
+                or_(job.status.in_(("queued", "running")),
+                    and_(job.status=="failed",run.status.in_(("running","finalizing")),run.lease_expires_at<=now)),
                 or_(
                     run.status.in_(("completed", "degraded", "human_review", "failed", "interrupted")),
                     and_(run.status.in_(("running", "finalizing")), run.lease_expires_at <= now),

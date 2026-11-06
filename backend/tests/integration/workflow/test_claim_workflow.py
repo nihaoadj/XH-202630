@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 from types import SimpleNamespace
 
 from app.agents.resource_workflows.learning_documents.claim_review_agent import claim_decide_node, claim_extract_node, claim_judge_node
@@ -583,3 +584,42 @@ def test_claim_revision_uses_its_own_budget_and_preserves_ordinary_budget():
     assert prepared["constraints"]["revision_feedback"]["revision_instructions"] == [
         state["review_result"]["revision_instructions"][0]
     ]
+
+
+@pytest.mark.parametrize("cap,count", [(0, 0), (1, 1), (2, 2)])
+@pytest.mark.parametrize("verdict", ["contradicted", "not_in_evidence"])
+def test_exhausted_claim_budget_finalizes_without_borrowing_ordinary(cap, count, verdict):
+    state = _state()
+    state.update(claim_max_iterations=cap, claim_revision_count=count,
+                 revision_count=0, max_iterations=3, claim_check_status="completed",
+                 claim_eligible_resource_ids=["res-claim"],
+                 resource_review_results={"res-claim": {"decision": "approve"}},
+                 claim_metrics={"res-claim": {"metric_status": "complete", "factual_claim_total": 1,
+                     "supported_claim_total": 0, "contradicted_claim_total": int(verdict == "contradicted"),
+                     "not_in_evidence_claim_total": int(verdict == "not_in_evidence")}})
+    state["review_result"].update(decision="revise", status="revise", issues=[{
+        "resource_id": "res-claim", "resource_type": "讲义", "claim_ids": ["claim-1"]}],
+        revision_instructions=[{"target_resource_type": "讲义", "target_claim_ids": ["claim-1"],
+                                "issue_codes": ["factual_risk"], "action": "修正事实", "priority": 1}])
+    assert route_after_claim_decide(state) == "finalize"
+    finalized = decide_node(state)
+    assert finalized["workflow_status"] == "human_review"
+    assert finalized["generated_resources"][0].publication_status == "unpublished"
+    assert state["revision_count"] == 0
+    assert state["claim_revision_count"] == count
+
+
+def test_real_ordinary_revision_keeps_its_own_route():
+    state = _state()
+    state.update(claim_max_iterations=0, max_iterations=2, revision_count=0)
+    state["review_result"].update(decision="revise", revision_instructions=[{
+        "target_resource_type": "讲义", "action": "补全练习材料", "issue_codes": ["structure_quality"]}])
+    assert route_after_claim_decide(state) == "prepare_revision"
+
+
+@pytest.mark.parametrize("decision", ["approve", "reject", "human_review"])
+def test_non_revision_never_uses_stale_claim_instructions(decision):
+    state = _state()
+    state["review_result"].update(decision=decision, revision_instructions=[{
+        "target_resource_type": "讲义", "target_claim_ids": ["claim-1"]}])
+    assert route_after_claim_decide(state) == "finalize"

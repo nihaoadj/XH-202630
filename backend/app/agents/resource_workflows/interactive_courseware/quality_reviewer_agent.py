@@ -146,6 +146,7 @@ def resolve_review_targets(scenes: list[dict[str, Any]], issues: list[dict[str, 
 def review_courseware_quality_decision(
     llm_gateway: LLMGateway | None, run_id: str, document: dict[str, Any],
     *, allowance: LLMCallOptions | None = None,
+    content_review: bool = False, evidence: list[dict] | None = None,
 ) -> tuple[CoursewareReviewDecision, dict[str, Any] | None]:
     if not courseware_ai_available(llm_gateway):
         return _unavailable("AI_QUALITY_REVIEW_UNAVAILABLE", "AI 教学质量审核不可用")
@@ -157,6 +158,8 @@ def review_courseware_quality_decision(
             for item in document.get("scenes", [])
         ],
     }
+    if content_review:
+        safe_document = {"document": document, "frozen_evidence": evidence or []}
     # A transient provider failure must not immediately turn a fully valid V2
     # review course into a warning release.  Keep this bounded: the gateway
     # still owns per-call structured repair, while this loop makes at most one
@@ -226,3 +229,21 @@ def review_courseware_quality(
     """Compatibility adapter for callers that only need serializable issues."""
     decision, warning = review_courseware_quality_decision(llm_gateway, run_id, document)
     return [issue.model_dump(mode="json") for issue in decision.issues], warning
+
+
+# ---------------------------------------------------------------------------
+# Bypass LLM-call accounting (T41): bind the stage scope around this agent
+# entry point so every caller (workflow, lifecycle, retry, Worker) observes
+# the same run segment.  The original function body is unchanged.
+# ---------------------------------------------------------------------------
+import functools as _functools
+
+from app.agents.shared.llm_accounting import stage_labeled_scope as _stage_labeled_scope
+
+_review_courseware_quality_decision = review_courseware_quality_decision
+
+
+@_functools.wraps(_review_courseware_quality_decision)
+def review_courseware_quality_decision(*args, **kwargs):
+    with _stage_labeled_scope("quality_review"):
+        return _review_courseware_quality_decision(*args, **kwargs)

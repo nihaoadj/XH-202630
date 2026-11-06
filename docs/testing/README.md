@@ -1,6 +1,10 @@
 # 项目测试方案
 
-> 文档核对日期：2026-10-25；登记数量以 `tests/suites.json` 为准，当前结果以本次 `output/test-runs/` 报告为准。
+T42 修复验收继续仅运行四个 claim-e11-* 专项。integration 加入 test_claim_source_locating_repairs.py，覆盖冻结比例及边界、Prompt/schema 漂移、v1/v2 差异与旧已存诊断回放、失败诊断及收费/容量收敛。eval 改用 backend/tests/fixtures/claim_extraction/source_locating_v2/manifest.json：两区各120条记录、各6个来源组，组名/模板/数字归一正文跨区无交集；部分记录同源重复，不代表120个独立来源。运行前检查两个分区，发现泄漏拒绝；正确来源金标与 claim_text 分离。原 v1 数据不覆盖，旧回归评测标记 NOT_PROVEN_HISTORICAL。恢复率未达与接受后区间错误分别统计，不把正常拒绝算作误绑定；仍不证明真实模型质量。
+
+> 文档核对日期：2026-10-30；登记数量以 `tests/suites.json` 为准，当前结果以本次 `output/test-runs/` 报告为准。
+
+T41 LLM 调用旁路计量新增套件 `llm-accounting-focused`（`tests/suites.json`）：精确包含 `backend/tests/unit/{models,core,tooling}/test_llm_accounting*.py`、`backend/tests/integration/{workflow,courseware,persistence,services,api}/test_llm_accounting*.py`、`backend/tests/migrations/test_llm_accounting_schema.py`、`backend/tests/e2e/test_llm_accounting_recovery.py` 与 `backend/tests/e2e/courseware/test_llm_accounting_worker.py` 共 11 个文件，evidence_type=deterministic、超时 1200s。基线工具 `backend/scripts/llm_accounting_baseline.py --mode record|compare` 冻结原请求/业务投影/观察 payload 与源码指纹，compare 对改动请求、业务结果或源码漂移返回非 0。spawn/fault 测试均带独立进程超时；未启用真实模型（`RUN_LIVE_LLM=0`/`COURSEWARE_LIVE_EVAL=0`）。本套件只覆盖本更新，全量回归仍由 `backend-full`/`backend-migration`/课件冻结评测/前端专项按需执行。
 
 本方案把工程回归、冻结评测、浏览器体验、真实模型质量和部署验收分别组织成可执行套件。套件成员以 [`tests/suites.json`](../../tests/suites.json) 为准，运行工具为 [`scripts/run_tests.py`](../../scripts/run_tests.py)。比赛数据与三项质量指标见 [比赛评测方案](competition.md)。更新计划与本地 skills 不随仓库分发。
 
@@ -52,7 +56,7 @@ python scripts/run_tests.py --suite backend-api --suite backend-migration
 |---|---|---|
 | quick | 架构导入、生成契约漂移、核心契约/策略/报告/工具、比赛金标、前端单元 | 迭代中快速定位；不替代领域最低验收 |
 | regression | quick 中两个静态门禁、Ruff / ESLint / 关键 API/SSE/请求类型、Python 依赖一致性、后端全量、比赛金标、课件冻结、全部前端单元、生产构建 | 共享测试设施或多领域回归 |
-| acceptance | regression 加十五个浏览器专项 | 本地完整工程验收 |
+| acceptance | regression 加清单登记的浏览器专项 | 本地完整工程验收 |
 
 `--suite` 可重复，和 profile 组合时去重。`--fail-fast` 停止后续执行，但摘要将余下套件记为 `NOT_RUN`；默认尽量执行全部已选套件以便一次定位问题。只运行 `frontend-browser` 时，须先执行 `frontend-build`；acceptance 已按依赖顺序安排。直接 pytest 与原 npm 专项命令继续可用：
 
@@ -100,7 +104,7 @@ AST 门禁覆盖 `core/`、`agents/shared/`、`api/` 的绝对/相对、函数�
 
 ### 浏览器专项与证据位置
 
-先执行 `npm --prefix frontend run build`；既有专项读取 `frontend/dist`，新增同步专项为真实 Vue 组件启动隔离 Vite fixture。下面列出全部 15 个 browser 成员。更细的页面合同保留在源码与已链接的专项说明中。
+先执行 `npm --prefix frontend run build`；既有专项读取 `frontend/dist`，新增同步专项为真实 Vue 组件启动隔离 Vite fixture。下面列出常用 browser 成员，完整成员以 `tests/suites.json` 为准。更细的页面合同保留在源码与已链接的专项说明中。
 
 | npm 专项 | 主要覆盖 | 本地证据目录 / 文件 |
 |---|---|---|
@@ -141,6 +145,8 @@ Windows 默认使用已安装的 Edge；其他平台默认使用 Playwright Chro
 | F-AGENT 分工与协同 | [证据工作流](../../backend/tests/integration/workflow/test_evidence_workflow.py)、[54 例回放](../../backend/tests/integration/workflow/test_competition_replay.py) | backend-workflow；实际 graph 控制和可追溯中间输出 |
 | F-RESOURCE 五类文档 | [资源 Agent](../../backend/tests/unit/agents/test_resource_type_agents.py)、[资源 API](../../backend/tests/integration/api/test_resource_api.py)、[生成任务 API](../../backend/tests/integration/api/test_generate_jobs_api.py) | backend-full；讲义/实操/分阶题/案例/清单原行为 |
 | F-REVIEW 审核/纠偏/Claim/发布 | [Claim 工作流](../../backend/tests/integration/workflow/test_claim_workflow.py)、[发布定稿](../../backend/tests/integration/services/test_generation_finalization.py)、[资源 API](../../backend/tests/integration/api/test_resource_api.py) | backend-workflow/full；保留历史版本、仅统计最终发布叶子 |
+| F-CLAIM-EXTRACTION 中立抽取候选 | [抽取工作流](../../backend/tests/integration/workflow/test_claim_extraction_v2.py)、[私有账本](../../backend/tests/integration/persistence/test_claim_extraction_ledger.py)、[进程中断](../../backend/tests/e2e/test_claim_extraction_recovery.py)、[p0_36迁移](../../backend/tests/migrations/test_p0_36_claim_extraction.py) | claim-extraction-focused/eval、backend-full；无额外Evidence、短文单批/长文分批、一次原Judge、共享预算/CAS/所有权、旧数据及失败/新run重试。默认legacy，真实质量/容量另验 |
+| F-CLAIM-SOURCE-LOCATING 程序化来源定位 | [定位单元](../../backend/tests/unit/agents/test_claim_source_locating.py)、[契约单元](../../backend/tests/unit/models/test_claim_source_locating_policy.py)、[v2 工作流](../../backend/tests/integration/workflow/test_claim_source_locating.py)、[v2 持久化](../../backend/tests/integration/persistence/test_claim_source_locating_persistence.py)、[v2 公开 API](../../backend/tests/integration/api/test_claim_source_locating_api.py)、[v2 恢复](../../backend/tests/e2e/test_claim_source_locating_recovery.py) | claim-e11-unit/integration/recovery/eval；A→B→C 分层定位、编辑白名单与关键内容保护、歧义拒绝、计算上限、权威回写、诊断私有化、排队任务冻结。合成样本，真实模型质量 NOT_RUN |
 | F-READ Markdown 与资源库 | [资源库 API](../../backend/tests/integration/api/test_resource_library_api.py)、[资源详情](../../backend/tests/integration/api/test_resource_api.py)、`resourceShelfOrder.test.mjs` | backend-api/frontend-unit；公开产物与排序 |
 | F-FEEDBACK 学习反馈与动态路径 | [浏览器专项](../../frontend/tests/feedbackBrowser.test.mjs)、[反馈闭环](../../backend/tests/integration/services/test_feedback_loop_service.py)、[掌握度策略](../../backend/tests/unit/policies/test_learner_mastery_policy.py)、`learnerMastery.test.mjs` | integration/unit/browser；低正确率补救、强化/推进与版本变化；测评题、反思 payload、反馈结果、纠错与下一步选择；浏览器提交只写本地 fixture |
 | F-TUTOR 导学 | [Tutor 服务](../../backend/tests/unit/services/test_tutor_service.py)、`tutorState.test.mjs`、[Tutor 界面专项](../../frontend/tests/tutorUiBrowser.test.mjs) | backend-unit/frontend-unit/browser；上下文与追问状态、消息/引用/输入、等待防重复、失败恢复及响应式可达性 |
@@ -156,6 +162,13 @@ Windows 默认使用已安装的 Edge；其他平台默认使用 Playwright Chro
 矩阵映射功能与现有可执行文件，不把测试文件数、参数化数量或覆盖率工具的行覆盖率当作比赛用例数。以根 AGENTS.md 的影响矩阵选最低验收；跨领域取并集。没有修改的低影响文案无需全量。
 
 ## 四、数据与证据治理
+
+Claim 抽取专项使用 `python scripts/run_tests.py --suite claim-extraction-focused --suite claim-extraction-eval --output output/test-runs/claim-extraction-check`，输出目录必须为空。冻结合成清单位于 `backend/tests/fixtures/claim_extraction/`，离线脚本记录清单及源码hash，验证实际抽取/原Judge编排与失败出口。`fixture_policy_gate=PASS` 与 `quality_gate=NOT_RUN_OFFLINE`、`judge_capacity_gate=NOT_RUN_OFFLINE`分开报告；处理范围不是事实召回分母，工程预算不是实测容量。真实模型测试仅依AGENTS中的明确授权规则启用，不能用合成计数profile访问真实transport。
+
+T37 追加 `claim-density-eval` 套件（`backend/scripts/claim_density_eval.py`，只离线）：对 `backend/tests/fixtures/claim_extraction/density_v1/` 的 8 篇合成正文调用**生产** `plan_batches` 与完整消息/window 检查，输出基线/候选的批数、每批 span/风险字符/预估条数、分区检查与金标覆盖，并记录源码与数据 hash。manifest 中的分组期望（基线 8 批、候选 12 批、金标 7/7）由冻结公式推导，**不得在失败后重生**。该套件与 `claim-extraction-focused` 中的 `test_claim_density_policy.py` / `test_claim_density_batching.py` / `test_live_lecture_budget.py` / `test_claim_density_eval.py` 共同构成确定性证据；`quality_gate` 仍为 `NOT_RUN_OFFLINE`。真实讲义验收累计最多 3 次生成，额度文件预留即计数、失败/超时/unknown 不返还，单次成功或历史 59 条都不能证明召回或成本改善。额度锁覆盖"预留→执行→结算"整个槽位窗口（不是单次写文件），因此两个进程不能同时占用两个槽位；进程被硬杀后锁文件会保留，必须先确认没有存活 Worker 再人工删除，不能靠重置额度绕过。
+
+T42 追加四个 `claim-e11-*` 套件：`claim-e11-unit`（定位契约/定位器/评测器单元，复用 density/contracts/batching/estimation 单元）、`claim-e11-integration`（v2 定位 workflow/持久化/API 集成，复用 ledger/attempt 持久化与指定冻结 node id）、`claim-e11-recovery`（v2 进程故障矩阵、独立重试身份与排队任务冻结，复用 T31 恢复边界）、`claim-e11-eval`（`backend/scripts/claim_source_locating_eval.py --split acceptance`，经生产 `locate` 入口运行冻结合成来源定位验收）。离线评测门为：唯一精确区间 100%、格式恢复 ≥95%、受限文字恢复 ≥80%、必须拒绝反例错误接受 0、接受样本错误区间 0。标定分区（`--split calibration`）只用于 P4 冻结规则，验收分区（`--split acceptance`）为冻结规则后的最终检验；失败不得反复调参后仍称独立。所有样本合成，真实模型质量 `NOT_RUN`。
+
 
 - fixture 按领域存于 `backend/tests/fixtures/`，版本、来源、画像、期望与负例须可审查；使用虚构/脱敏画像。真实敏感数据不得复制到 fixture、日志或报告。
 - 修改输入契约、来源或期望先说明依据并更新相应 fixture/version；知识库正文变化会使 competition 加载失败，复核标注后显式更新快照，禁止用自动重写快照掩盖漂移。
@@ -215,3 +228,29 @@ npm --prefix frontend run test:courseware-sync-browser
 ```
 
 以上直接专项不能替代根 AGENTS.md 要求的相关回归与前端生产构建；测试使用隔离的虚构事件和任务，不调用真实模型或业务数据库。
+
+## 通用真实模型对照评测
+
+每次真实测试在 `docs/evaluations/E<N>/report.md` 简要记录目的、实际执行、结果依据和未覆盖项；必要结果文件直接放同目录。复验新编号，失败/中断/阻塞也保留。具体见[真实测试记录](../evaluations/README.md)。纯离线回归继续使用 `output/test-runs/`；归档不自动授权真实调用。
+
+## 专用测试身份
+
+真实环境人工/自动联调优先使用[专用测试账号](test-account.md)，按文档读取本地凭据和隔离测试状态。确定性回归继续使用隔离fixture，不依赖此持久账号；账号存在不构成真实模型调用授权。
+
+
+### Claim估算路径（T31第12节）
+
+claim-extraction-focused已替换tokenizer资产专用测试为test_claim_estimation.py，并加入test_claim_estimate_attempts.py及test_p0_37_claim_estimate.py；保留冻结fixture金标、旧1.0合同与历史报告。使用真实gateway/transport的无网替身逐attempt验证包装仅计一次、15%余量、usage偏高/偏低/未知、observer失败不重发、零ticket不成功、旧Worker/历史数据及迁移失败回滚。完整acceptance与离线25案例另跑，不把规则PASS当真实改善。新预检命令及配置见[估算说明](claim-counting-profile.md)。本轮真实DeepSeek冒烟未执行，质量A/B/C对照也未执行。
+
+
+T37 2026-11-05修复追加：focused内覆盖SQL/Memory容量64/75/128/129及伪造65条legacy/read/CAS拒绝；真实工具固定新增授权cap1和隔离根，内部重试/返工不按物理调用占槽。判定检查最终叶资源、抽取completed和Judge ID完整覆盖，失败不会exit0。token汇总以抽取私有账本替换trace的最后一次抽取调用，避免漏计/双计；input/output无法还原时记null，unknown预留单列。
+
+密度离线工具对冻结已标注的7条合成事实锚点执行真实executor、merge和Judge假件，校验候选而非仅跨度包含；此证据不证明未标注文本或真实模型的全文召回。manifest必须有text/label/policy hash和对应期望，缺项/不一致拒绝。historical manifest使用claim-density-historical-1.0，包含带path/sha256的text和policy、resource身份、target_skill_nodes及expected的baseline_batches/candidate_batches，离线重放使用完整生产fits。真实回归与全部后端结果分别记录；已知1200秒suite上限不能覆盖慢机器时，另行明确记录更长有界执行，不冒充原时限通过。
+
+### T38 讲义普通审核专项
+
+从仓库根执行：`python scripts/run_tests.py --suite lecture-review-focused --suite lecture-review-eval --output output/test-runs/t38-final`。使用新的空输出目录。新增专项覆盖策略冻结、问题核销、无变化、审计与恢复；冻结评测使用 scripted gateway，不能证明模型真实正确率。兼容命令为 `python scripts/run_tests.py --suite resource-review-focused --suite resource-review-eval --suite architecture --suite frontend-contracts --suite backend-lint --output output/test-runs/t38-compat`。
+
+T39 讲义审核 V2 专项：`python scripts/run_tests.py --suite lecture-review-v2-focused --suite lecture-review-v2-eval --output output/test-runs/t39-final`。`lecture-review-v2-focused` 覆盖 V2 合同、程序派生覆盖、一次有界纠正、M=1/2/3 与超时边界、Memory/SQL 持久守卫、V3 审计及五类文档/API/Claim/发布兼容；`lecture-review-v2-eval` 用 `backend/tests/fixtures/resource_reviews/lecture_issue_v2/manifest.json` 的 24 个跨三题材冻结用例（匿名 ID、scripted 期望）。两者都是确定性证据：真实模型质量、真实端到端、CI 与部署仍为 NOT_RUN。兼容命令沿用 `--suite lecture-review-focused --suite lecture-review-eval --suite resource-review-focused --suite resource-review-eval --suite architecture --suite frontend-contracts --suite backend-lint`。历史只读复核见 `output/test-runs/t38-history/historical-review.json`，来源仅部分可核验，整体 INCONCLUSIVE。真实组件、整任务端到端、CI 和部署结论必须另有证据；本更新未授权真实调用。
+
+T39 执行权回归新增 test_lecture_worker_epoch.py：真实 SQLite 任务账本下验证 row_version 增长不误拦、旧 epoch 和过期任务租约被拒绝。test_lecture_review_crashes.py 通过实际 RecordedNode、review_node、V2 引擎与 DurableWorkflowRunner，在 Memory/SQLite 注入六类中断，断言断点命中、请求数和旧轮恢复不进入 stream；均已纳入 lecture-review-v2-focused。网关使用 scripted fixture，不代表真实模型或生产故障演练。

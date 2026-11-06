@@ -236,7 +236,7 @@ class GenerateRequest(BaseModel):
     # Initial generation plus two revisions means at most three visible attempts.
     max_iterations: int = Field(default=2, ge=0, le=3, description="最大业务返工次数")
     claim_max_iterations: int = Field(
-        default=0, ge=0, le=3, description="Claim 审核专用最大返工次数；当前默认不返工"
+        default=1, ge=0, le=3, description="Claim 审核专用最大返工次数；默认1次，0关闭专用返工，不借用普通返工额度"
     )
     constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
 

@@ -88,11 +88,29 @@ def _context(
 ) -> ResourceGenerationContext:
     learner = node_input.learner
     constraints = dict(node_input.constraints)
+    if spec is not None and isinstance(constraints.get("revision_feedback"), dict):
+        feedback = dict(constraints["revision_feedback"])
+        feedback["assessment_findings"] = [
+            dict(item) for item in feedback.get("assessment_findings", [])
+            if spec.resource_type == "分阶测试题"
+            and item.get("resource_spec_id") == spec.resource_spec_id
+            and (previous is None or item.get("resource_id") == previous.resource_id)
+        ]
+        constraints["revision_feedback"] = feedback
     # A revision must be able to preserve text that the reviewer did not ask
     # to change.  Keep the previous artifact scoped to the resource worker and
     # inject it only when a prior version exists (never on first generation).
     if previous is not None and (node_input.generation_attempt > 1 or state.get("resource_retry_context")):
         constraints["previous_version_content"] = previous.content_text or ""
+    if spec is not None and spec.resource_type == "讲义" and state.get("lecture_review_policy"):
+        revision = (state.get("lecture_revision") or {}).get(spec.resource_spec_id)
+        if not (revision or {}).get("claim_only"):
+            constraints.pop("revision_feedback", None)
+            constraints.pop("previous_version_content", None)
+            if revision:
+                if previous is None or revision["parent_resource_id"] != previous.resource_id:
+                    raise contract_error()
+                constraints["lecture_revision"] = revision
     return ResourceGenerationContext(
         run_id=node_input.run_id,
         batch_id=node_input.batch_id,
@@ -265,6 +283,9 @@ def generate_node(
                     else {item.resource_type for item in specs})
     if not active_types:
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+    active_spec_ids = {spec.resource_spec_id for spec in specs if spec.resource_type in active_types
+        and (not state.get("lecture_review_policy") or spec.resource_type != "讲义" or not (node_input.revision_count or node_input.claim_revision_count)
+             or spec.resource_spec_id in (state.get("lecture_revision") or {}))}
     step_context = start_step(state, attempt=node_input.generation_attempt)
     previous = _previous(node_input.generated_resources)
     source = state.get("regeneration_source")
@@ -274,10 +295,10 @@ def generate_node(
             if spec.resource_type == source.resource_type:
                 previous.setdefault((spec.resource_spec_id, "text"), source)
     resources = [item for item in node_input.generated_resources
-                 if item.resource_type not in active_types]
+                 if item.resource_spec_id not in active_spec_ids]
     generated_now: list[LearningResource] = []
     executions = [item for item in state.get("resource_executions", [])
-                  if item.get("resource_type") not in active_types]
+                  if item.get("resource_spec_id") not in active_spec_ids]
     errors: list[dict[str, Any]] = []
     llm_metadata = None
     work_items = [
@@ -294,7 +315,7 @@ def generate_node(
             ),
         )
         for spec in specs
-        if spec.resource_type in active_types
+        if spec.resource_spec_id in active_spec_ids
     ]
     progress_trace = {
         "run_id": node_input.run_id,
@@ -374,6 +395,9 @@ def generate_node(
                                    worker_step_id=context.step_id, state="human_review",
                                    validation_status="failed",
                                    error_code=_error_code_value(error.code))
+        from app.agents.shared.llm_accounting import bind_generated_resource
+
+        bind_generated_resource(spec.resource_spec_id, resource.resource_id)
         if resource_progress_recorder is not None:
             resource_progress_recorder.record_resource_generated(
                 state, resource=resource, execution=execution, trace_item=progress_trace

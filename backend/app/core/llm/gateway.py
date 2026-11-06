@@ -25,6 +25,7 @@ from openai import (
 )
 from pydantic import BaseModel
 
+from app.core.llm.attempts import AttemptObserver
 from app.config import get_settings
 from app.core.security.errors import ErrorCode, PUBLIC_MESSAGES
 from app.core.llm.transport import LangChainChatTransport
@@ -280,6 +281,7 @@ class LLMGateway:
         claim_request_timeout_seconds: float | None = None,
         claim_retry_request_timeout_seconds: float | None = None,
         claim_schema_repair_attempts: int | None = None,
+        min_attempt_seconds: float = 0.0,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
@@ -325,6 +327,9 @@ class LLMGateway:
         self.monotonic = monotonic
         self.wall_clock = wall_clock
         self.jitter = jitter
+        # Zero means "never skip an attempt"; positive values enable the
+        # deadline floor described in _has_viable_deadline().
+        self.min_attempt_seconds = max(0.0, float(min_attempt_seconds or 0.0))
 
     def options_for(
         self,
@@ -384,6 +389,32 @@ class LLMGateway:
             deadline = deadline.replace(tzinfo=timezone.utc)
         return (deadline - self.wall_clock()).total_seconds()
 
+    def remaining_seconds(self, context: LLMCallContext) -> float | None:
+        """Expose the deadline countdown so agents can allocate it fairly."""
+
+        return self._remaining_seconds(context)
+
+    def _minimum_viable_attempt(self, configured_timeout: float) -> float:
+        """Smallest remaining budget that can still produce a useful answer.
+
+        The floor is half of the call's own configured timeout: an attempt with
+        at least half its normal budget may still return a partial-but-valid
+        answer, while a sliver of budget can only end as a timeout.  The
+        configured ceiling keeps short interactive calls (for example a 40s
+        tutor turn) from inheriting a floor larger than their whole budget.
+        """
+
+        if self.min_attempt_seconds <= 0:
+            return 0.0
+        return min(self.min_attempt_seconds, 0.5 * max(0.0, configured_timeout))
+
+    def _has_viable_deadline(
+        self, remaining: float | None, configured_timeout: float
+    ) -> bool:
+        if remaining is None:
+            return True
+        return remaining >= self._minimum_viable_attempt(configured_timeout)
+
     def _delay_for(self, attempt: int, retry_after: float | None) -> float:
         if retry_after is not None:
             return min(retry_after, self.retry_max_delay_seconds)
@@ -414,7 +445,7 @@ class LLMGateway:
         schema = json.dumps(output_schema.model_json_schema(), ensure_ascii=False)
         repair = (
             "上一次输出未通过结构校验。请仅返回修复后的 JSON 对象，不要解释。\n"
-            f"错误：{failure.code.value}:{failure.safe_detail or 'invalid_output'}\n"
+            f"错误：{failure.code.value}:{(failure.safe_detail or 'invalid_output')[:12000]}\n"
             f"JSON Schema：{schema}"
         )
         return [
@@ -558,6 +589,7 @@ class LLMGateway:
         output_schema: type[T],
         context: LLMCallContext,
         options: LLMCallOptions,
+        attempt_observer: AttemptObserver | None = None,
     ) -> LLMCallResult[T]:
         started_at = self.monotonic()
         attempts: list[LLMAttemptSummary] = []
@@ -596,6 +628,23 @@ class LLMGateway:
             timeout = options.request_timeout_seconds if attempt == 1 else (
                 options.retry_request_timeout_seconds or options.request_timeout_seconds
             )
+            if not self._has_viable_deadline(remaining, timeout):
+                # Starting this attempt can only burn the remaining budget and
+                # still end as a timeout, which also starves the steps that come
+                # after this node.  Fail now instead of launching a doomed call.
+                self._raise_final(
+                    failure=_MappedFailure(
+                        ErrorCode.LLM_TIMEOUT,
+                        retryable=True,
+                        category="timeout",
+                        safe_detail="deadline_budget_insufficient",
+                    ),
+                    context=context,
+                    attempt=max(1, attempt),
+                    started_at=started_at,
+                    attempts=attempts,
+                    finish_reason=finish_reason,
+                )
             if remaining is not None:
                 timeout = min(timeout, max(0.001, remaining))
             if mode == StructuredOutputMode.TEXT:
@@ -604,8 +653,16 @@ class LLMGateway:
                 prepared_messages = self._json_mode_messages(call_messages, output_schema)
             else:
                 prepared_messages = call_messages
+            # All observer callbacks are outside provider exception mapping.
+            ticket = None
+            retry_allowed = True
+            if attempt_observer is not None:
+                ticket = attempt_observer.before_attempt(context, attempt, prepared_messages,
+                    output_schema, mode, next_output_tokens, timeout)
+                timeout = min(timeout, getattr(ticket, "timeout_seconds", timeout))
             attempt_started = self.monotonic()
             raw: RawLLMResponse | None = None
+            transport_error = None
             try:
                 raw = _invoke_transport_with_hard_timeout(
                     self.transport,
@@ -616,6 +673,17 @@ class LLMGateway:
                     temperature=options.temperature,
                     max_output_tokens=next_output_tokens,
                 )
+            except Exception as exc:
+                transport_error = exc
+            elapsed = max(0, int((self.monotonic() - attempt_started) * 1000))
+            if attempt_observer is not None:
+                if transport_error is not None:
+                    retry_allowed = attempt_observer.on_attempt_error(ticket, transport_error, elapsed)
+                else:
+                    retry_allowed = attempt_observer.after_attempt(ticket, raw, elapsed)
+            try:
+                if transport_error is not None:
+                    raise transport_error
                 finish_reason = raw.finish_reason
                 if raw.response_metadata.get("refusal") or finish_reason == "content_filter":
                     raise _MappedFailure(
@@ -711,7 +779,7 @@ class LLMGateway:
                 and not output_failure
                 and transport_retry_attempts < 1
             )
-            if attempt >= options.max_attempts or not (
+            if not retry_allowed or attempt >= options.max_attempts or not (
                 can_transport_retry
                 or can_text_fallback
                 or can_repair
@@ -835,6 +903,14 @@ class LLMGateway:
             timeout = options.request_timeout_seconds if attempt == 1 else (
                 options.retry_request_timeout_seconds or options.request_timeout_seconds
             )
+            if not self._has_viable_deadline(remaining, timeout):
+                self._raise_final(
+                    failure=_MappedFailure(ErrorCode.LLM_TIMEOUT, retryable=True,
+                                           category="timeout",
+                                           safe_detail="deadline_budget_insufficient"),
+                    context=context, attempt=attempt, started_at=started_at,
+                    attempts=attempts, finish_reason=finish_reason,
+                )
             if remaining is not None:
                 timeout = min(timeout, max(0.001, remaining))
             attempt_started = self.monotonic()
@@ -961,4 +1037,27 @@ def default_llm_gateway() -> LLMGateway:
         claim_request_timeout_seconds=settings.claim_request_timeout_seconds,
         claim_retry_request_timeout_seconds=settings.claim_retry_request_timeout_seconds,
         claim_schema_repair_attempts=settings.claim_schema_repair_attempts,
+        min_attempt_seconds=settings.llm_min_attempt_seconds,
     )
+
+
+# ---------------------------------------------------------------------------
+# Bypass LLM-call accounting (T41): observe the two real public entry points
+# and the hard-timeout transport helper.  The original function objects,
+# signatures, argument objects, results and exceptions are preserved exactly;
+# without an active accounting scope each wrapper is a direct passthrough.
+# ---------------------------------------------------------------------------
+from app.core.llm.accounting import (  # noqa: E402
+    observed_gateway_method,
+    observed_transport_call,
+)
+
+LLMGateway.invoke_structured = observed_gateway_method(  # type: ignore[method-assign]
+    LLMGateway.invoke_structured
+)
+LLMGateway.invoke_plain_text = observed_gateway_method(  # type: ignore[method-assign]
+    LLMGateway.invoke_plain_text
+)
+_invoke_transport_with_hard_timeout = observed_transport_call(
+    _invoke_transport_with_hard_timeout
+)

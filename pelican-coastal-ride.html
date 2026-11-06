@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>鹈鹕的海边骑行</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body { display: grid; place-items: center; min-height: 100vh; padding: 24px; background: #efe9dc; color: #304c4a; font-family: Georgia, "Noto Serif SC", serif; }
+    main { width: min(1100px, 100%); overflow: hidden; border: 1px solid #d8d0be; background: #f8f4e9; box-shadow: 0 18px 60px #526d6624; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 30px; }
+    .brand { font: 700 12px/1.2 Arial, sans-serif; letter-spacing: .2em; }
+    .issue { font: 11px/1.2 Arial, sans-serif; letter-spacing: .15em; color: #85908a; text-align: right; }
+    .scene { display: block; width: 100%; height: auto; background: #bfe0d8; }
+    footer { display: flex; justify-content: space-between; align-items: end; gap: 20px; padding: 24px 30px 28px; }
+    h1 { margin: 0 0 7px; font-size: clamp(22px, 3.5vw, 36px); font-weight: 400; letter-spacing: .04em; }
+    p { margin: 0; color: #788780; font-size: 13px; letter-spacing: .08em; }
+    .note { color: #d17a53; font: italic 16px Georgia, serif; text-align: right; white-space: nowrap; }
+    .wheel { transform-box: fill-box; transform-origin: center; animation: spin 1.8s linear infinite; }
+    .rider { animation: bob 1.8s ease-in-out infinite; }
+    .cloud-a { animation: drift 22s ease-in-out infinite alternate; }
+    .cloud-b { animation: drift 28s ease-in-out infinite alternate-reverse; }
+    .landscape { animation: landscape 6s linear infinite; }
+    .scarf { transform-box: fill-box; transform-origin: right center; animation: flutter 1.2s ease-in-out infinite alternate; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    @keyframes drift { to { transform: translateX(45px); } }
+    @keyframes landscape { to { transform: translateX(-240px); } }
+    @keyframes flutter { to { transform: rotate(5deg) translateY(3px); } }
+    @media (max-width: 560px) { body { padding: 10px; } header { padding: 18px; } footer { padding: 20px 18px; } .note { font-size: 12px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; } }
+  </style>
+</head>
+<body>
+<main>
+  <header><div class="brand">THE COASTAL POST</div><div class="issue">A LITTLE MOMENT BY THE SEA &nbsp; / &nbsp; NO. 01</div></header>
+  <svg class="scene" viewBox="0 0 1000 580" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+    <title id="title">鹈鹕的海边骑行</title>
+    <desc id="desc">一只戴着围巾的白色鹈鹕骑着红色自行车，沿着阳光下的海岸前行。</desc>
+    <defs>
+      <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#b9dfd7"/><stop offset="1" stop-color="#e1ece0"/></linearGradient>
+      <linearGradient id="sea" x2="0" y2="1"><stop stop-color="#8ebfba"/><stop offset="1" stop-color="#b8d6c8"/></linearGradient>
+      <pattern id="road" width="240" height="48" patternUnits="userSpaceOnUse"><path d="M0 15h35 M110 36h16 M196 10h22" fill="none" stroke="#d9be99" stroke-width="3" stroke-linecap="round" opacity=".65"/></pattern>
+      <g id="spokes" fill="none" stroke="#54716c" stroke-width="2" opacity=".65"><path d="M0-83V83M-83 0H83M-59-59 59 59M59-59-59 59M-32-77 32 77M32-77-32 77M-77-32 77 32M-77 32 77-32"/></g>
+      <g id="wheel"><circle r="88" fill="#f7eddb" stroke="#385653" stroke-width="9"/><circle r="78" fill="none" stroke="#c9bca3" stroke-width="2"/><use href="#spokes"/><circle r="7" fill="#405e59"/></g>
+      <g id="grass" fill="none" stroke="#789783" stroke-width="3" stroke-linecap="round"><path d="M0 0q-3-15-11-21M0 0q2-18 9-26M0 0q8-8 16-10"/></g>
+    </defs>
+    <rect width="1000" height="580" fill="url(#sky)"/>
+    <circle cx="787" cy="115" r="54" fill="#f6d99d" opacity=".92"/>
+    <g fill="#f8f5e9" opacity=".78">
+      <g class="cloud-a"><path d="M101 130c8-18 27-23 41-11 12-25 47-24 57 3 20-3 30 4 33 16H95c0-3 2-6 6-8Z"/></g>
+      <g class="cloud-b"><path d="M554 80c7-13 22-17 32-8 9-19 34-19 43 1 16-2 24 5 26 14H550c0-3 1-5 4-7Z"/></g>
+    </g>
+    <path d="M0 276Q140 252 265 267T520 261T750 267T1000 252V390H0Z" fill="#9bc8be" opacity=".65"/>
+    <path d="M0 292Q180 282 350 291T680 287T1000 289V405H0Z" fill="url(#sea)"/>
+    <g fill="none" stroke="#e7f1e5" stroke-width="3" stroke-linecap="round" opacity=".7"><path d="M69 320h100m38 17h46m384-18h118m-75 25h53m105-13h86M286 353h85"/></g>
+    <path d="M0 393Q140 374 275 390T540 386T790 391T1000 375V580H0Z" fill="#e9d7b6"/>
+    <path d="M0 449Q220 432 450 447T1000 441V580H0Z" fill="#e4c9a3"/>
+    <rect y="455" width="1000" height="125" fill="url(#road)"/>
+    <g class="landscape"><use href="#grass" x="40" y="422"/><use href="#grass" x="280" y="422"/><use href="#grass" x="520" y="422"/><use href="#grass" x="760" y="422"/><use href="#grass" x="1000" y="422"/><use href="#grass" x="1240" y="422"/></g>
+    <ellipse cx="493" cy="526" rx="230" ry="15" fill="#8c806b" opacity=".16"/>
+    <!-- Bicycle -->
+    <g transform="translate(326 435)"><g class="wheel"><use href="#wheel"/></g></g>
+    <g transform="translate(660 435)"><g class="wheel"><use href="#wheel"/></g></g>
+    <g fill="none" stroke="#bd6652" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"><path d="M326 435 405 317 484 435 326 435 455 326 484 435 605 326 660 435"/><path d="M590 300 605 326"/></g>
+    <path d="M389 312h45" stroke="#405954" stroke-width="9" stroke-linecap="round"/>
+    <path d="M584 300h32q16 0 16 14" fill="none" stroke="#405954" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="484" cy="435" r="20" fill="#eadac0" stroke="#a75343" stroke-width="4"/>
+    <g transform="translate(484 435)"><g class="wheel"><path d="M-25 0h50" stroke="#435d57" stroke-width="5"/><path d="M-31-4h13M18 4h13" stroke="#435d57" stroke-width="6" stroke-linecap="round"/></g></g>
+    <!-- Rider -->
+    <g class="rider">
+      <path d="M403 304Q431 335 464 324" fill="none" stroke="#d39b57" stroke-width="13" stroke-linecap="round"/>
+      <path d="M464 324Q485 366 475 409" fill="none" stroke="#d39b57" stroke-width="11" stroke-linecap="round"/>
+      <path d="M472 407l-13 15 25 1" fill="none" stroke="#d39b57" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M364 291Q350 263 357 234Q369 195 418 201Q470 208 484 248Q493 283 465 305Q436 328 392 314Q374 309 364 291Z" fill="#f8f5e9" stroke="#546d64" stroke-width="3"/>
+      <path d="M376 259q22-21 51-11 17 6 27 24-22 28-58 21-17-4-20-34Z" fill="#e4e7da" stroke="#a8b9aa" stroke-width="2"/>
+      <path d="M382 293q-20 0-34-13 1 22 18 30" fill="#f8f5e9" stroke="#546d64" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M427 226Q431 184 455 157Q470 141 490 144Q509 146 516 166Q523 185 510 200L493 218Q483 234 480 251" fill="#f8f5e9" stroke="#546d64" stroke-width="3" stroke-linecap="round"/>
+      <path d="M515 168Q557 167 613 183Q568 191 518 190Z" fill="#e4a45e" stroke="#a96645" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M518 190Q556 190 610 184Q583 211 540 218Q524 219 513 201Z" fill="#efc17e" stroke="#a96645" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="495" cy="166" r="3.5" fill="#354d49"/><circle cx="496" cy="165" r="1" fill="white"/>
+      <path d="M455 214q17 8 31 2" fill="none" stroke="#c95e4b" stroke-width="12" stroke-linecap="round"/>
+      <path class="scarf" d="M452 212q-24 4-48-7 6 12 20 19-16 2-28-3 13 17 35 14 18-3 27-12Z" fill="#cc6954" stroke="#ae584a" stroke-width="2"/>
+      <path d="M435 278Q461 297 485 296Q512 294 548 310" fill="none" stroke="#e9e9db" stroke-width="20" stroke-linecap="round"/>
+      <path d="M435 278Q461 297 485 296Q512 294 548 310" fill="none" stroke="#9caea1" stroke-width="2" stroke-linecap="round"/>
+      <path d="M544 308q8-3 14 3" fill="none" stroke="#d39b57" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <g fill="#f6f0e1" opacity=".85"><circle cx="130" cy="471" r="2"/><circle cx="190" cy="500" r="3"/><circle cx="834" cy="478" r="2"/><circle cx="904" cy="516" r="3"/></g>
+  </svg>
+  <footer><div><h1>沿着海岸，慢慢骑。</h1><p>给今天留一点轻盈的时间。</p></div><div class="note">Enjoy the ride ♡</div></footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "reason": "T27: stable stage ordering for equal created_at/attempt; original artifact and gate baseline unchanged.",
+  "cases": {
+    "single-lecture": null,
+    "lecture-practice-quiz": "release",
+    "missing-quiz": "release",
+    "duplicate-source": null,
+    "empty-source": null,
+    "unknown-source": null,
+    "unsafe-model-content": "release",
+    "unknown-component": "design",
+    "unknown-source-block": "design",
+    "scene-retry-idempotent": "release",
+    "ai-review-revision": "release",
+    "ai-review-unresolved": "release",
+    "short-low-interaction": "release",
+    "medium-interaction-30m": "release",
+    "high-interaction-60m": "release",
+    "multi-resource-concept-fusion": "release",
+    "duplicate-and-complementary-sources": null,
+    "source-conflict-parallel": "release",
+    "constrained-interaction-quota": "release",
+    "localized-review-repair": "release"
+  }
+}

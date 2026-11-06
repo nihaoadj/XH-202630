@@ -1,0 +1,150 @@
+{
+  "density_fixture": {
+    "capacity_share": 0.9,
+    "chars_per_claim": 35.0,
+    "enabled": true,
+    "version": "claim-density-v1"
+  },
+  "expectations": {
+    "baseline_batches": 8,
+    "batch_claims_tested": [
+      16,
+      20
+    ],
+    "candidate_batches_20": 12,
+    "explicitly_not_claimed": [
+      "model recall",
+      "Chinese tokenizer accuracy",
+      "production token savings",
+      "Judge capacity above fixture size"
+    ],
+    "gold_total": 7,
+    "note": "Derived from the frozen formula (prior=35, share=0.9) and segmentation spans, not from a failing run. Regenerating after a failure is forbidden.",
+    "per_text": {
+      "t01_paragraphs": {
+        "baseline": 1,
+        "candidate_20": 4,
+        "role": "fit (prior selection)"
+      },
+      "t02_lists": {
+        "baseline": 1,
+        "candidate_20": 1
+      },
+      "t03_table": {
+        "baseline": 1,
+        "candidate_20": 1
+      },
+      "t04_code": {
+        "baseline": 1,
+        "candidate_20": 1,
+        "note": "single unit above the 630 risk budget"
+      },
+      "t05_headings": {
+        "baseline": 1,
+        "candidate_20": 1,
+        "note": "zero-risk structure plus one paragraph"
+      },
+      "t06_unicode_crlf": {
+        "baseline": 1,
+        "candidate_20": 1
+      },
+      "t07_structural": {
+        "baseline": 1,
+        "candidate_20": 1,
+        "note": "zero risk chars"
+      },
+      "t08_mixed": {
+        "baseline": 1,
+        "candidate_20": 2
+      }
+    }
+  },
+  "labels": {
+    "t01_paragraphs": {
+      "facts": 1,
+      "sha256": "8b2a13734593dd935414865919cc24c732c1274508497cbe95ce6ad3f8fa30c3"
+    },
+    "t02_lists": {
+      "facts": 1,
+      "sha256": "e79ff08341b1473f7a4ffbae952cf7b22efa02df582aff3d9fe92fd67ef6a088"
+    },
+    "t03_table": {
+      "facts": 1,
+      "sha256": "e19c21b51131e253f72afff61d82d8c8e7dcc3c7b0591a7b0a2dd6db4c18c175"
+    },
+    "t04_code": {
+      "facts": 1,
+      "sha256": "eb68274ff5a54c04f08ff177534f4e73fb18ad0c2d7dd1b5e5000900d496964d"
+    },
+    "t05_headings": {
+      "facts": 1,
+      "sha256": "ac726c4e06e05803fbfe0dfba74dfec572ceaa875bab93dc86e3dbff966c1063"
+    },
+    "t06_unicode_crlf": {
+      "facts": 1,
+      "sha256": "a6a549b5893b75b3fbe9402498d3f7704fdb63a67a9349eb7850d110290c75c5"
+    },
+    "t07_structural": {
+      "facts": 0,
+      "sha256": "024f5f240db988a6ea1b311496c9f63b6df086a7d15181026aae55d1ae4670df"
+    },
+    "t08_mixed": {
+      "facts": 1,
+      "sha256": "52f8714353d7ade67b6ca5ad7fc6e1732da101f1548f5e18d9308229e5e1a822"
+    }
+  },
+  "policies": {
+    "baseline_estimate_2_0": {
+      "digest": "e499df86554f09118e4e3da821cb5f3a8f092ea92e6722979a8b92eecdd00632",
+      "expects_density_key": false,
+      "path": "policies/estimate_2_0_baseline.json"
+    },
+    "legacy_extraction_1_0": {
+      "digest": "d99bdb74312adf78cb9fc4f51bb2112d372c082ecfc9a220f6f97325ad82140e",
+      "path": "policies/extraction_1_0_baseline.json"
+    }
+  },
+  "schema_version": "density-fixtures-1.0",
+  "texts": {
+    "t01_paragraphs": {
+      "chars": 1447,
+      "newline": "\n",
+      "sha256": "6b4bbda1a7100487d938b9e21a1207c9a1e8e28fdcc6904f71bc6e48e5b64ca3"
+    },
+    "t02_lists": {
+      "chars": 481,
+      "newline": "\n",
+      "sha256": "a9150450e57267976b0da4973783b3b6b1ab2f57aee151139f66342e80c246ba"
+    },
+    "t03_table": {
+      "chars": 369,
+      "newline": "\n",
+      "sha256": "cd56ab10a4703b96c3a4e6dde23755fa41306cca59c06ffe1076d437a63be00f"
+    },
+    "t04_code": {
+      "chars": 768,
+      "newline": "\n",
+      "sha256": "3caee35d863f9582487ee3add87b0da70abdc17562e42c48536efa3c1371074a"
+    },
+    "t05_headings": {
+      "chars": 88,
+      "newline": "\n",
+      "sha256": "4a9533a6fd3c223b9021df90f1b3c5a9934a784f50ad7e3ce88716aa9d3ebb88"
+    },
+    "t06_unicode_crlf": {
+      "chars": 102,
+      "newline": "\r\n",
+      "sha256": "28b4f758f9d9e86867c8392e5275e7e2eeee1403903a91a0f1b6394a11849b6e"
+    },
+    "t07_structural": {
+      "chars": 25,
+      "newline": "\n",
+      "sha256": "f6fb1ff4c45c2b8e1dbb106d631ca3767abba7e588dce38c52b66c906c2d23f0"
+    },
+    "t08_mixed": {
+      "chars": 761,
+      "newline": "\n",
+      "sha256": "b856a2b09fa2834ed3409621eb87ef70fbd9e73bb296b06676d4fcf6af9be206"
+    }
+  }
+}

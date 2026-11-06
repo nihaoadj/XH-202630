@@ -1,0 +1,14 @@
+{
+  "scenarios": [
+    "courseware_planner_fallback",
+    "text_checklist_generate",
+    "text_claim_extract"
+  ],
+  "schema_version": "llm-accounting-baseline-v1",
+  "source_fingerprint": {
+    "accounting_module": "c5fb3498aac40bf7967c50457d7eba536fb3c48e0f4bae5a4ccb2d2288db50c4",
+    "gateway_hard_timeout": "a0b3819c79559b81c9f13759794fead30f5aeed04c71639b126ac2d7a5aefb10",
+    "gateway_invoke_plain_text": "38901dcf45c25505e4e44244d95fb5754ee68df425c82c43f9197e11d7c9e006",
+    "gateway_invoke_structured": "cd17cbdfae2afd79b1fffc1ef78da53c647a83e72698d8246b1956d23dc29f9f"
+  }
+}

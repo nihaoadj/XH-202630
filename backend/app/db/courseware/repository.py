@@ -6,10 +6,10 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
-from threading import Lock
+from threading import Lock, RLock
 from typing import Any, Callable
 
-from sqlalchemy import or_, update
+from sqlalchemy import case, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,10 @@ from app.db.courseware.models import (
     CoursewareLearningEventORM,
 )
 from app.models.courseware.events import sanitize_event_state
+from app.models.courseware.checkpoints import COURSEWARE_CHECKPOINT_STAGE_ORDER
+from app.models.courseware.content_review import (
+    ContentReviewBlocked, ContentReviewConflict, binding_for_spec, json_hash, validate_private_spec,
+)
 
 
 def _now() -> datetime:
@@ -131,6 +135,7 @@ class MemoryCoursewareRepository:
         self.learning_events: dict[str, dict[str, Any]] = {}
         self._learning_sequence = 0
         self._scene_claim_lock = Lock()
+        self._content_review_lock = RLock()
 
     def create_job(self, row: dict[str, Any]) -> dict[str, Any]:
         key = (row["learner_id"], row["request_hash"])
@@ -143,16 +148,56 @@ class MemoryCoursewareRepository:
         self.jobs_by_request[key] = row["run_id"]
         return deepcopy(stored)
 
-    def create_job_with_task_once(self, row: dict[str, Any], task: dict[str, Any]) -> dict[str, Any]:
-        stored = self.create_job(row)
-        # Idempotent requests return the existing run; the outbox must point
-        # at that run rather than the newly generated (discarded) UUID.
-        task = {**task, "run_id": stored["run_id"],
-                "outbox_id": f"cwo_{stored['run_id']}",
-                "idempotency_key": f"courseware.run:{stored['run_id']}"}
-        self.enqueue_task_once(task)
-        self.append_event_once(stored["run_id"], f"{stored['run_id']}:queued", "job", "queued")
-        return stored
+    def create_job_with_task_once(self, row: dict[str, Any], task: dict[str, Any], initial_spec=None) -> dict[str, Any]:
+        with self._content_review_lock:
+            prior = self.jobs_by_request.get((row["learner_id"], row["request_hash"]))
+            if prior:
+                stored = deepcopy(self.jobs[prior])
+                original = next((t for t in self.outbox.values() if t["idempotency_key"] == f"courseware.run:{prior}"), None)
+                if original is None:
+                    if (self.get_spec_by_run(prior) or {}).get("spec_json", {}).get("content_review"):
+                        raise ContentReviewBlocked("missing original content binding")
+                    self.enqueue_task_once({**task, "run_id": prior, "outbox_id": f"cwo_{prior}", "idempotency_key": f"courseware.run:{prior}", "payload": {"run_id": prior}})
+                return stored
+            # Validate and copy every participant before mutating any map.
+            task = deepcopy(task)
+            if initial_spec is not None:
+                if initial_spec["run_id"] != row["run_id"]:
+                    raise ContentReviewBlocked("spec owner mismatch")
+                task["payload"] = {"run_id": row["run_id"], "content_review_binding": binding_for_spec(initial_spec)}
+            backup = deepcopy((self.jobs, self.jobs_by_request, self.specs, self.outbox, self.events))
+            try:
+                stored = self.create_job(row)
+                if initial_spec is not None:
+                    self.save_spec(initial_spec)
+                self.enqueue_task_once(task)
+                self.append_event_once(stored["run_id"], f"{stored['run_id']}:queued", "job", "queued")
+            except BaseException:
+                self.jobs, self.jobs_by_request, self.specs, self.outbox, self.events = backup
+                raise
+            return stored
+
+    def get_run_content_review_binding(self, run_id):
+        original = next((t for t in self.outbox.values() if t["idempotency_key"] == f"courseware.run:{run_id}"), None)
+        return deepcopy((original or {}).get("payload", {}).get("content_review_binding"))
+
+    def save_content_review_spec_once(self, run_id, spec_id, expected_hash, new_spec):
+        with self._content_review_lock:
+            old = self.specs.get(spec_id)
+            if old is None or old["run_id"] != run_id or new_spec["run_id"] != run_id or new_spec["spec_id"] != spec_id:
+                raise ContentReviewBlocked("spec owner mismatch")
+            if old["content_hash"] != expected_hash and old["content_hash"] != new_spec["content_hash"]:
+                raise ContentReviewConflict("stale spec")
+            validate_private_spec(new_spec["spec_json"], old["spec_json"])
+            if new_spec["content_hash"] != json_hash(new_spec["spec_json"]):
+                raise ContentReviewBlocked("CAS hash mismatch")
+            if old["content_hash"] == new_spec["content_hash"]:
+                return deepcopy(old)
+            if old["content_hash"] != expected_hash:
+                raise ContentReviewConflict("stale spec")
+            stored = deepcopy({**old, **new_spec, "created_at": old["created_at"]})
+            self.specs[spec_id] = stored
+            return deepcopy(stored)
 
     def get_job(self, run_id: str) -> dict[str, Any] | None:
         row = self.jobs.get(run_id)
@@ -214,6 +259,8 @@ class MemoryCoursewareRepository:
         return deepcopy(self.links.get(resource_id, []))
 
     def save_spec(self, row: dict[str, Any]) -> dict[str, Any]:
+        if self.specs.get(row["spec_id"], {}).get("spec_json", {}).get("content_review") is not None:
+            raise ContentReviewBlocked("content policy requires CAS persistence")
         stored = deepcopy({**row, "created_at": _now()})
         self.specs[row["spec_id"]] = stored
         return deepcopy(stored)
@@ -342,7 +389,10 @@ class MemoryCoursewareRepository:
 
     def latest_checkpoint(self, run_id: str) -> dict[str, Any] | None:
         rows = [row for row in self.checkpoints.values() if row["run_id"] == run_id]
-        return deepcopy(max(rows, key=lambda row: (row["created_at"], row["attempt"]))) if rows else None
+        return deepcopy(max(rows, key=lambda row: (
+            row["created_at"], row["attempt"], COURSEWARE_CHECKPOINT_STAGE_ORDER.get(row["stage"], 0),
+            row["checkpoint_id"],
+        ))) if rows else None
 
     def append_event_once(self, run_id: str, event_id: str, stage: str, status: str,
                           payload: dict[str, Any] | None = None, scene_id: str | None = None) -> dict[str, Any]:
@@ -512,19 +562,31 @@ class SQLCoursewareRepository:
                 return _job_row(existing)
             return _job_row(db.get(CoursewareGenerationJobORM, row["run_id"]))
 
-    def create_job_with_task_once(self, row: dict[str, Any], task: dict[str, Any]) -> dict[str, Any]:
+    def create_job_with_task_once(self, row: dict[str, Any], task: dict[str, Any], initial_spec=None) -> dict[str, Any]:
         with self.session_factory() as db:
             existing = db.query(CoursewareGenerationJobORM).filter_by(
                 learner_id=row["learner_id"], request_hash=row["request_hash"],
             ).one_or_none()
-            if existing is None:
+            created = existing is None
+            if created:
                 existing = CoursewareGenerationJobORM(**row)
                 db.add(existing)
                 db.flush()
+                if initial_spec is not None:
+                    if initial_spec["run_id"] != row["run_id"]:
+                        raise ContentReviewBlocked("spec owner mismatch")
+                    binding = binding_for_spec(initial_spec)
+                    db.add(CoursewareSpecORM(**deepcopy(initial_spec)))
+                    task = {**task, "payload": {"run_id": row["run_id"], "content_review_binding": binding}}
             task_row = db.query(CoursewareOutboxORM).filter_by(
                 idempotency_key=f"courseware.run:{existing.run_id}"
             ).one_or_none()
             if task_row is None:
+                if not created:
+                    old_spec = db.query(CoursewareSpecORM).filter_by(run_id=existing.run_id).first()
+                    if old_spec and old_spec.spec_json.get("content_review"):
+                        raise ContentReviewBlocked("missing original content binding")
+                    task = {**task, "payload": {"run_id": existing.run_id}}
                 task_row = CoursewareOutboxORM(**{**task,
                     "run_id": existing.run_id,
                     "outbox_id": f"cwo_{existing.run_id}",
@@ -549,6 +611,34 @@ class SQLCoursewareRepository:
             else:
                 db.refresh(existing)
             return _job_row(existing)
+
+    def get_run_content_review_binding(self, run_id):
+        with self.session_factory() as db:
+            row = db.query(CoursewareOutboxORM).filter_by(idempotency_key=f"courseware.run:{run_id}", run_id=run_id).one_or_none()
+            return deepcopy((row.payload if row else {}).get("content_review_binding"))
+
+    def save_content_review_spec_once(self, run_id, spec_id, expected_hash, new_spec):
+        with self.session_factory() as db:
+            old = db.get(CoursewareSpecORM, spec_id)
+            if old is None or old.run_id != run_id or new_spec["run_id"] != run_id or new_spec["spec_id"] != spec_id:
+                raise ContentReviewBlocked("spec owner mismatch")
+            if old.content_hash != expected_hash and old.content_hash != new_spec["content_hash"]:
+                raise ContentReviewConflict("stale spec")
+            validate_private_spec(new_spec["spec_json"], old.spec_json)
+            if new_spec["content_hash"] != json_hash(new_spec["spec_json"]):
+                raise ContentReviewBlocked("CAS hash mismatch")
+            if old.content_hash == new_spec["content_hash"]:
+                return self.get_spec_by_run(run_id)
+            result = db.execute(update(CoursewareSpecORM).where(
+                CoursewareSpecORM.spec_id == spec_id, CoursewareSpecORM.run_id == run_id,
+                CoursewareSpecORM.content_hash == expected_hash,
+            ).values(spec_json=deepcopy(new_spec["spec_json"]), content_hash=new_spec["content_hash"],
+                     status=new_spec["status"], prompt_version=new_spec["prompt_version"]))
+            if result.rowcount != 1:
+                db.rollback()
+                raise ContentReviewConflict("stale spec")
+            db.commit()
+        return self.get_spec_by_run(run_id)
 
     def get_job(self, run_id: str) -> dict[str, Any] | None:
         with self.session_factory() as db:
@@ -638,6 +728,8 @@ class SQLCoursewareRepository:
     def save_spec(self, row: dict[str, Any]) -> dict[str, Any]:
         with self.session_factory() as db:
             stored = db.get(CoursewareSpecORM, row["spec_id"])
+            if stored is not None and stored.spec_json.get("content_review") is not None:
+                raise ContentReviewBlocked("content policy requires CAS persistence")
             if stored is None:
                 stored = CoursewareSpecORM(**row)
                 db.add(stored)
@@ -925,7 +1017,9 @@ class SQLCoursewareRepository:
     def latest_checkpoint(self, run_id: str) -> dict[str, Any] | None:
         with self.session_factory() as db:
             row = db.query(CoursewareWorkflowCheckpointORM).filter_by(run_id=run_id).order_by(
-                CoursewareWorkflowCheckpointORM.created_at.desc(), CoursewareWorkflowCheckpointORM.attempt.desc()
+                CoursewareWorkflowCheckpointORM.created_at.desc(), CoursewareWorkflowCheckpointORM.attempt.desc(),
+                case(dict(COURSEWARE_CHECKPOINT_STAGE_ORDER), value=CoursewareWorkflowCheckpointORM.stage, else_=0).desc(),
+                CoursewareWorkflowCheckpointORM.checkpoint_id.desc(),
             ).first()
             if row is None:
                 return None

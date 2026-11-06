@@ -4,6 +4,8 @@ The injected backend performs hybrid retrieval/reranking; this node still owns
 the immutable KB/Chunk/hash validation before candidates become Evidence DTOs.
 """
 
+from time import monotonic
+
 from app.models.shared.workflow import WorkflowState as AgentState
 from app.core.retrieval.retriever import EvidenceRetriever, retrieval_policy_from_settings
 from app.core.security.errors import ErrorCode
@@ -187,24 +189,38 @@ def retrieve_node(
         else []
     )
     fallback_reason: str | None = None
+    # Both attempts (node-scoped and its global fallback) share one node-level
+    # budget, so a slow backend cannot double the worst-case wait.
+    retrieval_budget = float(
+        getattr(evidence_retriever.settings, "retrieval_timeout_seconds", 120.0)
+    )
+    retrieval_started = monotonic()
+
+    def _retrieve(bounded_request: RetrievalRequest):
+        remaining = max(1.0, retrieval_budget - (monotonic() - retrieval_started))
+        runner = getattr(evidence_retriever, "retrieve_with_deadline", None)
+        if callable(runner):
+            return runner(bounded_request, timeout_seconds=remaining)
+        return evidence_retriever.retrieve(bounded_request)
+
     if allowed_chunk_ids:
         scoped_request = request.model_copy(update={
             "allowed_chunk_ids": allowed_chunk_ids,
             "retrieval_scope": "node_scoped",
         })
-        scoped_batch = evidence_retriever.retrieve(scoped_request)
+        scoped_batch = _retrieve(scoped_request)
         if scoped_batch.status in {
             RetrievalStatus.NO_HIT,
             RetrievalStatus.EVIDENCE_INSUFFICIENT,
         }:
             fallback_reason = scoped_batch.status.value
-            batch = evidence_retriever.retrieve(request)
+            batch = _retrieve(request)
         else:
             batch = scoped_batch
     else:
         if target_nodes:
             fallback_reason = "node_mapping_missing"
-        batch = evidence_retriever.retrieve(request)
+        batch = _retrieve(request)
 
     profile = dict(batch.retrieval_profile)
     if batch.status == RetrievalStatus.EVIDENCE_INSUFFICIENT:

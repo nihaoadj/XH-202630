@@ -106,8 +106,19 @@ def test_claim_check_defaults_to_disabled_and_remains_disabled_for_explicit_draf
 
     assert reviewed.include_claim_check is False
     assert reviewed.max_iterations == 2
-    assert reviewed.claim_max_iterations == 0
+    assert reviewed.claim_max_iterations == 1
     assert draft.include_claim_check is False
+
+
+@pytest.mark.parametrize("explicit", [None, 0, 1, 3])
+def test_claim_revision_default_and_explicit_budget_are_frozen(explicit):
+    args = {} if explicit is None else {"claim_max_iterations": explicit}
+    request = GenerateRequest(learner_id="contract_001", topic="工业视觉", **args)
+    expected = 1 if explicit is None else explicit
+    assert GenerateRequest.model_validate_json(request.model_dump_json()).claim_max_iterations == expected
+    state = build_workflow_state(_learner(), request)
+    assert state["claim_max_iterations"] == expected
+    assert WorkflowStateSnapshot.model_validate(state).claim_max_iterations == expected
 
 
 def test_workflow_state_json_round_trip_preserves_schema_version_and_ids():

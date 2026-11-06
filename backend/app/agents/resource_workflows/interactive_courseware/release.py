@@ -18,6 +18,7 @@ import zipfile
 from app.core.courseware.runtime import RENDERER_VERSION, RUNTIME_VERSION
 from app.models.courseware.learning_design import CoursewareLearningDesign
 from app.agents.resource_workflows.interactive_courseware.composition import topic, source_summary
+from app.agents.resource_workflows.interactive_courseware.content_review.lifecycle import verify_run_content
 
 
 def _hash(value: Any) -> str:
@@ -58,6 +59,7 @@ class CandidateReleaseCoordinator:
                provenance: dict[str, Any] | None = None,
                idempotency_key: str | None = None) -> dict[str, Any]:
         """Persist a candidate after freezing all inputs that define it."""
+        verify_run_content(self.repository, run_id)
         scene_set = [{"scene_id": row.get("scene_id"),
                       "content_hash": row.get("content_hash"),
                       "revision_no": row.get("revision_no", row.get("attempt", 0))}
@@ -98,6 +100,7 @@ class CandidateReleaseCoordinator:
                resource_projection: dict[str, Any], job_status: str,
                warnings: list[dict[str, Any]], event_payload: dict[str, Any],
                manifest: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        verify_run_content(self.repository, candidate["run_id"])
         return self.repository.commit_release_once(
             candidate["release_id"], resource_id=resource_id,
             resource_projection=resource_projection, job_status=job_status,
@@ -137,6 +140,7 @@ class CandidateReleaseCoordinator:
         candidate = facts.candidate
         document = facts.document
         warnings = facts.warnings
+        verify_run_content(self.repository, run_id, document)
         release_id = candidate["release_id"]
         document["event_context"] = {"resource_id": resource_id, "release_id": release_id}
         page_issues = page_quality_check(document)

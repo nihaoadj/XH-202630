@@ -4,6 +4,7 @@ from dependency_injector import containers, providers
 
 from app.agents.resource_workflows.learning_documents.workflow import build_workflow
 from app.agents.learning_agents.tutor_agent import TutorAgent, TutorContextBuilder
+from app.agents.resource_workflows.learning_documents.claim_extraction.profiles import load_counter
 from app.config import get_settings
 from app.core.retrieval.retriever import EvidenceRetriever
 from app.core.llm.transport import LangChainChatTransport
@@ -47,6 +48,7 @@ from app.agents.resource_workflows.interactive_courseware.worker import Coursewa
 from app.services.courseware.executor import CoursewareExecutor
 from app.services.resource_library import ResourceLibraryService
 from app.services.reviews.reviews import ReviewService
+from app.services.runs.llm_accounting import LLMAccountingQueryService
 from app.services.runs.queries import RunQueryService
 from app.services.runs.events import RunEventStreamService
 from app.services.users.users import UserService
@@ -54,8 +56,26 @@ from app.services.runs.workflow_artifact_recorder import WorkflowArtifactRecorde
 from app.services.tutor.tutor import TutorService
 
 
+def _llm_accounting_query_db_path() -> str | None:
+    """Resolve the independent accounting DB path for the read-only query service."""
+
+    from app.services.runs.llm_accounting_runtime import (
+        resolve_llm_accounting_db_path,
+    )
+
+    settings = get_settings()
+    if not settings.llm_accounting_enabled:
+        return None
+    path = resolve_llm_accounting_db_path()
+    return str(path) if path is not None else None
+
+
 class Container(containers.DeclarativeContainer):
     config = providers.Configuration()
+    llm_accounting_query_service = providers.Singleton(
+        LLMAccountingQueryService,
+        db_path=providers.Callable(_llm_accounting_query_db_path),
+    )
 
     runtime_settings = providers.Singleton(get_settings)
     llm_transport = providers.Singleton(
@@ -200,8 +220,10 @@ class Container(containers.DeclarativeContainer):
         catalog=knowledge_catalog,
         vector_index=knowledge_vector_index,
     )
+    claim_extraction_counter = providers.Singleton(load_counter, settings=runtime_settings, gateway=llm_gateway)
     workflow = providers.Singleton(
         build_workflow,
+        claim_extraction_counter=claim_extraction_counter,
         llm_gateway=llm_gateway,
         evidence_retriever=evidence_retriever,
         lifecycle_repository=audit_repository,
@@ -221,6 +243,8 @@ class Container(containers.DeclarativeContainer):
         resource_repo=resource_repository,
         workflow=workflow,
         audit_repo=audit_repository,
+        claim_extraction_gateway=llm_gateway,
+        claim_extraction_counter=claim_extraction_counter,
         knowledge_catalog=knowledge_catalog,
         claim_repo=claim_repository,
     )

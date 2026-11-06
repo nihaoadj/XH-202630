@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+from app.services.generation.lecture_policy import resolve_lecture_dispatch
 from app.config import get_settings
 from app.core.retrieval.knowledge_ids import query_hash
 from app.core.security.errors import ApplicationError, ErrorCode
@@ -43,7 +44,8 @@ def prepare_resource_retry(service, learner, run_id, spec_id, representation):
     try:
         dispatch = service.job_repo.get_dispatch(run_id) or {}
         source_snapshot = dispatch.get("dispatch_snapshot") or {}
-        if source_snapshot.get("workflow_version") not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION}:
+        source_version, lecture = resolve_lecture_dispatch(source_snapshot)
+        if source_version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION}:
             raise ValueError("unsupported source dispatch version")
         frozen_learner = LearnerProfile.model_validate(source_snapshot["learner"])
         original = GenerateRequest.model_validate(source.request_payload)
@@ -59,6 +61,16 @@ def prepare_resource_retry(service, learner, run_id, spec_id, representation):
         checkpoint = max(checkpoints, key=lambda item: (item.step_sequence, item.event_sequence, item.checkpoint_id))
         checkpoint = WorkflowCheckpoint.model_validate(checkpoint.model_dump(mode="json"))
         projection = checkpoint.state_projection
+        if lecture:
+            from app.agents.resource_workflows.learning_documents.reviewing.lecture_authority import validate_lecture_authority
+            creation = audit.get_run_creation_snapshot(run_id)
+            run_record = audit.get_run(run_id)
+            events = audit.list_events(run_id, after_sequence=0, limit=100)
+            created = [event for event in events if str(getattr(event.event_type, "value", event.event_type)).lower() == "run_created"]
+            if len(created) != 1:
+                raise ValueError("source creation event missing")
+            validate_lecture_authority(request_snapshot=creation, request_hash=run_record.request_hash,
+                created_event_request_hash=created[0].payload.get("request_hash"), dispatch=source_snapshot, checkpoint=projection)
         if (projection.get("run_id") != run_id or projection.get("learner_id") != learner.learner_id
                 or projection.get("knowledge_base_id") != source.knowledge_base_id):
             raise ValueError("checkpoint ownership mismatch")

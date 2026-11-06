@@ -1,4 +1,6 @@
 from __future__ import annotations
+from app.services.generation.lecture_policy import freeze_lecture_policy, resolve_lecture_dispatch
+from app.agents.resource_workflows.learning_documents.reviewing.lecture_authority import lecture_workflow_version
 
 from collections.abc import Callable
 
@@ -8,6 +10,10 @@ import uuid
 from app.db.generation.base import BaseGenerationJobRepository
 from app.core.execution import ExecutionFence, execution_fence
 from app.models.generation.dispatch import TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION
+from app.models.generation.dispatch import ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION
+from app.models.reviews.claim_extraction import policy_from_input
+from app.agents.resource_workflows.learning_documents.claim_extraction.budget import snapshot_fields
+from app.config import get_settings
 from app.models.generation.resource_retry import ResourceRetryContext
 from app.services.generation.resource_retry import prepare_resource_retry
 from app.services.generation.dispatch import submission_identity
@@ -431,10 +437,14 @@ class GenerationJobService:
             focus_snapshot=focus_snapshot,
         )
 
-    @staticmethod
-    def _dispatch_snapshot(learner, request, resource_retry_context=None):
+    def _dispatch_snapshot(self, learner, request, resource_retry_context=None):
         snapshot = {"workflow_version": TEXT_WORKFLOW_VERSION, "learner": learner.model_dump(mode="json"),
                     "request_hash": canonical_hash(request.model_dump(mode="json"))}
+        freeze = getattr(self.generation_service, "freeze_claim_extraction", None)
+        if freeze is not None:
+            snapshot.update(freeze(request))
+        elif request.include_claim_check and get_settings().claim_extraction_strategy != "legacy_v3":
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
         if resource_retry_context is not None:
             context = ResourceRetryContext.from_snapshot(resource_retry_context)
             if context.request != request or context.learner != learner:
@@ -443,6 +453,14 @@ class GenerationJobService:
             # Older workers must reject this dispatch instead of silently
             # starting an ordinary diagnose/retrieve/plan workflow.
             snapshot["workflow_version"] = RESOURCE_RETRY_WORKFLOW_VERSION
+        if snapshot.get("claim_extraction_policy"):
+            snapshot["workflow_version"] = ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION if resource_retry_context else ESTIMATE_TEXT_WORKFLOW_VERSION
+        lecture = freeze_lecture_policy(request, get_settings())
+        if lecture:
+            snapshot.update(lecture)
+            snapshot["base_workflow_version"] = snapshot["workflow_version"]
+            snapshot["workflow_version"] = lecture_workflow_version(lecture["lecture_review_contract_version"])
+            snapshot["lecture_dispatch_hash"] = canonical_hash(snapshot)
         return snapshot
 
     def run_claim(self, claim):
@@ -450,22 +468,31 @@ class GenerationJobService:
         error_code = None
         resource_ids = []
         learner = None
+        preflight_failed = True
         try:
-            version = claim.snapshot.get("workflow_version")
-            if version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION}:
-                raise ValueError("unsupported frozen workflow")
-            if (version == RESOURCE_RETRY_WORKFLOW_VERSION) != (claim.snapshot.get("resource_retry_context") is not None):
-                raise ValueError("retry dispatch version mismatch")
             req = GenerateRequest.model_validate(claim.request_payload)
-            learner = LearnerProfile.model_validate(claim.snapshot["learner"])
-            if (req.learner_id != claim.learner_id or learner.learner_id != claim.learner_id
+            frozen_learner = LearnerProfile.model_validate(claim.snapshot["learner"])
+            if (req.learner_id != claim.learner_id or frozen_learner.learner_id != claim.learner_id
                     or canonical_hash(req.model_dump(mode="json")) != claim.snapshot.get("request_hash")):
                 raise ValueError("frozen generation input mismatch")
+            learner = frozen_learner
+            version, lecture = resolve_lecture_dispatch(claim.snapshot)
+            if version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}:
+                raise ValueError("unsupported frozen workflow")
+            if (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (claim.snapshot.get("resource_retry_context") is not None):
+                raise ValueError("retry dispatch version mismatch")
+            private = snapshot_fields(claim.snapshot)
+            policy = policy_from_input({"include_claim_check": req.include_claim_check, **private})
+            if (version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None):
+                raise ValueError("frozen extraction dispatch mismatch")
             with execution_fence(ExecutionFence(claim.run_id, claim.owner, claim.epoch)):
                 retry_context = claim.snapshot.get("resource_retry_context")
+                preflight_failed = False
                 response = self.generation_service.generate_with_run_id(
                     learner, req, run_id=claim.run_id, batch_id=claim.batch_id,
-                    **({"resource_retry_context": retry_context} if retry_context is not None else {}))
+                    **({"claim_extraction_snapshot": private} if hasattr(self.generation_service, "freeze_claim_extraction") else {}),
+                    **({"resource_retry_context": retry_context} if retry_context is not None else {}),
+                    **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": claim.snapshot} if hasattr(self.generation_service, "freeze_lecture_review") else {}))
                 resource_ids = [item.resource_id for item in response.resources]
                 if getattr(response, "workflow_status", None) == "failed":
                     error_code = "GENERATION_EXECUTION_FAILED"
@@ -475,8 +502,11 @@ class GenerationJobService:
             error_code = exc.code.value if isinstance(exc, ApplicationError) else "GENERATION_EXECUTION_FAILED"
             logger.error("Generation attempt failed run_id=%s epoch=%s code=%s type=%s",
                          claim.run_id, claim.epoch, error_code, type(exc).__name__)
-        finished = self.job_repo.finish_claim(claim, resource_ids=resource_ids, error_code=error_code)
-        if finished and error_code and learner and self.mastery_service:
+        finished = self.job_repo.finish_claim(claim, resource_ids=resource_ids, error_code=error_code,
+            **({"reject_frozen_snapshot":bool(error_code and preflight_failed)}
+               if getattr(self.job_repo,"supports_frozen_rejection",False) else {}))
+        if (finished and error_code and learner and self.mastery_service
+                and getattr(self.job_repo.get(claim.run_id),"job_status",None)=="failed"):
             self.mastery_service.release_failed_generation(learner, run_id=claim.run_id)
         return finished
 
@@ -556,21 +586,28 @@ class GenerationJobService:
             effective_batch_id = batch_id or (job.batch_id if job else run_id)
             snapshot = metadata.get("dispatch_snapshot") or {}
             retry_context = snapshot.get("resource_retry_context")
+            lecture = {}
             if snapshot:
-                version = snapshot.get("workflow_version")
-                if (version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION}
-                        or (version == RESOURCE_RETRY_WORKFLOW_VERSION) != (retry_context is not None)):
+                version, lecture = resolve_lecture_dispatch(snapshot)
+                if (version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}
+                        or (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (retry_context is not None)):
                     raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
             if retry_context is not None:
                 learner = LearnerProfile.model_validate(snapshot["learner"])
                 if canonical_hash(req.model_dump(mode="json")) != snapshot.get("request_hash"):
                     raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            private = snapshot_fields(snapshot)
+            policy = policy_from_input({"include_claim_check": req.include_claim_check, **private})
+            if snapshot and ((version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None)):
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
             response = self.generation_service.generate_with_run_id(
                 learner,
                 req,
                 run_id=run_id,
                 batch_id=effective_batch_id,
                 **({"resource_retry_context": retry_context} if retry_context is not None else {}),
+                **({"claim_extraction_snapshot": private} if hasattr(self.generation_service,"freeze_claim_extraction") else {}),
+                **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": snapshot or None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
             )
             self.job_repo.mark_completed(
                 run_id,

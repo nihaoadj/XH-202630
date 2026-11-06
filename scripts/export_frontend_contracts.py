@@ -23,6 +23,7 @@ from app.models.learning_documents.schemas import (
     GenerationJobListResponse, GenerationJobStatusResponse,
 )
 from app.models.reports.contracts import CurrentReportResponse, ReportInvalidation, ReportResponse, ReportWindow
+from app.models.shared.llm_accounting import TaskLLMAccountingResponseV1
 from app.models.shared.persistence import RunStatus, RunSummary, RunTimeline, WorkflowEventType
 from app.models.shared.streaming import PublicRunEvent, PublicRunSnapshot
 
@@ -33,7 +34,7 @@ MODELS = (
     ContinueResourceBatchRequest, GenerateRequest, GenerationJobCreateResponse,
     GenerationJobListResponse, GenerationJobStatusResponse, CurrentReportResponse,
     ReportInvalidation, ReportResponse, ReportWindow, RunSummary, RunTimeline,
-    PublicRunEvent, PublicRunSnapshot,
+    PublicRunEvent, PublicRunSnapshot, TaskLLMAccountingResponseV1,
 )
 OUTPUT = ROOT / "frontend/src/contracts/generated"
 ANNOTATIONS = {"title", "description", "default", "format", "minLength", "maxLength", "pattern",

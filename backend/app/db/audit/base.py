@@ -30,7 +30,15 @@ class RunNotFound(PersistenceError):
 
 
 class BaseAuditRepository(ABC):
+    def validate_review_execution_epoch(self, run_id: str, owner: str, epoch: int) -> None:
+        """Repositories without a durable dispatch ledger cannot verify an epoch."""
+        raise PersistenceConflict("review execution epoch cannot be verified")
+
     """持久化 Agent 过程与资源审核结果的抽象接口。"""
+
+    def get_step_review_audit(self, run_id: str, step_id: str):
+        """Internal only; legacy custom repositories may have no private ledger."""
+        return None
 
     @abstractmethod
     def save_run(
@@ -154,6 +162,9 @@ class BaseAuditRepository(ABC):
         pass
 
     @abstractmethod
+    def get_run_creation_snapshot(self, run_id: str) -> dict:
+        raise PersistenceError("creation snapshot unavailable")
+
     def get_run(self, run_id: str) -> AgentRunRecord | None:
         pass
 

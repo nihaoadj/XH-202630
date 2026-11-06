@@ -1,0 +1,1 @@
+analysis_id,baseline_id,candidate_id,metric_id,metric_version,stratum,unit,baseline_value,candidate_value,baseline_denominator,candidate_denominator,absolute_delta,delta_unit,relative_improvement,ci_low,ci_high,n_pairs,independent_groups,criterion_ref,criterion_met,conclusion,notes

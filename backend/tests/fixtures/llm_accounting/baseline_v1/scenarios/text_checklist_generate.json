@@ -1,0 +1,99 @@
+{
+  "observations": [
+    {
+      "attempt_complete": true,
+      "attempts": [
+        {
+          "error_category": null,
+          "error_code": null,
+          "gateway_status": "success",
+          "helper_error_class": null,
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": true,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 1,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        }
+      ],
+      "attribution": "resource",
+      "attribution_complete": true,
+      "capture_complete": true,
+      "domain": "learning_documents",
+      "error_class": null,
+      "error_code": null,
+      "gateway_attempt_count": 1,
+      "gateway_retry_count": 0,
+      "known_input_tokens": 0,
+      "known_llm_duration_ms": 0,
+      "known_output_tokens": 0,
+      "known_total_tokens": 0,
+      "model_name": "fake-model",
+      "node_name": "ReviewChecklistAgent",
+      "observation_id": 1,
+      "observed_attempt_count": 1,
+      "outcome": "success",
+      "resource_labels": [
+        "4f786158-0c23-50f9-8085-4f20c0d6eba5",
+        "复习清单"
+      ],
+      "run_id": "run-new-resource-type",
+      "schema_name": "ReviewPracticeNodeBlockV2",
+      "schema_version": "llm-accounting-v1",
+      "segment_id": "segment",
+      "source_call_id": "<call-1>",
+      "stage": null,
+      "stage_sequence": null,
+      "step_id": "<step-1>:node:1",
+      "structured_output_mode": "function_calling",
+      "usage_complete": false,
+      "usage_input_tokens": null,
+      "usage_mismatch": false,
+      "usage_output_tokens": null,
+      "usage_total_tokens": null
+    }
+  ],
+  "projection": {
+    "resource_type": "复习清单",
+    "source_evidence_ids": [
+      "ev-new-resource-type"
+    ]
+  },
+  "requests": [
+    {
+      "max_output_tokens": 16384,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是 ReviewChecklistAgent。一次只能为一个能力节点生成主动回忆训练的严格 JSON。\n只使用输入的当前节点 Evidence 和允许知识点；不得使用常识补全、相邻节点或未冻结的前置知识。\n必须严格保持当前 ReviewPracticeNodeBlockV2 结构和字段，不得新增、删除、重命名字段，也不得输出 Markdown、代码围栏或额外文字。\n本清单的标题由服务端按批次主题生成；当前节点内容只需准确覆盖输入的 skill_node_id、skill_node_name 和 allowed_knowledge_points，\n不要因为清单标题包含更宽的批次主题而扩展内容，也不要因此判定当前节点内容与标题不匹配。\n目标配额是 4 道闭卷回忆、4 道概念辨析和 2 道正反例辨认；正反例放入 example_recognition_questions 数组。\n证据不足时可以减量，但每个未生成槽位必须写入 omitted_slots，原因只能是 INSUFFICIENT_DISTINCT_EVIDENCE 或 NO_EXPLICIT_CONCEPT_BOUNDARY；闭卷回忆\n和概念辨析各至少保留一道。概念辨析有两道以上时必须同时含真、假陈述；错误陈述和反例只可违反 Evidence\n明确支持的一个关键边界。每题必须绑定至少一个当前节点 Evidence。还必须输出 knowledge_summary：用 3—5 句、至少 100 字综合概括\n本节点的核心概念、作用、关键边界和可执行的复习提醒，不得新增 Evidence 未支持的事实；summary_evidence_ids 必须列出\n该小结所依据的当前节点 Evidence，且必须是 evidence_ids 的子集。\nJSON 示例（仅示意字段与嵌套结构；实际值必须来自输入白名单）：\n{\n  \"schema_version\": \"2.0\",\n  \"skill_node_id\": \"node-001\",\n  \"skill_node_name\": \"示例节点\",\n  \"recall_questions\": [\n    {\n      \"local_id\": \"recall-1\",\n      \"prompt\": \"说明 Evidence 明确支持的概念。\",\n      \"reference_answer\": \"Evidence 中的原文结论。\",\n      \"explanation\": \"依据该 Evidence 核对。\",\n      \"evidence_ids\": [\"ev-001\"],\n      \"pass_criteria\": \"能准确复述核心结论。\"\n    }\n  ],\n  \"distinction_questions\": [\n    {\n      \"local_id\": \"distinction-1\",\n      \"statement\": \"Evidence 明确支持的陈述。\",\n      \"truth_value\": true,\n      \"correction\": \"无需纠正。\",\n      \"explanation\": \"与 Evidence 一致。\",\n      \"evidence_ids\": [\"ev-001\"],\n      \"pass_criteria\": \"能判断并说明依据。\"\n    }\n  ],\n  \"example_recognition_questions\": [],\n  \"omitted_slots\": [\n    {\"local_id\": \"recall-2\", \"reason\": \"INSUFFICIENT_DISTINCT_EVIDENCE\"},\n    {\"local_id\": \"recall-3\", \"reason\": \"INSUFFICIENT_DISTINCT_EVIDENCE\"},\n    {\"local_id\": \"recall-4\", \"reason\": \"INSUFFICIENT_DISTINCT_EVIDENCE\"},\n    {\"local_id\": \"distinction-2\", \"reason\": \"NO_EXPLICIT_CONCEPT_BOUNDARY\"},\n    {\"local_id\": \"distinction-3\", \"reason\": \"NO_EXPLICIT_CONCEPT_BOUNDARY\"},\n    {\"local_id\": \"distinction-4\", \"reason\": \"NO_EXPLICIT_CONCEPT_BOUNDARY\"},\n    {\"local_id\": \"example-1\", \"reason\": \"NO_EXPLICIT_CONCEPT_BOUNDARY\"},\n    {\"local_id\": \"example-2\", \"reason\": \"NO_EXPLICIT_CONCEPT_BOUNDARY\"}\n  ],\n  \"knowledge_summary\": \"这里填入不少于 100 字的综合概括，只总结当前节点 Evidence 已明确支持的核心概念、作用、关键边界、适用条件、常见误区和可执行的复习提醒，不引入任何 Evidence 未出现的事实，也不扩展到相邻能力节点。\",\n  \"summary_evidence_ids\": [\"ev-001\"],\n  \"evidence_ids\": [\"ev-001\"]\n}\n不要输出 Markdown、代码围栏或额外文字。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"schema_version\":\"2.0\",\"skill_node_id\":\"skill-search\",\"skill_node_name\":\"skill-search\",\"allowed_knowledge_points\":[\"skill-search\"],\"allowed_evidence_ids\":[\"ev-new-resource-type\"],\"evidence\":[{\"schema_version\":\"1.0\",\"evidence_id\":\"ev-new-resource-type\",\"knowledge_base_id\":\"kb-fixture\",\"document_id\":\"doc-fixture\",\"document_version\":\"docv-fixture\",\"chunk_id\":\"chunk-fixture\",\"query\":\"测试查询\",\"query_hash\":\"80996e730cd1001a56e540b6f5481e406f743cbd480952a0c0556a160b9095b1\",\"query_rank\":1,\"rank\":1,\"raw_score\":0.2,\"score_kind\":\"distance\",\"normalized_score\":0.9,\"excerpt\":\"可信知识片段\",\"excerpt_hash\":\"706cd85410c10eb66cbb2369206f0702cdd78099084110997f669d0600107a8b\",\"locator\":{\"knowledge_base_id\":\"kb-fixture\",\"document_id\":\"doc-fixture\",\"document_version\":\"docv-fixture\",\"chunk_id\":\"chunk-fixture\",\"source_type\":\"markdown\",\"source_path\":\"source.md\",\"title\":\"Fixture\",\"section\":\"Fixture\",\"page\":null,\"line_start\":1,\"line_end\":1,\"timestamp_start_ms\":null,\"timestamp_end_ms\":null},\"config_hash\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"retrieved_at\":\"2026-01-01T00:00:00Z\"}],\"difficulty\":\"中级\"}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.models.shared.agent_contracts.ReviewPracticeNodeBlockV2>",
+      "temperature": 0.2,
+      "timeout_seconds": 5.0
+    }
+  ]
+}

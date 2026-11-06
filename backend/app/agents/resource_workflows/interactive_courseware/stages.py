@@ -104,8 +104,34 @@ def resolve_scene_candidates(
         results = [(index, scene, None) for index, scene in enumerate(scenes)]
         ai_enabled = any((row.get("agent_version") or "").startswith("ai") for row in recovered_scenes)
     elif ai_enabled and len(scenes) > 1:
+        # Bypass LLM-call accounting (T41): the scene pool must observe the
+        # same run segment from both worker threads.  Each work item runs in
+        # a copied context (ContextVar values never auto-cross threads) and
+        # binds an exclusive scene scope; concurrency/order is unchanged.
+        from app.agents.shared.llm_accounting import (
+            capture_context,
+            run_with_captured_context,
+            stage_labeled_scope,
+        )
+
+        # Each worker needs its own copy of the parent context (a Context
+        # object can only be entered once, and two threads must never run the
+        # same Context).  Capture one per work item in the parent thread.
+        parent_contexts = [capture_context() for _ in scenes]
+
+        def _compose_with_scene_scope(item: tuple[int, dict[str, Any]]):
+            index, scene = item
+            scene_label = scene.get("scene_id") or f"scene-index-{index}"
+            with stage_labeled_scope("composing", labels=[scene_label]):
+                return compose_one(index, scene)
+
         with ThreadPoolExecutor(max_workers=min(2, len(scenes)), thread_name_prefix="courseware-scene") as executor:
-            results = list(executor.map(lambda item: compose_one(*item), enumerate(scenes)))
+            results = list(
+                executor.map(
+                    lambda pair: run_with_captured_context(pair[0], _compose_with_scene_scope, pair[1]),
+                    zip(parent_contexts, enumerate(scenes)),
+                )
+            )
     else:
         results = [compose_one(index, scene) for index, scene in enumerate(scenes)]
     enhanced_scenes: list[dict[str, Any] | None] = [None] * len(scenes)

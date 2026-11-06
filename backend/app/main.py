@@ -122,7 +122,21 @@ async def lifespan(app: FastAPI):
     # Courseware execution is deliberately owned by the standalone
     # ``backend/scripts/courseware_worker.py`` process. The Web process only
     # serves APIs/SSE and must not run long tasks in its lifespan.
-    yield
+    # Bypass LLM-call accounting (T41): start the optional writer child at an
+    # explicit lifecycle point; failures only disable persistence.
+    from app.services.runs.llm_accounting_runtime import (
+        start_llm_accounting_runtime,
+        stop_llm_accounting_runtime,
+    )
+
+    try:
+        start_llm_accounting_runtime()
+    except Exception:
+        logger.warning("llm-accounting runtime startup failed type=runtime_start")
+    try:
+        yield
+    finally:
+        stop_llm_accounting_runtime()
 
 
 app = FastAPI(

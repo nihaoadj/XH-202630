@@ -1,27 +1,33 @@
-"""Independent, answer-aware semantic scope review for structured assessments."""
+"""Answer-aware assessment validation; invocation belongs to the public review package."""
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
-from app.core.llm.gateway import LLMGateway
 from app.core.retrieval.knowledge_base import load_knowledge_base_manifest
-from app.models.shared.agent_contracts import AssessmentScopeReviewV1
+from app.models.reviews.review_audit import ReviewPolicySnapshotV1
 from app.models.shared.llm import LLMCallContext
+from app.agents.resource_workflows.learning_documents.reviewing import (
+    ReviewAuditInput, ReviewCallCollector, build_review_prompt, build_review_request,
+    invoke_review, normalize_review_result, resolve_review_profile,
+)
 
 
-SCOPE_PROMPT = """你是独立的结构化测评范围审核器。逐题审核题干、选项、正确答案、参考答案和 rubric。
-每题只能考查其指定能力节点及允许知识点；不得把相邻或更高阶节点内容伪装成允许标签。
-只能依据冻结 evidence 判定。每个 question_id 必须恰好输出一次：
-- in_scope：题目完全属于当前节点且有指定 evidence 支持；
-- out_of_scope：题目涉及其他能力节点或不属于允许知识点；
-- insufficient_evidence：当前 evidence 无法支撑题干、答案或 rubric。
-in_scope 必须返回恰好一个该题允许的、直接支持题干与答案的 supported_evidence_id；其他结果不得返回不在该题白名单的 evidence。
-reason 只写一条不超过 80 字的判定理由，不得复述题干、答案、rubric 或 evidence 原文。只返回严格 JSON。"""
+_FROZEN_CATALOG: ContextVar[dict | None] = ContextVar("assessment_review_catalog", default=None)
+
+
+@contextmanager
+def assessment_catalog_snapshot(nodes):
+    """Inject frozen catalog data for isolated replay without consulting settings."""
+    token = _FROZEN_CATALOG.set(deepcopy(nodes))
+    try:
+        yield
+    finally:
+        _FROZEN_CATALOG.reset(token)
 
 
 @dataclass(frozen=True)
@@ -31,9 +37,14 @@ class AssessmentScopeOutcome:
     issues: list[dict[str, Any]]
     revision_instructions: list[dict[str, Any]]
     trace_metadata: dict[str, Any]
+    summary: dict[str, Any]
+    llm_result: Any
 
 
 def _catalog_nodes() -> dict[str, dict[str, Any]]:
+    frozen = _FROZEN_CATALOG.get()
+    if frozen is not None:
+        return deepcopy(frozen)
     try:
         rows = load_knowledge_base_manifest().get("skill_nodes", [])
     except Exception:
@@ -44,7 +55,6 @@ def _catalog_nodes() -> dict[str, dict[str, Any]]:
         if isinstance(row, dict) and str(row.get("node_id") or "").strip()
     }
 
-
 def _questions(payload: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for block in payload.get("node_blocks", []):
@@ -54,16 +64,7 @@ def _questions(payload: dict[str, Any]) -> list[dict[str, Any]]:
                              "skill_node_name": block.get("skill_node_name")})
     return rows
 
-
-def review_assessment_scope(
-    *,
-    resource,
-    evidence: list,
-    target_skill_nodes: list[str],
-    llm_gateway: LLMGateway,
-    context: LLMCallContext,
-) -> AssessmentScopeOutcome:
-    """Review the canonical payload; never use the redacted Markdown projection."""
+def prepare_assessment_scope(*, resource, evidence, target_skill_nodes):
     payload = resource.assessment_payload
     if not isinstance(payload, dict):
         raise ValueError("structured assessment payload missing")
@@ -105,40 +106,102 @@ def review_assessment_scope(
         {"evidence_id": item.evidence_id, "excerpt": item.excerpt}
         for item in evidence if item.evidence_id in set().union(*allowed_evidence_by_question.values())
     ]
-    result = llm_gateway.invoke_structured(
-        messages=[SystemMessage(content=SCOPE_PROMPT), HumanMessage(content=json.dumps({
-            "resource_id": resource.resource_id, "questions": prompt_questions,
-            "frozen_evidence": scoped_evidence,
-        }, ensure_ascii=False))],
-        output_schema=AssessmentScopeReviewV1,
-        context=context,
-        options=llm_gateway.options_for("assessment_scope_reviewer", temperature=0.0),
-    )
-    findings = [item.model_dump(mode="json") for item in result.output.findings]
+    return ({"resource_id": resource.resource_id, "questions": prompt_questions,
+             "frozen_evidence": scoped_evidence}, questions, allowed_evidence_by_question)
+
+
+def validate_assessment_findings(*, findings, questions, allowed_evidence_by_question, combined):
+    expected_ids = {q["question_id"] for q in questions}
     by_id = {item["question_id"]: item for item in findings}
     if set(by_id) != expected_ids or len(by_id) != len(findings):
-        raise ValueError("assessment scope findings must cover each question exactly once")
-    invalid_evidence = [
-        item["question_id"] for item in findings
-        if set(item["supported_evidence_ids"]) - allowed_evidence_by_question[item["question_id"]]
-        or (item["decision"] == "in_scope" and not item["supported_evidence_ids"])
-    ]
-    if invalid_evidence:
-        raise ValueError("assessment scope finding evidence invalid")
-    failed = [item for item in findings if item["decision"] != "in_scope"]
-    issues = [{
-        "code": "coverage_gap" if item["decision"] == "out_of_scope" else "evidence_gap",
-        "severity": "high", "resource_type": "分阶测试题", "resource_id": resource.resource_id,
-        "knowledge_point": next(question["skill_node_id"] for question in questions if question["question_id"] == item["question_id"]),
-        "description": f"{item['question_id']}：{item['reason']}",
-    } for item in failed[:3]]
-    instructions = ([{
-        "issue_codes": sorted({item["code"] for item in issues}),
-        "target_resource_type": "分阶测试题",
-        "action": "仅围绕冻结能力节点、允许知识点和题目 evidence 重建越界或证据不足的题目。",
-        "priority": 1,
-    }] if issues else [])
+        raise ValueError("assessment findings must cover each question exactly once")
+    normalized = []
+    # Always use canonical question order, independently of model output order.
+    for question in questions:
+        item = by_id[question["question_id"]]
+        decision = item["scope_decision"] if combined else item["decision"]
+        supported = item["supported_evidence_ids"]
+        if (len(supported) > 1 or len(supported) != len(set(supported))
+                or set(supported) - allowed_evidence_by_question[question["question_id"]]
+                or (decision == "in_scope" and len(supported) != 1)):
+            raise ValueError("assessment finding evidence invalid")
+        codes = []
+        reasons = []
+        if decision != "in_scope":
+            codes.append("coverage_gap" if decision == "out_of_scope" else "evidence_gap")
+            reasons.append("超出冻结节点范围" if decision == "out_of_scope" else "该题证据不足")
+        if combined:
+            objective = question["question_type"] in {"single_choice", "multiple_choice"}
+            if objective != (item["rubric_check"] == "not_applicable"):
+                raise ValueError("assessment rubric status incompatible with question type")
+            if item["answer_check"] != "pass":
+                codes.append("factual_risk" if item["answer_check"] == "fail" else "evidence_gap")
+                reasons.append("答案集合错误" if objective else "参考答案依据不足")
+            if item["clarity_check"] != "pass":
+                codes.append("structure_quality")
+                reasons.append("题干或选项无法判定")
+            if item["rubric_check"] not in {"pass", "not_applicable"}:
+                codes.append("evidence_gap" if item["rubric_check"] == "insufficient_evidence" else "structure_quality")
+                reasons.append("评分标准错误或依据不足")
+        # Reasons are controlled labels, never excerpts echoed by a model.
+        normalized.append({
+            "question_id": question["question_id"], "skill_node_id": question["skill_node_id"],
+            "scope_decision": decision, "supported_evidence_ids": supported,
+            "answer_check": item.get("answer_check"), "clarity_check": item.get("clarity_check"),
+            "rubric_check": item.get("rubric_check"), "codes": list(dict.fromkeys(codes)),
+            "reason": "；".join(reasons) or "符合冻结审核约束",
+        })
+    return normalized
+
+
+def _review_assessment(*, resource, evidence, target_skill_nodes, llm_gateway, context,
+                       collector=None, review_id=None, policy=None, combined=False):
+    policy = ReviewPolicySnapshotV1.model_validate(policy or {})
+    collector = collector if collector is not None else ReviewCallCollector()
+    scope_payload, questions, allowed = prepare_assessment_scope(
+        resource=resource, evidence=evidence, target_skill_nodes=target_skill_nodes)
+    if combined:
+        scope_payload = {**scope_payload, "assessment_package": resource.assessment_payload,
+                         "target_skill_nodes": list(target_skill_nodes), "difficulty": resource.difficulty}
+    phase = "assessment_combined_v2" if combined else "assessment_scope_v1"
+    profile = resolve_review_profile(resource_type=resource.resource_type, phase=phase, policy=policy)
+    bundle = build_review_prompt(profile=profile)
+    request = build_review_request(profile=profile, prompt_bundle=bundle,
+        audit_input=ReviewAuditInput(resource=resource, scope_payload=scope_payload, policy=policy))
+    result = invoke_review(request=request, llm_gateway=llm_gateway, call_context=context,
+                           collector=collector, review_id=review_id)
+    try:
+        findings = validate_assessment_findings(
+            findings=[item.model_dump(mode="json") for item in result.output.findings],
+            questions=questions, allowed_evidence_by_question=allowed, combined=combined)
+    except ValueError:
+        collector.invalid_result(call_id=result.call_id)
+        raise
+    summary = result.output.summary if combined else {
+        "decision": "approve", "hallucination_score": 0.0, "issues": [],
+        "difficulty_match": True, "coverage_rate": 0.0 if any(f["codes"] for f in findings) else 1.0,
+        "suggestion": "逐题范围审核完成。", "revision_instructions": [],
+    }
+    try:
+        summary = normalize_review_result(output=summary, findings=findings, resource_context=resource)
+    except ValueError:
+        collector.invalid_result(call_id=result.call_id)
+        raise
     return AssessmentScopeOutcome(
-        passed=not failed, findings=findings, issues=issues,
-        revision_instructions=instructions, trace_metadata=result.trace_metadata(),
+        passed=not any(f["codes"] for f in findings), findings=findings,
+        issues=summary["issues"], revision_instructions=summary["revision_instructions"],
+        trace_metadata=result.trace_metadata(), summary=summary, llm_result=result,
     )
+
+
+def review_assessment_scope(*, resource, evidence, target_skill_nodes, llm_gateway,
+                            context: LLMCallContext, collector=None, review_id=None, policy=None):
+    return _review_assessment(resource=resource, evidence=evidence, target_skill_nodes=target_skill_nodes,
+        llm_gateway=llm_gateway, context=context, collector=collector, review_id=review_id, policy=policy)
+
+
+def review_assessment_combined(*, resource, evidence, target_skill_nodes, llm_gateway,
+                               context: LLMCallContext, collector=None, review_id=None, policy=None):
+    return _review_assessment(resource=resource, evidence=evidence, target_skill_nodes=target_skill_nodes,
+        llm_gateway=llm_gateway, context=context, collector=collector, review_id=review_id,
+        policy=policy, combined=True)

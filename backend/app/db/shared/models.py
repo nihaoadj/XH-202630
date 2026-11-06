@@ -959,6 +959,7 @@ class AgentRunORM(Base):
     __tablename__ = "agent_runs"
 
     run_id = Column(String(128), primary_key=True)
+    claim_extraction_mode = Column(String(32), nullable=False, default="legacy_v3", server_default="legacy_v3")
     schema_version = Column(String(16), nullable=False, default="1.0")
     learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=True, index=True)
     knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=True, index=True)
@@ -986,6 +987,20 @@ class AgentRunORM(Base):
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     ended_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ClaimExtractionRunORM(Base):
+    __tablename__ = "claim_extraction_runs"
+
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id", ondelete="CASCADE"), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    policy_hash = Column(String(64), nullable=False)
+    policy_json = Column(JSON, nullable=False)
+    revision = Column(Integer, nullable=False, default=0)
+    state_hash = Column(String(64), nullable=False)
+    state_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
 
 
 class AgentStepORM(Base):

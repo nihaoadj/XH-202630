@@ -1,11 +1,17 @@
 # API 文档
 
+T41 修复口径：`known_*` 按字段分别累计，其他字段未知不丢弃已知输入用量；`complete_*` 仅在所有调用的该字段可靠时返回，否则为 null。共享调用仅进入一个以规范资源集合标识的 shared 分区，分区可加总，不再对每个资源标签重复累计。缺失计量库查询不创建目录或文件；异步 writer 正常空闲不会退出，缺少 end 的片段不能封为完整。全链路实施前历史基线仍未证明，不能把局部回归通过当作完整等价验收。
+
+T41 LLM 调用旁路计量：新增两个只读端点，复用既有认证/画像可见性，不改变旧接口行为。`GET /api/runs/{run_id}/llm-accounting`（文本任务，额外经 `run.learner_id` 走画像访问校验）与 `GET /api/resources/courseware/jobs/{run_id}/llm-accounting`（课件任务，沿用 `_authorized_job` 等价校验）；不存在/不可见统一 404，非法参数 422。参数 `include_calls=false`、`stage`（受控枚举）、`cursor`（不透明复合游标）、`limit`（1..100，默认 20）。响应含 `availability`（available/partial/pending/not_recorded/unavailable）、capture/attempt/usage/attribution 完整性、`coverage_complete`/`as_of`、`task_summary`/`stage_summaries`/`resource_partition_summaries`、当前页 `segments`/可选 `calls`、`next_cursor`/`has_more` 与 `incomplete_reasons`。查询零写入，缺库/损坏返回 200+unavailable/partial。旧 `GenerateResponse`/`RunTimeline`/`JobDetail` 与报告字段不变，旧扁平 trace 明确为历史口径，新旧不相加。
+
 T29兼容说明：HTTP/DTO/状态码不变。新legacy学习检索使用`learning-tasks-v2`/`source-balanced-global-v2`内部版本；TopK在完整候选校验后参与最终预算`min(max_evidence, top_k_per_query×query_count)`。该版本Evidence.query_rank表示owner在完整有界窗口的名次，可能超过单query TopK，但不超过20；最终Evidence.rank仍连续，最多8条、每条摘录最多1200字符。旧Tutor/E1和冻结证据维持旧语义；现有retrieval_profile只增加追踪字段，不新增端点。
 
 > 项目编号：XH-202630
 > 文档版本：2.3
-> 文档更新时间：2026-10-23
+> 文档更新时间：2026-10-27
 > 说明：本文档以当前代码实现为准，覆盖 `backend/app/api` 中已经启用的核心接口。
+
+资源分区按调用归属可相加：`resource` 只进入 `resource_labels[0]` 的一个 `exclusive` 分区，其余标签（类型、批次、review ID）保留为描述明细；`resource_set` 的标签集合整体进入一个 `shared` 分区，其余进入 `unallocated`。新文本调用在产物物化后将临时 spec 主标签绑定实际 `resource_id`，审核/Claim 以实际资源 ID 为主标签；未物化的调用保留 spec 标识。历史记录不回写 ID 映射，但查询同样只按主标签累计，避免附加标签重复计数。
 
 ## 1. 基本信息
 
@@ -291,8 +297,11 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 - `include_review`
 - `include_claim_check`
 - `max_iterations`（默认 `2`，表示首次生成之外最多进行两次普通审核返工）
-- `claim_max_iterations`（默认 `0`，当前 Claim 审核只判定、不自动返工；显式传入非零值可开启有界返工）
-- `constraints`
+- `claim_max_iterations`（默认 `1`，Claim专用返工最多1次；显式 `0` 禁用。额度为0或用尽后转人工复核、保持未发布，不借用普通返工额度）
+
+Claim 抽取策略属于服务端私有策略，不增加GenerateRequest、constraints、响应或事件字段。默认legacy_v3，新策略neutral_estimate_v1在提交时冻结2.0私有policy和独立dispatch，旧Worker拒绝未知版本；无需外部tokenizer/profile或校准PASS。无效窗口/估算配置沿WORKFLOW_CONTRACT_INVALID拒绝；抽取零候选、超限或范围不完整沿原Claim失败路径，不裁候选、不拆Judge。旧neutral_batch_v1快照保留读取但受控拒绝执行，重试创建新run并冻结新策略。实际用量超过估算时如实入账、保留有效结果并限制后续请求，不增加公开字段；私有批次/票据/会话不进入detail/timeline/events/SSE。公开Claim沿原span、ID、Judge evidence_ids及指标语义，complete不表示全文事实已召回。T37 的密度装箱子契约（`density_batching`）同样属于私有快照：不进入 GenerateRequest、响应、detail/timeline/events/SSE 或 Markdown，旧 2.0 快照序列化时省略该键以保持原 hash；它只改变批次划分，不改变公开状态码、Claim DTO 或判定语义。
+
+T42 的 `source_locating` 子契约与 `location_diagnostics` 定位诊断同属私有字段：不进 GenerateRequest、响应、`GET /api/runs/{run_id}/claims` 及其余 detail/timeline/events/SSE，也不进 ClaimRecord 或前端导出契约。公开的 `source_text`/`source_start`/`source_end` 语义不变——始终是从冻结正文截取的权威原文与全文半开区间（由程序定位并回写），HTTP 状态码、Claim DTO 字段与 Judge 判定语义均不改变。
 
 示例：
 
@@ -702,8 +711,11 @@ GenerationJob 预分配 run_id
 关键契约：
 
 - `max_iterations` 是最大业务返工次数，不包含首次生成；LLM 技术重试不增加该值。
-- `claim_max_iterations` 默认 `0`，当前 Claim 审核只判定、不自动返工；显式传入非零值时，才启用 Claim 审核发现事实/证据问题后的定向返工，不占用 `max_iterations`。运行状态分别记录 `revision_count` 与 `claim_revision_count`。
+- `claim_max_iterations`默认1，允许一次Claim专用返工且不占普通`max_iterations`。显式0或额度耗尽时，Claim要求修订的资源进入人工复核并保持未发布，不再退到普通返工。普通审核自身的返工仍由`max_iterations`控制。运行状态分别记录 `revision_count` 与 `claim_revision_count`。
 - Reviewer 决策为 `approve | revise | reject | human_review`。
+- 实操结构通过后执行一次语义审核；测评默认 `two_stage_v1`，合并候选未启用。审核策略只由服务端冻结，公开请求不能指定。此次不新增 HTTP 路径、DTO 字段或事件 payload；`review_audit_v1`、逐题 findings、策略快照和含答案题卷为内部数据，不经 ReviewSummary、公开 AgentTrace 或 timeline 输出。
+- 结构化测评的摘要描述与修订动作由程序按原问题码和合法题号生成受控文案，保留决策、严重性、评分及优先级，避免模型在自由文本中回显内部题干或答案。
+- 公开 trace 的 `input_tokens/output_tokens/total_tokens` 继续表示原最后一次模型调用，不能当作多资源或两阶段的总成本；私有 ledger 才按各逻辑调用汇总，未知用量不以零替代。历史实操的结构批准不证明完成了新增语义审核或实际执行。
 - `issues` 是带 code、severity、目标资源/知识点的结构化数组。
 - `revision_instructions` 包含 issue_codes、target_resource_type、action、priority 和系统生成的 instruction_id。
 - revise 必须携带可执行指令；指令无效、证据不足、Reviewer 异常或额度耗尽时进入 human_review。
@@ -966,3 +978,18 @@ POST /api/resources/courseware/jobs/batch
 ## 19. 复习清单 V2 互动课件兼容
 
 互动课件仍使用既有的创建、预览、学习事件和进度 HTTP 路径。选择含 `review_practice_payload` 的“复习清单”时，服务端自动生成 V2 主动回忆课件；学习事件只接受答案揭示与三态自评的受控状态，不新增作答提交接口。
+
+## 统一课件审核的私有边界
+
+`content_v1` 不增加公开 HTTP/DTO/认证/请求选项或事件字段。策略只由服务端在创建时冻结；请求幂等 hash 保持原公开语义，开关切换不拆分同一请求。初始 outbox 的私有 `content_review_binding` 与内部 spec 交叉核验；只有两处均无新策略时按 legacy 解释，任何单边丢失或版本不符均阻断。
+
+详细字段结论、批准值、原始依据、Prompt 与私有调用账本只在内部 JSON，detail/reviews/events/artifact 不透传它们。新审核异常使用既有任务隔离/发布阻断状态和受控错误类别；不公开模型自由输出中的原文。已发布资源读取保持只读，场景重试、Worker、刷新、publish 与 release coordinator 均核验相同内容门。
+
+
+T37 2026-11-05容量修复只涉及私有estimate结果合同与验收工具：支持冻结额度内最多128条候选，旧1.0仍64。公开HTTP/DTO/认证/错误码/事件与Claim判定语义不变，不新增审核绕过入口。到达claim_extract或job=completed均不等于Claim成功；私有验收报告须检查最终资源版本及完整判定。
+
+### T38 私有审核边界
+
+讲义问题账本、核销历史、冻结策略及 `review_audit_v2` 是内部数据，不新增公开 HTTP/DTO/SSE 字段。公开审核继续展示最多三条问题及一条修订摘要。`evidence_insufficient`、合同无效和无进展使用既有未发布/复核状态承载，不能视为通过；没有新增人工审核工作台。
+
+T39：HTTP/DTO/认证/状态码/事件契约不变。`lecture_issue_v2` 只影响讲义审核内部策略与私有审计（`review_audit_v3`），公开响应仍返回原受控摘要；不新增端点，不改 Claim 与发布接口。

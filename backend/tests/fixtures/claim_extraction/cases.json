@@ -1,0 +1,246 @@
+[
+  {
+    "id": "short",
+    "text": "A fact.",
+    "expected": {
+      "status": "completed",
+      "candidates": 1,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "eleventh",
+    "text": "Fact 0.\n\nFact 1.\n\nFact 2.\n\nFact 3.\n\nFact 4.\n\nFact 5.\n\nFact 6.\n\nFact 7.\n\nFact 8.\n\nFact 9.\n\nFact 10.",
+    "expected": {
+      "status": "completed",
+      "candidates": 11,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "twentyfirst",
+    "text": "Fact 0.\n\nFact 1.\n\nFact 2.\n\nFact 3.\n\nFact 4.\n\nFact 5.\n\nFact 6.\n\nFact 7.\n\nFact 8.\n\nFact 9.\n\nFact 10.\n\nFact 11.\n\nFact 12.\n\nFact 13.\n\nFact 14.\n\nFact 15.\n\nFact 16.\n\nFact 17.\n\nFact 18.\n\nFact 19.\n\nFact 20.",
+    "expected": {
+      "status": "completed",
+      "candidates": 21,
+      "judge_calls": 1
+    }
+  },
+  {
+    "id": "tail",
+    "text": "# Topic\n\nFirst fact.\n\nFinal unsupported fact.",
+    "expected": {
+      "status": "completed",
+      "candidates": 2,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "case-sensitive",
+    "text": "Token differs from token.\n\nTOKEN is a distinct identifier.",
+    "expected": {
+      "status": "completed",
+      "candidates": 2,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "repeated-location",
+    "text": "A fact.\n\nA fact.",
+    "expected": {
+      "status": "completed",
+      "candidates": 2,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "conditional-negative",
+    "text": "If x > 0, flag is false.\n\nVersion 2 does not support A.",
+    "expected": {
+      "status": "completed",
+      "candidates": 2,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "steps",
+    "text": "- Step one explains a factual condition.\n\n- Step two explains another fact.",
+    "expected": {
+      "status": "completed",
+      "candidates": 2,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "table",
+    "text": "| Name | Value |\n| --- | --- |\n| A | 1 |",
+    "expected": {
+      "status": "completed",
+      "candidates": 1,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "code",
+    "text": "```python\nx = \"a  b\"\n```",
+    "expected": {
+      "status": "completed",
+      "candidates": 1,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "crlf-unicode",
+    "text": "\r\n\t事实🙂\r\n内部  空白 \t\r\n",
+    "expected": {
+      "status": "completed",
+      "candidates": 1,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "unknown-markdown",
+    "text": "::: odd syntax\nUnrecognized tag <thing>.",
+    "expected": {
+      "status": "completed",
+      "candidates": 1,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "48-candidates",
+    "text": "Fact 00.\n\nFact 01.\n\nFact 02.\n\nFact 03.\n\nFact 04.\n\nFact 05.\n\nFact 06.\n\nFact 07.\n\nFact 08.\n\nFact 09.\n\nFact 10.\n\nFact 11.\n\nFact 12.\n\nFact 13.\n\nFact 14.\n\nFact 15.\n\nFact 16.\n\nFact 17.\n\nFact 18.\n\nFact 19.\n\nFact 20.\n\nFact 21.\n\nFact 22.\n\nFact 23.\n\nFact 24.\n\nFact 25.\n\nFact 26.\n\nFact 27.\n\nFact 28.\n\nFact 29.\n\nFact 30.\n\nFact 31.\n\nFact 32.\n\nFact 33.\n\nFact 34.\n\nFact 35.\n\nFact 36.\n\nFact 37.\n\nFact 38.\n\nFact 39.\n\nFact 40.\n\nFact 41.\n\nFact 42.\n\nFact 43.\n\nFact 44.\n\nFact 45.\n\nFact 46.\n\nFact 47.",
+    "expected": {
+      "status": "completed",
+      "candidates": 48,
+      "judge_calls": 1
+    }
+  },
+  {
+    "id": "zero-claims",
+    "text": "Fact with no safe split",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "fault": "zero",
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "missing-unit",
+    "text": "Fact with no safe split",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "fault": "missing_unit",
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "version-mixing",
+    "text": "Fact with no safe split",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "fault": "version",
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "candidate-cap",
+    "text": "Fact with no safe split",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "fault": "cap",
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "unknown-profile",
+    "text": "Fact with no safe split",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "fault": "unknown_profile",
+    "expected_extract_calls": 0
+  },
+  {
+    "id": "judge-window",
+    "text": "Fact with no safe split",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "fault": "judge_window",
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "unknown-usage",
+    "text": "A fact.",
+    "expected": {
+      "status": "completed",
+      "candidates": 1,
+      "judge_calls": 1
+    },
+    "fault": "unknown_usage",
+    "expected_extract_calls": 1
+  },
+  {
+    "id": "over-judge-capacity",
+    "text": "Fact 0.\n\nFact 1.\n\nFact 2.\n\nFact 3.\n\nFact 4.\n\nFact 5.\n\nFact 6.\n\nFact 7.\n\nFact 8.\n\nFact 9.\n\nFact 10.\n\nFact 11.\n\nFact 12.\n\nFact 13.\n\nFact 14.\n\nFact 15.\n\nFact 16.\n\nFact 17.\n\nFact 18.\n\nFact 19.\n\nFact 20.",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "settings": {
+      "claim_extraction_resource_claims": 16,
+      "claim_extraction_max_calls": 16
+    }
+  },
+  {
+    "id": "token-budget",
+    "text": "A fact.",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "settings": {
+      "claim_extraction_max_tokens": 1
+    },
+    "expected_extract_calls": 0
+  },
+  {
+    "id": "unsplittable-line",
+    "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "expected": {
+      "status": "failed",
+      "candidates": 0,
+      "judge_calls": 0
+    },
+    "settings": {
+      "claim_extraction_target_tokens": 80
+    },
+    "expected_extract_calls": 0
+  }
+]

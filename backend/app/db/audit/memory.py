@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -8,7 +9,11 @@ from typing import Any, Iterable, Optional
 from app.db.audit.base import (
     BaseAuditRepository,
     PersistenceConflict,
+    PersistenceError,
     RunNotFound,
+)
+from app.models.reviews.review_audit import (
+    audit_namespace, select_audit_envelope, public_review_payload, read_review_audit, step_review_audit_envelope,
 )
 from app.models.shared.persistence import (
     AgentRunRecord,
@@ -26,6 +31,8 @@ from app.models.shared.persistence import (
     require_run_transition,
 )
 from app.models.shared.workflow import normalize_review_status
+from app.db.claim.extraction import creation_snapshot
+from app.models.reviews.claim_extraction import LEGACY, NEUTRAL, validate_snapshot
 from app.models.learning_documents.schemas import ResourceClaim, ReviewSummary, SourceRef
 
 
@@ -38,20 +45,24 @@ class MemoryAuditRepository(BaseAuditRepository):
 
     def __init__(self):
         self.runs: dict[str, dict[str, Any]] = {}
+        self.claim_extraction_rows: dict[str, dict] = {}
         self.reviews: dict[str, dict[str, Any]] = {}
         self.steps: dict[str, dict[str, AgentStepRecord]] = {}
         self.events: dict[str, list[WorkflowEvent]] = {}
         self.checkpoints: dict[str, list[WorkflowCheckpoint]] = {}
         self.evidence: dict[str, dict[str, PersistedEvidenceSnapshot]] = {}
+        self.step_output_payloads: dict[str, dict[str, dict]] = {}
         self._lock = threading.RLock()
 
     def _require_run(self, run_id: str) -> dict[str, Any]:
         run = self.runs.get(run_id)
         if run is None:
             raise RunNotFound("run not found")
+        validate_snapshot(run.get("claim_extraction_mode", LEGACY), run.get("input_payload", {}), self.claim_extraction_rows.get(run_id))
         return run
 
     def _run_record(self, run: dict[str, Any]) -> AgentRunRecord:
+        validate_snapshot(run.get("claim_extraction_mode", LEGACY), run.get("input_payload", {}), self.claim_extraction_rows.get(run["run_id"]))
         fields = AgentRunRecord.model_fields
         return AgentRunRecord.model_validate({key: run.get(key) for key in fields})
 
@@ -114,6 +125,7 @@ class MemoryAuditRepository(BaseAuditRepository):
 
     def create_run(self, command: CreateRunCommand) -> AgentRunRecord:
         with self._lock:
+            extraction = creation_snapshot(command.run_id, command.request_snapshot)
             existing = self.runs.get(command.run_id)
             if existing is not None:
                 if existing["request_hash"] != command.request_hash:
@@ -121,6 +133,7 @@ class MemoryAuditRepository(BaseAuditRepository):
                 return self._run_record(existing)
             now = command.occurred_at
             run = {
+                "claim_extraction_mode": extraction.policy.strategy if extraction else LEGACY,
                 "schema_version": "1.0",
                 "run_id": command.run_id,
                 "learner_id": command.learner_id,
@@ -153,17 +166,26 @@ class MemoryAuditRepository(BaseAuditRepository):
                 "output_payload": {},
             }
             self.runs[command.run_id] = run
+            if extraction:
+                self.claim_extraction_rows[command.run_id] = extraction.model_dump(mode="json")
             self.steps[command.run_id] = {}
+            self.step_output_payloads[command.run_id] = {}
             self.events[command.run_id] = []
             self.checkpoints[command.run_id] = []
             self.evidence[command.run_id] = {}
-            self._append_event(
-                run,
-                WorkflowEventType.RUN_CREATED,
-                payload={"request_hash": command.request_hash},
-                occurred_at=now,
-                status=RunStatus.CREATED.value,
-            )
+            try:
+                self._append_event(
+                    run,
+                    WorkflowEventType.RUN_CREATED,
+                    payload={"request_hash": command.request_hash},
+                    occurred_at=now,
+                    status=RunStatus.CREATED.value,
+                )
+            except Exception:
+                for mapping in (self.runs, self.steps, self.step_output_payloads, self.events,
+                                self.checkpoints, self.evidence, self.claim_extraction_rows):
+                    mapping.pop(command.run_id, None)
+                raise
             return self._run_record(run)
 
     def start_run(
@@ -240,6 +262,21 @@ class MemoryAuditRepository(BaseAuditRepository):
             return record
 
     def complete_step(self, command: CompleteStepCommand) -> AgentStepRecord:
+        # Mirror SQL atomicity if event/evidence validation fails after mutation.
+        with self._lock:
+            names = ("runs", "steps", "events", "evidence", "step_output_payloads")
+            before = {name: copy.deepcopy(getattr(self, name).get(command.run_id)) for name in names}
+            try:
+                return self._complete_step(command)
+            except Exception:
+                for name, value in before.items():
+                    if value is None:
+                        getattr(self, name).pop(command.run_id, None)
+                    else:
+                        getattr(self, name)[command.run_id] = value
+                raise
+
+    def _complete_step(self, command: CompleteStepCommand) -> AgentStepRecord:
         with self._lock:
             run = self._require_run(command.run_id)
             current = self.steps[command.run_id].get(command.step_id)
@@ -285,6 +322,16 @@ class MemoryAuditRepository(BaseAuditRepository):
                 )
                 if trace.get(key) is not None
             }
+            try:
+                envelope = step_review_audit_envelope(
+                    audit=command.review_audit, run_id=command.run_id, step_id=command.step_id,
+                    node_name=current.node_name,
+                    generation_attempt=int(trace.get("attempt") or current.generation_attempt), trace=trace,
+                    request_snapshot=run["input_payload"])
+            except ValueError as exc:
+                raise PersistenceConflict("review audit validation failed") from exc
+            if envelope is not None:
+                payload["review_audit_hash"] = envelope["audit_hash"]
             payload_hash = canonical_hash(payload)
             if current.status != "running":
                 if current.payload_hash == payload_hash:
@@ -371,6 +418,10 @@ class MemoryAuditRepository(BaseAuditRepository):
                     int((command.ended_at - current.started_at).total_seconds() * 1000),
                 ),
             )
+            if envelope is not None:
+                old_payload = self.step_output_payloads[command.run_id].get(command.step_id, {})
+                self.step_output_payloads[command.run_id][command.step_id] = {
+                    **copy.deepcopy(old_payload), audit_namespace(envelope): copy.deepcopy(envelope)}
             self.steps[command.run_id][command.step_id] = record
             run["trace"].append(trace)
             run["generation_attempt"] = record.generation_attempt
@@ -422,6 +473,20 @@ class MemoryAuditRepository(BaseAuditRepository):
                     status=record.status,
                 )
             return record
+
+    def get_step_review_audit(self, run_id: str, step_id: str):
+        with self._lock:
+            run = self._require_run(run_id)
+            step = self.steps[run_id].get(step_id)
+            if step is None:
+                raise RunNotFound("step not found")
+            try:
+                return read_review_audit(
+                    envelope=select_audit_envelope(copy.deepcopy(self.step_output_payloads.get(run_id, {}).get(step_id, {}))),
+                    run_id=run_id, step_id=step_id, node_name=step.node_name, status=step.status,
+                    request_snapshot=run["input_payload"], checkpoints=self.checkpoints.get(run_id, []))
+            except ValueError as exc:
+                raise PersistenceError(str(exc)) from exc
 
     def save_checkpoint(
         self,
@@ -608,12 +673,17 @@ class MemoryAuditRepository(BaseAuditRepository):
                 event_id=event_id,
             )
 
+    def get_run_creation_snapshot(self, run_id: str) -> dict:
+        with self._lock:
+            return copy.deepcopy(self._require_run(run_id)["input_payload"])
+
     def get_run(self, run_id: str) -> AgentRunRecord | None:
         with self._lock:
             run = self.runs.get(run_id)
             return self._run_record(run) if run else None
 
     def list_steps(self, run_id: str) -> list[AgentStepRecord]:
+        self.get_run(run_id)
         with self._lock:
             return sorted(
                 self.steps.get(run_id, {}).values(),
@@ -627,6 +697,7 @@ class MemoryAuditRepository(BaseAuditRepository):
         after_sequence: int = 0,
         limit: int = 100,
     ) -> list[WorkflowEvent]:
+        self.get_run(run_id)
         with self._lock:
             return [
                 item
@@ -636,9 +707,12 @@ class MemoryAuditRepository(BaseAuditRepository):
 
     def list_checkpoints(self, run_id: str) -> list[WorkflowCheckpoint]:
         with self._lock:
+            if run_id in self.runs:
+                self._run_record(self.runs[run_id])
             return list(self.checkpoints.get(run_id, []))
 
     def list_evidence(self, run_id: str) -> list[PersistedEvidenceSnapshot]:
+        self.get_run(run_id)
         with self._lock:
             return sorted(
                 self.evidence.get(run_id, {}).values(),
@@ -756,14 +830,15 @@ class MemoryAuditRepository(BaseAuditRepository):
             return review_id
         self.reviews[review_id] = {
             "review_id": review_id,
-            **payload,
+            **copy.deepcopy(public_review_payload(payload)),
             "review_hash": review_hash,
         }
         return review_id
 
     def list_reviews_by_run(self, run_id: str) -> list[dict[str, Any]]:
+        self.get_run(run_id)
         return [
-            {**review, "status": normalize_review_status(review.get("status"), passed=bool(review.get("passed")))}
+            {**copy.deepcopy(public_review_payload(review)), "status": normalize_review_status(review.get("status"), passed=bool(review.get("passed")))}
             for _, review in sorted(self.reviews.items())
             if review.get("run_id") == run_id
         ]

@@ -95,6 +95,9 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         # The prior artifact is exposed in its own clearly delimited field;
         # do not duplicate a potentially large document inside constraints.
         prompt_constraints.pop("previous_version_content", None)
+        lecture_revision = prompt_constraints.pop("lecture_revision", None)
+        if lecture_revision:
+            prompt_constraints.pop("revision_feedback", None)
         payload = {
             "topic": context.topic,
             "resource_spec_id": spec.resource_spec_id,
@@ -117,7 +120,14 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
                 for item in evidence
             ],
         }
-        revision_feedback = context.constraints.get("revision_feedback")
+        if lecture_revision:
+            payload["lecture_revision"] = lecture_revision
+            payload["revision_guidance"] = (
+                "按本份讲义的稳定问题ID、原验收条件和冻结证据定向修改；旧正文和旧审核意见均非新事实证据。"
+                "保留其余正确内容；不得改写验收条件、补造证据外细节或只加免责声明。"
+                "上次无变化时必须核对未满足条件与位置，不能只声称已修改。"
+            )
+        revision_feedback = None if lecture_revision else context.constraints.get("revision_feedback")
         if revision_feedback:
             payload["revision_feedback"] = revision_feedback
             payload["previous_version_content"] = context.constraints.get(
@@ -145,6 +155,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         representation: ResourceRepresentation,
         max_output_tokens: int | None = None,
         request_timeout_seconds: float | None = None,
+        max_attempts: int | None = None,
     ) -> LLMCallResult[ArtifactOutputT]:
         self._ensure_route(spec)
         representation_spec = self._representation_spec(spec, representation)
@@ -163,20 +174,30 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         options = options.model_copy(update={
             "max_output_tokens": max(requested_budget, options.max_output_tokens),
             **({"request_timeout_seconds": request_timeout_seconds} if request_timeout_seconds is not None else {}),
+            # Agents that run their own bounded validation loop must be able to
+            # collapse the SDK retry to one call; otherwise the two layers
+            # multiply (2 validation attempts x 2 gateway attempts = 4 provider
+            # calls per knowledge point).
+            **({"max_attempts": max_attempts} if max_attempts is not None else {}),
         })
-        return llm_gateway.invoke_structured(
-            messages=messages,
-            output_schema=output_schema,
-            context=LLMCallContext(
-                run_id=context.run_id,
-                step_id=context.step_id,
-                node_name=self.agent_name,
-                schema_name=output_schema.__name__,
-                generation_attempt=context.generation_attempt,
-                workflow_deadline_at=context.workflow_deadline_at,
-            ),
-            options=options,
-        )
+        # Bypass LLM-call accounting (T41): attribute this logical call to
+        # its exclusive resource spec before entering the real gateway.
+        from app.agents.shared.llm_accounting import exclusive_resource_scope
+
+        with exclusive_resource_scope((spec.resource_spec_id, spec.resource_type)):
+            return llm_gateway.invoke_structured(
+                messages=messages,
+                output_schema=output_schema,
+                context=LLMCallContext(
+                    run_id=context.run_id,
+                    step_id=context.step_id,
+                    node_name=self.agent_name,
+                    schema_name=output_schema.__name__,
+                    generation_attempt=context.generation_attempt,
+                    workflow_deadline_at=context.workflow_deadline_at,
+                ),
+                options=options,
+            )
 
     def invoke_plain_text(
         self,
@@ -217,18 +238,23 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         if max_attempts is not None:
             option_updates["max_attempts"] = max_attempts
         options = options.model_copy(update=option_updates)
-        return llm_gateway.invoke_plain_text(
-            messages=messages,
-            context=LLMCallContext(
-                run_id=context.run_id,
-                step_id=context.step_id,
-                node_name=self.agent_name,
-                schema_name="plain_markdown",
-                generation_attempt=context.generation_attempt,
-                workflow_deadline_at=context.workflow_deadline_at,
-            ),
-            options=options,
-        )
+        # Bypass LLM-call accounting (T41): same exclusive resource attribution
+        # as the structured path; failures degrade to a plain gateway call.
+        from app.agents.shared.llm_accounting import exclusive_resource_scope
+
+        with exclusive_resource_scope((spec.resource_spec_id, spec.resource_type)):
+            return llm_gateway.invoke_plain_text(
+                messages=messages,
+                context=LLMCallContext(
+                    run_id=context.run_id,
+                    step_id=context.step_id,
+                    node_name=self.agent_name,
+                    schema_name="plain_markdown",
+                    generation_attempt=context.generation_attempt,
+                    workflow_deadline_at=context.workflow_deadline_at,
+                ),
+                options=options,
+            )
 
     def metadata(
         self,

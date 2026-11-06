@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any
 
 from app.core.llm.structured_output import parse_structured_output
@@ -17,6 +18,9 @@ class ScriptedLLMTransport:
         self.outcomes = list(outcomes)
         self.model_name = model_name
         self.calls: list[dict[str, Any]] = []
+        # Synthetic transports never think; exposed so frozen claim-extraction
+        # contracts can verify LLM_THINKING_MODE=disabled (T36).
+        self.settings = SimpleNamespace(llm_base_url="offline", llm_thinking_mode="disabled")
 
     def invoke(self, **kwargs) -> RawLLMResponse:
         self.calls.append(kwargs)
@@ -37,6 +41,12 @@ class ScriptedLLMGateway:
         self.outcomes = list(outcomes)
         self.model_name = model_name
         self.calls: list[dict[str, Any]] = []
+        # Synthetic gateways never think; exposed so frozen claim-extraction
+        # contracts can verify LLM_THINKING_MODE=disabled (T36).
+        self.transport = SimpleNamespace(
+            model_name=model_name,
+            settings=SimpleNamespace(llm_base_url="offline", llm_thinking_mode="disabled"),
+        )
 
     def options_for(self, node_name: str, *, temperature: float = 0.0) -> LLMCallOptions:
         return LLMCallOptions(

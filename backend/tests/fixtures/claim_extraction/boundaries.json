@@ -1,0 +1,23 @@
+[
+  {
+    "id": "truncated-parent-replacement",
+    "text": "First fact.\n\nLast fact.",
+    "fault": "truncated_parent",
+    "expected": {
+      "status": "completed",
+      "candidates": 2,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 3
+  },
+  {
+    "id": "cap-parent-replacement",
+    "text": "Fact 0.\n\nFact 1.\n\nFact 2.\n\nFact 3.\n\nFact 4.\n\nFact 5.\n\nFact 6.\n\nFact 7.\n\nFact 8.\n\nFact 9.\n\nFact 10.\n\nFact 11.\n\nFact 12.\n\nFact 13.\n\nFact 14.\n\nFact 15.",
+    "expected": {
+      "status": "completed",
+      "candidates": 16,
+      "judge_calls": 1
+    },
+    "expected_extract_calls": 3
+  }
+]

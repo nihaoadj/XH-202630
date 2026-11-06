@@ -1,6 +1,10 @@
 # 总体架构文档
 
-T30讲义教学加工：`resource_agents/lecture_contract.py`拥有`lecture-pedagogy-v1`的受众、篇幅、自包含示例、去重复、通用/项目边界准则及节点显示名投影。TextResourceAgent升级`text-resource-v6-teaching-contract`，只投影Prompt展示文本，不改ResourceSpec、知识点真实ID或冻结Evidence。显示名仅取单一已分配KB的manifest已知目标节点，未知/混合KB不猜。既有reviewer只给讲义的同一次审核追加共享rubric及控制信息，其他资源System Prompt、调用次数、Claim/发布节点不变。这是生成/审核指导，不是新语义硬门，不能由单元测试声称真实模型已消除重复或悬空引用。
+T42 修复：定位算法按冻结的 locator_algorithm_version 区分 v1/v2，共用同一定位入口。旧策略缺省 v1，原序列化/hash 和诊断重算保持；仅新冻结策略使用 v2，执行比例与计算限制并保证删除重复字后仍保留原文字。contracts.select_contract 在需要构建新抽取请求前比较 Prompt/schema hash；已完成结果继续只读幂等复用。拒绝定位通过私有领域异常携带最多8条失败诊断，executor 在已有预算路径保存，不增加模型调用、节点或 Judge 职责。
+
+T41 LLM 调用旁路计量：新增 `models/shared/llm_accounting.py`（纯 DTO/聚合/hash，不依赖 DB/Service/Agent）、`core/llm/accounting.py`（ContextVar 作用域 + 采集 + 可注入 publisher 协议，不导入业务层）与 `agents/shared/llm_accounting.py`（作用域适配）。真实统一入口只在 `core/llm/gateway.py` 的 `invoke_structured`/`invoke_plain_text` 及 `_invoke_transport_with_hard_timeout` 外层用 `functools.wraps` 装饰，原函数体、签名、参数/返回对象、异常身份不变。独立计量库 `db/audit/llm_accounting/`（独立 Metadata/Engine，不注册业务 Base、不迁移业务库），运行时 `services/runs/llm_accounting_runtime.py`（每宿主进程一个可选 spawn writer 子进程 + 有界非阻塞队列），只读查询 `services/runs/llm_accounting.py`。core 不反向依赖具体工作流；Agent 侧只绑定身份/阶段作用域，不持 SQL/进程/队列。
+
+T30讲义教学加工：`resource_agents/lecture_contract.py`拥有`lecture-pedagogy-v1`的受众、篇幅、自包含示例、去重复、通用/项目边界准则及节点显示名投影。TextResourceAgent升级`text-resource-v6-teaching-contract`，只投影Prompt展示文本，不改ResourceSpec、知识点真实ID或冻结Evidence。显示名仅取单一已分配KB的manifest已知目标节点，未知/混合KB不猜。讲义审核通过`reviewing/prompts/resources/text.py`的`resource.text` 2.1片段复用同一rubric，版本和规则正文纳入Prompt fingerprint；`reviewing/payloads.py`只在该次讲义审核的HumanMessage中附加展示名及教学控制信息，其他资源不接收讲义规则，调用次数、Claim/发布节点不变。这是生成/审核指导，不是新语义硬门，不能由单元测试声称真实模型已消除重复或悬空引用。
 
 T29学习检索：`agents/shared/learning_queries.py`确定性构造任务问题，不调用LLM；retrieve节点仅在legacy学习路径且新开关开启时选择新版本。`vector_store.search_many_evidence_candidates`提供来源预校验后的完整有界20候选，不按owner提前截断；`EvidenceRetriever`继续负责SQL版本/hash、原分门槛、去重，再调用纯`source_balance.py`按节点覆盖及来源软规则选材。来源由可信SQL路径与manifest的id/file/type匹配，分类清单hash纳入config hash。旧接口、Tutor与E1路径不变；新policy候选query_rank允许到min(20, rerank_candidate_k)，其余仍受原TopK约束。没有新表或跨层业务依赖。
 
@@ -9,7 +13,7 @@ T28已激活T27分片文件：`core/retrieval/evidence_chunking.py::markdown_evi
 > 项目编号：XH-202630  
 > 项目名称：领域知识个性化生成与多智能体协同决策系统  
 > 文档版本：2.7
-> 文档更新时间：2026-10-25
+> 文档更新时间：2026-10-27
 > 文档定位：描述当前代码库的真实分层、模块边界、运行路径与主流程。
 
 ## 0. 整体架构总览
@@ -136,6 +140,12 @@ SQLite trigger 将所有报告来源的增改删与全局 epoch 放进同一事�
 - 业务课件评测执行器位于 `backend/scripts/courseware_harness/`；`core/courseware/evaluation.py` 保留确定性指标和 fixture 计算。旧 Service 模块及 core 评测入口只保留兼容导出或按需转发，实际实现各有唯一归属；core 的旧 harness 入口是迁移兼容例外。
 - 文本资源工作流仅编排 Spec、受限并发、失败隔离、产物物化和 trace；正文 Prompt 位于 `resource_agents/`。
 - 公共资源类型词汇由 `models/learning_documents/` 唯一定义。当前路由为 `讲义 -> TextResourceAgent`、`实操指南 -> PracticeGuideAgent`、`分阶测试题 -> AssessmentAgent`、`复习清单 -> ReviewChecklistAgent`、`案例分析 -> CaseStudyAgent`，唯一别名为 `定制讲义 -> 讲义`。
+
+文本审核的唯一注册表及公共入口位于 `agents/resource_workflows/learning_documents/reviewing/`。`profiles.py` 显式绑定类型、阶段、规则、专项、schema 与网关角色；`prompts/` 静态导入片段，纯构建器产生版本和指纹，`payloads.py` 每次构建独立消息，`executor.py` 统一调用网关。`checks.py` 仅做程序检查，`results.py` 适配原摘要及完整发现，`telemetry.py` 收集所有逻辑调用。节点只编排与聚合；测评专审依赖此公开包，公共包不反向导入节点或专审。规则重组明确使用 V2；原 scope 规则保持 V1。
+
+私有序列化契约归 `models/reviews/review_audit.py`，SQL/Memory 仓储不依赖工作流实现。Generation Service 冻结 `ReviewPolicySnapshotV1`，不持有 Prompt；RecordedNode 在 complete_step 中提交独立 `review_audit`，公开 trace 不承载明细。checkpoint 仅保存策略与审核 hash 引用，仍是有界的只读回放，未新增断点恢复能力。实操每份语义审核一次；测评默认两阶段，合并 V2 候选未启用。
+
+课件既有七阶段恢复顺序由 `models/courseware/checkpoints.py` 唯一定义，工作流和 SQL/Memory 仓储共用；仓储只在原时间/attempt 并列时按阶段与 ID 稳定选择最新 checkpoint。该限定修复不改变课件生成、审核、渲染或发布职责。
 - 反馈闭环可额外创建专属 `个性化纠错训练包 -> CorrectionTrainingPackageAgent`。它在学习文档内部受支持，但不属于普通生成词汇；`FeedbackService` 验证强化候选和快照后才可创建，并只向 Agent 传入脱敏目标、教学策略、达标标准和冻结 Evidence。
 
 课件总工作流保留预算、租约、状态与异常边界，spec 准备、单场景 compose、scene persistence 为具名阶段，`release.py` 通过平台 callback 构建候选产物并经仓储提交。`core/courseware/storyboard.py` 仅执行来源绑定的复习/实操及分页分支，没有模型或数据库调用。
@@ -343,10 +353,16 @@ GenerationJob/AgentRun 的 queued 竞态保持现有 ownership：Job 可先存�
 
 T15 建立完整 trace 图形链路并移除重复的生命周期日志UI；T17 将唯一资源状态区域置于轨迹上方常显，从真实请求类型占位过渡到执行记录。AgentVisualization仅展示图形链路、资源交付与按真实childRuns显示的独立后续生成导航，reducer事件保存不变；交付列表采用浅灰底面的独立白色资源article，以细边界和间距明确每份产物归属；状态横排，操作按内容宽度横排/按需折行，使用短可见文案并保留完整aria-label与原发射事件。校验、发布、生成次数及 Agent 记录在卡片主体常显，技术审计保留原过程详情入口。ResourceExecutionProgressList保留spec分组/text优先/状态优先级和原按钮条件，阶段审核、publication与Claim状态分别显示；不把审核通过或Claim完成当作已发布，汇总既有多表示口径未变。待决定提示与发布结果按同resource_id读取当前资源本体和报告中的显式决定，再补执行字段；已确认发布清除过期待决定，不改变发布规则。历史执行项缺少时间时，状态刷新按需读取现有timeline查询取得有限水位。`workflowPresentation.js` 集中维护真实关键节点与明确历史 agent 别名的展示/详情白名单，图与详情 hook 共用；已有未知 node_name 不借 agent 别名提升为可交互节点。`associatedStepResources` 仅使用同 Run 的显式 resource_ids 或 review_ids 关联资源；没有关联的诊断/规划等节点不自动选择其他产物。详情分开执行状态、普通审核和事实判定。`WorkflowDetailDialog.vue`管理通用外壳、加载/刷新、显式资源选择和唯一body滚动；无tablist/tab/tabpanel或模块切换。`workflowDetailPresentation.js`管理六项职责与唯一contentKind、受控公开摘要投影/未知全文回退；`workflow-detail/`的结果、普通审核、冻结证据、版本叶子按职责渲染单页，CSS仅作用于详情。诊断展示难度/盲区/建议，检索展示明确引用的冻结来源，规划仅投影最多四项保存摘要，生成展示显式关联版本正文，审核展示真实Review及已保存摘要/decision_reason，Claim核验展示真实判定与来源对照。evidence_gate/claim_extract被动，仅图内状态，不再重复检索/核验正文；不同调用/版本的同角色不按名称去重。资源入口只展示普通审核和默认折叠的显式版本对比，旧独立Claim发布报告保持。已删除不再使用的导航/抽取详情实现，不保留转发。`workflowNodeIcons.js`共用14个既有图形与未知图形。底部执行上下文/输入/标识默认折叠；多资源节点选择放在主体前，单资源选择折叠。接口未保存完整诊断/规划或逐资源模型suggestion时不补造；审核聚合说明不称原始模型回复，执行成功不等于审核通过。ClaimEvidenceList可选focusFirst仅详情启用，按记录顺序优先contradicted/not_in_evidence/incomplete，无问题时首条，non_factual不抢占问题，旧发布报告默认折叠。冻结来源、版本身份、请求隔离和发布边界不变，呈现不改变判定或发布。
 
-P0-06 的 Claim 抽取器与 Generator 相互独立。模型只能从资源、目标技能节点和当前
+P0-06 的 Claim 抽取器与 Generator 相互独立。默认 `legacy_v3` 模型从资源、目标技能节点和当前
 Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、
 资源版本、知识点与 Evidence 边界。判定失败、漏判或伪造 ID 均 fail closed 到
 `human_review`。新资源版本必须重新抽取，旧版本判定不会复制。
+
+`learning_documents/claim_extraction/` 提供 `neutral_estimate_v1` 的唯一 `execute_extraction` 入口：segmentation/batching 仅产生原文范围，payloads 和静态导入的 prompts 显式组装正文/目标/有界文内上下文，budget/executor 负责持久请求票据和有限恢复，merge 校验片段、保守去重并调用原 materializer。私有 DTO 位于 `models/reviews/claim_extraction.py`，SQL/Memory CAS 位于 `db/claim/extraction.py`。公开节点仍是 `claim_review_agent.py` 的 extract/judge/decide，图拓扑、原 Judge Prompt/schema/options、证据范围与发布行为保持。Judge 前 guard 只核对冻结配置、审核身份与一次调用容量。T37 在同一 `plan_batches` 中增加密度约束：`density_batching` 子契约（`claim-density-v1`）随 policy 冻结，按 `paragraph/list/table/code` 的 span 字符数预估候选数，与 token 条件同时生效；heading/whitespace 权重为 0 但仍参与分段、装箱、token 计数与逐 unit 回执，单 unit 候选豁免密度。没有第二个 planner，`make_batch`/`subdivide`/batch ID/分区不变；`density_batching is None`（旧快照）或 `enabled=false` 走原 token 装箱，且不读取当前 settings。
+
+T42 在抽取后追加程序化来源定位：新版中立模型只输出 `claim_text`/`source_text`（无偏移），`source_locating/` 包（`api.py` 为纯定位入口，`normalization.py` 管比较副本与原文区间映射，`approximate.py` 管有界编辑距离搜索，`rules.py` 管编辑白名单与关键内容保护，`rules_v1.json` 为冻结规则资产）在当前 target unit 内依次执行 A 唯一精确 → B 受控格式（仅 CRLF→LF 与叙述内连续横向空白折叠）→ C 受限文字编辑（整数编辑距离 ≤ 上限、保护数字/否定/量词/条件/关系/单位版本、歧义与差距不足拒绝），成功后从冻结正文截取真实 `source_text` 并计算全文偏移与 hash。`contracts.py` 是唯一契约选择入口，返回 Prompt/output_schema/payload 版本，供预算、gateway、observer、持久复验共用。定位诊断私有化为 `ExtractionResult.location_diagnostics`（`None` 省略），不进入公开 trace/SSE/DTO/ClaimRecord。Judge 输入/Prompt/schema/options、证据范围与发布行为均不变，不新增来源核对调用。
+
+新策略在服务/Worker 提交时冻结，并计入 run request hash；新 dispatch 版本使旧 Worker 受控拒绝。`agent_runs.claim_extraction_mode` 与 input policy/私有账本交叉验证。一次 `GenerationService` 图调用持有同一 execution session，普通和 Claim 返工沿用 run 剩余额度；SQL 写入同时验证 run/job fence 与租约，未知在途票据禁止继续。同 run 完成结果只供原活跃 session 幂等读取；现有 runner 不建设检查点续跑，中断按原语义失败、新 run 独立重试。默认仍为 legacy，真实计数/质量/容量门另行验证。
 
 `max_iterations` 是普通审核最大返工次数，不包含初次生成；Claim 使用独立的 `claim_max_iterations`。`generation_attempt = revision_count + claim_revision_count + 1`，技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
 
@@ -671,3 +687,30 @@ SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范�
 生成页通过 `features/generation/generationCommands.js` 准备并发送 continuation 请求，`useGenerationCommands.js` 负责四个命令的上下文、异步步骤与按钮状态归属；页面通过窄回调执行选择、localStorage、资源清空、订阅及通知。协调器复用 `createRequestGuard`，同步观察 learner/run，切换（包括 A→B→A）或卸载立即失效；retry、append、resource 三个忙碌通道各有当前所有者，两种批量重试共用 retry。自身合法选中新 Run 时保留该命令并重新捕获预期上下文，其他旧命令失效。命令刷新将有效性谓词传入 `loadJobs`，列表回写和错误也检查命令归属；false 不启动订阅或宣告成功，列表 loading 仍由其独立请求版本收尾。忽略过期 UI 响应不取消或重发服务端任务，后续可从原列表重新发现。
 
 `useGenerationResources.js` 只拥有所选任务资源和节点阶级读取及各自版本号，文本读取按 Run，课件来源按 batch；页面提供明确的 learner/run/textRun/knowledge base/batch 上下文并在切换/卸载时失效请求。jobs/status/claims/profile/task 的计数以及 Progress/Claims/Audit 的订阅清理继续独立，未合并成一个全局计数器，也未改变页面模板、样式和路由。命令协调器纳入严格 JSDoc/checkJs；纯请求计划和公共请求 guard 的契约保持。
+
+## 统一课件内容审核 content_v1
+
+新增内部合同 `models/courseware/content_review.py`，纯能力 `core/courseware/content_review/`，执行与生命周期 `agents/resource_workflows/interactive_courseware/content_review/`。依赖为 workflow → agents content_review → core content_review → models；core 不访问仓储或网关。唯一静态 registry 按源类型/schema 选择复习 V2、实操 V3 adapter；通用 engine 无资源类型分支。Prompt 片段、规则、profile、schema 和模型配置指纹版本化，模型只返回有界逐项结论或受限 enrichment patch。
+
+来源正文/答案、AI 候选、模板、用户标题与未消费字段分别建清单。独立 oracle 不调用 composition，核对字段、题目/答案、阶段、步骤/代码、最终目标、顺序与组件；完整输出 hash 和内容身份在恢复/发布时重验。整体九维审核继续执行，新策略发送完整可见文档和冻结依据，定位到 AI 字段的修订复用同一累计预算；固定题目/操作不进入自由改写。
+
+CoursewareBudgetCoordinator 仍是调用预算入口；content_v1 在最终 invoke_structured 入口按完整消息/schema/输出/attempt 预留并 CAS 写私有 ledger，原外层第二次质量请求另取票。真实网关守卫在包装前及调用前保留，fixture estimator 不可用于真实 LLMGateway。七阶段不变，spec CAS hash、稳定内容身份、阶段 hash 与 append-only ledger 链分别校验。默认关闭，首版真实模型 tokenizer/chat 包装 profile 尚待部署验证；确定性通过不能证明语义质量。
+
+
+T31第12节取代历史tokenizer/profile前置，统一使用无资产字符估算工厂与逐attempt预算钩子。使用与限制见[Claim估算配置](testing/claim-counting-profile.md)。默认legacy，真实冒烟与质量对照未执行。
+
+
+T31第12节：core/llm/counting.py为无资产字符估算，attempts.py只定义可选观察协议，网关逐次准备真实消息后调用；业务observer在claim_extraction/budget.py执行SQL/Memory CAS。2.0私有policy冻结估算参数/model/endpoint/thinking/window，ledger按logical/physical分别计数，保留真实usage超估与unknown预留；Judge只注入只读窗口observer。旧1.0仅保留解析/历史查询，执行入口拒绝旧neutral。p037扩展模式约束，原节点/Prompt/公开DTO和Evidence范围保持。
+
+
+T37 2026-11-05修复：共享ExtractionResult载体最多128条；策略级容量检查位于check_ledger_size，被持久snapshot读取与SQL/Memory CAS复用，包含model_copy绕过模型校验的情况。1.0最多64、2.0不超过冻结resource_claims且最多128，旧序列化不变。单批cap与密度算法、原Judge/节点顺序/发布规则保持。验收脚本按parent_resource_id识别最终叶资源，结合版本、持久抽取结果与Judge覆盖判断，历史返工资源不误算成未审核的当前资源。
+
+### T38 讲义普通审核
+
+`learning_documents/reviewing/lecture_*` 持有讲义新策略的请求、证据约束、问题核销和账本状态推进；生成器按 resource_spec/lineage 接收定向返工。新策略与旧 `content_v2` 版本并存；新任务冻结独立工作流标记及完整 dispatch hash，创建快照与 RUN_CREATED 事件构成恢复权威来源。私有 V2 审计保存结构化观察；checkpoint 仅保存冻结策略和审计引用，不复制正文或完整账本。Claim 判定和发布门禁保持原职责。
+
+### T39 讲义普通审核 V2
+
+`models/reviews/lecture_review_v2.py` 定义 V2 策略、输出、观察与账本；`reviewing/lecture_contract_v2.py` 只从 targets 派生覆盖率，并强制每个 missing 目标都有指向它的开放覆盖问题、每个非 pass 语义维度都有同维度阻断问题（反之亦然）。`reviewing/lecture_ledger_v2.py` 在观察中保存程序计算出的 coverage_rate，模型不再填写总体覆盖结论。`reviewing/lecture_correction.py` 只对白名单内的自相矛盾发起一次业务纠正，第二次请求 `max_attempts=1`、关闭 schema repair；`reviewing/lecture_guard.py` 复用已提交的 review step 记录，阻止在旧 running/failed 审核步骤上重新发起调用。V2 使用 `review_audit_v3` 私有命名空间承载 v2 策略、账本与纠正记录，首次无效结果作为受控附件计入同一 1 MiB envelope；公共 trace/DTO 仍只保留摘要。V1 与 legacy 的记录、hash、Prompt 与恢复路径不变。
+
+T39 执行权校验：带 epoch 的 Worker 在调用模型前通过审计仓储核对 generation_jobs 的 claim_epoch、claim_owner、running 状态和任务租约；AgentRun.row_version 只表示记录修改版本，不能与领取轮次比较。同步执行仍核对 run owner/lease，提交阶段原有 fencing 保留。没有可验证的 dispatch 账本时，带 epoch 的调用失败关闭。

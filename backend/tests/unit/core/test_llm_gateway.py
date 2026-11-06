@@ -597,3 +597,78 @@ def test_plain_text_retries_a_length_stop_with_compact_markdown_instruction():
     assert result.retry_count == 1
     assert result.output.startswith("# 完整讲义")
     assert transport.calls[1]["messages"][0].content.startswith("上一轮 Markdown")
+
+
+def test_min_attempt_floor_blocks_a_doomed_call_without_touching_transport():
+    transport = ScriptedLLMTransport([raw('{"value":"unused"}')])
+    now = datetime(2026, 7, 29, tzinfo=timezone.utc)
+    gateway = LLMGateway(transport, min_attempt_seconds=45.0, wall_clock=lambda: now)
+
+    with pytest.raises(LLMGatewayError) as caught:
+        gateway.invoke_structured(
+            messages=[HumanMessage(content="test")],
+            output_schema=Payload,
+            context=context(workflow_deadline_at=now + timedelta(seconds=3)),
+            options=options(request_timeout_seconds=240),
+        )
+
+    assert caught.value.error.code == ErrorCode.LLM_TIMEOUT.value
+    assert caught.value.error.safe_detail == "deadline_budget_insufficient"
+    assert transport.calls == []
+
+
+def test_min_attempt_floor_does_not_block_a_usable_retry():
+    transport = ScriptedLLMTransport([TimeoutError("secret"), raw('{"value":"ok"}')])
+    gateway = LLMGateway(
+        transport,
+        min_attempt_seconds=45.0,
+        sleep=lambda _seconds: None,
+        jitter=lambda: 0.0,
+    )
+
+    result = gateway.invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(),
+        options=options(request_timeout_seconds=240),
+    )
+
+    assert result.output.value == "ok"
+    assert len(transport.calls) == 2
+
+
+def test_min_attempt_floor_scales_down_for_short_interactive_calls():
+    transport = ScriptedLLMTransport([raw('{"value":"ok"}')])
+    now = datetime(2026, 7, 29, tzinfo=timezone.utc)
+    gateway = LLMGateway(transport, min_attempt_seconds=45.0, wall_clock=lambda: now)
+
+    result = gateway.invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(workflow_deadline_at=now + timedelta(seconds=25)),
+        options=options(request_timeout_seconds=40),
+    )
+
+    assert result.output.value == "ok"
+    assert len(transport.calls) == 1
+
+
+def test_plain_text_min_attempt_floor_blocks_a_doomed_call():
+    transport = ScriptedLLMTransport([raw("# unused")])
+    now = datetime(2026, 7, 29, tzinfo=timezone.utc)
+    gateway = LLMGateway(transport, min_attempt_seconds=45.0, wall_clock=lambda: now)
+
+    with pytest.raises(LLMGatewayError) as caught:
+        gateway.invoke_plain_text(
+            messages=[HumanMessage(content="write markdown")],
+            context=context(
+                node_name="TextResourceAgent",
+                schema_name="plain_markdown",
+                workflow_deadline_at=now + timedelta(seconds=3),
+            ),
+            options=options(request_timeout_seconds=240),
+        )
+
+    assert caught.value.error.code == ErrorCode.LLM_TIMEOUT.value
+    assert caught.value.error.safe_detail == "deadline_budget_insufficient"
+    assert transport.calls == []

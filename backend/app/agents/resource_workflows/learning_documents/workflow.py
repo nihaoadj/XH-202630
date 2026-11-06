@@ -275,14 +275,20 @@ def route_after_claim_extract(state: AgentState) -> str:
 
 
 def route_after_claim_decide(state: AgentState) -> str:
+    if _review_decision(state) != ReviewDecision.REVISE:
+        return "finalize"
     claim_revision_requested = any(
         isinstance(instruction, dict) and instruction.get("target_claim_ids")
         for instruction in state.get("review_result", {}).get("revision_instructions", [])
     )
-    if claim_revision_requested and (
-        state.get("claim_revision_count", 0) < state.get("claim_max_iterations", 1)
-    ):
-        return "prepare_claim_revision"
+    if claim_revision_requested:
+        # Claim corrections cannot borrow ordinary-review revision allowance.
+        # Finalization preserves the existing human-review/publication gate.
+        return (
+            "prepare_claim_revision"
+            if state.get("claim_revision_count", 0) < state.get("claim_max_iterations", 1)
+            else "finalize"
+        )
     if _review_decision(state) == ReviewDecision.REVISE and (
         state.get("revision_count", 0) < state.get("max_iterations", 2)
     ):
@@ -332,14 +338,50 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
             instruction for instruction in instructions
             if instruction.get("target_resource_type") in targets
         ],
+        "assessment_findings": [
+            {"resource_id": resource_id, "resource_spec_id": result.get("resource_spec_id"), **finding}
+            for resource_id, result in state.get("resource_review_results", {}).items()
+            if not claim_only and result.get("resource_type") == "分阶测试题" and "分阶测试题" in targets
+            for specialized in result.get("specialized_reviews", {}).values()
+            for finding in specialized.get("findings", [])
+            if finding.get("codes")
+        ],
     }
+    lecture_revision = {}
+    exact_lecture_specs = set()
+    if state.get("lecture_review_policy"):
+        frozen_targets = {item["resource_spec_id"]: item["knowledge_points"] for item in state.get("resource_specs", [])}
+        for resource in state.get("generated_resources", []):
+            result = state.get("resource_review_results", {}).get(resource.resource_id, {})
+            failed_generation = any(item.get("resource_id") == resource.resource_id and item.get("validation_status") == "failed"
+                for item in state.get("resource_executions", []))
+            if resource.resource_type != "讲义" or (not claim_only and result.get("decision") != "revise" and not failed_generation) or (claim_only and resource.resource_type not in targets):
+                continue
+            ledger = (state.get("lecture_ledgers") or {}).get(resource.resource_spec_id)
+            if not ledger:
+                failed = any(item.get("resource_id") == resource.resource_id and item.get("validation_status") == "failed"
+                    for item in state.get("resource_executions", []))
+                if failed:
+                    exact_lecture_specs.add(resource.resource_spec_id)
+                    lecture_revision[resource.resource_spec_id] = {"previous_content": resource.content_text or "",
+                        "parent_resource_id": resource.resource_id, "generation_failure": True, "claim_only": False,
+                        "open_issues": [], "targets": frozen_targets[resource.resource_spec_id]}
+                    continue
+                raise ValueError("lecture revision requires its issue ledger")
+            exact_lecture_specs.add(resource.resource_spec_id)
+            lecture_revision[resource.resource_spec_id] = {
+                "previous_content": resource.content_text or "", "parent_resource_id": resource.resource_id, "claim_only": claim_only,
+                "binding": ledger["binding"], "open_issues": [i["issue"] for i in ledger["issues"] if i["status"] == "open"],
+                "closed_issues": [{"issue_id": i["issue"]["issue_id"], "acceptance": i["issue"]["acceptance"]} for i in ledger["issues"] if i["status"] == "closed"],
+                "targets": frozen_targets[resource.resource_spec_id], "unchanged": ledger["observations"][-1]["unchanged"],
+                "consecutive_unchanged": ledger["observations"][-1]["consecutive_unchanged"]}
     constraints = dict(state.get("constraints") or {})
     constraints["revision_feedback"] = review_feedback
     resources = [
         resource.model_copy(
             update={"review_status": ResourceStatus.REVISION_REQUESTED.value}
         )
-        if resource.resource_type in targets
+        if resource.resource_type in targets and (not state.get("lecture_review_policy") or claim_only or resource.resource_type != "讲义" or resource.resource_spec_id in exact_lecture_specs)
         else resource
         for resource in state.get("generated_resources", [])
     ]
@@ -371,6 +413,7 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
         "revision_count": revision_count,
         "claim_revision_count": claim_revision_count,
         "generation_attempt": generation_attempt,
+        **({"lecture_revision": lecture_revision} if state.get("lecture_review_policy") else {}),
         "current_node": "prepare_revision",
         "trace": [trace_item],
         "errors": [],
@@ -672,6 +715,13 @@ def _bind_resource_progress_recorder(node, recorder: Any | None):
     return partial(node, resource_progress_recorder=recorder)
 
 
+def _bind_review_repository(node, repository):
+    """Give the reviewer its durable step source for the V2 entry guard."""
+    if repository is None or "review_repository" not in signature(node).parameters:
+        return node
+    return partial(node, review_repository=repository)
+
+
 def _bind_evidence_retriever(node, retriever: EvidenceRetriever):
     if "evidence_retriever" not in signature(node).parameters:
         return node
@@ -683,10 +733,15 @@ def build_workflow(
     evidence_retriever: EvidenceRetriever | None = None,
     lifecycle_repository: BaseAuditRepository | None = None,
     resource_progress_recorder: Any | None = None,
+    claim_extraction_repository=None,
+    claim_extraction_counter=None,
 ):
     """Build the synchronous workflow with the P0-03 evidence boundary."""
     gateway = llm_gateway or default_llm_gateway()
     retriever = evidence_retriever or default_evidence_retriever()
+    if claim_extraction_repository is None and lifecycle_repository is not None:
+        from app.db.claim.extraction import extraction_repository
+        claim_extraction_repository = extraction_repository(lifecycle_repository)
     workflow = StateGraph(AgentState)
 
     def add_recorded(name: str, node) -> None:
@@ -704,12 +759,23 @@ def build_workflow(
             resource_progress_recorder,
         ),
     )
-    add_recorded("review", _bind_llm_gateway(review_node, gateway))
+    add_recorded("review", _bind_review_repository(_bind_llm_gateway(review_node, gateway), lifecycle_repository))
     add_recorded("prepare_revision", prepare_revision_node)
     add_recorded("prepare_claim_revision", prepare_claim_revision_node)
     add_recorded("finalize_draft", finalize_draft_node)
-    add_recorded("claim_extract", _bind_llm_gateway(claim_extract_node, gateway))
-    add_recorded("claim_judge", _bind_llm_gateway(claim_judge_node, gateway))
+    def bind_claim(node):
+        if "claim_extraction_repository" not in signature(node).parameters:
+            return _bind_llm_gateway(node, gateway)
+        def invoke(state):
+            return node(state, llm_gateway=gateway,
+                        claim_extraction_repository=claim_capabilities["repository"],
+                        claim_extraction_counter=claim_capabilities["counter"])
+        return invoke
+
+    claim_capabilities = dict(repository=claim_extraction_repository, counter=claim_extraction_counter)
+
+    add_recorded("claim_extract", bind_claim(claim_extract_node))
+    add_recorded("claim_judge", bind_claim(claim_judge_node))
     add_recorded("claim_decide", claim_decide_node)
     add_recorded("finalize", decide_node)
     add_recorded("finalize_evidence_insufficient", finalize_evidence_insufficient_node)
@@ -769,4 +835,13 @@ def build_workflow(
     workflow.add_edge("finalize", END)
     workflow.add_edge("finalize_evidence_insufficient", END)
 
-    return workflow.compile()
+    compiled = workflow.compile()
+    compiled.claim_extraction_gateway = gateway
+    compiled.claim_extraction_counter = claim_extraction_counter
+    def configure_claim_extraction(*, llm_gateway, repository, counter):
+        if llm_gateway is not gateway:
+            raise ValueError("workflow and service Claim gateways differ")
+        claim_capabilities.update(repository=repository, counter=counter)
+        compiled.claim_extraction_counter = counter
+    compiled.configure_claim_extraction = configure_claim_extraction
+    return compiled

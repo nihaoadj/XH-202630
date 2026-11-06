@@ -8,6 +8,7 @@ from pathlib import Path
 from time import monotonic
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from app.models.courseware.checkpoints import COURSEWARE_CHECKPOINT_STAGE_ORDER
 
 from app.core.courseware.packaging import package_courseware
 from app.core.courseware.provenance import build_provenance_graph, validate_provenance_graph
@@ -53,6 +54,9 @@ from app.agents.resource_workflows.interactive_courseware.lineage import reconci
 from app.core.courseware.review import quality_review, source_trace_review
 from app.agents.resource_workflows.interactive_courseware.source import CoursewareAdmissionError, admit_and_snapshot, content_hash, frozen_source_batch_id
 from app.agents.resource_workflows.interactive_courseware.release import CandidatePublication, CandidateReleaseCoordinator
+from app.agents.resource_workflows.interactive_courseware.content_review.lifecycle import ContentReviewLifecycle, verify_run_content
+from app.agents.resource_workflows.interactive_courseware.content_review.persistence import freeze_policy, read_state
+from app.models.courseware.content_review import ContentReviewBlocked, ContentReviewBusy, ContentReviewStateV1, json_hash
 
 
 class CoursewareControlStop(RuntimeError):
@@ -109,6 +113,7 @@ class InteractiveCoursewareWorkflow:
         self.scene_composer = compose_courseware_scene
         self.budget = CoursewareBudgetCoordinator(self.repo, get_settings)
         self.release_coordinator = CandidateReleaseCoordinator(self.repo)
+        self.content_review = ContentReviewLifecycle(self)
         self._lease_lost_event = None
 
     def set_lease_lost_event(self, event) -> None:
@@ -143,6 +148,12 @@ class InteractiveCoursewareWorkflow:
         }
         if state_json:
             state.update(state_json)
+        content_state = self.content_review.state(run_id)
+        if content_state is not None:
+            from app.core.courseware.content_review import stage_content_hash
+            identity = self.content_review.verify(run_id).identity if stage != "snapshot" else json_hash(row.get("source_snapshots") or [])
+            scene_values = [r["scene_json"] for r in self.repo.list_scenes(f"cws_{run_id}")]
+            state.update(content_identity=identity, stage_content_hash=stage_content_hash(identity, stage, scene_values))
         output_hash = content_hash(json.dumps(state, ensure_ascii=False, sort_keys=True, default=str))
         previous = self.repo.latest_checkpoint(run_id) or {}
         input_projection = {
@@ -167,6 +178,16 @@ class InteractiveCoursewareWorkflow:
             return False
         state = checkpoint.get("state_json") or {}
         expected_output = content_hash(json.dumps(state, ensure_ascii=False, sort_keys=True, default=str))
+        content_state = self.content_review.state(run_id)
+        if content_state is not None:
+            from app.core.courseware.content_review import stage_content_hash
+            stage = checkpoint["stage"]
+            if COURSEWARE_CHECKPOINT_STAGE_ORDER.get(stage, 0) >= 3:
+                verify_run_content(self.repo, run_id)
+            identity = self.content_review.verify(run_id).identity if stage != "snapshot" else json_hash((self.repo.get_job(run_id) or {}).get("source_snapshots") or [])
+            scenes = [r["scene_json"] for r in self.repo.list_scenes(f"cws_{run_id}")]
+            if state.get("content_identity") != identity or state.get("stage_content_hash") != stage_content_hash(identity, stage, scenes):
+                raise ContentReviewBlocked("checkpoint content identity changed")
         return bool(checkpoint.get("output_hash")) and checkpoint.get("output_hash") == expected_output \
             and checkpoint.get("input_hash") != checkpoint.get("output_hash")
 
@@ -215,8 +236,16 @@ class InteractiveCoursewareWorkflow:
             "task_kind": "courseware.run", "status": "queued", "payload": {"run_id": run_id},
             "idempotency_key": f"courseware.run:{run_id}",
         }
+        existing = next((r for r in self.repo.list_jobs(request.learner_id) if r.get("request_hash") == request_hash), None)
+        initial_spec = None
+        if not existing and get_settings().courseware_content_review_enabled:
+            policy = freeze_policy(get_settings(), self.llm_gateway, job_row["deadline_at"])
+            private = {"content_review": ContentReviewStateV1(policy=policy).model_dump(mode="json")}
+            initial_spec = {"spec_id": f"cws_{run_id}", "run_id": run_id, "schema_version": "1.0",
+                "prompt_version": "content-v1", "runtime_version": RUNTIME_VERSION, "status": "pending",
+                "spec_json": private, "content_hash": json_hash(private)}
         if hasattr(self.repo, "create_job_with_task_once"):
-            row = self.repo.create_job_with_task_once(job_row, task_row)
+            row = self.repo.create_job_with_task_once(job_row, task_row, initial_spec=initial_spec) if initial_spec else self.repo.create_job_with_task_once(job_row, task_row)
         else:
             row = self.repo.create_job(job_row)
             self.repo.enqueue_task_once(task_row)
@@ -255,10 +284,33 @@ class InteractiveCoursewareWorkflow:
 
     def run(self, run_id: str) -> CoursewareJobResponse | None:
         """Execute or resume the durable courseware state machine."""
+        if (self.repo.get_job(run_id) or {}).get("status") in {"published", "published_with_warnings"}:
+            return self.get_job(run_id)
+        # Bypass LLM-call accounting (T41): direct/Web execution entry owns
+        # its run segment; nested execution reuses it.  Purely observational.
+        from app.agents.shared.llm_accounting import courseware_run_segment
+
+        with courseware_run_segment(run_id):
+            return self._run(run_id)
+
+    def _run(self, run_id: str) -> CoursewareJobResponse | None:
+        claimed = False
         try:
+            if self.content_review.state(run_id) is not None:
+                self.content_review.claim(run_id)
+                claimed = True
             return self._run_workflow(run_id)
         except CoursewareControlStop as exc:
             return self._control_result(run_id, exc.code)
+        except ContentReviewBusy:
+            return self.get_job(run_id)
+        except ContentReviewBlocked:
+            row = self.repo.update_job(run_id, status="quarantined", error_code="COURSEWARE_CONTENT_REVIEW_BLOCKED", error_message="课件内容身份、预算或投影审核未通过")
+            self._event(run_id, "release_gate", "blocked", {"error_code": "COURSEWARE_CONTENT_REVIEW_BLOCKED"})
+            return self._job_response(row)
+        finally:
+            if claimed:
+                self.content_review.release(run_id)
 
     def _control_result(self, run_id: str, code: str) -> CoursewareJobResponse | None:
         status = {
@@ -283,9 +335,7 @@ class InteractiveCoursewareWorkflow:
         warnings: list[dict[str, str]] = list(job.get("warnings") or [])
         checkpoint = self.repo.latest_checkpoint(run_id)
         completed_stage = (checkpoint or {}).get("stage") if self._checkpoint_valid(run_id, checkpoint) else None
-        stage_order = {"snapshot": 1, "design": 2, "scenes": 3, "rule_review": 4,
-                       "quality_review": 5, "candidate_artifact": 6, "release": 7}
-        completed_rank = stage_order.get(completed_stage, 0)
+        completed_rank = COURSEWARE_CHECKPOINT_STAGE_ORDER.get(completed_stage, 0)
         # Older v3 plans could create more than the renderer/reviewer ceiling
         # of 16 scenes. A retry of that deterministic planning failure must
         # rebuild the storyboard, not repeatedly reuse the known-bad 23-page
@@ -310,7 +360,10 @@ class InteractiveCoursewareWorkflow:
         else:
             try:
                 self._stage(run_id, "snapshotting")
-                snapshots, knowledge_base_id = admit_and_snapshot(self.resource_service, self.audit_repo, job)
+                if self.content_review.state(run_id) is not None:
+                    snapshots, knowledge_base_id = admit_and_snapshot(self.resource_service, self.audit_repo, job, content_review=True)
+                else:
+                    snapshots, knowledge_base_id = admit_and_snapshot(self.resource_service, self.audit_repo, job)
                 # A resource-scoped job has one source.  Keep its batch as
                 # lineage metadata when present, but do not reject older or
                 # standalone resources that legitimately have no batch.
@@ -331,14 +384,28 @@ class InteractiveCoursewareWorkflow:
                 self._event(run_id, "snapshotting", "failed", {"error_type": type(exc).__name__})
                 return self._job_response(row)
 
+        if self.content_review.state(run_id) is not None:
+            # Validate frozen schema, question identities and bindings before
+            # design derivation or any Planner request, including snapshot reuse.
+            self.content_review.context(run_id)
         self._stage(run_id, "design_reviewing", source_snapshots=snapshots,
                     knowledge_base_id=knowledge_base_id)
         self._control_guard(run_id)
         learner_context = self._learner_context(job.get("learner_id"))
+        frozen_spec = self.repo.get_spec_by_run(run_id)
+        if self.content_review.state(run_id) is not None and (frozen_spec or {}).get("spec_json", {}).get("learner_context_snapshot"):
+            learner_context = LearnerContextSnapshot.model_validate(frozen_spec["spec_json"]["learner_context_snapshot"])
         design_stage = prepare_design(snapshots, learner_context, job.get("request_options") or {})
         if design_stage.failure:
             return self._stage_failure(run_id, design_stage.failure, warnings)
         learning_design = design_stage.design
+        if self.content_review.state(run_id) is not None:
+            from app.core.courseware.content_review import resolve_adapter
+            from app.models.courseware.learning_design import CoursewareLearningDesign
+            if (frozen_spec or {}).get("spec_json", {}).get("learning_design"):
+                learning_design = CoursewareLearningDesign.model_validate(frozen_spec["spec_json"]["learning_design"])
+            else:
+                learning_design = resolve_adapter(snapshots[0]).refine_design(snapshots[0], learning_design)
         warnings.extend(design_stage.warnings)
         resource_bundle = [
             ResourceBundleSnapshot.from_snapshot(item).model_dump(mode="json") for item in snapshots
@@ -502,6 +569,8 @@ class InteractiveCoursewareWorkflow:
                 run_id, document, snapshots, deterministic_document,
                 provenance_graph, warnings,
             )
+            if self.content_review.state(run_id) is not None:
+                title = document["title"]
             self._control_guard(run_id)
             existing_resource = self.repo.get_resource_by_run(run_id)
             resource_id = existing_resource["resource_id"] if existing_resource else f"cwr_{uuid.uuid4().hex}"
@@ -584,7 +653,17 @@ class InteractiveCoursewareWorkflow:
         Exceptions stay inside the caller's existing release failure boundary.
         """
         self._control_guard(run_id)
+        if self.content_review.state(run_id) is not None:
+            self.content_review.verify(run_id, document, persist_manifest=True, require_manifest=True)
         page_issues = page_quality_issues(document)
+        if page_issues and self.content_review.state(run_id) is not None:
+            safe_template = self.content_review.degrade(run_id, "page_quality_rejected")
+            if safe_template is None or page_quality_issues(safe_template) or source_trace_review(safe_template, snapshots) or quality_review(safe_template):
+                raise CoursewareReleaseGateError("COURSEWARE_PAGE_QUALITY_GATE_FAILED", "模板未满足课件内容硬门")
+            document = safe_template
+            provenance_graph = build_provenance_graph(document, snapshots)
+            warnings.append({"code": "PAGE_QUALITY_CONTENT_TEMPLATE", "message": "页面内容未达硬门，已清除新增文字并使用已验证模板", "fallback_version": "courseware-templates-v1"})
+            page_issues = []
         if page_issues:
             self._save_review(run_id, "page_quality", "rejected", page_issues)
             repairable_page_codes = {
@@ -641,6 +720,10 @@ class InteractiveCoursewareWorkflow:
         learner_context, learning_design,
     ):
         """Recover or create the frozen spec, retaining budget and write order."""
+        if self.content_review.state(run_id) is not None:
+            result = self.content_review.prepare(run_id, job, snapshots, resource_bundle, learner_context, learning_design)
+            self._checkpoint_completed(run_id, "design", state_json={"spec_id": result[2]})
+            return result
         recovered_spec = self.repo.get_spec_by_run(run_id) if completed_rank >= 2 else None
         plan_enrichment = None
         if recovered_spec:
@@ -725,6 +808,9 @@ class InteractiveCoursewareWorkflow:
         self, index, scene, *, run_id, spec_id, sources_by_id, learning_design, job,
     ):
         """Compose one closed scene contract under the existing budget guard."""
+        if self.content_review.state(run_id) is not None:
+            # All model prose for these fixed sources is approved enrichment.
+            return index, scene, None
         scene_id = f"{spec_id}_scene_{index + 1}"
         contract_errors = validate_scene_shape(scene)
         if contract_errors:
@@ -771,6 +857,9 @@ class InteractiveCoursewareWorkflow:
 
     def _persist_approved_scenes(self, run_id, spec_id, scenes, snapshots, ai_enabled):
         """Persist the approved scene set before recording its checkpoint."""
+        if self.content_review.state(run_id) is not None:
+            spec = self.repo.get_spec_by_run(run_id)["spec_json"]
+            self.content_review.verify(run_id, {"schema_version": "2.0", "title": spec["title"], "scenes": scenes, "design": spec["design"]}, persist_manifest=True)
         for index, scene in enumerate(scenes):
             scene_id = f"{spec_id}_scene_{index + 1}"
             scene_hash = content_hash(json.dumps(scene, ensure_ascii=False, sort_keys=True))
@@ -816,6 +905,7 @@ class InteractiveCoursewareWorkflow:
         job = self.repo.get_job(run_id)
         if job is None or job["status"] in {"published", "published_with_warnings"}:
             return self._job_response(job) if job else None
+        self.content_review.state(run_id)
         # Preserve this one deterministic planning code until the retry enters
         # the workflow. It instructs the workflow to discard the old oversized
         # storyboard and rebuild it under the current page budget.
@@ -852,12 +942,31 @@ class InteractiveCoursewareWorkflow:
         self, run_id: str, scene_id: str, *, review_instruction: str | None = None,
         automatic: bool = False, enqueue_outbox: bool = True, enqueue_only: bool = False,
     ) -> CoursewareJobResponse | None:
+        # Bypass LLM-call accounting (T41): one execution segment per
+        # scene-retry entry; nested reuse keeps a single segment per run.
+        from app.agents.shared.llm_accounting import courseware_run_segment
+
+        with courseware_run_segment(run_id, stage="scene_retry"):
+            return self._retry_scene(
+                run_id, scene_id, review_instruction=review_instruction,
+                automatic=automatic, enqueue_outbox=enqueue_outbox, enqueue_only=enqueue_only,
+            )
+
+    def _retry_scene(
+        self, run_id: str, scene_id: str, *, review_instruction: str | None = None,
+        automatic: bool = False, enqueue_outbox: bool = True, enqueue_only: bool = False,
+    ) -> CoursewareJobResponse | None:
         self._control_guard(run_id)
         job = self.repo.get_job(run_id)
         scene = self.repo.get_scene(scene_id)
         spec = self.repo.get_spec_by_run(run_id)
         if job is None or scene is None or spec is None or scene["spec_id"] != spec["spec_id"]:
             return None
+        if self.content_review.state(run_id) is not None:
+            verify_run_content(self.repo, run_id)
+            # Approved fixed projections have no failed editable item. A fresh
+            # overall finding uses the bounded enrichment revision route.
+            return self._job_response(job)
         if enqueue_only:
             next_attempt = int(scene.get("attempt") or 0) + 1
             input_snapshot_hash = content_hash(json.dumps({
@@ -987,6 +1096,15 @@ class InteractiveCoursewareWorkflow:
 
     def process_scene_outbox(self, run_id: str | None = None, limit: int = 10) -> dict[str, int]:
         """Consume retry intents after a process restart, idempotently."""
+        # Bypass LLM-call accounting (T41): the legacy outbox entry is one
+        # execution batch; each run keeps its own segment (created by the
+        # retry_scene call below), so consecutive runs never merge scopes.
+        from app.agents.shared.llm_accounting import courseware_batch
+
+        with courseware_batch():
+            return self._process_scene_outbox(run_id, limit)
+
+    def _process_scene_outbox(self, run_id: str | None = None, limit: int = 10) -> dict[str, int]:
         processed = skipped = failed = 0
         for item in self.repo.list_outbox(run_id, pending_only=True)[:max(1, limit)]:
             scene_id = item.get("scene_id")
@@ -1026,6 +1144,9 @@ class InteractiveCoursewareWorkflow:
             ),
             "scenes": [row["scene_json"] for row in self.repo.list_scenes(spec["spec_id"])],
         }
+        if self.content_review.state(run_id) is not None:
+            document["design"] = spec["spec_json"]["design"]
+            self.content_review.verify(run_id, document)
         issues = source_trace_review(document, snapshots) + quality_review(document)
         if issues:
             self._event(run_id, "republishing", "blocked", {"issue_count": len(issues)})
@@ -1106,6 +1227,7 @@ class InteractiveCoursewareWorkflow:
             return self._job_response(job)
         if job["status"] != "approved_pending_publish" or not job.get("resource_id"):
             return self._job_response(job)
+        verify_run_content(self.repo, run_id)
         resource = self.repo.update_resource_status(job["resource_id"], "published")
         if resource is None:
             return self._job_response(self.repo.update_job(run_id, status="failed", error_code="COURSEWARE_ARTIFACT_MISSING", error_message="待发布课件不存在"))
@@ -1195,6 +1317,8 @@ class InteractiveCoursewareWorkflow:
         spec = self.repo.get_spec_by_run(run_id)
         if spec is None:
             return
+        if self.content_review.state(run_id) is not None:
+            self.content_review.verify(run_id, document, persist_manifest=True)
         for index, scene in enumerate(document.get("scenes") or []):
             scene_id = f"{spec['spec_id']}_scene_{index + 1}"
             scene_hash = content_hash(json.dumps(scene, ensure_ascii=False, sort_keys=True))
@@ -1220,6 +1344,8 @@ class InteractiveCoursewareWorkflow:
         snapshots: list[dict[str, Any]], deterministic_document: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
         """Run bounded, machine-only quality repair before an artifact exists."""
+        if self.content_review.state(run_id) is not None:
+            return self.content_review.quality(run_id, job, document)
         budget_warning = self._review_budget_warning(run_id, job)
         quality_budget = self.budget.before_call(run_id, "quality_review")
         if not quality_budget.allowed:

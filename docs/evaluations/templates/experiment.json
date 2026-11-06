@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0.0",
+  "protocol_version": "2.0.0",
+  "experiment_id": null,
+  "status": "DRAFT",
+  "question": null,
+  "hypothesis": null,
+  "parent_experiment_id": null,
+  "scope": "component_or_end_to_end",
+  "changed_variables": [],
+  "controlled_variables": {},
+  "authorization": {
+    "conversation_reference": null,
+    "scope": null
+  },
+  "dataset": {
+    "dataset_id": null,
+    "version": null,
+    "manifest_ref": null,
+    "sha256": null,
+    "calibration_split": null,
+    "evaluation_split": null
+  },
+  "variants": [
+    {
+      "variant_id": "baseline",
+      "source_commit": null,
+      "dirty_snapshot_ref": null,
+      "dirty_snapshot_hash": null,
+      "dependency_hash": null,
+      "prompt_hash": null,
+      "config_hash": null,
+      "model": null
+    },
+    {
+      "variant_id": "candidate",
+      "source_commit": null,
+      "dirty_snapshot_ref": null,
+      "dirty_snapshot_hash": null,
+      "dependency_hash": null,
+      "prompt_hash": null,
+      "config_hash": null,
+      "model": null
+    }
+  ],
+  "design": {
+    "repeats": 3,
+    "sample_size": null,
+    "sample_size_rationale": null,
+    "order_seed": null,
+    "model_seed": null,
+    "concurrency": 1,
+    "matrix_ref": null,
+    "cache_policy": null,
+    "retry_policy": null
+  },
+  "metrics": [],
+  "primary_metric_id": null,
+  "guardrails": [],
+  "statistics": {
+    "independent_unit": null,
+    "method": "paired_cluster_bootstrap",
+    "confidence_level": 0.95,
+    "resamples": 10000,
+    "seed": null,
+    "failure_policy": null,
+    "decision_rule": null
+  },
+  "budget": {
+    "currency": null,
+    "max_cost": null,
+    "max_total_tokens": null,
+    "max_transport_attempts": null,
+    "max_seconds": null,
+    "prices_ref": null,
+    "includes_evaluator": true
+  },
+  "runner": {
+    "command": null,
+    "source_hash": null,
+    "isolated_environment": null
+  },
+  "scorer": {
+    "type": null,
+    "version": null,
+    "source_hash": null,
+    "rubric_ref": null
+  },
+  "frozen_at": null,
+  "limitations": []
+}
