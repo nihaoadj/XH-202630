@@ -507,6 +507,16 @@ class SQLFeedbackLoopRepository(BaseFeedbackLoopRepository):
                 db.commit()
             return self._load_result(db, attempt_id, replay=False)
 
+    def get_attempt(self, learner_id, attempt_id):
+        with self.session_factory() as db:
+            row = db.query(LearningAttemptORM).filter_by(learner_id=learner_id, attempt_id=attempt_id).first()
+            return self._load_attempt(db, row) if row else None
+
+    def get_result(self, learner_id, attempt_id):
+        with self.session_factory() as db:
+            row = db.query(LearningAttemptORM).filter_by(learner_id=learner_id, attempt_id=attempt_id).first()
+            return self._load_result(db, row.attempt_id, replay=False) if row else None
+
     def list_attempts(self, learner_id: str, limit: int | None = 20) -> list[LearningAttempt]:
         with self.session_factory() as db:
             rows = db.query(LearningAttemptORM).filter_by(learner_id=learner_id).order_by(

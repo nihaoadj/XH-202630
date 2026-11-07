@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import timezone
 
 from app.db.diagnosis.base import BaseDiagnosisRepository
 from app.db.feedback.base import BaseFeedbackRepository
@@ -30,6 +31,10 @@ def _event_sort_value(event: LearningHistoryEvent) -> float:
 def _datetime_sort_value(value) -> float:
     if value is None:
         return float("-inf")
+    # SQLite returns naive datetimes while memory/SQL-with-timezone rows are
+    # aware. Sorting both must assume UTC, not the process local zone.
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
     return value.timestamp()
 
 
@@ -45,7 +50,9 @@ class LearningHistoryService:
         resource_repo: BaseResourceRepository | None = None,
         audit_repo: BaseAuditRepository | None = None,
         knowledge_service: KnowledgeService | None = None,
+        round_service=None,
     ):
+        self.round_service = round_service
         self.profile_service = profile_service
         self.questionnaire_repo = questionnaire_repo
         self.diagnosis_repo = diagnosis_repo
@@ -125,6 +132,17 @@ class LearningHistoryService:
         )
         return f"correction:{batch_id}:{attempt_id}"
 
+    def _learner_bound_run_ids(self, learner_id: str) -> set[str]:
+        """Runs already projected as round members, bounded to this learner."""
+        repository = self.round_service.repository
+        bound: set[str] = set()
+        for root in repository.find("learning_rounds", learner_id=learner_id):
+            for stage in repository.find("learning_round_stages", round_id=root["round_id"]):
+                for node in repository.find("learning_round_stage_nodes", stage_id=stage["stage_id"]):
+                    bound.update(row["run_id"] for row in
+                                 repository.find("learning_round_job_bindings", stage_node_id=node["stage_node_id"]))
+        return bound
+
     def journey(self, learner_id: str, *, offset: int = 0, limit: int = 20) -> LearningJourneyResponse | None:
         """Build a learner-readable chain from durable facts without inventing links.
 
@@ -138,6 +156,9 @@ class LearningHistoryService:
             return None
 
         jobs = self.generation_job_repo.list_by_learner(learner_id)
+        if self.round_service is not None:
+            bound = self._learner_bound_run_ids(learner_id)
+            jobs = [job for job in jobs if job.run_id not in bound]
         results = self.feedback_loop_repo.list_results(learner_id, limit=500) if self.feedback_loop_repo else []
         jobs_by_run = {item.run_id: item for item in jobs}
         results_by_run = {
@@ -292,7 +313,24 @@ class LearningHistoryService:
             if next_rounds:
                 round_item.path_change["next_steps"] = next_rounds
 
-        page = rounds[offset:offset + limit]
+        normal_rounds = []
+        if self.round_service is not None:
+            roots = self.round_service.repository.find("learning_rounds", learner_id=learner_id)
+            for root in roots:
+                detail = self.round_service.detail(learner_id, root["round_id"])
+                if root["protocol_version"] == "legacy-correction/v1":
+                    source = self.feedback_loop_repo.get_attempt(learner_id, root["source_attempt_id"])
+                    parent = next((item for item in rounds if source and source.source_run_id in item.run_ids), None)
+                    if parent:
+                        parent.run_summary["learning_round"] = detail.model_dump(mode="json")
+                else:
+                    normal_rounds.append(detail)
+        combined = [(item.occurred_at, item.round_id or item.run_id, "legacy", item) for item in rounds]
+        combined.extend((item.created_at, item.round_id, "round", item) for item in normal_rounds)
+        combined.sort(key=lambda item: (_datetime_sort_value(item[0]), item[1]), reverse=True)
+        selected = combined[offset:offset + limit]
+        page = [item[3] for item in selected if item[2] == "legacy"]
+        round_page = [item[3] for item in selected if item[2] == "round"]
         current_state = self._current_state(profile, results)
         linked_run_ids = {job.run_id for job in jobs}
         timeline = self.timeline(learner_id)
@@ -306,9 +344,10 @@ class LearningHistoryService:
             profile=profile,
             current_state=current_state,
             rounds=page,
+            learning_rounds=round_page,
             unlinked_events=unlinked_events,
-            total_rounds=len(rounds),
-            next_offset=offset + limit if offset + limit < len(rounds) else None,
+            total_rounds=len(combined),
+            next_offset=offset + limit if offset + limit < len(combined) else None,
         )
 
     def _batch_resources(

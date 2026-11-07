@@ -126,6 +126,7 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { diagnosisApi, profileApi } from '../learners/api.js'
 import { coursewareApi } from '../courseware/api.js'
 import { generateApi } from '../generation/api.js'
+import { roundGenerationApi } from '../generation/roundApi.js'
 import { knowledgeApi } from '../knowledge/api.js'
 import { onboardingApi } from './api.js'
 import { useAuthStore } from '../../stores/auth'
@@ -708,6 +709,7 @@ async function submitDiagnosis() {
   }
 }
 
+let roundSubmissionChoice = null
 async function submitGeneration() {
   if (busy.value) return
   if (!selectedResourceTypes.value.length) {
@@ -734,10 +736,23 @@ async function submitGeneration() {
       },
     }
     localStorage.setItem('last_generation_request', JSON.stringify(payload))
-    const responses = await generateApi.createJobsForClaim(payload)
+    const fingerprint = JSON.stringify(payload)
+    if (!roundSubmissionChoice || roundSubmissionChoice.fingerprint !== fingerprint) {
+      const capabilities = await roundGenerationApi.capabilities().catch(() => null)
+      if (!setupMounted || version !== requestVersion || currentUser.value?.user_id !== owner) return
+      roundSubmissionChoice = { fingerprint, enabled: capabilities?.data?.round_creation_enabled === true, key: `round-${crypto.randomUUID()}` }
+    }
+    let round = null
+    let responses
+    if (roundSubmissionChoice.enabled) {
+      const response = await roundGenerationApi.create({ ...payload, selection_key: roundSubmissionChoice.key })
+      round = response.data
+      const primary = round.members.find(member => member.role === 'primary')
+      responses = [{ data: { run_id: round.primary_default_run_id || primary?.job_ids[0] } }]
+    } else responses = await generateApi.createJobsForClaim(payload)
     if (!setupMounted || version !== requestVersion || currentUser.value?.user_id !== owner) return
     const res = responses[0]
-    localStorage.setItem('current_generation_run_ids', JSON.stringify(responses.map((item) => item.data?.run_id).filter(Boolean)))
+    localStorage.setItem('current_generation_run_ids', JSON.stringify(round ? round.members.flatMap(member => member.job_ids) : responses.map((item) => item.data?.run_id).filter(Boolean)))
     draftCompleted = true
     clearDraft(draftOwner)
     if (version === requestVersion) submittingGeneration.value = false
@@ -746,6 +761,7 @@ async function submitGeneration() {
       query: {
         runId: res.data.run_id,
         learnerId: activeLearnerId.value,
+        ...(round ? { roundId: round.round_id, stageId: round.stage_id, memberId: round.members.find(member => member.role === 'primary')?.member_id } : {}),
       },
     })
   } catch (error) {

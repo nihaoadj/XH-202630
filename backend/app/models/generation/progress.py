@@ -9,6 +9,16 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 
+class RoundBindingSummaryV1(BaseModel):
+    """Read-only job binding resolved by the server from persisted facts."""
+
+    round_id: str = Field(min_length=1, max_length=128)
+    member_id: str = Field(min_length=1, max_length=128)
+    stage_id: str = Field(min_length=1, max_length=128)
+    stage_node_id: str = Field(min_length=1, max_length=128)
+    role: Literal["primary", "review", "legacy"]
+
+
 class ResourceRepresentation(str, Enum):
     TEXT = "text"
 

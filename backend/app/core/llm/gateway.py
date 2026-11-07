@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.core.llm.budget import LLMBudgetGuard, reserve_call, budgeted_transport_call, effective_context
+
 import json
 import logging
 import random
@@ -286,8 +288,10 @@ class LLMGateway:
         monotonic: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
         jitter: Callable[[], float] = random.random,
+        budget_guard: LLMBudgetGuard | None = None,
     ):
         self.transport = transport
+        self.budget_guard = budget_guard
         self.retry_base_delay_seconds = retry_base_delay_seconds
         self.retry_max_delay_seconds = retry_max_delay_seconds
         self.default_options = default_options or LLMCallOptions()
@@ -591,6 +595,7 @@ class LLMGateway:
         options: LLMCallOptions,
         attempt_observer: AttemptObserver | None = None,
     ) -> LLMCallResult[T]:
+        context = effective_context(context)
         started_at = self.monotonic()
         attempts: list[LLMAttemptSummary] = []
         usages: list[LLMUsage] = []
@@ -662,10 +667,12 @@ class LLMGateway:
                 timeout = min(timeout, getattr(ticket, "timeout_seconds", timeout))
             attempt_started = self.monotonic()
             raw: RawLLMResponse | None = None
+            reservation = reserve_call(self.budget_guard, context, attempt, next_output_tokens, timeout)
             transport_error = None
             try:
-                raw = _invoke_transport_with_hard_timeout(
-                    self.transport,
+                raw = budgeted_transport_call(
+                    _invoke_transport_with_hard_timeout, self.budget_guard, reservation,
+                    transport=self.transport,
                     timeout_seconds=timeout,
                     messages=prepared_messages,
                     output_schema=output_schema,
@@ -883,6 +890,7 @@ class LLMGateway:
         model's plain text directly.
         """
 
+        context = effective_context(context)
         started_at = self.monotonic()
         attempts: list[LLMAttemptSummary] = []
         usages: list[LLMUsage] = []
@@ -915,9 +923,11 @@ class LLMGateway:
                 timeout = min(timeout, max(0.001, remaining))
             attempt_started = self.monotonic()
             raw: RawLLMResponse | None = None
+            reservation = reserve_call(self.budget_guard, context, attempt, options.max_output_tokens, timeout)
             try:
-                raw = _invoke_transport_with_hard_timeout(
-                    self.transport,
+                raw = budgeted_transport_call(
+                    _invoke_transport_with_hard_timeout, self.budget_guard, reservation,
+                    transport=self.transport,
                     timeout_seconds=timeout,
                     messages=call_messages,
                     # TEXT mode never reads this schema; the parameter keeps

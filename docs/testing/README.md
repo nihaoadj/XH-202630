@@ -291,3 +291,10 @@ T48 验收修复的新增回归包含正常bool难度、逆序spec/display_order
 
 
 T48 第二次收尾回归：`resource-quality-query`新增较早/同序/较晚损坏审核、跨资源隔离、后续有效恢复，并保留persisted approved记录验证其不可绕过最新失败。`resource-quality-evaluation`新增两难度标签的32/33/空值边界及null预测、临时SQL/API坏标签隔离（相关组无效、独立组及旧摘要可用）。本次无前端行为改动，只重新导出并检查契约。
+
+T49 单主节点/反馈双节点学习轮次专项（2026-11-07 收尾）：先执行 `npm --prefix frontend run build`，再运行 `python scripts/run_tests.py --suite learning-round-contracts --suite learning-round-policies --suite learning-round-persistence --suite learning-round-budget --suite learning-round-transactions --suite learning-round-generation --suite learning-round-recovery --suite learning-round-api --suite learning-round-projections --suite learning-round-compat --output output/test-runs/t49-backend-r4`、`python scripts/run_tests.py --suite learning-round-frontend --output output/test-runs/t49-frontend-r2` 与 `python scripts/run_tests.py --suite learning-round-browser --output output/test-runs/t49-browser-r2`；静态门禁为 `npm --prefix frontend run typecheck`、范围 Ruff/ESLint、`scripts/check_architecture.py`、`scripts/export_frontend_contracts.py --check` 与 `git diff --check`。本次记录：后端 10/10 PASS（289 项通过、1 项 SQL-only 跳过）、前端 10 项、浏览器 3 场景，均退出 0。
+
+- `learning-round-recovery`：真实 SQLite 文件重开后的轮次/绑定/任务读取与创建重放；queued worker 任务只执行一次；放弃 claim 经 reconcile 回收；租约过期后新 owner 接管且旧 owner 不能完成；失败 retry 保持同一 stage_node 并累计恢复额度；legacy 双节点无绑定任务仍可恢复；单成员失败只重试该成员。
+- `learning-round-generation` 本轮扩至 49 项：两目标拒绝、review 资格、need 跨轮保留、同源题 ID 分别映射、95% 可纠错、重复提交冲突、跨阶段会话拒绝、仅 review 六题复测（根 path hold、主结果与 tier 不变、画像只 +1）、资源缺组 not-ready。
+- A01–A20 的逐项用例映射、证据路径和“通过/部分”判定见 `docs/update_plan/T49.md` 第 16 节。A07、A08、A14、A15 仍为部分；A03/A04/A19 为服务级或仓储级证据。
+- 确定性限制：95% 用例在 `RoundAssessment.prepare` 注入已判分成绩；仅 review 复测把短答评分替换为确定性 1.0，避免真实 LLM。未运行后端全量、完整 regression/acceptance、真实模型、生产迁移/部署与多浏览器矩阵；本地 PASS 不代表 CI、生产就绪或整体验收。

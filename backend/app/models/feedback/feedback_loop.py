@@ -114,6 +114,7 @@ class LearningAttemptSubmit(StrictFeedbackModel):
     @classmethod
     def validate_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
         allowed = {
+            "round_context",
             "source",
             "client_version",
             "session_id",
@@ -351,6 +352,7 @@ class FeedbackLoopResult(StrictFeedbackModel):
     generation_options: NextGenerationOptionsV1 | None = None
     feedback_report: dict[str, Any] = Field(default_factory=dict)
     idempotent_replay: bool = False
+    round_summary: dict[str, Any] | None = None
 
 
 class FeedbackContext(StrictFeedbackModel):

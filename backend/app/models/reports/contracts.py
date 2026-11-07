@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from app.models.feedback.rounds import LearningRoundDetailV1
 from app.models.learning_documents.schemas import (
     AgentTrace,
     FeedbackRecord,
@@ -172,6 +173,8 @@ class ReportRevisionPartsV1(BaseModel):
 
 
 class ReportResponse(BaseModel):
+    learning_round_summary: LearningRoundDetailV1 | None = None
+    remediation_needs: List[Dict[str, Any]] = Field(default_factory=list)
     # Keep the original fields below intact: report 4.1 is deliberately an
     # additive read contract for existing report consumers.
     report_schema_version: str = "4.1"

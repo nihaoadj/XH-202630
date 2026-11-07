@@ -1209,3 +1209,23 @@ T44 通用文本审核未新增表或列：六类文本资源的通用账本、�
 修复续作不迁移历史行。新任务在既有 request snapshot/checkpoint 私有 JSON 冻结执行信封 1.1 的 reviewer 身份及独立 hash，内部 V1 策略 hash 不变；旧执行信封 1.0 保留原文只读，不补写身份。恢复根据持久产物/结构包和冻结证据逐观察重跑硬门与核销，拒绝缺引用、hash/版本错配和 hash 自洽的非法决定；发布写入前完成校验。
 
 T46 两类审核修订输入分离未新增表或列：`resource_review_revision` / `claim_review_revision` 及带版本的 `generation_revision_inputs` 映射仅存在于同次图调用的内存 `constraints` 与单资源 retry 的 `revision_feedback` 传输槽，不写入 `build_checkpoint_projection` 白名单，也不跨进程恢复；新 Run 重试仍从已持久资源/审核/Claim/Evidence 重建输入。持久 V1–V4 审核记录与既有 checkpoint JSON 保持原样，不做物理迁移。
+
+## T49 学习轮次存储（p0_38）
+
+新增九张表，均为增量迁移，不重命名或删除既有 Job、Attempt、资源、反馈与课程记录：
+
+| 表 | 作用与关键约束 |
+|---|---|
+| `learning_rounds` | 轮次根：学习者、知识库、方向、协议版本（`learning-round/v1` 或 `legacy-correction/v1`）、可选父轮次与来源 Attempt、选择 key/hash、创建时冻结预算快照、`row_version`。唯一 `(learner_id, selection_key)`；来源非空时唯一 `(learner_id, protocol_version, source_attempt_id)`；普通协议父轮次唯一 |
+| `learning_round_nodes` | 本轮成员：`role=primary/review/legacy`、冻结节点名与阶。唯一 `(round_id, skill_node_id)`；`primary`/`review` 各至多一条；legacy 协议只能有 legacy 成员 |
+| `learning_round_stages` | 阶段：`initial`（ordinal=0）或 `correction`（递增），`state=producing/awaiting_assessment/completed`，阶段选择 key/hash 与阶段预算。唯一 `(round_id, ordinal)`、`(round_id, selection_key)` |
+| `learning_round_stage_nodes` | 阶段成员：独立 `batch_id`（仅 legacy 导入 initial 允许为空）、来源 Attempt、冻结单节点请求/类型/难度、`budget_counters`、`recovery_count`。唯一 `(stage_id, round_node_id)`、非空 `batch_id` 唯一、`(round_node_id, source_attempt_id)` 唯一 |
+| `learning_round_job_bindings` | 一个真实 Run 只属于一个 stage_node；`relation_kind=production/append/retry` 与来源 Run。索引 `(stage_node_id, created_at, run_id)` |
+| `learning_round_evaluation_sessions` | 每阶段唯一冻结会话：manifest 与 hash（私有答案/评分策略不外泄）、`grading_state=idle/grading/submitted`、提交 key/hash、评分 owner/generation/lease、`attempt_id` 唯一。`submitted` 与 `attempt_id` 必须同时存在 |
+| `feedback_node_decisions` | 每节点本次反馈事实：分数、action/reason/targets、来源角色、纠错资格、错误摘要。唯一 `(attempt_id, round_node_id)`；不替代既有掌握态 |
+| `learner_remediation_needs` | 未解决补救项：`status=remediate/practice/resolved`、首个未解决与最近 Attempt、最近分数、等待轮次。唯一 `(learner_id, knowledge_base_id, skill_node_id)`，与课程 `wait_rounds` 不混用 |
+| `learning_round_budget_reservations` | 每次网关尝试的预留/结算：scope（生产 stage_node 或评分 session）、`run_id`、`call_id`、`gateway_attempt`、预留/已知 token 与秒数、`state=reserved/settled/unknown`。唯一 `(scope_id, call_id, gateway_attempt)` |
+
+迁移入口 `db/migrations/p0_38_learning_rounds.py`，注册于 `db/migrations/__init__.py`；`init_database` 在 `create_all` 前导入 `db/feedback/round_models.py`，随后执行既有增量迁移与 p0_38，最后幂等刷新 `p0_35` 报告触发器。重复执行不重置 epoch。报告侧 `report-read/3` 把新表纳入 `WATCHED_TABLES`，评分租约心跳与预算计数不触发报告重建。删除画像时在同一事务内先清会话 `attempt_id`、预算预留与节点决策，再删除轮次事实；Memory 与 SQL 语义一致。
+
+旧数据不批量回填：`legacy-correction/v1` 容器的 initial `batch_id` 为空并由私有 manifest 引用原批次与资源，`session.attempt_id` 指向真实旧 Attempt，禁止重评分或复制伪 Attempt。

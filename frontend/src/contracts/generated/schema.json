@@ -2785,6 +2785,17 @@
           ],
           "default": null
         },
+        "learning_round_summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearningRoundDetailV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mastery_overview": {
           "title": "Mastery Overview",
           "type": "object"
@@ -2891,6 +2902,13 @@
             "$ref": "#/$defs/LearningResource"
           },
           "title": "Recent Resources",
+          "type": "array"
+        },
+        "remediation_needs": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Remediation Needs",
           "type": "array"
         },
         "report_availability": {
@@ -3511,6 +3529,17 @@
       "title": "ExerciseItem",
       "type": "object"
     },
+    "FeedbackAction": {
+      "enum": [
+        "remediate",
+        "practice",
+        "advance",
+        "hold",
+        "human_review"
+      ],
+      "title": "FeedbackAction",
+      "type": "string"
+    },
     "FeedbackAnswer": {
       "description": "单题答题详情",
       "properties": {
@@ -3735,6 +3764,144 @@
       "title": "FeedbackRecord",
       "type": "object"
     },
+    "GenerateCreateRequest": {
+      "additionalProperties": false,
+      "description": "Public new-job contract; persisted legacy snapshots use GenerateRequest.",
+      "properties": {
+        "claim_max_iterations": {
+          "default": 1,
+          "description": "Claim 审核专用最大返工次数；默认1次，0关闭专用返工，不借用普通返工额度",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Claim Max Iterations",
+          "type": "integer"
+        },
+        "constraints": {
+          "description": "生成约束",
+          "title": "Constraints",
+          "type": "object"
+        },
+        "diagnostic_result_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "诊断结果 ID",
+          "title": "Diagnostic Result Id"
+        },
+        "difficulty_preference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "难度偏好",
+          "title": "Difficulty Preference"
+        },
+        "generation_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "draft",
+                "standard",
+                "strict"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "standard",
+          "description": "生成模式：draft | standard | strict",
+          "title": "Generation Mode"
+        },
+        "include_claim_check": {
+          "default": false,
+          "description": "是否进行 Claim 级审核；开启后建议每任务只生成一个资源",
+          "title": "Include Claim Check",
+          "type": "boolean"
+        },
+        "include_review": {
+          "default": true,
+          "description": "是否进入审核",
+          "title": "Include Review",
+          "type": "boolean"
+        },
+        "knowledge_base_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "当前知识库 ID",
+          "title": "Knowledge Base Id"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "max_iterations": {
+          "default": 2,
+          "description": "最大业务返工次数",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "profile_focus_mode": {
+          "default": "auto",
+          "description": "画像薄弱点注入模式",
+          "enum": [
+            "auto",
+            "off"
+          ],
+          "title": "Profile Focus Mode",
+          "type": "string"
+        },
+        "resource_types": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Resource Types",
+          "type": "array"
+        },
+        "target_skill_nodes": {
+          "description": "目标能力节点（最多一个）",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Target Skill Nodes",
+          "type": "array"
+        },
+        "topic": {
+          "description": "学习主题",
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "learner_id",
+        "topic"
+      ],
+      "title": "GenerateCreateRequest",
+      "type": "object"
+    },
     "GenerateRequest": {
       "description": "生成资源请求模型",
       "properties": {
@@ -3870,6 +4037,211 @@
         "topic"
       ],
       "title": "GenerateRequest",
+      "type": "object"
+    },
+    "GenerateRoundCreateRequestV1": {
+      "additionalProperties": false,
+      "description": "A round may split multiple selected Claim resources into separate jobs.",
+      "properties": {
+        "claim_max_iterations": {
+          "default": 1,
+          "description": "Claim 审核专用最大返工次数；默认1次，0关闭专用返工，不借用普通返工额度",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Claim Max Iterations",
+          "type": "integer"
+        },
+        "constraints": {
+          "description": "生成约束",
+          "title": "Constraints",
+          "type": "object"
+        },
+        "diagnostic_result_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "诊断结果 ID",
+          "title": "Diagnostic Result Id"
+        },
+        "difficulty_preference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "难度偏好",
+          "title": "Difficulty Preference"
+        },
+        "generation_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "draft",
+                "standard",
+                "strict"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "standard",
+          "description": "生成模式：draft | standard | strict",
+          "title": "Generation Mode"
+        },
+        "include_claim_check": {
+          "default": false,
+          "description": "是否进行 Claim 级审核；开启后建议每任务只生成一个资源",
+          "title": "Include Claim Check",
+          "type": "boolean"
+        },
+        "include_review": {
+          "default": true,
+          "description": "是否进入审核",
+          "title": "Include Review",
+          "type": "boolean"
+        },
+        "knowledge_base_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "当前知识库 ID",
+          "title": "Knowledge Base Id"
+        },
+        "learner_id": {
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "max_iterations": {
+          "default": 2,
+          "description": "最大业务返工次数",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "profile_focus_mode": {
+          "default": "auto",
+          "description": "画像薄弱点注入模式",
+          "enum": [
+            "auto",
+            "off"
+          ],
+          "title": "Profile Focus Mode",
+          "type": "string"
+        },
+        "resource_types": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Resource Types",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selection_key": {
+          "maxLength": 128,
+          "minLength": 8,
+          "title": "Selection Key",
+          "type": "string"
+        },
+        "target_skill_nodes": {
+          "description": "目标能力节点（最多一个）",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Target Skill Nodes",
+          "type": "array"
+        },
+        "topic": {
+          "description": "学习主题",
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "learner_id",
+        "topic",
+        "selection_key"
+      ],
+      "title": "GenerateRoundCreateRequestV1",
+      "type": "object"
+    },
+    "GenerationCapabilitiesV1": {
+      "additionalProperties": false,
+      "properties": {
+        "protocol_version": {
+          "const": "learning-round/v1",
+          "default": "learning-round/v1",
+          "enum": [
+            "learning-round/v1"
+          ],
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "round_creation_enabled": {
+          "title": "Round Creation Enabled",
+          "type": "boolean"
+        },
+        "round_query_available": {
+          "title": "Round Query Available",
+          "type": "boolean"
+        },
+        "round_recovery_available": {
+          "title": "Round Recovery Available",
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "single_target_required": {
+          "const": true,
+          "default": true,
+          "enum": [
+            true
+          ],
+          "title": "Single Target Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "round_creation_enabled",
+        "round_query_available",
+        "round_recovery_available"
+      ],
+      "title": "GenerationCapabilitiesV1",
       "type": "object"
     },
     "GenerationJobCreateResponse": {
@@ -4094,6 +4466,17 @@
         },
         "resource_progress_summary": {
           "$ref": "#/$defs/RunResourceProgressSummary"
+        },
+        "round_binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoundBindingSummaryV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "run_id": {
           "title": "Run Id",
@@ -5407,6 +5790,18 @@
       "title": "LearnerTierProgressV1",
       "type": "object"
     },
+    "LearningIntent": {
+      "description": "The learner's explicit objective for the next resource batch.",
+      "enum": [
+        "reinforce_weakness",
+        "learn_new_knowledge",
+        "learn_new_and_reinforce",
+        "downgrade_learning",
+        "upgrade_learning"
+      ],
+      "title": "LearningIntent",
+      "type": "string"
+    },
     "LearningNodeMasteryMapV1": {
       "properties": {
         "nodes": {
@@ -6332,6 +6727,178 @@
         "source_refs"
       ],
       "title": "LearningResource",
+      "type": "object"
+    },
+    "LearningRoundDetailV1": {
+      "additionalProperties": false,
+      "properties": {
+        "available_actions": {
+          "items": {
+            "enum": [
+              "append_primary",
+              "evaluate",
+              "correct",
+              "next",
+              "retry"
+            ],
+            "type": "string"
+          },
+          "title": "Available Actions",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/RoundMemberSummaryV1"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Members",
+          "type": "array"
+        },
+        "protocol_version": {
+          "enum": [
+            "learning-round/v1",
+            "legacy-correction/v1"
+          ],
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "round_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Round Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/RoundStageSummaryV1"
+          },
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "round_id",
+        "protocol_version",
+        "created_at",
+        "members",
+        "learner_id",
+        "stages",
+        "available_actions"
+      ],
+      "title": "LearningRoundDetailV1",
+      "type": "object"
+    },
+    "LearningRoundListV1": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/LearningRoundSummaryV1"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "limit": {
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "total": {
+          "minimum": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "learner_id",
+        "offset",
+        "limit",
+        "total",
+        "items"
+      ],
+      "title": "LearningRoundListV1",
+      "type": "object"
+    },
+    "LearningRoundSummaryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/RoundMemberSummaryV1"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Members",
+          "type": "array"
+        },
+        "protocol_version": {
+          "enum": [
+            "learning-round/v1",
+            "legacy-correction/v1"
+          ],
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "round_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Round Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round_id",
+        "protocol_version",
+        "created_at",
+        "members"
+      ],
+      "title": "LearningRoundSummaryV1",
       "type": "object"
     },
     "MetricThresholdV1": {
@@ -7779,6 +8346,17 @@
           ],
           "default": null
         },
+        "learning_round_summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearningRoundDetailV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mastery_overview": {
           "title": "Mastery Overview",
           "type": "object"
@@ -7885,6 +8463,13 @@
             "$ref": "#/$defs/LearningResource"
           },
           "title": "Recent Resources",
+          "type": "array"
+        },
+        "remediation_needs": {
+          "items": {
+            "type": "object"
+          },
+          "title": "Remediation Needs",
           "type": "array"
         },
         "report_availability": {
@@ -8306,6 +8891,107 @@
         "resource_type"
       ],
       "title": "ResourceDifficultyPointV1",
+      "type": "object"
+    },
+    "ResourceEvaluationQuestion": {
+      "description": "学习后测评题目",
+      "properties": {
+        "diagnostic_dimension": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Diagnostic Dimension"
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty"
+        },
+        "knowledge_point": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Point"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "path_node_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path Node Id"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "question_id": {
+          "title": "Question Id",
+          "type": "string"
+        },
+        "question_type": {
+          "title": "Question Type",
+          "type": "string"
+        },
+        "skill_node_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Node Id"
+        },
+        "source": {
+          "default": "resource",
+          "enum": [
+            "resource",
+            "assessment_bank",
+            "knowledge_base"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question_id",
+        "question_type",
+        "question"
+      ],
+      "title": "ResourceEvaluationQuestion",
       "type": "object"
     },
     "ResourceExecutionProgress": {
@@ -8826,6 +9512,1120 @@
       ],
       "title": "ResourceRepresentation",
       "type": "string"
+    },
+    "RoundAnswerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "title": "Answer"
+        },
+        "question_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Question Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question_id",
+        "answer"
+      ],
+      "title": "RoundAnswerV1",
+      "type": "object"
+    },
+    "RoundAttemptProcessingV1": {
+      "additionalProperties": false,
+      "properties": {
+        "retry_after_seconds": {
+          "const": 2,
+          "default": 2,
+          "enum": [
+            2
+          ],
+          "title": "Retry After Seconds",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "state": {
+          "const": "grading",
+          "default": "grading",
+          "enum": [
+            "grading"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "RoundAttemptProcessingV1",
+      "type": "object"
+    },
+    "RoundAttemptSubmitV1": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/RoundAnswerV1"
+          },
+          "maxItems": 500,
+          "minItems": 1,
+          "title": "Answers",
+          "type": "array"
+        },
+        "duration_ms": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "expected_profile_version": {
+          "minimum": 1,
+          "title": "Expected Profile Version",
+          "type": "integer"
+        },
+        "idempotency_key": {
+          "maxLength": 128,
+          "minLength": 8,
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "learning_reflection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoundLearningReflectionV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "manifest_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Hash",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "learner_id",
+        "session_id",
+        "manifest_hash",
+        "idempotency_key",
+        "expected_profile_version",
+        "submitted_at",
+        "answers"
+      ],
+      "title": "RoundAttemptSubmitV1",
+      "type": "object"
+    },
+    "RoundBindingSummaryV1": {
+      "description": "Read-only job binding resolved by the server from persisted facts.",
+      "properties": {
+        "member_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Member Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "review",
+            "legacy"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "round_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Round Id",
+          "type": "string"
+        },
+        "stage_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stage Id",
+          "type": "string"
+        },
+        "stage_node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stage Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round_id",
+        "member_id",
+        "stage_id",
+        "stage_node_id",
+        "role"
+      ],
+      "title": "RoundBindingSummaryV1",
+      "type": "object"
+    },
+    "RoundCandidatesV1": {
+      "additionalProperties": false,
+      "properties": {
+        "correction_targets": {
+          "items": {
+            "$ref": "#/$defs/RoundCorrectionTargetV1"
+          },
+          "title": "Correction Targets",
+          "type": "array"
+        },
+        "eligible_review_nodes": {
+          "items": {
+            "$ref": "#/$defs/NextGenerationCandidateV1"
+          },
+          "title": "Eligible Review Nodes",
+          "type": "array"
+        },
+        "generation_options": {
+          "$ref": "#/$defs/NextGenerationOptionsV1"
+        },
+        "profile_version": {
+          "minimum": 1,
+          "title": "Profile Version",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation_options",
+        "eligible_review_nodes",
+        "correction_targets",
+        "profile_version"
+      ],
+      "title": "RoundCandidatesV1",
+      "type": "object"
+    },
+    "RoundCorrectionSelectionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "include_claim_check": {
+          "default": false,
+          "title": "Include Claim Check",
+          "type": "boolean"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selection_key": {
+          "maxLength": 128,
+          "minLength": 8,
+          "title": "Selection Key",
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/RoundCorrectionTargetV1"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Targets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "learner_id",
+        "targets",
+        "selection_key"
+      ],
+      "title": "RoundCorrectionSelectionV1",
+      "type": "object"
+    },
+    "RoundCorrectionTargetV1": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "source_attempt_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Source Attempt Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id",
+        "source_attempt_id"
+      ],
+      "title": "RoundCorrectionTargetV1",
+      "type": "object"
+    },
+    "RoundCreationResponseV1": {
+      "additionalProperties": false,
+      "properties": {
+        "members": {
+          "items": {
+            "$ref": "#/$defs/RoundMemberJobsV1"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Members",
+          "type": "array"
+        },
+        "primary_default_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Primary Default Run Id"
+        },
+        "primary_node_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Primary Node Id"
+        },
+        "round_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Round Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "stage_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stage Id",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "producing",
+            "awaiting_assessment",
+            "completed"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round_id",
+        "stage_id",
+        "primary_node_id",
+        "members",
+        "state"
+      ],
+      "title": "RoundCreationResponseV1",
+      "type": "object"
+    },
+    "RoundEvaluationGroupV1": {
+      "additionalProperties": false,
+      "properties": {
+        "member_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Member Id",
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/ResourceEvaluationQuestion"
+          },
+          "minItems": 1,
+          "title": "Questions",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "review",
+            "legacy"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member_id",
+        "node_id",
+        "role",
+        "questions"
+      ],
+      "title": "RoundEvaluationGroupV1",
+      "type": "object"
+    },
+    "RoundEvaluationRequestV1": {
+      "additionalProperties": false,
+      "properties": {
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "learner_id"
+      ],
+      "title": "RoundEvaluationRequestV1",
+      "type": "object"
+    },
+    "RoundEvaluationSessionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/RoundEvaluationGroupV1"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Groups",
+          "type": "array"
+        },
+        "manifest_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Hash",
+          "type": "string"
+        },
+        "round_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Round Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "stage_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stage Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "round_id",
+        "stage_id",
+        "manifest_hash",
+        "groups"
+      ],
+      "title": "RoundEvaluationSessionV1",
+      "type": "object"
+    },
+    "RoundFeedbackResultV1": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/RoundNodeFeedbackV1"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Nodes",
+          "type": "array"
+        },
+        "primary_path_action": {
+          "$ref": "#/$defs/FeedbackAction"
+        },
+        "profile_version": {
+          "minimum": 1,
+          "title": "Profile Version",
+          "type": "integer"
+        },
+        "round_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Round Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "stage_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stage Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round_id",
+        "stage_id",
+        "session_id",
+        "attempt_id",
+        "profile_version",
+        "primary_path_action",
+        "nodes"
+      ],
+      "title": "RoundFeedbackResultV1",
+      "type": "object"
+    },
+    "RoundLearningReflectionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "comment": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        },
+        "completed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed"
+        },
+        "confusing_part": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confusing Part"
+        },
+        "difficulty_feeling": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty Feeling"
+        },
+        "helpful_part": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helpful Part"
+        },
+        "self_rating": {
+          "anyOf": [
+            {
+              "maximum": 5,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Self Rating"
+        },
+        "time_spent_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Spent Seconds"
+        }
+      },
+      "title": "RoundLearningReflectionV1",
+      "type": "object"
+    },
+    "RoundMemberJobsV1": {
+      "additionalProperties": false,
+      "properties": {
+        "batch_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Id"
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty"
+        },
+        "failed_job_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Failed Job Count",
+          "type": "integer"
+        },
+        "job_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Job Ids",
+          "type": "array"
+        },
+        "member_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Member Id",
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resource Ids",
+          "type": "array"
+        },
+        "resource_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resource Types",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "review",
+            "legacy"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "stage_node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stage Node Id",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "producing",
+            "awaiting_assessment",
+            "completed",
+            "failed"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member_id",
+        "role",
+        "node_id",
+        "stage_node_id",
+        "resource_types",
+        "state"
+      ],
+      "title": "RoundMemberJobsV1",
+      "type": "object"
+    },
+    "RoundMemberSummaryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "failed_job_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Failed Job Count",
+          "type": "integer"
+        },
+        "member_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Member Id",
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "node_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Node Name",
+          "type": "string"
+        },
+        "remediation_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "remediate",
+                "practice",
+                "resolved"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remediation Status"
+        },
+        "resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resource Ids",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "review",
+            "legacy"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "producing",
+            "awaiting_assessment",
+            "completed",
+            "failed"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "tier": {
+          "anyOf": [
+            {
+              "maximum": 3,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tier"
+        }
+      },
+      "required": [
+        "member_id",
+        "node_id",
+        "role",
+        "node_name",
+        "state"
+      ],
+      "title": "RoundMemberSummaryV1",
+      "type": "object"
+    },
+    "RoundNextSelectionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "include_claim_check": {
+          "default": false,
+          "title": "Include Claim Check",
+          "type": "boolean"
+        },
+        "learner_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Learner Id",
+          "type": "string"
+        },
+        "primary_learning_intent": {
+          "$ref": "#/$defs/LearningIntent"
+        },
+        "primary_node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Primary Node Id",
+          "type": "string"
+        },
+        "primary_resource_types": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "title": "Primary Resource Types",
+          "type": "array"
+        },
+        "review_node_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Node Id"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selection_key": {
+          "maxLength": 128,
+          "minLength": 8,
+          "title": "Selection Key",
+          "type": "string"
+        },
+        "source_attempt_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Source Attempt Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "learner_id",
+        "source_attempt_id",
+        "primary_node_id",
+        "primary_learning_intent",
+        "primary_resource_types",
+        "selection_key"
+      ],
+      "title": "RoundNextSelectionV1",
+      "type": "object"
+    },
+    "RoundNodeFeedbackV1": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/FeedbackAction"
+        },
+        "correction_eligible": {
+          "title": "Correction Eligible",
+          "type": "boolean"
+        },
+        "member_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Member Id",
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "remediation_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "remediate",
+                "practice",
+                "resolved"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remediation Status"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "review",
+            "legacy"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Score",
+          "type": "number"
+        },
+        "source_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Attempt Id"
+        }
+      },
+      "required": [
+        "member_id",
+        "node_id",
+        "role",
+        "score",
+        "action",
+        "reason",
+        "correction_eligible"
+      ],
+      "title": "RoundNodeFeedbackV1",
+      "type": "object"
+    },
+    "RoundResultNotSubmittedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "round_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Round Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "stage_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stage Id",
+          "type": "string"
+        },
+        "state": {
+          "const": "not_submitted",
+          "default": "not_submitted",
+          "enum": [
+            "not_submitted"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round_id",
+        "stage_id"
+      ],
+      "title": "RoundResultNotSubmittedV1",
+      "type": "object"
+    },
+    "RoundStageSummaryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "initial",
+            "correction"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/RoundMemberJobsV1"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Members",
+          "type": "array"
+        },
+        "ordinal": {
+          "minimum": 0,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "stage_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stage Id",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "producing",
+            "awaiting_assessment",
+            "completed"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage_id",
+        "kind",
+        "ordinal",
+        "state",
+        "members"
+      ],
+      "title": "RoundStageSummaryV1",
+      "type": "object"
     },
     "RunPublishSummary": {
       "description": "Read-only publication facts for one run, derived from persisted state.\n\nCounters are logical resources, not executions or versions.  ``None`` means\n\"cannot be confirmed\", never zero; ``completeness`` describes the data, not\nthe job lifecycle state.",
@@ -10419,8 +12219,17 @@
     "EvaluationSummary": {
       "$ref": "#/$defs/EvaluationSummary"
     },
+    "GenerateCreateRequest": {
+      "$ref": "#/$defs/GenerateCreateRequest"
+    },
     "GenerateRequest": {
       "$ref": "#/$defs/GenerateRequest"
+    },
+    "GenerateRoundCreateRequestV1": {
+      "$ref": "#/$defs/GenerateRoundCreateRequestV1"
+    },
+    "GenerationCapabilitiesV1": {
+      "$ref": "#/$defs/GenerationCapabilitiesV1"
     },
     "GenerationJobCreateResponse": {
       "$ref": "#/$defs/GenerationJobCreateResponse"
@@ -10430,6 +12239,12 @@
     },
     "GenerationJobStatusResponse": {
       "$ref": "#/$defs/GenerationJobStatusResponse"
+    },
+    "LearningRoundDetailV1": {
+      "$ref": "#/$defs/LearningRoundDetailV1"
+    },
+    "LearningRoundListV1": {
+      "$ref": "#/$defs/LearningRoundListV1"
     },
     "PublicRunEvent": {
       "$ref": "#/$defs/PublicRunEvent"
@@ -10445,6 +12260,36 @@
     },
     "ReportWindow": {
       "$ref": "#/$defs/ReportWindow"
+    },
+    "RoundAttemptProcessingV1": {
+      "$ref": "#/$defs/RoundAttemptProcessingV1"
+    },
+    "RoundAttemptSubmitV1": {
+      "$ref": "#/$defs/RoundAttemptSubmitV1"
+    },
+    "RoundCandidatesV1": {
+      "$ref": "#/$defs/RoundCandidatesV1"
+    },
+    "RoundCorrectionSelectionV1": {
+      "$ref": "#/$defs/RoundCorrectionSelectionV1"
+    },
+    "RoundCreationResponseV1": {
+      "$ref": "#/$defs/RoundCreationResponseV1"
+    },
+    "RoundEvaluationRequestV1": {
+      "$ref": "#/$defs/RoundEvaluationRequestV1"
+    },
+    "RoundEvaluationSessionV1": {
+      "$ref": "#/$defs/RoundEvaluationSessionV1"
+    },
+    "RoundFeedbackResultV1": {
+      "$ref": "#/$defs/RoundFeedbackResultV1"
+    },
+    "RoundNextSelectionV1": {
+      "$ref": "#/$defs/RoundNextSelectionV1"
+    },
+    "RoundResultNotSubmittedV1": {
+      "$ref": "#/$defs/RoundResultNotSubmittedV1"
     },
     "RunResourceQualityResponseV1": {
       "$ref": "#/$defs/RunResourceQualityResponseV1"

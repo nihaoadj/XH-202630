@@ -352,6 +352,7 @@ export type CurrentReportResponse = {
   "learning_node_mastery_map"?: (LearningNodeMasteryMapV1) | (null);
   "learning_path"?: Array<LearningPathItem>;
   "learning_path_graph"?: (LearningPathGraphV1) | (null);
+  "learning_round_summary"?: (LearningRoundDetailV1) | (null);
   "mastery_overview"?: Record<string, unknown>;
   "mastery_summary"?: Record<string, unknown>;
   "mastery_trend"?: Array<Record<string, unknown>>;
@@ -370,6 +371,7 @@ export type CurrentReportResponse = {
   "recent_resource_credibility"?: Array<Record<string, unknown>>;
   "recent_resource_quality"?: Array<ResourceQualityMetricsV1>;
   "recent_resources"?: Array<LearningResource>;
+  "remediation_needs"?: Array<Record<string, unknown>>;
   "report_availability"?: Record<string, unknown>;
   "report_revision": string;
   "report_schema_version"?: string;
@@ -478,6 +480,8 @@ export type ExerciseItem = {
   "skill_node_id"?: (string) | (null);
 };
 
+export type FeedbackAction = "remediate" | "practice" | "advance" | "hold" | "human_review";
+
 export type FeedbackAnswer = {
   "answer"?: (unknown) | (null);
   "correct": boolean;
@@ -510,6 +514,23 @@ export type FeedbackRecord = {
 };
 };
 
+export type GenerateCreateRequest = {
+  "claim_max_iterations"?: number;
+  "constraints"?: Record<string, unknown>;
+  "diagnostic_result_id"?: (string) | (null);
+  "difficulty_preference"?: (string) | (null);
+  "generation_mode"?: ("draft" | "standard" | "strict") | (null);
+  "include_claim_check"?: boolean;
+  "include_review"?: boolean;
+  "knowledge_base_id"?: (string) | (null);
+  "learner_id": string;
+  "max_iterations"?: number;
+  "profile_focus_mode"?: "auto" | "off";
+  "resource_types"?: Array<string>;
+  "target_skill_nodes"?: Array<string>;
+  "topic": string;
+};
+
 export type GenerateRequest = {
   "claim_max_iterations"?: number;
   "constraints"?: Record<string, unknown>;
@@ -525,6 +546,34 @@ export type GenerateRequest = {
   "resource_types"?: Array<string>;
   "target_skill_nodes"?: Array<string>;
   "topic": string;
+};
+
+export type GenerateRoundCreateRequestV1 = {
+  "claim_max_iterations"?: number;
+  "constraints"?: Record<string, unknown>;
+  "diagnostic_result_id"?: (string) | (null);
+  "difficulty_preference"?: (string) | (null);
+  "generation_mode"?: ("draft" | "standard" | "strict") | (null);
+  "include_claim_check"?: boolean;
+  "include_review"?: boolean;
+  "knowledge_base_id"?: (string) | (null);
+  "learner_id": string;
+  "max_iterations"?: number;
+  "profile_focus_mode"?: "auto" | "off";
+  "resource_types"?: Array<string>;
+  "schema_version"?: "1.0";
+  "selection_key": string;
+  "target_skill_nodes"?: Array<string>;
+  "topic": string;
+};
+
+export type GenerationCapabilitiesV1 = {
+  "protocol_version"?: "learning-round/v1";
+  "round_creation_enabled": boolean;
+  "round_query_available": boolean;
+  "round_recovery_available": boolean;
+  "schema_version"?: "1.0";
+  "single_target_required"?: true;
 };
 
 export type GenerationJobCreateResponse = {
@@ -558,6 +607,7 @@ export type GenerationJobStatusResponse = {
   "request_payload"?: Record<string, unknown>;
   "resource_ids"?: Array<string>;
   "resource_progress_summary"?: RunResourceProgressSummary;
+  "round_binding"?: (RoundBindingSummaryV1) | (null);
   "run_id": string;
   "started_at"?: (string) | (null);
   "superseded_by_run_id"?: (string) | (null);
@@ -720,6 +770,8 @@ export type LearnerTierProgressV1 = {
   "updated_at"?: (string) | (null);
 };
 
+export type LearningIntent = "reinforce_weakness" | "learn_new_knowledge" | "learn_new_and_reinforce" | "downgrade_learning" | "upgrade_learning";
+
 export type LearningNodeMasteryMapV1 = {
   "nodes"?: Array<LearningNodeMasteryPointV1>;
   "schema_version"?: "1.0";
@@ -834,6 +886,33 @@ export type LearningResource = {
   "storage_type"?: string;
   "topic"?: (string) | (null);
   "version"?: number;
+};
+
+export type LearningRoundDetailV1 = {
+  "available_actions": Array<"append_primary" | "evaluate" | "correct" | "next" | "retry">;
+  "created_at": string;
+  "learner_id": string;
+  "members": Array<RoundMemberSummaryV1>;
+  "protocol_version": "learning-round/v1" | "legacy-correction/v1";
+  "round_id": string;
+  "schema_version"?: "1.0";
+  "stages": Array<RoundStageSummaryV1>;
+};
+
+export type LearningRoundListV1 = {
+  "items": Array<LearningRoundSummaryV1>;
+  "learner_id": string;
+  "limit": number;
+  "offset": number;
+  "schema_version"?: "1.0";
+  "total": number;
+};
+
+export type LearningRoundSummaryV1 = {
+  "created_at": string;
+  "members": Array<RoundMemberSummaryV1>;
+  "protocol_version": "learning-round/v1" | "legacy-correction/v1";
+  "round_id": string;
 };
 
 export type MetricThresholdV1 = {
@@ -1032,6 +1111,7 @@ export type ReportResponse = {
   "learning_node_mastery_map"?: (LearningNodeMasteryMapV1) | (null);
   "learning_path"?: Array<LearningPathItem>;
   "learning_path_graph"?: (LearningPathGraphV1) | (null);
+  "learning_round_summary"?: (LearningRoundDetailV1) | (null);
   "mastery_overview"?: Record<string, unknown>;
   "mastery_summary"?: Record<string, unknown>;
   "mastery_trend"?: Array<Record<string, unknown>>;
@@ -1050,6 +1130,7 @@ export type ReportResponse = {
   "recent_resource_credibility"?: Array<Record<string, unknown>>;
   "recent_resource_quality"?: Array<ResourceQualityMetricsV1>;
   "recent_resources"?: Array<LearningResource>;
+  "remediation_needs"?: Array<Record<string, unknown>>;
   "report_availability"?: Record<string, unknown>;
   "report_revision"?: (string) | (null);
   "report_schema_version"?: string;
@@ -1107,6 +1188,19 @@ export type ResourceDifficultyPointV1 = {
   "resource_type": string;
   "skill_name": string;
   "skill_node_id": string;
+};
+
+export type ResourceEvaluationQuestion = {
+  "diagnostic_dimension"?: (string) | (null);
+  "difficulty"?: (string) | (null);
+  "knowledge_point"?: (string) | (null);
+  "options"?: Array<string>;
+  "path_node_id"?: (string) | (null);
+  "question": string;
+  "question_id": string;
+  "question_type": string;
+  "skill_node_id"?: (string) | (null);
+  "source"?: "resource" | "assessment_bank" | "knowledge_base";
 };
 
 export type ResourceExecutionProgress = {
@@ -1183,6 +1277,176 @@ export type ResourceQualitySummaryV1 = {
 };
 
 export type ResourceRepresentation = "text";
+
+export type RoundAnswerV1 = {
+  "answer": unknown;
+  "question_id": string;
+};
+
+export type RoundAttemptProcessingV1 = {
+  "retry_after_seconds"?: 2;
+  "schema_version"?: "1.0";
+  "session_id": string;
+  "state"?: "grading";
+};
+
+export type RoundAttemptSubmitV1 = {
+  "answers": Array<RoundAnswerV1>;
+  "duration_ms"?: number;
+  "expected_profile_version": number;
+  "idempotency_key": string;
+  "learner_id": string;
+  "learning_reflection"?: (RoundLearningReflectionV1) | (null);
+  "manifest_hash": string;
+  "schema_version"?: "1.0";
+  "session_id": string;
+  "submitted_at": string;
+};
+
+export type RoundBindingSummaryV1 = {
+  "member_id": string;
+  "role": "primary" | "review" | "legacy";
+  "round_id": string;
+  "stage_id": string;
+  "stage_node_id": string;
+};
+
+export type RoundCandidatesV1 = {
+  "correction_targets": Array<RoundCorrectionTargetV1>;
+  "eligible_review_nodes": Array<NextGenerationCandidateV1>;
+  "generation_options": NextGenerationOptionsV1;
+  "profile_version": number;
+  "schema_version"?: "1.0";
+};
+
+export type RoundCorrectionSelectionV1 = {
+  "include_claim_check"?: boolean;
+  "learner_id": string;
+  "schema_version"?: "1.0";
+  "selection_key": string;
+  "targets": Array<RoundCorrectionTargetV1>;
+};
+
+export type RoundCorrectionTargetV1 = {
+  "node_id": string;
+  "source_attempt_id": string;
+};
+
+export type RoundCreationResponseV1 = {
+  "members": Array<RoundMemberJobsV1>;
+  "primary_default_run_id"?: (string) | (null);
+  "primary_node_id": (string) | (null);
+  "round_id": string;
+  "schema_version"?: "1.0";
+  "stage_id": string;
+  "state": "producing" | "awaiting_assessment" | "completed";
+};
+
+export type RoundEvaluationGroupV1 = {
+  "member_id": string;
+  "node_id": string;
+  "questions": Array<ResourceEvaluationQuestion>;
+  "role": "primary" | "review" | "legacy";
+};
+
+export type RoundEvaluationRequestV1 = {
+  "learner_id": string;
+};
+
+export type RoundEvaluationSessionV1 = {
+  "groups": Array<RoundEvaluationGroupV1>;
+  "manifest_hash": string;
+  "round_id": string;
+  "schema_version"?: "1.0";
+  "session_id": string;
+  "stage_id": string;
+};
+
+export type RoundFeedbackResultV1 = {
+  "attempt_id": string;
+  "nodes": Array<RoundNodeFeedbackV1>;
+  "primary_path_action": FeedbackAction;
+  "profile_version": number;
+  "round_id": string;
+  "schema_version"?: "1.0";
+  "session_id": string;
+  "stage_id": string;
+};
+
+export type RoundLearningReflectionV1 = {
+  "comment"?: (string) | (null);
+  "completed"?: (boolean) | (null);
+  "confusing_part"?: (string) | (null);
+  "difficulty_feeling"?: (string) | (null);
+  "helpful_part"?: (string) | (null);
+  "self_rating"?: (number) | (null);
+  "time_spent_seconds"?: (number) | (null);
+};
+
+export type RoundMemberJobsV1 = {
+  "batch_id"?: (string) | (null);
+  "difficulty"?: (string) | (null);
+  "failed_job_count"?: number;
+  "job_ids"?: Array<string>;
+  "member_id": string;
+  "node_id": string;
+  "resource_ids"?: Array<string>;
+  "resource_types": Array<string>;
+  "role": "primary" | "review" | "legacy";
+  "stage_node_id": string;
+  "state": "producing" | "awaiting_assessment" | "completed" | "failed";
+};
+
+export type RoundMemberSummaryV1 = {
+  "failed_job_count"?: number;
+  "member_id": string;
+  "node_id": string;
+  "node_name": string;
+  "remediation_status"?: ("remediate" | "practice" | "resolved") | (null);
+  "resource_ids"?: Array<string>;
+  "role": "primary" | "review" | "legacy";
+  "state": "producing" | "awaiting_assessment" | "completed" | "failed";
+  "tier"?: (number) | (null);
+};
+
+export type RoundNextSelectionV1 = {
+  "include_claim_check"?: boolean;
+  "learner_id": string;
+  "primary_learning_intent": LearningIntent;
+  "primary_node_id": string;
+  "primary_resource_types": Array<string>;
+  "review_node_id"?: (string) | (null);
+  "schema_version"?: "1.0";
+  "selection_key": string;
+  "source_attempt_id": string;
+};
+
+export type RoundNodeFeedbackV1 = {
+  "action": FeedbackAction;
+  "correction_eligible": boolean;
+  "member_id": string;
+  "node_id": string;
+  "reason": string;
+  "remediation_status"?: ("remediate" | "practice" | "resolved") | (null);
+  "role": "primary" | "review" | "legacy";
+  "score": number;
+  "source_attempt_id"?: (string) | (null);
+};
+
+export type RoundResultNotSubmittedV1 = {
+  "round_id": string;
+  "schema_version"?: "1.0";
+  "stage_id": string;
+  "state"?: "not_submitted";
+};
+
+export type RoundStageSummaryV1 = {
+  "kind": "initial" | "correction";
+  "members": Array<RoundMemberJobsV1>;
+  "ordinal": number;
+  "stage_id": string;
+  "state": "producing" | "awaiting_assessment" | "completed";
+};
 
 export type RunPublishSummary = {
   "completeness"?: PublishCompleteness;

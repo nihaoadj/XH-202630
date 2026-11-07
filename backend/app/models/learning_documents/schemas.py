@@ -8,6 +8,7 @@ from app.models.generation.progress import (
     ResourceExecutionProgress,
     ResourceExecutionState,
     ResourceRepresentation,
+    RoundBindingSummaryV1,
     RunPublishSummary,
     RunResourceProgressSummary,
 )
@@ -285,6 +286,16 @@ class GenerateRequest(BaseModel):
         return self
 
 
+class GenerateCreateRequest(GenerateRequest):
+    """Public new-job contract; persisted legacy snapshots use GenerateRequest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_skill_nodes: List[str] = Field(
+        default_factory=list, max_length=1, description="目标能力节点（最多一个）"
+    )
+
+
 class GenerationJobCreateResponse(StatusResponse):
     """异步资源生成任务创建响应"""
     run_id: str
@@ -314,6 +325,7 @@ class GenerationJobStatusResponse(BaseModel):
     publish_summary: Optional[RunPublishSummary] = None
     request_payload: Dict[str, Any] = Field(default_factory=dict)
     focus_snapshot: Optional[LearnerFocusSnapshotV1] = None
+    round_binding: Optional[RoundBindingSummaryV1] = None
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None

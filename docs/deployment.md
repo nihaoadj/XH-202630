@@ -540,3 +540,12 @@ T40：Claim专用返工是请求参数`claim_max_iterations`，默认1，显式0
 关闭容错：把新请求模式设为 `exact_v1`，仍输出无偏移 v2，只关闭 B/C；旧 v2 tolerant 任务继续冻结规则。回滚代码前停止接收新任务、排空或按既有策略终止新任务，并保留能读取 v2 输出与新子契约的兼容 reader；不删字段、不重算旧 hash、不改写历史记录。本任务无数据库表/列迁移，历史 `policy_json`/`state_json` 与各 hash 原样保留。
 
 新版通用审核与讲义专用 issue 策略互斥：启用 `resource_issue_v1` 时设 `LECTURE_REVIEW_STRATEGY=legacy_content_v2`，关闭旧专用循环，由通用新审核接管讲义；本地已同步。其他部署显式设置的 `lecture_issue_v1/v2` 也须调整。若回退此前讲义 V2 行为，须同时设 `RESOURCE_REVIEW_STRATEGY=compat` 与 `LECTURE_REVIEW_STRATEGY=lecture_issue_v2`，并保留原讲义窗口。
+
+
+### T49 学习轮次存储与创建开关
+
+T49 的 `p0_38_learning_rounds` 是增量迁移：注册轮次、成员、阶段、阶段成员、任务绑定、冻结测评会话、节点决策、待补救项和预算预留九张表，保留原 Job、Attempt、资源及其 hash。初始化会在迁移后幂等刷新 `p0_35` 报告触发器；缓存协议为 `report-read/3`，新增轮次事实进入失效闭包，评分租约心跳本身不触发报告重建。Web 与 Worker 应使用同一代码版本；旧版本不能负责新协议任务的恢复。
+
+`LEARNING_ROUND_CREATION_ENABLED=false` 是源码默认值。它控制新常规轮次及下一轮选择，不阻断已有轮次的查询、测评提交、纠错与合法恢复；普通旧入口仍可进行单目标生产。前端读取服务端 capability，不用浏览器自行启用。其余参数见 [backend/.env.example](../backend/.env.example)：纠错阶段额度每成员默认2（1–3），资源显式恢复额度默认2（0–3），每份资源token预算默认1,048,576（262,144–4,194,304）。额度、模型输入容量及deadline在创建时冻结，失败和重试不重置预算。
+
+标准回退只关闭新创建开关，保留新增事实及其查询、提交与恢复代码。物理回退函数只允许空的新表；有业务事实时返回 `ROUND_ROLLBACK_HAS_FACTS`，不删除正式记录。测试只在隔离合成数据库演练，不自动修改实际业务库或本地 `.env`。启用与生产迁移仍需对应环境操作和验证，不由本地专项通过替代。

@@ -50,7 +50,9 @@ from app.models.learning_documents.schemas import (
     GenerationJobStatusResponse,
     LearnerProfile,
 )
-from app.models.generation.progress import ResourceExecutionProgress, RunResourceProgressSummary
+from app.models.generation.progress import (
+    ResourceExecutionProgress, RoundBindingSummaryV1, RunResourceProgressSummary,
+)
 from app.services.generation.generation import GenerationService
 from app.services.learners.mastery import MasteryService
 from app.models.learning_documents.types import FEEDBACK_ONLY_RESOURCE_TYPES
@@ -70,11 +72,15 @@ class GenerationJobService:
         generation_service: GenerationService,
         mastery_service: MasteryService | None = None,
         dispatch_mode: str = "background",
+        round_repository=None,
+        round_uow_factory=None,
     ):
         self.job_repo = job_repo
         self.generation_service = generation_service
         self.mastery_service = mastery_service
         self.dispatch_mode = dispatch_mode
+        self.round_repository = round_repository
+        self.round_uow_factory = round_uow_factory
 
     def create_continuation(
         self,
@@ -85,6 +91,7 @@ class GenerationJobService:
         resource_service_factory: Callable[[], ResourceService],
         feedback_repo_factory: Callable[[], BaseFeedbackLoopRepository],
         run_id: str | None = None, submission_hash: str | None = None,
+        round_uow_factory=None,
     ) -> tuple[GenerationJobCreateResponse, GenerateRequest]:
         """Prepare a continuation; the API schedules the returned request last."""
         if run_id and submission_hash:
@@ -117,6 +124,13 @@ class GenerationJobService:
             payload,
             resource_service_factory=resource_service_factory,
         )
+        if self.round_repository is not None and self.round_repository.one(
+            "learning_round_job_bindings", run_id=prepared.source_job_run_id,
+        ):
+            from app.services.generation.round_continuations import create_round_continuation
+            return create_round_continuation(self, learner, prepared, run_id, submission_hash,
+                                             round_uow_factory=round_uow_factory)
+
         feedback_repositories = [
             feedback_repo_factory()
             for _ in range(prepared.feedback_repo_call_count)
@@ -212,17 +226,47 @@ class GenerationJobService:
             batch_id=job.batch_id or job.run_id, learner_id=job.learner_id, topic=job.topic,
             knowledge_base_id=job.knowledge_base_id, job_status=job.job_status, focus_snapshot=job.focus_snapshot)
 
-    def create_resource_retry(self, learner, source_run_id, spec_id, representation, *, idempotency_key=None):
+    def create_resource_retry(self, learner, source_run_id, spec_id, representation, *, idempotency_key=None,
+                              round_uow_factory=None):
         context = prepare_resource_retry(self, learner, source_run_id, spec_id, representation)
         identity = submission_identity(
             learner, context, idempotency_key if idempotency_key is not None else context.context_hash,
             f"resource-retry:{source_run_id}:{spec_id}:{representation}",
         )
         source = self.job_repo.get(source_run_id)
+        if self.round_repository is not None:
+            binding = self.round_repository.one("learning_round_job_bindings", run_id=source_run_id)
+            if binding is not None:
+                from app.services.generation.round_continuations import create_bound_job
+                return create_bound_job(self, context.learner, binding, context.request.model_copy(deep=True),
+                    identity["run_id"], identity["submission_hash"], relation="retry", source_run_id=source_run_id,
+                    retry_context=context.model_dump(mode="json"), round_uow_factory=round_uow_factory)
         job = self.create_job(context.learner, context.request.model_copy(deep=True),
                               batch_id=source.batch_id or source_run_id,
                               resource_retry_context=context.model_dump(mode="json"), **identity)
         return job, context.request
+
+    def create_round_job(self, learner, req, repository, stage_node_id, *, run_id):
+        from copy import copy
+        from app.services.generation.round_context import load_round_context
+        bound = copy(self)
+        bound.round_repository = repository
+        bound._trusted_round_binding = load_round_context(repository, learner, stage_node_id, req)
+        bound._continuation_atomicity_active = True
+        return bound.create_job(learner, req, run_id=run_id, batch_id=bound._trusted_round_binding.batch_id,
+                                submission_hash=canonical_hash(req.model_dump(mode="json")))
+
+    def _round_binding(self, learner, req, run_id):
+        from app.services.generation.round_context import load_round_context
+        binding = getattr(self, "_trusted_round_binding", None)
+        if binding is not None:
+            return binding
+        if self.round_repository is not None and run_id:
+            stored = self.round_repository.one("learning_round_job_bindings", run_id=run_id)
+            if stored:
+                return load_round_context(self.round_repository, learner, stored["stage_node_id"], req,
+                    relation_kind=stored["relation_kind"], source_run_id=stored["source_run_id"])
+        return None
 
     def create_job(self, learner, req, *, run_id=None, batch_id=None, retry_failed=False, submission_hash=None,
                    resource_retry_context=None):
@@ -263,6 +307,7 @@ class GenerationJobService:
         submission_hash: str | None = None,
         resource_retry_context: dict | None = None,
     ) -> GenerationJobCreateResponse:
+        round_binding = self._round_binding(learner, req, run_id)
         feedback_only = set(req.resource_types) & set(FEEDBACK_ONLY_RESOURCE_TYPES)
         correction_followup = (
             "个性化纠错训练包" in req.resource_types
@@ -294,7 +339,7 @@ class GenerationJobService:
         created_new = False
         rescheduled_retry = False
         focus_snapshot = None
-        if existing is None and self.mastery_service is not None and resource_retry_context is None:
+        if existing is None and self.mastery_service is not None and resource_retry_context is None and round_binding is None:
             # The generic auto entry point must obey the same tier policy as a
             # feedback follow-up.  Do not let a three-node focus snapshot mix tiers.
             auto_targets = None
@@ -346,7 +391,10 @@ class GenerationJobService:
                 req.constraints = {**req.constraints, "learner_focus_snapshot": raw_snapshot}
         if self.mastery_service is not None and req.target_skill_nodes and resource_retry_context is None:
             try:
-                if correction_followup:
+                if round_binding is not None:
+                    tier = next(node.tier for node in self.mastery_service.knowledge_service.list_skill_nodes(learner.knowledge_base_id)
+                                if node.node_id == round_binding.node_id)
+                elif correction_followup:
                     tier = self.mastery_service.validate_correction_targets(
                         learner,
                         req.target_skill_nodes,
@@ -422,7 +470,7 @@ class GenerationJobService:
             )
             job_status = "queued"
             created_new = True
-        if (created_new or rescheduled_retry) and self.mastery_service is not None:
+        if (created_new or rescheduled_retry) and self.mastery_service is not None and round_binding is None:
             try:
                 self.mastery_service.schedule_generation(
                     learner, run_id=run_id, selected_node_ids=req.target_skill_nodes,
@@ -481,6 +529,23 @@ class GenerationJobService:
             snapshot["resource_dispatch_hash"] = canonical_hash(snapshot)
         return snapshot
 
+    def _generate_with_budget(self, learner, request, **kwargs):
+        from contextlib import nullcontext
+        from app.core.llm.budget import round_call_scope
+        from app.models.shared.llm import LLMBudgetScope
+        from app.services.feedback.round_budget import RoundBudgetGuard
+        scope = nullcontext()
+        if self.round_repository is not None:
+            binding = self.round_repository.one("learning_round_job_bindings", run_id=kwargs["run_id"])
+            if binding:
+                member = self.round_repository.one("learning_round_stage_nodes", stage_node_id=binding["stage_node_id"])
+                stage = self.round_repository.one("learning_round_stages", stage_id=member["stage_id"])
+                scope = round_call_scope(LLMBudgetScope(scope_id=member["stage_node_id"], stage_id=stage["stage_id"], kind="production"),
+                                         input_cap=stage["budget_snapshot"]["input_capacity"],
+                                         guard=RoundBudgetGuard(self.round_repository))
+        with scope:
+            return self.generation_service.generate_with_run_id(learner, request, **kwargs)
+
     def run_claim(self, claim):
         """Only a persisted, still-owned claim can execute the frozen submission."""
         error_code = None
@@ -511,7 +576,7 @@ class GenerationJobService:
             with execution_fence(ExecutionFence(claim.run_id, claim.owner, claim.epoch)):
                 retry_context = claim.snapshot.get("resource_retry_context")
                 preflight_failed = False
-                response = self.generation_service.generate_with_run_id(
+                response = self._generate_with_budget(
                     learner, req, run_id=claim.run_id, batch_id=claim.batch_id,
                     **({"claim_extraction_snapshot": private} if hasattr(self.generation_service, "freeze_claim_extraction") else {}),
                     **({"resource_retry_context": retry_context} if retry_context is not None else {}),
@@ -537,6 +602,24 @@ class GenerationJobService:
     def get_job(self, run_id: str) -> GenerationJobStatusResponse | None:
         job = self.job_repo.get(run_id)
         return self._with_resource_progress(job) if job else None
+
+    def _round_binding_summary(self, run_id: str):
+        """Resolve a read-only round binding; unknown runs stay unbound."""
+        if self.round_repository is None:
+            return None
+        binding = self.round_repository.one("learning_round_job_bindings", run_id=run_id)
+        if binding is None:
+            return None
+        stage_node = self.round_repository.one("learning_round_stage_nodes", stage_node_id=binding["stage_node_id"])
+        if stage_node is None:
+            return None
+        stage = self.round_repository.one("learning_round_stages", stage_id=stage_node["stage_id"])
+        member = self.round_repository.one("learning_round_nodes", round_node_id=stage_node["round_node_id"])
+        if stage is None or member is None:
+            return None
+        return RoundBindingSummaryV1(round_id=stage["round_id"], member_id=member["round_node_id"],
+                                     stage_id=stage["stage_id"], stage_node_id=stage_node["stage_node_id"],
+                                     role=member["role"])
 
     def _with_resource_progress(
         self, job: GenerationJobStatusResponse,
@@ -585,6 +668,7 @@ class GenerationJobService:
         return job.model_copy(update={
             "resource_progress_summary": summary,
             "publish_summary": publish_summary,
+            "round_binding": self._round_binding_summary(job.run_id),
         })
 
     def mark_superseded(self, run_id: str, replacement_run_id: str) -> GenerationJobStatusResponse | None:
@@ -639,7 +723,7 @@ class GenerationJobService:
             policy = policy_from_input({"include_claim_check": req.include_claim_check, **private})
             if snapshot and ((version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None)):
                 raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
-            response = self.generation_service.generate_with_run_id(
+            response = self._generate_with_budget(
                 learner,
                 req,
                 run_id=run_id,

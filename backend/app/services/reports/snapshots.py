@@ -43,7 +43,7 @@ def revision_parts(report: dict) -> dict[str, str]:
         "activity": {"learning_activity", "window", "metric_summary"},
         "text_resources": {"resource_credibility_summary", "recent_resource_credibility", "recent_resources", "review_summary", "resource_quality_summary", "recent_resource_quality"},
         "resource_match": {"resource_difficulty_curve", "resource_difficulty_match", "difficulty_curve"},
-        "path": {"current_learning_path", "learning_path", "learning_path_graph", "current_learning_state", "generation_options", "tier_progress"},
+        "path": {"current_learning_path", "learning_path", "learning_path_graph", "current_learning_state", "generation_options", "tier_progress", "learning_round_summary", "remediation_needs"},
         "history": {"feedback_trend", "recent_feedback", "recent_attempts", "feedback_analysis", "recent_feedback_decisions", "recent_knowledge_state_mutations", "recent_followup_runs", "profile_versions", "agent_flow", "next_suggestions"},
     }
     assigned = set().union(*groups.values())

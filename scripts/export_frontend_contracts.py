@@ -19,8 +19,16 @@ from app.models.courseware.contracts import (
 )
 from app.models.courseware.events import CoursewareLearningEvent, CoursewareLearningEventAck, CoursewareLearningEventBatch
 from app.models.learning_documents.schemas import (
-    ContinueResourceBatchRequest, GenerateRequest, GenerationJobCreateResponse,
+    ContinueResourceBatchRequest, GenerateCreateRequest, GenerateRequest, GenerationJobCreateResponse,
     GenerationJobListResponse, GenerationJobStatusResponse,
+)
+from app.models.feedback.rounds import (
+    RoundCandidatesV1,
+    GenerationCapabilitiesV1,
+    GenerateRoundCreateRequestV1, LearningRoundDetailV1, LearningRoundListV1,
+    RoundAttemptProcessingV1, RoundAttemptSubmitV1, RoundCorrectionSelectionV1,
+    RoundCreationResponseV1, RoundEvaluationRequestV1, RoundEvaluationSessionV1,
+    RoundFeedbackResultV1, RoundNextSelectionV1, RoundResultNotSubmittedV1,
 )
 from app.models.reports.contracts import CurrentReportResponse, EvaluationSummary, ReportInvalidation, ReportResponse, ReportWindow
 from app.models.reviews.quality_metrics import RunResourceQualityResponseV1
@@ -29,12 +37,18 @@ from app.models.shared.persistence import RunStatus, RunSummary, RunTimeline, Wo
 from app.models.shared.streaming import PublicRunEvent, PublicRunSnapshot
 
 MODELS = (
+    RoundCandidatesV1,
+    GenerationCapabilitiesV1,
     EvaluationSummary,
     CoursewareBatchCreateRequest, CoursewareBatchJobResponse, CoursewareJobCreateRequest,
     CoursewareJobDetail, CoursewareJobListResponse, CoursewareJobResponse,
     CoursewareLearningEvent, CoursewareLearningEventAck, CoursewareLearningEventBatch,
-    ContinueResourceBatchRequest, GenerateRequest, GenerationJobCreateResponse,
+    ContinueResourceBatchRequest, GenerateCreateRequest, GenerateRequest, GenerationJobCreateResponse,
     GenerationJobListResponse, GenerationJobStatusResponse, CurrentReportResponse,
+    GenerateRoundCreateRequestV1, LearningRoundDetailV1, LearningRoundListV1,
+    RoundAttemptProcessingV1, RoundAttemptSubmitV1, RoundCorrectionSelectionV1,
+    RoundCreationResponseV1, RoundEvaluationRequestV1, RoundEvaluationSessionV1,
+    RoundFeedbackResultV1, RoundNextSelectionV1, RoundResultNotSubmittedV1,
     ReportInvalidation, ReportResponse, ReportWindow, RunSummary, RunTimeline,
     PublicRunEvent, PublicRunSnapshot, RunResourceQualityResponseV1, TaskLLMAccountingResponseV1,
 )

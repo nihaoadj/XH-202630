@@ -70,7 +70,7 @@ def _values(table):
 
 
 def test_protocol_is_two_and_installs_every_quality_trigger_idempotently(database):
-    assert PROTOCOL == "report-read/2"
+    assert PROTOCOL == "report-read/3"
     for source in QUALITY_SOURCES:
         assert source in WATCHED_TABLES
     expected = expected_triggers()

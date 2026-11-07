@@ -57,6 +57,8 @@
       </div>
     </section>
 
+    <LearningRoundReportSummary :round="report.learning_round_summary || null" :needs="report.remediation_needs || []" />
+
     <section class="report-chart-section report-mastery-section" aria-label="学习节点掌握概览">
       <LearningNodeMasteryChart :key="`mastery-${report.report_revision || 'initial'}`" :data="report.learning_node_mastery_map" />
     </section>
@@ -136,6 +138,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { knowledgeApi } from '../knowledge/api.js'
 import { profileApi } from '../learners/api.js'
 import { useAppStore } from '../../stores/app'
+import LearningRoundReportSummary from './LearningRoundReportSummary.vue'
 import ReportChart from './ReportChart.vue'
 import LearningNodeMasteryChart from './LearningNodeMasteryChart.vue'
 import ResourceDifficultyCurve from './ResourceDifficultyCurve.vue'

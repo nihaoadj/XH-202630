@@ -1,10 +1,11 @@
 """Explicit source closure for the report projection; bump protocol on changes."""
+from app.db.feedback.round_models import ROUND_MODELS
 from app.db.shared.models import Base
 from app.db.shared import extended_models as _extended_models  # noqa: F401
 
-PROTOCOL = "report-read/2"
+PROTOCOL = "report-read/3"
 TABLE = "report_read_watermarks"
-WATCHED_TABLES = (
+WATCHED_TABLES = tuple(model.__tablename__ for model in ROUND_MODELS) + (
     "learner_profiles", "generated_resources", "generation_jobs", "feedback_records",
     "learning_attempts", "learning_attempt_point_results", "feedback_decisions",
     "knowledge_state_mutations", "learner_profile_versions", "learning_paths",
@@ -27,6 +28,11 @@ JOB_COLUMNS = {
 # invalidate a cached report.  Identity/version/order columns are not excluded
 # because a reassignment or a sequence change is a real source correction.
 EXCLUDED_COLUMNS = {
+    "learning_round_evaluation_sessions": frozenset({
+        "grading_owner", "grading_generation", "grading_lease_expires_at", "row_version",
+    }),
+    "learning_round_stage_nodes": frozenset({"budget_counters", "row_version"}),
+    "learning_round_stages": frozenset({"budget_counters", "row_version"}),
     "agent_runs": frozenset({
         "heartbeat_at", "lease_expires_at", "owner_instance_id", "updated_at",
     }),

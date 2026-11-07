@@ -1,5 +1,5 @@
 <template>
-  <div ref="productionPage" class="generate-page" :class="{ 'is-courseware-workspace': isCoursewareWorkspace, 'is-fit-layout': isFitLayout }">
+  <div ref="productionPage" class="generate-page" :class="{ 'is-courseware-workspace': isCoursewareWorkspace, 'is-fit-layout': isFitLayout, 'has-learning-round': Boolean(roundDetail) }">
     <section class="control-panel" aria-label="资源任务控制">
       <div class="task-selector">
         <div class="selector-field">
@@ -36,13 +36,15 @@
         <div v-if="selectedCoursewareJob" class="task-actions" role="group" aria-label="课件任务操作">
           <el-button class="status-action status-action-refresh" :icon="Refresh" @click="coursewareWorkspace?.refreshCurrentJob()">刷新状态</el-button>
           <el-dropdown trigger="click" @command="handleAppendCommand">
-            <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources">追加资源<el-icon><ArrowDown /></el-icon></el-button>
+            <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources" :disabled="Boolean(roundDetail && !roundPrimaryJob)">{{ appendTargetLabel }}<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown><el-dropdown-menu><el-dropdown-item command="text" :disabled="!selectedJob">文本学习资源</el-dropdown-item><el-dropdown-item command="courseware" :disabled="!resources.length">HTML 互动课件</el-dropdown-item></el-dropdown-menu></template>
           </el-dropdown>
         </div>
       </template>
     </CoursewareGenerationWorkspace>
 
+    <LearningRoundNodeSwitcher v-if="roundDetail" :detail="roundDetail" :selection="roundSelection" @select="selectRoundMember" @evaluate="openRoundEvaluation" />
+    <p v-if="roundError" class="error-message" role="alert">{{ roundError }}</p>
     <section v-if="selectedJob" class="studio-grid">
       <div class="process-panel">
         <div class="panel-title compact"><div class="panel-heading-copy"><span class="panel-section-number">01</span><h3>生成协作轨迹</h3><span class="eyebrow">/ WORKFLOW</span></div><span class="connection-state" :class="`is-${connectionStatus}`"><i aria-hidden="true" />{{ productionConnectionLabel }}</span></div>
@@ -72,7 +74,7 @@
             <el-button v-if="selectedJob.job_status === 'failed'" class="status-action status-action-retry" :icon="RefreshRight" @click="retryGeneration" :loading="retrying">重新生成</el-button>
             <el-button v-if="selectedJob.job_status === 'completed'" class="status-action status-action-resource" :class="{ 'is-retry': hasRetryableResources }" :icon="hasRetryableResources ? RefreshRight : Refresh" @click="hasRetryableResources ? regeneratePendingResources() : loadResourcesForSelectedJob()" :loading="hasRetryableResources ? retrying : loadingResources">{{ hasRetryableResources ? `重新生成失败资源（${retryableResourceTypes.length}）` : '刷新资源' }}</el-button>
             <el-dropdown trigger="click" @command="handleAppendCommand">
-              <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources">追加资源<el-icon><ArrowDown /></el-icon></el-button>
+              <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources" :disabled="Boolean(roundDetail && !roundPrimaryJob)">{{ appendTargetLabel }}<el-icon><ArrowDown /></el-icon></el-button>
               <template #dropdown><el-dropdown-menu><el-dropdown-item command="text" :disabled="!selectedJob">文本学习资源</el-dropdown-item><el-dropdown-item command="courseware" :disabled="!resources.length">HTML 互动课件</el-dropdown-item></el-dropdown-menu></template>
             </el-dropdown>
           </div>
@@ -151,7 +153,7 @@
       width="min(520px, calc(100vw - 32px))"
       :close-on-click-modal="false"
     >
-      <p class="append-resource-hint">请选择要加入当前资源批次的资源类型。</p>
+      <p class="append-resource-hint">{{ roundDetail ? appendTargetLabel : '请选择要加入当前资源批次的资源类型。' }}</p>
       <el-checkbox-group v-model="selectedAppendResourceTypes" class="append-resource-options">
         <el-checkbox
           v-for="option in appendResourceOptions"
@@ -303,6 +305,8 @@ import PreparationPanel from '../../components/PreparationPanel.vue'
 import PreparationWorkspace from '../../components/PreparationWorkspace.vue'
 import CoursewareGenerationWorkspace from '../courseware/CoursewareGenerationWorkspace.vue'
 import AgentVisualization from './AgentVisualization.vue'
+import LearningRoundNodeSwitcher from './LearningRoundNodeSwitcher.vue'
+import { useLearningRoundWorkspace } from './useLearningRoundWorkspace.js'
 import { useAppStore } from '../../stores/app'
 import {
   formatDateTime,
@@ -358,8 +362,9 @@ const appendIncludeClaimCheck = ref(true)
 const coursewareComposerVisible = ref(false)
 const coursewareWorkspace = ref(null)
 const selectedRunId = ref(initialRunId)
+const roundContextGeneration = ref(0)
 const { retrying, retryingResourceKey, appendingResources, run: runGenerationCommand, dispose: disposeGenerationCommands } = useGenerationCommands({
-  getContext: () => ({ learnerId: selectedLearnerId.value, runId: selectedRunId.value }),
+  getContext: () => ({ learnerId: selectedLearnerId.value, runId: selectedRunId.value, roundContextGeneration: roundContextGeneration.value }),
   selectRun: runId => { selectedRunId.value = runId },
   refreshJobs: isCurrent => loadJobs(false, isCurrent),
   startRealtime: runId => startRealtime(runId),
@@ -405,6 +410,23 @@ const selectedJob = computed(
 const selectedCoursewareJob = computed(
   () => coursewareJobs.value.find((item) => item.run_id === selectedRunId.value) || null
 )
+const { detail: roundDetail, selection: roundSelection, primaryJob: roundPrimaryJob, error: roundError, select: selectRoundMemberImpl } = useLearningRoundWorkspace({
+  learnerId: selectedLearnerId, selectedJob, selectedRunId, jobs, route, router,
+  activateRun: async runId => { selectedRunId.value = runId; await handleTaskChange() },
+})
+const appendTargetJob = computed(() => roundDetail.value ? roundPrimaryJob.value : selectedJob.value)
+const appendTargetLabel = computed(() => {
+  const primary = roundDetail.value?.members.find(member => member.role === 'primary')
+  return primary ? `为主节点 ${primary.node_name || primary.node_id} 追加资源` : '追加资源'
+})
+function selectRoundMember(changes) {
+  roundContextGeneration.value += 1
+  return selectRoundMemberImpl(changes)
+}
+function openRoundEvaluation() {
+  if (roundDetail.value) router.push({ path: '/feedback', query: { learnerId: selectedLearnerId.value, roundId: roundDetail.value.round_id, stageId: roundSelection.value.stageId } })
+}
+
 const {
   resources, nodeTiers, loadingResources, resourcesLoaded, selectedResourceId,
   resourceTierLabel, loadResourcesForSelectedJob, loadCoursewareSourceResources,
@@ -469,13 +491,15 @@ const hasRetryableResources = computed(() => (
 ))
 const supportedAppendResourceTypes = ['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析']
 const appendResourceOptions = computed(() => {
-  const existingTypes = new Set(selectedJob.value?.request_payload?.resource_types || [])
+  const primary = roundDetail.value?.members.find(member => member.role === 'primary')
+  const initialScope = roundDetail.value?.stages.find(stage => stage.kind === 'initial')?.members.find(member => member.member_id === primary?.member_id)
+  const existingTypes = new Set(initialScope?.resource_types || appendTargetJob.value?.request_payload?.resource_types || [])
   return supportedAppendResourceTypes.map((type) => ({
     type,
     alreadyIncluded: existingTypes.has(type),
   }))
 })
-const appendReviewEnabled = computed(() => selectedJob.value?.request_payload?.include_review !== false)
+const appendReviewEnabled = computed(() => appendTargetJob.value?.request_payload?.include_review !== false)
 
 // Presentation only: task copy and viewport containment never alter workflow state.
 const productionPage = ref(null)
@@ -994,7 +1018,7 @@ async function retryGeneration() {
 }
 
 function appendResources() {
-  const sourceJob = selectedJob.value
+  const sourceJob = appendTargetJob.value
   const payload = sourceJob?.request_payload
   if (!sourceJob?.learner_id || !payload) {
     ElMessage.warning('该任务缺少追加资源所需的原始参数')
@@ -1078,7 +1102,7 @@ function applyAcceptedGeneration(runId) {
 }
 
 async function confirmAppendResources() {
-  const sourceJob = selectedJob.value
+  const sourceJob = appendTargetJob.value
   const resourceTypes = [...new Set(selectedAppendResourceTypes.value)]
   const plan = planAppendResources(sourceJob, resourceTypes, appendIncludeClaimCheck.value)
   if (!plan) {
@@ -1262,6 +1286,8 @@ onBeforeUnmount(() => {
 .process-scroll,.resource-stage { overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:#9db8c2 transparent; }
 .process-scroll:focus-visible,.resource-stage:focus-visible { outline-offset:-2px; }
 .generate-page.is-fit-layout { height:100%; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:14px; padding-top:16px; }
+.generate-page.is-fit-layout.has-learning-round { grid-template-rows:auto auto minmax(0,1fr) auto; }
+.is-fit-layout .round-switcher { margin:0; }
 .is-fit-layout .studio-grid { min-height:0; }
 .is-fit-layout .process-panel,.is-fit-layout .resources-panel { min-height:0; overflow:hidden; }
 .is-fit-layout .process-scroll,.is-fit-layout .resource-stage { flex:1; min-height:0; overflow-y:auto; }

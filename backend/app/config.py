@@ -22,6 +22,10 @@ def resolve_backend_path(path: str | Path) -> Path:
 class Settings(BaseSettings):
     """搴旂敤閰嶇疆锛岃嚜鍔ㄤ粠 .env 鏂囦欢鍔犺浇"""
     app_mode: str = "development"
+    learning_round_creation_enabled: bool = False
+    learning_round_correction_stage_limit: int = Field(default=2, ge=1, le=3)
+    learning_round_resource_recovery_limit: int = Field(default=2, ge=0, le=3)
+    learning_round_resource_token_limit: int = Field(default=1048576, ge=262144, le=4194304)
     allow_degraded_generation: bool = False
     # AI is the normal courseware authoring path.  ``courseware_ai_enabled``
     # remains as a deployment-owned emergency switch for older environments;

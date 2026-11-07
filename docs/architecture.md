@@ -751,3 +751,14 @@ T39 执行权校验：带 epoch 的 Worker 在调用模型前通过审计仓储�
 报表侧 `services/reports/reports.py` 只消费该投影，并在 `text_resources` revision 组纳入新字段；`db/reports/watermarks.py` 将协议升级为 `report-read/2`，闭包新增 `agent_runs/agent_steps/workflow_checkpoints/resource_specs`，排除纯租约心跳列。API 层新增独立 `GET /api/runs/{run_id}/resource-quality`，不进入旧资源读模型或 `GenerateReport`。前端 `utils/qualityMetricsPresentation.js` 只做标签映射与 `—` 处理，不重算、不从遗留分数补数。评测 v2（`competition_suite.py`）的 M-COVERAGE 只读普通审核覆盖，Claim 覆盖公式已移除。
 
 T48 验收修复：`services/reviews/quality_evaluation.py` 校验冻结 manifest/case、去重与跨案例资源版本唯一性，再复用纯指标计算入口；`services/reports/evaluation.py` 仅从显式 v2 行重建分组，隔离坏行/冲突组，旧浮点均值保持兼容且不升级为新评测。报告质量分母保留所有当前可见已发布文本资源，缺少 Run/来源包时用未知占位；真实读取异常不当作无数据。
+
+### T49 单主节点与双节点学习轮次
+
+轮次把产品轮次与 `run_id`/`batch_id` 解耦，固定为“一个主节点 + 可选一个已学复习节点”，阶段内可追加本轮纠错：
+
+- `models/feedback/rounds.py` 是版本化公开 DTO（`learning-round/v1`，`schema_version=1.0`）；`db/feedback/round_{models,repository,sql_repository,memory}.py` 只做九表存取与完整性校验。`db/shared/unit_of_work.py` 提供单连接/单快照事务绑定；`services/feedback/round_uow.py` 显式列出参与者，不在服务里做泛化事务框架。
+- `services/feedback/round_learning.py` 只编排创建、查询与响应（含整轮主节点与阶段默认 Run 的区分）；`round_plans.py` 纯构建单节点计划与稳定 ID；`round_assessment.py` 冻结联合题组并在写锁外准备评分；`round_feedback.py` 执行一次提交、分别判分、一次画像版本；`round_corrections.py` 只处理本轮纠错阶段；`legacy_round_adapter.py` 用旧证据冻结 `legacy-correction/v1` 容器，不发明 primary。
+- `services/learners/review_eligibility.py` 独立判断附带复习资格（同归属已发布资源 + 有效正式测评）；`remediation.py` 维护与课程排程分离的待补救项、等待增长和固定排序。
+- 生产侧 `services/generation/round_context.py` 用持久绑定重新校验学习者/知识库/节点/难度/资源范围，`services/generation/round_continuations.py` 只允许主节点常规追加与合法失败恢复，并复用同一 UOW；`core/llm/budget.py` 的 `round_call_scope` 由 `_generate_with_budget` 在真实工作流外建立，资源 Agent 的 `copy_context().run` 让我方线程继承该作用域。
+- 前端 `features/generation/{useLearningRoundWorkspace,LearningRoundNodeSwitcher}.js|vue` 与 `features/feedback/{useRoundEvaluation,RoundEvaluationGroups,RoundFeedbackWorkspace}` 按 `memberId + stageId + real runId` 导航；`features/learners/LearningRoundHistory.vue` 与 `features/reports/LearningRoundReportSummary.vue` 消费同一轮次投影。Job 查询返回服务端解析的 `round_binding`，旧 Run 不按角色字符串猜测。
+- 报告侧 `report-read/3` 把九表纳入失效闭包并排除评分租约/预算心跳列；历史服务把新轮次与未绑定旧批次合并分页，`total_rounds` 以产品轮次计数。

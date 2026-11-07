@@ -23,7 +23,7 @@ from app.services.reports.snapshots import ReportSnapshot, SnapshotCache, canoni
 # ETag/revision so a browser cannot retain a structurally stale report after a
 # deployment (for example, the radar changing from measured nodes to the full
 # knowledge graph).
-REPORT_PROJECTION_VERSION = "4.4-resource-quality-v2"
+REPORT_PROJECTION_VERSION = "4.5-learning-round-v1"
 
 
 class ReportSnapshotUnstable(RuntimeError):
@@ -54,7 +54,9 @@ class ReportService:
         profile_repo=None,
         clock=None,
         quality_service=None,
+        round_service=None,
     ):
+        self.round_service = round_service
         self.resource_repo = resource_repo
         self.feedback_repo = feedback_repo
         self.feedback_loop_repo = feedback_loop_repo
@@ -75,6 +77,8 @@ class ReportService:
         repositories = [self.resource_repo, self.feedback_repo, self.feedback_loop_repo,
                         self.generation_job_repo, self.claim_repo, self.audit_repo,
                         self.diagnosis_repo, self.profile_repo]
+        if self.round_service is not None:
+            repositories.append(self.round_service.repository)
         if self.mastery_service:
             repositories.extend([self.mastery_service.repository, self.mastery_service.curriculum_repo,
                                  self.mastery_service.tier_progress_repo,
@@ -231,6 +235,12 @@ class ReportService:
         generation-job record is the durable batch boundary and retains the
         adopted target snapshot for that batch.
         """
+        if self.round_service is not None:
+            rows, _ = self.round_service.repository.list_rounds(profile.learner_id, 0, 100)
+            latest = next((row for row in rows if row["protocol_version"] == "learning-round/v1"), None)
+            if latest:
+                return {row["skill_node_id"] for row in self.round_service.repository.find("learning_round_nodes", round_id=latest["round_id"])
+                        if row["role"] == "primary"}
         if self.generation_job_repo is None:
             return None
         eligible_statuses = {"queued", "running", "completed"}
@@ -612,6 +622,16 @@ class ReportService:
             "data_warnings": ability_projection.data_warnings if ability_projection else ["MASTERY_PROJECTION_UNAVAILABLE"],
         }
 
+        if self.round_service is not None:
+            rows, _ = self.round_service.repository.list_rounds(profile.learner_id, 0, 100)
+            latest = next((row for row in rows if row["protocol_version"] == "learning-round/v1"), None)
+            report["learning_round_summary"] = self.round_service.detail(profile.learner_id, latest["round_id"]).model_dump(mode="json") if latest else None
+            report["remediation_needs"] = [
+                {key: row[key] for key in ("skill_node_id", "status", "last_score", "wait_rounds", "last_attempt_id")}
+                for row in self.round_service.repository.find("learner_remediation_needs", learner_id=profile.learner_id,
+                                                              knowledge_base_id=profile.knowledge_base_id)
+                if row["status"] != "resolved"
+            ]
         parts = revision_parts(report)
         report["freshness"]["source_revisions"] = parts
         report["report_revision"] = self._revision(parts, window_days)

@@ -14,6 +14,7 @@ from app.db.audit.repository import create_audit_repository
 from app.db.shared.database import get_session_factory
 from app.db.claim.repository import create_claim_repository
 from app.db.diagnosis.repository import create_diagnosis_repository
+from app.db.feedback.round_repository import create_round_repository
 from app.db.feedback.repository import create_feedback_repository
 from app.db.feedback.feedback_loop_repository import create_feedback_loop_repository
 from app.db.generation.repository import create_generation_job_repository
@@ -32,6 +33,7 @@ from app.models.shared.llm import LLMCallOptions
 from app.services.learners.diagnosis import DiagnosisService
 from app.services.auth.authentication import AuthService
 from app.services.reports.evaluation import EvaluationService
+from app.services.feedback.round_learning import RoundLearningService
 from app.services.feedback.feedback import FeedbackService
 from app.services.generation.jobs import GenerationJobService
 from app.services.generation.generation import GenerationService
@@ -110,8 +112,12 @@ class Container(containers.DeclarativeContainer):
     vector_store = providers.Singleton(get_vector_store)
     db_session_factory = providers.Singleton(get_session_factory)
 
+    round_repository = providers.Singleton(
+        create_round_repository, db_type=config.db_type, session_factory=db_session_factory,
+    )
     learner_repository = providers.Singleton(
         create_learner_repository,
+        round_repository=round_repository,
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
@@ -255,6 +261,7 @@ class Container(containers.DeclarativeContainer):
         generation_service=generation_service,
         mastery_service=mastery_service,
         dispatch_mode=config.generation_dispatch_mode,
+        round_repository=round_repository,
     )
     resource_service = providers.Singleton(ResourceService, repo=resource_repository)
     courseware_service = providers.Singleton(
@@ -294,6 +301,18 @@ class Container(containers.DeclarativeContainer):
         mastery_service=mastery_service,
         resource_repo=resource_repository,
     )
+    from app.services.feedback.round_uow import RoundUnitOfWork
+    # Resolved per request by the continuation endpoints. Injecting this
+    # factory into GenerationJobService at construction would create an eager
+    # cycle (job service -> factory -> feedback service -> job service).
+    round_uow_factory = providers.Factory(
+        RoundUnitOfWork, rounds=round_repository, feedback=feedback_service, learners=learner_repository,
+    )
+
+    round_learning_service = providers.Singleton(
+        RoundLearningService, repository=round_repository, feedback_service=feedback_service,
+        learner_repository=learner_repository, settings=runtime_settings,
+    )
     report_read_repository = providers.Singleton(SQLReportReadRepository, session_factory=db_session_factory)
     resource_quality_query_service = providers.Singleton(
         ResourceQualityQueryService,
@@ -315,6 +334,7 @@ class Container(containers.DeclarativeContainer):
         read_repo=report_read_repository,
         profile_repo=learner_repository,
         quality_service=resource_quality_query_service,
+        round_service=round_learning_service,
     )
     tutor_context_builder = providers.Singleton(
         TutorContextBuilder,
@@ -384,6 +404,7 @@ class Container(containers.DeclarativeContainer):
         resource_repo=resource_repository,
         audit_repo=audit_repository,
         knowledge_service=knowledge_service,
+        round_service=round_learning_service,
     )
 
 

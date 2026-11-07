@@ -7,6 +7,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings, resolve_backend_path
+from app.db.feedback import round_models  # noqa: F401
 from app.db.shared import extended_models  # noqa: F401
 from app.db.courseware import models as courseware_models  # noqa: F401
 from app.db.courseware.migrations import migrate_sqlite_courseware
@@ -47,6 +48,7 @@ from app.db.migrations import (
     apply_p0_35_report_read_model_migration,
     apply_p0_36_claim_extraction_migration,
     apply_p0_37_claim_estimate_migration,
+    apply_p0_38_learning_rounds_migration,
     apply_tutor_migration,
 )
 
@@ -183,6 +185,7 @@ def init_database():
     apply_p0_35_report_read_model_migration(engine)
     apply_p0_36_claim_extraction_migration(engine)
     apply_p0_37_claim_estimate_migration(engine)
+    apply_p0_38_learning_rounds_migration(engine)
 
 
 def _sqlite_tables(conn) -> set[str]:
