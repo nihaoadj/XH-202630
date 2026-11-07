@@ -47,6 +47,7 @@ from app.services.courseware import CoursewareService
 from app.agents.resource_workflows.interactive_courseware.worker import CoursewareSceneWorker
 from app.services.courseware.executor import CoursewareExecutor
 from app.services.resource_library import ResourceLibraryService
+from app.services.reviews.quality_query import ResourceQualityQueryService
 from app.services.reviews.reviews import ReviewService
 from app.services.runs.llm_accounting import LLMAccountingQueryService
 from app.services.runs.queries import RunQueryService
@@ -294,6 +295,13 @@ class Container(containers.DeclarativeContainer):
         resource_repo=resource_repository,
     )
     report_read_repository = providers.Singleton(SQLReportReadRepository, session_factory=db_session_factory)
+    resource_quality_query_service = providers.Singleton(
+        ResourceQualityQueryService,
+        audit_repository=audit_repository,
+        resource_repository=resource_repository,
+        claim_repository=claim_repository,
+        generation_job_repository=generation_job_repository,
+    )
     report_service = providers.Singleton(
         ReportService,
         resource_repo=resource_repository,
@@ -306,6 +314,7 @@ class Container(containers.DeclarativeContainer):
         diagnosis_repo=diagnosis_repository,
         read_repo=report_read_repository,
         profile_repo=learner_repository,
+        quality_service=resource_quality_query_service,
     )
     tutor_context_builder = providers.Singleton(
         TutorContextBuilder,

@@ -67,6 +67,61 @@
       <div class="report-chart-slot report-path-slot"><LearningPathGraph :data="report.learning_path_graph" /></div>
     </section>
 
+    <section v-if="qualitySummary || recentQualityItems.length" class="report-quality-section" aria-label="生成资源质量摘要">
+      <header class="report-quality-head">
+        <div>
+          <span class="report-kicker">RESOURCE QUALITY</span>
+          <h3>生成资源质量摘要</h3>
+        </div>
+        <p>以下数值来自平台版本化质量投影，绑定具体 Run 与资源版本；未测量的项显示“—”及原因，不按 0% 处理。</p>
+      </header>
+      <div v-if="qualitySummary" class="report-quality-grid">
+        <article class="report-quality-metric">
+          <span>知识覆盖（当前可见资源聚合）</span>
+          <strong :class="`is-${qualityTone(qualitySummary.coverage)}`">{{ qualityValueText(qualitySummary.coverage) }}</strong>
+          <small>{{ qualityMetricText(qualitySummary.coverage) }}</small>
+        </article>
+        <article class="report-quality-metric">
+          <span>幻觉率（已核验事实子集）</span>
+          <strong :class="`is-${qualityTone(qualitySummary.claim_unverified_subset_rate || null)}`">{{ claimAggregateText }}</strong>
+          <small>{{ claimAggregateNote }}</small>
+        </article>
+        <article class="report-quality-metric">
+          <span>核验完成资源</span>
+          <strong>{{ qualitySummary.claim_verified_resource_total }} / {{ qualitySummary.resource_total }}</strong>
+          <small>其余资源按各自状态分别计数，未完成不并入该比例。</small>
+        </article>
+        <article v-if="qualitySummary.reference_resource_total" class="report-quality-metric is-reference">
+          <span>普通审核参考幻觉率</span>
+          <strong class="is-attention">5%</strong>
+          <small>普通审核参考／待核验：未开启 Claim 的资源按平台规则给出的未校准参考值，不是测量结果。</small>
+        </article>
+      </div>
+      <ul v-if="recentQualityItems.length" class="report-quality-list">
+        <li v-for="item in recentQualityItems" :key="`${item.resource_id}-${item.resource_version}`">
+          <strong>{{ item.resource_type || '资源' }}</strong>
+          <span>覆盖 {{ qualityValueText(item.coverage) }}（{{ sourceLabel(item.coverage) }} · {{ statusLabel(item.coverage) }}）</span>
+          <span>幻觉 {{ hallucinationMetricText(item.hallucination) }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="report-quality-section" aria-label="项目评测结果">
+      <header class="report-quality-head"><div><span class="report-kicker">PROJECT EVALUATION</span><h3>项目评测结果</h3></div><p>独立于个人学情与单资源审核；离线金标只验证计算链路，真实模型结果也需注明证据范围。</p></header>
+      <p>达标标准：核心知识点覆盖率 ≥90% · 幻觉率 &lt;5% · 难度适配准确率 ≥85%。</p>
+      <p v-if="evaluationInvalidRows" role="status">有 {{ evaluationInvalidRows }} 条评测记录无效，已隔离；相关结果不能判定达标。</p>
+      <p v-if="evaluationLoading" role="status">正在读取项目评测结果…</p>
+      <p v-else-if="evaluationError" role="alert">{{ evaluationError }} <el-button text @click="loadEvaluation">重试</el-button></p>
+      <p v-else-if="!evaluations.length">暂无有效的版本化评测记录，三项指标均未测量；旧版平均分不作为评测依据。</p>
+      <article v-for="group in evaluations" :key="group.manifest_hash" class="report-quality-metric">
+        <h4>{{ group.manifest.evidence_mode === 'offline_gold' ? '离线计算验证' : '真实模型评测（生产自审）' }} · {{ group.manifest.suite_id }} / {{ group.manifest.suite_version }}</h4>
+        <p>{{ group.manifest.experiment_name }} · 已接收 {{ group.received_case_total }}/{{ group.planned_case_total }} 案例 · 生成失败 {{ group.failed_case_total }} · {{ ({ complete: '记录齐全', incomplete: '缺少案例', invalid: '记录冲突，结果无效' })[group.status] }}</p>
+        <p v-for="field in evaluationFields" :key="field.key"><span>{{ field.label }}：</span><strong :class="`is-${qualityTone(group[field.key])}`">{{ qualityValueText(group[field.key]) }}</strong> <small>{{ qualityMetricText(group[field.key]) }}</small></p>
+        <small>覆盖：{{ group.coverage.numerator ?? '—' }}/{{ group.coverage.denominator ?? '—' }} 个案例目标；幻觉：{{ group.hallucination.numerator ?? '—' }}/{{ group.hallucination.denominator ?? '—' }} 条事实；难度：{{ group.difficulty.numerator ?? '—' }}/{{ group.difficulty.denominator ?? '—' }} 个标注案例。</small>
+        <small>定义 {{ group.manifest.metric_definition_version }} · fixture {{ group.manifest.fixture_version }} · 覆盖 fixture {{ group.manifest.coverage_fixture_version }}；不代表正式比赛整体门已通过。</small>
+      </article>
+    </section>
+
     <section class="next-round-panel">
       <div><span class="report-kicker">NEXT LEARNING CYCLE</span><h3>下一轮学习重点</h3><p>建议优先围绕以下知识点进行练习与资源生成，持续缩小当前学习盲区。</p></div>
       <div class="suggestion-list"><span v-for="item in nextSuggestions" :key="item">{{ item }}</span><em v-if="!nextSuggestions.length">完成一次能力诊断后，将在这里展示个性化学习重点。</em></div>
@@ -85,8 +140,12 @@ import ReportChart from './ReportChart.vue'
 import LearningNodeMasteryChart from './LearningNodeMasteryChart.vue'
 import ResourceDifficultyCurve from './ResourceDifficultyCurve.vue'
 import LearningPathGraph from './LearningPathGraph.vue'
-import { learningReportApi, fetchReportSnapshot } from './api'
+import { evaluationApi, learningReportApi, fetchReportSnapshot } from './api'
 import { ReportStreamClient } from './reportStreamClient'
+import {
+  hallucinationMetricText, qualityMetricText, qualityTone, qualityValueText,
+  sourceLabel, statusLabel,
+} from '../../utils/qualityMetricsPresentation.js'
 
 const store = useAppStore()
 const selectedLearnerId = ref(localStorage.getItem('last_learner_id') || store.currentLearnerId || '')
@@ -97,9 +156,30 @@ const windowDays = ref(30)
 const streamStatus = ref('closed')
 const reportLoading = ref(false)
 const reportError = ref('')
+const evaluations = ref([])
+const evaluationLoading = ref(false)
+const evaluationInvalidRows = ref(0)
+const evaluationError = ref('')
+const evaluationFields = [{ key: 'coverage', label: '核心知识点覆盖率' }, { key: 'hallucination', label: '幻觉率' }, { key: 'difficulty', label: '难度适配准确率' }]
+let evaluationRequestVersion = 0
 let reportRequestVersion = 0
 let reportMounted = true
 const metricSummary = computed(() => report.metric_summary || {})
+const qualitySummary = computed(() => report.resource_quality_summary || null)
+const recentQualityItems = computed(() => Array.isArray(report.recent_resource_quality) ? report.recent_resource_quality : [])
+const claimAggregateText = computed(() => {
+  const rate = qualitySummary.value?.claim_unverified_subset_rate
+  return rate ? qualityValueText(rate) : '—'
+})
+const claimAggregateNote = computed(() => {
+  const summary = qualitySummary.value
+  if (!summary || !summary.claim_unverified_subset_rate) {
+    return '可见资源中没有完整的 Claim 核验结果；未完成的资源不并入该比例，也不回退为 5% 参考值。'
+  }
+  const risk = summary.claim_risk_fact_total ?? 0
+  const factual = summary.claim_factual_total ?? 0
+  return `已核验资源子集：${risk}/${factual} 条事实与证据矛盾或未获支持；其余资源保持各自状态。`
+})
 const nextSuggestions = computed(() => report.next_suggestions || report.weak_points || [])
 const activeProfile = computed(() => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null)
 const directionName = computed(() => resolveTrackName(activeProfile.value?.knowledge_base_id))
@@ -141,6 +221,26 @@ const stream = new ReportStreamClient({
   fetchReport: fetchReportSnapshot,
 })
 
+async function loadEvaluation() {
+  const version = ++evaluationRequestVersion
+  evaluations.value = []
+  evaluationInvalidRows.value = 0
+  evaluationLoading.value = true
+  evaluationError.value = ''
+  const isCurrent = () => reportMounted && version === evaluationRequestVersion
+  try {
+    const response = await evaluationApi.summary()
+    if (isCurrent()) {
+      evaluations.value = response.data.resource_quality_evaluations
+      evaluationInvalidRows.value = response.data.resource_quality_invalid_row_total || 0
+    }
+  } catch (error) {
+    if (isCurrent()) evaluationError.value = '项目评测读取失败，不能据此判断达标。'
+  } finally {
+    if (isCurrent()) evaluationLoading.value = false
+  }
+}
+
 async function loadReport(force = false) {
   if (!selectedLearnerId.value || !reportMounted) return
   const learnerId = selectedLearnerId.value
@@ -169,6 +269,7 @@ async function loadReport(force = false) {
   }
 }
 async function handleProfileChange() {
+  void loadEvaluation()
   replaceReport({})
   await loadReport(true)
 }
@@ -187,6 +288,7 @@ function handleVisibility() {
   else if (streamStatus.value === 'polling') stream.stop()
 }
 onMounted(async () => {
+  void loadEvaluation()
   window.addEventListener('online', restartStream); window.addEventListener('offline', handleOffline)
   document.addEventListener('visibilitychange', handleVisibility)
   try {
@@ -198,6 +300,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   reportMounted = false
   ++reportRequestVersion
+  ++evaluationRequestVersion
   stream.stop(); window.removeEventListener('online', restartStream); window.removeEventListener('offline', handleOffline)
   document.removeEventListener('visibilitychange', handleVisibility)
 })
@@ -387,4 +490,20 @@ onBeforeUnmount(() => {
   .report-page .report-refresh-button { transition: none; }
   :global(.app-shell:has(.report-page) .topbar-action) { transition: none; }
 }
+.report-quality-section { margin-top:24px; padding:20px; border:1px solid #e1eaee; border-radius:12px; background:#f8fbfd; }
+.report-quality-head { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:flex-end; justify-content:space-between; margin-bottom:14px; }
+.report-quality-head h3 { margin:4px 0 0; font-size:16px; color:#172c45; }
+.report-quality-head p { margin:0; max-width:560px; color:#59697b; font-size:12px; line-height:1.7; }
+.report-quality-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; }
+.report-quality-metric { display:flex; flex-direction:column; gap:6px; padding:12px; border:1px solid #dbe6ee; border-radius:8px; background:#fff; }
+.report-quality-metric span { color:#59697b; font-size:12px; }
+.report-quality-metric strong { color:#172c45; font-size:20px; font-weight:600; }
+.report-quality-metric strong.is-success { color:#176b70; }
+.report-quality-metric strong.is-attention { color:#935719; }
+.report-quality-metric strong.is-muted { color:#59697b; }
+.report-quality-metric small { color:#59697b; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+.report-quality-metric.is-reference { border-color:#f0dcb8; background:#fff9ef; }
+.report-quality-list { display:grid; gap:6px; margin:14px 0 0; padding:0; list-style:none; }
+.report-quality-list li { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; padding:8px 10px; border-radius:6px; background:#fff; color:#59697b; font-size:12px; }
+.report-quality-list li strong { color:#172c45; }
 </style>

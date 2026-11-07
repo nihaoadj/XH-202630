@@ -149,6 +149,40 @@ export type BlindSpotNodeV1 = {
   "stable_order": number;
 };
 
+export type ClaimMetricCountsV1 = {
+  "claim_total"?: number;
+  "contradicted_claim_total"?: number;
+  "factual_claim_total"?: number;
+  "incomplete_claim_total"?: number;
+  "non_factual_claim_total"?: number;
+  "not_in_evidence_claim_total"?: number;
+  "supported_claim_total"?: number;
+};
+
+export type ClaimQualityV1 = {
+  "counts"?: (ClaimMetricCountsV1) | (null);
+  "failure_code"?: (string) | (null);
+  "hallucination": RateMetricV1;
+  "progress": RateMetricV1;
+  "reason_codes"?: Array<string>;
+  "requested": boolean;
+  "review_id"?: (string) | (null);
+  "status": "complete" | "reference" | "pending" | "incomplete" | "failed" | "not_applicable" | "not_requested" | "unavailable" | "legacy_unavailable";
+  "support_rate"?: (RateMetricV1) | (null);
+};
+
+export type ClaimStatusBucketsV1 = {
+  "complete"?: number;
+  "failed"?: number;
+  "incomplete"?: number;
+  "legacy_unavailable"?: number;
+  "not_applicable"?: number;
+  "not_requested"?: number;
+  "pending"?: number;
+  "reference"?: number;
+  "unavailable"?: number;
+};
+
 export type ContinueResourceBatchRequest = {
   "include_claim_check"?: (boolean) | (null);
   "instructions"?: (string) | (null);
@@ -270,6 +304,27 @@ export type CoursewareSceneStatus = {
   "title"?: (string) | (null);
 };
 
+export type CoverageStatusBucketsV1 = {
+  "complete"?: number;
+  "failed"?: number;
+  "incomplete"?: number;
+  "legacy_unavailable"?: number;
+  "not_applicable"?: number;
+  "not_requested"?: number;
+  "pending"?: number;
+  "unavailable"?: number;
+};
+
+export type CoverageTargetV1 = {
+  "display_name"?: (string) | (null);
+  "heading_path"?: Array<string>;
+  "paragraph_id"?: (string) | (null);
+  "reason_code"?: (string) | (null);
+  "status": "covered" | "missing";
+  "target_id": string;
+  "unit_id"?: (string) | (null);
+};
+
 export type CurrentReportResponse = {
   "ability_nodes"?: Array<AbilityNodeProjectionV1>;
   "agent_flow"?: Array<AgentTrace>;
@@ -313,6 +368,7 @@ export type CurrentReportResponse = {
   "recent_followup_runs"?: Array<Record<string, unknown>>;
   "recent_knowledge_state_mutations"?: Array<Record<string, unknown>>;
   "recent_resource_credibility"?: Array<Record<string, unknown>>;
+  "recent_resource_quality"?: Array<ResourceQualityMetricsV1>;
   "recent_resources"?: Array<LearningResource>;
   "report_availability"?: Record<string, unknown>;
   "report_revision": string;
@@ -320,6 +376,7 @@ export type CurrentReportResponse = {
   "resource_credibility_summary"?: Record<string, unknown>;
   "resource_difficulty_curve"?: (ResourceDifficultyCurveV1) | (null);
   "resource_difficulty_match"?: Array<Record<string, unknown>>;
+  "resource_quality_summary"?: (ResourceQualitySummaryV1) | (null);
   "review_summary"?: Record<string, unknown>;
   "skill_level": string;
   "strong_points": Array<string>;
@@ -346,6 +403,66 @@ export type DifficultyCurveItem = {
   "recommended_difficulty": string;
   "score": number;
   "topic": string;
+};
+
+export type DifficultyFitV1 = {
+  "dimension_status"?: "pass" | "fail" | "insufficient" | "not_evaluated";
+  "estimated_difficulty"?: (string) | (null);
+  "match_status"?: "matched" | "too_easy" | "challenging" | "too_hard" | "not_measured";
+  "reason_codes"?: Array<string>;
+  "scale_version"?: "declared-band/v1";
+};
+
+export type DimensionCountsV1 = {
+  "coverage"?: number;
+  "difficulty"?: number;
+  "factual_evidence"?: number;
+  "self_contained"?: number;
+};
+
+export type EvaluationQualityManifestV2 = {
+  "coverage_fixture_version": string;
+  "evaluation_id": string;
+  "evidence_mode": "offline_gold" | "live_model";
+  "experiment_name": string;
+  "fixture_version": string;
+  "metric_definition_version"?: "resource-quality/v2";
+  "schema_version"?: "2.0";
+  "selected_case_targets": {
+  [key: string]: Array<string>;
+};
+  "source_snapshot_hash": string;
+  "suite_data_hash": string;
+  "suite_id": string;
+  "suite_version": string;
+};
+
+export type EvaluationResourceQualityV2 = {
+  "coverage": RateMetricV1;
+  "coverage_known_target_total": number;
+  "coverage_unknown_case_ids"?: Array<string>;
+  "covered_target_total": number;
+  "difficulty": RateMetricV1;
+  "expected_target_total": number;
+  "failed_case_total": number;
+  "hallucination": RateMetricV1;
+  "manifest": EvaluationQualityManifestV2;
+  "manifest_hash": string;
+  "planned_case_total": number;
+  "reason_codes"?: Array<string>;
+  "received_case_total": number;
+  "status": "complete" | "incomplete" | "invalid";
+};
+
+export type EvaluationSummary = {
+  "ablation"?: Array<Record<string, unknown>>;
+  "created_at"?: (string) | (null);
+  "metrics": {
+  [key: string]: number;
+};
+  "resource_quality_evaluations"?: Array<EvaluationResourceQualityV2>;
+  "resource_quality_invalid_row_total"?: number;
+  "sample_count": number;
 };
 
 export type ExerciseItem = {
@@ -445,6 +562,20 @@ export type GenerationJobStatusResponse = {
   "started_at"?: (string) | (null);
   "superseded_by_run_id"?: (string) | (null);
   "topic": string;
+};
+
+export type IssueStatisticsV1 = {
+  "blocked_by_issue_total"?: number;
+  "false_positive_issue_total"?: (number) | (null);
+  "fixed_issue_total"?: (number) | (null);
+  "history_completeness"?: "complete" | "partial" | "unavailable";
+  "open_by_dimension"?: (DimensionCountsV1) | (null);
+  "open_by_severity"?: (SeverityCountsV1) | (null);
+  "open_issue_total"?: (number) | (null);
+  "reason_codes"?: Array<string>;
+  "reopened_issue_total"?: (number) | (null);
+  "still_open_issue_total"?: (number) | (null);
+  "unverifiable_issue_total"?: (number) | (null);
 };
 
 export type KnowledgeBlindSpotMapV1 = {
@@ -705,6 +836,11 @@ export type LearningResource = {
   "version"?: number;
 };
 
+export type MetricThresholdV1 = {
+  "comparator": ThresholdComparator;
+  "value": number;
+};
+
 export type NextGenerationCandidateV1 = {
   "blocked_by_node_ids"?: Array<string>;
   "confidence": AbilityConfidence;
@@ -737,6 +873,24 @@ export type NextGenerationOptionsV1 = {
   "snapshot_hash": string;
   "tier_completion"?: boolean;
   "tier_progress"?: (LearnerTierProgressV1) | (null);
+};
+
+export type OrdinaryReviewQualityV1 = {
+  "contract_version"?: (string) | (null);
+  "covered_target_total"?: (number) | (null);
+  "decision"?: ("approve" | "revise" | "reject" | "human_review") | (null);
+  "difficulty"?: "pass" | "fail" | "insufficient" | "not_evaluated";
+  "factual_evidence"?: "pass" | "fail" | "insufficient" | "not_evaluated";
+  "failure_code"?: (string) | (null);
+  "missing_target_total"?: (number) | (null);
+  "reason_codes"?: Array<string>;
+  "review_id"?: (string) | (null);
+  "review_step_id"?: (string) | (null);
+  "review_step_sequence"?: (number) | (null);
+  "self_contained"?: "pass" | "fail" | "insufficient" | "not_evaluated";
+  "status": "complete" | "failed" | "incomplete" | "not_requested" | "unavailable" | "legacy_unavailable";
+  "target_total"?: (number) | (null);
+  "truncated_issue_count"?: boolean;
 };
 
 export type PersistedEvidenceSnapshot = {
@@ -805,6 +959,33 @@ export type PublishCompleteness = "complete" | "partial" | "unavailable";
 
 export type PublishIncompleteReason = "request_missing" | "spec_request_mismatch" | "logical_identity_missing" | "resource_reference_missing" | "unsupported_representation" | "repository_unavailable" | "lineage_conflict";
 
+export type QualityAssessment = "met" | "not_met" | "not_assessed" | "not_applicable";
+
+export type QualityAvailability = "available" | "partial" | "unavailable";
+
+export type QualityEvidenceMode = "production_audit" | "offline_gold" | "live_model" | "rule_reference" | "legacy";
+
+export type QualityMetricId = "core_knowledge_coverage" | "hallucination_rate" | "factual_support_rate" | "difficulty_adaptation_accuracy" | "claim_check_progress";
+
+export type QualityMetricSource = "ordinary_review" | "ordinary_rule_reference" | "claim_judge" | "labeled_evaluation" | "none";
+
+export type QualityMetricStatus = "complete" | "reference" | "not_requested" | "pending" | "incomplete" | "failed" | "not_applicable" | "legacy_unavailable" | "unavailable";
+
+export type RateMetricV1 = {
+  "assessment": QualityAssessment;
+  "definition_version": string;
+  "denominator"?: (number) | (null);
+  "evidence_mode": QualityEvidenceMode;
+  "metric_id": QualityMetricId;
+  "numerator"?: (number) | (null);
+  "reason_codes"?: Array<string>;
+  "schema_version"?: "1.0";
+  "source": QualityMetricSource;
+  "status": QualityMetricStatus;
+  "threshold"?: (MetricThresholdV1) | (null);
+  "value"?: (number) | (null);
+};
+
 export type ReplayCompleteness = "complete" | "legacy_partial";
 
 export type ReportInvalidation = {
@@ -867,6 +1048,7 @@ export type ReportResponse = {
   "recent_followup_runs"?: Array<Record<string, unknown>>;
   "recent_knowledge_state_mutations"?: Array<Record<string, unknown>>;
   "recent_resource_credibility"?: Array<Record<string, unknown>>;
+  "recent_resource_quality"?: Array<ResourceQualityMetricsV1>;
   "recent_resources"?: Array<LearningResource>;
   "report_availability"?: Record<string, unknown>;
   "report_revision"?: (string) | (null);
@@ -874,6 +1056,7 @@ export type ReportResponse = {
   "resource_credibility_summary"?: Record<string, unknown>;
   "resource_difficulty_curve"?: (ResourceDifficultyCurveV1) | (null);
   "resource_difficulty_match"?: Array<Record<string, unknown>>;
+  "resource_quality_summary"?: (ResourceQualitySummaryV1) | (null);
   "review_summary"?: Record<string, unknown>;
   "skill_level": string;
   "strong_points": Array<string>;
@@ -954,6 +1137,51 @@ export type ResourcePartitionSummaryV1 = {
   "usage"?: LLMUsageSummaryV1;
 };
 
+export type ResourceQualityMetricsV1 = {
+  "availability"?: QualityAvailability;
+  "claim": ClaimQualityV1;
+  "coverage": RateMetricV1;
+  "difficulty_fit": DifficultyFitV1;
+  "display_order"?: number;
+  "factual_support"?: (RateMetricV1) | (null);
+  "hallucination": RateMetricV1;
+  "issue_statistics": IssueStatisticsV1;
+  "metric_policy_version"?: "resource-quality/v2";
+  "ordinary_review": OrdinaryReviewQualityV1;
+  "published"?: boolean;
+  "reason_codes"?: Array<string>;
+  "resource_id": string;
+  "resource_spec_id"?: (string) | (null);
+  "resource_type": string;
+  "resource_version": number;
+  "review_id"?: (string) | (null);
+  "run_id": string;
+  "schema_version"?: "1.0";
+  "source_binding": SourceBindingQualityV1;
+  "target_coverage"?: Array<CoverageTargetV1>;
+  "topic"?: string;
+};
+
+export type ResourceQualitySummaryV1 = {
+  "claim_buckets"?: ClaimStatusBucketsV1;
+  "claim_factual_total"?: number;
+  "claim_risk_fact_total"?: number;
+  "claim_unverified_subset_rate"?: (RateMetricV1) | (null);
+  "claim_verified_resource_total"?: number;
+  "coverage": RateMetricV1;
+  "coverage_buckets"?: CoverageStatusBucketsV1;
+  "coverage_covered_target_total"?: (number) | (null);
+  "coverage_missing_target_total"?: (number) | (null);
+  "coverage_target_total"?: (number) | (null);
+  "coverage_unknown_resource_total"?: number;
+  "metric_policy_version"?: "resource-quality/v2";
+  "reason_codes"?: Array<string>;
+  "reference_resource_total"?: number;
+  "reference_value"?: (number) | (null);
+  "resource_total": number;
+  "schema_version"?: "1.0";
+};
+
 export type ResourceRepresentation = "text";
 
 export type RunPublishSummary = {
@@ -978,6 +1206,17 @@ export type RunResourceProgressSummary = {
   "published"?: number;
   "schema_version"?: "1.0";
   "total"?: number;
+};
+
+export type RunResourceQualityResponseV1 = {
+  "availability": QualityAvailability;
+  "items"?: Array<ResourceQualityMetricsV1>;
+  "metric_policy_version"?: "resource-quality/v2";
+  "reason_codes"?: Array<string>;
+  "run_id": string;
+  "schema_version"?: "1.0";
+  "source_revision": string;
+  "summary": ResourceQualitySummaryV1;
 };
 
 export type RunStatus = "created" | "running" | "finalizing" | "completed" | "degraded" | "human_review" | "failed" | "interrupted";
@@ -1025,6 +1264,21 @@ export type SegmentInfoV1 = {
   "recorded_at": string;
   "sealed"?: boolean;
   "segment_id": string;
+};
+
+export type SeverityCountsV1 = {
+  "critical"?: number;
+  "high"?: number;
+  "low"?: number;
+  "medium"?: number;
+};
+
+export type SourceBindingQualityV1 = {
+  "reason_codes"?: Array<string>;
+  "source_ref_total"?: number;
+  "status"?: "complete" | "partial" | "not_measured" | "failed";
+  "unique_document_total"?: number;
+  "verified_ref_total"?: number;
 };
 
 export type SourceLocator = {
@@ -1104,6 +1358,8 @@ export type TaskLLMAccountingResponseV1 = {
   "task_summary"?: LLMUsageSummaryV1;
   "usage_complete"?: boolean;
 };
+
+export type ThresholdComparator = "lt" | "gte";
 
 export type WeaknessPriorityV1 = {
   "confidence": AbilityConfidence;

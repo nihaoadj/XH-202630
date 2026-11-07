@@ -741,3 +741,13 @@ T39 执行权校验：带 epoch 的 Worker 在调用模型前通过审计仓储�
 私有输入类型在 `models/reviews/revision_inputs.py`（纯 Pydantic，不依赖 Service/工作流/DB），纯构造与 scope 选择在 `agents/resource_workflows/learning_documents/revision_inputs.py`（无模型/SQL/容器；Claim 用无损 `scan_units` 分组、同段共享上下文、跨段各自成组）。六类资源 Agent 复用 `agents/resource_agents/revision_prompts.py` 的两类说明与统一拼装，保留各自 Markdown/结构化输出合同。
 
 同次图调用内通过私有内存 `constraints["generation_revision_inputs"]` 携带带版本的 spec→封套映射，`generator._context` 只取当前 spec 项并赋给对应字段；该映射不入 checkpoint 白名单、不跨进程恢复。单资源 retry 通过 `revision_feedback` 槽装载带 `schema_version="revision-input-v1"` 的封套，导入节点只重映射 Evidence ID 与 spec ID，不改 `claim_text`/`source_text`/`reason`。上一版完整正文只在输入内保留一份，修订原则为最小必要修改、证据不足优先收缩、必要时删除、不补造事实。
+
+### T48 资源质量指标的单一计算与查询
+
+`models/reviews/quality_metrics.py` 是版本化 DTO 与阈值注册表的唯一来源；`services/reviews/quality_metrics.py` 是覆盖率、幻觉率、Claim 进度、难度适配与聚合的唯一计算入口，报告、Run 查询 API 与评测 v2 都调用它，不复制第二套公式。
+
+`services/reviews/quality_query.py` 负责把持久事实投影为逐资源结果：精确匹配同一 Run/资源版本/审核记录，校验目标集与冻结 spec 一致，冲突判定保持未完成而不是最后一次写入覆盖；issue 统计只读取账本并输出数字/状态，不输出答案、rubric、Prompt 或证据摘录。`db/audit/quality_read.py` 定义一次性来源包：SQL 在显式 `BEGIN` 的同一连接上绑定嵌套 Session/savepoint，Memory 按固定锁序获取共享/资源/Claim 锁；明确能力不支持时返回不可用；数据库或程序异常保留错误语义，退出时释放事务/锁，不静默拼接两个时刻。
+
+报表侧 `services/reports/reports.py` 只消费该投影，并在 `text_resources` revision 组纳入新字段；`db/reports/watermarks.py` 将协议升级为 `report-read/2`，闭包新增 `agent_runs/agent_steps/workflow_checkpoints/resource_specs`，排除纯租约心跳列。API 层新增独立 `GET /api/runs/{run_id}/resource-quality`，不进入旧资源读模型或 `GenerateReport`。前端 `utils/qualityMetricsPresentation.js` 只做标签映射与 `—` 处理，不重算、不从遗留分数补数。评测 v2（`competition_suite.py`）的 M-COVERAGE 只读普通审核覆盖，Claim 覆盖公式已移除。
+
+T48 验收修复：`services/reviews/quality_evaluation.py` 校验冻结 manifest/case、去重与跨案例资源版本唯一性，再复用纯指标计算入口；`services/reports/evaluation.py` 仅从显式 v2 行重建分组，隔离坏行/冲突组，旧浮点均值保持兼容且不升级为新评测。报告质量分母保留所有当前可见已发布文本资源，缺少 Run/来源包时用未知占位；真实读取异常不当作无数据。

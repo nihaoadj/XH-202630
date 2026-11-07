@@ -20,7 +20,7 @@
             <WorkflowEvidencePanel :sources="nodeEvidence" />
           </section>
           <template v-else-if="contentKind === 'review'">
-            <WorkflowReviewPanel :reviews="reviews" :step="step" />
+            <WorkflowReviewPanel :reviews="reviews" :step="step" :quality="qualityForSelected" />
             <details v-if="hasRevisions" class="review-revisions detail-disclosure"><summary>修订前后对照 · {{ chain.length }} 个版本</summary><WorkflowVersionPanel :chain="chain" :resource-id="resourceId" :all-reviews="snapshot.reviews || []" :run-id="runId" /></details>
           </template>
           <section v-else-if="contentKind === 'claims'" class="claim-verification detail-module" aria-label="陈述事实核验">
@@ -60,6 +60,7 @@ import './workflow-detail/workflowDetail.css'
 const props = defineProps({
   visible: Boolean, loading: Boolean, error: { type: String, default: '' }, claimsError: { type: String, default: '' },
   snapshot: { type: Object, default: () => ({}) }, claims: { type: Object, default: () => ({}) },
+  quality: { type: Object, default: null },
   step: { type: Object, default: null }, resourceId: { type: String, default: '' }, runId: { type: String, default: '' }, claimEnabled: { type: Boolean, default: true },
 })
 defineEmits(['update:visible', 'update:resourceId', 'refresh'])
@@ -71,6 +72,7 @@ const runResources = computed(() => (props.snapshot.resource_versions || []).fil
 const resources = computed(() => props.step ? associatedStepResources(props.snapshot, props.step, props.runId) : runResources.value)
 const resource = computed(() => resources.value.find(item => item.resource_id === props.resourceId))
 const resourceTitle = computed(() => resource.value ? `${resource.value.resource_type || '学习资源'} · v${resource.value.version || '?'}` : '')
+const qualityForSelected = computed(() => (props.quality && resource.value && props.quality.resource_id === resource.value.resource_id) ? props.quality : null)
 const reviews = computed(() => resource.value ? (props.snapshot.reviews || []).filter(item => item.resource_id === resource.value.resource_id && item.run_id === props.runId
   && (!props.step?.review_ids?.length || props.step.review_ids.includes(item.review_id)))
   .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))) : [])

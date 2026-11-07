@@ -134,6 +134,36 @@ export function requireRunTimelineResponse(response) {
   return response
 }
 
+/** @param {unknown} value @returns {value is boolean} */
+function isOptionalBoolean(value) {
+  return value === undefined || value === null || typeof value === 'boolean'
+}
+
+/** @param {unknown} metric @returns {boolean} */
+function isOptionalMetric(metric) {
+  return metric == null || (isRecord(metric) && typeof metric.status === 'string')
+}
+
+/**
+ * Run resource-quality transport guard: the server owns the complete DTO.
+ * Every metric row must at least carry a status string; null values stay null.
+ * @param {import('axios').AxiosResponse<import('./generated/contracts').RunResourceQualityResponseV1>} response
+ * @returns {import('axios').AxiosResponse<import('./generated/contracts').RunResourceQualityResponseV1>}
+ */
+export function requireRunResourceQualityResponse(response) {
+  const value = /** @type {unknown} */ (response.data)
+  if (!isRecord(value) || typeof value.run_id !== 'string' || !Array.isArray(value.items)) {
+    throw new ContractResponseError()
+  }
+  const valid = value.items.every(item => (
+    isRecord(item) && typeof item.resource_id === 'string'
+    && isOptionalBoolean(item.claim_requested) && isOptionalMetric(item.coverage)
+    && isOptionalMetric(item.hallucination) && isOptionalMetric(item.claim)
+  ))
+  if (!valid) throw new ContractResponseError()
+  return response
+}
+
 /** @param {unknown} value @returns {value is import('./ports').ReportInvalidationInput} */
 export function isReportInvalidation(value) {
   return isRecord(value) && typeof value.learner_id === 'string'

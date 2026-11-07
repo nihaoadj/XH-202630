@@ -1,4 +1,6 @@
 """内存实现的生成资源仓库"""
+import functools
+import threading
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -7,6 +9,21 @@ from app.db.learning_documents.models import ResourceExecutionRecord, ResourceSp
 from app.models.learning_documents.schemas import LearningResource
 from app.models.learning_documents.invariants import immutable_resource_payload
 from app.db.audit.base import PersistenceConflict
+
+
+def _locked(method):
+    """Serialize one public repository operation on the instance RLock.
+
+    The same re-entrant lock is held by the cross-repository quality snapshot,
+    so a reader inside that region never observes a half-applied write.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
 
 
 class MemoryResourceRepository(BaseResourceRepository):
@@ -18,6 +35,7 @@ class MemoryResourceRepository(BaseResourceRepository):
         self.associations: Dict[str, Dict[str, str | None]] = {}
         self._specs: Dict[str, ResourceSpecRecord] = {}
         self._executions: Dict[tuple[str, str, str], ResourceExecutionRecord] = {}
+        self._lock = threading.RLock()
 
     def get(self, resource_id: str) -> Optional[LearningResource]:
         resource = self._store.get(resource_id)
@@ -227,3 +245,16 @@ class MemoryResourceRepository(BaseResourceRepository):
             ),
             key=lambda item: (item.resource_spec_id, item.representation),
         )
+
+
+# Every public operation runs under the shared re-entrant lock. Applying it
+# once avoids a partially annotated class where one new method silently escapes
+# the snapshot guarantee.
+for _name, _attribute in list(MemoryResourceRepository.__dict__.items()):
+    if _name.startswith("_") or not callable(_attribute):
+        continue
+    if getattr(_attribute, "_snapshot_locked", False):
+        continue
+    _wrapped = _locked(_attribute)
+    _wrapped._snapshot_locked = True
+    setattr(MemoryResourceRepository, _name, _wrapped)

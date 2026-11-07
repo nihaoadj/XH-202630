@@ -275,3 +275,19 @@ python scripts/run_tests.py --suite publication-browser --output output/test-run
 - `publication-browser`：真实 `frontend/dist` 应用 + 隔离 API fixture，覆盖错峰 0/3→1/3→2/3→终态失败、终态后发布/拒绝、旧版本与 parent 链阅读、分页及第二页503保留结果、慢响应切任务、运行中部分未知、旧响应回退与重新进入；证据写入 `TEST_RUN_OUTPUT`（`publication-summary.json`、截图、逐用例控制台错误），请求不出回环地址。预期的分页503单独记录，其余控制台错误和外部请求均使对应场景失败。浏览器缺失或必需用例失败即为未通过。
 
 以上专项均为确定性/合成证据：真实模型质量、真实端到端、Worker 故障注入、CI 与部署仍为 NOT_RUN。曾单列失败的 SQL 资源重试 node 在修复测试冻结输入后已恢复到兼容 suite；先前失败与复验记录保留于 T47 第9节，不再以移出节点计为兼容通过。
+
+T48 资源质量指标与报告专项（2026-11-07 实施）：`python scripts/run_tests.py --suite resource-quality-unit --suite resource-quality-query --suite resource-quality-report --suite resource-quality-evaluation --suite resource-quality-ui --output output/test-runs/t48-metrics`，构建后运行 `python scripts/run_tests.py --suite resource-quality-browser --output output/test-runs/t48-browser`；静态检查为 `--suite architecture --suite frontend-contracts --suite frontend-build`。六个 suite 的文件/命令以 `tests/suites.json` 为准，均只覆盖本次改动。
+
+- `resource-quality-unit`：C01/C02/H01—H06/E03 的纯指标口径，包含重复/缺失目标拒绝、5% 参考不计分子分母且不判达标、真实 5% 不满足 `<5%`、未完成状态不回退参考、难度仅用标注样本。
+- `resource-quality-query`：逐资源精确绑定（run/spec/resource/version/review）、目标集校验、冲突判定、私有账本安全投影（无答案/rubric/证据原文/内部自由文本）、SQL 显式 `BEGIN` 共同快照、Memory 锁序与并发写入不拼接时刻、只读 API 的授权/404/422/排序/零写入。
+- `resource-quality-report`：报告只聚合当前可见已发布文本资源；质量读取失败降级为 unknown 而不破坏报告；新字段进入 `text_resources` revision 组；`report-read/2` watermark 闭包覆盖 run/step/checkpoint/spec，幂等升级、缺触发器禁缓存、回滚保留业务事实。
+- `resource-quality-evaluation`：v1 报告与 fixture 原字节保留；v2 以普通审核单位计算 M-COVERAGE；Claim 关联变化不影响覆盖；缺失/失败案例保留在计划分母且不产生 PASS；P0-09 验收报告因无普通审核逐目标账本，其 M-COVERAGE 显式为 `NOT_MEASURABLE`，CLI v2 只输出 `core_knowledge_coverage_rate`。
+- `resource-quality-ui` / `resource-quality-browser`：前端只展示后端值，附来源与测量状态；5% 参考标注“普通审核参考／待核验”且无达标绿勾；无值显示 `—` 而非 `0%`；请求世代、Run/画像切换与卸载保护。
+
+本轮未运行：真实模型调用、生产迁移/部署、正式评测入库、后端全量、完整 regression/acceptance 与全部浏览器；离线/隔离浏览器的 PASS 不代表真实质量或生产就绪。
+
+
+T48 验收修复的新增回归包含正常bool难度、逆序spec/display_order、Claim部分落库后失败、请求开关未知、身份混绑、完整空账本/部分账本、SQL与Memory读取错误传播和清理、报告缺Run/缺来源保留分母。评测专项追加真实SQL+API v2行映射、manifest引用、缺测冻结目标分母、重复live资源版本/冲突case拒绝、坏行隔离，以及Claim失败且无发布的普通覆盖仍可计量（离线double）。浏览器专项覆盖真实生成组件链/详情刷新、项目评测空/有效/错误、小屏与桌面；不构成真实模型、CI或部署证据。
+
+
+T48 第二次收尾回归：`resource-quality-query`新增较早/同序/较晚损坏审核、跨资源隔离、后续有效恢复，并保留persisted approved记录验证其不可绕过最新失败。`resource-quality-evaluation`新增两难度标签的32/33/空值边界及null预测、临时SQL/API坏标签隔离（相关组无效、独立组及旧摘要可用）。本次无前端行为改动，只重新导出并检查契约。

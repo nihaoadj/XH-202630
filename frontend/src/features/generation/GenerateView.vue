@@ -58,7 +58,7 @@
             :job-status="selectedJob.job_status" :published-resources="resources"
             :review-enabled="selectedJob.request_payload?.include_review !== false"
             :retrying-resource-key="retryingResourceKey" :retry-enabled="['completed', 'failed'].includes(selectedJob.job_status)"
-            :claim-reports="claimReports" @open-child-run="openChildRun" @open-resource="openGeneratedResource"
+            :claim-reports="claimReports" :quality-metrics="resourceQuality" @open-child-run="openChildRun" @open-resource="openGeneratedResource"
             @retry-resource="retryResource" @open-claim-report="openClaimReport"
             @inspect-step="openAuditStep" @inspect-resource="openAuditResource"
           />
@@ -177,7 +177,7 @@
       </template>
     </el-dialog>
 
-    <WorkflowDetailDialog v-model:visible="auditVisible" v-model:resource-id="auditResourceId" :loading="auditLoading" :error="auditError" :claims-error="auditClaimsError" :snapshot="auditSnapshot" :claims="auditClaims" :step="auditStep" :run-id="selectedRunId" :claim-enabled="selectedJob?.request_payload?.include_claim_check !== false" @refresh="refreshAudit" />
+    <WorkflowDetailDialog v-model:visible="auditVisible" v-model:resource-id="auditResourceId" :loading="auditLoading" :error="auditError" :claims-error="auditClaimsError" :snapshot="auditSnapshot" :claims="auditClaims" :quality="auditQualityItem" :step="auditStep" :run-id="selectedRunId" :claim-enabled="selectedJob?.request_payload?.include_claim_check !== false" @refresh="refreshQualityAudit" />
     <el-dialog v-model="claimReportVisible" class="production-dialog claim-report-dialog" width="min(760px, calc(100vw - 32px))">
       <template #header>
         <div class="claim-report-header">
@@ -218,6 +218,16 @@
                 仅覆盖已抽取的事实，不代表全文正确率。
               </p>
             </div>
+          </div>
+
+          <div v-if="selectedClaimQuality" class="claim-quality-note" :class="`is-${qualityTone(selectedClaimQuality.hallucination)}`">
+            <p>
+              幻觉率：<strong>{{ hallucinationMetricText(selectedClaimQuality.hallucination) }}</strong>
+              <em v-if="isReferenceMetric(selectedClaimQuality.hallucination)">普通审核参考／待核验，不是达标结论。</em>
+            </p>
+            <p v-if="selectedClaimQuality.claim">
+              Claim 核验状态：{{ claimQualityStatusLabel(selectedClaimQuality.claim.status) }}
+            </p>
           </div>
 
           <div class="claim-metrics-grid">
@@ -282,6 +292,10 @@ import { useGenerationAudit } from './useGenerationAudit.js'
 import { buildResourceStatusItems } from './resourceStatusPresentation.js'
 import { resolvePublicationView } from './publicationPresentation.js'
 import WorkflowDetailDialog from './WorkflowDetailDialog.vue'
+import { useResourceQuality } from './useResourceQuality.js'
+import {
+  hallucinationMetricText, isReferenceMetric, qualityTone,
+} from '../../utils/qualityMetricsPresentation.js'
 import ClaimEvidenceList from './ClaimEvidenceList.vue'
 import { useProductionLayout } from './useProductionLayout.js'
 import ResourceViewer from '../learning-documents/ResourceViewer.vue'
@@ -334,6 +348,7 @@ const jobsError = ref('')
 let jobsRequestVersion = 0
 let statusRequestVersion = 0
 let claimsRequestVersion = 0
+let qualityRequestVersion = 0
 let profileChangeVersion = 0
 let taskChangeVersion = 0
 let generationMounted = true
@@ -355,6 +370,7 @@ const coursewareJobs = ref([])
 const timelineState = ref(createInitialTimelineState())
 const connectionStatus = ref('idle')
 const claimReports = ref({})
+const resourceQuality = ref({})
 const claimReportVisible = ref(false)
 const claimDecisionLoading = ref(false)
 const selectedClaimReportId = ref('')
@@ -426,6 +442,13 @@ const selectedResource = computed(
   () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
 )
 const selectedClaimReport = computed(() => claimReports.value[selectedClaimReportId.value] || null)
+const auditQualityItem = computed(() => resourceQuality.value[auditResourceId.value] || null)
+function claimQualityStatusLabel(status) {
+  return ({ complete: '已完成', pending: '进行中', incomplete: '未完成', failed: '失败',
+    not_applicable: '不适用', not_requested: '未开启', unavailable: '暂不可用',
+    legacy_unavailable: '历史数据缺失' })[status] || status || '未记录'
+}
+const selectedClaimQuality = computed(() => resourceQuality.value[selectedClaimReportId.value] || null)
 const {
   visible: auditVisible, loading: auditLoading, error: auditError, claimsError: auditClaimsError,
   snapshot: auditSnapshot, claims: auditClaims, step: auditStep, resourceId: auditResourceId,
@@ -616,6 +639,7 @@ const { stopPolling, closeRealtime, cancelPublishedResourceRefresh, startRealtim
   isMounted: () => generationMounted,
   refreshStatus: (...args) => refreshStatus(...args),
   loadClaimReports: (...args) => loadClaimReports(...args),
+  loadResourceQuality: (...args) => loadResourceQuality(...args),
 })
 
 
@@ -737,6 +761,12 @@ const {
   messages: ElMessage,
 })
 
+const { loadResourceQuality } = useResourceQuality({
+  selectedRunId, selectedLearnerId, resourceQuality,
+  isMounted: () => generationMounted,
+  requestVersion: () => qualityRequestVersion,
+  nextRequestVersion: () => ++qualityRequestVersion,
+})
 
 
 
@@ -750,6 +780,13 @@ const {
 
 
 
+
+
+async function refreshQualityAudit() {
+  const runId = selectedRunId.value
+  await refreshAudit()
+  if (runId === selectedRunId.value) await loadResourceQuality(runId)
+}
 
 async function refreshStatus({ forceResources = false, forceClaims = false } = {}) {
   if (!selectedJob.value?.run_id) return
@@ -798,6 +835,8 @@ async function refreshStatus({ forceResources = false, forceClaims = false } = {
       await loadClaimReports(nextJob.run_id)
       if (!isCurrent()) return
     }
+    await loadResourceQuality(nextJob.run_id)
+    if (!isCurrent()) return
   } catch (error) {
     if (!isCurrent()) return
     console.error(error)
@@ -809,11 +848,16 @@ async function refreshStatus({ forceResources = false, forceClaims = false } = {
 async function refreshJobs() {
   if (!await loadJobs(false)) return
   const version = jobsRequestVersion
+  const runId = selectedRunId.value
+  const taskVersion = taskChangeVersion
+  const isCurrent = () => generationMounted && version === jobsRequestVersion && taskVersion === taskChangeVersion && runId === selectedRunId.value
   if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
     await loadResourcesForSelectedJob()
   }
-  if (!generationMounted || version !== jobsRequestVersion) return
-  await startRealtime(selectedRunId.value)
+  if (!isCurrent()) return
+  await loadResourceQuality(runId)
+  if (!isCurrent()) return
+  await startRealtime(runId)
 }
 
 async function handleTaskChange() {
@@ -845,18 +889,21 @@ async function handleTaskChange() {
     await loadResourcesForSelectedJob()
     if (!isCurrent()) return
     await loadClaimReports(selectedRunId.value)
+    if (!isCurrent()) return
   } else {
     resourcesLoaded.value = true
   }
   if (!isCurrent()) return
-  await startRealtime(selectedRunId.value)
+  await loadResourceQuality(runId)
+  if (!isCurrent()) return
+  await startRealtime(runId)
 }
 
 async function handleProfileChange() {
   const version = ++profileChangeVersion
   invalidateResources(); ++claimsRequestVersion; invalidateNodeTiers(); ++taskChangeVersion
   syncProfileContext()
-  jobs.value = []; coursewareJobs.value = []; nodeTiers.value = {}; claimReports.value = {}
+  jobs.value = []; coursewareJobs.value = []; nodeTiers.value = {}; claimReports.value = {}; resourceQuality.value = {}
   loadingResources.value = false
   coursewareComposerVisible.value = false
   selectedRunId.value = ''
@@ -867,13 +914,18 @@ async function handleProfileChange() {
   closeRealtime()
   stopPolling()
   if (!await loadJobs(true) || version !== profileChangeVersion || !generationMounted) return
+  const runId = selectedRunId.value
+  const taskVersion = taskChangeVersion
+  const isCurrent = () => generationMounted && version === profileChangeVersion && taskVersion === taskChangeVersion && runId === selectedRunId.value
   if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
     await loadResourcesForSelectedJob()
   } else {
     resourcesLoaded.value = true
   }
-  if (version !== profileChangeVersion || !generationMounted) return
-  await startRealtime(selectedRunId.value)
+  if (!isCurrent()) return
+  await loadResourceQuality(runId)
+  if (!isCurrent()) return
+  await startRealtime(runId)
 }
 
 async function deleteProfile(profile) {
@@ -1076,13 +1128,18 @@ onMounted(async () => {
     await loadProfiles()
     const version = profileChangeVersion
     if (!generationMounted || !await loadJobs(true) || version !== profileChangeVersion) return
+    const runId = selectedRunId.value
+    const taskVersion = taskChangeVersion
+    const isCurrent = () => generationMounted && version === profileChangeVersion && taskVersion === taskChangeVersion && runId === selectedRunId.value
     if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
       await loadResourcesForSelectedJob()
     } else {
       resourcesLoaded.value = true
     }
-    if (!generationMounted || version !== profileChangeVersion) return
-    await startRealtime(selectedRunId.value)
+    if (!isCurrent()) return
+    await loadResourceQuality(runId)
+    if (!isCurrent()) return
+    await startRealtime(runId)
   } catch (error) {
     if (generationMounted) jobsError.value = error?.response?.data?.message || '学习画像加载失败，请刷新页面重试'
   }
@@ -1288,6 +1345,11 @@ onBeforeUnmount(() => {
 .claim-report-status { display:flex; align-items:center; gap:6px; flex:none; color:var(--prod-accent); font-size:12px; }
 .claim-report-status svg { width:18px; height:18px; }
 .claim-report-status.is-warning { color:#935719; }
+.claim-quality-note { margin:0 0 10px; padding:8px 10px; border-radius:6px; background:#f6f9fb; }
+.claim-quality-note.is-attention { background:#fff7ec; }
+.claim-quality-note p { margin:0; color:#59697b; font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+.claim-quality-note strong { color:#172c45; }
+.claim-quality-note em { color:#935719; font-style:normal; }
 .claim-report-overview { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
 .claim-rate-panel { padding:18px; background:#f2f7f6; border-left:2px solid #77b5ad; }
 .claim-rate-ring { display:grid; place-items:center; width:96px; height:96px; flex:none; border-radius:50%; background:conic-gradient(#176b70 var(--claim-rate,0%),#d8e7e2 0%); }

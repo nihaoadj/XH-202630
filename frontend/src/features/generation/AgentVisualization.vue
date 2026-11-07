@@ -9,7 +9,7 @@
       </div>
       <ResourceExecutionProgressList
         :executions="statusItems" :review-enabled="reviewEnabled"
-        :retrying-key="retryingResourceKey" :retry-enabled="retryEnabled" :claim-reports="claimReports"
+        :quality-metrics="qualityMetrics" :retrying-key="retryingResourceKey" :retry-enabled="retryEnabled" :claim-reports="claimReports"
         @open-resource="$emit('open-resource', $event)" @retry-resource="$emit('retry-resource', $event)"
         @open-claim-report="$emit('open-claim-report', $event)" @inspect-resource="$emit('inspect-resource', $event)"
       />
@@ -37,6 +37,7 @@ const props = defineProps({
   resourceExecutions: { type: Array, default: () => [] }, resourceProgressSummary: { type: Object, default: null },
   publishSummary: { type: Object, default: null },
   retryingResourceKey: { type: String, default: '' }, retryEnabled: Boolean,
+  qualityMetrics: { type: Object, default: () => ({}) },
   claimReports: { type: Object, default: () => ({}) },
   requestedResourceTypes: { type: Array, default: () => [] }, jobStatus: { type: String, default: '' },
   publishedResources: { type: Array, default: () => [] }, runId: { type: String, default: '' },

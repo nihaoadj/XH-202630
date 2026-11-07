@@ -446,6 +446,12 @@ python -m app.db.migrations.p0_35_report_read_model --database D:/path/to/backed
 
 该回滚仅删除本迁移拥有的水位/触发器/索引，不删除学习事实。临时副本的重复迁移、回滚、重装与身份更换由 migration 测试覆盖；是否已升级/已回滚实际部署库，必须以目标环境核验为准。本任务未操作部署库。
 
+### T48 report-read/2 升级与回滚
+
+报告缓存协议由 `report-read/1` 升至 `report-read/2`，触发器闭包新增 `agent_runs`、`agent_steps`、`workflow_checkpoints`、`resource_specs`；这是本次唯一的数据库协议变更，无业务列迁移。升级在应用启动/初始化调用既有 `p0_35` installer 时幂等完成；同一维护窗口内 Web 与 Worker 必须部署同一版本并重启，让两个进程都重新加载协议常量。旧/新进程混跑且触发器集合不匹配时，`read_token()` 返回 `None`，报告缓存安全禁用，不能把混跑视为验证通过。
+
+回滚顺序：停写 → 部署上一版本应用/前端 → 在维护窗口用新版本 installer 的 rollback 移除报告派生触发器/索引/watermark（保留业务数据与无关触发器）→ 再用旧版 apply 重装旧协议。禁止通过在线 GET 触发迁移或回滚。前端回滚后旧 DTO 字段仍在，报告中的新字段缺失时显示未知，不从旧可信度分数补数。本轮未在生产执行迁移/回滚，仅在临时 SQLite 验证往返与幂等。
+
 ## 英文选材配置
 
 ### 学习检索细化与来源软平衡（T29）

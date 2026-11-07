@@ -4,6 +4,7 @@ from app.db.learning_documents.base import BaseResourceRepository
 from app.models.learning_documents.schemas import LearnerProfile
 from app.db.feedback.feedback_loop_base import BaseFeedbackLoopRepository
 from app.services.learners.mastery import MasteryService
+from app.models.learning_documents.schemas import ResourceRepresentation
 from app.models.learning_documents.types import SUPPORTED_RESOURCE_TYPES
 from app.models.learners.mastery import MASTERY_CONFIRMATION_THRESHOLD
 from app.models.reviews.claims import ClaimMetricStatus, compute_claim_metric
@@ -22,7 +23,7 @@ from app.services.reports.snapshots import ReportSnapshot, SnapshotCache, canoni
 # ETag/revision so a browser cannot retain a structurally stale report after a
 # deployment (for example, the radar changing from measured nodes to the full
 # knowledge graph).
-REPORT_PROJECTION_VERSION = "4.3-complete-snapshots"
+REPORT_PROJECTION_VERSION = "4.4-resource-quality-v2"
 
 
 class ReportSnapshotUnstable(RuntimeError):
@@ -52,6 +53,7 @@ class ReportService:
         read_repo=None,
         profile_repo=None,
         clock=None,
+        quality_service=None,
     ):
         self.resource_repo = resource_repo
         self.feedback_repo = feedback_repo
@@ -63,6 +65,7 @@ class ReportService:
         self.diagnosis_repo = diagnosis_repo
         self.read_repo = read_repo
         self.profile_repo = profile_repo
+        self.quality_service = quality_service
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._cache = SnapshotCache()
 
@@ -363,6 +366,7 @@ class ReportService:
         }
 
         credibility = self._resource_credibility(resources, knowledge_base_id=profile.knowledge_base_id)
+        resource_quality = self._resource_quality(resources, order=credibility["items"])
         blind_spot_map = self._build_blind_spot_map(ability_projection, attempts, visible_diagnostic_runs)
         resource_difficulty_curve = self._build_resource_difficulty_curve(
             ability_projection, resources, credibility_items=credibility["items"],
@@ -393,6 +397,8 @@ class ReportService:
             "weakness_groups": self._weakness_groups(priorities, ability_names),
             "resource_credibility_summary": credibility["summary"],
             "recent_resource_credibility": credibility["items"][:10],
+            "resource_quality_summary": resource_quality["summary"],
+            "recent_resource_quality": resource_quality["items"][:10],
             "as_of_profile_version": profile.profile_version,
             "generated_at": generated_at,
             "learner_id": profile.learner_id,
@@ -966,6 +972,45 @@ class ReportService:
                 "scoring_strategy_version": "audit-40/source-50/claim-10/v1",
                 **{f"credibility_{level}_count": count for level, count in level_counts.items()},
                 "notice": "可信等级表示平台可验证的生成质量证据，不等价于来源机构权威性或绝对事实正确。"}}
+
+    def _resource_quality(self, resources, *, order=()) -> dict:
+        """Attach the shared versioned quality projection for visible resources.
+
+        The range is the current visible published text resources; this is not a
+        7/30/90-day generation-quality trend and is labelled as such.
+        """
+        if self.quality_service is None:
+            return {"summary": None, "items": []}
+        eligible = [
+            resource for resource in resources
+            if resource.publication_status == "published"
+            and resource.representation is ResourceRepresentation.TEXT
+            and resource.resource_type in SUPPORTED_RESOURCE_TYPES
+        ]
+        if not eligible:
+            return {"summary": None, "items": []}
+        run_ids = sorted({resource.run_id for resource in eligible if resource.run_id})
+        wanted = {resource.resource_id for resource in eligible}
+        by_id = {
+            item.resource_id: item for item in self.quality_service.items_for_runs(run_ids)
+            if item.resource_id in wanted
+        }
+        by_id = {resource.resource_id: item for resource in eligible
+                 if (item := by_id.get(resource.resource_id)) is not None
+                 and (item.run_id, item.resource_version, item.review_id, item.resource_spec_id)
+                 == (resource.run_id, resource.version, resource.review_id, resource.resource_spec_id)}
+        items = [
+            by_id.get(resource.resource_id) or self.quality_service.unavailable_item(resource)
+            for resource in eligible
+        ]
+        summary = self.quality_service.summarize_items(items)
+        position = {
+            item["resource_id"]: index for index, item in enumerate(order)
+        }
+        items.sort(key=lambda item: (
+            position.get(item.resource_id, len(position)), item.resource_id,
+        ))
+        return {"summary": summary, "items": items}
 
     @staticmethod
     def _claims_for_resource(resource, claim_groups, judgement_groups):

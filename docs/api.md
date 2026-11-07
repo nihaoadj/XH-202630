@@ -836,6 +836,20 @@ Invoke-RestMethod -Method Post `
 `EVIDENCE_INSUFFICIENT`、`EVIDENCE_PROVENANCE_INVALID` 和细分 LLM 错误码。
 响应不得包含 prompt、模型原文、API Key、数据库连接串或原始 provider 异常。
 
+### 14.7 `GET /api/runs/{run_id}/resource-quality`
+
+只读、版本化的资源质量投影，与学习资源读模型、旧 `GenerateReport` payload 和 checkpoint/hash 分离。可选 `resource_id` 精确查看一版；不传则返回该 Run 已持久化资源各版本的元数据，排序为 `spec.display_order`、`version`、`resource_id`。不返回正文、Claim 清单、答案、rubric、Prompt 或证据摘录。
+
+- 响应：`schema_version=1.0`、`metric_policy_version=resource-quality/v2`、`run_id`、`source_revision`、`availability`、`items[]`、`summary`、`reason_codes[]`。
+- 逐资源项绑定 `(run_id, resource_spec_id, resource_id, resource_version, review_id)`；跨 Run、父/子版本或旧版本混入不会借用结果。`resource_id` 不属于该 Run 返回 404；Run 不可见（含其他账号）统一 404；`resource_id` 超过 128 字符返回 422。
+- 状态分别表达 `complete / reference / pending / incomplete / failed / not_applicable / not_requested / unavailable / legacy_unavailable`。无值返回 `value=null`，不得填 0；历史缺失使用 `legacy_unavailable`。
+- 覆盖：`coverage` 只使用普通审核逐知识点结果，`已覆盖冻结目标数 ÷ 冻结目标总数`。Claim 知识点关联、单资源 `coverage_rate`、模型自评分都不参与。空目标集不是 0/0 或 100%。
+- 幻觉率：Claim 完整且 `factual_claim_total>0` 时复用现有核验统计；未开启 Claim 且同版普通审核通过证据成立时返回 `status=reference`、`value=0.05`、无分子分母、`assessment=not_assessed`、`evidence_mode=rule_reference`，前端标注“普通审核参考／待核验”，不写入 `claim_hallucination_rate`、不判达标、不参与均值。Claim 已开启但失败/未完成/不适用时返回 null 状态，不回退 5%。
+- 难度：`difficulty_fit` 只表达单资源离散结构（matched/too_easy/challenging/too_hard/not_measured），不折算为“难度适配准确率”。
+- 阈值（后端注册表唯一来源）：覆盖率 `>= 0.90`；幻觉率 `< 0.05`；难度适配准确率 `>= 0.85`（仅标注评测）。真实 5% 不满足严格 `<5%`。
+- 报告新增可选字段：`resource_quality_summary` 与 `recent_resource_quality`，复用同一投影；二者只聚合当前可见已发布文本资源的冻结目标单位，缺任一应测结果时汇总 `status=incomplete`、`value=null`。旧 `resource_credibility_summary/recent_resource_credibility` 保留为历史兼容字段，不是第二套新口径，后续物理删除需独立计划。
+- 评测：`suite_v2.json` 与 `ordinary_coverage_v2.json` 定义 v2；v1 `suite.json` 与旧报告原字节保留，显式加载 v1 会被拒绝并提示使用 v2。离线 PASS 与 `official_gates=NOT_MEASURABLE` 分开输出。
+
 ## 15. P0-09 接口验收口径
 
 P0-09 不新增业务 API。`scripts/run_p0_09_acceptance.py --offline` 使用 FakeGateway / 固定 fixture；`--live` 只有显式环境开关时才调用 Provider。`--runtime` 的前端探针已适配 `features/<domain>/`，仅核对 feature、hook、API、组件和 SSE 的源码连线，不证明浏览器交互。该模式启动 TestClient lifespan，触发数据库初始化与启动对账，须在隔离 demo 环境运行。工程验收使用统一 acceptance，实际环境按 [Demo Runbook](demo-runbook.md) 检查。
@@ -1036,3 +1050,22 @@ T39：HTTP/DTO/认证/状态码/事件契约不变。`lecture_issue_v2` 只影�
 T44：HTTP/DTO/认证/状态码/事件契约不变。`resource_issue_v1` 只影响六类文本资源的审核内部策略与私有审计（`review_audit_v4`），公开响应仍返回原受控摘要（最多三条问题及一条修订摘要），不新增端点，不改 Claim 与发布接口。
 
 T44 修复续作的执行身份（模型/角色与 hash）、父版完整结构包和核销重放信息均为私有字段，不进入公开审核响应。发布前缺失或非法私有审计受控失败，不能先写入已发布资源再检查。执行信封升级为 1.1，不改变公开 DTO；旧 1.0 记录保留只读。
+
+
+### T48 验收修复：项目评测的版本化数据
+
+`GET /api/evaluation/summary` 保留 `sample_count/metrics/ablation/created_at`，追加：
+
+- `resource_quality_evaluations`：`EvaluationResourceQualityV2[]`，默认空。每组有冻结 `manifest`、`manifest_hash`、`status`（complete/incomplete/invalid）、计划/接收/失败案例数、已知/覆盖/预期案例目标单位数、未知案例ID，以及独立的 `coverage/hallucination/difficulty` 三个 `RateMetricV1`。记录齐全不表示三项实测均齐全。
+- `resource_quality_invalid_row_total`：被隔离的结构或身份无效行数，默认0；无效组的数值为空，不影响旧摘要或其他有效组。实际数据库读取错误仍保留接口错误语义。
+
+唯一新版行入口是 `ContestEvalResultORM.metrics.resource_quality_case_v2`：`{"manifest": <EvaluationQualityManifestV2>, "case": <EvaluationQualityCaseV2>}`。同组至少一行含完整 manifest，其他行可只含 case 并以其 `manifest_hash` 引用；`row.case_id/experiment_name` 必须与 case/manifest 一致。CLI顶层 `quality_manifest` 和 `quality_case_records` 可按此映射，不将报告aggregate作为额外case写入。本次不自动导入生产数据库。
+
+Manifest冻结 `evaluation_id/experiment_name/suite_id/suite_version/fixture_version/coverage_fixture_version/metric_definition_version/evidence_mode/source_snapshot_hash/suite_data_hash/selected_case_targets`。Case保存预期/预测难度、生成状态、Run/资源/版本/审核绑定、普通覆盖逐目标结果与完整Claim分类计数/状态。相同case相同payload只算一次，冲突、目标混绑或跨case重用同一live资源版本使组invalid；缺case保留冻结分母并显示incomplete；live与offline不混算。
+
+`offline_gold` 固定标记离线计算验证，不构成正式比赛质量达标；`live_model` 是生产自审结果，正式独立质量门另行验证。旧metrics平均值不能补入新版三项指标。覆盖独立于Claim及发布状态；难度失败案例算错且不从计划分母删除；Claim仅完整且符合评测范围时计数。
+
+Run质量查询按 `display_order/resource_version/resource_id` 排序，布尔 `difficulty_match` 不转换为准确率；未知请求开关不推断成关闭或开启。5%仅为开关明确且同版普通审核通过后的未校准规则参考，不是风险上限。Claim失败/进行中先于部分落库结果判断，不显示假0%或达标。
+
+
+T48 收尾复查修复：同资源普通审核以最新持久step_sequence为准，较晚损坏审核覆盖较早有效记录，同序冲突失败优先；不可从旧Review补5%参考，后续合法审核可恢复。评测Case的`expected_difficulty`和非null的`predicted_difficulty`统一为1..32字符；空值/超长值在逐行校验时隔离，相关组invalid，其他合法组与旧摘要仍正常返回，不截断标签或吞聚合异常。

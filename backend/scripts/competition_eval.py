@@ -32,7 +32,10 @@ LIVE_NOT_READY_EXIT_CODE = 2
 
 
 def _render_report(report) -> dict:
+    coverage = report.ordinary_coverage
     return {
+        "report_schema_version": report.report_schema_version,
+        "metric_definition_version": report.metric_definition_version,
         "suite_id": report.suite_id,
         "suite_version": report.suite_version,
         "mode": report.mode,
@@ -45,18 +48,25 @@ def _render_report(report) -> dict:
         "failed_case_count": report.failed_case_count,
         "independent_quality_review": report.independent_quality_review,
         "case_results": report.case_results,
+        "quality_manifest": report.quality_manifest.model_dump(mode="json") if report.quality_manifest else None,
+        "quality_case_records": [item.model_dump(mode="json") for item in report.quality_case_records],
         "metrics": {
             "hallucination_rate": report.claim_metrics.claim_hallucination_rate,
             "factual_claim_total": report.claim_metrics.factual_claim_total,
             "unsupported_claim_total": report.claim_metrics.unsupported_claim_total,
-            "knowledge_coverage_rate": report.claim_metrics.knowledge_coverage_rate,
-            "covered_skill_total": report.claim_metrics.covered_skill_total,
-            "target_skill_total": report.claim_metrics.target_skill_total,
+            # v2 only; the retired Claim-based key is not emitted under a new
+            # name, and the definition version travels with the value.
+            "core_knowledge_coverage_rate": coverage.metric.value,
+            "coverage_definition_version": coverage.definition_version,
+            "covered_target_total": coverage.covered_unit_total,
+            "planned_target_total": coverage.planned_unit_total,
+            "coverage_missing_case_count": coverage.missing_case_count,
             "difficulty_match_accuracy": report.difficulty.accuracy,
             "difficulty_correct_total": report.difficulty.correct_total,
             "difficulty_case_total": report.difficulty.case_total,
             "difficulty_confusion_matrix": report.difficulty.confusion_matrix,
         },
+        "ordinary_coverage": coverage.model_dump(mode="json"),
         "gates": [gate.as_dict() for gate in report.gates],
         "official_gates": [gate.as_dict() for gate in report.official_gates],
     }

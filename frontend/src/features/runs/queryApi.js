@@ -1,5 +1,5 @@
 import { api } from '../../api/client.js'
-import { requireRunSummaryResponse, requireRunTimelineResponse } from '../../contracts/guards.js'
+import { requireRunResourceQualityResponse, requireRunSummaryResponse, requireRunTimelineResponse } from '../../contracts/guards.js'
 
 export const runApi = {
   /** @param {string} runId @returns {Promise<import('axios').AxiosResponse<import('../../contracts/generated/contracts').RunSummary>>} */
@@ -10,4 +10,10 @@ export const runApi = {
   evidence: runId => api.get(`/runs/${runId}/evidence`),
   /** @param {string} runId @returns {Promise<import('axios').AxiosResponse<unknown>>} */
   claims: runId => api.get(`/runs/${runId}/claims`),
+  /**
+   * Versioned quality projection; the response binds every metric to the
+   * exact run/resource version.  The frontend never recomputes these values.
+   * @param {string} runId @returns {Promise<import('axios').AxiosResponse<import('../../contracts/generated/contracts').RunResourceQualityResponseV1>>}
+   */
+  resourceQuality: runId => api.get(`/runs/${runId}/resource-quality`).then(requireRunResourceQualityResponse),
 }

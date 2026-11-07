@@ -12,10 +12,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.audit.base import (
+    REVIEW_NODE_NAMES,
+    RUN_FACTS_UNAVAILABLE,
     BaseAuditRepository,
     PersistenceConflict,
     PersistenceError,
     RunNotFound,
+    StepReviewAudit,
+    audit_failure_code,
 )
 from app.db.shared.models import (
     AgentRunORM,
@@ -584,6 +588,72 @@ class SQLAuditRepository(BaseAuditRepository):
                     request_snapshot=run.input_payload or {}, checkpoints=checkpoints)
             except ValueError as exc:
                 raise PersistenceError(str(exc)) from exc
+
+    def get_review_audits_by_runs(self, run_ids: list[str]) -> list[StepReviewAudit]:
+        """One read-only session per run loads review steps and their checkpoints.
+
+        The read count is bounded by the de-duplicated run list, not by resource
+        or Claim counts.  Every step still goes through ``read_review_audit`` so
+        envelope/hash/policy validation is never duplicated here.
+        """
+        results: list[StepReviewAudit] = []
+        for run_id in dict.fromkeys(run_ids):
+            try:
+                with self.session_factory() as db:
+                    run = db.get(AgentRunORM, run_id)
+                    if run is None:
+                        results.append(StepReviewAudit(
+                            run_id=run_id, step_id="", step_sequence=-1,
+                            node_name="", status="", failure_code=RUN_FACTS_UNAVAILABLE,
+                        ))
+                        continue
+                    request_snapshot = run.input_payload or {}
+                    steps = (
+                        db.query(AgentStepORM)
+                        .filter(AgentStepORM.run_id == run_id)
+                        .order_by(AgentStepORM.step_no.asc(), AgentStepORM.step_id.asc())
+                        .all()
+                    )
+                    review_steps = [
+                        step for step in steps
+                        if (step.node_name or step.agent_name) in REVIEW_NODE_NAMES
+                    ]
+                    if not review_steps:
+                        continue
+                    checkpoints = [
+                        self._checkpoint_record(item)
+                        for item in db.query(WorkflowCheckpointORM).filter_by(run_id=run_id).all()
+                    ]
+                    for step in review_steps:
+                        try:
+                            audit = read_review_audit(
+                                envelope=select_audit_envelope(step.output_payload or {}),
+                                run_id=run_id, step_id=step.step_id,
+                                node_name=step.node_name or step.agent_name,
+                                status=step.status,
+                                request_snapshot=request_snapshot,
+                                checkpoints=checkpoints,
+                            )
+                        except Exception as exc:  # noqa: BLE001 - fail closed per step
+                            results.append(StepReviewAudit(
+                                run_id=run_id, step_id=step.step_id,
+                                step_sequence=step.step_no,
+                                node_name=step.node_name or step.agent_name,
+                                status=step.status, failure_code=audit_failure_code(exc),
+                            ))
+                            continue
+                        results.append(StepReviewAudit(
+                            run_id=run_id, step_id=step.step_id,
+                            step_sequence=step.step_no,
+                            node_name=step.node_name or step.agent_name,
+                            status=step.status, audit=audit,
+                        ))
+            except PersistenceError:
+                results.append(StepReviewAudit(
+                    run_id=run_id, step_id="", step_sequence=-1,
+                    node_name="", status="", failure_code=RUN_FACTS_UNAVAILABLE,
+                ))
+        return sorted(results, key=lambda item: (item.run_id, item.step_sequence, item.step_id))
 
     def save_checkpoint(
         self,

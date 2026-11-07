@@ -22,19 +22,21 @@ from app.models.learning_documents.schemas import (
     ContinueResourceBatchRequest, GenerateRequest, GenerationJobCreateResponse,
     GenerationJobListResponse, GenerationJobStatusResponse,
 )
-from app.models.reports.contracts import CurrentReportResponse, ReportInvalidation, ReportResponse, ReportWindow
+from app.models.reports.contracts import CurrentReportResponse, EvaluationSummary, ReportInvalidation, ReportResponse, ReportWindow
+from app.models.reviews.quality_metrics import RunResourceQualityResponseV1
 from app.models.shared.llm_accounting import TaskLLMAccountingResponseV1
 from app.models.shared.persistence import RunStatus, RunSummary, RunTimeline, WorkflowEventType
 from app.models.shared.streaming import PublicRunEvent, PublicRunSnapshot
 
 MODELS = (
+    EvaluationSummary,
     CoursewareBatchCreateRequest, CoursewareBatchJobResponse, CoursewareJobCreateRequest,
     CoursewareJobDetail, CoursewareJobListResponse, CoursewareJobResponse,
     CoursewareLearningEvent, CoursewareLearningEventAck, CoursewareLearningEventBatch,
     ContinueResourceBatchRequest, GenerateRequest, GenerationJobCreateResponse,
     GenerationJobListResponse, GenerationJobStatusResponse, CurrentReportResponse,
     ReportInvalidation, ReportResponse, ReportWindow, RunSummary, RunTimeline,
-    PublicRunEvent, PublicRunSnapshot, TaskLLMAccountingResponseV1,
+    PublicRunEvent, PublicRunSnapshot, RunResourceQualityResponseV1, TaskLLMAccountingResponseV1,
 )
 OUTPUT = ROOT / "frontend/src/contracts/generated"
 ANNOTATIONS = {"title", "description", "default", "format", "minLength", "maxLength", "pattern",

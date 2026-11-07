@@ -463,6 +463,12 @@ python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
 
 旧 `POST /api/feedback/attempts` 因聚合分数缺少服务端题目证据返回 422 `FEEDBACK_EVIDENCE_UNVERIFIED`，不写 Attempt、掌握度或画像版本。
 
+### 4.10 T48 资源质量读取与 watermark 协议
+
+本轮不新增/删除/重命名业务表或列，也不写任何质量派生行。质量结果在查询时从既有 `resource_reviews`、私有审核账本（V4 审计 envelope / checkpoint 投影）、`generated_resources`、`resource_specs`、`agent_runs/agent_steps`、`resource_claims/claim_judgements` 读取并投影；私有账本只输出安全摘要（状态、计数、稳定 ID、受控位置码），不投影答案、rubric、Prompt、证据摘录或内部自由文本。
+
+报告读模型协议由 `report-read/1` 升为 `report-read/2`：`report_read_watermarks` 的触发器闭包新增 `agent_runs`、`agent_steps`、`workflow_checkpoints`、`resource_specs`，其中 `agent_runs` 排除 `heartbeat_at/lease_expires_at/owner_instance_id/updated_at`，避免租约心跳使缓存失效。升级由既有 `p0_35` installer 幂等完成；缺表、触发器缺失/被改、协议不匹配或旧/新进程触发器集合不一致时 `read_token()` 返回 `None`，调用方禁用报告缓存而不是继续提供旧正文。回滚使用同一 installer 的 rollback 移除派生触发器/索引/watermark，保留业务表、业务行与无关触发器；不得通过在线 GET 执行。
+
 ## 5. 问卷与诊断的边界
 
 ### 5.1 问卷负责什么

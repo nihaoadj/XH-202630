@@ -6,10 +6,11 @@
     </div>
     <el-empty v-if="!points.length" description="暂无已发布且可关联能力节点的资源" :image-size="56" />
     <template v-else>
-      <v-chart class="chart" :option="option" autoresize aria-label="学习者准备度、资源难度与资源可信度对比曲线" />
+      <v-chart class="chart" :option="option" autoresize aria-label="预估准备度、资源难度与审核参考分对比曲线" />
+      <p class="summary">准备度与难度是预估刻度，审核参考分是规则分数，均不代表标注评测准确率。 </p>
       <p class="summary">已测匹配 {{ summary.measured_point_count || 0 }} / {{ summary.total_point_count || points.length }} 个点 · 共 {{ summary.total_resource_count || points.length }} 个资源；历史批次按平均值汇总。</p>
-      <p v-if="hasCredibility" class="summary credibility-summary">平均可信度 {{ formatScore(summary.average_credibility_score) }} · 已量化 {{ summary.credibility_scored_count || 0 }} · Claim 通过 {{ summary.claim_review_passed_count || 0 }} · 受 80 分上限约束 {{ summary.claim_ceiling_applied_count || 0 }}</p>
-      <p v-else class="summary credibility-summary">暂无可量化可信度证据。</p>
+      <p v-if="hasCredibility" class="summary credibility-summary">平均审核参考分 {{ formatScore(summary.average_credibility_score) }} · 已量化 {{ summary.credibility_scored_count || 0 }} · Claim 通过 {{ summary.claim_review_passed_count || 0 }} · 受 80 分上限约束 {{ summary.claim_ceiling_applied_count || 0 }}</p>
+      <p v-else class="summary credibility-summary">暂无可量化审核参考分证据。</p>
     </template>
   </article>
 </template>
@@ -42,7 +43,7 @@ const pointLabel = (point, index) => {
 }
 // Keep the server's complete audit score intact, but avoid presenting absolute
 // certainty in the learner-facing report.
-const displayCredibilityScore = (value) => typeof value === 'number' ? Math.min(99, Math.round(value)) : null
+const displayCredibilityScore = (value) => typeof value === 'number' ? Math.round(value) : null
 const formatScore = (value) => {
   const score = displayCredibilityScore(value)
   return score == null ? '—' : `${score} / 100`
@@ -71,25 +72,25 @@ const option = computed(() => {
           const calibration = point.difficulty_source === 'calibrated_history'
             ? `<br/>反馈均分：${feedbackScoreText(point.feedback_score)}<br/>反馈校准：+${Math.round((point.difficulty_adjustment || 0) * 100)}%`
             : ''
-          return `<b>${label}</b><br/>包含资源：${point.resource_count || point.resource_ids?.length || 0} 个<br/>学习者准备度均值：${readinessText}<br/>资源难度均值：${difficultyText}<br/>差值均值：${gap}${calibration}<br/>结论：${statusLabel[point.match_status] || point.match_status}<br/>资源可信度均值：${credibilityText}`
+          return `<b>${label}</b><br/>包含资源：${point.resource_count || point.resource_ids?.length || 0} 个<br/>预估准备度均值：${readinessText}<br/>预估难度刻度均值：${difficultyText}<br/>差值均值：${gap}${calibration}<br/>结论：${statusLabel[point.match_status] || point.match_status}<br/>审核参考分均值：${credibilityText}`
         }
         const calibration = point.difficulty_source === 'calibrated_history'
           ? `<br/>默认难度：${point.default_resource_difficulty_score == null ? '—' : `${Math.round(point.default_resource_difficulty_score * 100)}%`}<br/>反馈均分：${feedbackScoreText(point.feedback_score)}<br/>反馈校准：+${Math.round((point.difficulty_adjustment || 0) * 100)}%`
           : ''
         const credibilityLines = breakdown
-          ? `<br/>资源可信度：${credibilityText}<br/>可信等级：${credibilityLabels[point.credibility_level] || point.credibility_level || '—'}<br/>普通审核：${breakdown.publication_review_score} / 40<br/>来源验证：${breakdown.source_traceability_score} / 50<br/>Claim 审核：${breakdown.claim_review_score} / 10${breakdown.claim_review_passed ? '' : '<br/>Claim 未完全通过：最高 80 分'}<br/>原始审核等级：${point.credibility_grade || '—'}`
-          : `<br/>资源可信度：${credibilityText}`
-        return `<b>${point.skill_name}</b><br/>资源：${point.resource_type}<br/>学习者准备度：${readinessText}<br/>资源难度：${difficultyText}${calibration}<br/>差值：${gap}<br/>结论：${statusLabel[point.match_status] || point.match_status}${credibilityLines}`
+          ? `<br/>审核参考分：${credibilityText}<br/>可信等级：${credibilityLabels[point.credibility_level] || point.credibility_level || '—'}<br/>普通审核：${breakdown.publication_review_score} / 40<br/>引用绑定完整度：${breakdown.source_traceability_score} / 50<br/>Claim 审核：${breakdown.claim_review_score} / 10${breakdown.claim_review_passed ? '' : '<br/>Claim 未完全通过：最高 80 分'}<br/>原始审核等级：${point.credibility_grade || '—'}`
+          : `<br/>审核参考分：${credibilityText}`
+        return `<b>${point.skill_name}</b><br/>资源：${point.resource_type}<br/>预估准备度：${readinessText}<br/>预估难度刻度：${difficultyText}${calibration}<br/>差值：${gap}<br/>结论：${statusLabel[point.match_status] || point.match_status}${credibilityLines}`
       },
     },
     legend: { bottom: 4, type: 'scroll', padding: [0, 8], itemGap: 12, textStyle: { color: '#637990', fontSize: 11 } },
     grid: { top: 30, right: 18, bottom: categories.length > 4 ? 88 : 68, left: 42, containLabel: true },
     xAxis: { type: 'category', data: categories, axisLabel: { interval: 0, rotate: categories.length > 3 ? 28 : 0, margin: 13, color: '#61758c', fontSize: 10, overflow: 'truncate', width: 86, formatter: (value) => value.length > 14 ? `${value.slice(0, 13)}…` : value }, axisTick: { show: false }, axisLine: { lineStyle: { color: '#d8e4ee' } } },
-    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#61758c', fontSize: 10 }, splitLine: { lineStyle: { color: '#e8eef4' } } },
+    yAxis: [{ type: 'value', name: '预估刻度', min: 0, max: 100, axisLabel: { formatter: '{value}', color: '#61758c', fontSize: 10 }, splitLine: { lineStyle: { color: '#e8eef4' } } }, { type: 'value', name: '审核参考分', min: 0, max: 100, axisLabel: { formatter: '{value}分' }, splitLine: { show: false } }],
     series: [
-      { name: '学习者准备度', type: 'line', data: readiness, connectNulls: false, symbolSize: 7, lineStyle: { color: '#2f78dc', width: 3 }, itemStyle: { color: '#2f78dc' } },
-      { name: '资源难度', type: 'line', data: difficulty, connectNulls: false, symbolSize: 7, lineStyle: { color: '#e58b39', width: 3 }, itemStyle: { color: '#e58b39' } },
-      { name: '资源可信度', type: 'line', data: credibility, connectNulls: false, symbolSize: 7, lineStyle: { color: '#7a5cc7', width: 3 }, itemStyle: { color: '#7a5cc7' } },
+      { name: '预估准备度', type: 'line', data: readiness, connectNulls: false, symbolSize: 7, lineStyle: { color: '#2f78dc', width: 3 }, itemStyle: { color: '#2f78dc' } },
+      { name: '预估难度刻度', type: 'line', data: difficulty, connectNulls: false, symbolSize: 7, lineStyle: { color: '#e58b39', width: 3 }, itemStyle: { color: '#e58b39' } },
+      { name: '审核参考分', yAxisIndex: 1, type: 'line', data: credibility, connectNulls: false, symbolSize: 7, lineStyle: { color: '#7a5cc7', width: 3 }, itemStyle: { color: '#7a5cc7' } },
     ],
   }
 })

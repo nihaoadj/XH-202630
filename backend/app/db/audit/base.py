@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Iterable, Optional
 
@@ -17,6 +18,28 @@ from app.models.shared.persistence import (
 from app.models.learning_documents.schemas import ReviewSummary
 
 
+REVIEW_NODE_NAMES = frozenset({"review", "reviewer"})
+# Controlled failure codes for the batch ledger read.  Exception text never
+# leaves this layer, so provider/driver detail cannot reach a public DTO.
+AUDIT_INVALID = "AUDIT_INVALID"
+AUDIT_MISSING = "AUDIT_MISSING"
+AUDIT_READ_FAILED = "AUDIT_READ_FAILED"
+RUN_FACTS_UNAVAILABLE = "RUN_FACTS_UNAVAILABLE"
+
+
+@dataclass(frozen=True)
+class StepReviewAudit:
+    """One review step's validated private ledger, or a controlled failure."""
+
+    run_id: str
+    step_id: str
+    step_sequence: int
+    node_name: str
+    status: str
+    audit: Any | None = None
+    failure_code: str | None = None
+
+
 class PersistenceError(RuntimeError):
     """Sanitized base failure for lifecycle persistence."""
 
@@ -29,6 +52,16 @@ class RunNotFound(PersistenceError):
     """The requested Run does not exist."""
 
 
+def audit_failure_code(error: Exception) -> str:
+    """Map a ledger validation failure to a controlled code, never its text."""
+    message = str(error).lower()
+    if "missing" in message or "incomplete" in message:
+        return AUDIT_MISSING
+    if isinstance(error, PersistenceError) or "mismatch" in message or "invalid" in message:
+        return AUDIT_INVALID
+    return AUDIT_READ_FAILED
+
+
 class BaseAuditRepository(ABC):
     def validate_review_execution_epoch(self, run_id: str, owner: str, epoch: int) -> None:
         """Repositories without a durable dispatch ledger cannot verify an epoch."""
@@ -39,6 +72,46 @@ class BaseAuditRepository(ABC):
     def get_step_review_audit(self, run_id: str, step_id: str):
         """Internal only; legacy custom repositories may have no private ledger."""
         return None
+
+    def get_review_audits_by_runs(self, run_ids: list[str]) -> list[StepReviewAudit]:
+        """Batch private-ledger read with a bounded, ordered result.
+
+        This compatibility implementation reuses the single-step validation
+        core, so a custom legacy repository keeps working without a new
+        abstract method.  Native repositories override it with one batched
+        load per run.  A damaged step never hides its siblings: it becomes a
+        controlled failure code instead of an exception.
+        """
+        results: list[StepReviewAudit] = []
+        for run_id in dict.fromkeys(run_ids):
+            try:
+                steps = self.list_steps(run_id)
+            except Exception:
+                results.append(StepReviewAudit(
+                    run_id=run_id, step_id="", step_sequence=-1,
+                    node_name="", status="", failure_code=RUN_FACTS_UNAVAILABLE,
+                ))
+                continue
+            for step in steps:
+                if (step.node_name or step.agent_name) not in REVIEW_NODE_NAMES:
+                    continue
+                try:
+                    audit = self.get_step_review_audit(run_id, step.step_id)
+                except Exception as exc:  # noqa: BLE001 - fail closed per step
+                    results.append(StepReviewAudit(
+                        run_id=run_id, step_id=step.step_id,
+                        step_sequence=step.step_sequence,
+                        node_name=step.node_name or step.agent_name,
+                        status=step.status, failure_code=audit_failure_code(exc),
+                    ))
+                    continue
+                results.append(StepReviewAudit(
+                    run_id=run_id, step_id=step.step_id,
+                    step_sequence=step.step_sequence,
+                    node_name=step.node_name or step.agent_name,
+                    status=step.status, audit=audit,
+                ))
+        return sorted(results, key=lambda item: (item.run_id, item.step_sequence, item.step_id))
 
     @abstractmethod
     def save_run(
