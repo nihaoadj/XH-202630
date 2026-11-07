@@ -437,6 +437,7 @@ export type GenerationJobStatusResponse = {
   "job_status": "queued" | "running" | "completed" | "failed";
   "knowledge_base_id"?: (string) | (null);
   "learner_id": string;
+  "publish_summary"?: (RunPublishSummary) | (null);
   "request_payload"?: Record<string, unknown>;
   "resource_ids"?: Array<string>;
   "resource_progress_summary"?: RunResourceProgressSummary;
@@ -800,6 +801,10 @@ export type PublicRunSnapshot = {
   "workflow_status"?: (string) | (null);
 };
 
+export type PublishCompleteness = "complete" | "partial" | "unavailable";
+
+export type PublishIncompleteReason = "request_missing" | "spec_request_mismatch" | "logical_identity_missing" | "resource_reference_missing" | "unsupported_representation" | "repository_unavailable" | "lineage_conflict";
+
 export type ReplayCompleteness = "complete" | "legacy_partial";
 
 export type ReportInvalidation = {
@@ -951,6 +956,16 @@ export type ResourcePartitionSummaryV1 = {
 
 export type ResourceRepresentation = "text";
 
+export type RunPublishSummary = {
+  "completeness"?: PublishCompleteness;
+  "incomplete_reasons"?: Array<PublishIncompleteReason>;
+  "pending_review"?: (number) | (null);
+  "published"?: (number) | (null);
+  "schema_version"?: "1.0";
+  "total"?: (number) | (null);
+  "unpublished"?: (number) | (null);
+};
+
 export type RunResourceProgressSummary = {
   "approved"?: number;
   "can_finalize"?: boolean;
@@ -977,6 +992,7 @@ export type RunSummary = {
   "knowledge_base_id"?: (string) | (null);
   "last_error_code"?: (string) | (null);
   "learner_id"?: (string) | (null);
+  "publish_summary"?: (RunPublishSummary) | (null);
   "replay_completeness": ReplayCompleteness;
   "retrieval_status"?: (string) | (null);
   "revision_count"?: number;

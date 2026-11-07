@@ -254,3 +254,24 @@ T37 2026-11-05修复追加：focused内覆盖SQL/Memory容量64/75/128/129及伪
 T39 讲义审核 V2 专项：`python scripts/run_tests.py --suite lecture-review-v2-focused --suite lecture-review-v2-eval --output output/test-runs/t39-final`。`lecture-review-v2-focused` 覆盖 V2 合同、程序派生覆盖、一次有界纠正、M=1/2/3 与超时边界、Memory/SQL 持久守卫、V3 审计及五类文档/API/Claim/发布兼容；`lecture-review-v2-eval` 用 `backend/tests/fixtures/resource_reviews/lecture_issue_v2/manifest.json` 的 24 个跨三题材冻结用例（匿名 ID、scripted 期望）。两者都是确定性证据：真实模型质量、真实端到端、CI 与部署仍为 NOT_RUN。兼容命令沿用 `--suite lecture-review-focused --suite lecture-review-eval --suite resource-review-focused --suite resource-review-eval --suite architecture --suite frontend-contracts --suite backend-lint`。历史只读复核见 `output/test-runs/t38-history/historical-review.json`，来源仅部分可核验，整体 INCONCLUSIVE。真实组件、整任务端到端、CI 和部署结论必须另有证据；本更新未授权真实调用。
 
 T39 执行权回归新增 test_lecture_worker_epoch.py：真实 SQLite 任务账本下验证 row_version 增长不误拦、旧 epoch 和过期任务租约被拒绝。test_lecture_review_crashes.py 通过实际 RecordedNode、review_node、V2 引擎与 DurableWorkflowRunner，在 Memory/SQLite 注入六类中断，断言断点命中、请求数和旧轮恢复不进入 stream；均已纳入 lecture-review-v2-focused。网关使用 scripted fixture，不代表真实模型或生产故障演练。
+
+T44 通用文本审核专项：`python scripts/run_tests.py --suite resource-issue-focused --suite resource-issue-eval --suite resource-issue-compat --output output/test-runs/t44-final`（使用新的空输出目录）。`resource-issue-focused` 覆盖通用契约/六类适配器/引擎/定向返工/工作流路由/策略分派/V4 审计/公开投影/故障恢复与冻结评测单测；`resource-issue-eval` 用 `backend/tests/fixtures/resource_reviews/resource_issue_v1/manifest.json` 的 60 个冻结案例经生产引擎、真实路由与 V4 仓储回放（`real_model_quality=NOT_RUN_LIVE`）；`resource-issue-compat` 按文件/nodeid 去重回归旧 lecture V2、专业规则、审计与预算接口。三者都是确定性证据：真实模型质量、真实端到端、CI 与部署仍为 NOT_RUN。
+
+T44 缺口修复续作增加六类资源经实际生成/首审/返工复审/Claim/发布/HTTP Markdown 读取节点的离线链路，以及真实 Memory/SQLite 仓储与 DurableWorkflowRunner 的三断点恢复、空审计引用发布前拒绝、hash 自洽但非法核销恢复拒绝。网关均为 scripted，不据此声称真实模型效果或生产端到端通过。新执行身份信封 1.1 与内部策略 1.0 分开校验，旧记录不重写；专项同时覆盖模型漂移与删键拒绝。最新修复证据目录以 T44 10.5 节为准。
+
+T46 两类审核修订输入分离与 Claim 定向修订专项：`python scripts/run_tests.py --suite claim-revision-unit --suite claim-revision-integration --suite claim-revision-recovery --suite claim-revision-contract --output output/test-runs/t46-final-r1`（使用新的空输出目录）。`claim-revision-unit` 覆盖私有输入模型/纯构造/六类 Prompt 路由及既有普通审核修订与测评作用域反馈；`claim-revision-integration` 覆盖 prepare/generator 定向修订工作流、单资源 retry 导入与既有 Claim 预算/路由/类型输出兼容；`claim-revision-recovery` 覆盖私有输入不入有界 checkpoint、故障中断语义与父版本审计保留；`claim-revision-contract` 覆盖公开 API 契约与 workflow state 序列化无漂移。四者均为确定性证据（scripted gateway、显式 Settings），真实修复成功率/幻觉率/成本收益为 NOT_RUN。
+
+T47 统一自动发布判定与部分发布表达专项：
+
+```powershell
+python scripts/run_tests.py --suite publication-policy-focused --suite publication-summary-focused --suite publication-compat-focused --suite publication-ui-focused --output output/test-runs/t47-focused-r1
+python scripts/run_tests.py --suite publication-browser --output output/test-runs/t47-browser-r1
+```
+
+- `publication-policy-focused`：新纯函数单测、真实 `decide_node` 金标（`backend/tests/fixtures/publication/policy_v1.json`，期望值由改动前节点生成）及既有普通审核/Claim/strict 终态节点。旧 `may_publish` 契约保留，不迁移断言。
+- `publication-summary-focused`：聚合器单元、SQL/Memory 只读一致性与零写入、有界查询、Job/Run/timeline 响应一致、旧记录与授权/分页契约。
+- `publication-compat-focused`：终态后用户决定的刷新语义（发布、拒绝、重复决定、冲突、事件补写），以及既有 Claim 门禁、发布持久化、正文读取、SQL 资源重试与旧 API 兼容。SQL 重试脚本显式冻结 legacy Claim/普通审核快照，不受开发环境默认策略影响，保留原断言。
+- `publication-ui-focused`：前端派生投影、响应 guard、parent 链阅读选择与反例、分页中途失败保留及旧请求隔离、发布决定请求竞态（Node，非浏览器）。
+- `publication-browser`：真实 `frontend/dist` 应用 + 隔离 API fixture，覆盖错峰 0/3→1/3→2/3→终态失败、终态后发布/拒绝、旧版本与 parent 链阅读、分页及第二页503保留结果、慢响应切任务、运行中部分未知、旧响应回退与重新进入；证据写入 `TEST_RUN_OUTPUT`（`publication-summary.json`、截图、逐用例控制台错误），请求不出回环地址。预期的分页503单独记录，其余控制台错误和外部请求均使对应场景失败。浏览器缺失或必需用例失败即为未通过。
+
+以上专项均为确定性/合成证据：真实模型质量、真实端到端、Worker 故障注入、CI 与部署仍为 NOT_RUN。曾单列失败的 SQL 资源重试 node 在修复测试冻结输入后已恢复到兼容 suite；先前失败与复验记录保留于 T47 第9节，不再以移出节点计为兼容通过。

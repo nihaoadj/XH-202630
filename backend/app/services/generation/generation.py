@@ -1,4 +1,8 @@
 from app.services.generation.lecture_policy import freeze_lecture_policy, lecture_fields
+from app.services.generation.resource_review_policy import (
+    freeze_resource_review_policy,
+    resource_review_fields,
+)
 from app.core.execution import ExecutionFence, current_execution_fence, execution_fence, execution_session
 from app.db.generation.fencing import install_execution_fencing
 import uuid
@@ -16,6 +20,7 @@ from app.models.knowledge.knowledge import RESOURCE_AWARE_STRATEGY, LEGACY_RETRI
 from app.models.generation.resource_retry import ResourceRetryContext
 from app.models.learning_documents.types import GENERAL_GENERATION_RESOURCE_TYPES
 from app.models.reviews.review_audit import ReviewPolicySnapshotV1
+from app.models.reviews.revision_inputs import RESERVED_REVISION_INPUT_KEYS
 from app.models.reviews.claim_extraction import policy_from_input
 from app.db.claim.extraction import extraction_repository
 from app.agents.resource_workflows.learning_documents.claim_extraction.budget import frozen_snapshot, snapshot_fields
@@ -53,6 +58,7 @@ def build_workflow_state(
     batch_id: str | None = None,
     claim_extraction_snapshot: dict | None = None,
     lecture_review_snapshot: dict | None = None,
+    resource_review_snapshot: dict | None = None,
 ) -> WorkflowState:
     """Validate and map every public request control into workflow channels."""
     if learner.learner_id != req.learner_id:
@@ -72,10 +78,16 @@ def build_workflow_state(
             mode="python",
             exclude_none=True,
         )
+        # A client can never inject a generation revision input. Strip the
+        # reserved keys here; the server-side prepare / verified retry import
+        # writes them back through the private channels only.
+        for reserved_key in RESERVED_REVISION_INPUT_KEYS:
+            constraints.pop(reserved_key, None)
         effective_run_id = run_id or str(uuid.uuid4())
         snapshot = WorkflowStateSnapshot(
             **claim_extraction_snapshot,
             **lecture_fields(lecture_review_snapshot or {}),
+            **resource_review_fields(resource_review_snapshot or {}),
             run_id=effective_run_id,
             batch_id=batch_id or effective_run_id,
             learner_id=req.learner_id,
@@ -295,6 +307,7 @@ def _request_snapshot(req: GenerateRequest, state: WorkflowState) -> dict:
         "resource_types": list(req.resource_types),
         "review_policy": state.get("review_policy"),
         **lecture_fields(state),
+        **resource_review_fields(state),
         "retrieval_strategy_version": state.get("retrieval_strategy_version", LEGACY_RETRIEVAL_STRATEGY),
         "difficulty_preference": req.difficulty_preference,
         "generation_mode": req.generation_mode or "standard",
@@ -382,18 +395,21 @@ class GenerationService:
     def freeze_lecture_review(self, req):
         return freeze_lecture_policy(req, get_settings())
 
+    def freeze_resource_review(self, req):
+        return freeze_resource_review_policy(req, get_settings())
+
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         return self.generate_with_run_id(learner, req)
 
-    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None, *, resource_retry_context=None, claim_extraction_snapshot=None, lecture_review_snapshot=None, lecture_dispatch_snapshot=None):
+    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None, *, resource_retry_context=None, claim_extraction_snapshot=None, lecture_review_snapshot=None, lecture_dispatch_snapshot=None, resource_review_snapshot=None, resource_dispatch_snapshot=None):
         if current_execution_fence() is not None or not hasattr(self.audit_repo, "session_factory"):
             return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id,
-                                               resource_retry_context=resource_retry_context, claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot, lecture_dispatch_snapshot=lecture_dispatch_snapshot)
+                                               resource_retry_context=resource_retry_context, claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot, lecture_dispatch_snapshot=lecture_dispatch_snapshot, resource_review_snapshot=resource_review_snapshot, resource_dispatch_snapshot=resource_dispatch_snapshot)
         install_execution_fencing()
         run_id = run_id or str(uuid.uuid4())
         with execution_fence(ExecutionFence(run_id, f"text-{uuid.uuid4()}")):
             return self._generate_with_run_id(learner, req, run_id=run_id, batch_id=batch_id,
-                                               resource_retry_context=resource_retry_context, claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot, lecture_dispatch_snapshot=lecture_dispatch_snapshot)
+                                               resource_retry_context=resource_retry_context, claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot, lecture_dispatch_snapshot=lecture_dispatch_snapshot, resource_review_snapshot=resource_review_snapshot, resource_dispatch_snapshot=resource_dispatch_snapshot)
 
     def _generate_with_run_id(
         self,
@@ -405,6 +421,8 @@ class GenerationService:
         claim_extraction_snapshot: dict | None = None,
         lecture_review_snapshot: dict | None = None,
         lecture_dispatch_snapshot: dict | None = None,
+        resource_review_snapshot: dict | None = None,
+        resource_dispatch_snapshot: dict | None = None,
     ) -> GenerateResponse:
         """Generate with a caller-owned Run ID while preserving durable lifecycle semantics."""
         readiness = (
@@ -429,12 +447,22 @@ class GenerationService:
             if lecture_review_snapshot is not None and saved_fields != lecture_fields(lecture_review_snapshot):
                 raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
             lecture_review_snapshot = saved_fields
-        elif lecture_review_snapshot is None:
-            lecture_review_snapshot = freeze_lecture_policy(req, get_settings())
+            saved_resource_fields = resource_review_fields(saved_snapshot)
+            if resource_review_snapshot is not None and saved_resource_fields != resource_review_fields(resource_review_snapshot):
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            resource_review_snapshot = saved_resource_fields
+        else:
+            if lecture_review_snapshot is None:
+                lecture_review_snapshot = freeze_lecture_policy(req, get_settings())
+            if resource_review_snapshot is None:
+                resource_review_snapshot = freeze_resource_review_policy(req, get_settings())
         initial_state = build_workflow_state(learner, req, run_id=run_id, batch_id=batch_id,
-            claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot)
+            claim_extraction_snapshot=claim_extraction_snapshot, lecture_review_snapshot=lecture_review_snapshot,
+            resource_review_snapshot=resource_review_snapshot)
         if lecture_dispatch_snapshot is not None:
             initial_state["lecture_dispatch_snapshot"] = lecture_dispatch_snapshot
+        if resource_dispatch_snapshot is not None:
+            initial_state["resource_dispatch_snapshot"] = resource_dispatch_snapshot
         if resource_retry_context is not None:
             try:
                 retry = ResourceRetryContext.from_snapshot(resource_retry_context)

@@ -23,12 +23,25 @@ from app.db.shared.models import Base, KnowledgeBaseORM, LearnerProfileORM, User
 from app.models.generation.dispatch import RESOURCE_RETRY_WORKFLOW_VERSION
 from app.main import application_exception_handler
 from app.models.generation.resource_retry import ResourceRetryContext
+from app.models.reviews.revision_inputs import ORDINARY_KIND, REVISION_INPUT_ENVELOPE_VERSION
 from app.models.knowledge.knowledge import EvidenceItem, ScoreKind, SourceLocator, SourceType
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
 from app.models.shared.agent_contracts import ResourceSpec
 from app.models.shared.persistence import PersistedEvidenceSnapshot, WorkflowCheckpoint, canonical_hash
 from app.services.generation.jobs import GenerationJobService
 from app.services.generation.resource_retry import prepare_resource_retry
+
+
+@pytest.fixture(autouse=True)
+def _freeze_legacy_review_strategies(monkeypatch):
+    # This suite exercises the legacy TEXT-workflow retry path. The T45 defaults
+    # (neutral claim + resource_issue) must not leak into these frozen fixtures,
+    # so pin the strategies the historical dispatch snapshots were built for.
+    # ``get_settings`` is lru_cached, so patch the module-level name that
+    # ``_dispatch_snapshot`` actually resolves rather than the env/cache.
+    from app.config import Settings
+    legacy = Settings(claim_extraction_strategy="legacy_v3", resource_review_strategy="compat")
+    monkeypatch.setattr("app.services.generation.jobs.get_settings", lambda: legacy)
 
 
 def source_state(repo=None):
@@ -109,7 +122,9 @@ def test_prepare_child_is_frozen_single_spec_and_source_unchanged(source, status
     assert context.diagnosis == {"summary": "frozen diagnosis"}
     assert context.learning_plan == {"goal": "frozen plan"}
     assert context.spec == s.spec and context.evidence == [s.evidence]
-    assert len(context.revision_feedback["revision_instructions"]) == 1
+    assert context.revision_feedback["schema_version"] == REVISION_INPUT_ENVELOPE_VERSION
+    assert context.revision_feedback["kind"] == ORDINARY_KIND
+    assert len(context.revision_feedback["input"]["feedback"]["revision_instructions"]) == 1
     child, req = s.service.create_resource_retry(s.learner, "source", s.spec.resource_spec_id, "text")
     repeated, _ = s.service.create_resource_retry(s.learner, "source", s.spec.resource_spec_id, "text")
     assert child.run_id == repeated.run_id != "source"
@@ -179,7 +194,10 @@ def test_feedback_merges_only_selected_claim_instructions_and_deduplicates(sourc
         "revision_instructions": [own, claim, {"target_resource_type": "实操指南", "instruction": "other"}],
         "issues": [{"resource_id": "parent", "message": "own"}, {"resource_id": "other", "message": "other"}]}}
     s.checkpoint = s.checkpoint.model_copy(update={"state_projection": projection, "state_hash": canonical_hash(projection)})
-    feedback = prepare(s).revision_feedback
+    revision = prepare(s).revision_feedback
+    assert revision["schema_version"] == REVISION_INPUT_ENVELOPE_VERSION
+    assert revision["kind"] == ORDINARY_KIND
+    feedback = revision["input"]["feedback"]
     assert feedback["revision_instructions"] == [own, claim]
     assert feedback["issues"] == [{"resource_id": "parent", "message": "own"}]
 

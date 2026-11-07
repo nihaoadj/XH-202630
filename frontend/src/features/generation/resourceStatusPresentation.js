@@ -1,4 +1,5 @@
 import { resourceExecutionStateMeta } from '../../utils/generationDisplay.js'
+import { readableResourceId } from './publicationPresentation.js'
 
 function logicalState(items) {
   const states = items.map(item => item.resource_execution_state)
@@ -50,6 +51,12 @@ export function buildResourceStatusItems(executions = [], {
         item.resource_execution_state = 'approved'
       }
     }
+    // A readable body can come from an earlier published version while the
+    // current attempt stays failed/pending. Keep that id separate from
+    // ``resource_id`` so Claim, retry and review links stay on the exact attempt.
+    item.readable_resource_id = readableResourceId(item, {
+      resources: [...publishedSources.values()], runId,
+    })
     return item
   })
   if (['queued', 'running'].includes(jobStatus)) {

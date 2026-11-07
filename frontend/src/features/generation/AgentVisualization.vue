@@ -5,7 +5,7 @@
       <div class="delivery-heading">
         <svg class="delivery-symbol" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Zm0 0 8 4.5 8-4.5M12 12v9M8 5.25l8 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
         <h4 class="phase-name">资源状态</h4>
-        <span class="delivery-count"><span>已发布</span><strong>{{ progressSummary.published }}<small> / {{ progressSummary.total }}</small></strong></span>
+        <span class="delivery-count"><span>{{ incompletePublication ? '已确认发布' : '已发布' }}</span><strong>{{ deliveryCount.published ?? '—' }}<small v-if="!incompletePublication"> / {{ deliveryCount.total ?? '—' }}</small></strong><small v-if="incompletePublication">{{ publishSummary.completeness === 'unavailable' ? '发布情况暂不可用' : '汇总不完整' }}</small></span>
       </div>
       <ResourceExecutionProgressList
         :executions="statusItems" :review-enabled="reviewEnabled"
@@ -30,10 +30,12 @@ import ResourceExecutionProgressList from './ResourceExecutionProgressList.vue'
 import WorkflowExecutionGraph from './WorkflowExecutionGraph.vue'
 import { normalizeResourceProgressSummary } from '../../utils/generationDisplay'
 import { buildResourceStatusItems } from './resourceStatusPresentation.js'
+import { resolveDeliveryCount } from './publicationPresentation.js'
 const props = defineProps({
   trace: { type: Array, default: () => [] }, childRuns: { type: Array, default: () => [] },
   legacyPartial: Boolean,
   resourceExecutions: { type: Array, default: () => [] }, resourceProgressSummary: { type: Object, default: null },
+  publishSummary: { type: Object, default: null },
   retryingResourceKey: { type: String, default: '' }, retryEnabled: Boolean,
   claimReports: { type: Object, default: () => ({}) },
   requestedResourceTypes: { type: Array, default: () => [] }, jobStatus: { type: String, default: '' },
@@ -47,6 +49,14 @@ const statusItems = computed(() => buildResourceStatusItems(props.resourceExecut
   claimReports: props.claimReports,
 }))
 const progressSummary = computed(() => normalizeResourceProgressSummary(props.resourceProgressSummary, statusItems.value))
+const incompletePublication = computed(() => Boolean(props.publishSummary && props.publishSummary.completeness !== 'complete'))
+// The header counter uses the authoritative summary when present; the current
+// page of loaded resources is never used as the run denominator.
+const deliveryCount = computed(() => resolveDeliveryCount({
+  publishSummary: props.publishSummary,
+  fallbackPublished: progressSummary.value.published,
+  fallbackTotal: progressSummary.value.total,
+}))
 </script>
 
 <style scoped>

@@ -224,7 +224,7 @@ T9知识库资料现按 `teaching/zh`、`references/{zh,en}`、`licenses/`、`pr
 
 ## 测试运行
 
-Claim 中立抽取默认 `CLAIM_EXTRACTION_STRATEGY=legacy_v3`，显式选择 `neutral_estimate_v1` 后使用无外部资产的字符估算：ASCII/CJK/其他Unicode系数0.3/0.6/1，完整实际请求统一增加15%余量，每消息8和请求128的包装余量只计一次。无需tokenizer下载、PROFILE路径/ID或校准PASS。短文单批、长文按需分批、程序汇总，同资源一次原Judge；无额外Evidence和模型整合调用。每个真实attempt发送前CAS预留本次输入估算及实际输出cap，返回按可靠usage核销，未知用量保留预留并阻止自动补调；实际超估不丢有效结果，超支入账后阻断下一请求。正常批次及同图返工共享run预算，中断按原失败/新run重试。配置与迁移见[部署说明](docs/deployment.md#claim-中立抽取候选)。估算不是精确token或计费硬上限；真实冒烟和质量对照分别验证，本轮按用户要求只做代码与离线验证。T37 为 `neutral_estimate_v1` 增加冻结的密度装箱子契约（`density_batching`，version `claim-density-v1`）：按 paragraph/list/table/code 的原文字符数预估候选数，与既有 token 上界**同时**约束装箱；标题与空行不占风险权重，但仍完整送模型并逐 unit 回执；仅当候选批只含 1 个 unit 时豁免密度。`CLAIM_EXTRACTION_DENSITY_ENABLED` / `_PRIOR` / `RISK_SHARE` 只影响此后冻结的新 Run——旧 2.0 快照不含该键、hash 与原 token 装箱保持不变。触顶判废、细分、预算、CAS 与 Judge 均不变；密度是调度启发式，不构成事实召回或成本改善证明。
+Claim 中立抽取默认 `CLAIM_EXTRACTION_STRATEGY=neutral_estimate_v1`，使用无外部资产的字符估算：ASCII/CJK/其他Unicode系数0.3/0.6/1，完整实际请求统一增加15%余量，每消息8和请求128的包装余量只计一次。无需tokenizer下载、PROFILE路径/ID或校准PASS。短文单批、长文按需分批、程序汇总，同资源一次原Judge；无额外Evidence和模型整合调用。每个真实attempt发送前CAS预留本次输入估算及实际输出cap，返回按可靠usage核销，未知用量保留预留并阻止自动补调；实际超估不丢有效结果，超支入账后阻断下一请求。正常批次及同图返工共享run预算，中断按原失败/新run重试。配置与迁移见[部署说明](docs/deployment.md#claim-中立抽取候选)。估算不是精确token或计费硬上限；真实冒烟和质量对照分别验证，本轮按用户要求只做代码与离线验证。T37 为 `neutral_estimate_v1` 增加冻结的密度装箱子契约（`density_batching`，version `claim-density-v1`）：按 paragraph/list/table/code 的原文字符数预估候选数，与既有 token 上界**同时**约束装箱；标题与空行不占风险权重，但仍完整送模型并逐 unit 回执；仅当候选批只含 1 个 unit 时豁免密度。`CLAIM_EXTRACTION_DENSITY_ENABLED` / `_PRIOR` / `RISK_SHARE` 只影响此后冻结的新 Run——旧 2.0 快照不含该键、hash 与原 token 装箱保持不变。触顶判废、细分、预算、CAS 与 Judge 均不变；密度是调度启发式，不构成事实召回或成本改善证明。
 
 专项命令：`python scripts/run_tests.py --suite claim-extraction-focused --suite claim-extraction-eval --output output/test-runs/claim-extraction-check`。输出目录必须为空；评测固定合成正文并调用实际抽取/判定代码，输出 `fixture_policy_gate`、`quality_gate=NOT_RUN_OFFLINE` 与 `judge_capacity_gate=NOT_RUN_OFFLINE`。范围处理清单不能充当事实召回分母，工程上限不能充当实测容量。
 
@@ -236,6 +236,8 @@ T42 程序化来源定位与受限文字容错（`neutral_estimate_v1`）：新�
 完整的层级、功能覆盖矩阵、数据/证据规范见 [项目测试方案](docs/testing/README.md)，比赛54用例、来源快照与三指标口径见 [比赛评测方案](docs/testing/competition.md)。统一入口按套件运行，默认关闭真实模型调用，每次输出独立日志、JUnit 和 JSON/Markdown 摘要：
 
 LLM 调用旁路计量专项：`python scripts/run_tests.py --suite llm-accounting-focused --output output/test-runs/llm-accounting-check`。它覆盖文本与互动课件全链路模型调用的旁路观察/作用域/独立库/故障矩阵/迁移/API/e2e，不启用真实模型。两个可选配置 `LLM_ACCOUNTING_ENABLED`（默认 true）与 `LLM_ACCOUNTING_DB_PATH`（默认 `backend/data/llm_accounting.db`，独立于业务库）见 [部署说明](docs/deployment.md)。
+
+部分发布汇总专项（T47）：先执行 `npm --prefix frontend run build`，再运行 `python scripts/run_tests.py --suite publication-policy-focused --suite publication-summary-focused --suite publication-compat-focused --suite publication-ui-focused --output output/test-runs/t47-focused-r1` 与 `python scripts/run_tests.py --suite publication-browser --output output/test-runs/t47-browser-r1`（输出目录必须新建且为空）。它只覆盖自动发布判定等价、发布汇总读取与 Job/Run/前端表达，不运行全量后端、全前端或全部浏览器，也不启用真实模型。范围与未运行项见[测试说明](docs/testing/README.md)。
 
 ```powershell
 python scripts/run_tests.py --list
@@ -426,3 +428,9 @@ T37 修复（2026-11-05）：estimate 抽取结果载体支持最多128条，持
 默认 `LECTURE_REVIEW_STRATEGY=legacy_content_v2`。可选 `lecture_issue_v1`（T38）与 `lecture_issue_v2`（T39）仅用于讲义普通审核，需显式设置已确认的 `LECTURE_REVIEW_CONTEXT_TOKENS`；输出预算沿用 reviewer 配置并随任务冻结。配置变化只影响后续新任务。新策略以逐问题账本核销返工，不改变 Claim 与发布门禁。真实质量验收未运行，默认策略不切换。`lecture_issue_v2` 删除模型自填的总体 coverage 结论，只保留逐目标 covered/missing，覆盖比例、阻断判定与 approve/revise/human_review 全部由程序从冻结目标派生；覆盖问题必须写明受影响目标。三维语义判断（事实、难度、自包含）仍为独立判断。对白名单内的自相矛盾（目标集不全、缺失目标未关联问题、维度与问题冲突、风险分冲突、核销漏项、临时 ID 重复）允许一次有界纠正，与首次请求共享冻结的物理尝试上限 M，不增加全局重试。V2 首次请求前必须有持久 step 记录，旧 running/failed 审核步骤会让新调用被拒绝。真实模型质量仍未验收。专项命令见 docs/testing/README.md。
 
 Claim定向返工默认最多1次（`claim_max_iterations=1`），显式0可禁用；Claim要求修订但专用额度不可用时进入人工复核且未发布，不借普通`max_iterations`。普通审核返工默认仍为2。已冻结任务按保存值执行。
+
+### 文本文档普通审核通用化（T44）
+
+新增内部策略 `RESOURCE_REVIEW_STRATEGY=resource_issue_v1`（默认启用；显式 `compat` 可回退历史各类型审核），让六类文本资源（讲义、实操指南、分阶测试题、案例分析、复习清单、内部纠错训练包）共用同一版本化闭环：证据约束问题登记、稳定 `issue_id`（`ri_`/`rip_` 前缀）、精确定向返工、逐问题核销、全文回归、无变化控制、程序硬门（结构失败零语义调用）与一次有界纠正；结构化资源的完整私有包也进入审核。启动须显式填写已核实的 `RESOURCE_REVIEW_CONTEXT_TOKENS`，缺失将拒绝初始化；示例及本地配置使用当前 reviewer 已声明的 129024，其他模型应按实际窗口配置。Claim 中立策略要求 `LLM_THINKING_MODE=disabled`。环境显式值优先；默认变更只影响此后新建且未被旧环境值覆盖的任务，已冻结任务不转换。当前策略已默认切换，真实模型质量仍未验收，未在本次执行真实调用或重启服务。策略在 Run 创建时冻结，回滚只影响后续新 Run；私有审计使用 `review_audit_v4` 命名空间，不做物理迁移。专项命令见 docs/testing/README.md。
+
+新版通用审核与讲义专用 issue 策略互斥：启用 `resource_issue_v1` 时设 `LECTURE_REVIEW_STRATEGY=legacy_content_v2`，关闭旧专用循环，由通用新审核接管讲义；本地已同步。其他部署显式设置的 `lecture_issue_v1/v2` 也须调整。若回退此前讲义 V2 行为，须同时设 `RESOURCE_REVIEW_STRATEGY=compat` 与 `LECTURE_REVIEW_STRATEGY=lecture_issue_v2`，并保留原讲义窗口。

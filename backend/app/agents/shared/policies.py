@@ -5,9 +5,11 @@ The reviewer model may recommend a decision, but it never owns the release gate.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Iterable
 
-from app.models.shared.workflow import ReviewDecision
+from app.models.shared.workflow import ResourceStatus, ReviewDecision
 
 
 BLOCKING_SEVERITIES = frozenset({"high", "critical"})
@@ -50,8 +52,177 @@ def decide_review(
     return ReviewDecision.HUMAN_REVIEW
 
 
+class PublicationReason(str, Enum):
+    """Controlled reason codes for the automatic terminal publication decision."""
+
+    APPROVED = "approved"
+    ORDINARY_REJECTED = "ordinary_rejected"
+    ORDINARY_REVIEW_REQUIRED = "ordinary_review_required"
+    ORDINARY_REVISION_UNRESOLVED = "ordinary_revision_unresolved"
+    GENERATION_LOCKED = "generation_locked"
+    CLAIM_GATE_FAILED = "claim_gate_failed"
+    CLAIM_METRIC_INCOMPLETE = "claim_metric_incomplete"
+    CLAIM_USER_REVIEW_REQUIRED = "claim_user_review_required"
+    STRICT_DEGRADATION = "strict_degradation"
+
+
+# Canonical resource state for one ordinary review decision.  ``revise`` means
+# the revision budget is exhausted, so it resolves to human review rather than
+# to an automatic publication.
+_ORDINARY_STATUS_BY_DECISION: dict[str, ResourceStatus] = {
+    "approve": ResourceStatus.APPROVED,
+    "reject": ResourceStatus.REJECTED,
+    "human_review": ResourceStatus.HUMAN_REVIEW,
+    "revise": ResourceStatus.HUMAN_REVIEW,
+}
+
+_ORDINARY_REASON_BY_DECISION: dict[str, PublicationReason] = {
+    "approve": PublicationReason.APPROVED,
+    "reject": PublicationReason.ORDINARY_REJECTED,
+    "human_review": PublicationReason.ORDINARY_REVIEW_REQUIRED,
+    "revise": PublicationReason.ORDINARY_REVISION_UNRESOLVED,
+}
+
+_REASON_BY_FALLBACK_STATUS: dict[ResourceStatus, PublicationReason] = {
+    ResourceStatus.APPROVED: PublicationReason.APPROVED,
+    ResourceStatus.REJECTED: PublicationReason.ORDINARY_REJECTED,
+    ResourceStatus.REVISION_REQUESTED: PublicationReason.ORDINARY_REVISION_UNRESOLVED,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationInputs:
+    """Explicit inputs for one resource's terminal automatic decision.
+
+    ``fallback_status`` is the run-level terminal status the caller already
+    derived from the aggregate review decision; it only applies when the item
+    carries no recognised per-resource decision.
+    """
+
+    item_decision: str
+    fallback_status: ResourceStatus
+    is_locked: bool
+    strict_with_degradation: bool
+    include_claim_check: bool
+    is_claim_eligible: bool
+    claim_failed: bool
+    has_claim_problem: bool
+    claim_metric_status: str | None
+    factual_claim_total: int = 0
+    supported_claim_total: int = 0
+    contradicted_claim_total: int = 0
+    not_in_evidence_claim_total: int = 0
+    allow_partial_claim_publish: bool = False
+    claim_user_review_enabled: bool = False
+    claim_user_review_min_factual_pass_rate: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationDecision:
+    """Terminal review/publication outcome for a single logical resource."""
+
+    review_status: ResourceStatus
+    publish: bool
+    reason: PublicationReason
+    claim_publish_decision_pending: bool
+    claim_degraded_publish: bool
+    factual_pass_rate: float | None
+
+
+def resolve_publication(inputs: PublicationInputs) -> PublicationDecision:
+    """Resolve one resource's terminal state from already-computed inputs.
+
+    This is the only production automatic terminal-decision entry point.  It
+    performs no IO, reads no global configuration and writes no event; the
+    caller passes the configuration that applies to the execution it is
+    finishing.  Condition priority mirrors the historical inline node logic.
+    """
+
+    factual_pass_rate = (
+        inputs.supported_claim_total / inputs.factual_claim_total
+        if inputs.factual_claim_total
+        else None
+    )
+    claim_metric_complete = inputs.claim_metric_status == "complete"
+    partial_metric_allowed = (
+        inputs.allow_partial_claim_publish
+        and inputs.is_claim_eligible
+        and inputs.item_decision == ReviewDecision.APPROVE.value
+        and inputs.claim_metric_status == "incomplete"
+    )
+    user_review_allowed = (
+        inputs.claim_user_review_enabled
+        and inputs.item_decision == ReviewDecision.APPROVE.value
+        and inputs.is_claim_eligible
+        and claim_metric_complete
+        and factual_pass_rate is not None
+        and factual_pass_rate >= inputs.claim_user_review_min_factual_pass_rate
+        and inputs.contradicted_claim_total == 0
+        and inputs.not_in_evidence_claim_total > 0
+    )
+
+    if inputs.is_locked:
+        review_status = ResourceStatus.HUMAN_REVIEW
+        reason = PublicationReason.GENERATION_LOCKED
+    elif (
+        inputs.has_claim_problem
+        and not partial_metric_allowed
+        and not user_review_allowed
+    ):
+        review_status = ResourceStatus.HUMAN_REVIEW
+        reason = PublicationReason.CLAIM_GATE_FAILED
+    elif user_review_allowed:
+        review_status = ResourceStatus.HUMAN_REVIEW
+        reason = PublicationReason.CLAIM_USER_REVIEW_REQUIRED
+    else:
+        review_status = _ORDINARY_STATUS_BY_DECISION.get(
+            inputs.item_decision, inputs.fallback_status
+        )
+        reason = _ORDINARY_REASON_BY_DECISION.get(inputs.item_decision) or (
+            PublicationReason.STRICT_DEGRADATION
+            if inputs.strict_with_degradation
+            else _REASON_BY_FALLBACK_STATUS.get(
+                inputs.fallback_status, PublicationReason.ORDINARY_REVIEW_REQUIRED
+            )
+        )
+
+    if inputs.include_claim_check and review_status == ResourceStatus.APPROVED:
+        claim_gate_passed = (
+            inputs.is_claim_eligible
+            and not inputs.claim_failed
+            and not inputs.has_claim_problem
+            and inputs.claim_metric_status in {"complete", "not_applicable"}
+        )
+        if not claim_gate_passed and not partial_metric_allowed and not user_review_allowed:
+            review_status = ResourceStatus.HUMAN_REVIEW
+            reason = (
+                PublicationReason.CLAIM_METRIC_INCOMPLETE
+                if inputs.claim_metric_status == "incomplete"
+                else PublicationReason.CLAIM_GATE_FAILED
+            )
+
+    publish = review_status == ResourceStatus.APPROVED
+    return PublicationDecision(
+        review_status=review_status,
+        publish=publish,
+        reason=reason,
+        claim_publish_decision_pending=user_review_allowed,
+        claim_degraded_publish=bool(
+            publish
+            and inputs.allow_partial_claim_publish
+            and inputs.claim_metric_status == "incomplete"
+        ),
+        factual_pass_rate=factual_pass_rate,
+    )
+
+
 def may_publish(*, decision: str, review_status: str | None, is_leaf: bool = True) -> bool:
-    """The only automatic publication transition allowed by P0-05."""
+    """Legacy standalone predicate: final state plus leaf eligibility.
+
+    Kept as an independent testing/compatibility contract for callers that
+    supply a leaf-version eligibility flag; production automatic terminal
+    decisions go through :func:`resolve_publication`, which has no leaf input.
+    """
 
     return (
         decision == ReviewDecision.APPROVE.value

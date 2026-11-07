@@ -19,6 +19,7 @@ from app.models.knowledge.knowledge import EvidenceAllocation, EvidenceItem, Ret
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.models.shared.assessment import ASSESSMENT_QUESTION_QUOTAS
 from app.models.reviews.review_audit import ReviewAuditRecordV2, ReviewAuditRecordV1, ReviewPolicySnapshotV1
+from app.models.reviews.revision_inputs import ClaimReviewRevisionInput, ResourceReviewRevisionInput
 from app.models.shared.workflow import (
     ErrorInfo,
     StepStatus,
@@ -252,6 +253,19 @@ class ResourceGenerationContext(BaseModel):
     constraints: Dict[str, Any] = Field(default_factory=dict)
     generation_attempt: int = Field(default=1, ge=1)
     workflow_deadline_at: Optional[datetime] = None
+    # Generation-side revision inputs (T46). At most one is non-null for a
+    # single resource worker; first generation leaves both empty. These are
+    # distinct from the recheck-tracking ``state.resource_revision`` /
+    # ``state.lecture_revision`` records, which keep their parent-version
+    # validation semantics and are never mixed into the worker prompt.
+    resource_review_revision: Optional[ResourceReviewRevisionInput] = None
+    claim_review_revision: Optional[ClaimReviewRevisionInput] = None
+
+    @model_validator(mode="after")
+    def validate_revision_inputs(self) -> "ResourceGenerationContext":
+        if self.resource_review_revision is not None and self.claim_review_revision is not None:
+            raise ValueError("a resource worker receives at most one generation revision input")
+        return self
 
     @field_validator("evidence")
     @classmethod

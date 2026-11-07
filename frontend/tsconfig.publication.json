@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.quality.json",
+  "files": [
+    "src/contracts/guards.js",
+    "src/features/generation/api.js",
+    "src/features/runs/queryApi.js",
+    "src/features/generation/publicationPresentation.js"
+  ]
+}

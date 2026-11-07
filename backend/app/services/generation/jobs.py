@@ -1,6 +1,13 @@
 from __future__ import annotations
 from app.services.generation.lecture_policy import freeze_lecture_policy, resolve_lecture_dispatch
 from app.agents.resource_workflows.learning_documents.reviewing.lecture_authority import lecture_workflow_version
+from app.services.generation.resource_review_policy import (
+    freeze_resource_review_policy,
+    resolve_resource_review_dispatch,
+)
+from app.agents.resource_workflows.learning_documents.reviewing.resource_authority import (
+    resource_workflow_version,
+)
 
 from collections.abc import Callable
 
@@ -23,6 +30,7 @@ from app.db.shared.retry import run_with_sqlite_retry
 from sqlalchemy.exc import IntegrityError
 from app.db.feedback.feedback_loop_base import BaseFeedbackLoopRepository
 from app.services.learning_documents.resources import ResourceService
+from app.services.learning_documents.publication_summary import load_publication_summary
 from app.services.generation.continuation import (
     create_continuation,
     execute_continuation,
@@ -461,6 +469,16 @@ class GenerationJobService:
             snapshot["base_workflow_version"] = snapshot["workflow_version"]
             snapshot["workflow_version"] = lecture_workflow_version(lecture["lecture_review_contract_version"])
             snapshot["lecture_dispatch_hash"] = canonical_hash(snapshot)
+        resource = freeze_resource_review_policy(request, get_settings())
+        if resource:
+            if "lecture_dispatch_hash" in snapshot:
+                # A run cannot route 讲义 through both the legacy lecture loop and
+                # the generic loop; the two versioned strategies are exclusive.
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+            snapshot.update(resource)
+            snapshot["base_workflow_version"] = snapshot["workflow_version"]
+            snapshot["workflow_version"] = resource_workflow_version(resource["resource_review_contract_version"])
+            snapshot["resource_dispatch_hash"] = canonical_hash(snapshot)
         return snapshot
 
     def run_claim(self, claim):
@@ -476,7 +494,12 @@ class GenerationJobService:
                     or canonical_hash(req.model_dump(mode="json")) != claim.snapshot.get("request_hash")):
                 raise ValueError("frozen generation input mismatch")
             learner = frozen_learner
-            version, lecture = resolve_lecture_dispatch(claim.snapshot)
+            resource = {}
+            if claim.snapshot.get("workflow_version") == "learning_documents.resource_issue.v1":
+                version, resource = resolve_resource_review_dispatch(claim.snapshot)
+                lecture = {}
+            else:
+                version, lecture = resolve_lecture_dispatch(claim.snapshot)
             if version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}:
                 raise ValueError("unsupported frozen workflow")
             if (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (claim.snapshot.get("resource_retry_context") is not None):
@@ -492,7 +515,8 @@ class GenerationJobService:
                     learner, req, run_id=claim.run_id, batch_id=claim.batch_id,
                     **({"claim_extraction_snapshot": private} if hasattr(self.generation_service, "freeze_claim_extraction") else {}),
                     **({"resource_retry_context": retry_context} if retry_context is not None else {}),
-                    **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": claim.snapshot} if hasattr(self.generation_service, "freeze_lecture_review") else {}))
+                    **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": claim.snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
+                    **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": claim.snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}))
                 resource_ids = [item.resource_id for item in response.resources]
                 if getattr(response, "workflow_status", None) == "failed":
                     error_code = "GENERATION_EXECUTION_FAILED"
@@ -550,7 +574,18 @@ class GenerationJobService:
             # can be approved while Claim extraction is still in progress.
             published=published,
             can_finalize=bool(total and terminal == total), items=executions)
-        return job.model_copy(update={"resource_progress_summary": summary})
+        # Logical-resource publication facts stay separate from the per-execution
+        # progress above; the executions just read are reused, never re-queried.
+        publish_summary = load_publication_summary(
+            run_id=job.run_id,
+            request_payload=job.request_payload,
+            resource_repository=resource_repo,
+            executions=records,
+        )
+        return job.model_copy(update={
+            "resource_progress_summary": summary,
+            "publish_summary": publish_summary,
+        })
 
     def mark_superseded(self, run_id: str, replacement_run_id: str) -> GenerationJobStatusResponse | None:
         return self.job_repo.mark_superseded(run_id, replacement_run_id)
@@ -587,8 +622,12 @@ class GenerationJobService:
             snapshot = metadata.get("dispatch_snapshot") or {}
             retry_context = snapshot.get("resource_retry_context")
             lecture = {}
+            resource = {}
             if snapshot:
-                version, lecture = resolve_lecture_dispatch(snapshot)
+                if snapshot.get("workflow_version") == "learning_documents.resource_issue.v1":
+                    version, resource = resolve_resource_review_dispatch(snapshot)
+                else:
+                    version, lecture = resolve_lecture_dispatch(snapshot)
                 if (version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}
                         or (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (retry_context is not None)):
                     raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
@@ -607,7 +646,8 @@ class GenerationJobService:
                 batch_id=effective_batch_id,
                 **({"resource_retry_context": retry_context} if retry_context is not None else {}),
                 **({"claim_extraction_snapshot": private} if hasattr(self.generation_service,"freeze_claim_extraction") else {}),
-                **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": snapshot or None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
+                **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
+                **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}),
             )
             self.job_repo.mark_completed(
                 run_id,

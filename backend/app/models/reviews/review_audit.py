@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.reviews.lecture_review import LectureLedgerV1, LectureReviewPolicyV1
 from app.models.reviews.lecture_review_v2 import LectureLedgerV2, LectureReviewPolicyV2
+from app.models.reviews.resource_review import ResourceLedgerV1
+from app.models.reviews.resource_review_policy import RESOURCE_ADAPTER_TYPES, ResourceReviewPolicyV1
 
 from app.models.shared.llm import LLMAttemptSummary, LLMUsage
 from app.models.shared.persistence import canonical_hash
@@ -21,7 +23,11 @@ PRIVATE_REVIEW_FIELDS = frozenset({"specialized_reviews", "review_audit", "revie
                                    "review_audit_refs", "assessment_findings", "assessment_payload",
                                    "review_audit_v2", "review_audit_v3", "lecture_review_policy", "lecture_review_policy_hash",
                                    "lecture_review_contract_version", "lecture_ledgers", "lecture_revision",
-                                   "lecture_stop_reasons", "lecture_dispatch_snapshot"})
+                                   "lecture_stop_reasons", "lecture_dispatch_snapshot",
+                                   "review_audit_v4", "resource_review_policy", "resource_review_policy_hash",
+                                   "resource_review_contract_version", "resource_ledgers", "resource_revision",
+                                   "resource_stop_reasons", "resource_dispatch_snapshot",
+                                   "resource_review_identity", "resource_review_identity_hash"})
 PROFILE_VERSIONS = {
     "content_v2": "2.0", "practice_semantic_v2": "2.0",
     "assessment_scope_v1": "1.0", "assessment_package_v1": "2.0",
@@ -285,6 +291,53 @@ class ReviewAuditRecordV3(ReviewAuditRecordV1):
         return self
 
 
+class ReviewAuditRecordV4(ReviewAuditRecordV1):
+    """Generic resource-issue audit for the ``resource_issue_v1`` strategy.
+
+    Persists the frozen generic policy/hash, one generic ledger per reviewed
+    resource, and the bounded first-result correction attachments.  The repair
+    record reuses the V3 bounded-repair shape (identical fields) without
+    changing its serialization or the V1-V3 historical hashes.
+    """
+
+    schema_version: Literal["4.0"] = "4.0"
+    resource_review_policy: ResourceReviewPolicyV1
+    resource_review_policy_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    resource_ledgers: list[ResourceLedgerV1] = Field(max_length=100)
+    repairs: list[ReviewRepairRecordV3] = Field(default_factory=list, max_length=24)
+
+    @model_validator(mode="after")
+    def validate_resources(self):
+        expected = hashlib.sha256(_canonical(self.resource_review_policy.model_dump(mode="json"))).hexdigest()
+        if self.resource_review_policy_hash != expected:
+            raise ValueError("resource audit policy hash mismatch")
+        resources = {item.resource_id: item for item in self.resources}
+        seen = set()
+        hashes = {}
+        for ledger in self.resource_ledgers:
+            binding = ledger.binding
+            if (binding.run_id != self.run_id or binding.policy_hash != expected or
+                    binding.resource_id not in resources or binding.resource_id in seen):
+                raise ValueError("resource audit ledger ownership mismatch")
+            if resources[binding.resource_id].resource_spec_id != binding.resource_spec_id:
+                raise ValueError("resource audit resource specification mismatch")
+            if ledger.observations[-1].step_id != self.step_id:
+                raise ValueError("resource audit observation step mismatch")
+            if resources[binding.resource_id].decision == "approve" and ledger.observations[-1].decision != "approve":
+                raise ValueError("resource audit cannot approve an open ledger")
+            seen.add(binding.resource_id)
+            hashes[binding.resource_id] = ledger.observations[-1].output_hash
+        for resource in self.resources:
+            if resource.resource_type in RESOURCE_ADAPTER_TYPES and resource.decision == "approve" and resource.resource_id not in seen:
+                raise ValueError("approved resource requires a verified ledger")
+        for repair in self.repairs:
+            if repair.resource_id not in resources:
+                raise ValueError("resource repair names an unknown resource")
+            if repair.corrected and hashes.get(repair.resource_id) != repair.final_output_hash:
+                raise ValueError("resource repair final hash is not the committed result")
+        return self
+
+
 def audit_record_model(value):
     version = value.schema_version if isinstance(value, PrivateReviewModel) else value.get("schema_version")
     if version == "1.0":
@@ -293,18 +346,22 @@ def audit_record_model(value):
         return ReviewAuditRecordV2
     if version == "3.0":
         return ReviewAuditRecordV3
+    if version == "4.0":
+        return ReviewAuditRecordV4
     raise ValueError("unknown review audit schema version")
 
 
 AUDIT_V3_NAMESPACE = "review_audit_v3"
+AUDIT_V4_NAMESPACE = "review_audit_v4"
 
 
 def audit_namespace(envelope):
-    return {"2.0": "review_audit_v2", "3.0": AUDIT_V3_NAMESPACE}.get(envelope["schema_version"], AUDIT_NAMESPACE)
+    return {"2.0": "review_audit_v2", "3.0": AUDIT_V3_NAMESPACE,
+            "4.0": AUDIT_V4_NAMESPACE}.get(envelope["schema_version"], AUDIT_NAMESPACE)
 
 
 def select_audit_envelope(payload):
-    keys = [key for key in (AUDIT_NAMESPACE, "review_audit_v2", AUDIT_V3_NAMESPACE) if key in payload]
+    keys = [key for key in (AUDIT_NAMESPACE, "review_audit_v2", AUDIT_V3_NAMESPACE, AUDIT_V4_NAMESPACE) if key in payload]
     if len(keys) > 1:
         raise ValueError("multiple review audit namespaces")
     if not keys:
@@ -339,10 +396,16 @@ def step_review_audit_envelope(*, audit, run_id, step_id, node_name, generation_
         raise ValueError("new lecture strategy requires a versioned audit")
     if request_snapshot.get("lecture_review_contract_version") == "2.0" and envelope["schema_version"] != "3.0":
         raise ValueError("lecture contract 2.0 requires the V3 audit")
+    if request_snapshot.get("resource_review_contract_version") is not None and envelope["schema_version"] != "4.0":
+        raise ValueError("new resource strategy requires the V4 audit")
     if envelope["schema_version"] in {"2.0", "3.0"}:
         for key in ("lecture_review_policy", "lecture_review_policy_hash"):
             if payload[key] != request_snapshot.get(key):
                 raise ValueError("lecture audit frozen policy mismatch")
+    if envelope["schema_version"] == "4.0":
+        for key in ("resource_review_policy", "resource_review_policy_hash"):
+            if payload[key] != request_snapshot.get(key):
+                raise ValueError("resource audit frozen policy mismatch")
     frozen = request_snapshot.get("review_policy")
     if frozen is not None and payload["policy"] != ReviewPolicySnapshotV1.model_validate(frozen).model_dump(mode="json"):
         raise ValueError("review audit frozen policy mismatch")
@@ -357,7 +420,9 @@ def step_review_audit_envelope(*, audit, run_id, step_id, node_name, generation_
 
 def read_review_audit(*, envelope: dict | None, run_id: str, step_id: str, node_name: str,
                       status: str, request_snapshot: dict, checkpoints: list) -> ReviewAuditRecordV1 | None:
-    expected = (request_snapshot.get("review_policy") or {}).get("audit_schema_version") == "1.0" or request_snapshot.get("lecture_review_contract_version") is not None
+    expected = ((request_snapshot.get("review_policy") or {}).get("audit_schema_version") == "1.0"
+                or request_snapshot.get("lecture_review_contract_version") is not None
+                or request_snapshot.get("resource_review_contract_version") is not None)
     if envelope is None:
         if expected and node_name in {"review", "reviewer"}:
             if status in {"success", "degraded", "human_review"}:
@@ -373,10 +438,16 @@ def read_review_audit(*, envelope: dict | None, run_id: str, step_id: str, node_
         raise ValueError("new lecture strategy requires a versioned audit")
     if request_snapshot.get("lecture_review_contract_version") == "2.0" and checked["schema_version"] != "3.0":
         raise ValueError("lecture contract 2.0 requires the V3 audit")
+    if request_snapshot.get("resource_review_contract_version") is not None and checked["schema_version"] != "4.0":
+        raise ValueError("new resource strategy requires the V4 audit")
     if checked["schema_version"] in {"2.0", "3.0"}:
         for key in ("lecture_review_policy", "lecture_review_policy_hash"):
             if checked["payload"][key] != request_snapshot.get(key):
                 raise ValueError("lecture audit frozen policy mismatch")
+    if checked["schema_version"] == "4.0":
+        for key in ("resource_review_policy", "resource_review_policy_hash"):
+            if checked["payload"][key] != request_snapshot.get(key):
+                raise ValueError("resource audit frozen policy mismatch")
     frozen = request_snapshot.get("review_policy")
     if frozen is not None and checked["payload"]["policy"] != ReviewPolicySnapshotV1.model_validate(frozen).model_dump(mode="json"):
         raise ValueError("review audit frozen policy mismatch")
@@ -394,4 +465,10 @@ def read_review_audit(*, envelope: dict | None, run_id: str, step_id: str, node_
             for key in ("lecture_review_policy", "lecture_review_policy_hash"):
                 if checkpoint.state_projection.get(key) != request_snapshot.get(key):
                     raise ValueError("lecture checkpoint frozen policy mismatch")
+        if checked["schema_version"] == "4.0":
+            if matching[0].get("schema_version") != checked["schema_version"]:
+                raise ValueError("resource checkpoint audit version mismatch")
+            for key in ("resource_review_policy", "resource_review_policy_hash"):
+                if checkpoint.state_projection.get(key) != request_snapshot.get(key):
+                    raise ValueError("resource checkpoint frozen policy mismatch")
     return audit_record_model(checked["payload"]).model_validate(checked["payload"])

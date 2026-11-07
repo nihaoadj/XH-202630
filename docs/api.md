@@ -364,8 +364,42 @@ T42 的 `source_locating` 子契约与 `location_diagnostics` 定位诊断同属
 - `started_at`
 - `finished_at`
 - `resource_progress_summary`
+- `publish_summary`（可选，缺失或 `null` 表示旧响应）
 
-`resource_progress_summary` 包含 `total`、`counts`、`approved`、`human_review`、`failed`、`published`、`can_finalize` 和 `items`。每个 `items[]` 是一个资源表示的公开执行投影，包含 `resource_spec_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`attempt`、`resource_id`、`review_id`、`error_code`、`agent_name`、`prompt_version`、`artifact_format` 与 `validation_status`。
+`resource_progress_summary` 包含 `total`、`counts`、`approved`、`human_review`、`failed`、`published`、`can_finalize` 和 `items`。每个 `items[]` 是一个资源表示的公开执行投影，包含 `resource_spec_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`attempt`、`resource_id`、`review_id`、`error_code`、`agent_name`、`prompt_version`、`artifact_format` 与 `validation_status`。该字段语义不变，仍按执行记录计数，`can_finalize` 不是发布许可。
+
+`publish_summary` 是同一次查询派生的只读发布事实，Task 列表、Task 详情、`GET /api/runs/{run_id}` 与 `GET /api/runs/{run_id}/timeline` 返回同一对象语义（timeline 只通过 `run.publish_summary` 携带，没有顶层副本）：
+
+| 字段 | 语义 |
+|---|---|
+| `schema_version` | 派生对象的版本，固定 `1.0`，与持久快照版本无关 |
+| `total` | 本次请求的逻辑资源总数；无法恢复分母时为 `null` |
+| `published` | 已确认存在可读已发布正文的逻辑资源数；`partial` 时为已确认数量，无法确认时 `null` |
+| `unpublished` | 仅在 `completeness=complete` 时为 `total - published`，否则 `null` |
+| `pending_review` | 尚无可读已发布正文且当前待用户决定的逻辑资源数，不是全部 `human_review`；未知为 `null` |
+| `completeness` | `complete` / `partial` / `unavailable`，描述数据完整性，不是任务执行状态 |
+| `incomplete_reasons` | 受控原因码，按枚举声明顺序去重：`request_missing`、`spec_request_mismatch`、`logical_identity_missing`、`resource_reference_missing`、`unsupported_representation`、`repository_unavailable`、`lineage_conflict` |
+
+计数单位为逻辑资源，不是执行项或版本：同一 `resource_spec_id` 的多个版本只计一次；请求三份、两份已发布、一份失败且无产物时为 `2/3`。`completeness=complete` 时满足 `published + unpublished = total` 且 `0 <= pending_review <= unpublished`。查询零写入、不新增事件、不重算发布许可；存储故障按原有错误合同抛出，只有依赖缺失才返回 `unavailable`。
+
+```json
+{
+  "run_id": "run_1",
+  "learner_id": "learner_1",
+  "topic": "RAG 检索",
+  "job_status": "failed",
+  "resource_progress_summary": { "total": 3, "counts": {"approved": 2, "failed": 1}, "approved": 2, "failed": 1, "published": 2, "can_finalize": true, "items": [] },
+  "publish_summary": {
+    "schema_version": "1.0",
+    "total": 3,
+    "published": 2,
+    "unpublished": 1,
+    "pending_review": 0,
+    "completeness": "complete",
+    "incomplete_reasons": []
+  }
+}
+```
 
 说明：
 
@@ -718,6 +752,7 @@ GenerationJob 预分配 run_id
 - 公开 trace 的 `input_tokens/output_tokens/total_tokens` 继续表示原最后一次模型调用，不能当作多资源或两阶段的总成本；私有 ledger 才按各逻辑调用汇总，未知用量不以零替代。历史实操的结构批准不证明完成了新增语义审核或实际执行。
 - `issues` 是带 code、severity、目标资源/知识点的结构化数组。
 - `revision_instructions` 包含 issue_codes、target_resource_type、action、priority 和系统生成的 instruction_id。
+- T46 的生成端私有修订输入 `resource_review_revision`（普通审核）与 `claim_review_revision`（Claim 审核）是服务端内部字段：不进 GenerateRequest、响应、ReviewSummary、公开 trace、timeline、events 或 SSE，也不进前端导出契约；公开的 `issues`/`revision_instructions`/Claim DTO 语义不变，本次不新增 HTTP 路径、DTO 字段、表或事件 payload。
 - revise 必须携带可执行指令；指令无效、证据不足、Reviewer 异常或额度耗尽时进入 human_review。
 - Generator 返工时读取上一版本，只为指令命中的资源类型创建新 resource_id/version；未命中类型沿用当前版本。
 - `review_status` 与 `publication_status` 分离。只有最终 approve 的当前叶子版本可以 published。
@@ -734,6 +769,8 @@ GenerationJob 预分配 run_id
 retrieval_status、final_decision、时间戳和 replay_completeness。不存在时返回
 `404 + WORKFLOW_RUN_NOT_FOUND`。
 
+摘要额外返回可选 `publish_summary`（字段与语义见 [8.2](#82-get-apigeneratejobsrun_id)）。它以该 Run 对应 GenerationJob 的 `request_payload` 为请求依据；没有 Job 时不推测原始请求，`total` 为 `null` 并给出 `request_missing`。执行引用的资源若属于其他逻辑槽，则给出 `lineage_conflict`；引用缺失或冲突时 `pending_review` 为 `null`，不将其他资源的待决定状态重复计入，已确认的发布数量仍按各自逻辑槽计算。`publish_summary` 由查询时派生，不写入 `AgentRunRecord`、checkpoint 或公开事件，旧记录经 `RunSummary.from_record()` 转换后该字段为 `null`。
+
 ### 14.2 `GET /api/runs/{run_id}/timeline`
 
 按 event_sequence 返回 Step、Event、Checkpoint、Evidence、resource_versions 和
@@ -742,6 +779,8 @@ reviews。查询参数：
 - `after_sequence`：默认 0。
 - `limit`：1..500。
 - `next_event_sequence`：存在下一页时返回。
+
+`run.publish_summary` 与 [14.1](#141-get-apirunsrun_id) 使用同一聚合结果，且不受事件分页影响；本接口不额外增加顶层发布汇总字段。Timeline 已读取的 `resource_versions` 会被复用，不会重复查询。
 
 该接口只读数据库，不调用 LLM、Embedding 或 Chroma，也不等于自动 resume。
 
@@ -993,3 +1032,7 @@ T37 2026-11-05容量修复只涉及私有estimate结果合同与验收工具：�
 讲义问题账本、核销历史、冻结策略及 `review_audit_v2` 是内部数据，不新增公开 HTTP/DTO/SSE 字段。公开审核继续展示最多三条问题及一条修订摘要。`evidence_insufficient`、合同无效和无进展使用既有未发布/复核状态承载，不能视为通过；没有新增人工审核工作台。
 
 T39：HTTP/DTO/认证/状态码/事件契约不变。`lecture_issue_v2` 只影响讲义审核内部策略与私有审计（`review_audit_v3`），公开响应仍返回原受控摘要；不新增端点，不改 Claim 与发布接口。
+
+T44：HTTP/DTO/认证/状态码/事件契约不变。`resource_issue_v1` 只影响六类文本资源的审核内部策略与私有审计（`review_audit_v4`），公开响应仍返回原受控摘要（最多三条问题及一条修订摘要），不新增端点，不改 Claim 与发布接口。
+
+T44 修复续作的执行身份（模型/角色与 hash）、父版完整结构包和核销重放信息均为私有字段，不进入公开审核响应。发布前缺失或非法私有审计受控失败，不能先写入已发布资源再检查。执行信封升级为 1.1，不改变公开 DTO；旧 1.0 记录保留只读。

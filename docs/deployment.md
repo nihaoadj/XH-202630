@@ -479,7 +479,7 @@ T17选材配置：`RETRIEVAL_TOP_K_DEFAULT=6`（旧环境显式设3会覆盖新�
 
 ## Claim 中立抽取候选
 
-默认 `CLAIM_EXTRACTION_STRATEGY=legacy_v3`；显式选择 `neutral_estimate_v1` 使用纯字符估算，无tokenizer、外部profile或校准PASS依赖。旧 `neutral_batch_v1` 已停止执行，保留1.0历史账本和审核查询；旧queued任务被Worker领取后按失败协议结束，运行中任务不抢租约/不自动接管。通过已有重试/单资源retry入口创建新run，重新冻结当前策略，不把旧policy静默转换为新策略。
+默认 `CLAIM_EXTRACTION_STRATEGY=neutral_estimate_v1`，要求 `LLM_THINKING_MODE=disabled`，使用纯字符估算，无tokenizer、外部profile或校准PASS依赖。旧 `neutral_batch_v1` 已停止执行，保留1.0历史账本和审核查询；旧queued任务被Worker领取后按失败协议结束，运行中任务不抢租约/不自动接管。通过已有重试/单资源retry入口创建新run，重新冻结当前策略，不把旧policy静默转换为新策略。
 
 | 配置 | 默认及含义 |
 |---|---|
@@ -519,6 +519,12 @@ EstimatePolicy原有resource_claims允许上界128，结果载体已同步支持
 
 T40：Claim专用返工是请求参数`claim_max_iterations`，默认1，显式0禁用；额度耗尽不借普通返工预算，进入现有人工复核/未发布状态。此处不是新增环境变量。后端/Worker加载新代码后处理的新请求采用新默认；已有冻结请求保留原值。
 
+### T44 通用文本审核策略部署与回滚
+
+验收修复后的新任务使用执行信封 1.1，冻结实际 reviewer 模型名/角色及独立身份 hash，发送前核对实际网关。历史执行信封 1.0 只读保留，无法证明原模型身份，必须新建任务才能继续审核；不回填历史身份或改写原 policy hash。发布前缺失审计引用、恢复重放不一致、模型身份漂移均受控拒绝。升级仍要求 Web/Worker 使用相同版本；T44 离线验收时默认仍为 `compat`；T45 按用户要求将新任务默认改为 `resource_issue_v1`，本次无真实调用、进程升级或部署。
+
+`RESOURCE_REVIEW_STRATEGY` 默认 `resource_issue_v1`；显式设为 `compat` 可回退历史 lecture/assessment/practice 审核。默认新策略让六类文本资源共用同一闭环，且启动前必须配置 `RESOURCE_REVIEW_CONTEXT_TOKENS`，缺失拒绝初始化，不可猜测供应商窗口。示例及当前本地配置沿用同一 reviewer 已声明的 129024；其他部署须按实际模型核实。环境变量及实际 `.env` 的显式策略值优先于代码默认，升级时须同步旧策略覆盖值；当前本地已同步为新版审核与中立 Claim。现有进程在下次正常重启后加载，本次未自动重启。启用时同一 Run 的所有文本类型都走新闭环，缺失 adapter 的未知类型硬失败、不回退 legacy。审核输出预算、物理尝试上限 M（1..3）、一次有界纠正、coverage 阈值 0.8、最大开放 24/每轮新增 12/连续无变化 2 均在任务创建时冻结；新审计使用 `review_audit_v4`，与 V1–V3 并列、不做物理迁移。回滚配置只影响后续新 Run；在途新策略任务须由支持 V4 的兼容代码完成或按既有中断语义隔离，不能删键降级继续发布。回退不支持 V4 的二进制前停止领取新策略任务，保留新审计并保持只读。无数据库表/列迁移，本地离线通过不代表已部署或真实模型质量。
+
 ### T42 程序化来源定位与受限文字容错
 
 新版中立模型不再输出 `source_start/source_end`，程序在所属 target unit 内按 A（唯一精确）→ B（受控格式）→ C（受限文字编辑）分层定位并从冻结正文截取真实 `source_text`，再计算全文偏移与 hash。新版 Prompt/schema/payload 由单一契约选择入口按冻结策略选定，Judge 输入/Prompt/schema/options/判定与聚合逻辑不变，不新增来源核对模型调用。
@@ -526,3 +532,5 @@ T40：Claim专用返工是请求参数`claim_max_iterations`，默认1，显式0
 `CLAIM_EXTRACTION_SOURCE_LOCATING_MODE` 仅在**新建 neutral_estimate_v1 请求冻结时**读取，写入私有 `source_locating` 子契约（`None` 时序列化省略该键，复刻 `density_batching` 的兼容语义）。已有排队/运行/失败/完成任务继续原冻结快照，恢复不重冻、不回退为 exact_v1 或 legacy。规则表是版本化静态资产（`source_locating/rules_v1.json`），hash 随新 run 冻结；代码中的 Prompt/schema/规则资产 hash 与冻结值不一致即拒绝执行（`rules_drift`）。
 
 关闭容错：把新请求模式设为 `exact_v1`，仍输出无偏移 v2，只关闭 B/C；旧 v2 tolerant 任务继续冻结规则。回滚代码前停止接收新任务、排空或按既有策略终止新任务，并保留能读取 v2 输出与新子契约的兼容 reader；不删字段、不重算旧 hash、不改写历史记录。本任务无数据库表/列迁移，历史 `policy_json`/`state_json` 与各 hash 原样保留。
+
+新版通用审核与讲义专用 issue 策略互斥：启用 `resource_issue_v1` 时设 `LECTURE_REVIEW_STRATEGY=legacy_content_v2`，关闭旧专用循环，由通用新审核接管讲义；本地已同步。其他部署显式设置的 `lecture_issue_v1/v2` 也须调整。若回退此前讲义 V2 行为，须同时设 `RESOURCE_REVIEW_STRATEGY=compat` 与 `LECTURE_REVIEW_STRATEGY=lecture_issue_v2`，并保留原讲义窗口。

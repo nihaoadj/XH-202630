@@ -15,6 +15,12 @@ from app.models.learning_documents.schemas import LearningResource
 from app.models.shared.agent_contracts import ResourceSpec, build_trace_item, start_step
 from app.models.shared.persistence import PersistedEvidenceSnapshot, canonical_hash
 from app.models.shared.workflow import StepStatus
+from app.models.reviews.revision_inputs import ClaimReviewRevisionInput, ResourceReviewRevisionInput
+from app.agents.resource_workflows.learning_documents.revision_inputs import (
+    is_revision_input_envelope,
+    pack_revision_input,
+    unpack_revision_input,
+)
 
 
 def _json_model(model, value):
@@ -29,6 +35,41 @@ def _remap(value: Any, mapping: dict[str, str]) -> Any:
     if isinstance(value, dict):
         return {key: _remap(item, mapping) for key, item in value.items()}
     return value
+
+
+def _remap_revision_input_envelope(envelope: dict, *, mapping: dict[str, str], new_spec_id: str) -> dict:
+    """Rebase only identifier fields inside a private revision-input envelope.
+
+    Evidence ids and the spec id are remapped to the current run; claim text,
+    source text, Judge reasons, offsets and the parent resource identity stay
+    bound to the source, so a generic string replace never rewrites the actual
+    content a worker is asked to preserve.
+    """
+    model = unpack_revision_input(envelope)
+    if isinstance(model, ClaimReviewRevisionInput):
+        updated = model.model_copy(update={
+            "resource_spec_id": new_spec_id,
+            "evidence": [
+                item.model_copy(update={"evidence_id": mapping.get(item.evidence_id, item.evidence_id)})
+                for item in model.evidence
+            ],
+            "problems": [
+                item.model_copy(update={
+                    "evidence_ids": [mapping.get(ident, ident) for ident in item.evidence_ids],
+                })
+                for item in model.problems
+            ],
+        })
+    elif isinstance(model, ResourceReviewRevisionInput):
+        updated = model.model_copy(update={
+            "resource_spec_id": new_spec_id,
+            "issues": _remap(model.issues, mapping),
+            "closed_issues": _remap(model.closed_issues, mapping),
+            "feedback": _remap(model.feedback, mapping),
+        })
+    else:  # pragma: no cover - unpack_revision_input only yields the two types
+        raise ValueError("unknown revision input kind")
+    return pack_revision_input(updated)
 
 
 def _project_allocation(allocation, selected, mapping, step_id):
@@ -130,7 +171,19 @@ def reuse_resource_context_node(state: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(context["diagnosis"], dict) or not isinstance(context["learning_plan"], dict):
             raise ValueError("invalid frozen upstream output")
         constraints = dict(state.get("constraints") or {})
-        constraints["revision_feedback"] = _remap(context.get("revision_feedback") or {}, mapping)
+        revision_feedback = context.get("revision_feedback") or {}
+        if is_revision_input_envelope(revision_feedback):
+            # A typed generation revision input is carried in the legacy slot as
+            # a versioned, kind-tagged envelope. Rebase its identifiers and hand
+            # it to the first retry worker via the private spec→envelope map.
+            constraints["generation_revision_inputs"] = {
+                cloned_spec.resource_spec_id: _remap_revision_input_envelope(
+                    revision_feedback, mapping=mapping, new_spec_id=cloned_spec.resource_spec_id,
+                )
+            }
+            constraints.pop("revision_feedback", None)
+        else:
+            constraints["revision_feedback"] = _remap(revision_feedback, mapping)
         result = {
             "diagnosis": context["diagnosis"], "learning_plan": context["learning_plan"],
             "retrieved_evidence": evidence, "resource_specs": [cloned_spec.model_dump(mode="json")],

@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ResourceRepresentation(str, Enum):
@@ -57,9 +57,65 @@ class RunResourceProgressSummary(BaseModel):
     items: List[ResourceExecutionProgress] = Field(default_factory=list)
 
 
+class PublishCompleteness(str, Enum):
+    """How completely the derived publication facts cover the requested run."""
+
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    UNAVAILABLE = "unavailable"
+
+
+class PublishIncompleteReason(str, Enum):
+    """Controlled reasons why a publication summary is not complete."""
+
+    REQUEST_MISSING = "request_missing"
+    SPEC_REQUEST_MISMATCH = "spec_request_mismatch"
+    LOGICAL_IDENTITY_MISSING = "logical_identity_missing"
+    RESOURCE_REFERENCE_MISSING = "resource_reference_missing"
+    UNSUPPORTED_REPRESENTATION = "unsupported_representation"
+    REPOSITORY_UNAVAILABLE = "repository_unavailable"
+    LINEAGE_CONFLICT = "lineage_conflict"
+
+
+class RunPublishSummary(BaseModel):
+    """Read-only publication facts for one run, derived from persisted state.
+
+    Counters are logical resources, not executions or versions.  ``None`` means
+    "cannot be confirmed", never zero; ``completeness`` describes the data, not
+    the job lifecycle state.
+    """
+
+    schema_version: Literal["1.0"] = "1.0"
+    total: Optional[int] = Field(default=None, ge=0)
+    published: Optional[int] = Field(default=None, ge=0)
+    unpublished: Optional[int] = Field(default=None, ge=0)
+    pending_review: Optional[int] = Field(default=None, ge=0)
+    completeness: PublishCompleteness = PublishCompleteness.UNAVAILABLE
+    incomplete_reasons: List[PublishIncompleteReason] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_complete_counters(self) -> "RunPublishSummary":
+        if self.completeness is not PublishCompleteness.COMPLETE:
+            return self
+        total, published = self.total, self.published
+        unpublished, pending = self.unpublished, self.pending_review
+        if total is None or published is None or unpublished is None or pending is None:
+            raise ValueError("complete publish summary requires every counter")
+        if published + unpublished != total:
+            raise ValueError("complete publish summary requires published + unpublished == total")
+        if not 0 <= pending <= unpublished:
+            raise ValueError("pending_review must be a subset of unpublished")
+        if self.incomplete_reasons:
+            raise ValueError("complete publish summary cannot carry incomplete reasons")
+        return self
+
+
 __all__ = [
     "ResourceRepresentation",
     "ResourceExecutionState",
     "ResourceExecutionProgress",
     "RunResourceProgressSummary",
+    "PublishCompleteness",
+    "PublishIncompleteReason",
+    "RunPublishSummary",
 ]

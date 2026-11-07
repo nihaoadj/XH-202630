@@ -286,6 +286,10 @@ GenerateRequest 请求校验与类型规范化
 
 Claim finalizer 保留完整通过、硬阻断、待用户决策和显式 partial 降级的区别：无证据事实满足阈值时可等待用户决定；`CLAIM_PARTIAL_PUBLISH` 仅控制符合条件的审核不完整资源，保留 `incomplete` 指标。默认配置与模板差异见 [部署说明](deployment.md)，不能把这些发布例外表述为完整 Claim 审核通过。
 
+自动终态判定集中在一个纯函数：`agents/shared/policies.py::resolve_publication(PublicationInputs) -> PublicationDecision`。它只接收本次执行原本适用的显式输入（普通审核决定与回退状态、生成锁定、strict 降级标志、Claim 是否启用/eligible/failed/problem、指标状态与事实计数、用户决定开关与阈值、partial-publish 开关），不读全局配置、不查库、不调用模型、不写事件；`workflow.py::decide_node` 只负责取数、调用与按原顺序应用结果（`published_at`、`review_ids`、执行状态和 Run 聚合仍在节点内）。`May_publish()` 保留为 legacy 独立谓词与旧测试契约，不再是生产自动终态入口；生产判定没有 `is_leaf` 入参，叶版本筛选属评测侧职责。
+
+发布事实读取是独立的只读聚合器：`services/learning_documents/publication_summary.py` 的 `aggregate_publication_summary()` 是纯函数，`load_publication_summary()` 只补读调用方未提供的集合（`list_specs_by_run`/`list_executions_by_run`/`list_by_run`，每个 run 每个集合最多一次），不持有跨请求状态。`GenerationJobService._with_resource_progress()` 复用已读 executions，`RunQueryService._with_publication_summary()` 复用 timeline 已读 resources；两者共用同一个 DTO `RunPublishSummary`（`models/generation/progress.py`），因此 Job 列表/详情、Run summary 与 timeline 的计数口径一致。聚合以 `(run_id, resource_spec_id)` 为逻辑键，分母来自冻结 spec（spec 未建齐时仅在请求唯一确定集合时补齐），Execution 识别失败无产物，资源确认可读正文；父子 Run 隔离，非法关联与循环 parent 链标记为不完整而不是合并。该路径只读、零写入，也不重算发布许可。
+
 ### 4.2.1 当前资源生产流程
 
 ![当前资源生产工作流](assets/资源生产工作流图.svg)
@@ -714,3 +718,26 @@ T37 2026-11-05修复：共享ExtractionResult载体最多128条；策略级容�
 `models/reviews/lecture_review_v2.py` 定义 V2 策略、输出、观察与账本；`reviewing/lecture_contract_v2.py` 只从 targets 派生覆盖率，并强制每个 missing 目标都有指向它的开放覆盖问题、每个非 pass 语义维度都有同维度阻断问题（反之亦然）。`reviewing/lecture_ledger_v2.py` 在观察中保存程序计算出的 coverage_rate，模型不再填写总体覆盖结论。`reviewing/lecture_correction.py` 只对白名单内的自相矛盾发起一次业务纠正，第二次请求 `max_attempts=1`、关闭 schema repair；`reviewing/lecture_guard.py` 复用已提交的 review step 记录，阻止在旧 running/failed 审核步骤上重新发起调用。V2 使用 `review_audit_v3` 私有命名空间承载 v2 策略、账本与纠正记录，首次无效结果作为受控附件计入同一 1 MiB envelope；公共 trace/DTO 仍只保留摘要。V1 与 legacy 的记录、hash、Prompt 与恢复路径不变。
 
 T39 执行权校验：带 epoch 的 Worker 在调用模型前通过审计仓储核对 generation_jobs 的 claim_epoch、claim_owner、running 状态和任务租约；AgentRun.row_version 只表示记录修改版本，不能与领取轮次比较。同步执行仍核对 run owner/lease，提交阶段原有 fencing 保留。没有可验证的 dispatch 账本时，带 epoch 的调用失败关闭。
+
+### T44 文本文档普通审核通用化
+
+验收修复续作：新任务执行信封为 `resource_review_contract_version=1.1`，独立冻结 `resource_review_identity`（`role=reviewer`、实际 `model_name`）及 hash；内部 V1 policy 的 JSON/hash 不重写。历史 1.0 保留读取，不推断或补写模型身份，不继续发起审核调用。复审携带已绑定的完整父版正文/结构包，旧位置在父版索引验证，当前位置在当前版索引验证。程序硬门同键持续失败复用旧 issue ID；题卷旧问题的 `still_open`/`reopen` 同样参与当前 findings 的唯一关联。清单比较投影排除自引用包 hash，完整产物 hash 仍覆盖原包。
+
+发布之前无条件重建私有审计链（包含空引用检查），逐观察执行程序门和核销校验，再比较派生观察与账本；通过后才写发布产物。恢复不会把 hash 自洽但违反核销规则的 JSON 当作通过。
+
+`models/reviews/resource_review.py` 定义通用契约（binding、issue、ledger、两类 observation 与稳定 `model_issue_id`/`program_issue_id`）；`models/reviews/resource_review_policy.py` 定义冻结策略、六类 adapter 注册表与版本映射（`resource-registry-v1`）。`reviewing/resource_issues/` 持有唯一引擎 `review_resource_v1`、程序硬门、校验、派生决定、账本与定向返工；六类显式 adapter（lecture/practice/assessment/case_study/checklist/correction_package）实现 `build_material`/`build_location_index`/`validate_findings`/`project_public_summary`，不直接调用模型或访问仓储。
+
+双 hash 分离「完整性绑定」（`text_exact_hash`/`structured_payload_exact_hash`/`artifact_exact_hash`）与「无变化比较」（`comparison_hash`），机械 ID 归一化后的无变化禁止核销为 fixed。程序硬门 `run_program_gate` 失败时零语义调用并产出 `ProgramGateObservation`，通过时门结果折叠进 `ModelReviewObservation`，二者共用同一 V4 事务/checkpoint。`services/generation/resource_review_policy.py` 在用例创建时冻结策略；`reviewer_agent.py` 对携带 `resource_review_policy` 的任务优先走通用分派。默认 `compat` 保留旧 lecture/assessment/practice 路径，不做物理迁移。
+
+### T46 两类审核修订输入分离与 Claim 定向修订
+
+生成端修订输入与复审状态分开。每个资源 worker 的一次生成只获得当前返工来源的一类私有输入，通过 `ResourceGenerationContext` 上的两个可选互斥字段传递：
+
+- `resource_review_revision`：普通资源审核后的生成修订要求；适配通用资源工单（`resource_issue_v1`）或显式 compat 的普通反馈。
+- `claim_review_revision`：Claim 审核后的定向生成修订要求；逐条携带错误 `claim_text`、对应 `source_text`、正文定位、Judge 判定与理由，以及可关联的冻结 Evidence（`not_in_evidence` 的 Judge 引用为空）。
+
+首次生成两者皆空。`state.resource_revision`、`state.lecture_revision` 及持久 V1—V4 审核记录继续保留原键与父版本/复审语义，不作为新生成 Prompt 的混合入口；旧专用讲义循环（`lecture_review_policy`）的生成仍沿用历史 `lecture_revision` 约束，不被折入 typed 输入。
+
+私有输入类型在 `models/reviews/revision_inputs.py`（纯 Pydantic，不依赖 Service/工作流/DB），纯构造与 scope 选择在 `agents/resource_workflows/learning_documents/revision_inputs.py`（无模型/SQL/容器；Claim 用无损 `scan_units` 分组、同段共享上下文、跨段各自成组）。六类资源 Agent 复用 `agents/resource_agents/revision_prompts.py` 的两类说明与统一拼装，保留各自 Markdown/结构化输出合同。
+
+同次图调用内通过私有内存 `constraints["generation_revision_inputs"]` 携带带版本的 spec→封套映射，`generator._context` 只取当前 spec 项并赋给对应字段；该映射不入 checkpoint 白名单、不跨进程恢复。单资源 retry 通过 `revision_feedback` 槽装载带 `schema_version="revision-input-v1"` 的封套，导入节点只重映射 Evidence ID 与 spec ID，不改 `claim_text`/`source_text`/`reason`。上一版完整正文只在输入内保留一份，修订原则为最小必要修改、证据不足优先收缩、必要时删除、不补造事实。

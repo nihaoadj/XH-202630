@@ -28,6 +28,8 @@ from app.models.shared.agent_contracts import (
 )
 from app.models.learning_documents.schemas import LearningResource
 from app.models.shared.workflow import ResourceStatus, StepStatus
+from app.models.reviews.revision_inputs import ClaimReviewRevisionInput, ResourceReviewRevisionInput
+from app.agents.resource_workflows.learning_documents.revision_inputs import unpack_revision_input
 from app.db.learning_documents.models import ResourceSpecRecord
 
 
@@ -88,29 +90,65 @@ def _context(
 ) -> ResourceGenerationContext:
     learner = node_input.learner
     constraints = dict(node_input.constraints)
-    if spec is not None and isinstance(constraints.get("revision_feedback"), dict):
-        feedback = dict(constraints["revision_feedback"])
-        feedback["assessment_findings"] = [
-            dict(item) for item in feedback.get("assessment_findings", [])
-            if spec.resource_type == "分阶测试题"
-            and item.get("resource_spec_id") == spec.resource_spec_id
-            and (previous is None or item.get("resource_id") == previous.resource_id)
-        ]
-        constraints["revision_feedback"] = feedback
-    # A revision must be able to preserve text that the reviewer did not ask
-    # to change.  Keep the previous artifact scoped to the resource worker and
-    # inject it only when a prior version exists (never on first generation).
-    if previous is not None and (node_input.generation_attempt > 1 or state.get("resource_retry_context")):
-        constraints["previous_version_content"] = previous.content_text or ""
-    if spec is not None and spec.resource_type == "讲义" and state.get("lecture_review_policy"):
-        revision = (state.get("lecture_revision") or {}).get(spec.resource_spec_id)
-        if not (revision or {}).get("claim_only"):
-            constraints.pop("revision_feedback", None)
-            constraints.pop("previous_version_content", None)
-            if revision:
-                if previous is None or revision["parent_resource_id"] != previous.resource_id:
-                    raise contract_error()
-                constraints["lecture_revision"] = revision
+    claim_revision = None
+    resource_review_revision = None
+    # The private spec→envelope map is server-built and never forwarded whole
+    # to a single worker. Pick only this spec's entry; a fresh first generation
+    # and any spec without an entry keep both revision inputs empty.
+    generation_revision_inputs = constraints.get("generation_revision_inputs")
+    if spec is not None and isinstance(generation_revision_inputs, dict):
+        entry = generation_revision_inputs.get(spec.resource_spec_id)
+        if entry is not None:
+            revision_input = unpack_revision_input(entry)
+            if isinstance(revision_input, ClaimReviewRevisionInput):
+                claim_revision = revision_input
+            elif isinstance(revision_input, ResourceReviewRevisionInput):
+                resource_review_revision = revision_input
+        constraints.pop("generation_revision_inputs", None)
+
+    if claim_revision is not None or resource_review_revision is not None:
+        # A worker receiving a typed generation revision input must not also
+        # receive the legacy mixed fields; the parent text and structured
+        # payload already travel inside the input itself.
+        constraints.pop("revision_feedback", None)
+        constraints.pop("previous_version_content", None)
+        constraints.pop("lecture_revision", None)
+        constraints.pop("resource_revision", None)
+    else:
+        # Legacy / historical revision inputs (no new projection for this spec).
+        if spec is not None and isinstance(constraints.get("revision_feedback"), dict):
+            feedback = dict(constraints["revision_feedback"])
+            feedback["assessment_findings"] = [
+                dict(item) for item in feedback.get("assessment_findings", [])
+                if spec.resource_type == "分阶测试题"
+                and item.get("resource_spec_id") == spec.resource_spec_id
+                and (previous is None or item.get("resource_id") == previous.resource_id)
+            ]
+            constraints["revision_feedback"] = feedback
+        # A revision must be able to preserve text that the reviewer did not ask
+        # to change.  Keep the previous artifact scoped to the resource worker
+        # and inject it only when a prior version exists (never on first
+        # generation).
+        if previous is not None and (node_input.generation_attempt > 1 or state.get("resource_retry_context")):
+            constraints["previous_version_content"] = previous.content_text or ""
+        if spec is not None and spec.resource_type == "讲义" and state.get("lecture_review_policy"):
+            revision = (state.get("lecture_revision") or {}).get(spec.resource_spec_id)
+            if not (revision or {}).get("claim_only"):
+                constraints.pop("revision_feedback", None)
+                constraints.pop("previous_version_content", None)
+                if revision:
+                    if previous is None or revision["parent_resource_id"] != previous.resource_id:
+                        raise contract_error()
+                    constraints["lecture_revision"] = revision
+        if spec is not None and state.get("resource_review_policy"):
+            revision = (state.get("resource_revision") or {}).get(spec.resource_spec_id)
+            if not (revision or {}).get("claim_only"):
+                constraints.pop("revision_feedback", None)
+                constraints.pop("previous_version_content", None)
+                if revision:
+                    if previous is None or revision.get("parent_resource_id") != previous.resource_id:
+                        raise contract_error()
+                    constraints["resource_revision"] = revision
     return ResourceGenerationContext(
         run_id=node_input.run_id,
         batch_id=node_input.batch_id,
@@ -129,6 +167,8 @@ def _context(
         constraints=constraints,
         generation_attempt=node_input.generation_attempt,
         workflow_deadline_at=state.get("workflow_deadline_at"),
+        resource_review_revision=resource_review_revision,
+        claim_review_revision=claim_revision,
     )
 
 
@@ -285,7 +325,9 @@ def generate_node(
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
     active_spec_ids = {spec.resource_spec_id for spec in specs if spec.resource_type in active_types
         and (not state.get("lecture_review_policy") or spec.resource_type != "讲义" or not (node_input.revision_count or node_input.claim_revision_count)
-             or spec.resource_spec_id in (state.get("lecture_revision") or {}))}
+             or spec.resource_spec_id in (state.get("lecture_revision") or {}))
+        and (not state.get("resource_review_policy") or not (node_input.revision_count or node_input.claim_revision_count)
+             or spec.resource_spec_id in (state.get("resource_revision") or {}))}
     step_context = start_step(state, attempt=node_input.generation_attempt)
     previous = _previous(node_input.generated_resources)
     source = state.get("regeneration_source")

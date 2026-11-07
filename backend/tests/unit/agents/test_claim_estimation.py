@@ -129,7 +129,7 @@ def test_offline_preflight_reports_candidate_and_configured_mode_without_assets(
     monkeypatch.setattr('sys.argv',['claim_counting_profile.py'])
     assert cli.main()==0
     result=json.loads(capsys.readouterr().out)
-    assert result['configured_strategy']=='legacy_v3' and result['strategy']==ESTIMATE
+    assert result['configured_strategy']==ESTIMATE and result['strategy']==ESTIMATE
     assert not result['live_executed'] and result['max_attempts']==24
 
 

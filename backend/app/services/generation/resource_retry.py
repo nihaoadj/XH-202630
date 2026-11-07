@@ -4,19 +4,77 @@ from __future__ import annotations
 import json
 
 from app.services.generation.lecture_policy import resolve_lecture_dispatch
+from app.services.generation.resource_review_policy import resolve_resource_review_dispatch
 from app.config import get_settings
 from app.core.retrieval.knowledge_ids import query_hash
 from app.core.security.errors import ApplicationError, ErrorCode
-from app.models.generation.dispatch import TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION
+from app.models.generation.dispatch import (
+    ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION,
+    ESTIMATE_TEXT_WORKFLOW_VERSION,
+    RESOURCE_RETRY_WORKFLOW_VERSION,
+    TEXT_WORKFLOW_VERSION,
+)
 from app.models.generation.resource_retry import ResourceRetryContext
 from app.models.knowledge.knowledge import EvidenceAllocation, RESOURCE_AWARE_STRATEGY
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
 from app.models.shared.agent_contracts import ResourceSpec
 from app.models.shared.persistence import WorkflowCheckpoint, canonical_hash
+from app.agents.resource_workflows.learning_documents.claim_extraction.budget import snapshot_fields
+from app.models.reviews.claim_extraction import policy_from_input
+from app.agents.resource_workflows.learning_documents.revision_inputs import (
+    build_claim_review_revision_input,
+    build_resource_review_revision_input,
+    pack_revision_input,
+    scope_ordinary_feedback,
+)
 
 
 def retry_conflict(detail="原任务冻结上下文不完整，无法从资源生成处重试；请明确选择批次完整重新生成"):
     return ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, public_message=detail, status_code=409)
+
+
+def _retry_revision_input(*, generation, run_id, resource, spec_id, spec, feedback, evidence):
+    """Build the single typed generation revision input for one retry (T46).
+
+    Ordinary review failure reasons take precedence: they are adapted into a
+    ``ResourceReviewRevisionInput`` and packed into the versioned, kind-tagged
+    envelope that travels inside the legacy ``revision_feedback`` slot. Only
+    when the parent's ordinary review passed do we fall back to the Claim-audit
+    revision, built from the persisted Claims/Judgements and the frozen
+    Evidence. A pure failure rebuild without any review keeps the legacy
+    feedback dictionary, and a missing parent can never forge either input.
+    """
+    if resource is None:
+        return feedback
+    feedback = scope_ordinary_feedback(feedback, spec_id, resource)
+    has_ordinary = bool(feedback.get("issues") or feedback.get("revision_instructions"))
+    if has_ordinary:
+        model = build_resource_review_revision_input(
+            resource_spec_id=spec_id,
+            resource=resource,
+            targets=tuple(spec.knowledge_points),
+            feedback=feedback,
+        )
+        return pack_revision_input(model)
+    claim_repo = getattr(generation, "claim_repo", None)
+    if claim_repo is None:
+        return feedback
+    try:
+        claims = claim_repo.list_claims_by_run(run_id)
+        judgements = claim_repo.list_judgements_by_run(run_id)
+    except (AttributeError, TypeError):
+        return feedback
+    model = build_claim_review_revision_input(
+        resource_spec_id=spec_id,
+        resource=resource,
+        targets=tuple(spec.knowledge_points),
+        claims=claims,
+        judgements=judgements,
+        evidence=evidence,
+    )
+    if model.problems:
+        return pack_revision_input(model)
+    return feedback
 
 
 def prepare_resource_retry(service, learner, run_id, spec_id, representation):
@@ -44,11 +102,27 @@ def prepare_resource_retry(service, learner, run_id, spec_id, representation):
     try:
         dispatch = service.job_repo.get_dispatch(run_id) or {}
         source_snapshot = dispatch.get("dispatch_snapshot") or {}
-        source_version, lecture = resolve_lecture_dispatch(source_snapshot)
-        if source_version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION}:
+        resource = {}
+        if source_snapshot.get("workflow_version") == "learning_documents.resource_issue.v1":
+            source_version, resource = resolve_resource_review_dispatch(source_snapshot)
+            lecture = {}
+        else:
+            source_version, lecture = resolve_lecture_dispatch(source_snapshot)
+        if source_version not in {
+            TEXT_WORKFLOW_VERSION,
+            RESOURCE_RETRY_WORKFLOW_VERSION,
+            ESTIMATE_TEXT_WORKFLOW_VERSION,
+            ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION,
+        }:
             raise ValueError("unsupported source dispatch version")
         frozen_learner = LearnerProfile.model_validate(source_snapshot["learner"])
         original = GenerateRequest.model_validate(source.request_payload)
+        policy = policy_from_input({"include_claim_check": original.include_claim_check,
+                                    **snapshot_fields(source_snapshot)})
+        if (source_version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None):
+            raise ValueError("frozen extraction dispatch mismatch")
+        if (source_version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (source_snapshot.get("resource_retry_context") is not None):
+            raise ValueError("retry dispatch version mismatch")
         if (frozen_learner.learner_id != learner.learner_id
                 or original.learner_id != learner.learner_id
                 or (frozen_learner.user_id and frozen_learner.user_id != learner.user_id)):
@@ -70,6 +144,16 @@ def prepare_resource_retry(service, learner, run_id, spec_id, representation):
             if len(created) != 1:
                 raise ValueError("source creation event missing")
             validate_lecture_authority(request_snapshot=creation, request_hash=run_record.request_hash,
+                created_event_request_hash=created[0].payload.get("request_hash"), dispatch=source_snapshot, checkpoint=projection)
+        if resource:
+            from app.agents.resource_workflows.learning_documents.reviewing.resource_authority import validate_resource_authority
+            creation = audit.get_run_creation_snapshot(run_id)
+            run_record = audit.get_run(run_id)
+            events = audit.list_events(run_id, after_sequence=0, limit=100)
+            created = [event for event in events if str(getattr(event.event_type, "value", event.event_type)).lower() == "run_created"]
+            if len(created) != 1:
+                raise ValueError("source creation event missing")
+            validate_resource_authority(request_snapshot=creation, request_hash=run_record.request_hash,
                 created_event_request_hash=created[0].payload.get("request_hash"), dispatch=source_snapshot, checkpoint=projection)
         if (projection.get("run_id") != run_id or projection.get("learner_id") != learner.learner_id
                 or projection.get("knowledge_base_id") != source.knowledge_base_id):
@@ -134,6 +218,15 @@ def prepare_resource_retry(service, learner, run_id, spec_id, representation):
             feedback["suggestion"] = aggregate["suggestion"]
         if execution.error_code:
             feedback["execution_error_code"] = execution.error_code
+        revision_feedback = _retry_revision_input(
+            generation=generation,
+            run_id=run_id,
+            resource=parent,
+            spec_id=spec_id,
+            spec=spec,
+            feedback=feedback,
+            evidence=[by_id[ident] for ident in selected_ids],
+        )
         constraints = {**original.constraints, "replacement_resource_types": [spec.resource_type],
                        "resource_retry_lineage": {"source_run_id": run_id, "source_spec_id": spec_id,
                                                   "source_checkpoint_hash": checkpoint.state_hash}}
@@ -151,7 +244,7 @@ def prepare_resource_retry(service, learner, run_id, spec_id, representation):
                    "evidence_allocation": allocation.model_dump(mode="json") if allocation else None,
                    "retrieval_strategy_version": strategy, "retrieval_config_hash": projection["retrieval_config_hash"],
                    "source_resource": parent.model_dump(mode="json") if parent else None,
-                   "revision_feedback": feedback}
+                   "revision_feedback": revision_feedback}
         context = ResourceRetryContext.from_snapshot({**payload, "context_hash": canonical_hash(payload)})
         if len(json.dumps(context.model_dump(mode="json"), ensure_ascii=False).encode()) > get_settings().workflow_checkpoint_max_bytes:
             raise ValueError("retry context exceeds checkpoint budget")

@@ -270,7 +270,11 @@ def test_sql_generation_service_persists_retry_evidence_claims_and_lineage(tmp_p
 
         graph = Capture()
         response = GenerationService(resources, graph, audit, claim_repo=claims).generate_with_run_id(
-            learner, request, run_id="new-run", resource_retry_context=context)
+            learner, request, run_id="new-run", resource_retry_context=context,
+            # These scripted agents and the source run use frozen legacy
+            # protocols, independently of the developer's current defaults.
+            claim_extraction_snapshot={}, lecture_review_snapshot={},
+            resource_review_snapshot={})
         assert response.workflow_status == "completed"
         generated = response.resources[0]
         assert resources.get(generated.resource_id).publication_status == "published"

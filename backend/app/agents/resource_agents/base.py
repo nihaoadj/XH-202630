@@ -19,6 +19,7 @@ from app.models.shared.agent_contracts import (
     ResourceSpec,
 )
 from app.models.shared.llm import LLMCallContext, LLMCallResult
+from app.agents.resource_agents.revision_prompts import attach_revision_fields
 
 
 ArtifactOutputT = TypeVar("ArtifactOutputT", bound=BaseModel)
@@ -95,8 +96,13 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         # The prior artifact is exposed in its own clearly delimited field;
         # do not duplicate a potentially large document inside constraints.
         prompt_constraints.pop("previous_version_content", None)
+        # Never forward the whole spec→input map to a single worker.
+        prompt_constraints.pop("generation_revision_inputs", None)
         lecture_revision = prompt_constraints.pop("lecture_revision", None)
         if lecture_revision:
+            prompt_constraints.pop("revision_feedback", None)
+        resource_revision = prompt_constraints.pop("resource_revision", None)
+        if resource_revision:
             prompt_constraints.pop("revision_feedback", None)
         payload = {
             "topic": context.topic,
@@ -120,6 +126,10 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
                 for item in evidence
             ],
         }
+        # A typed generation revision input supersedes the legacy mixed fields.
+        if context.claim_review_revision is not None or context.resource_review_revision is not None:
+            attach_revision_fields(payload, context)
+            return payload
         if lecture_revision:
             payload["lecture_revision"] = lecture_revision
             payload["revision_guidance"] = (
@@ -127,7 +137,14 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
                 "保留其余正确内容；不得改写验收条件、补造证据外细节或只加免责声明。"
                 "上次无变化时必须核对未满足条件与位置，不能只声称已修改。"
             )
-        revision_feedback = None if lecture_revision else context.constraints.get("revision_feedback")
+        if resource_revision:
+            payload["resource_revision"] = resource_revision
+            payload["revision_guidance"] = (
+                "按稳定问题ID、原验收条件和冻结证据定向修改；逐问题核销并做全文回归。"
+                "保留其余正确内容；不得改写验收条件、补造证据外细节或只加免责声明。"
+                "上次无变化时必须核对未满足条件与位置，不能只声称已修改。"
+            )
+        revision_feedback = None if (lecture_revision or resource_revision) else context.constraints.get("revision_feedback")
         if revision_feedback:
             payload["revision_feedback"] = revision_feedback
             payload["previous_version_content"] = context.constraints.get(

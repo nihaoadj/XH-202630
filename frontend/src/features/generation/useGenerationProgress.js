@@ -5,6 +5,11 @@ import {
   applyRunSnapshot, createInitialTimelineState, hydrateWorkflowTimeline, reduceWorkflowEvent,
 } from '../../utils/workflowEventReducer.js'
 
+// Existing durable events only signal "facts changed"; every refresh re-queries
+// the persisted state, so duplicates, replays and out-of-order delivery cannot
+// inflate a counter.
+const PUBLICATION_REFRESH_EVENTS = new Set(['resource_published', 'resource_publication_decided'])
+
 /** Track the selected text-generation run; the page owns shared state and cleanup. */
 export function useGenerationProgress({
   selectedRunId,
@@ -109,7 +114,7 @@ export function useGenerationProgress({
       onWorkflowEvent: (event) => {
         if (generation !== streamGeneration) return
         timelineState.value = reduceWorkflowEvent(timelineState.value, event)
-        if (event.event_type === 'resource_published') queuePublishedResourceRefresh(runId)
+        if (PUBLICATION_REFRESH_EVENTS.has(event.event_type)) queuePublishedResourceRefresh(runId)
       },
       onTerminal: async () => {
         if (generation !== streamGeneration) return

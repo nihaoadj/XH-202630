@@ -22,6 +22,7 @@ from app.agents.resource_workflows.learning_documents.claim_review_agent import 
 )
 from app.agents.resource_workflows.learning_documents.state import AgentState
 from app.agents.shared.retrieval import retrieve_node
+from app.agents.shared.evidence_scope import evidence_for_resource
 from app.core.security.errors import ErrorCode
 from app.core.retrieval.retriever import (
     EvidenceRetriever,
@@ -40,10 +41,16 @@ from app.models.shared.workflow import (
     StepStatus,
     WorkflowStatus,
 )
-from app.models.reviews.claims import ClaimMetricStatus
+from app.models.reviews.claims import ClaimJudgement, ClaimMetricStatus, ClaimRecord
+from app.agents.resource_workflows.learning_documents.revision_inputs import (
+    build_claim_review_revision_input,
+    build_resource_review_revision_input,
+    pack_revision_input,
+)
 from app.agents.shared.policies import (
+    PublicationInputs,
     locked_human_review_resource_ids,
-    may_publish,
+    resolve_publication,
     target_resource_types,
 )
 from app.models.knowledge.knowledge import RetrievalStatus
@@ -304,6 +311,95 @@ def decide_next(state: AgentState) -> str:
     return "generate" if revision_count < state.get("max_iterations", 2) else "decide"
 
 
+def _generation_revision_inputs(
+    state: AgentState,
+    *,
+    claim_only: bool,
+    targets: set[str],
+    lecture_revision: dict,
+    resource_revision: dict,
+    review_feedback: dict,
+) -> dict[str, dict]:
+    """Build the private spec→envelope map for the next generation round.
+
+    Claim revisions produce one ``claim`` input per spec that has bad factual
+    Claims bound to its parent version; ordinary revisions produce one
+    ``ordinary`` input from the active review engine's work order, or from the
+    scoped compat feedback when no engine policy is present. The legacy
+    dedicated lecture loop is deliberately left out so its historical
+    ``lecture_revision`` constraint keeps working unchanged. Sibling specs and
+    empty projections are left out so a worker never receives a stale or
+    foreign instruction.
+    """
+    frozen_targets = {
+        item["resource_spec_id"]: item.get("knowledge_points", [])
+        for item in state.get("resource_specs", [])
+        if isinstance(item, dict)
+    }
+    result: dict[str, dict] = {}
+    if claim_only:
+        claims = [
+            ClaimRecord.model_validate(item)
+            for item in state.get("extracted_claims", [])
+            if isinstance(item, dict)
+        ]
+        judgements = [
+            ClaimJudgement.model_validate(item)
+            for item in state.get("claim_judgements", [])
+            if isinstance(item, dict)
+        ]
+        for resource in state.get("generated_resources", []):
+            if resource.resource_type not in targets or not resource.resource_spec_id:
+                continue
+            if not any(claim.resource_id == resource.resource_id
+                       and claim.resource_version == resource.version for claim in claims):
+                continue
+            model = build_claim_review_revision_input(
+                resource_spec_id=resource.resource_spec_id,
+                resource=resource,
+                targets=tuple(frozen_targets.get(resource.resource_spec_id, [])),
+                claims=claims,
+                judgements=judgements,
+                evidence=evidence_for_resource(state, resource),
+            )
+            if model.problems:
+                result[resource.resource_spec_id] = pack_revision_input(model)
+        return result
+
+    for resource in state.get("generated_resources", []):
+        if resource.resource_type not in targets or not resource.resource_spec_id:
+            continue
+        spec_id = resource.resource_spec_id
+        if state.get("resource_review_policy"):
+            # New generic resource engine: adapt the resource work order. A spec
+            # without a work order has nothing to revise in this round.
+            work_order = resource_revision.get(spec_id)
+            if work_order is None:
+                continue
+            model = build_resource_review_revision_input(
+                resource_spec_id=spec_id,
+                resource=resource,
+                targets=tuple(frozen_targets.get(spec_id, [])),
+                work_order=work_order,
+            )
+        elif state.get("lecture_review_policy"):
+            # Legacy dedicated lecture loop: keep the historical
+            # ``lecture_revision`` constraint as the generation entry.
+            # ``state.lecture_revision`` is not folded into the typed input and
+            # retains its parent-version / re-review semantics untouched.
+            continue
+        else:
+            # Explicit compat / generic reviewer: adapt the scoped feedback.
+            model = build_resource_review_revision_input(
+                resource_spec_id=spec_id,
+                resource=resource,
+                targets=tuple(frozen_targets.get(spec_id, [])),
+                feedback=review_feedback,
+            )
+        result[spec_id] = pack_revision_input(model)
+    return result
+
+
 def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, Any]:
     revision_count = state.get("revision_count", 0) + (0 if claim_only else 1)
     claim_revision_count = state.get("claim_revision_count", 0) + (1 if claim_only else 0)
@@ -375,13 +471,70 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
                 "closed_issues": [{"issue_id": i["issue"]["issue_id"], "acceptance": i["issue"]["acceptance"]} for i in ledger["issues"] if i["status"] == "closed"],
                 "targets": frozen_targets[resource.resource_spec_id], "unchanged": ledger["observations"][-1]["unchanged"],
                 "consecutive_unchanged": ledger["observations"][-1]["consecutive_unchanged"]}
+    resource_revision = {}
+    exact_resource_specs = set()
+    if state.get("resource_review_policy"):
+        from app.models.reviews.resource_review import ResourceLedgerV1
+        from app.models.reviews.resource_review_policy import RESOURCE_ADAPTER_TYPES
+        from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.revision import (
+            build_revision_work_order, failure_placeholder_work_order,
+        )
+        frozen_targets = {item["resource_spec_id"]: item["knowledge_points"] for item in state.get("resource_specs", [])}
+        for resource in state.get("generated_resources", []):
+            if resource.resource_type not in RESOURCE_ADAPTER_TYPES:
+                continue
+            result = state.get("resource_review_results", {}).get(resource.resource_id, {})
+            failed_generation = any(item.get("resource_id") == resource.resource_id and item.get("validation_status") == "failed"
+                for item in state.get("resource_executions", []))
+            if not claim_only and result.get("decision") != "revise" and not failed_generation:
+                continue
+            if claim_only and resource.resource_type not in targets:
+                continue
+            ledger_data = (state.get("resource_ledgers") or {}).get(resource.resource_spec_id)
+            ledger = ResourceLedgerV1.model_validate(ledger_data) if ledger_data else None
+            exact_resource_specs.add(resource.resource_spec_id)
+            if ledger is None:
+                resource_revision[resource.resource_spec_id] = failure_placeholder_work_order(
+                    resource_spec_id=resource.resource_spec_id, resource=resource,
+                    targets=tuple(frozen_targets[resource.resource_spec_id]),
+                    revision_kind="claim" if claim_only else "ordinary").as_dict()
+                continue
+            resource_revision[resource.resource_spec_id] = build_revision_work_order(
+                resource_spec_id=resource.resource_spec_id, resource=resource, previous=ledger,
+                revision_kind="claim" if claim_only else "ordinary",
+                targets=tuple(frozen_targets[resource.resource_spec_id])).as_dict()
     constraints = dict(state.get("constraints") or {})
     constraints["revision_feedback"] = review_feedback
+    # Build the private generation revision inputs before the old claims /
+    # judgements are cleared below; they are read from the frozen domain
+    # objects only and never survive into a later round unless rebuilt here.
+    generation_revision_inputs = _generation_revision_inputs(
+        state,
+        claim_only=claim_only,
+        targets=targets,
+        lecture_revision=lecture_revision,
+        resource_revision=resource_revision,
+        review_feedback=review_feedback,
+    )
+    if generation_revision_inputs:
+        constraints["generation_revision_inputs"] = generation_revision_inputs
+    else:
+        constraints.pop("generation_revision_inputs", None)
     resources = [
         resource.model_copy(
             update={"review_status": ResourceStatus.REVISION_REQUESTED.value}
         )
-        if resource.resource_type in targets and (not state.get("lecture_review_policy") or claim_only or resource.resource_type != "讲义" or resource.resource_spec_id in exact_lecture_specs)
+        if (
+            resource.resource_type in targets
+            and (
+                (not state.get("lecture_review_policy") and not state.get("resource_review_policy"))
+                or (
+                    state.get("lecture_review_policy")
+                    and (claim_only or resource.resource_type != "讲义" or resource.resource_spec_id in exact_lecture_specs)
+                )
+                or (state.get("resource_review_policy") and resource.resource_spec_id in exact_resource_specs)
+            )
+        )
         else resource
         for resource in state.get("generated_resources", [])
     ]
@@ -414,6 +567,7 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
         "claim_revision_count": claim_revision_count,
         "generation_attempt": generation_attempt,
         **({"lecture_revision": lecture_revision} if state.get("lecture_review_policy") else {}),
+        **({"resource_revision": resource_revision} if state.get("resource_review_policy") else {}),
         "current_node": "prepare_revision",
         "trace": [trace_item],
         "errors": [],
@@ -543,80 +697,35 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             ResourceStatus.HUMAN_REVIEW.value: "human_review",
             ResourceStatus.REVISION_REQUESTED.value: "revise",
         }.get(resource.review_status, decision.value))
-        if resource.resource_id in locked_resource_ids:
-            item_status = ResourceStatus.HUMAN_REVIEW
-        elif strict_with_degradation:
-            item_status = ResourceStatus.HUMAN_REVIEW
         metric = claim_metrics.get(canonical_id, {})
-        factual_total = int(metric.get("factual_claim_total", 0) or 0)
-        supported_total = int(metric.get("supported_claim_total", 0) or 0)
-        contradicted_total = int(metric.get("contradicted_claim_total", 0) or 0)
-        not_in_evidence_total = int(metric.get("not_in_evidence_claim_total", 0) or 0)
-        factual_pass_rate = (supported_total / factual_total) if factual_total else None
-        user_review_allowed = (
-            allow_claim_user_review
-            and item_decision == ReviewDecision.APPROVE.value
-            and canonical_id in claim_eligible_ids
-            and metric.get("metric_status") == ClaimMetricStatus.COMPLETE.value
-            and factual_pass_rate is not None
-            and factual_pass_rate >= claim_user_review_threshold
-            and contradicted_total == 0
-            and not_in_evidence_total > 0
-        )
-        partial_problem_allowed = (
-            allow_partial_claim_publish
-            and item_decision == ReviewDecision.APPROVE.value
-            and canonical_id in claim_eligible_ids
-            and metric.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value
-        )
-        if canonical_id in locked_resource_ids:
-            item_status = ResourceStatus.HUMAN_REVIEW
-        elif canonical_id in claim_problem_ids and not partial_problem_allowed and not user_review_allowed:
-            item_status = ResourceStatus.HUMAN_REVIEW
-        elif user_review_allowed:
-            item_status = ResourceStatus.HUMAN_REVIEW
-        else:
-            item_status = {
-                "approve": ResourceStatus.APPROVED,
-                "reject": ResourceStatus.REJECTED,
-                "human_review": ResourceStatus.HUMAN_REVIEW,
-                "revise": ResourceStatus.HUMAN_REVIEW,
-            }.get(item_decision, resource_status)
-        if (
-            state.get("include_claim_check", False)
-            and item_status == ResourceStatus.APPROVED
-        ):
-            claim_gate_passed = (
-                canonical_id in claim_eligible_ids
-                and canonical_id not in claim_failed_ids
-                and canonical_id not in claim_problem_ids
-                and metric.get("metric_status") in {
-                    ClaimMetricStatus.COMPLETE.value,
-                    ClaimMetricStatus.NOT_APPLICABLE.value,
-                }
-            )
-            if not claim_gate_passed:
-                partial_allowed = (
-                    allow_partial_claim_publish
-                    and canonical_id in claim_eligible_ids
-                    and item_decision == ReviewDecision.APPROVE.value
-                    and metric.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value
-                )
-                if not partial_allowed and not user_review_allowed:
-                    item_status = ResourceStatus.HUMAN_REVIEW
-        publish = item_status == ResourceStatus.APPROVED
-        claim_decision_pending = bool(user_review_allowed)
+        publication = resolve_publication(PublicationInputs(
+            item_decision=item_decision,
+            fallback_status=resource_status,
+            is_locked=canonical_id in locked_resource_ids,
+            strict_with_degradation=strict_with_degradation,
+            include_claim_check=bool(state.get("include_claim_check", False)),
+            is_claim_eligible=canonical_id in claim_eligible_ids,
+            claim_failed=canonical_id in claim_failed_ids,
+            has_claim_problem=canonical_id in claim_problem_ids,
+            claim_metric_status=metric.get("metric_status"),
+            factual_claim_total=int(metric.get("factual_claim_total", 0) or 0),
+            supported_claim_total=int(metric.get("supported_claim_total", 0) or 0),
+            contradicted_claim_total=int(metric.get("contradicted_claim_total", 0) or 0),
+            not_in_evidence_claim_total=int(
+                metric.get("not_in_evidence_claim_total", 0) or 0
+            ),
+            allow_partial_claim_publish=allow_partial_claim_publish,
+            claim_user_review_enabled=allow_claim_user_review,
+            claim_user_review_min_factual_pass_rate=claim_user_review_threshold,
+        ))
+        publish = publication.publish
+        claim_decision_pending = publication.claim_publish_decision_pending
         resources.append(resource.model_copy(update={
-            "review_status": item_status.value,
+            "review_status": publication.review_status.value,
             "publication_status": "published" if publish else "unpublished",
             "published_at": resource.published_at or now if publish else None,
-            "claim_degraded_publish": bool(
-                publish
-                and allow_partial_claim_publish
-                and claim_metrics.get(canonical_id, {}).get("metric_status")
-                == ClaimMetricStatus.INCOMPLETE.value
-            ),
-            "claim_factual_pass_rate": factual_pass_rate,
+            "claim_degraded_publish": publication.claim_degraded_publish,
+            "claim_factual_pass_rate": publication.factual_pass_rate,
             "claim_warning_publish": False,
             "claim_publish_decision_pending": claim_decision_pending,
             "claim_publish_decision": "pending" if claim_decision_pending else resource.claim_publish_decision,

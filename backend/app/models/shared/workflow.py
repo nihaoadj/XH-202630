@@ -148,6 +148,15 @@ class WorkflowState(TypedDict, total=False):
     lecture_ledgers: Dict[str, Any]
     lecture_revision: Dict[str, Any]
     lecture_stop_reasons: Dict[str, str]
+    resource_dispatch_snapshot: Dict[str, Any]
+    resource_review_contract_version: str
+    resource_review_policy: Dict[str, Any]
+    resource_review_policy_hash: str
+    resource_review_identity: Dict[str, Any]
+    resource_review_identity_hash: str
+    resource_ledgers: Dict[str, Any]
+    resource_revision: Dict[str, Any]
+    resource_stop_reasons: Dict[str, str]
     review_policy: Dict[str, Any] | None
     review_audit: Dict[str, Any] | None
     review_audit_refs: List[Dict[str, Any]]
@@ -235,6 +244,14 @@ class WorkflowStateSnapshot(BaseModel):
     lecture_ledgers: Dict[str, Any] = Field(default_factory=dict)
     lecture_revision: Dict[str, Any] = Field(default_factory=dict)
     lecture_stop_reasons: Dict[str, str] = Field(default_factory=dict)
+    resource_review_contract_version: str | None = None
+    resource_review_policy: Dict[str, Any] | None = None
+    resource_review_policy_hash: str | None = None
+    resource_review_identity: Dict[str, Any] | None = None
+    resource_review_identity_hash: str | None = None
+    resource_ledgers: Dict[str, Any] = Field(default_factory=dict)
+    resource_revision: Dict[str, Any] = Field(default_factory=dict)
+    resource_stop_reasons: Dict[str, str] = Field(default_factory=dict)
     review_policy: ReviewPolicySnapshotV1 | None = None
     review_audit: ReviewAuditRecordV1 | ReviewAuditRecordV2 | None = None
     review_audit_refs: List[Dict[str, Any]] = Field(default_factory=list)
@@ -316,6 +333,9 @@ class WorkflowStateSnapshot(BaseModel):
             payload["claim_extraction_policy"] = self.claim_extraction_policy.model_dump(mode="json")
         if self.lecture_review_contract_version is None:
             for key in ("lecture_review_contract_version", "lecture_review_policy", "lecture_review_policy_hash", "lecture_ledgers", "lecture_revision", "lecture_stop_reasons"):
+                payload.pop(key, None)
+        if self.resource_review_contract_version is None:
+            for key in ("resource_review_contract_version", "resource_review_policy", "resource_review_policy_hash", "resource_review_identity", "resource_review_identity_hash", "resource_ledgers", "resource_revision", "resource_stop_reasons"):
                 payload.pop(key, None)
         # LangGraph keeps these runtime values in-process; preserve typed models for
         # existing node code while normalizing public enum channels to strings.

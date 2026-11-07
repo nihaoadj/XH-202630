@@ -53,6 +53,53 @@ def start_run(s, claim, *, expired=False):
     s.audit.start_run(claim.run_id, occurred_at=now, lease_expires_at=lease)
 
 
+@pytest.mark.parametrize("mode", ["worker", "background"])
+@pytest.mark.parametrize("strategy", ["resource", "lecture", "compat"])
+def test_review_dispatch_reaches_only_its_own_authority(state, monkeypatch, mode, strategy):
+    from app.config import Settings
+    from app.db.generation.memory import MemoryGenerationJobRepository
+    from app.services.generation.lecture_policy import freeze_lecture_policy
+    from app.services.generation.resource_review_policy import freeze_resource_review_policy
+    from app.agents.resource_workflows.learning_documents.reviewing.lecture_authority import validate_lecture_authority
+    from app.agents.resource_workflows.learning_documents.reviewing.resource_authority import validate_resource_authority
+    settings = Settings(resource_review_strategy="resource_issue_v1" if strategy == "resource" else "compat",
+                        resource_review_context_tokens=129024, claim_extraction_strategy="legacy_v3",
+                        lecture_review_strategy="lecture_issue_v2" if strategy == "lecture" else "legacy_content_v2",
+                        lecture_review_context_tokens=129024)
+    monkeypatch.setattr("app.services.generation.jobs.get_settings", lambda: settings)
+    req = state.req.model_copy(update={"include_review": True, "include_claim_check": False})
+    seen = []
+
+    def generate(learner, request, **kwargs):
+        seen.append(kwargs)
+        lecture = kwargs["lecture_review_snapshot"]
+        resource = kwargs["resource_review_snapshot"]
+        assert bool(lecture) == (strategy == "lecture")
+        assert bool(resource) == (strategy == "resource")
+        snapshot = {**lecture, **resource}
+        shared = dict(request_snapshot=snapshot, request_hash=canonical_hash(snapshot),
+                      created_event_request_hash=canonical_hash(snapshot))
+        validate_lecture_authority(**shared, dispatch=kwargs["lecture_dispatch_snapshot"])
+        validate_resource_authority(**shared, dispatch=kwargs["resource_dispatch_snapshot"])
+        assert (kwargs["lecture_dispatch_snapshot"] is not None) == bool(lecture)
+        assert (kwargs["resource_dispatch_snapshot"] is not None) == bool(resource)
+        return SimpleNamespace(resources=[], workflow_status="completed")
+
+    generation = SimpleNamespace(generate_with_run_id=generate,
+        freeze_lecture_review=lambda request: freeze_lecture_policy(request, settings),
+        freeze_resource_review=lambda request: freeze_resource_review_policy(request, settings))
+    repo = state.repo if mode == "worker" else MemoryGenerationJobRepository()
+    service = GenerationJobService(repo, generation, dispatch_mode=mode)
+    job = service.create_job(state.learner, req)
+    if mode == "worker":
+        service.run_claim(repo.claim_next("worker", 60))
+    else:
+        repo._dispatch_metadata[job.run_id]["dispatch_snapshot"] = service._dispatch_snapshot(state.learner, req)
+        service.run_job(state.learner, req, run_id=job.run_id)
+    assert len(seen) == 1
+    assert repo.get(job.run_id).job_status == "completed"
+
+
 def test_atomic_claim_and_prestart_recovery(state):
     s = state
     job = s.service.create_job(s.learner, s.req)

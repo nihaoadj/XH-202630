@@ -8,6 +8,7 @@ from app.core.retrieval.knowledge_base import load_knowledge_base_manifest
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec, ReviewPracticeNodeBlockV2, ReviewPracticePackageV2
 from .base import BaseResourceGenerationAgent
+from .revision_prompts import attach_revision_fields
 
 REVIEW_PRACTICE_PROMPT = """你是 ReviewChecklistAgent。一次只能为一个能力节点生成主动回忆训练的严格 JSON。
 只使用输入的当前节点 Evidence 和允许知识点；不得使用常识补全、相邻节点或未冻结的前置知识。
@@ -127,7 +128,9 @@ class ReviewChecklistAgent(BaseResourceGenerationAgent[ReviewPracticeNodeBlockV2
                    "allowed_knowledge_points":[node_id,*points], "allowed_evidence_ids":evidence_ids,
                    "evidence":[item.model_dump(mode="json") for item in context.evidence if item.evidence_id in evidence_ids],
                    "difficulty":spec.difficulty}
-        if context.generation_attempt > 1:
+        if context.claim_review_revision is not None or context.resource_review_revision is not None:
+            attach_revision_fields(payload, context)
+        elif context.generation_attempt > 1:
             payload["revision_feedback"] = context.constraints.get("revision_feedback", {})
             payload["previous_version_content"] = context.constraints.get("previous_version_content", "")
             payload["revision_guidance"] = "这是一次审核返工；仅修改反馈指出的问题，保留上一版本其余正确内容。"

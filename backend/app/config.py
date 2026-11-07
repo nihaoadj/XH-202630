@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     # Per-resource Claim extraction target.  The model prompt and the
     # workflow's deterministic envelope check both consume this value.
     claim_max_claims_per_resource: int = Field(default=10, ge=1, le=20)
-    claim_extraction_strategy: Literal["legacy_v3", "neutral_batch_v1", "neutral_estimate_v1"] = "legacy_v3"
+    claim_extraction_strategy: Literal["legacy_v3", "neutral_batch_v1", "neutral_estimate_v1"] = "neutral_estimate_v1"
     # Deprecated environment inputs accepted but ignored by the estimate path.
     claim_extraction_context_limit: int = Field(default=1048576, gt=0, le=2**24)
     claim_estimate_ascii_weight: float = Field(default=0.3, gt=0, le=16, allow_inf_nan=False)
@@ -144,13 +144,13 @@ class Settings(BaseSettings):
     claim_extraction_attempt_timeout_seconds: float = Field(default=180, gt=0, le=180, allow_inf_nan=False)
     claim_extraction_max_request_seconds: float = Field(default=480, gt=0, le=3600, allow_inf_nan=False)
     # T37 density-aware packing. Frozen into each new estimate Run; changing
-    # these only affects Runs frozen afterwards. The global strategy default
-    # stays legacy_v3 and no existing bound (batch/resource/max_calls) moves.
+    # these only affects Runs frozen afterwards. No existing bound
+    # (batch/resource/max_calls) moves when selecting the estimate strategy.
     claim_extraction_density_enabled: bool = True
     claim_extraction_density_prior: float = Field(default=35.0, gt=0, allow_inf_nan=False)
     claim_extraction_risk_share: float = Field(default=0.9, gt=0, le=1, allow_inf_nan=False)
     # T42 programmatic source locating. Only affects NEW neutral_estimate_v1
-    # requests at freeze time; the global strategy default stays legacy_v3.
+    # requests at freeze time; historical policies are never upgraded in place.
     # exact_v1 = neutral-v2 prompt but only unique exact locating; tolerant_v1
     # additionally enables the bounded format (B) and edit (C) layers. None
     # (explicit, used by test fixtures) keeps the historical v1 prompt with no
@@ -167,6 +167,12 @@ class Settings(BaseSettings):
     lecture_review_context_tokens: int | None = Field(default=None, gt=0)
     assessment_review_strategy: Literal["two_stage_v1", "combined_v2"] = "two_stage_v1"
     assessment_review_context_tokens: int | None = Field(default=None, gt=0)
+    # T44 generic text-document review.  ``compat`` keeps the historical
+    # per-resource reviewers; ``resource_issue_v1`` routes every text resource
+    # through the one shared closed loop by default. Deployments must still
+    # supply the actual reviewer context window explicitly.
+    resource_review_strategy: Literal["compat", "resource_issue_v1"] = "resource_issue_v1"
+    resource_review_context_tokens: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def validate_assessment_review_window(self):
@@ -174,6 +180,8 @@ class Settings(BaseSettings):
             raise ValueError("LECTURE_REVIEW_CONTEXT_TOKENS is required for a versioned lecture strategy")
         if self.assessment_review_strategy == "combined_v2" and self.assessment_review_context_tokens is None:
             raise ValueError("ASSESSMENT_REVIEW_CONTEXT_TOKENS is required for combined_v2")
+        if self.resource_review_strategy == "resource_issue_v1" and self.resource_review_context_tokens is None:
+            raise ValueError("RESOURCE_REVIEW_CONTEXT_TOKENS is required for resource_issue_v1")
         return self
     # Claim extraction/judgement starts with a larger budget because the
     # audited resource text and evidence envelope can be substantial.

@@ -164,7 +164,7 @@ Claim 结果（按资源版本拆分）：v1 `c9e41c7b…` 73 条（factual 65�
 - `output/t41-live-acceptance/accounting-query-r2-expected-stages.json`
 - `output/t41-live-acceptance/business-summary-r2.json`
 
-计量库：`backend/data/llm_accounting.db`（按 run_id 查询）。修复离线证据：`docs/llm_accounting/live-fix-20261106.md`。
+计量库：`backend/data/llm_accounting.db`（按 run_id 查询）。修复离线证据：`docs/llm_accounting/live-fix-20261106.md`。真实测试编号归档：[E2](../evaluations/E2/report.md)（首次 FAIL）、[E3](../evaluations/E3/report.md)（修复后 PASS）。
 
 ## 8. 后续修复状态
 

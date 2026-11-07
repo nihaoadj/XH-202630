@@ -4,10 +4,20 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
+from app.config import Settings
 from app.agents.resource_workflows.learning_documents.workflow import build_workflow
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
 from app.models.shared.workflow import WorkflowStateSnapshot
 from app.services.generation.generation import build_workflow_state
+
+
+@pytest.fixture(autouse=True)
+def _freeze_legacy_claim_strategy(monkeypatch):
+    # This historical contract test was written for the legacy Claim policy.
+    # Freeze it so the T45 ``neutral_estimate_v1`` default (which requires a
+    # submission preflight) does not leak into the field-mapping assertions.
+    legacy = Settings(claim_extraction_strategy="legacy_v3", resource_review_strategy="compat")
+    monkeypatch.setattr("app.services.generation.generation.get_settings", lambda: legacy)
 
 
 def _learner() -> LearnerProfile:

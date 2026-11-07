@@ -178,6 +178,132 @@ class DurableWorkflowRunner:
             raise ValueError("lecture runtime ledger differs from durable audit")
         state["lecture_ledgers"] = ledgers
 
+    def _validate_resource_entry(self, state):
+        from app.services.generation.resource_review_policy import resource_review_fields
+        from app.agents.resource_workflows.learning_documents.reviewing.resource_authority import (
+            validate_resource_authority,
+        )
+        run_id = state.get("run_id")
+        run = self.repository.get_run(run_id) if run_id else None
+        if run is None:
+            if resource_review_fields(state):
+                raise ValueError("resource run authority missing")
+            return
+        if str(getattr(run.replay_completeness, "value", run.replay_completeness)) == "legacy_partial":
+            raise ValueError("legacy partial run is read-only; execution authority unavailable")
+        snapshot = self.repository.get_run_creation_snapshot(run_id)
+        frozen = resource_review_fields(snapshot)
+        if frozen != resource_review_fields(state):
+            raise ValueError("resource runtime differs from run creation snapshot")
+        events = self.repository.list_events(run_id, after_sequence=0, limit=100)
+        created = [event for event in events if str(getattr(event.event_type, "value", event.event_type)) in ("RUN_CREATED", "run_created")]
+        if len(created) != 1:
+            raise ValueError("resource run creation event missing")
+        if created[0].payload_hash != canonical_hash(created[0].payload):
+            raise ValueError("resource run creation event payload hash mismatch")
+        validate_resource_authority(request_snapshot=snapshot, request_hash=run.request_hash,
+            created_event_request_hash=created[0].payload.get("request_hash"),
+            dispatch=state.get("resource_dispatch_snapshot"), checkpoint=state)
+
+    def _assert_no_unfinished_resource_review(self, state):
+        """Refuse to resume a resource-issue run holding an unfinished review step."""
+        if not state.get("resource_review_policy"):
+            return
+        from app.agents.resource_workflows.learning_documents.reviewing.lecture_guard import (
+            LectureStepGuardError,
+            assert_no_unfinished_review,
+        )
+        run_id = state.get("run_id")
+        try:
+            assert_no_unfinished_review(repository=self.repository, run_id=run_id)
+        except LectureStepGuardError as exc:
+            raise ApplicationError(ErrorCode.WORKFLOW_PERSISTENCE_CONFLICT, status_code=409) from exc
+
+    def _restore_resource_ledgers(self, state, *, recovering=True):
+        if not state.get("resource_review_policy"):
+            return
+        from app.models.reviews.review_audit import review_audit_envelope
+        from app.services.generation.resource_review_policy import resource_review_fields
+        from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.adapters.base import text_hash
+        from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.persistence import verify_binding_hashes, replay_resource_artifacts
+        from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.registry import adapter_for
+        run_id = state["run_id"]
+        checkpoints = self.repository.list_checkpoints(run_id)
+        if any(cp.state_hash != canonical_hash(cp.state_projection) for cp in checkpoints):
+            raise ValueError("resource checkpoint state hash mismatch")
+        frozen = resource_review_fields(self.repository.get_run_creation_snapshot(run_id))
+        if any(resource_review_fields(cp.state_projection) != frozen for cp in checkpoints):
+            raise ValueError("resource checkpoint frozen policy fields missing or changed")
+        audit_schema = "4.0"
+        checkpoint_steps = {cp.step_id for cp in checkpoints}
+        for step in self.repository.list_steps(run_id):
+            if step.node_name in {"review", "reviewer"} and step.status in {"success", "degraded", "human_review"} and step.step_id not in checkpoint_steps and recovering:
+                raise ValueError("observation_incomplete: committed resource review has no checkpoint")
+        references = state.get("review_audit_refs", [])
+        if checkpoints and recovering:
+            latest = max(checkpoints, key=lambda cp: (cp.step_sequence, cp.event_sequence, cp.checkpoint_id))
+            if references != latest.state_projection.get("review_audit_refs", []):
+                raise ValueError("resource checkpoint audit references missing or changed")
+        referenced_steps = {ref.get("step_id") for ref in references}
+        for step in self.repository.list_steps(run_id):
+            if step.node_name in {"review", "reviewer"} and step.status in {"success", "degraded", "human_review"} and step.step_id not in referenced_steps:
+                raise ValueError("resource committed review audit reference missing")
+        ledgers = {}
+        resource_repo = getattr(self.artifact_recorder, "resource_repository", None)
+        evidence = {item.evidence_id: item for item in self.repository.list_evidence(run_id)}
+        for reference in references:
+            if reference.get("schema_version") != audit_schema:
+                raise ValueError("resource checkpoint references legacy audit")
+            audit = self.repository.get_step_review_audit(run_id, reference["step_id"])
+            if audit is None or audit.schema_version != audit_schema:
+                raise ValueError("resource audit missing")
+            envelope = review_audit_envelope(audit, run_id=run_id, step_id=reference["step_id"])
+            if envelope["audit_hash"] != reference.get("audit_hash"):
+                raise ValueError("resource audit reference hash mismatch")
+            expected_reference = {"step_id": audit.step_id, "audit_hash": envelope["audit_hash"],
+                "review_ids": [resource.review_id for resource in audit.resources], "schema_version": audit_schema,
+                "resource_ledgers": [{"resource_id": ledger.binding.resource_id, "resource_spec_id": ledger.binding.resource_spec_id,
+                    "version": ledger.binding.version, "artifact_exact_hash": ledger.binding.artifact_exact_hash,
+                    "lineage_id": ledger.binding.lineage_id} for ledger in audit.resource_ledgers]}
+            if reference != expected_reference:
+                raise ValueError("resource audit reference summary mismatch")
+            for ledger in audit.resource_ledgers:
+                if resource_repo is None:
+                    raise ValueError("resource resource repository unavailable")
+                spec = resource_repo.get_spec(ledger.binding.resource_spec_id)
+                if spec is None or spec.run_id != run_id:
+                    raise ValueError("resource frozen specification missing")
+                evidence_ids = sorted(spec.evidence_ids)
+                evidence_items = [evidence[ident] for ident in evidence_ids]
+                frozen_evidence = [{"evidence_id": ident, "excerpt_hash": text_hash(evidence[ident].excerpt)}
+                                   for ident in evidence_ids]
+                if canonical_hash({"evidence": frozen_evidence}) != ledger.binding.evidence_snapshot_hash:
+                    raise ValueError("resource frozen evidence mismatch")
+                adapter = adapter_for(ledger.binding.resource_type)
+                targets = list(spec.knowledge_points)
+                previous_resource = None
+                versioned_resources = []
+                for observation in ledger.observations:
+                    binding = observation.binding
+                    resource = resource_repo.get(binding.resource_id)
+                    if (resource is None or resource.run_id != run_id or resource.resource_spec_id != binding.resource_spec_id
+                            or resource.resource_family_id != binding.lineage_id or resource.version != binding.version):
+                        raise ValueError("resource persisted resource version mismatch")
+                    if previous_resource is not None and resource.parent_resource_id != previous_resource:
+                        raise ValueError("resource persisted parent lineage mismatch")
+                    material = adapter.build_material(resource=resource, evidence=evidence_items,
+                                                      spec=None, targets=targets)
+                    verify_binding_hashes(binding=binding, material=material, evidence=evidence_items)
+                    previous_resource = resource.resource_id
+                    versioned_resources.append(resource)
+                verified = replay_resource_artifacts(ledger=ledger, resources=versioned_resources,
+                    adapter=adapter, targets=targets, evidence=evidence_items)
+                ledgers[ledger.binding.resource_spec_id] = verified.model_dump(mode="json")
+        supplied = state.get("resource_ledgers")
+        if supplied and supplied != ledgers:
+            raise ValueError("resource runtime ledger differs from durable audit")
+        state["resource_ledgers"] = ledgers
+
     def invoke(self, initial_state: dict[str, Any]) -> dict[str, Any]:
         from app.db.claim.extraction import extraction_repository
         from app.agents.resource_workflows.learning_documents.claim_extraction.budget import validate_entry
@@ -185,11 +311,17 @@ class DurableWorkflowRunner:
         self._validate_lecture_entry(initial_state)
         self._assert_no_unfinished_lecture_review(initial_state)
         self._restore_lecture_ledgers(initial_state)
+        self._validate_resource_entry(initial_state)
+        if initial_state.get("resource_review_policy") and initial_state.get("resource_review_contract_version") != "1.1":
+            raise ValueError("historical resource review identity is read-only; create a new run")
+        self._assert_no_unfinished_resource_review(initial_state)
+        self._restore_resource_ledgers(initial_state)
         validate_entry(initial_state, private_repository)
         if not hasattr(self.workflow, "stream"):
             raw_result = self.workflow.invoke(initial_state)
             result = {**initial_state, **raw_result}
             self._validate_lecture_entry(result)
+            self._validate_resource_entry(result)
             validate_entry(result, private_repository)
             if "workflow_status" not in raw_result:
                 result["workflow_status"] = "completed"
@@ -203,6 +335,7 @@ class DurableWorkflowRunner:
                 continue
             latest = value
             self._validate_lecture_entry(latest)
+            self._validate_resource_entry(latest)
             validate_entry(latest, private_repository)
             trace = latest.get("trace", [])
             if not trace:
@@ -215,6 +348,8 @@ class DurableWorkflowRunner:
                 continue
             if latest.get("lecture_review_policy") and latest.get("review_audit_refs"):
                 self._restore_lecture_ledgers(latest, recovering=False)
+            if latest.get("resource_review_policy"):
+                self._restore_resource_ledgers(latest, recovering=False)
             if self.artifact_recorder is not None:
                 try:
                     self.artifact_recorder.record(latest, item)
@@ -229,6 +364,7 @@ class DurableWorkflowRunner:
                         status_code=409 if isinstance(exc, PersistenceConflict) else 503,
                     ) from exc
             self._restore_lecture_ledgers(latest, recovering=False)
+            self._restore_resource_ledgers(latest, recovering=False)
             projection = build_checkpoint_projection(latest)
             encoded = canonical_json(projection).encode("utf-8")
             if len(encoded) > get_settings().workflow_checkpoint_max_bytes:

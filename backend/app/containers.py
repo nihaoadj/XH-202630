@@ -343,6 +343,7 @@ class Container(containers.DeclarativeContainer):
         resource_repository=resource_repository,
         claim_repository=claim_repository,
         feedback_loop_repository=feedback_loop_repository,
+        generation_job_repository=generation_job_repository,
     )
     run_event_stream_service = providers.Singleton(
         RunEventStreamService,

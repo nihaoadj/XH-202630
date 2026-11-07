@@ -1197,3 +1197,9 @@ T37 2026-11-05：无表/列或数据迁移。ExtractionResult.final_claims静态
 不新增物理表或迁移。V2 审计复用 Agent step 私有 JSON 的 `review_audit_v2` namespace，保留 V1 原记录及 hash；同一步禁止混合两版本。账本保存资源版本、正文 hash、冻结证据和策略 hash、问题原要求、核销历史及无变化记录，正文/证据由既有持久化资源引用。终态 trace 与审计同事务提交，随后写 checkpoint 引用。审计上限仍为 1 MiB，超限失败关闭。SHA-256 用于一致性检测，不提供针对可改写全部数据库记录者的认证。Provider 返回而审计未提交时结果可能丢失，不承诺外部调用 exactly-once。
 
 T39 讲义审核 V2 未新增表或列：纠正记录与 v2 账本写入既有 step 私有 JSON 的 `review_audit_v3` 命名空间，与 `review_audit_v1`/`review_audit_v2` 并列；整个 envelope（含首次无效结果附件、两次调用与账本）仍受 1 MiB 限额，超限按 observation_incomplete 隔离且不发布。旧 V1/V2 行按原 schema 读取，不做物理迁移。
+
+T44 通用文本审核未新增表或列：六类文本资源的通用账本、程序硬门观察、有界纠正记录与 V4 策略写入既有 step 私有 JSON 的 `review_audit_v4` 命名空间，与 `review_audit_v1`/`v2`/`v3` 并列；envelope 仍受 1 MiB 限额，超限按 observation_incomplete 隔离且不发布。旧 V1–V3 行按原 schema 读取，不做物理迁移。
+
+修复续作不迁移历史行。新任务在既有 request snapshot/checkpoint 私有 JSON 冻结执行信封 1.1 的 reviewer 身份及独立 hash，内部 V1 策略 hash 不变；旧执行信封 1.0 保留原文只读，不补写身份。恢复根据持久产物/结构包和冻结证据逐观察重跑硬门与核销，拒绝缺引用、hash/版本错配和 hash 自洽的非法决定；发布写入前完成校验。
+
+T46 两类审核修订输入分离未新增表或列：`resource_review_revision` / `claim_review_revision` 及带版本的 `generation_revision_inputs` 映射仅存在于同次图调用的内存 `constraints` 与单资源 retry 的 `revision_feedback` 传输槽，不写入 `build_checkpoint_projection` 白名单，也不跨进程恢复；新 Run 重试仍从已持久资源/审核/Claim/Evidence 重建输入。持久 V1–V4 审核记录与既有 checkpoint JSON 保持原样，不做物理迁移。

@@ -9,6 +9,7 @@ from app.core.security.errors import ApplicationError, ErrorCode
 from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
 
 from .base import BaseResourceGenerationAgent
+from .revision_prompts import attach_revision_fields
 
 
 CORRECTION_PACKAGE_PROMPT = """你是 CorrectionTrainingPackageAgent。一次性输出一份可直接发布的 Markdown 薄弱点强化包，不要输出写作说明、思考过程、JSON 或代码围栏。
@@ -83,7 +84,9 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
             "evidence": [{"evidence_id": item.evidence_id, "source": item.locator.source_path,
                           "section": item.locator.section, "excerpt": item.excerpt} for item in evidence],
         }
-        if context.generation_attempt > 1:
+        if context.claim_review_revision is not None or context.resource_review_revision is not None:
+            attach_revision_fields(payload, context)
+        elif context.generation_attempt > 1:
             payload["revision_feedback"] = context.constraints.get("revision_feedback", {})
             payload["previous_version_content"] = context.constraints.get("previous_version_content", "")
         return payload

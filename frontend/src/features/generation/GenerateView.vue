@@ -53,6 +53,7 @@
             :legacy-partial="timelineState.replayCompleteness === 'legacy_partial'"
             :resource-executions="timelineState.resourceExecutions"
             :resource-progress-summary="selectedJob.resource_progress_summary || timelineState.resourceProgressSummary"
+            :publish-summary="selectedJob.publish_summary || null"
             :requested-resource-types="selectedJob.request_payload?.resource_types || []"
             :job-status="selectedJob.job_status" :published-resources="resources"
             :review-enabled="selectedJob.request_payload?.include_review !== false"
@@ -279,6 +280,7 @@ import { planRetryGeneration, planRegeneratePending, planAppendResources, planRe
 import { useGenerationClaims } from './useGenerationClaims.js'
 import { useGenerationAudit } from './useGenerationAudit.js'
 import { buildResourceStatusItems } from './resourceStatusPresentation.js'
+import { resolvePublicationView } from './publicationPresentation.js'
 import WorkflowDetailDialog from './WorkflowDetailDialog.vue'
 import ClaimEvidenceList from './ClaimEvidenceList.vue'
 import { useProductionLayout } from './useProductionLayout.js'
@@ -406,7 +408,20 @@ const {
 })
 const isCoursewareWorkspace = computed(() => coursewareComposerVisible.value || Boolean(selectedCoursewareJob.value))
 const shortRunId = computed(() => (selectedTask.value?.run_id ? selectedTask.value.run_id.slice(0, 8).toUpperCase() : '-'))
-const taskResourceCount = computed(() => selectedCoursewareJob.value ? (selectedCoursewareJob.value.resource_id ? 1 : 0) : resources.value.length)
+// Courseware keeps its own task contract; text tasks read the authoritative
+// publication summary instead of counting the currently loaded page.
+const publicationView = computed(() => resolvePublicationView({
+  publishSummary: selectedJob.value?.publish_summary || null,
+  jobStatus: selectedJob.value?.job_status || '',
+  fallbackPublished: selectedJob.value?.resource_progress_summary?.published || 0,
+  fallbackTotal: selectedJob.value?.resource_progress_summary?.total || 0,
+}))
+const taskResourceCount = computed(() => {
+  if (selectedCoursewareJob.value) return selectedCoursewareJob.value.resource_id ? 1 : 0
+  const view = publicationView.value
+  if (!view.hasSummary) return resources.value.length
+  return `${view.published ?? '—'} / ${view.total ?? '—'}`
+})
 const selectedResource = computed(
   () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
 )
@@ -498,7 +513,20 @@ function statusTagType(status) {
 }
 
 function taskStatusLabel(task) {
-  if (task?.task_kind !== 'interactive_courseware') return statusLabel(task?.job_status)
+  if (task?.task_kind !== 'interactive_courseware') {
+    const executionLabel = statusLabel(task?.job_status)
+    const publication = task?.run_id && task.run_id === selectedJob.value?.run_id
+      ? publicationView.value.label
+      : resolvePublicationView({
+        publishSummary: task?.publish_summary || null,
+        jobStatus: task?.job_status || '',
+        fallbackPublished: task?.resource_progress_summary?.published || 0,
+        fallbackTotal: task?.resource_progress_summary?.total || 0,
+      }).label
+    // Keep the real execution result and append the publication fact separately;
+    // one never replaces the other.
+    return publication ? `${executionLabel} · ${publication}` : executionLabel
+  }
   return ({
     queued: '排队中', admitting: '校验来源', snapshotting: '冻结来源', design_reviewing: '规划课程', composing: '生成页面',
     trace_reviewing: '来源审核', quality_reviewing: '质量审核', auto_revising: '定向修订', rendering: '渲染课件',
@@ -531,12 +559,13 @@ function profileDisplayName(profile) {
 }
 
 async function openGeneratedResource(item) {
-  if (!item?.resource_id || !selectedJob.value) return
-  if (!resources.value.some((resource) => resource.resource_id === item.resource_id)) {
+  const resourceId = item?.readable_resource_id || item?.resource_id
+  if (!resourceId || !selectedJob.value) return
+  if (!resources.value.some((resource) => resource.resource_id === resourceId)) {
     await loadResourcesForSelectedJob()
   }
-  if (resources.value.some((resource) => resource.resource_id === item.resource_id)) {
-    selectedResourceId.value = item.resource_id
+  if (resources.value.some((resource) => resource.resource_id === resourceId)) {
+    selectedResourceId.value = resourceId
   }
 }
 
@@ -549,7 +578,23 @@ function taskLabel(task) {
     return `HTML 课件 / ${taskStatusLabel(task)} / ${task.run_id.slice(0, 8).toUpperCase()} / ${formatDateTime(task.updated_at || task.created_at)}`
   }
   const prefix = task.job_status === 'running' || task.job_status === 'queued' ? '当前' : '历史'
-  return `${prefix} / ${task.run_id.slice(0, 8).toUpperCase()} / ${formatDateTime(task.finished_at || task.created_at)}`
+  const view = resolvePublicationView({
+    publishSummary: task.publish_summary || null,
+    jobStatus: task.job_status || '',
+    fallbackPublished: task.resource_progress_summary?.published || 0,
+    fallbackTotal: task.resource_progress_summary?.total || 0,
+  })
+  const publication = view.hasSummary && view.published !== null
+    ? `已发布 ${view.published}/${view.total ?? '—'}`
+    : ''
+  return [prefix, task.run_id.slice(0, 8).toUpperCase(), formatDateTime(task.finished_at || task.created_at), publication]
+    .filter(Boolean).join(' / ')
+}
+
+/** True when the accepted job already has readable published output. */
+function jobHasPublication(job) {
+  const published = job?.publish_summary?.published ?? job?.resource_progress_summary?.published
+  return Number(published || 0) > 0
 }
 
 function persistSelectedJob() {
@@ -706,7 +751,7 @@ const {
 
 
 
-async function refreshStatus() {
+async function refreshStatus({ forceResources = false, forceClaims = false } = {}) {
   if (!selectedJob.value?.run_id) return
   const learnerId = selectedLearnerId.value
   const runId = selectedJob.value.run_id
@@ -734,17 +779,24 @@ async function refreshStatus() {
     jobs.value = jobs.value.map((item) => (item.run_id === nextJob.run_id ? nextJob : item))
     timelineState.value = applyRunSnapshot(timelineState.value, nextJob, resourceOptions)
     persistSelectedJob()
+    if (!isCurrent()) return
 
-    const hasPublishedResources = Number(nextJob.resource_progress_summary?.published || 0) > 0
-    if (nextJob.job_status === 'completed') {
-      stopPolling()
+    const publishedCount = Number(
+      nextJob.publish_summary?.published ?? nextJob.resource_progress_summary?.published ?? 0,
+    ) || 0
+    // A terminal job must stop ordinary polling whether or not it published
+    // anything; resource and Claim reads are decided independently below so a
+    // failed run with readable output still refreshes them.
+    if (nextJob.job_status === 'completed' || nextJob.job_status === 'failed') stopPolling()
+    const readResources = forceResources || nextJob.job_status === 'completed' || publishedCount > 0
+    const readClaims = forceClaims || nextJob.job_status === 'completed'
+    if (readResources) {
       await loadResourcesForSelectedJob()
       if (!isCurrent()) return
+    }
+    if (readClaims) {
       await loadClaimReports(nextJob.run_id)
-    } else if (hasPublishedResources) {
-      await loadResourcesForSelectedJob()
-    } else if (nextJob.job_status === 'failed') {
-      stopPolling()
+      if (!isCurrent()) return
     }
   } catch (error) {
     if (!isCurrent()) return
@@ -757,7 +809,7 @@ async function refreshStatus() {
 async function refreshJobs() {
   if (!await loadJobs(false)) return
   const version = jobsRequestVersion
-  if (selectedJob.value?.job_status === 'completed' || selectedJob.value?.resource_progress_summary?.published) {
+  if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
     await loadResourcesForSelectedJob()
   }
   if (!generationMounted || version !== jobsRequestVersion) return
@@ -789,7 +841,7 @@ async function handleTaskChange() {
   // generation task, otherwise both task workspaces render together.
   coursewareComposerVisible.value = false
   if (!selectedJob.value) return
-  if (selectedJob.value.job_status === 'completed' || selectedJob.value.resource_progress_summary?.published) {
+  if (selectedJob.value.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
     await loadResourcesForSelectedJob()
     if (!isCurrent()) return
     await loadClaimReports(selectedRunId.value)
@@ -815,7 +867,7 @@ async function handleProfileChange() {
   closeRealtime()
   stopPolling()
   if (!await loadJobs(true) || version !== profileChangeVersion || !generationMounted) return
-  if (selectedJob.value?.job_status === 'completed' || selectedJob.value?.resource_progress_summary?.published) {
+  if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
     await loadResourcesForSelectedJob()
   } else {
     resourcesLoaded.value = true
@@ -1024,7 +1076,7 @@ onMounted(async () => {
     await loadProfiles()
     const version = profileChangeVersion
     if (!generationMounted || !await loadJobs(true) || version !== profileChangeVersion) return
-    if (selectedJob.value?.job_status === 'completed' || selectedJob.value?.resource_progress_summary?.published) {
+    if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
       await loadResourcesForSelectedJob()
     } else {
       resourcesLoaded.value = true

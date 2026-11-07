@@ -8,6 +8,7 @@ from app.models.generation.progress import (
     ResourceExecutionProgress,
     ResourceExecutionState,
     ResourceRepresentation,
+    RunPublishSummary,
     RunResourceProgressSummary,
 )
 from app.models.learners.mastery import LearnerFocusSnapshotV1
@@ -309,6 +310,8 @@ class GenerationJobStatusResponse(BaseModel):
     resource_progress_summary: RunResourceProgressSummary = Field(
         default_factory=RunResourceProgressSummary
     )
+    # Derived read-only publication facts; ``None`` keeps legacy responses valid.
+    publish_summary: Optional[RunPublishSummary] = None
     request_payload: Dict[str, Any] = Field(default_factory=dict)
     focus_snapshot: Optional[LearnerFocusSnapshotV1] = None
     created_at: Optional[datetime] = None

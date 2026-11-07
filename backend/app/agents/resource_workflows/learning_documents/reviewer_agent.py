@@ -11,8 +11,8 @@ from app.core.security.errors import ApplicationError, ErrorCode
 from app.models.shared.agent_contracts import ReviewerInput, build_trace_item, make_error_info, start_step
 from app.models.shared.llm import LLMCallContext
 from app.models.shared.workflow import ResourceStatus, ReviewDecision, StepStatus
-from app.models.reviews.review_audit import (ReviewAuditRecordV2, ReviewAuditRecordV3, ReviewPolicySnapshotV1,
-    ReviewResourceAuditV1, review_audit_envelope)
+from app.models.reviews.review_audit import (ReviewAuditRecordV2, ReviewAuditRecordV3, ReviewAuditRecordV4,
+    ReviewPolicySnapshotV1, ReviewResourceAuditV1, review_audit_envelope)
 from app.agents.shared.policies import decide_review, locked_human_review_resource_ids
 from app.agents.shared.validators import revision_instructions_are_valid
 from app.agents.resource_workflows.learning_documents.generator_agent import progress_summary
@@ -50,6 +50,11 @@ def review_node(
     lecture_stop_reasons = dict(state.get("lecture_stop_reasons") or {})
     lecture_repairs = []
     lecture_contract_version = state.get("lecture_review_contract_version")
+    resource_ledgers = dict(state.get("resource_ledgers") or {})
+    current_resource_ledgers = []
+    resource_stop_reasons = dict(state.get("resource_stop_reasons") or {})
+    resource_repairs = []
+    resource_contract_version = state.get("resource_review_contract_version")
     # A revision run replaces only the resource types named by the previous
     # review instructions.  Previously approved siblings are immutable from a
     # review perspective: re-reviewing them allocates fresh review IDs for an
@@ -172,6 +177,56 @@ def review_node(
                                "description": "资源引用未能映射到本次检索证据"}],
                    "difficulty_match": False, "coverage_rate": 0.0,
                    "suggestion": "引用证据不完整，禁止自动批准。", "revision_instructions": []}
+        elif state.get("resource_review_policy"):
+            structure_status = "passed"
+            try:
+                call_context = LLMCallContext(
+                    run_id=node_input.run_id, step_id=step_context["step_id"], node_name="reviewer",
+                    schema_name=("ResourceReviewRecheckV1" if resource.resource_spec_id in resource_ledgers
+                                 else "ResourceReviewInitialV1"),
+                    generation_attempt=node_input.generation_attempt,
+                    workflow_deadline_at=state.get("workflow_deadline_at"))
+
+                def resource_guard(*, step_id, generation_attempt):
+                    assert_review_entry_allowed(
+                        repository=review_repository, run_id=node_input.run_id,
+                        step_id=step_id, generation_attempt=generation_attempt)
+
+                from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.engine import (
+                    review_resource_v1,
+                )
+                outcome = review_resource_v1(
+                    state=state, resource=resource, evidence=evidence,
+                    step_id=step_context["step_id"], context=call_context,
+                    gateway=llm_gateway, collector=collector,
+                    review_id=review_ids[resource.resource_id], step_guard=resource_guard)
+                raw, last_llm_result = outcome.raw, outcome.last_llm_result
+                stop_reason = outcome.stop_reason
+                if outcome.repair is not None:
+                    resource_repairs.append(outcome.repair)
+                if outcome.ledger is not None:
+                    resource_ledgers[resource.resource_spec_id] = outcome.ledger.model_dump(mode="json")
+                    current_resource_ledgers.append(outcome.ledger)
+                if stop_reason:
+                    resource_stop_reasons[resource.resource_spec_id] = stop_reason
+                    if stop_reason == "program_gate_failed":
+                        structure_status = "failed"
+            except (LLMGatewayError, ValueError) as exc:
+                if isinstance(exc, LLMGatewayError):
+                    error = _fail_closed_review_error(exc.error)
+                    last_llm_result = exc
+                    error_category = exc.error.category
+                else:
+                    error_category = "input_budget" if isinstance(exc, ReviewInputBudgetError) else "review_validation"
+                    error = _fail_closed_review_error(make_error_info(
+                        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, source="reviewer",
+                        attempt=node_input.generation_attempt, category=error_category))
+                raw = {"decision": "human_review", "hallucination_score": 0.5,
+                       "issues": [{"code": "evidence_gap", "severity": "high",
+                                   "resource_type": resource.resource_type, "knowledge_point": None,
+                                   "description": "审核能力不可用或结果无效，无法安全完成自动审核。"}],
+                       "difficulty_match": False, "coverage_rate": 0.0,
+                       "suggestion": "保持未发布。", "revision_instructions": []}
         elif structured_review := check_resource_structure(resource=resource, context=state):
             raw = structured_review
         else:
@@ -377,6 +432,7 @@ def review_node(
         published = (
             decision == "approve"
             and not (state.get("lecture_review_policy") and resource.resource_type == "讲义")
+            and not state.get("resource_review_policy")
             and not state.get("include_claim_check", False)
             and not (
                 state.get("generation_mode") == "strict"
@@ -440,6 +496,13 @@ def review_node(
             "lecture_review_policy": state["lecture_review_policy"],
             "lecture_review_policy_hash": state["lecture_review_policy_hash"],
             "lecture_ledgers": [ledger.model_dump(mode="json") for ledger in current_lecture_ledgers]})
+    elif state.get("resource_review_policy"):
+        audit = ReviewAuditRecordV4.model_validate({**audit.model_dump(mode="json"), "schema_version": "4.0",
+            "resource_review_policy": state["resource_review_policy"],
+            "resource_review_policy_hash": state["resource_review_policy_hash"],
+            "resource_ledgers": [ledger.model_dump(mode="json") for ledger in current_resource_ledgers],
+            "repairs": [repair.as_dict() | {"review_id": review_ids[repair.resource_id]}
+                        for repair in resource_repairs]})
     envelope = review_audit_envelope(audit, run_id=node_input.run_id, step_id=step_context["step_id"])
     audit_ref = {"step_id": step_context["step_id"], "audit_hash": envelope["audit_hash"],
                  "review_ids": [item.review_id for item in resource_audits]}
@@ -448,8 +511,14 @@ def review_node(
             {"resource_id": l.binding.resource_id, "resource_spec_id": l.binding.resource_spec_id,
              "version": l.binding.version, "content_hash": l.binding.content_hash,
              "lineage_id": l.binding.lineage_id} for l in current_lecture_ledgers]})
+    elif state.get("resource_review_policy"):
+        audit_ref.update({"schema_version": "4.0", "resource_ledgers": [
+            {"resource_id": l.binding.resource_id, "resource_spec_id": l.binding.resource_spec_id,
+             "version": l.binding.version, "artifact_exact_hash": l.binding.artifact_exact_hash,
+             "lineage_id": l.binding.lineage_id} for l in current_resource_ledgers]})
     return {
         **({"lecture_ledgers": lecture_ledgers, "lecture_stop_reasons": lecture_stop_reasons} if state.get("lecture_review_policy") else {}),
+        **({"resource_ledgers": resource_ledgers, "resource_stop_reasons": resource_stop_reasons} if state.get("resource_review_policy") else {}),
         "review_audit": audit.model_dump(mode="json"),
         "review_audit_refs": [*state.get("review_audit_refs", []), audit_ref],
         "review_result": review,

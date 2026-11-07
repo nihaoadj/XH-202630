@@ -3371,6 +3371,17 @@
           "title": "Learner Id",
           "type": "string"
         },
+        "publish_summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPublishSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "request_payload": {
           "title": "Request Payload",
           "type": "object"
@@ -6223,6 +6234,30 @@
       "title": "PublicRunSnapshot",
       "type": "object"
     },
+    "PublishCompleteness": {
+      "description": "How completely the derived publication facts cover the requested run.",
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ],
+      "title": "PublishCompleteness",
+      "type": "string"
+    },
+    "PublishIncompleteReason": {
+      "description": "Controlled reasons why a publication summary is not complete.",
+      "enum": [
+        "request_missing",
+        "spec_request_mismatch",
+        "logical_identity_missing",
+        "resource_reference_missing",
+        "unsupported_representation",
+        "repository_unavailable",
+        "lineage_conflict"
+      ],
+      "title": "PublishIncompleteReason",
+      "type": "string"
+    },
     "ReplayCompleteness": {
       "enum": [
         "complete",
@@ -7262,6 +7297,85 @@
       "title": "ResourceRepresentation",
       "type": "string"
     },
+    "RunPublishSummary": {
+      "description": "Read-only publication facts for one run, derived from persisted state.\n\nCounters are logical resources, not executions or versions.  ``None`` means\n\"cannot be confirmed\", never zero; ``completeness`` describes the data, not\nthe job lifecycle state.",
+      "properties": {
+        "completeness": {
+          "$ref": "#/$defs/PublishCompleteness",
+          "default": "unavailable"
+        },
+        "incomplete_reasons": {
+          "items": {
+            "$ref": "#/$defs/PublishIncompleteReason"
+          },
+          "title": "Incomplete Reasons",
+          "type": "array"
+        },
+        "pending_review": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pending Review"
+        },
+        "published": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "enum": [
+            "1.0"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "total": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total"
+        },
+        "unpublished": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unpublished"
+        }
+      },
+      "title": "RunPublishSummary",
+      "type": "object"
+    },
     "RunResourceProgressSummary": {
       "properties": {
         "approved": {
@@ -7435,6 +7549,17 @@
           ],
           "default": null,
           "title": "Learner Id"
+        },
+        "publish_summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPublishSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "replay_completeness": {
           "$ref": "#/$defs/ReplayCompleteness"

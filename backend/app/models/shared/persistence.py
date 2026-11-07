@@ -11,6 +11,7 @@ from typing import Any, Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.retrieval.knowledge_ids import normalize_text, sha256_hex
+from app.models.generation.progress import RunPublishSummary
 from app.models.knowledge.knowledge import EvidenceItem, SourceLocator
 
 
@@ -178,6 +179,8 @@ class RunSummary(StrictPersistenceModel):
     updated_at: datetime
     ended_at: datetime | None = None
     replay_completeness: ReplayCompleteness
+    # Derived at query time from persisted facts; never written to a snapshot.
+    publish_summary: RunPublishSummary | None = None
 
     @classmethod
     def from_record(cls, record: AgentRunRecord) -> "RunSummary":
@@ -496,6 +499,17 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
             projection[key] = _jsonable(state[key])
         if state.get("lecture_stop_reasons"):
             projection["lecture_stop_reasons"] = _jsonable(state["lecture_stop_reasons"])
+    if state.get("resource_review_contract_version") is not None:
+        resource_keys = ("resource_review_contract_version", "resource_review_policy", "resource_review_policy_hash")
+        if state["resource_review_contract_version"] == "1.1":
+            resource_keys += ("resource_review_identity", "resource_review_identity_hash")
+        for key in resource_keys:
+            if key not in state or state[key] is None:
+                raise ValueError("resource checkpoint frozen fields missing")
+            if key in state:
+                projection[key] = _jsonable(state[key])
+        if state.get("resource_stop_reasons"):
+            projection["resource_stop_reasons"] = _jsonable(state["resource_stop_reasons"])
     if state.get("review_policy") is not None:
         projection["review_policy"] = _jsonable(state["review_policy"])
     if state.get("review_audit_refs"):

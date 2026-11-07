@@ -99,14 +99,16 @@ function phaseMeta(item) {
 }
 
 function publicationLabel(item) {
-  if (item.publication_status !== 'published') return '尚未发布'
-  return item.resource_execution_state === 'approved' ? '已发布' : '已有版本已发布'
+  if (item.publication_status === 'published') {
+    return item.resource_execution_state === 'approved' ? '已发布' : '已有版本已发布'
+  }
+  // The current attempt is still failed/pending, but an earlier published
+  // version of the same logical resource is readable and can be opened.
+  return item.readable_resource_id ? '已有版本已发布' : '尚未发布'
 }
 
 function canOpen(item) {
-  return item.resource_execution_state === 'approved'
-    && item.publication_status === 'published'
-    && Boolean(item.resource_id)
+  return Boolean(item.readable_resource_id)
 }
 
 function canRetry(item) {
