@@ -8,6 +8,8 @@ const NODE_ICON_PATHS = Object.freeze({
   review: ['M9 5h11M9 12h11M9 19h11', 'm3 5 1.5 1.5L7 3M3 12l1.5 1.5L7 10M3 19l1.5 1.5L7 17'],
   claim_extract: ['M5 5h14M5 19h14', 'M5 9v4h4c0 2-1 3-3 3M15 9v4h4c0 2-1 3-3 3'],
   claim_judge: ['M12 3v17M7 21h10M4 7h16', 'm5 7-3 7h6ZM19 7l-3 7h6Z', 'M2 14a3 3 0 0 0 6 0M16 14a3 3 0 0 0 6 0'],
+  claim_evidence_retrieve: ['M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z', 'm15 15 6 6', 'M7 10h6M10 7v6'],
+  claim_evidence_rejudge: ['M20 7a9 9 0 1 0 1 9', 'M20 2v5h-5', 'm8 12 3 3 5-6'],
   prepare_revision: ['M3 10a9 9 0 1 1 2.5 8.5', 'M3 4v6h6'],
   prepare_claim_revision: ['M13 3H5v18h14v-6', 'm11 13 8-8 3 3-8 8-4 1Z', 'm17 7 3 3'],
   finalize_draft: ['M14 3H5v18h14V8Z', 'M14 3v5h5', 'M8 12h8M8 16h5'],

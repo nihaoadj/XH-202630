@@ -11,6 +11,22 @@ import {
 } from '../src/features/generation/claimEvidenceRetrievalPresentation.js'
 import { useGenerationAudit } from '../src/features/generation/useGenerationAudit.js'
 
+import { workflowNodeMeta, canInspectStep } from '../src/features/generation/workflowPresentation.js'
+import { detailRole } from '../src/features/generation/workflowDetailPresentation.js'
+import { iconPaths } from '../src/features/generation/workflowNodeIcons.js'
+
+for (const [node, title, kind] of [
+  ['claim_evidence_retrieve', '知识库补检', 'evidence'],
+  ['claim_evidence_rejudge', '缺证重判', 'claims'],
+]) {
+  assert.equal(workflowNodeMeta({ node_name: node }).title, title)
+  assert.equal(canInspectStep({ node_name: node }), true)
+  assert.equal(canInspectStep({ agent_name: node }), true)
+  assert.equal(detailRole({ node_name: node }).contentKind, kind)
+  assert.notDeepEqual(iconPaths(node), iconPaths('unknown'))
+  assert.equal(canInspectStep({ node_name: 'future_node', agent_name: node }), false)
+}
+
 const job = {
   run_id: 'run-A', learner_id: 'learner-A', batch_id: 'batch-A',
   request_payload: {

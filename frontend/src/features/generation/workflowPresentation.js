@@ -7,6 +7,8 @@ const NODE_META = Object.freeze({
   review: { title: '审核纠偏', description: '审核问题与定向修订' },
   claim_extract: { title: '事实抽取', description: '提取需要核验的陈述' },
   claim_judge: { title: '事实核验', description: '对照冻结证据判定陈述' },
+  claim_evidence_retrieve: { title: '知识库补检', description: '为缺证事实补充知识库证据' },
+  claim_evidence_rejudge: { title: '缺证重判', description: '用补充证据重新核对缺证事实' },
   prepare_revision: { title: '返工准备', description: '准备资源定向修订' },
   prepare_claim_revision: { title: '事实修订准备', description: '准备事实问题修订' },
   finalize_draft: { title: '草稿整理', description: '整理生成草稿' },
@@ -17,6 +19,7 @@ const NODE_META = Object.freeze({
 
 const INSPECTABLE_NODES = new Set([
   'diagnose', 'retrieve', 'plan', 'generate', 'review', 'claim_judge',
+  'claim_evidence_retrieve', 'claim_evidence_rejudge',
 ])
 
 const LEGACY_AGENT_NODES = Object.freeze({
@@ -28,6 +31,8 @@ const LEGACY_AGENT_NODES = Object.freeze({
   reviewer: 'review',
   claim_extractor: 'claim_extract',
   claim_judge: 'claim_judge',
+  claim_evidence_retrieve: 'claim_evidence_retrieve',
+  claim_evidence_rejudge: 'claim_evidence_rejudge',
 })
 
 function recordedName(value) {

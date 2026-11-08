@@ -8,6 +8,8 @@ const ROLES = Object.freeze({
   generate: { contentKind: 'document', result: '生成正文', code: 'RESOURCE OUTPUT' },
   review: { contentKind: 'review', result: '审核结果', code: 'REVIEW' },
   claim_judge: { contentKind: 'claims', result: 'Claim 与证据', code: 'CLAIM VERIFICATION' },
+  claim_evidence_retrieve: { contentKind: 'evidence', result: '补检证据', code: 'EVIDENCE SUPPLEMENT' },
+  claim_evidence_rejudge: { contentKind: 'claims', result: '缺证重判结果', code: 'CLAIM RECHECK' },
 })
 
 export function detailRole(step) {

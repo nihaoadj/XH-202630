@@ -16,6 +16,7 @@
           <label v-if="isResourceContent && resources.length > 1" class="resource-picker primary-resource-picker">关联资源<select :value="resourceId" aria-label="审核资源" @change="$emit('update:resourceId', $event.target.value)"><option v-for="(item, index) in resources" :key="item.resource_id" :value="item.resource_id">{{ resourceOption(item, index) }}</option></select></label>
           <p v-else-if="isResourceContent && resource" class="detail-resource-caption">{{ resourceTitle }}<span>本次执行关联版本</span></p>
           <section v-if="contentKind === 'evidence'" class="retrieval-result" aria-label="检索证据">
+            <ClaimEvidenceRetrievalPanel v-if="role.key === 'claim_evidence_retrieve' && claimEnabled" :summary="claimRetrieval" />
             <dl v-if="retrievalStats.length" class="retrieval-stats"><div v-for="item in retrievalStats" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl>
             <WorkflowEvidencePanel :sources="nodeEvidence" />
           </section>
@@ -26,6 +27,7 @@
           <section v-else-if="contentKind === 'claims'" class="claim-verification detail-module" aria-label="陈述事实核验">
             <el-alert v-if="claimsError && claimEnabled" :title="claimsError" type="warning" :closable="false" show-icon />
             <div class="claim-audit-heading detail-section-heading"><span class="section-number">CLAIM / EVIDENCE</span><h3>{{ claimAuditSummary(metric, claimEnabled) }}</h3></div>
+            <p v-if="role.key === 'claim_evidence_rejudge'" class="result-caption">本步骤仅重新核对首次缺证的事实陈述；下方展示所选资源当前的有效判定。</p>
             <ClaimEvidenceRetrievalPanel v-if="claimEnabled" :summary="claimRetrieval" />
             <ClaimEvidenceList v-if="claimEnabled && resource" :key="resourceId" :rows="rows" focus-first><template v-if="rows.length" #summary><div class="claim-verdict-counts"><span v-for="item in verdictCounts" :key="item.verdict" :class="`is-${item.verdict}`" :aria-label="`${item.label} ${item.count}`">{{ item.shortLabel }} <strong>{{ item.count }}</strong></span></div></template></ClaimEvidenceList>
             <p v-else-if="claimEnabled" class="empty-note">本节点未关联可核验的资源，无法展示 Claim 判定。</p>
