@@ -972,7 +972,10 @@ class FeedbackService:
         )
         source_batch_id = plan.source_batch_id
         try:
-            requests = plan.requests(include_claim_check=selection.include_claim_check)
+            requests = plan.requests(
+                include_claim_check=selection.include_claim_check,
+                include_claim_evidence_retrieval=selection.include_claim_evidence_retrieval,
+            )
             jobs = []
             for index, item_request in enumerate(requests):
                 item_run_id = run_id if len(requests) == 1 else self._stable_id("run", run_id, item_request.resource_types[0])
@@ -1206,6 +1209,33 @@ class FeedbackService:
             questions=self._shuffle_question_options(questions, profile.learner_id, batch_id),
         )
 
+    def require_legacy_run_assessment(self, run_ids) -> None:
+        """Reject a per-run/per-batch submission that belongs to a learning round.
+
+        Round-bound runs must be graded through the frozen joint session, so a
+        single group cannot be submitted on its own.  Runs without a binding
+        keep the previous behavior, which is what old tasks still rely on.
+        """
+        repository = getattr(self.generation_job_service, "round_repository", None)
+        if repository is None:
+            return
+        seen = set()
+        for value in run_ids:
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            binding = repository.one("learning_round_job_bindings", run_id=value)
+            if binding is None:
+                continue
+            stage_node = repository.one("learning_round_stage_nodes", stage_node_id=binding["stage_node_id"])
+            stage = repository.one("learning_round_stages", stage_id=stage_node["stage_id"]) if stage_node else None
+            round_id = stage["round_id"] if stage else "该学习轮次"
+            raise ApplicationError(
+                ErrorCode.ROUND_ASSESSMENT_INVALID,
+                public_message=f"该任务属于学习轮次 {round_id}，请在该轮次联合测评中一次提交全部节点题目",
+                status_code=422,
+            )
+
     def submit_run_attempt(
         self,
         profile: LearnerProfile,
@@ -1217,6 +1247,7 @@ class FeedbackService:
         tutor_batch_id: str | None = None,
         schedule_followup: Callable[[LearnerProfile, GenerateRequest, str], None] | None = None,
     ) -> FeedbackLoopResult:
+        self.require_legacy_run_assessment([run_id, *(resource.run_id for resource in resources)])
         questions, answer_key = self._build_run_question_specs(profile, resources, knowledge_service)
         if not questions:
             raise ValueError("当前任务暂时没有可用测评题目")

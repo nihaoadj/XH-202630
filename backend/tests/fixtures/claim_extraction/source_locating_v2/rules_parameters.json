@@ -1,0 +1,15 @@
+{
+  "version": "source-locating-rules-v1",
+  "rules_hash": "630d21327386553bf7a090db086057ec36e40d14d5ec7a3a2cef3a7a88973fd9",
+  "max_edits": 2,
+  "max_edit_ratio": 0.04,
+  "min_effective_chars": 40,
+  "min_score_margin": 0.02,
+  "frozen_gates": {
+    "unique_exact_span_accuracy": 1.0,
+    "format_recovery_min": 0.95,
+    "edit_recovery_min": 0.8,
+    "must_reject_wrong_accept": 0,
+    "accepted_wrong_span": 0
+  }
+}

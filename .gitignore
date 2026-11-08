@@ -37,6 +37,8 @@ backend/chroma_db/*
 
 # Logs
 backend/logs/*.log
+backend/logs/*.txt
+backend/.live-claim-runs/
 !backend/logs/.gitkeep
 
 # Testing
@@ -111,3 +113,6 @@ __extracted_pdf.txt
 # Local startup helpers
 scripts/local-*.ps1
 **/.codex-run-*.ps1
+
+# Local dedicated test-account credentials (never commit)
+/output/local-credentials/

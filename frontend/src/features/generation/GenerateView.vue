@@ -1,5 +1,5 @@
 <template>
-  <div ref="productionPage" class="generate-page" :class="{ 'is-courseware-workspace': isCoursewareWorkspace, 'is-fit-layout': isFitLayout }">
+  <div ref="productionPage" class="generate-page" :class="{ 'is-courseware-workspace': isCoursewareWorkspace, 'is-fit-layout': isFitLayout, 'has-learning-round': Boolean(roundDetail) }">
     <section class="control-panel" aria-label="资源任务控制">
       <div class="task-selector">
         <div class="selector-field">
@@ -36,13 +36,15 @@
         <div v-if="selectedCoursewareJob" class="task-actions" role="group" aria-label="课件任务操作">
           <el-button class="status-action status-action-refresh" :icon="Refresh" @click="coursewareWorkspace?.refreshCurrentJob()">刷新状态</el-button>
           <el-dropdown trigger="click" @command="handleAppendCommand">
-            <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources">追加资源<el-icon><ArrowDown /></el-icon></el-button>
+            <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources" :disabled="Boolean(roundDetail && !roundPrimaryJob)">{{ appendTargetLabel }}<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown><el-dropdown-menu><el-dropdown-item command="text" :disabled="!selectedJob">文本学习资源</el-dropdown-item><el-dropdown-item command="courseware" :disabled="!resources.length">HTML 互动课件</el-dropdown-item></el-dropdown-menu></template>
           </el-dropdown>
         </div>
       </template>
     </CoursewareGenerationWorkspace>
 
+    <LearningRoundNodeSwitcher v-if="roundDetail" :detail="roundDetail" :selection="roundSelection" @select="selectRoundMember" @evaluate="openRoundEvaluation" />
+    <p v-if="roundError" class="error-message" role="alert">{{ roundError }}</p>
     <section v-if="selectedJob" class="studio-grid">
       <div class="process-panel">
         <div class="panel-title compact"><div class="panel-heading-copy"><span class="panel-section-number">01</span><h3>生成协作轨迹</h3><span class="eyebrow">/ WORKFLOW</span></div><span class="connection-state" :class="`is-${connectionStatus}`"><i aria-hidden="true" />{{ productionConnectionLabel }}</span></div>
@@ -53,11 +55,12 @@
             :legacy-partial="timelineState.replayCompleteness === 'legacy_partial'"
             :resource-executions="timelineState.resourceExecutions"
             :resource-progress-summary="selectedJob.resource_progress_summary || timelineState.resourceProgressSummary"
+            :publish-summary="selectedJob.publish_summary || null"
             :requested-resource-types="selectedJob.request_payload?.resource_types || []"
             :job-status="selectedJob.job_status" :published-resources="resources"
             :review-enabled="selectedJob.request_payload?.include_review !== false"
             :retrying-resource-key="retryingResourceKey" :retry-enabled="['completed', 'failed'].includes(selectedJob.job_status)"
-            :claim-reports="claimReports" @open-child-run="openChildRun" @open-resource="openGeneratedResource"
+            :claim-reports="claimReports" :quality-metrics="resourceQuality" @open-child-run="openChildRun" @open-resource="openGeneratedResource"
             @retry-resource="retryResource" @open-claim-report="openClaimReport"
             @inspect-step="openAuditStep" @inspect-resource="openAuditResource"
           />
@@ -71,7 +74,7 @@
             <el-button v-if="selectedJob.job_status === 'failed'" class="status-action status-action-retry" :icon="RefreshRight" @click="retryGeneration" :loading="retrying">重新生成</el-button>
             <el-button v-if="selectedJob.job_status === 'completed'" class="status-action status-action-resource" :class="{ 'is-retry': hasRetryableResources }" :icon="hasRetryableResources ? RefreshRight : Refresh" @click="hasRetryableResources ? regeneratePendingResources() : loadResourcesForSelectedJob()" :loading="hasRetryableResources ? retrying : loadingResources">{{ hasRetryableResources ? `重新生成失败资源（${retryableResourceTypes.length}）` : '刷新资源' }}</el-button>
             <el-dropdown trigger="click" @command="handleAppendCommand">
-              <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources">追加资源<el-icon><ArrowDown /></el-icon></el-button>
+              <el-button class="status-action status-action-append" :icon="Plus" :loading="appendingResources" :disabled="Boolean(roundDetail && !roundPrimaryJob)">{{ appendTargetLabel }}<el-icon><ArrowDown /></el-icon></el-button>
               <template #dropdown><el-dropdown-menu><el-dropdown-item command="text" :disabled="!selectedJob">文本学习资源</el-dropdown-item><el-dropdown-item command="courseware" :disabled="!resources.length">HTML 互动课件</el-dropdown-item></el-dropdown-menu></template>
             </el-dropdown>
           </div>
@@ -150,7 +153,7 @@
       width="min(520px, calc(100vw - 32px))"
       :close-on-click-modal="false"
     >
-      <p class="append-resource-hint">请选择要加入当前资源批次的资源类型。</p>
+      <p class="append-resource-hint">{{ roundDetail ? appendTargetLabel : '请选择要加入当前资源批次的资源类型。' }}</p>
       <el-checkbox-group v-model="selectedAppendResourceTypes" class="append-resource-options">
         <el-checkbox
           v-for="option in appendResourceOptions"
@@ -169,6 +172,12 @@
           默认开启。对生成内容中的可验证事实进行证据核验与定向纠错。
           <template v-if="!appendReviewEnabled">当前源任务未启用普通审核，不能单独开启 Claim 审核。</template>
         </p>
+        <el-checkbox v-model="appendIncludeClaimEvidenceRetrieval" :disabled="!appendIncludeClaimCheck">
+          证据不足时补检知识库
+        </el-checkbox>
+        <p>
+          仅对首次缺少证据的事实陈述追加一次知识库检索并重新核对；关闭 Claim 审核时一并关闭。
+        </p>
       </div>
       <template #footer>
         <el-button @click="appendDialogVisible = false">取消</el-button>
@@ -176,7 +185,7 @@
       </template>
     </el-dialog>
 
-    <WorkflowDetailDialog v-model:visible="auditVisible" v-model:resource-id="auditResourceId" :loading="auditLoading" :error="auditError" :claims-error="auditClaimsError" :snapshot="auditSnapshot" :claims="auditClaims" :step="auditStep" :run-id="selectedRunId" :claim-enabled="selectedJob?.request_payload?.include_claim_check !== false" @refresh="refreshAudit" />
+    <WorkflowDetailDialog v-model:visible="auditVisible" v-model:resource-id="auditResourceId" :loading="auditLoading" :error="auditError" :claims-error="auditClaimsError" :snapshot="auditSnapshot" :claims="auditClaims" :claim-retrieval="auditClaimRetrieval" :quality="auditQualityItem" :step="auditStep" :run-id="selectedRunId" :claim-enabled="selectedJob?.request_payload?.include_claim_check !== false" @refresh="refreshQualityAudit" />
     <el-dialog v-model="claimReportVisible" class="production-dialog claim-report-dialog" width="min(760px, calc(100vw - 32px))">
       <template #header>
         <div class="claim-report-header">
@@ -217,6 +226,16 @@
                 仅覆盖已抽取的事实，不代表全文正确率。
               </p>
             </div>
+          </div>
+
+          <div v-if="selectedClaimQuality" class="claim-quality-note" :class="`is-${qualityTone(selectedClaimQuality.hallucination)}`">
+            <p>
+              幻觉率：<strong>{{ hallucinationMetricText(selectedClaimQuality.hallucination) }}</strong>
+              <em v-if="isReferenceMetric(selectedClaimQuality.hallucination)">普通审核参考／待核验，不是达标结论。</em>
+            </p>
+            <p v-if="selectedClaimQuality.claim">
+              Claim 核验状态：{{ claimQualityStatusLabel(selectedClaimQuality.claim.status) }}
+            </p>
           </div>
 
           <div class="claim-metrics-grid">
@@ -279,7 +298,12 @@ import { planRetryGeneration, planRegeneratePending, planAppendResources, planRe
 import { useGenerationClaims } from './useGenerationClaims.js'
 import { useGenerationAudit } from './useGenerationAudit.js'
 import { buildResourceStatusItems } from './resourceStatusPresentation.js'
+import { resolvePublicationView } from './publicationPresentation.js'
 import WorkflowDetailDialog from './WorkflowDetailDialog.vue'
+import { useResourceQuality } from './useResourceQuality.js'
+import {
+  hallucinationMetricText, isReferenceMetric, qualityTone,
+} from '../../utils/qualityMetricsPresentation.js'
 import ClaimEvidenceList from './ClaimEvidenceList.vue'
 import { useProductionLayout } from './useProductionLayout.js'
 import ResourceViewer from '../learning-documents/ResourceViewer.vue'
@@ -287,6 +311,8 @@ import PreparationPanel from '../../components/PreparationPanel.vue'
 import PreparationWorkspace from '../../components/PreparationWorkspace.vue'
 import CoursewareGenerationWorkspace from '../courseware/CoursewareGenerationWorkspace.vue'
 import AgentVisualization from './AgentVisualization.vue'
+import LearningRoundNodeSwitcher from './LearningRoundNodeSwitcher.vue'
+import { useLearningRoundWorkspace } from './useLearningRoundWorkspace.js'
 import { useAppStore } from '../../stores/app'
 import {
   formatDateTime,
@@ -332,17 +358,20 @@ const jobsError = ref('')
 let jobsRequestVersion = 0
 let statusRequestVersion = 0
 let claimsRequestVersion = 0
+let qualityRequestVersion = 0
 let profileChangeVersion = 0
 let taskChangeVersion = 0
 let generationMounted = true
 const appendDialogVisible = ref(false)
 const selectedAppendResourceTypes = ref([])
 const appendIncludeClaimCheck = ref(true)
+const appendIncludeClaimEvidenceRetrieval = ref(false)
 const coursewareComposerVisible = ref(false)
 const coursewareWorkspace = ref(null)
 const selectedRunId = ref(initialRunId)
+const roundContextGeneration = ref(0)
 const { retrying, retryingResourceKey, appendingResources, run: runGenerationCommand, dispose: disposeGenerationCommands } = useGenerationCommands({
-  getContext: () => ({ learnerId: selectedLearnerId.value, runId: selectedRunId.value }),
+  getContext: () => ({ learnerId: selectedLearnerId.value, runId: selectedRunId.value, roundContextGeneration: roundContextGeneration.value }),
   selectRun: runId => { selectedRunId.value = runId },
   refreshJobs: isCurrent => loadJobs(false, isCurrent),
   startRealtime: runId => startRealtime(runId),
@@ -353,6 +382,7 @@ const coursewareJobs = ref([])
 const timelineState = ref(createInitialTimelineState())
 const connectionStatus = ref('idle')
 const claimReports = ref({})
+const resourceQuality = ref({})
 const claimReportVisible = ref(false)
 const claimDecisionLoading = ref(false)
 const selectedClaimReportId = ref('')
@@ -387,6 +417,23 @@ const selectedJob = computed(
 const selectedCoursewareJob = computed(
   () => coursewareJobs.value.find((item) => item.run_id === selectedRunId.value) || null
 )
+const { detail: roundDetail, selection: roundSelection, primaryJob: roundPrimaryJob, error: roundError, select: selectRoundMemberImpl } = useLearningRoundWorkspace({
+  learnerId: selectedLearnerId, selectedJob, selectedRunId, jobs, route, router,
+  activateRun: async runId => { selectedRunId.value = runId; await handleTaskChange() },
+})
+const appendTargetJob = computed(() => roundDetail.value ? roundPrimaryJob.value : selectedJob.value)
+const appendTargetLabel = computed(() => {
+  const primary = roundDetail.value?.members.find(member => member.role === 'primary')
+  return primary ? `为主节点 ${primary.node_name || primary.node_id} 追加资源` : '追加资源'
+})
+function selectRoundMember(changes) {
+  roundContextGeneration.value += 1
+  return selectRoundMemberImpl(changes)
+}
+function openRoundEvaluation() {
+  if (roundDetail.value) router.push({ path: '/feedback', query: { learnerId: selectedLearnerId.value, roundId: roundDetail.value.round_id, stageId: roundSelection.value.stageId } })
+}
+
 const {
   resources, nodeTiers, loadingResources, resourcesLoaded, selectedResourceId,
   resourceTierLabel, loadResourcesForSelectedJob, loadCoursewareSourceResources,
@@ -406,14 +453,35 @@ const {
 })
 const isCoursewareWorkspace = computed(() => coursewareComposerVisible.value || Boolean(selectedCoursewareJob.value))
 const shortRunId = computed(() => (selectedTask.value?.run_id ? selectedTask.value.run_id.slice(0, 8).toUpperCase() : '-'))
-const taskResourceCount = computed(() => selectedCoursewareJob.value ? (selectedCoursewareJob.value.resource_id ? 1 : 0) : resources.value.length)
+// Courseware keeps its own task contract; text tasks read the authoritative
+// publication summary instead of counting the currently loaded page.
+const publicationView = computed(() => resolvePublicationView({
+  publishSummary: selectedJob.value?.publish_summary || null,
+  jobStatus: selectedJob.value?.job_status || '',
+  fallbackPublished: selectedJob.value?.resource_progress_summary?.published || 0,
+  fallbackTotal: selectedJob.value?.resource_progress_summary?.total || 0,
+}))
+const taskResourceCount = computed(() => {
+  if (selectedCoursewareJob.value) return selectedCoursewareJob.value.resource_id ? 1 : 0
+  const view = publicationView.value
+  if (!view.hasSummary) return resources.value.length
+  return `${view.published ?? '—'} / ${view.total ?? '—'}`
+})
 const selectedResource = computed(
   () => resources.value.find((item) => item.resource_id === selectedResourceId.value) || null
 )
 const selectedClaimReport = computed(() => claimReports.value[selectedClaimReportId.value] || null)
+const auditQualityItem = computed(() => resourceQuality.value[auditResourceId.value] || null)
+function claimQualityStatusLabel(status) {
+  return ({ complete: '已完成', pending: '进行中', incomplete: '未完成', failed: '失败',
+    not_applicable: '不适用', not_requested: '未开启', unavailable: '暂不可用',
+    legacy_unavailable: '历史数据缺失' })[status] || status || '未记录'
+}
+const selectedClaimQuality = computed(() => resourceQuality.value[selectedClaimReportId.value] || null)
 const {
   visible: auditVisible, loading: auditLoading, error: auditError, claimsError: auditClaimsError,
   snapshot: auditSnapshot, claims: auditClaims, step: auditStep, resourceId: auditResourceId,
+  claimRetrieval: auditClaimRetrieval,
   refresh: refreshAudit, openStep: openAuditStep, openResource: openAuditResource,
 } = useGenerationAudit({ selectedRunId, selectedLearnerId })
 const retryableResourceTypes = computed(() => {
@@ -431,13 +499,15 @@ const hasRetryableResources = computed(() => (
 ))
 const supportedAppendResourceTypes = ['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析']
 const appendResourceOptions = computed(() => {
-  const existingTypes = new Set(selectedJob.value?.request_payload?.resource_types || [])
+  const primary = roundDetail.value?.members.find(member => member.role === 'primary')
+  const initialScope = roundDetail.value?.stages.find(stage => stage.kind === 'initial')?.members.find(member => member.member_id === primary?.member_id)
+  const existingTypes = new Set(initialScope?.resource_types || appendTargetJob.value?.request_payload?.resource_types || [])
   return supportedAppendResourceTypes.map((type) => ({
     type,
     alreadyIncluded: existingTypes.has(type),
   }))
 })
-const appendReviewEnabled = computed(() => selectedJob.value?.request_payload?.include_review !== false)
+const appendReviewEnabled = computed(() => appendTargetJob.value?.request_payload?.include_review !== false)
 
 // Presentation only: task copy and viewport containment never alter workflow state.
 const productionPage = ref(null)
@@ -498,7 +568,20 @@ function statusTagType(status) {
 }
 
 function taskStatusLabel(task) {
-  if (task?.task_kind !== 'interactive_courseware') return statusLabel(task?.job_status)
+  if (task?.task_kind !== 'interactive_courseware') {
+    const executionLabel = statusLabel(task?.job_status)
+    const publication = task?.run_id && task.run_id === selectedJob.value?.run_id
+      ? publicationView.value.label
+      : resolvePublicationView({
+        publishSummary: task?.publish_summary || null,
+        jobStatus: task?.job_status || '',
+        fallbackPublished: task?.resource_progress_summary?.published || 0,
+        fallbackTotal: task?.resource_progress_summary?.total || 0,
+      }).label
+    // Keep the real execution result and append the publication fact separately;
+    // one never replaces the other.
+    return publication ? `${executionLabel} · ${publication}` : executionLabel
+  }
   return ({
     queued: '排队中', admitting: '校验来源', snapshotting: '冻结来源', design_reviewing: '规划课程', composing: '生成页面',
     trace_reviewing: '来源审核', quality_reviewing: '质量审核', auto_revising: '定向修订', rendering: '渲染课件',
@@ -531,12 +614,13 @@ function profileDisplayName(profile) {
 }
 
 async function openGeneratedResource(item) {
-  if (!item?.resource_id || !selectedJob.value) return
-  if (!resources.value.some((resource) => resource.resource_id === item.resource_id)) {
+  const resourceId = item?.readable_resource_id || item?.resource_id
+  if (!resourceId || !selectedJob.value) return
+  if (!resources.value.some((resource) => resource.resource_id === resourceId)) {
     await loadResourcesForSelectedJob()
   }
-  if (resources.value.some((resource) => resource.resource_id === item.resource_id)) {
-    selectedResourceId.value = item.resource_id
+  if (resources.value.some((resource) => resource.resource_id === resourceId)) {
+    selectedResourceId.value = resourceId
   }
 }
 
@@ -549,7 +633,23 @@ function taskLabel(task) {
     return `HTML 课件 / ${taskStatusLabel(task)} / ${task.run_id.slice(0, 8).toUpperCase()} / ${formatDateTime(task.updated_at || task.created_at)}`
   }
   const prefix = task.job_status === 'running' || task.job_status === 'queued' ? '当前' : '历史'
-  return `${prefix} / ${task.run_id.slice(0, 8).toUpperCase()} / ${formatDateTime(task.finished_at || task.created_at)}`
+  const view = resolvePublicationView({
+    publishSummary: task.publish_summary || null,
+    jobStatus: task.job_status || '',
+    fallbackPublished: task.resource_progress_summary?.published || 0,
+    fallbackTotal: task.resource_progress_summary?.total || 0,
+  })
+  const publication = view.hasSummary && view.published !== null
+    ? `已发布 ${view.published}/${view.total ?? '—'}`
+    : ''
+  return [prefix, task.run_id.slice(0, 8).toUpperCase(), formatDateTime(task.finished_at || task.created_at), publication]
+    .filter(Boolean).join(' / ')
+}
+
+/** True when the accepted job already has readable published output. */
+function jobHasPublication(job) {
+  const published = job?.publish_summary?.published ?? job?.resource_progress_summary?.published
+  return Number(published || 0) > 0
 }
 
 function persistSelectedJob() {
@@ -571,6 +671,7 @@ const { stopPolling, closeRealtime, cancelPublishedResourceRefresh, startRealtim
   isMounted: () => generationMounted,
   refreshStatus: (...args) => refreshStatus(...args),
   loadClaimReports: (...args) => loadClaimReports(...args),
+  loadResourceQuality: (...args) => loadResourceQuality(...args),
 })
 
 
@@ -692,6 +793,12 @@ const {
   messages: ElMessage,
 })
 
+const { loadResourceQuality } = useResourceQuality({
+  selectedRunId, selectedLearnerId, resourceQuality,
+  isMounted: () => generationMounted,
+  requestVersion: () => qualityRequestVersion,
+  nextRequestVersion: () => ++qualityRequestVersion,
+})
 
 
 
@@ -706,7 +813,14 @@ const {
 
 
 
-async function refreshStatus() {
+
+async function refreshQualityAudit() {
+  const runId = selectedRunId.value
+  await refreshAudit()
+  if (runId === selectedRunId.value) await loadResourceQuality(runId)
+}
+
+async function refreshStatus({ forceResources = false, forceClaims = false } = {}) {
   if (!selectedJob.value?.run_id) return
   const learnerId = selectedLearnerId.value
   const runId = selectedJob.value.run_id
@@ -734,18 +848,27 @@ async function refreshStatus() {
     jobs.value = jobs.value.map((item) => (item.run_id === nextJob.run_id ? nextJob : item))
     timelineState.value = applyRunSnapshot(timelineState.value, nextJob, resourceOptions)
     persistSelectedJob()
+    if (!isCurrent()) return
 
-    const hasPublishedResources = Number(nextJob.resource_progress_summary?.published || 0) > 0
-    if (nextJob.job_status === 'completed') {
-      stopPolling()
+    const publishedCount = Number(
+      nextJob.publish_summary?.published ?? nextJob.resource_progress_summary?.published ?? 0,
+    ) || 0
+    // A terminal job must stop ordinary polling whether or not it published
+    // anything; resource and Claim reads are decided independently below so a
+    // failed run with readable output still refreshes them.
+    if (nextJob.job_status === 'completed' || nextJob.job_status === 'failed') stopPolling()
+    const readResources = forceResources || nextJob.job_status === 'completed' || publishedCount > 0
+    const readClaims = forceClaims || nextJob.job_status === 'completed'
+    if (readResources) {
       await loadResourcesForSelectedJob()
       if (!isCurrent()) return
-      await loadClaimReports(nextJob.run_id)
-    } else if (hasPublishedResources) {
-      await loadResourcesForSelectedJob()
-    } else if (nextJob.job_status === 'failed') {
-      stopPolling()
     }
+    if (readClaims) {
+      await loadClaimReports(nextJob.run_id)
+      if (!isCurrent()) return
+    }
+    await loadResourceQuality(nextJob.run_id)
+    if (!isCurrent()) return
   } catch (error) {
     if (!isCurrent()) return
     console.error(error)
@@ -757,11 +880,16 @@ async function refreshStatus() {
 async function refreshJobs() {
   if (!await loadJobs(false)) return
   const version = jobsRequestVersion
-  if (selectedJob.value?.job_status === 'completed' || selectedJob.value?.resource_progress_summary?.published) {
+  const runId = selectedRunId.value
+  const taskVersion = taskChangeVersion
+  const isCurrent = () => generationMounted && version === jobsRequestVersion && taskVersion === taskChangeVersion && runId === selectedRunId.value
+  if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
     await loadResourcesForSelectedJob()
   }
-  if (!generationMounted || version !== jobsRequestVersion) return
-  await startRealtime(selectedRunId.value)
+  if (!isCurrent()) return
+  await loadResourceQuality(runId)
+  if (!isCurrent()) return
+  await startRealtime(runId)
 }
 
 async function handleTaskChange() {
@@ -789,22 +917,25 @@ async function handleTaskChange() {
   // generation task, otherwise both task workspaces render together.
   coursewareComposerVisible.value = false
   if (!selectedJob.value) return
-  if (selectedJob.value.job_status === 'completed' || selectedJob.value.resource_progress_summary?.published) {
+  if (selectedJob.value.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
     await loadResourcesForSelectedJob()
     if (!isCurrent()) return
     await loadClaimReports(selectedRunId.value)
+    if (!isCurrent()) return
   } else {
     resourcesLoaded.value = true
   }
   if (!isCurrent()) return
-  await startRealtime(selectedRunId.value)
+  await loadResourceQuality(runId)
+  if (!isCurrent()) return
+  await startRealtime(runId)
 }
 
 async function handleProfileChange() {
   const version = ++profileChangeVersion
   invalidateResources(); ++claimsRequestVersion; invalidateNodeTiers(); ++taskChangeVersion
   syncProfileContext()
-  jobs.value = []; coursewareJobs.value = []; nodeTiers.value = {}; claimReports.value = {}
+  jobs.value = []; coursewareJobs.value = []; nodeTiers.value = {}; claimReports.value = {}; resourceQuality.value = {}
   loadingResources.value = false
   coursewareComposerVisible.value = false
   selectedRunId.value = ''
@@ -815,13 +946,18 @@ async function handleProfileChange() {
   closeRealtime()
   stopPolling()
   if (!await loadJobs(true) || version !== profileChangeVersion || !generationMounted) return
-  if (selectedJob.value?.job_status === 'completed' || selectedJob.value?.resource_progress_summary?.published) {
+  const runId = selectedRunId.value
+  const taskVersion = taskChangeVersion
+  const isCurrent = () => generationMounted && version === profileChangeVersion && taskVersion === taskChangeVersion && runId === selectedRunId.value
+  if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
     await loadResourcesForSelectedJob()
   } else {
     resourcesLoaded.value = true
   }
-  if (version !== profileChangeVersion || !generationMounted) return
-  await startRealtime(selectedRunId.value)
+  if (!isCurrent()) return
+  await loadResourceQuality(runId)
+  if (!isCurrent()) return
+  await startRealtime(runId)
 }
 
 async function deleteProfile(profile) {
@@ -890,7 +1026,7 @@ async function retryGeneration() {
 }
 
 function appendResources() {
-  const sourceJob = selectedJob.value
+  const sourceJob = appendTargetJob.value
   const payload = sourceJob?.request_payload
   if (!sourceJob?.learner_id || !payload) {
     ElMessage.warning('该任务缺少追加资源所需的原始参数')
@@ -901,6 +1037,8 @@ function appendResources() {
     .map((option) => option.type)
   appendIncludeClaimCheck.value = appendReviewEnabled.value
     && sourceJob.request_payload?.include_claim_check !== false
+  appendIncludeClaimEvidenceRetrieval.value = appendIncludeClaimCheck.value
+    && sourceJob.request_payload?.include_claim_evidence_retrieval === true
   appendDialogVisible.value = true
 }
 
@@ -949,7 +1087,10 @@ async function handleCoursewarePublished(coursewareJob) {
 async function regeneratePendingResources() {
   const sourceJob = selectedJob.value
   const resourceTypes = retryableResourceTypes.value
-  const plan = planRegeneratePending(sourceJob, resourceTypes, appendIncludeClaimCheck.value)
+  const plan = planRegeneratePending(
+    sourceJob, resourceTypes, appendIncludeClaimCheck.value,
+    appendIncludeClaimEvidenceRetrieval.value,
+  )
   if (!plan) {
     ElMessage.warning('当前任务没有可重新生成的资源')
     return
@@ -974,9 +1115,12 @@ function applyAcceptedGeneration(runId) {
 }
 
 async function confirmAppendResources() {
-  const sourceJob = selectedJob.value
+  const sourceJob = appendTargetJob.value
   const resourceTypes = [...new Set(selectedAppendResourceTypes.value)]
-  const plan = planAppendResources(sourceJob, resourceTypes, appendIncludeClaimCheck.value)
+  const plan = planAppendResources(
+    sourceJob, resourceTypes, appendIncludeClaimCheck.value,
+    appendIncludeClaimEvidenceRetrieval.value,
+  )
   if (!plan) {
     ElMessage.warning('请至少选择一种要追加的资源类型')
     return
@@ -1024,13 +1168,18 @@ onMounted(async () => {
     await loadProfiles()
     const version = profileChangeVersion
     if (!generationMounted || !await loadJobs(true) || version !== profileChangeVersion) return
-    if (selectedJob.value?.job_status === 'completed' || selectedJob.value?.resource_progress_summary?.published) {
+    const runId = selectedRunId.value
+    const taskVersion = taskChangeVersion
+    const isCurrent = () => generationMounted && version === profileChangeVersion && taskVersion === taskChangeVersion && runId === selectedRunId.value
+    if (selectedJob.value?.job_status === 'completed' || jobHasPublication(selectedJob.value)) {
       await loadResourcesForSelectedJob()
     } else {
       resourcesLoaded.value = true
     }
-    if (!generationMounted || version !== profileChangeVersion) return
-    await startRealtime(selectedRunId.value)
+    if (!isCurrent()) return
+    await loadResourceQuality(runId)
+    if (!isCurrent()) return
+    await startRealtime(runId)
   } catch (error) {
     if (generationMounted) jobsError.value = error?.response?.data?.message || '学习画像加载失败，请刷新页面重试'
   }
@@ -1153,6 +1302,8 @@ onBeforeUnmount(() => {
 .process-scroll,.resource-stage { overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:#9db8c2 transparent; }
 .process-scroll:focus-visible,.resource-stage:focus-visible { outline-offset:-2px; }
 .generate-page.is-fit-layout { height:100%; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:14px; padding-top:16px; }
+.generate-page.is-fit-layout.has-learning-round { grid-template-rows:auto auto minmax(0,1fr) auto; }
+.is-fit-layout .round-switcher { margin:0; }
 .is-fit-layout .studio-grid { min-height:0; }
 .is-fit-layout .process-panel,.is-fit-layout .resources-panel { min-height:0; overflow:hidden; }
 .is-fit-layout .process-scroll,.is-fit-layout .resource-stage { flex:1; min-height:0; overflow-y:auto; }
@@ -1236,6 +1387,11 @@ onBeforeUnmount(() => {
 .claim-report-status { display:flex; align-items:center; gap:6px; flex:none; color:var(--prod-accent); font-size:12px; }
 .claim-report-status svg { width:18px; height:18px; }
 .claim-report-status.is-warning { color:#935719; }
+.claim-quality-note { margin:0 0 10px; padding:8px 10px; border-radius:6px; background:#f6f9fb; }
+.claim-quality-note.is-attention { background:#fff7ec; }
+.claim-quality-note p { margin:0; color:#59697b; font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+.claim-quality-note strong { color:#172c45; }
+.claim-quality-note em { color:#935719; font-style:normal; }
 .claim-report-overview { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
 .claim-rate-panel { padding:18px; background:#f2f7f6; border-left:2px solid #77b5ad; }
 .claim-rate-ring { display:grid; place-items:center; width:96px; height:96px; flex:none; border-radius:50%; background:conic-gradient(#176b70 var(--claim-rate,0%),#d8e7e2 0%); }

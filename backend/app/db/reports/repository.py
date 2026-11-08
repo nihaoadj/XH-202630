@@ -11,6 +11,7 @@ from app.models.learning_documents.types import SUPPORTED_RESOURCE_TYPES
 from app.db.reports.watermarks import PROTOCOL, TABLE, expected_triggers
 
 _SUPPORTED_REPOSITORIES = {
+    ("app.db.feedback.round_sql_repository", "SQLRoundRepository"),
     ("app.db.learning_documents.sql_repository", "SQLResourceRepository"),
     ("app.db.feedback.sql_repository", "SQLFeedbackRepository"),
     ("app.db.feedback.feedback_loop_sql_repository", "SQLFeedbackLoopRepository"),

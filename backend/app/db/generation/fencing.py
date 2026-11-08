@@ -61,3 +61,20 @@ def install_execution_fencing() -> None:
     if not event.contains(Session, "before_commit", _guard_commit):
         event.listen(Session, "before_commit", _guard_commit)
         event.listen(Session, "before_flush", _guard_commit)
+
+
+def assert_execution_ownership(session: Session, run_id: str) -> None:
+    """Guard a repository effect against the caller's exact execution target."""
+    from app.core.execution import current_execution_session
+
+    fence = current_execution_fence()
+    execution = current_execution_session()
+    if fence is None:
+        if execution is not None:
+            raise ExecutionLeaseLost()
+        return
+    if fence.run_id != run_id or (execution is not None and (
+        execution.run_id != run_id or execution.owner != fence.owner
+    )):
+        raise ExecutionLeaseLost()
+    _guard_commit(session)

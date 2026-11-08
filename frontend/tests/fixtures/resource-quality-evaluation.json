@@ -1,0 +1,85 @@
+{
+  "manifest": {
+    "schema_version": "2.0",
+    "evaluation_id": "test",
+    "experiment_name": "main",
+    "suite_id": "test-suite",
+    "suite_version": "v2",
+    "fixture_version": "labels/v1",
+    "coverage_fixture_version": "coverage/v2",
+    "metric_definition_version": "resource-quality/v2",
+    "evidence_mode": "offline_gold",
+    "source_snapshot_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "suite_data_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "selected_case_targets": {
+      "one": [
+        "same-target"
+      ],
+      "two": [
+        "same-target",
+        "other"
+      ]
+    }
+  },
+  "manifest_hash": "430853b4d3ddbd440e217313064e5d8edfab9c0a4f060e6fe7cc2c7397228825",
+  "status": "complete",
+  "planned_case_total": 2,
+  "received_case_total": 2,
+  "failed_case_total": 0,
+  "coverage_known_target_total": 3,
+  "covered_target_total": 3,
+  "expected_target_total": 3,
+  "coverage_unknown_case_ids": [],
+  "reason_codes": [],
+  "coverage": {
+    "schema_version": "1.0",
+    "metric_id": "core_knowledge_coverage",
+    "definition_version": "ordinary-target-coverage/v2",
+    "value": 1.0,
+    "status": "complete",
+    "source": "ordinary_review",
+    "numerator": 3,
+    "denominator": 3,
+    "assessment": "met",
+    "threshold": {
+      "comparator": "gte",
+      "value": 0.9
+    },
+    "evidence_mode": "offline_gold",
+    "reason_codes": []
+  },
+  "hallucination": {
+    "schema_version": "1.0",
+    "metric_id": "hallucination_rate",
+    "definition_version": "claim-risk/v1",
+    "value": 0.0,
+    "status": "complete",
+    "source": "claim_judge",
+    "numerator": 0,
+    "denominator": 20,
+    "assessment": "met",
+    "threshold": {
+      "comparator": "lt",
+      "value": 0.05
+    },
+    "evidence_mode": "offline_gold",
+    "reason_codes": []
+  },
+  "difficulty": {
+    "schema_version": "1.0",
+    "metric_id": "difficulty_adaptation_accuracy",
+    "definition_version": "difficulty-label-accuracy/v1",
+    "value": 1.0,
+    "status": "complete",
+    "source": "labeled_evaluation",
+    "numerator": 2,
+    "denominator": 2,
+    "assessment": "met",
+    "threshold": {
+      "comparator": "gte",
+      "value": 0.85
+    },
+    "evidence_mode": "offline_gold",
+    "reason_codes": []
+  }
+}

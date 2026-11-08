@@ -20,6 +20,7 @@ from app.models.shared.assessment import (
 )
 
 from .base import BaseResourceGenerationAgent
+from .revision_prompts import attach_revision_fields
 
 
 ASSESSMENT_PROMPT = """你是 AssessmentAgent。一次只能为一个能力节点生成严格 JSON 题组。
@@ -202,9 +203,31 @@ class AssessmentAgent(BaseResourceGenerationAgent[AssessmentNodeBlockV2]):
                 return str(node.get("name") or node_id), list(dict.fromkeys([node_id, *tags]))
         return node_id, [node_id]
 
+    @staticmethod
+    def _typed_revision_feedback(context: ResourceGenerationContext) -> dict:
+        """Scope the assessment-specific reviewer projection out of a typed input.
+
+        The compat ordinary input keeps the reviewer ``feedback`` (including the
+        per-question ``assessment_findings``) in ``resource_review_revision``;
+        the work-order and Claim paths carry the authoritative issues/findings in
+        the input itself, which the prompt reads directly.
+        """
+        rev = context.resource_review_revision
+        if rev is not None and rev.revision_source == "compat":
+            return rev.feedback or {}
+        return {}
+
     def _messages(self, spec: ResourceSpec, context: ResourceGenerationContext, node_id: str):
         node_name, allowed_tags = self._node_descriptor(node_id)
-        revision_feedback = context.constraints.get("revision_feedback", {})
+        has_typed_revision = (
+            context.claim_review_revision is not None
+            or context.resource_review_revision is not None
+        )
+        revision_feedback = (
+            self._typed_revision_feedback(context)
+            if has_typed_revision
+            else context.constraints.get("revision_feedback", {})
+        )
         node_index = list(spec.knowledge_points).index(node_id)
         node_question_ids = [f"q-{number:03d}" for number in range(node_index * 6 + 1, node_index * 6 + 7)]
         feedback_issues = revision_feedback.get("issues", []) if isinstance(revision_feedback, dict) else []
@@ -219,6 +242,11 @@ class AssessmentAgent(BaseResourceGenerationAgent[AssessmentNodeBlockV2]):
             for question_id in re.findall(r"q-\d{3}", str(item.get("description") or ""))
             if question_id in node_question_ids
         })
+        assessment_findings = [
+            item for item in revision_feedback.get("assessment_findings", [])
+            if item.get("skill_node_id") == node_id and item.get("question_id") in node_question_ids
+        ] if isinstance(revision_feedback, dict) else []
+        rejected_question_ids = sorted(set(rejected_question_ids) | {item["question_id"] for item in assessment_findings})
         payload = {
             "schema_version": "2.0", "skill_node_id": node_id, "skill_node_name": node_name,
             "allowed_knowledge_point_tags": allowed_tags, "allowed_evidence_ids": self._node_evidence_ids(spec, node_id),
@@ -235,10 +263,13 @@ class AssessmentAgent(BaseResourceGenerationAgent[AssessmentNodeBlockV2]):
             "revision_feedback": {
                 "rejected_question_ids": rejected_question_ids,
                 "issues": node_feedback,
-            } if context.generation_attempt > 1 else {},
+                "assessment_findings": assessment_findings,
+            } if (has_typed_revision or context.generation_attempt > 1) else {},
             "previous_version_content": context.constraints.get("previous_version_content", "")
             if context.generation_attempt > 1 else "",
         }
+        if has_typed_revision:
+            attach_revision_fields(payload, context)
         return [SystemMessage(content=ASSESSMENT_PROMPT), HumanMessage(content=self.json_payload(payload))]
 
     @staticmethod
@@ -273,7 +304,12 @@ class AssessmentAgent(BaseResourceGenerationAgent[AssessmentNodeBlockV2]):
                 try:
                     result = self.invoke(spec=spec, context=node_context, llm_gateway=llm_gateway,
                         messages=self._messages(spec, node_context, node_id), output_schema=AssessmentNodeBlockV2,
-                        representation="text", max_output_tokens=self.default_max_output_tokens)
+                        representation="text", max_output_tokens=self.default_max_output_tokens,
+                        # This loop already retries a failed validation.  Letting
+                        # the gateway retry inside each iteration multiplied the
+                        # budget by four (2 validation attempts x 2 transport
+                        # attempts) for one knowledge point.
+                        max_attempts=1)
                     self._validate_node(result.output, spec, node_id, node_context)
                     blocks.append(result.output)
                     traces.append(result.trace_metadata())

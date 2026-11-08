@@ -74,6 +74,15 @@ class CoursewareExecutor:
             }
 
     def run_once(self, limit: int | None = None) -> dict[str, int]:
+        # Bypass LLM-call accounting (T41): run_once is the outermost Worker
+        # execution-batch container; the sealed segment snapshots flush only
+        # after the original claim/heartbeat/complete/fail handling finishes.
+        from app.agents.shared.llm_accounting import courseware_batch
+
+        with courseware_batch():
+            return self._run_once(limit)
+
+    def _run_once(self, limit: int | None = None) -> dict[str, int]:
         started_at = datetime.now(timezone.utc)
         with self._metrics_lock:
             if self._started_at is None:

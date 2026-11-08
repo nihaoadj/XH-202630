@@ -54,6 +54,14 @@ def main():
         with WorkerProcessLock(str(get_engine().url.database) + ".generation-worker.lock"):
             init_database()
             container = init_container()
+            # Bypass LLM-call accounting (T41): one optional writer child per
+            # Worker host process; failures only disable persistence.
+            from app.services.runs.llm_accounting_runtime import (
+                start_llm_accounting_runtime,
+                stop_llm_accounting_runtime,
+            )
+
+            start_llm_accounting_runtime()
             worker = GenerationWorker(container.generation_job_repository(), container.feedback_loop_repository(),
                 container.generation_job_service, lease_seconds=settings.workflow_run_lease_seconds,
                 poll_seconds=settings.generation_worker_poll_seconds,
@@ -66,6 +74,7 @@ def main():
                     signal.signal(getattr(signal, name), lambda *_: worker.stop())
             if args.once:
                 result = worker.run_once()
+                stop_llm_accounting_runtime()
                 logging.info("Generation worker once claimed=%s processed=%s failed=%s", *result.values())
                 return 0 if not result["failed"] else 1
             server = health_server(worker, args.health_host, args.health_port)
@@ -79,6 +88,7 @@ def main():
             try:
                 worker.run_forever()
             finally:
+                stop_llm_accounting_runtime()
                 server.shutdown()
                 server.server_close()
         return 0

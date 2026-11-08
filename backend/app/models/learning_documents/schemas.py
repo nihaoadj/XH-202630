@@ -8,6 +8,8 @@ from app.models.generation.progress import (
     ResourceExecutionProgress,
     ResourceExecutionState,
     ResourceRepresentation,
+    RoundBindingSummaryV1,
+    RunPublishSummary,
     RunResourceProgressSummary,
 )
 from app.models.learners.mastery import LearnerFocusSnapshotV1
@@ -233,10 +235,14 @@ class GenerateRequest(BaseModel):
     )
     include_review: bool = Field(default=True, description="是否进入审核")
     include_claim_check: bool = Field(default=False, description="是否进行 Claim 级审核；开启后建议每任务只生成一个资源")
+    include_claim_evidence_retrieval: bool = Field(
+        default=False,
+        description="事实 Claim 首次缺证时补检知识库并重判；需同时开启普通审核与 Claim 审核",
+    )
     # Initial generation plus two revisions means at most three visible attempts.
     max_iterations: int = Field(default=2, ge=0, le=3, description="最大业务返工次数")
     claim_max_iterations: int = Field(
-        default=0, ge=0, le=3, description="Claim 审核专用最大返工次数；当前默认不返工"
+        default=1, ge=0, le=3, description="Claim 审核专用最大返工次数；默认1次，0关闭专用返工，不借用普通返工额度"
     )
     constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
 
@@ -271,6 +277,24 @@ class GenerateRequest(BaseModel):
 
     @model_validator(mode="after")
     def require_resource_review_for_claim_audit(self) -> "GenerateRequest":
+        from app.models.reviews.claim_evidence_retrieval import validate_feature_switch
+
+        if self.include_claim_evidence_retrieval:
+            if "include_claim_check" not in self.model_fields_set:
+                # Legacy/omitted requests are interpreted as closed; asking for
+                # supplements without an explicit Claim audit is invalid.
+                raise ValueError(
+                    "include_claim_evidence_retrieval requires include_claim_check=true"
+                )
+            validate_feature_switch(
+                include_claim_evidence_retrieval=True,
+                include_claim_check=self.include_claim_check,
+                include_review=self.include_review,
+            )
+            if len(self.resource_types) != 1:
+                raise ValueError(
+                    "include_claim_evidence_retrieval requires one resource_type per request"
+                )
         if self.include_claim_check and not self.include_review:
             # Keep the explicit no-review/draft path usable.  A caller that
             # did not send this field receives the effective safe default for
@@ -282,6 +306,16 @@ class GenerateRequest(BaseModel):
         if self.include_claim_check and len(self.resource_types) != 1:
             raise ValueError("include_claim_check requires one resource_type per request")
         return self
+
+
+class GenerateCreateRequest(GenerateRequest):
+    """Public new-job contract; persisted legacy snapshots use GenerateRequest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_skill_nodes: List[str] = Field(
+        default_factory=list, max_length=1, description="目标能力节点（最多一个）"
+    )
 
 
 class GenerationJobCreateResponse(StatusResponse):
@@ -309,8 +343,11 @@ class GenerationJobStatusResponse(BaseModel):
     resource_progress_summary: RunResourceProgressSummary = Field(
         default_factory=RunResourceProgressSummary
     )
+    # Derived read-only publication facts; ``None`` keeps legacy responses valid.
+    publish_summary: Optional[RunPublishSummary] = None
     request_payload: Dict[str, Any] = Field(default_factory=dict)
     focus_snapshot: Optional[LearnerFocusSnapshotV1] = None
+    round_binding: Optional[RoundBindingSummaryV1] = None
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -332,6 +369,10 @@ class ContinueResourceBatchRequest(BaseModel):
     include_claim_check: Optional[bool] = Field(
         default=None,
         description="可选：覆盖源任务的 Claim 审核设置；省略时沿用源任务",
+    )
+    include_claim_evidence_retrieval: Optional[bool] = Field(
+        default=None,
+        description="可选：覆盖源任务的 Claim 补检设置；省略时继承，显式 false 关闭",
     )
     source_run_id: Optional[str] = Field(
         default=None,

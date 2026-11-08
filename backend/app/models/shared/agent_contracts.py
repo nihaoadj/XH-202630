@@ -18,6 +18,8 @@ from app.core.security.errors import (
 from app.models.knowledge.knowledge import EvidenceAllocation, EvidenceItem, RetrievalStatus
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.models.shared.assessment import ASSESSMENT_QUESTION_QUOTAS
+from app.models.reviews.review_audit import ReviewAuditRecordV2, ReviewAuditRecordV1, ReviewPolicySnapshotV1
+from app.models.reviews.revision_inputs import ClaimReviewRevisionInput, ResourceReviewRevisionInput
 from app.models.shared.workflow import (
     ErrorInfo,
     StepStatus,
@@ -246,11 +248,27 @@ class ResourceGenerationContext(BaseModel):
     learner_profile_summary: Dict[str, Any] = Field(default_factory=dict)
     learning_path: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
     evidence: List[EvidenceItem] = Field(min_length=1, max_length=100)
+    # Bounded subset of ``evidence`` explicitly authorised by the child
+    # generation scope.  Empty for a first generation and every closed run.
+    supplement_evidence_ids: List[str] = Field(default_factory=list, max_length=16)
     node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     continuation_context: List[Dict[str, Any]] = Field(default_factory=list, max_length=20)
     constraints: Dict[str, Any] = Field(default_factory=dict)
     generation_attempt: int = Field(default=1, ge=1)
     workflow_deadline_at: Optional[datetime] = None
+    # Generation-side revision inputs (T46). At most one is non-null for a
+    # single resource worker; first generation leaves both empty. These are
+    # distinct from the recheck-tracking ``state.resource_revision`` /
+    # ``state.lecture_revision`` records, which keep their parent-version
+    # validation semantics and are never mixed into the worker prompt.
+    resource_review_revision: Optional[ResourceReviewRevisionInput] = None
+    claim_review_revision: Optional[ClaimReviewRevisionInput] = None
+
+    @model_validator(mode="after")
+    def validate_revision_inputs(self) -> "ResourceGenerationContext":
+        if self.resource_review_revision is not None and self.claim_review_revision is not None:
+            raise ValueError("a resource worker receives at most one generation revision input")
+        return self
 
     @field_validator("evidence")
     @classmethod
@@ -259,6 +277,15 @@ class ResourceGenerationContext(BaseModel):
         if len(evidence_ids) != len(set(evidence_ids)):
             raise ValueError("generation context evidence_id must be unique")
         return values
+
+    @model_validator(mode="after")
+    def validate_supplement_ids(self) -> "ResourceGenerationContext":
+        if len(self.supplement_evidence_ids) != len(set(self.supplement_evidence_ids)):
+            raise ValueError("supplement evidence ids must be unique")
+        known = {item.evidence_id for item in self.evidence}
+        if set(self.supplement_evidence_ids) - known:
+            raise ValueError("supplement evidence must be part of the context pool")
+        return self
 
 
 class ResourceArtifactMetadata(BaseModel):
@@ -687,6 +714,7 @@ class ReviewPracticePackageV2(StrictLLMOutput):
 
 
 class ReviewerInput(AgentInput):
+    review_policy: ReviewPolicySnapshotV1 | None = None
     generated_resources: List[LearningResource] = Field(default_factory=list)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
     difficulty_preference: Optional[str] = None
@@ -698,6 +726,10 @@ class ReviewerInput(AgentInput):
 
 class ReviewerOutput(BaseModel):
     review_result: Dict[str, Any]
+    review_audit: ReviewAuditRecordV1 | ReviewAuditRecordV2 | None = None
+    lecture_ledgers: Dict[str, Any] = Field(default_factory=dict)
+    lecture_stop_reasons: Dict[str, str] = Field(default_factory=dict)
+    review_audit_refs: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class DiagnosisLLMOutput(StrictLLMOutput):
@@ -795,6 +827,22 @@ class ReviewLLMOutput(StrictLLMOutput):
         if self.decision == "approve" and self.revision_instructions:
             raise ValueError("approve forbids revision_instructions")
         return self
+
+
+class AssessmentQuestionReviewV2(StrictLLMOutput):
+    question_id: str = Field(min_length=1, max_length=128)
+    scope_decision: Literal["in_scope", "out_of_scope", "insufficient_evidence"]
+    supported_evidence_ids: List[str] = Field(default_factory=list, max_length=1)
+    answer_check: Literal["pass", "fail", "insufficient_evidence"]
+    clarity_check: Literal["pass", "fail"]
+    rubric_check: Literal["pass", "fail", "insufficient_evidence", "not_applicable"]
+    reason: str = Field(min_length=1, max_length=80)
+
+
+class AssessmentCombinedReviewV2(StrictLLMOutput):
+    schema_version: Literal["2.0"] = "2.0"
+    findings: List[AssessmentQuestionReviewV2] = Field(min_length=1, max_length=300)
+    summary: ReviewLLMOutput
 
 
 def make_error_info(

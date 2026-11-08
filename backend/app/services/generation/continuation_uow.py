@@ -9,6 +9,7 @@ from typing import Any, Self
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+from app.db.shared.unit_of_work import begin_sql_scope
 from app.db.audit.sql_repository import SQLAuditRepository
 from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
 from app.db.feedback.feedback_loop_sql_repository import SQLFeedbackLoopRepository
@@ -213,20 +214,7 @@ class ContinuationUnitOfWork:
 
     def __enter__(self) -> Self:
         if self.mode == "sql":
-            self.connection = self.engine.connect()
-            self.transaction = self.connection.begin()
-            if self.connection.dialect.name == "sqlite":
-                # Serialize the read/decision/write sequence, including mastery
-                # scheduling, before inspecting an idempotent submission or retry.
-                self.connection.exec_driver_sql("BEGIN IMMEDIATE")
-            self.session_factory = scoped_session(
-                sessionmaker(
-                    autocommit=False,
-                    autoflush=False,
-                    bind=self.connection,
-                    join_transaction_mode="rollback_only",
-                )
-            )
+            self.connection, self.transaction, self.session_factory = begin_sql_scope(self.engine)
             self._bind_sql_graph()
         else:
             self._acquire_memory_locks_and_snapshot()

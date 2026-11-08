@@ -1,13 +1,25 @@
 # 知识库与数据库实现说明
 
+T42 修复：ExtractionResult.location_failures 为可选私有字典，按逻辑 call_id 保存最多8条拒绝诊断；None 时不序列化，历史 state hash 保持。成功诊断按 batch_id、失败诊断按 call_id 关联原输出/逻辑状态，在读与 CAS 路径校验；已有诊断条目不可改写或删除。物理费用仍先结算，逻辑输出/诊断再 CAS，字节容量不足以最小失败记录收敛，不丢费用、不伪造成功。根 policy/state 仍2.0，无表/列迁移；新 locator-v2 不覆盖旧 v1 策略或已发布产物。
+
+T41 修复：仅独立计量库启用 WAL，避免只读查询使零等待 writer 因读锁丢记录；容量检查计入主文件、WAL 和 SHM。只读连接使用转义后的 `mode=ro` URI，缺文件不建目录/库，异步建库后可重新检查。读取核验调用 payload 及分段 manifest 的 schema/hash，损坏时清空统计并返回 unavailable，不把改坏的 token 当作可信数字；不改变业务数据库 journal 配置。
+
+T41 LLM 调用旁路计量使用独立 SQLite 库（默认 `backend/data/llm_accounting.db`），拥有自己的 schema 版本与 `llm_call_observations`、`llm_accounting_segments` 两张逻辑表，主键 `(domain,run_id,segment_id,observation_id)`，无指向 `agent_runs`/`agent_steps`/课件表的外键，不注册进业务 `Base.metadata`、不修改既有 p0 迁移、不接触业务 SQLite 写锁（busy_timeout=0）。独立迁移在 `db/audit/llm_accounting/migrations.py` 版本化，建表失败只使计量 unavailable。重复投递同主键同 hash 为 no-op，同主键不同 hash 不覆盖首值（记 conflict）；hash 为排除 recorded_at 等不稳定字段的规范 JSON SHA-256。只保存身份与脱敏计量，不存 prompt/正文/答案/用户输入/headers/凭据。计量库最大 256MiB，超限停写标 `storage_capacity`，不自动删旧数据。独立库避免新计量占用业务写锁；业务库启动路径、数据、hash、发布指针完全不动。
+
 > 项目编号：XH-202630
 > 文档版本：2.3
-> 文档更新时间：2026-10-09
+> 文档更新时间：2026-10-27
 > 文档定位：说明当前项目中知识库源文件、SQLite 数据库、问卷、诊断、画像与资源的真实落库方式。
 
 ## 1. 当前运行方式
 
+文本资源审核的私有明细使用已有 `agent_steps.output_payload['review_audit_v1']`，不新增表或列。envelope 含 `schema_version`、规范 `payload` 及其 `audit_hash`，最大 1 MiB；`resource_reviews` 继续只存公开摘要。SQL 在 complete_step 同一事务中整体赋值 JSON 并保留其他命名空间；Memory 使用私有 map、深拷贝和锁内原子回滚。步骤归属、冻结策略、资源及 review IDs 共同校验；只有存在 audit 时才加入原步骤 hash，同终态内容幂等，终态增删改均冲突。
+
+内部只读 `get_step_review_audit(run_id, step_id)` 验证 envelope 与 hash。新版本已完成审核步骤缺明细为损坏，失败/中断步骤无明细为观测不完整，旧 Run 无标记且无明细为 `legacy_unrecorded` 的读取解释。complete_step 已提交而 checkpoint 尚未创建时，有效 audit 仍可读取；该步骤 checkpoint 已存在时必须有匹配的 hash/review ID 引用。checkpoint 不复制调用或 findings，保留默认 64 KiB 限制。私有内容不进入公开 step、timeline、事件、ReviewSummary 或 Markdown；旧公开单调用 token 字段不改为汇总。
+
 开发环境当前使用 SQLite。
+
+课件 checkpoint 保留原 `(created_at, attempt)` 的优先级；并列时按既有七阶段顺序、checkpoint ID 稳定排序，SQL/Memory 使用同一纯阶段常量。未知历史阶段 rank=0，既有数据可读且不回写；无表列迁移。这样同一时间戳的 scenes 不会被较早的 design 覆盖为“最新”恢复点。
 
 `backend/.env.example` 的默认配置如下，本机 `backend/.env` 可覆盖实际路径：
 
@@ -269,6 +281,27 @@ backend/chroma_db/
 
 ORM 入口是 `db/shared/models.py` 与 `db/courseware/models.py`，初始化与迁移装配位于 `db/shared/database.py`。Tutor 不写掌握度；课件交互自评不替代正式反馈成绩。
 
+### 3.11 Claim 缺证补检（T50，附加表）
+
+迁移 `backend/app/db/migrations/p0_39_claim_evidence_retrieval.py` 只新增侧表，不改既有列、唯一约束或行。原有 `resource_claims`、`claim_judgements`、`retrieval_evidence_snapshots` 仍是首轮判定与证据正文的唯一事实源。
+
+| 表 | 关键约束 | 用途 |
+|---|---|---|
+| `claim_evidence_retrieval_runs` | PK `run_id`，FK `agent_runs` | 冻结策略、预算账本（预留/已知/未知用量、逻辑调用、attempt、query 数）、owner/epoch |
+| `claim_evidence_retrieval_sessions` | PK `session_id`；UNIQUE run/resource/version/review | 每资源版本一个补检会话，终态不可改，`hard_block` 只允许 false→true |
+| `claim_evidence_retrieval_batches` | PK `batch_id`；UNIQUE session/kind/ordinal | query/retrieve/rejudge 批，payload ≤1 MiB |
+| `claim_evidence_retrieval_attempts` | PK `attempt_id`；UNIQUE batch/logical_call/attempt_no | 每次真实发送的预留与结算；未知用量保留预留 |
+| `claim_review_evidence_sets` | PK `scope_id`；UNIQUE run/resource/version/purpose/session | 受控证据 scope（audit/generation）与有序 manifest hash |
+| `claim_supplement_judgements` | PK `judgement_id`；UNIQUE session/claim | 第二轮判定，`round_no=1`，引用同 Run 已持久化快照 |
+| `claim_supplement_evidence` | UNIQUE judgement/evidence | 新判定与既有快照的关联，不写入旧 `claim_evidence` 外键 |
+
+- 生效集合由 `models/reviews/claim_resolution.py` 统一解析：只有 `active=true` 且 `completed` 的会话替换首次 `not_in_evidence` 项，其余沿用首轮。历史差异不视为数据冲突；同一激活轮重复不同 payload 仍是硬错误。
+- 激活在同一事务内校验证据 scope 身份、持久化第二轮集合身份与拟激活指标一致，然后写会话、scope 与 review 汇总；重复激活幂等，不同内容冲突。
+- 新反证批提交时在同一事务写 `hard_block` 并把该资源版本置为未发布（版本级安全戳）；`db/claim/publication.py` 在每次发布写入的事务内重读会话状态。
+- 补检 session 创建和发布使用同一资源写锁；创建 pending 等阻断 session 时原子撤销已发布状态。首次保存为 published 同样执行 guard，避免检查与写入之间插入新 session。
+- 证据继承通过持久 parent 链验证 run/spec/family/version，连续返工保留祖先 generation scope；恢复验证 manifest、快照 hash 与 KB 绑定。补检重判、激活和证据 scope 写入在执行上下文中校验 owner/lease 与目标 Run，失租拒绝提交。
+- 单资源 retry 把选中资料的授权补证导入为新 Run 初始快照；来源 scope、原始 snapshot 与父链身份保存在冻结 `ResourceRetryContext.supplement_context` 中。复制后的 evidence ID/config/snapshot hash 属于新 Run/reuse_context step，不复制旧补检 session、Claim/Judgement 或通过结论；新正文重新生成审核。新 spec/allocation 扩展不会修改源记录，不需要新表或迁移。
+
 ## 4. 当前 API 与数据库的关系
 
 ### 4.1 学习目录
@@ -450,6 +483,12 @@ python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
 - `learner_profiles`
 
 旧 `POST /api/feedback/attempts` 因聚合分数缺少服务端题目证据返回 422 `FEEDBACK_EVIDENCE_UNVERIFIED`，不写 Attempt、掌握度或画像版本。
+
+### 4.10 T48 资源质量读取与 watermark 协议
+
+本轮不新增/删除/重命名业务表或列，也不写任何质量派生行。质量结果在查询时从既有 `resource_reviews`、私有审核账本（V4 审计 envelope / checkpoint 投影）、`generated_resources`、`resource_specs`、`agent_runs/agent_steps`、`resource_claims/claim_judgements` 读取并投影；私有账本只输出安全摘要（状态、计数、稳定 ID、受控位置码），不投影答案、rubric、Prompt、证据摘录或内部自由文本。
+
+报告读模型协议由 `report-read/1` 升为 `report-read/2`：`report_read_watermarks` 的触发器闭包新增 `agent_runs`、`agent_steps`、`workflow_checkpoints`、`resource_specs`，其中 `agent_runs` 排除 `heartbeat_at/lease_expires_at/owner_instance_id/updated_at`，避免租约心跳使缓存失效。升级由既有 `p0_35` installer 幂等完成；缺表、触发器缺失/被改、协议不匹配或旧/新进程触发器集合不一致时 `read_token()` 返回 `None`，调用方禁用报告缓存而不是继续提供旧正文。回滚使用同一 installer 的 rollback 移除派生触发器/索引/watermark，保留业务表、业务行与无关触发器；不得通过在线 GET 执行。
 
 ## 5. 问卷与诊断的边界
 
@@ -1130,3 +1169,84 @@ T30本机19个不同专项通过（新契约10、预算及五类型流程7、Cla
 重复方向检查通过分页`GET /api/profiles/`读取本人记录，使用实际`knowledge_base_id`及`learning_preferences.metadata.onboarding.learning_direction_id`匹配；不从`user__direction`猜测ID，因为新画像实际附随机后缀。弹窗默认不选记录，“保留进度并继续”切至所选历史画像；“删除所选记录并重新开始”必须二次确认，复核目标及任务状态、成功读取问卷后，仅调用所选真实ID的DELETE，再进入空白问卷，不自动提交新画像。其他同方向记录和其他方向不删除；失败或数据不完整时不继续。
 
 这只是既有永久删除契约的前端入口，不新增后端锁、事务原子性或Worker取消机制。任务状态预检不能保证跨客户端并发删除安全；未通过本次测试证明旧数据库/课件物理文件完整清理。验证全部使用合成数据与mock接口，未访问或删除真实进度。具体功能与边界见[功能说明21](features.md#21-新建方向的续填与旧进度处理t34)。
+
+## 28. 本工作区首次换模同步记录（2026-10-29）
+
+本节仅记录本次执行工作区的实际状态，不代表其他机器或远端部署已经同步。Git 不分发 SQLite、Chroma 或模型权重；操作流程见[多语言换模与入库](deployment.md#多语言embedding换模与资料入库)。
+
+旧运行库为 `backend/data/domain_knowledge_writable_probe.db`、旧向量目录为 `backend/chroma_db`，RAG 活动资料为 6 篇 / 84 片。已通过一致性备份克隆至 `backend/data/domain_knowledge_m3.db`，构建独立 `backend/data/chroma_bge_m3`；当前实际配置已成组切为新库、新索引和固定 revision 的 BGE-M3 本地绝对路径，batch=4、本地加载开启，生成 LLM 与精排配置保持。
+
+当前同步结果：62 篇 / 1121 个有效片段 / 13 个能力节点；expected、SQL 和向量均 1121，index ready。最大片段 3820 tokens，未超 8192 上限。独立新进程核验向量维度、有限性、归一化，SQL/向量全部 ID、正文、完整 metadata 与冻结快照精确一致，六个 dense 中英文检索命中预期；manifest 两项 smoke 通过。按新 `.env` 的真实 EvidenceRetriever 返回 6 条证据，20 对候选完成精排，未降级；运行时 health ready。
+
+旧源库数据和 schema 未变，旧索引保留；目标全部原学习业务字段/行及不可变版本/冻结证据保留。只对平台注册的 `report_read_watermarks` 派生缓存状态采用专门规则：本次目标 epoch 103、源为 102，符合知识更新的失效触发；同 installation_id 不允许倒退，重置必须更换身份。源端的水位仍参与完整快照变化检测。新库 81 个报告触发器、5 个索引及 dispatch 字段已核验，SQLite integrity 与 foreign_key_check 通过。不能只看 schema_migrations 判断 dispatch/report 是否安装，因为这两项采用结构幂等迁移、不登记该表。
+
+当前问卷与题库 JSON 相较前次 dev 仅文件格式变化，语义未变；SQL 中 39 道诊断、130 道测评全字段与源文件一致，问卷版本为 1.1.0。本次没有重新执行批量示例数据初始化，没有新增或删除用户学习记录。
+
+证据：`output/test-runs/kb-sync-20261029/` 的备份、schema-and-preservation.json、activation.json、runtime-verification.json 及测试日志；模型 receipt 与精确审计在 `output/test-runs/kb-m3/model.json`、`build.json`、`audit.json`。旧 `.env` 备份仅位于 Git 忽略的私有目录，不打印或提交。Chroma telemetry 参数提示与 LangChain 弃用警告没有阻止本轮校验；未顺带升级这些依赖。
+
+项目便携式 `.venv/python.exe` 的依赖和 pip check 已通过；只按开发锁补装 psutil，没有修改全局 Python。Web/Worker 原本未运行，验证未启动消费者或创建生成任务；未调用付费生成 LLM，不将本地检索检查当作完整生成质量或生产部署验收。
+
+## 统一课件审核私有持久化
+
+不新增表或列，不迁移/回填历史批准。仅 content_v1 新 job 在同一创建事务预建 `courseware_specs`，固定 `spec_id=cws_<run_id>`，保存 policy_only；初始 `courseware.run:<run_id>` outbox payload 保存版本化 binding。SQL 事务与 Memory 锁内回滚涵盖 job/spec/task/queued event；幂等复用旧 job 不插入本次策略。初始 task 完成、重试或 dead-letter 后仍保留 payload，不能独立清理该绑定。
+
+私有 `save_content_review_spec_once` 使用 expected content_hash 做 CAS，保留 created_at、不可变策略/设计及其他 namespace，冲突重读，不覆盖并发 ticket。ledger 使用 reserved 及 completed/unknown 的追加链，未知 usage 保留最坏占用，2MiB spec 与有限 ledger 在调用前检查。完整 spec hash 只用于 CAS；批准身份绑定冻结来源/设计/值/全部规则结果/版本，预算核销不改变 design checkpoint，场景阶段另绑定输出摘要。
+
+新快照只从已准入 SourceRef 冻结可读 snippet 与原 doc/version/chunk/evidence 身份。无原 evidence_id 时使用明确的私有 reference locator，不把 doc/chunk ID 冒充 evidence ID；缺正文不进入可读依据白名单。原题答案另标 source_answer，不冒充原知识证据；无课件检索、无旧知识身份重算。独立 binding/spec 缺失会阻断，不宣称抵御同时删除双方记录的数据库管理员。已有运行库与本机换模状态不在本次操作范围。
+
+
+## Claim 抽取私有账本（p0_36）
+
+`p0_36_claim_extraction` 为 SQLite 增加 `agent_runs.claim_extraction_mode`（非空、默认 `legacy_v3`，创建后不可变）和 `claim_extraction_runs`。旧行保持 legacy，原 Claim/Judgement/Evidence、资源和知识库表不重命名、不回填；不改 Chroma。账本以 run_id 为主键/FK，合法删除 run 时级联；包含 schema、policy/hash、revision、state/hash、时间戳及 updated_at 索引。policy 与 state 的 JSON 合计上限 2MiB，超限失败而非截断。
+
+`SQLAuditRepository.create_run` 同事务建立 run、模式和新策略空账本；显式 Memory 仓储同锁整体验证提交。条件 CAS 使用 revision+state_hash，并在同事务/锁核对 owner/session、epoch、run/job lease；预留时间覆盖所有 attempt timeout 和退避。票据核销与批次结果同次 CAS，unknown usage 保留 token 预留、未知在途不能重发或推进下一轮，终态结果 hash 不可改。中途候选只在私有账本，原 artifact recorder 在 Judge 后保存正式 Claim/Judgement。
+
+账本不保存完整 messages/凭据，不进入公开 DTO、trace 或事件。完成结果绑定 resource/version/review/content/evidence/attempt 与 policy，只允许同一活跃执行幂等读取；中断不会通过本账本恢复图。回退优先关闭新任务策略并保留数据，已排队任务仍按冻结策略执行；降级迁移仅在隔离库验证无 neutral run 且空账本时允许移除表和列，非空拒绝。本轮仅验证隔离测试库，未对实际运行数据库迁移。
+
+
+## Claim估算账本2.0与p037
+
+T31第12节新增neutral_estimate_v1和2.0私有policy/ledger，复用claim_extraction_runs原JSON列，row.schema_version与两份JSON版本必须一致。p037在显式事务内局部替换agent_runs模式列、保留原值并扩展CHECK/trigger；不重建run行、不删除历史，验证键值/外键与失败回滚。旧1.0解析与查询保留，旧neutral执行受控拒绝；2.0不填假calibration字段。
+
+T37 在同一 2.0 policy JSON 中增加可选 `density_batching` 子契约，不新增表或列、不执行迁移。旧快照不含该键：解析为 `None`，再序列化仍省略该键，`digest(policy)` 与原 `policy_json` 逐字节不变；新快照写入完整子契约（含 `enabled=false`），子参数变化即改变新任务的 policy hash 与 result identity。读取保留旧/新两条路径，不回填、不升级既有 result、不重写历史账本。
+
+T42 在同一 2.0 policy JSON 中增加可选 `source_locating` 私有子契约（mode/prompt_version/prompt 与 schema hash/定位算法版本/规则 hash/全部阈值与计算上限），同样不新增表或列、不执行迁移。`None` 时序列化省略该键，`digest(policy)` 与原字节不变；新 run 写入完整子契约并随新任务冻结。`ExtractionResult.location_diagnostics` 为可选有界诊断，`None` 省略，不进公开 DTO/ClaimRecord。新增 `NeutralCandidateV2`/`UnitOutputV2`/`BatchOutputV2`（顶层 `schema_version="2.0"`，候选不含偏移）与旧 v1 输出按显式版本选择，读取/CAS 阻断混用；根 `schema_version=2.0` 与表结构不变。
+
+logical_call_id持久绑定具体result/batch，physical ticket按attempt_index独立预留，核销幂等且终态不可改。可靠usage可高于预留，tokens保存真实量，overrun_tokens=max(0,tokens-budget)，budget_exhausted必须与tokens/时间一致；未知请求不释放。普通批次、细分及同图返工共享余额，失租/重启不续跑旧run。旧dispatch预检失败时只在合法claim/epoch与run所有权下将非终态run和job同事务结束，并追加原RUN_FAILED事件，不覆盖终态或抢其他lease。
+
+回滚优先新任务legacy并保留历史。p037降级仅在无estimate任务及2.0账本时允许，不自动删数据；实际运行库未在本轮操作。
+
+
+T37 2026-11-05：无表/列或数据迁移。ExtractionResult.final_claims静态载体上限128；check_ledger_size/validate_snapshot对所有result按冻结policy限制容量（1.0额外最多64）。旧JSON和哈希不回填、不重写；失败/unknown历史任务不原地修改策略恢复。扩容的SQL/Memory read、CAS和反序列化覆盖64/75/128/129及伪造超限用例。
+
+### T38 私有问题账本存储
+
+不新增物理表或迁移。V2 审计复用 Agent step 私有 JSON 的 `review_audit_v2` namespace，保留 V1 原记录及 hash；同一步禁止混合两版本。账本保存资源版本、正文 hash、冻结证据和策略 hash、问题原要求、核销历史及无变化记录，正文/证据由既有持久化资源引用。终态 trace 与审计同事务提交，随后写 checkpoint 引用。审计上限仍为 1 MiB，超限失败关闭。SHA-256 用于一致性检测，不提供针对可改写全部数据库记录者的认证。Provider 返回而审计未提交时结果可能丢失，不承诺外部调用 exactly-once。
+
+T39 讲义审核 V2 未新增表或列：纠正记录与 v2 账本写入既有 step 私有 JSON 的 `review_audit_v3` 命名空间，与 `review_audit_v1`/`review_audit_v2` 并列；整个 envelope（含首次无效结果附件、两次调用与账本）仍受 1 MiB 限额，超限按 observation_incomplete 隔离且不发布。旧 V1/V2 行按原 schema 读取，不做物理迁移。
+
+T44 通用文本审核未新增表或列：六类文本资源的通用账本、程序硬门观察、有界纠正记录与 V4 策略写入既有 step 私有 JSON 的 `review_audit_v4` 命名空间，与 `review_audit_v1`/`v2`/`v3` 并列；envelope 仍受 1 MiB 限额，超限按 observation_incomplete 隔离且不发布。旧 V1–V3 行按原 schema 读取，不做物理迁移。
+
+修复续作不迁移历史行。新任务在既有 request snapshot/checkpoint 私有 JSON 冻结执行信封 1.1 的 reviewer 身份及独立 hash，内部 V1 策略 hash 不变；旧执行信封 1.0 保留原文只读，不补写身份。恢复根据持久产物/结构包和冻结证据逐观察重跑硬门与核销，拒绝缺引用、hash/版本错配和 hash 自洽的非法决定；发布写入前完成校验。
+
+T46 两类审核修订输入分离未新增表或列：`resource_review_revision` / `claim_review_revision` 及带版本的 `generation_revision_inputs` 映射仅存在于同次图调用的内存 `constraints` 与单资源 retry 的 `revision_feedback` 传输槽，不写入 `build_checkpoint_projection` 白名单，也不跨进程恢复；新 Run 重试仍从已持久资源/审核/Claim/Evidence 重建输入。持久 V1–V4 审核记录与既有 checkpoint JSON 保持原样，不做物理迁移。
+
+## T49 学习轮次存储（p0_38）
+
+新增九张表，均为增量迁移，不重命名或删除既有 Job、Attempt、资源、反馈与课程记录：
+
+| 表 | 作用与关键约束 |
+|---|---|
+| `learning_rounds` | 轮次根：学习者、知识库、方向、协议版本（`learning-round/v1` 或 `legacy-correction/v1`）、可选父轮次与来源 Attempt、选择 key/hash、创建时冻结预算快照、`row_version`。唯一 `(learner_id, selection_key)`；来源非空时唯一 `(learner_id, protocol_version, source_attempt_id)`；普通协议父轮次唯一 |
+| `learning_round_nodes` | 本轮成员：`role=primary/review/legacy`、冻结节点名与阶。唯一 `(round_id, skill_node_id)`；`primary`/`review` 各至多一条；legacy 协议只能有 legacy 成员 |
+| `learning_round_stages` | 阶段：`initial`（ordinal=0）或 `correction`（递增），`state=producing/awaiting_assessment/completed`，阶段选择 key/hash 与阶段预算。唯一 `(round_id, ordinal)`、`(round_id, selection_key)` |
+| `learning_round_stage_nodes` | 阶段成员：独立 `batch_id`（仅 legacy 导入 initial 允许为空）、来源 Attempt、冻结单节点请求/类型/难度、`budget_counters`、`recovery_count`。唯一 `(stage_id, round_node_id)`、非空 `batch_id` 唯一、`(round_node_id, source_attempt_id)` 唯一 |
+| `learning_round_job_bindings` | 一个真实 Run 只属于一个 stage_node；`relation_kind=production/append/retry` 与来源 Run。索引 `(stage_node_id, created_at, run_id)` |
+| `learning_round_evaluation_sessions` | 每阶段唯一冻结会话：manifest 与 hash（私有答案/评分策略不外泄）、`grading_state=idle/grading/submitted`、提交 key/hash、评分 owner/generation/lease、`attempt_id` 唯一。`submitted` 与 `attempt_id` 必须同时存在 |
+| `feedback_node_decisions` | 每节点本次反馈事实：分数、action/reason/targets、来源角色、纠错资格、错误摘要。唯一 `(attempt_id, round_node_id)`；不替代既有掌握态 |
+| `learner_remediation_needs` | 未解决补救项：`status=remediate/practice/resolved`、首个未解决与最近 Attempt、最近分数、等待轮次。唯一 `(learner_id, knowledge_base_id, skill_node_id)`，与课程 `wait_rounds` 不混用 |
+| `learning_round_budget_reservations` | 每次网关尝试的预留/结算：scope（生产 stage_node 或评分 session）、`run_id`、`call_id`、`gateway_attempt`、预留/已知 token 与秒数、`state=reserved/settled/unknown`。唯一 `(scope_id, call_id, gateway_attempt)` |
+
+迁移入口 `db/migrations/p0_38_learning_rounds.py`，注册于 `db/migrations/__init__.py`；`init_database` 在 `create_all` 前导入 `db/feedback/round_models.py`，随后执行既有增量迁移与 p0_38，最后幂等刷新 `p0_35` 报告触发器。重复执行不重置 epoch。报告侧 `report-read/3` 把新表纳入 `WATCHED_TABLES`，评分租约心跳与预算计数不触发报告重建。删除画像时在同一事务内先清会话 `attempt_id`、预算预留与节点决策，再删除轮次事实；Memory 与 SQL 语义一致。
+
+旧数据不批量回填：`legacy-correction/v1` 容器的 initial `batch_id` 为空并由私有 manifest 引用原批次与资源，`session.attempt_id` 指向真实旧 Attempt，禁止重评分或复制伪 Attempt。

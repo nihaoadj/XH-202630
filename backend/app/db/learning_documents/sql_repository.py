@@ -187,8 +187,34 @@ def _pydantic_to_orm(
 class SQLResourceRepository(BaseResourceRepository):
     """基于 SQLAlchemy 的生成资源仓库"""
 
-    def __init__(self, session_factory: Callable[[], Session]):
+    def __init__(
+        self,
+        session_factory: Callable[[], Session],
+        publication_guard: Callable[..., str | None] | None = None,
+    ):
         self.session_factory = session_factory
+        # The default guard resolves the persisted Claim evidence session rows on
+        # the same connection; callers cannot pass an in-memory list instead.
+        self.publication_guard = publication_guard or self._default_guard
+
+    @staticmethod
+    def _default_guard(db, *, run_id, resource_id, resource_version) -> str | None:
+        from app.db.claim.publication import sql_barrier_reason
+
+        return sql_barrier_reason(
+            db, run_id=run_id, resource_id=resource_id,
+            resource_version=resource_version,
+        )
+
+    def _assert_publishable(
+        self, db, *, run_id: str | None, resource_id: str, resource_version: int,
+    ) -> None:
+        from app.db.claim.publication import assert_publication_allowed
+
+        assert_publication_allowed(self.publication_guard(
+            db, run_id=run_id, resource_id=resource_id,
+            resource_version=int(resource_version),
+        ))
 
     def get(self, resource_id: str) -> Optional[LearningResource]:
         with self.session_factory() as db:
@@ -217,6 +243,14 @@ class SQLResourceRepository(BaseResourceRepository):
         )
         with self.session_factory() as db:
             try:
+                from app.db.claim.publication import lock_sql_resource
+
+                lock_sql_resource(db, resource.resource_id)
+                if normalized.publication_status == "published":
+                    self._assert_publishable(
+                        db, run_id=effective_run_id, resource_id=resource.resource_id,
+                        resource_version=normalized.version,
+                    )
                 orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource.resource_id).first()
                 if effective_run_id is not None:
                     duplicate_query = db.query(GeneratedResourceORM).filter(
@@ -273,6 +307,16 @@ class SQLResourceRepository(BaseResourceRepository):
                     orm.mime_type = resource.mime_type
                     orm.review_status = resource.review_status
                     orm.review_id = resource.review_id
+                    if resource.publication_status == "published":
+                        # Same transaction as the write: a version whose Claim
+                        # round is still running, interrupted or hard-blocked can
+                        # never be flipped to published here.
+                        self._assert_publishable(
+                            db,
+                            run_id=effective_run_id or orm.run_id,
+                            resource_id=orm.resource_id,
+                            resource_version=orm.version or 1,
+                        )
                     orm.publication_status = resource.publication_status
                     orm.published_at = resource.published_at
                     orm.claim_count = resource.claim_count
@@ -357,10 +401,19 @@ class SQLResourceRepository(BaseResourceRepository):
 
     def update_publication_decision(self, resource_id: str, *, publish: bool) -> Optional[LearningResource]:
         from datetime import datetime, timezone
+        from app.db.claim.publication import lock_sql_resource
         with self.session_factory() as db:
+            lock_sql_resource(db, resource_id)
             orm = db.query(GeneratedResourceORM).filter_by(resource_id=resource_id).first()
             if orm is None:
                 return None
+            if publish:
+                # Re-read the session rows in this transaction: the user decision
+                # is never authorised by a value read before the lock/write.
+                self._assert_publishable(
+                    db, run_id=orm.run_id, resource_id=orm.resource_id,
+                    resource_version=orm.version or 1,
+                )
             orm.publication_status = "published" if publish else "unpublished"
             orm.published_at = datetime.now(timezone.utc) if publish else None
             orm.claim_publish_decision_pending = False

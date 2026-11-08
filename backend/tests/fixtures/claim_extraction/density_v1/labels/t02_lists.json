@@ -1,0 +1,13 @@
+{
+  "facts": [
+    {
+      "end": 28,
+      "fact_id": "t02_lists-f1",
+      "start": 9,
+      "text": "该系统在检索阶段使用双塔编码器完成粗排"
+    }
+  ],
+  "python_chars": 481,
+  "text": "t02_lists.md",
+  "text_sha256": "a9150450e57267976b0da4973783b3b6b1ab2f57aee151139f66342e80c246ba"
+}

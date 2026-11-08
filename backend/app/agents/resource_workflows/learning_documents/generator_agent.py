@@ -8,7 +8,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Protocol
 
 from app.agents.shared.policies import target_resource_types
-from app.agents.shared.evidence_scope import allocation_for_state, validate_spec, contract_error, validate_payload_evidence
+from app.agents.shared.evidence_scope import (
+    allocation_for_state,
+    contract_error,
+    resolve_generation_evidence_context,
+    validate_payload_evidence,
+    validate_spec,
+)
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
 from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
 from app.agents.resource_workflows.learning_documents.state import AgentState
@@ -28,6 +34,8 @@ from app.models.shared.agent_contracts import (
 )
 from app.models.learning_documents.schemas import LearningResource
 from app.models.shared.workflow import ResourceStatus, StepStatus
+from app.models.reviews.revision_inputs import ClaimReviewRevisionInput, ResourceReviewRevisionInput
+from app.agents.resource_workflows.learning_documents.revision_inputs import unpack_revision_input
 from app.db.learning_documents.models import ResourceSpecRecord
 
 
@@ -88,11 +96,69 @@ def _context(
 ) -> ResourceGenerationContext:
     learner = node_input.learner
     constraints = dict(node_input.constraints)
-    # A revision must be able to preserve text that the reviewer did not ask
-    # to change.  Keep the previous artifact scoped to the resource worker and
-    # inject it only when a prior version exists (never on first generation).
-    if previous is not None and (node_input.generation_attempt > 1 or state.get("resource_retry_context")):
-        constraints["previous_version_content"] = previous.content_text or ""
+    claim_revision = None
+    resource_review_revision = None
+    # The private spec→envelope map is server-built and never forwarded whole
+    # to a single worker. Pick only this spec's entry; a fresh first generation
+    # and any spec without an entry keep both revision inputs empty.
+    generation_revision_inputs = constraints.get("generation_revision_inputs")
+    if spec is not None and isinstance(generation_revision_inputs, dict):
+        entry = generation_revision_inputs.get(spec.resource_spec_id)
+        if entry is not None:
+            revision_input = unpack_revision_input(entry)
+            if isinstance(revision_input, ClaimReviewRevisionInput):
+                claim_revision = revision_input
+            elif isinstance(revision_input, ResourceReviewRevisionInput):
+                resource_review_revision = revision_input
+        constraints.pop("generation_revision_inputs", None)
+
+    if claim_revision is not None or resource_review_revision is not None:
+        # A worker receiving a typed generation revision input must not also
+        # receive the legacy mixed fields; the parent text and structured
+        # payload already travel inside the input itself.
+        constraints.pop("revision_feedback", None)
+        constraints.pop("previous_version_content", None)
+        constraints.pop("lecture_revision", None)
+        constraints.pop("resource_revision", None)
+    else:
+        # Legacy / historical revision inputs (no new projection for this spec).
+        if spec is not None and isinstance(constraints.get("revision_feedback"), dict):
+            feedback = dict(constraints["revision_feedback"])
+            feedback["assessment_findings"] = [
+                dict(item) for item in feedback.get("assessment_findings", [])
+                if spec.resource_type == "分阶测试题"
+                and item.get("resource_spec_id") == spec.resource_spec_id
+                and (previous is None or item.get("resource_id") == previous.resource_id)
+            ]
+            constraints["revision_feedback"] = feedback
+        # A revision must be able to preserve text that the reviewer did not ask
+        # to change.  Keep the previous artifact scoped to the resource worker
+        # and inject it only when a prior version exists (never on first
+        # generation).
+        if previous is not None and (node_input.generation_attempt > 1 or state.get("resource_retry_context")):
+            constraints["previous_version_content"] = previous.content_text or ""
+        if spec is not None and spec.resource_type == "讲义" and state.get("lecture_review_policy"):
+            revision = (state.get("lecture_revision") or {}).get(spec.resource_spec_id)
+            if not (revision or {}).get("claim_only"):
+                constraints.pop("revision_feedback", None)
+                constraints.pop("previous_version_content", None)
+                if revision:
+                    if previous is None or revision["parent_resource_id"] != previous.resource_id:
+                        raise contract_error()
+                    constraints["lecture_revision"] = revision
+        if spec is not None and state.get("resource_review_policy"):
+            revision = (state.get("resource_revision") or {}).get(spec.resource_spec_id)
+            if not (revision or {}).get("claim_only"):
+                constraints.pop("revision_feedback", None)
+                constraints.pop("previous_version_content", None)
+                if revision:
+                    if previous is None or revision.get("parent_resource_id") != previous.resource_id:
+                        raise contract_error()
+                    constraints["resource_revision"] = revision
+    generation_evidence, supplement_ids = (
+        resolve_generation_evidence_context(state, spec, previous)
+        if spec is not None else (node_input.retrieved_evidence, [])
+    )
     return ResourceGenerationContext(
         run_id=node_input.run_id,
         batch_id=node_input.batch_id,
@@ -105,12 +171,15 @@ def _context(
             "learning_goal": learner.learning_goal,
         },
         learning_path=list(node_input.learning_plan.get("learning_path", []))[:50],
-        evidence=validate_spec(state, spec) if spec else node_input.retrieved_evidence,
+        evidence=generation_evidence,
+        supplement_evidence_ids=supplement_ids,
         node_evidence_map=spec.node_evidence_map if spec else node_input.node_evidence_map,
         continuation_context=list(node_input.constraints.get("continuation_context", []))[:12],
         constraints=constraints,
         generation_attempt=node_input.generation_attempt,
         workflow_deadline_at=state.get("workflow_deadline_at"),
+        resource_review_revision=resource_review_revision,
+        claim_review_revision=claim_revision,
     )
 
 
@@ -133,9 +202,20 @@ def _materialize(
     node_input: GeneratorInput,
     previous: LearningResource | None,
     spec: ResourceSpec,
+    context: ResourceGenerationContext | None = None,
 ) -> LearningResource:
     metadata = artifact.metadata
     data = artifact.artifact_data
+    allowed_ids = list(spec.evidence_ids)
+    if context is not None:
+        allowed_ids.extend(
+            item for item in context.supplement_evidence_ids
+            if item not in allowed_ids
+        )
+    pool = [
+        item for item in (context.evidence if context is not None else node_input.retrieved_evidence)
+        if item.evidence_id in allowed_ids
+    ]
     resource = LearningResource(
         resource_id=str(uuid.uuid4()), learner_id=node_input.learner.learner_id,
         topic=node_input.topic, run_id=node_input.run_id, batch_id=node_input.batch_id,
@@ -148,7 +228,7 @@ def _materialize(
         # agent-added subpoints, but never allow an artifact to drop a selected
         # target node before publication and curriculum accounting.
         knowledge_points=list(dict.fromkeys([*spec.knowledge_points, *artifact.knowledge_points])),
-        source_refs=source_refs_from_evidence([item for item in node_input.retrieved_evidence if item.evidence_id in spec.evidence_ids]),
+        source_refs=source_refs_from_evidence(pool),
         review_status=(ResourceStatus.PENDING_REVIEW.value if node_input.include_review
                        else ResourceStatus.UNREVIEWED_DRAFT.value),
         version=(previous.version + 1) if previous else 1,
@@ -161,8 +241,8 @@ def _materialize(
         practice_guide_payload=data.get("practice_guide_package"),
         practice_guide_payload_hash=(data.get("practice_guide_package") or {}).get("payload_hash"),
     )
-    validate_payload_evidence(resource, [item for item in node_input.retrieved_evidence if item.evidence_id in spec.evidence_ids])
-    if not set(metadata.source_evidence_ids) <= set(spec.evidence_ids):
+    validate_payload_evidence(resource, pool)
+    if not set(metadata.source_evidence_ids) <= set(allowed_ids):
         raise contract_error()
     return resource
 
@@ -265,6 +345,11 @@ def generate_node(
                     else {item.resource_type for item in specs})
     if not active_types:
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+    active_spec_ids = {spec.resource_spec_id for spec in specs if spec.resource_type in active_types
+        and (not state.get("lecture_review_policy") or spec.resource_type != "讲义" or not (node_input.revision_count or node_input.claim_revision_count)
+             or spec.resource_spec_id in (state.get("lecture_revision") or {}))
+        and (not state.get("resource_review_policy") or not (node_input.revision_count or node_input.claim_revision_count)
+             or spec.resource_spec_id in (state.get("resource_revision") or {}))}
     step_context = start_step(state, attempt=node_input.generation_attempt)
     previous = _previous(node_input.generated_resources)
     source = state.get("regeneration_source")
@@ -274,10 +359,10 @@ def generate_node(
             if spec.resource_type == source.resource_type:
                 previous.setdefault((spec.resource_spec_id, "text"), source)
     resources = [item for item in node_input.generated_resources
-                 if item.resource_type not in active_types]
+                 if item.resource_spec_id not in active_spec_ids]
     generated_now: list[LearningResource] = []
     executions = [item for item in state.get("resource_executions", [])
-                  if item.get("resource_type") not in active_types]
+                  if item.get("resource_spec_id") not in active_spec_ids]
     errors: list[dict[str, Any]] = []
     llm_metadata = None
     work_items = [
@@ -294,7 +379,7 @@ def generate_node(
             ),
         )
         for spec in specs
-        if spec.resource_type in active_types
+        if spec.resource_spec_id in active_spec_ids
     ]
     progress_trace = {
         "run_id": node_input.run_id,
@@ -348,7 +433,7 @@ def generate_node(
             if artifact is None:
                 artifact = agent.generate(spec, context, llm_gateway=llm_gateway)
             _validate_artifact_scope(artifact, spec, node_input.target_skill_nodes)
-            resource = _materialize(artifact, node_input, old, spec)
+            resource = _materialize(artifact, node_input, old, spec, context)
             llm_metadata = artifact.llm_metadata
             execution = _execution(spec, resource, agent, attempt=node_input.generation_attempt,
                                    worker_step_id=context.step_id,
@@ -374,6 +459,9 @@ def generate_node(
                                    worker_step_id=context.step_id, state="human_review",
                                    validation_status="failed",
                                    error_code=_error_code_value(error.code))
+        from app.agents.shared.llm_accounting import bind_generated_resource
+
+        bind_generated_resource(spec.resource_spec_id, resource.resource_id)
         if resource_progress_recorder is not None:
             resource_progress_recorder.record_resource_generated(
                 state, resource=resource, execution=execution, trace_item=progress_trace
@@ -421,7 +509,15 @@ def generate_node(
         evidence_refs=[item.evidence_id for item in node_input.retrieved_evidence],
         resource_ids=[item.resource_id for item in generated_now], attempt=node_input.generation_attempt,
         step_context=step_context, llm_metadata=llm_metadata)
-    return {"resource_specs": [item.model_dump(mode="json") for item in specs],
+    lineage = dict(state.get("claim_evidence_lineage") or {})
+    if state.get("include_claim_evidence_retrieval") or state.get("claim_evidence_scopes"):
+        for item in [*node_input.generated_resources, *resources, *([source] if source is not None else [])]:
+            lineage[item.resource_id] = {key: getattr(item, key) for key in (
+                "resource_id", "run_id", "resource_spec_id", "resource_family_id",
+                "version", "parent_resource_id",
+            )}
+    return {"claim_evidence_lineage": lineage,
+            "resource_specs": [item.model_dump(mode="json") for item in specs],
             "resource_executions": executions, "resource_progress_summary": progress_summary(executions),
             "generated_resources": resources, "current_node": "generator", "trace": [trace_item],
             "errors": errors, "generation_attempt": node_input.generation_attempt,

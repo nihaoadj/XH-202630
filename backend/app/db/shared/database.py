@@ -7,6 +7,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings, resolve_backend_path
+from app.db.feedback import round_models  # noqa: F401
 from app.db.shared import extended_models  # noqa: F401
 from app.db.courseware import models as courseware_models  # noqa: F401
 from app.db.courseware.migrations import migrate_sqlite_courseware
@@ -45,6 +46,10 @@ from app.db.migrations import (
     apply_p0_34_knowledge_identity_revision_migration,
     apply_p0_34_generation_dispatch_migration,
     apply_p0_35_report_read_model_migration,
+    apply_p0_36_claim_extraction_migration,
+    apply_p0_37_claim_estimate_migration,
+    apply_p0_38_learning_rounds_migration,
+    apply_p0_39_claim_evidence_retrieval_migration,
     apply_tutor_migration,
 )
 
@@ -136,6 +141,11 @@ def get_db_session():
 def init_database():
     """初始化数据库并执行 SQLite 兼容迁移。"""
     engine = get_engine()
+    # Imported here: the Claim package pulls the audit repository, which imports
+    # this module.  Registering the additive T50 tables before create_all keeps
+    # a fresh database complete without changing the import graph.
+    from app.db.claim import supplement_models as _supplement_models  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
     apply_p0_04_migration(engine)
     apply_p0_05_migration(engine)
@@ -179,6 +189,10 @@ def init_database():
     apply_p0_34_generation_dispatch_migration(engine)
     apply_tutor_migration(engine)
     apply_p0_35_report_read_model_migration(engine)
+    apply_p0_36_claim_extraction_migration(engine)
+    apply_p0_37_claim_estimate_migration(engine)
+    apply_p0_38_learning_rounds_migration(engine)
+    apply_p0_39_claim_evidence_retrieval_migration(engine)
 
 
 def _sqlite_tables(conn) -> set[str]:

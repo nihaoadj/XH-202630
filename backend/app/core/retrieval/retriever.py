@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+import threading
 from time import perf_counter
 from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from app.config import Settings, get_settings
 from app.core.security.errors import ErrorCode, PUBLIC_MESSAGES
@@ -102,6 +103,10 @@ def _config_payload(
 ) -> dict:
     policy_payload = policy.model_dump(mode="json")
     policy_payload.pop("strategy_version")
+    if policy_payload.get("excerpt_strategy") == "prefix":
+        # Keep every historical config hash byte-for-byte identical.
+        for key in ("excerpt_strategy", "excerpt_chars", "excerpt_structural_cap"):
+            policy_payload.pop(key, None)
     payload = {
         "schema_version": "1.0",
         "collection_resolver_version": "kb-hash-v1",
@@ -317,11 +322,21 @@ class EvidenceRetriever:
             error=_error_info(failure),
         )
 
-    def retrieve(self, request: RetrievalRequest) -> EvidenceBatch:
-        retrieval_started = perf_counter()
+    def _fingerprint(
+        self, request: RetrievalRequest
+    ) -> tuple[Any, bool, bool, dict, list[str], list[str], str]:
+        """Resolve the policy and identifiers shared by every retrieval entry.
+
+        Kept in one place so the bounded entry point records exactly the same
+        query hashes and config hash the real attempt would have produced.
+        """
+
         policy = request.policy
         resource_aware = policy.strategy_version == RESOURCE_AWARE_STRATEGY
-        refined = not resource_aware and policy.ranking_strategy_version == SOURCE_BALANCE_VERSION
+        refined = (
+            not resource_aware
+            and policy.ranking_strategy_version == SOURCE_BALANCE_VERSION
+        )
         catalog = source_catalog(request.knowledge_base_id) if refined else {}
         queries = request.queries[: policy.max_query_count]
         query_hashes = [query_hash(query) for query in queries]
@@ -333,6 +348,67 @@ class EvidenceRetriever:
                 knowledge_base_id=request.knowledge_base_id,
                 source_catalog_fingerprint=catalog_hash(catalog) if refined else None,
             )
+        )
+        return policy, resource_aware, refined, catalog, queries, query_hashes, config_hash
+
+    def retrieve_with_deadline(
+        self, request: RetrievalRequest, *, timeout_seconds: float | None = None
+    ) -> EvidenceBatch:
+        """Run one retrieval attempt under a hard wall-clock bound.
+
+        Retrieval is the only phase of a run that never touched a model budget,
+        so a stalled embedding or vector backend used to hold the run until the
+        lease expired.  Timing out here reuses the existing failure batch and
+        error code, which means the normal fallback policy still decides whether
+        the run degrades or fails.
+        """
+
+        limit = float(
+            timeout_seconds
+            if timeout_seconds is not None
+            else getattr(self.settings, "retrieval_timeout_seconds", 120.0)
+        )
+        if limit <= 0:
+            return self.retrieve(request)
+
+        outcome: dict[str, Any] = {}
+
+        def run() -> None:
+            try:
+                outcome["batch"] = self.retrieve(request)
+            except BaseException as exc:  # re-raised on the calling thread
+                outcome["error"] = exc
+
+        worker = threading.Thread(target=run, name="evidence-retrieval", daemon=True)
+        worker.start()
+        worker.join(limit)
+        if worker.is_alive():
+            _, _, _, _, _, query_hashes, config_hash = self._fingerprint(request)
+            return self._failed_batch(
+                request=request,
+                config_hash=config_hash,
+                query_hashes=query_hashes,
+                candidate_count=0,
+                partial_failure_count=0,
+                failure=_EvidenceFailure(
+                    ErrorCode.RETRIEVAL_UPSTREAM_UNAVAILABLE,
+                    category="retrieval",
+                    retryable=True,
+                    safe_detail=f"deadline_exceeded:{limit:.0f}s",
+                ),
+                retrieval_profile={
+                    "deadline_exceeded": True,
+                    "timeout_seconds": limit,
+                },
+            )
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["batch"]
+
+    def retrieve(self, request: RetrievalRequest) -> EvidenceBatch:
+        retrieval_started = perf_counter()
+        policy, resource_aware, refined, catalog, queries, query_hashes, config_hash = (
+            self._fingerprint(request)
         )
         allowed_chunk_ids = set(request.allowed_chunk_ids or [])
         candidates: list[VectorCandidate] = []
@@ -654,37 +730,62 @@ class EvidenceRetriever:
         retrieved_at = self.clock()
         evidence: list[EvidenceItem] = []
         evidence_by_chunk: dict[str, str] = {}
-        for rank, (candidate, chunk, normalized_score) in enumerate(ranked, start=1):
+        rank = 0
+        for candidate, chunk, normalized_score in ranked:
             hashed_query = query_hash(candidate.query)
-            excerpt = normalize_text(chunk.text)[: policy.max_excerpt_chars]
-            item = EvidenceItem(
-                evidence_id=evidence_id(
-                    run_id=request.run_id,
-                    step_id=request.step_id,
-                    knowledge_base_id=request.knowledge_base_id,
-                    retrieval_query_hash=hashed_query,
-                    knowledge_chunk_id=chunk.chunk_id,
+            if policy.excerpt_strategy == "claim_window_v1":
+                from app.core.retrieval.excerpt import build_excerpt_windows
+
+                windows = build_excerpt_windows(
+                    chunk.text,
+                    [candidate.query],
+                    excerpt_chars=policy.excerpt_chars or policy.max_excerpt_chars,
+                    structural_cap=policy.excerpt_structural_cap or policy.max_excerpt_chars,
+                )
+                excerpts = [
+                    (window.text, window.excerpt_identity) for window in windows
+                ] or [(
+                    normalize_text(normalize_text(chunk.text)[: policy.max_excerpt_chars]),
+                    None,
+                )]
+            else:
+                excerpts = [(
+                    normalize_text(normalize_text(chunk.text)[: policy.max_excerpt_chars]),
+                    None,
+                )]
+            for excerpt, identity in excerpts:
+                rank += 1
+                item = EvidenceItem(
+                    evidence_id=evidence_id(
+                        run_id=request.run_id,
+                        step_id=request.step_id,
+                        knowledge_base_id=request.knowledge_base_id,
+                        retrieval_query_hash=hashed_query,
+                        knowledge_chunk_id=chunk.chunk_id,
+                        config_hash=config_hash,
+                        excerpt_identity=identity,
+                    ),
+                    knowledge_base_id=chunk.knowledge_base_id,
+                    document_id=chunk.document_id,
+                    document_version=chunk.document_version,
+                    chunk_id=chunk.chunk_id,
+                    query=candidate.query,
+                    query_hash=hashed_query,
+                    query_rank=candidate.query_rank,
+                    rank=rank,
+                    raw_score=candidate.raw_score,
+                    score_kind=candidate.score_kind,
+                    normalized_score=normalized_score,
+                    excerpt=excerpt,
+                    excerpt_hash=sha256_hex(excerpt),
+                    locator=chunk.locator,
                     config_hash=config_hash,
-                ),
-                knowledge_base_id=chunk.knowledge_base_id,
-                document_id=chunk.document_id,
-                document_version=chunk.document_version,
-                chunk_id=chunk.chunk_id,
-                query=candidate.query,
-                query_hash=hashed_query,
-                query_rank=candidate.query_rank,
-                rank=rank,
-                raw_score=candidate.raw_score,
-                score_kind=candidate.score_kind,
-                normalized_score=normalized_score,
-                excerpt=excerpt,
-                excerpt_hash=sha256_hex(excerpt),
-                locator=chunk.locator,
-                config_hash=config_hash,
-                retrieved_at=retrieved_at,
-            )
-            evidence.append(item)
-            evidence_by_chunk[chunk.chunk_id] = item.evidence_id
+                    retrieved_at=retrieved_at,
+                )
+                evidence.append(item)
+                evidence_by_chunk[chunk.chunk_id] = item.evidence_id
+        if len(evidence) > policy.max_evidence_count:
+            evidence = evidence[: policy.max_evidence_count]
         node_evidence_map: dict[str, list[str]] = {}
         for node_id in node_order:
             ordered = sorted(

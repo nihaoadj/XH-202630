@@ -3,6 +3,8 @@
 The fixture was captured before T13's complexity and runtime extraction. It
 contains synthetic inputs only. Fix identities and clock so HTML byte hashes
 compare output rather than per-run metadata; keep every original gate outcome.
+T27's explicit checkpoint-only overlay corrects equal-clock latest-stage order;
+the historical artifact hashes, statuses and original baseline remain intact.
 """
 
 import json
@@ -19,6 +21,7 @@ from scripts.courseware_harness.offline import execute_workflow_case
 FIXTURE_DIR = Path(__file__).parents[2] / "fixtures" / "courseware" / "evals"
 CASES = json.loads((FIXTURE_DIR / "manifest.json").read_text(encoding="utf-8"))["cases"]
 BASELINE = json.loads((FIXTURE_DIR / "workflow-baseline.json").read_text(encoding="utf-8"))
+CHECKPOINT_ORDER = json.loads((FIXTURE_DIR / "checkpoint-order-expected.json").read_text(encoding="utf-8"))["cases"]
 
 
 class FixedDateTime(datetime):
@@ -35,6 +38,7 @@ def test_workflow_matches_pre_extraction_baseline(case, monkeypatch):
     monkeypatch.setattr(workflow, "datetime", FixedDateTime)
 
     actual = execute_workflow_case(case)
-    expected = BASELINE[case["id"]]
+    assert set(CHECKPOINT_ORDER) == set(BASELINE)
+    expected = {**BASELINE[case["id"]], "checkpoint_stage": CHECKPOINT_ORDER[case["id"]]}
 
     assert {key: actual.get(key) for key in expected} == expected

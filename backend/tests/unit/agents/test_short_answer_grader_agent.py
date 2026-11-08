@@ -43,6 +43,7 @@ def test_agent_keeps_schema_context_temperature_and_empty_answer_payload():
     assert call["context"].model_dump(exclude={"call_id"}) == {
         "run_id": "feedback-grading", "step_id": "q-synthetic", "node_name": "short_answer_grader",
         "schema_name": "AssessmentShortAnswerGradeV1", "generation_attempt": 1, "workflow_deadline_at": None,
+        "budget_input_token_cap": None, "budget_scope": None, "call_purpose": None,
     }
     assert [message.type for message in call["messages"]] == ["system", "human"]
     assert call["messages"][0].content == (

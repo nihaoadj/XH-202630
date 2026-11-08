@@ -19,9 +19,11 @@ def test_offline_gold_metrics_meet_competition_thresholds():
     thresholds = load_suite()["competition_thresholds"]
 
     # 比赛口径：幻觉率 < 5%、难度适配 >= 85%、核心知识点覆盖率 >= 90%。
+    # 覆盖率只来自普通审核逐知识点结果；Claim 指标不再输出任何覆盖口径。
     assert report.claim_metrics.claim_hallucination_rate < thresholds["hallucination_rate_max"]
     assert report.difficulty.accuracy >= thresholds["difficulty_match_accuracy_min"]
-    assert report.claim_metrics.knowledge_coverage_rate >= thresholds["knowledge_coverage_min"]
+    assert report.ordinary_coverage.metric.status.value == "complete"
+    assert report.ordinary_coverage.metric.value >= thresholds["knowledge_coverage_min"]
 
     # 样本量达到比赛要求的 50 组后，门状态必须是可测量结论而非 NOT_MEASURABLE。
     assert report.case_count >= thresholds["minimum_case_count"]
@@ -61,11 +63,22 @@ def test_non_factual_claims_excluded_from_hallucination_denominator():
     assert report.claim_metrics.claim_hallucination_rate == 3 / 74
 
 
-def test_coverage_counts_target_nodes_with_supported_claims():
+def test_coverage_comes_from_ordinary_review_targets_only():
+    from app.models.reviews.quality_metrics import QualityMetricId
+
     report = _report()
-    assert report.claim_metrics.target_skill_total == 13
-    assert report.claim_metrics.covered_skill_total == 13
-    assert report.claim_metrics.knowledge_coverage_rate == 1.0
+    coverage = report.ordinary_coverage
+    # 覆盖定义已升版：已覆盖冻结目标数 / 冻结目标总数，fixture 刻意保留 3 个缺失目标。
+    assert coverage.planned_unit_total == 54
+    assert coverage.covered_unit_total == 51
+    assert coverage.metric.value == 51 / 54
+    assert coverage.metric.metric_id is QualityMetricId.CORE_KNOWLEDGE_COVERAGE
+    assert coverage.metric.status.value == "complete"
+    assert coverage.missing_unit_total == 3
+    assert coverage.observed_case_total == coverage.planned_case_total == 54
+    # Claim 聚合不再携带任何覆盖字段。
+    assert not hasattr(report.claim_metrics, "knowledge_coverage_rate")
+    assert not hasattr(report.claim_metrics, "target_skill_total")
 
 
 def test_metric_report_serializes_for_submission():

@@ -84,6 +84,7 @@ def continue_resource_batch(
             payload,
             resource_service_factory=lambda: container.resource_service(),
             feedback_repo_factory=lambda: container.feedback_service().feedback_loop_repo,
+            round_uow_factory=getattr(container, "round_uow_factory", None),
             **submission_identity(learner, payload, getattr(request, "headers", {}).get("Idempotency-Key"), f"continuation:{batch_id}"),
         )
     except BatchContinuationError as exc:

@@ -20,8 +20,17 @@ from app.agents.resource_workflows.learning_documents.claim_review_agent import 
     claim_extract_node,
     claim_judge_node,
 )
+from app.agents.resource_workflows.learning_documents.claim_evidence_retrieval.nodes import (
+    claim_evidence_rejudge_node,
+    claim_evidence_retrieve_node,
+)
 from app.agents.resource_workflows.learning_documents.state import AgentState
 from app.agents.shared.retrieval import retrieve_node
+from app.agents.shared.evidence_scope import (
+    evidence_for_resource,
+    resolve_review_evidence_context,
+    supplement_evidence_for_resource,
+)
 from app.core.security.errors import ErrorCode
 from app.core.retrieval.retriever import (
     EvidenceRetriever,
@@ -40,14 +49,32 @@ from app.models.shared.workflow import (
     StepStatus,
     WorkflowStatus,
 )
-from app.models.reviews.claims import ClaimMetricStatus
+from app.models.reviews.claims import (
+    ClaimJudgement,
+    ClaimMetricStatus,
+    ClaimRecord,
+    ClaimVerdict,
+)
+from app.models.reviews.claim_evidence_retrieval import (
+    ACTIVE_STATUSES as _CLAIM_EVIDENCE_ACTIVE,
+    ClaimEvidenceRetrievalStatus,
+)
+from app.agents.resource_workflows.learning_documents.revision_inputs import (
+    build_claim_review_revision_input,
+    build_resource_review_revision_input,
+    pack_revision_input,
+)
 from app.agents.shared.policies import (
+    PublicationInputs,
     locked_human_review_resource_ids,
-    may_publish,
+    resolve_publication,
     target_resource_types,
 )
 from app.models.knowledge.knowledge import RetrievalStatus
 from app.agents.shared.recorded_node import recorded_node
+
+
+CLAIM_EVIDENCE_ACTIVE_STATUS_VALUES = frozenset(item.value for item in _CLAIM_EVIDENCE_ACTIVE)
 
 
 def _review_decision(state: AgentState) -> ReviewDecision:
@@ -274,15 +301,53 @@ def route_after_claim_extract(state: AgentState) -> str:
     )
 
 
+def route_after_initial_claim_judge(state: AgentState) -> str:
+    """Only an enabled, fully completed first round may start supplements."""
+
+    if not state.get("include_claim_evidence_retrieval", False):
+        return "claim_decide"
+    if not state.get("claim_evidence_retrieval_policy"):
+        return "claim_decide"
+    if state.get("claim_check_status") != ClaimCheckStatus.COMPLETED.value:
+        return "claim_decide"
+    if state.get("claim_failed_resource_ids"):
+        return "claim_decide"
+    round0 = [
+        item for item in state.get("claim_judgements", [])
+        if isinstance(item, dict)
+        and item.get("verdict") == ClaimVerdict.NOT_IN_EVIDENCE.value
+    ]
+    claims = {str(item.get("claim_id")): item for item in state.get("extracted_claims", []) if isinstance(item, dict)}
+    if not any(
+        claims.get(str(item.get("claim_id")), {}).get("claim_type") == "factual"
+        for item in round0
+    ):
+        return "claim_decide"
+    return "claim_evidence_retrieve"
+
+
+def route_after_claim_evidence_retrieve(state: AgentState) -> str:
+    refs = state.get("claim_evidence_retrieval_refs", [])
+    if any(item.get("status") == "rejudging" for item in refs if isinstance(item, dict)):
+        return "claim_evidence_rejudge"
+    return "claim_decide"
+
+
 def route_after_claim_decide(state: AgentState) -> str:
+    if _review_decision(state) != ReviewDecision.REVISE:
+        return "finalize"
     claim_revision_requested = any(
         isinstance(instruction, dict) and instruction.get("target_claim_ids")
         for instruction in state.get("review_result", {}).get("revision_instructions", [])
     )
-    if claim_revision_requested and (
-        state.get("claim_revision_count", 0) < state.get("claim_max_iterations", 1)
-    ):
-        return "prepare_claim_revision"
+    if claim_revision_requested:
+        # Claim corrections cannot borrow ordinary-review revision allowance.
+        # Finalization preserves the existing human-review/publication gate.
+        return (
+            "prepare_claim_revision"
+            if state.get("claim_revision_count", 0) < state.get("claim_max_iterations", 1)
+            else "finalize"
+        )
     if _review_decision(state) == ReviewDecision.REVISE and (
         state.get("revision_count", 0) < state.get("max_iterations", 2)
     ):
@@ -296,6 +361,95 @@ def decide_next(state: AgentState) -> str:
         return "decide"
     revision_count = state.get("revision_count", state.get("iteration", 0))
     return "generate" if revision_count < state.get("max_iterations", 2) else "decide"
+
+
+def _generation_revision_inputs(
+    state: AgentState,
+    *,
+    claim_only: bool,
+    targets: set[str],
+    lecture_revision: dict,
+    resource_revision: dict,
+    review_feedback: dict,
+) -> dict[str, dict]:
+    """Build the private spec→envelope map for the next generation round.
+
+    Claim revisions produce one ``claim`` input per spec that has bad factual
+    Claims bound to its parent version; ordinary revisions produce one
+    ``ordinary`` input from the active review engine's work order, or from the
+    scoped compat feedback when no engine policy is present. The legacy
+    dedicated lecture loop is deliberately left out so its historical
+    ``lecture_revision`` constraint keeps working unchanged. Sibling specs and
+    empty projections are left out so a worker never receives a stale or
+    foreign instruction.
+    """
+    frozen_targets = {
+        item["resource_spec_id"]: item.get("knowledge_points", [])
+        for item in state.get("resource_specs", [])
+        if isinstance(item, dict)
+    }
+    result: dict[str, dict] = {}
+    if claim_only:
+        claims = [
+            ClaimRecord.model_validate(item)
+            for item in state.get("extracted_claims", [])
+            if isinstance(item, dict)
+        ]
+        judgements = [
+            ClaimJudgement.model_validate(item)
+            for item in state.get("claim_judgements", [])
+            if isinstance(item, dict)
+        ]
+        for resource in state.get("generated_resources", []):
+            if resource.resource_type not in targets or not resource.resource_spec_id:
+                continue
+            if not any(claim.resource_id == resource.resource_id
+                       and claim.resource_version == resource.version for claim in claims):
+                continue
+            model = build_claim_review_revision_input(
+                resource_spec_id=resource.resource_spec_id,
+                resource=resource,
+                targets=tuple(frozen_targets.get(resource.resource_spec_id, [])),
+                claims=claims,
+                judgements=judgements,
+                evidence=resolve_review_evidence_context(state, resource, purpose="audit"),
+            )
+            if model.problems:
+                result[resource.resource_spec_id] = pack_revision_input(model)
+        return result
+
+    for resource in state.get("generated_resources", []):
+        if resource.resource_type not in targets or not resource.resource_spec_id:
+            continue
+        spec_id = resource.resource_spec_id
+        if state.get("resource_review_policy"):
+            # New generic resource engine: adapt the resource work order. A spec
+            # without a work order has nothing to revise in this round.
+            work_order = resource_revision.get(spec_id)
+            if work_order is None:
+                continue
+            model = build_resource_review_revision_input(
+                resource_spec_id=spec_id,
+                resource=resource,
+                targets=tuple(frozen_targets.get(spec_id, [])),
+                work_order=work_order,
+            )
+        elif state.get("lecture_review_policy"):
+            # Legacy dedicated lecture loop: keep the historical
+            # ``lecture_revision`` constraint as the generation entry.
+            # ``state.lecture_revision`` is not folded into the typed input and
+            # retains its parent-version / re-review semantics untouched.
+            continue
+        else:
+            # Explicit compat / generic reviewer: adapt the scoped feedback.
+            model = build_resource_review_revision_input(
+                resource_spec_id=spec_id,
+                resource=resource,
+                targets=tuple(frozen_targets.get(spec_id, [])),
+                feedback=review_feedback,
+            )
+        result[spec_id] = pack_revision_input(model)
+    return result
 
 
 def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, Any]:
@@ -332,14 +486,138 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
             instruction for instruction in instructions
             if instruction.get("target_resource_type") in targets
         ],
+        "assessment_findings": [
+            {"resource_id": resource_id, "resource_spec_id": result.get("resource_spec_id"), **finding}
+            for resource_id, result in state.get("resource_review_results", {}).items()
+            if not claim_only and result.get("resource_type") == "分阶测试题" and "分阶测试题" in targets
+            for specialized in result.get("specialized_reviews", {}).values()
+            for finding in specialized.get("findings", [])
+            if finding.get("codes")
+        ],
     }
+    lecture_revision = {}
+    exact_lecture_specs = set()
+    if state.get("lecture_review_policy"):
+        frozen_targets = {item["resource_spec_id"]: item["knowledge_points"] for item in state.get("resource_specs", [])}
+        for resource in state.get("generated_resources", []):
+            result = state.get("resource_review_results", {}).get(resource.resource_id, {})
+            failed_generation = any(item.get("resource_id") == resource.resource_id and item.get("validation_status") == "failed"
+                for item in state.get("resource_executions", []))
+            if resource.resource_type != "讲义" or (not claim_only and result.get("decision") != "revise" and not failed_generation) or (claim_only and resource.resource_type not in targets):
+                continue
+            ledger = (state.get("lecture_ledgers") or {}).get(resource.resource_spec_id)
+            if not ledger:
+                failed = any(item.get("resource_id") == resource.resource_id and item.get("validation_status") == "failed"
+                    for item in state.get("resource_executions", []))
+                if failed:
+                    exact_lecture_specs.add(resource.resource_spec_id)
+                    lecture_revision[resource.resource_spec_id] = {"previous_content": resource.content_text or "",
+                        "parent_resource_id": resource.resource_id, "generation_failure": True, "claim_only": False,
+                        "open_issues": [], "targets": frozen_targets[resource.resource_spec_id]}
+                    continue
+                raise ValueError("lecture revision requires its issue ledger")
+            exact_lecture_specs.add(resource.resource_spec_id)
+            lecture_revision[resource.resource_spec_id] = {
+                "previous_content": resource.content_text or "", "parent_resource_id": resource.resource_id, "claim_only": claim_only,
+                "binding": ledger["binding"], "open_issues": [i["issue"] for i in ledger["issues"] if i["status"] == "open"],
+                "closed_issues": [{"issue_id": i["issue"]["issue_id"], "acceptance": i["issue"]["acceptance"]} for i in ledger["issues"] if i["status"] == "closed"],
+                "targets": frozen_targets[resource.resource_spec_id], "unchanged": ledger["observations"][-1]["unchanged"],
+                "consecutive_unchanged": ledger["observations"][-1]["consecutive_unchanged"]}
+    resource_revision = {}
+    exact_resource_specs = set()
+    if state.get("resource_review_policy"):
+        from app.models.reviews.resource_review import ResourceLedgerV1
+        from app.models.reviews.resource_review_policy import RESOURCE_ADAPTER_TYPES
+        from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.revision import (
+            build_revision_work_order, failure_placeholder_work_order,
+        )
+        frozen_targets = {item["resource_spec_id"]: item["knowledge_points"] for item in state.get("resource_specs", [])}
+        for resource in state.get("generated_resources", []):
+            if resource.resource_type not in RESOURCE_ADAPTER_TYPES:
+                continue
+            result = state.get("resource_review_results", {}).get(resource.resource_id, {})
+            failed_generation = any(item.get("resource_id") == resource.resource_id and item.get("validation_status") == "failed"
+                for item in state.get("resource_executions", []))
+            if not claim_only and result.get("decision") != "revise" and not failed_generation:
+                continue
+            if claim_only and resource.resource_type not in targets:
+                continue
+            ledger_data = (state.get("resource_ledgers") or {}).get(resource.resource_spec_id)
+            ledger = ResourceLedgerV1.model_validate(ledger_data) if ledger_data else None
+            exact_resource_specs.add(resource.resource_spec_id)
+            if ledger is None:
+                resource_revision[resource.resource_spec_id] = failure_placeholder_work_order(
+                    resource_spec_id=resource.resource_spec_id, resource=resource,
+                    targets=tuple(frozen_targets[resource.resource_spec_id]),
+                    revision_kind="claim" if claim_only else "ordinary").as_dict()
+                continue
+            resource_revision[resource.resource_spec_id] = build_revision_work_order(
+                resource_spec_id=resource.resource_spec_id, resource=resource, previous=ledger,
+                revision_kind="claim" if claim_only else "ordinary",
+                targets=tuple(frozen_targets[resource.resource_spec_id])).as_dict()
     constraints = dict(state.get("constraints") or {})
     constraints["revision_feedback"] = review_feedback
+    if claim_only:
+        # Bounded, explicitly authorised supplement excerpts for the child
+        # version.  They are review evidence, not new source_refs: the frozen
+        # spec and its evidence ids stay untouched.
+        supplement_excerpts: list[dict[str, str]] = []
+        seen_supplement_ids: set[str] = set()
+        for resource in state.get("generated_resources", []):
+            if resource.resource_type not in targets:
+                continue
+            allowed = {
+                evidence_id
+                for scope in state.get("claim_evidence_scopes", {}).get(resource.resource_id, [])
+                if scope.get("purpose") == "generation"
+                for evidence_id in scope.get("added_evidence_ids", [])
+            }
+            # Only the explicitly authorised supplements: this path must not
+            # re-validate the frozen spec (the revision input does that).
+            for item in supplement_evidence_for_resource(
+                state, resource, purpose="generation",
+            ):
+                if item.evidence_id not in allowed or item.evidence_id in seen_supplement_ids:
+                    continue
+                seen_supplement_ids.add(item.evidence_id)
+                supplement_excerpts.append({
+                    "evidence_id": item.evidence_id,
+                    "excerpt": item.excerpt[:2000],
+                })
+        if supplement_excerpts:
+            constraints["claim_revision_supplement_evidence"] = supplement_excerpts[:8]
+        else:
+            constraints.pop("claim_revision_supplement_evidence", None)
+    # Build the private generation revision inputs before the old claims /
+    # judgements are cleared below; they are read from the frozen domain
+    # objects only and never survive into a later round unless rebuilt here.
+    generation_revision_inputs = _generation_revision_inputs(
+        state,
+        claim_only=claim_only,
+        targets=targets,
+        lecture_revision=lecture_revision,
+        resource_revision=resource_revision,
+        review_feedback=review_feedback,
+    )
+    if generation_revision_inputs:
+        constraints["generation_revision_inputs"] = generation_revision_inputs
+    else:
+        constraints.pop("generation_revision_inputs", None)
     resources = [
         resource.model_copy(
             update={"review_status": ResourceStatus.REVISION_REQUESTED.value}
         )
-        if resource.resource_type in targets
+        if (
+            resource.resource_type in targets
+            and (
+                (not state.get("lecture_review_policy") and not state.get("resource_review_policy"))
+                or (
+                    state.get("lecture_review_policy")
+                    and (claim_only or resource.resource_type != "讲义" or resource.resource_spec_id in exact_lecture_specs)
+                )
+                or (state.get("resource_review_policy") and resource.resource_spec_id in exact_resource_specs)
+            )
+        )
         else resource
         for resource in state.get("generated_resources", [])
     ]
@@ -367,10 +645,15 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
         "claim_judgements": [],
         "claim_metrics": {},
         "claim_eligible_resource_ids": [],
+        "claim_evidence_retrieval_refs": [],
+        "claim_evidence_new_evidence_ids": [],
+        "claim_evidence_hard_block_resource_ids": [],
         "claim_check_status": ClaimCheckStatus.PENDING.value,
         "revision_count": revision_count,
         "claim_revision_count": claim_revision_count,
         "generation_attempt": generation_attempt,
+        **({"lecture_revision": lecture_revision} if state.get("lecture_review_policy") else {}),
+        **({"resource_revision": resource_revision} if state.get("resource_review_policy") else {}),
         "current_node": "prepare_revision",
         "trace": [trace_item],
         "errors": [],
@@ -426,6 +709,28 @@ def finalize_draft_node(state: AgentState) -> dict[str, Any]:
     }
 
 
+def _claim_evidence_barrier_ids(state: AgentState, resource) -> bool:
+    """Temporary barrier: this version's round is still running or interrupted.
+
+    A revision clears the refs, so the child version is judged on its own round
+    while the parent version keeps its own durable barrier.
+    """
+
+    for item in state.get("claim_evidence_retrieval_refs", []) or []:
+        if not isinstance(item, dict) or item.get("resource_id") != resource.resource_id:
+            continue
+        if item.get("resource_version") not in {None, resource.version}:
+            continue
+        status = str(item.get("status") or "")
+        if (
+            item.get("hard_block")
+            or status in CLAIM_EVIDENCE_ACTIVE_STATUS_VALUES
+            or status == ClaimEvidenceRetrievalStatus.INTERRUPTED.value
+        ):
+            return True
+    return False
+
+
 def decide_node(state: AgentState) -> dict[str, Any]:
     """Finalize review semantics without silently approving risky output."""
     step_context = start_step(state)
@@ -476,6 +781,7 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     claim_eligible_ids = set(state.get("claim_eligible_resource_ids", []))
     claim_metrics = state.get("claim_metrics", {})
     claim_failed_ids = set(state.get("claim_failed_resource_ids", []))
+    claim_hard_block_ids = set(state.get("claim_evidence_hard_block_resource_ids", []))
     claim_problem_ids = {
         str(item.get("resource_id"))
         for item in review.get("issues", [])
@@ -500,80 +806,37 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             ResourceStatus.HUMAN_REVIEW.value: "human_review",
             ResourceStatus.REVISION_REQUESTED.value: "revise",
         }.get(resource.review_status, decision.value))
-        if resource.resource_id in locked_resource_ids:
-            item_status = ResourceStatus.HUMAN_REVIEW
-        elif strict_with_degradation:
-            item_status = ResourceStatus.HUMAN_REVIEW
         metric = claim_metrics.get(canonical_id, {})
-        factual_total = int(metric.get("factual_claim_total", 0) or 0)
-        supported_total = int(metric.get("supported_claim_total", 0) or 0)
-        contradicted_total = int(metric.get("contradicted_claim_total", 0) or 0)
-        not_in_evidence_total = int(metric.get("not_in_evidence_claim_total", 0) or 0)
-        factual_pass_rate = (supported_total / factual_total) if factual_total else None
-        user_review_allowed = (
-            allow_claim_user_review
-            and item_decision == ReviewDecision.APPROVE.value
-            and canonical_id in claim_eligible_ids
-            and metric.get("metric_status") == ClaimMetricStatus.COMPLETE.value
-            and factual_pass_rate is not None
-            and factual_pass_rate >= claim_user_review_threshold
-            and contradicted_total == 0
-            and not_in_evidence_total > 0
-        )
-        partial_problem_allowed = (
-            allow_partial_claim_publish
-            and item_decision == ReviewDecision.APPROVE.value
-            and canonical_id in claim_eligible_ids
-            and metric.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value
-        )
-        if canonical_id in locked_resource_ids:
-            item_status = ResourceStatus.HUMAN_REVIEW
-        elif canonical_id in claim_problem_ids and not partial_problem_allowed and not user_review_allowed:
-            item_status = ResourceStatus.HUMAN_REVIEW
-        elif user_review_allowed:
-            item_status = ResourceStatus.HUMAN_REVIEW
-        else:
-            item_status = {
-                "approve": ResourceStatus.APPROVED,
-                "reject": ResourceStatus.REJECTED,
-                "human_review": ResourceStatus.HUMAN_REVIEW,
-                "revise": ResourceStatus.HUMAN_REVIEW,
-            }.get(item_decision, resource_status)
-        if (
-            state.get("include_claim_check", False)
-            and item_status == ResourceStatus.APPROVED
-        ):
-            claim_gate_passed = (
-                canonical_id in claim_eligible_ids
-                and canonical_id not in claim_failed_ids
-                and canonical_id not in claim_problem_ids
-                and metric.get("metric_status") in {
-                    ClaimMetricStatus.COMPLETE.value,
-                    ClaimMetricStatus.NOT_APPLICABLE.value,
-                }
-            )
-            if not claim_gate_passed:
-                partial_allowed = (
-                    allow_partial_claim_publish
-                    and canonical_id in claim_eligible_ids
-                    and item_decision == ReviewDecision.APPROVE.value
-                    and metric.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value
-                )
-                if not partial_allowed and not user_review_allowed:
-                    item_status = ResourceStatus.HUMAN_REVIEW
-        publish = item_status == ResourceStatus.APPROVED
-        claim_decision_pending = bool(user_review_allowed)
+        publication = resolve_publication(PublicationInputs(
+            item_decision=item_decision,
+            fallback_status=resource_status,
+            is_locked=canonical_id in locked_resource_ids,
+            strict_with_degradation=strict_with_degradation,
+            include_claim_check=bool(state.get("include_claim_check", False)),
+            is_claim_eligible=canonical_id in claim_eligible_ids,
+            claim_failed=canonical_id in claim_failed_ids,
+            has_claim_problem=canonical_id in claim_problem_ids,
+            claim_metric_status=metric.get("metric_status"),
+            factual_claim_total=int(metric.get("factual_claim_total", 0) or 0),
+            supported_claim_total=int(metric.get("supported_claim_total", 0) or 0),
+            contradicted_claim_total=int(metric.get("contradicted_claim_total", 0) or 0),
+            not_in_evidence_claim_total=int(
+                metric.get("not_in_evidence_claim_total", 0) or 0
+            ),
+            claim_hard_block=canonical_id in claim_hard_block_ids,
+            claim_publication_barrier=_claim_evidence_barrier_ids(state, resource),
+            allow_partial_claim_publish=allow_partial_claim_publish,
+            claim_user_review_enabled=allow_claim_user_review,
+            claim_user_review_min_factual_pass_rate=claim_user_review_threshold,
+        ))
+        publish = publication.publish
+        claim_decision_pending = publication.claim_publish_decision_pending
         resources.append(resource.model_copy(update={
-            "review_status": item_status.value,
+            "review_status": publication.review_status.value,
             "publication_status": "published" if publish else "unpublished",
             "published_at": resource.published_at or now if publish else None,
-            "claim_degraded_publish": bool(
-                publish
-                and allow_partial_claim_publish
-                and claim_metrics.get(canonical_id, {}).get("metric_status")
-                == ClaimMetricStatus.INCOMPLETE.value
-            ),
-            "claim_factual_pass_rate": factual_pass_rate,
+            "claim_degraded_publish": publication.claim_degraded_publish,
+            "claim_factual_pass_rate": publication.factual_pass_rate,
             "claim_warning_publish": False,
             "claim_publish_decision_pending": claim_decision_pending,
             "claim_publish_decision": "pending" if claim_decision_pending else resource.claim_publish_decision,
@@ -672,6 +935,13 @@ def _bind_resource_progress_recorder(node, recorder: Any | None):
     return partial(node, resource_progress_recorder=recorder)
 
 
+def _bind_review_repository(node, repository):
+    """Give the reviewer its durable step source for the V2 entry guard."""
+    if repository is None or "review_repository" not in signature(node).parameters:
+        return node
+    return partial(node, review_repository=repository)
+
+
 def _bind_evidence_retriever(node, retriever: EvidenceRetriever):
     if "evidence_retriever" not in signature(node).parameters:
         return node
@@ -683,10 +953,17 @@ def build_workflow(
     evidence_retriever: EvidenceRetriever | None = None,
     lifecycle_repository: BaseAuditRepository | None = None,
     resource_progress_recorder: Any | None = None,
+    claim_extraction_repository=None,
+    claim_extraction_counter=None,
+    claim_repository=None,
+    supplement_repository=None,
 ):
     """Build the synchronous workflow with the P0-03 evidence boundary."""
     gateway = llm_gateway or default_llm_gateway()
     retriever = evidence_retriever or default_evidence_retriever()
+    if claim_extraction_repository is None and lifecycle_repository is not None:
+        from app.db.claim.extraction import extraction_repository
+        claim_extraction_repository = extraction_repository(lifecycle_repository)
     workflow = StateGraph(AgentState)
 
     def add_recorded(name: str, node) -> None:
@@ -704,12 +981,51 @@ def build_workflow(
             resource_progress_recorder,
         ),
     )
-    add_recorded("review", _bind_llm_gateway(review_node, gateway))
+    add_recorded("review", _bind_review_repository(_bind_llm_gateway(review_node, gateway), lifecycle_repository))
     add_recorded("prepare_revision", prepare_revision_node)
     add_recorded("prepare_claim_revision", prepare_claim_revision_node)
     add_recorded("finalize_draft", finalize_draft_node)
-    add_recorded("claim_extract", _bind_llm_gateway(claim_extract_node, gateway))
-    add_recorded("claim_judge", _bind_llm_gateway(claim_judge_node, gateway))
+    def bind_claim(node):
+        if "claim_extraction_repository" not in signature(node).parameters:
+            return _bind_llm_gateway(node, gateway)
+        def invoke(state):
+            return node(state, llm_gateway=gateway,
+                        claim_extraction_repository=claim_capabilities["repository"],
+                        claim_extraction_counter=claim_capabilities["counter"])
+        return invoke
+
+    claim_capabilities = dict(repository=claim_extraction_repository, counter=claim_extraction_counter)
+
+    supplement_capabilities: dict[str, Any] = {
+        "repository": supplement_repository,
+        "claim_repository": claim_repository,
+        "audit_repository": lifecycle_repository,
+        "retriever": retriever,
+    }
+
+    def bind_supplement(node):
+        def invoke(state):
+            if supplement_capabilities["repository"] is None:
+                return {
+                    "current_node": node.__name__,
+                    "trace": [],
+                    "errors": [],
+                }
+            return node(
+                state,
+                llm_gateway=gateway,
+                **({"evidence_retriever": supplement_capabilities["retriever"]}
+                   if node is claim_evidence_retrieve_node else {}),
+                supplement_repository=supplement_capabilities["repository"],
+                claim_repository=supplement_capabilities["claim_repository"],
+                audit_repository=supplement_capabilities["audit_repository"],
+            )
+        return invoke
+
+    add_recorded("claim_extract", bind_claim(claim_extract_node))
+    add_recorded("claim_judge", bind_claim(claim_judge_node))
+    add_recorded("claim_evidence_retrieve", bind_supplement(claim_evidence_retrieve_node))
+    add_recorded("claim_evidence_rejudge", bind_supplement(claim_evidence_rejudge_node))
     add_recorded("claim_decide", claim_decide_node)
     add_recorded("finalize", decide_node)
     add_recorded("finalize_evidence_insufficient", finalize_evidence_insufficient_node)
@@ -756,7 +1072,23 @@ def build_workflow(
         route_after_claim_extract,
         {"claim_judge": "claim_judge", "claim_decide": "claim_decide"},
     )
-    workflow.add_edge("claim_judge", "claim_decide")
+    workflow.add_conditional_edges(
+        "claim_judge",
+        route_after_initial_claim_judge,
+        {
+            "claim_evidence_retrieve": "claim_evidence_retrieve",
+            "claim_decide": "claim_decide",
+        },
+    )
+    workflow.add_conditional_edges(
+        "claim_evidence_retrieve",
+        route_after_claim_evidence_retrieve,
+        {
+            "claim_evidence_rejudge": "claim_evidence_rejudge",
+            "claim_decide": "claim_decide",
+        },
+    )
+    workflow.add_edge("claim_evidence_rejudge", "claim_decide")
     workflow.add_conditional_edges(
         "claim_decide",
         route_after_claim_decide,
@@ -769,4 +1101,13 @@ def build_workflow(
     workflow.add_edge("finalize", END)
     workflow.add_edge("finalize_evidence_insufficient", END)
 
-    return workflow.compile()
+    compiled = workflow.compile()
+    compiled.claim_extraction_gateway = gateway
+    compiled.claim_extraction_counter = claim_extraction_counter
+    def configure_claim_extraction(*, llm_gateway, repository, counter):
+        if llm_gateway is not gateway:
+            raise ValueError("workflow and service Claim gateways differ")
+        claim_capabilities.update(repository=repository, counter=counter)
+        compiled.claim_extraction_counter = counter
+    compiled.configure_claim_extraction = configure_claim_extraction
+    return compiled

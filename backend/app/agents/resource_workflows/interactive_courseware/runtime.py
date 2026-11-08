@@ -13,6 +13,7 @@ def courseware_ai_available(llm_gateway: LLMGateway | None) -> bool:
     issue anonymous calls or present a deterministic result as an AI result.
     """
 
+    llm_gateway = getattr(llm_gateway, "underlying_gateway", llm_gateway)
     settings = get_settings()
     if not llm_gateway or not settings.courseware_ai_enabled:
         return False

@@ -99,6 +99,7 @@
           <el-form label-position="top" class="questionnaire-form resource-selection-form">
             <el-form-item label="本次要生成的资源类型" required class="resource-type-field"><div class="field-hint resource-hint">按你的学习习惯自由组合，可选择多种。</div><el-checkbox-group class="resource-type-grid" v-model="selectedResourceTypes" aria-label="本次要生成的资源类型"><el-checkbox v-for="item in resourceTypeOptions" :key="item" :label="item" :value="item"><span class="resource-option"><el-icon aria-hidden="true"><component :is="resourceVisuals[item].icon" /></el-icon><strong>{{ item }}</strong><span>{{ resourceVisuals[item].description }}</span></span></el-checkbox></el-checkbox-group></el-form-item>
             <el-form-item label="Claim 强化审查"><div class="claim-review-control"><el-icon class="claim-icon" aria-hidden="true"><Lock /></el-icon><div><strong>对关键事实逐条核对来源证据</strong><p>开启后增加事实审查与必要修订，生成耗时会相应增加。</p></div><el-switch v-model="includeClaimCheck" active-text="开启" inactive-text="关闭" aria-label="Claim 强化审查" /></div></el-form-item>
+            <el-form-item label="证据不足时补检知识库"><div class="claim-review-control"><el-icon class="claim-icon" aria-hidden="true"><Search /></el-icon><div><strong>缺证事实再检索一次并复核</strong><p>仅对首次缺少证据的事实陈述追加知识库检索并重新核对，会增加审核耗时。</p></div><el-switch v-model="includeClaimEvidenceRetrieval" :disabled="!includeClaimCheck" active-text="开启" inactive-text="关闭" aria-label="证据不足时补检知识库" /></div></el-form-item>
             <el-form-item label="补充要求" class="supplemental-field"><el-input v-model="supplementalRequirements" type="textarea" :rows="3" aria-label="补充要求" placeholder="可选。例如：更想看案例拆解、增加练习题，或优先覆盖 Embedding 和 Rerank。" /><div class="field-hint">系统会结合方向、诊断结果与资源类型安排生成任务，你可以在此补充具体目标。</div></el-form-item>
             <div class="action-row"><el-button class="back-button" :icon="ArrowLeft" @click="goStep('diagnosis')">上一步</el-button><span class="action-hint">已选择 {{ selectedResourceTypes.length }} 种资源</span><el-button type="primary" :loading="submittingGeneration" @click="submitGeneration">生成并进入状态页<el-icon v-if="!submittingGeneration" aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
           </el-form>
@@ -121,11 +122,12 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Aim, ArrowLeft, ArrowRight, Check, Collection, Connection, DataAnalysis, Document, EditPen, List, Lock, MagicStick, Monitor, Reading } from '@element-plus/icons-vue'
+import { Aim, ArrowLeft, ArrowRight, Check, Collection, Connection, DataAnalysis, Document, EditPen, List, Lock, MagicStick, Monitor, Reading, Search } from '@element-plus/icons-vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { diagnosisApi, profileApi } from '../learners/api.js'
 import { coursewareApi } from '../courseware/api.js'
 import { generateApi } from '../generation/api.js'
+import { roundGenerationApi } from '../generation/roundApi.js'
 import { knowledgeApi } from '../knowledge/api.js'
 import { onboardingApi } from './api.js'
 import { useAuthStore } from '../../stores/auth'
@@ -146,6 +148,7 @@ const submittingDiagnosis = ref(false)
 const submittingGeneration = ref(false)
 const selectedResourceTypes = ref(['讲义', '实操指南', '分阶测试题'])
 const includeClaimCheck = ref(false)
+const includeClaimEvidenceRetrieval = ref(false)
 const supplementalRequirements = ref('')
 const preparingQuestionnaire = ref(false)
 const deletingProgress = ref(false)
@@ -459,6 +462,7 @@ function resetFlow() {
   restartAcknowledged.value = false
   selectedResourceTypes.value = ['讲义', '实操指南', '分阶测试题']
   includeClaimCheck.value = false
+  includeClaimEvidenceRetrieval.value = false
   supplementalRequirements.value = ''
 }
 
@@ -708,6 +712,7 @@ async function submitDiagnosis() {
   }
 }
 
+let roundSubmissionChoice = null
 async function submitGeneration() {
   if (busy.value) return
   if (!selectedResourceTypes.value.length) {
@@ -729,15 +734,29 @@ async function submitGeneration() {
       diagnostic_result_id: diagnosisResult.value?.diagnostic_result_id,
       resource_types: selectedResourceTypes.value,
       include_claim_check: includeClaimCheck.value,
+      include_claim_evidence_retrieval: includeClaimCheck.value && includeClaimEvidenceRetrieval.value,
       constraints: {
         supplemental_requirements: supplementalRequirements.value.trim(),
       },
     }
     localStorage.setItem('last_generation_request', JSON.stringify(payload))
-    const responses = await generateApi.createJobsForClaim(payload)
+    const fingerprint = JSON.stringify(payload)
+    if (!roundSubmissionChoice || roundSubmissionChoice.fingerprint !== fingerprint) {
+      const capabilities = await roundGenerationApi.capabilities().catch(() => null)
+      if (!setupMounted || version !== requestVersion || currentUser.value?.user_id !== owner) return
+      roundSubmissionChoice = { fingerprint, enabled: capabilities?.data?.round_creation_enabled === true, key: `round-${crypto.randomUUID()}` }
+    }
+    let round = null
+    let responses
+    if (roundSubmissionChoice.enabled) {
+      const response = await roundGenerationApi.create({ ...payload, selection_key: roundSubmissionChoice.key })
+      round = response.data
+      const primary = round.members.find(member => member.role === 'primary')
+      responses = [{ data: { run_id: round.primary_default_run_id || primary?.job_ids[0] } }]
+    } else responses = await generateApi.createJobsForClaim(payload)
     if (!setupMounted || version !== requestVersion || currentUser.value?.user_id !== owner) return
     const res = responses[0]
-    localStorage.setItem('current_generation_run_ids', JSON.stringify(responses.map((item) => item.data?.run_id).filter(Boolean)))
+    localStorage.setItem('current_generation_run_ids', JSON.stringify(round ? round.members.flatMap(member => member.job_ids) : responses.map((item) => item.data?.run_id).filter(Boolean)))
     draftCompleted = true
     clearDraft(draftOwner)
     if (version === requestVersion) submittingGeneration.value = false
@@ -746,6 +765,7 @@ async function submitGeneration() {
       query: {
         runId: res.data.run_id,
         learnerId: activeLearnerId.value,
+        ...(round ? { roundId: round.round_id, stageId: round.stage_id, memberId: round.members.find(member => member.role === 'primary')?.member_id } : {}),
       },
     })
   } catch (error) {
@@ -769,9 +789,12 @@ function saveDraft() {
   if (!draftReady || draftCompleted || !draftOwner || draftOwner !== currentUser.value?.user_id) return
   writeDraft(draftOwner, { stage: stepStage.value, domainId: selectedDomainId.value, directionId: selectedDirectionId.value, questionnaireLoaded: Boolean(questions.value.length),
     form, diagnosticAnswers, profile: flowProfile.value, diagnosticQuestions: flowQuestions.value, diagnosis: flowDiagnosis.value,
-    resourceTypes: selectedResourceTypes.value, includeClaimCheck: includeClaimCheck.value, supplementalRequirements: supplementalRequirements.value, restartAcknowledged: restartAcknowledged.value })
+    resourceTypes: selectedResourceTypes.value, includeClaimCheck: includeClaimCheck.value,
+    includeClaimEvidenceRetrieval: includeClaimEvidenceRetrieval.value,
+    supplementalRequirements: supplementalRequirements.value, restartAcknowledged: restartAcknowledged.value })
 }
-watch([stepStage, selectedDomainId, selectedDirectionId, form, diagnosticAnswers, flowProfile, flowQuestions, flowDiagnosis, selectedResourceTypes, includeClaimCheck, supplementalRequirements], saveDraft, { deep: true })
+watch([stepStage, selectedDomainId, selectedDirectionId, form, diagnosticAnswers, flowProfile, flowQuestions, flowDiagnosis, selectedResourceTypes, includeClaimCheck, includeClaimEvidenceRetrieval, supplementalRequirements], saveDraft, { deep: true })
+watch(includeClaimCheck, (enabled) => { if (!enabled) includeClaimEvidenceRetrieval.value = false })
 watch(() => currentUser.value?.user_id, (next, previous) => {
   if (!previous || next === previous) return
   draftReady = false
@@ -790,6 +813,7 @@ watch(() => currentUser.value?.user_id, (next, previous) => {
   initialRecommendedNodeName.value = ''
   selectedResourceTypes.value = ['讲义', '实操指南', '分阶测试题']
   includeClaimCheck.value = false
+  includeClaimEvidenceRetrieval.value = false
   supplementalRequirements.value = ''
   preparingQuestionnaire.value = false
   submittingProfile.value = false
@@ -856,6 +880,7 @@ async function initializeFlow() {
           }
           selectedResourceTypes.value = Array.isArray(draft.resourceTypes) ? draft.resourceTypes.filter(type => resourceTypeOptions.includes(type)) : selectedResourceTypes.value
           includeClaimCheck.value = draft.includeClaimCheck === true
+          includeClaimEvidenceRetrieval.value = includeClaimCheck.value && draft.includeClaimEvidenceRetrieval === true
           supplementalRequirements.value = typeof draft.supplementalRequirements === 'string' ? draft.supplementalRequirements : ''
           await loadInitialRecommendedNodeName()
         } else stepStage.value = 'track'

@@ -1,6 +1,11 @@
 """比赛金标评测套件：加载、校验与三项指标编排（离线确定性，不调用大模型）。
 
-- 幻觉率与覆盖率复用 ``compute_competition_claim_metrics``：金标 verdict 作为判定输入，
+v2 定义（``resource-quality/v2``）：
+
+- 核心知识点覆盖率只读普通审核的逐目标结果，单位是 ``(case_id, target_id)``；
+  Claim 是否抽取、判定成功与否都不改变该指标及其分母。旧套件里的
+  ``knowledge_coverage_rate`` 由 Claim 支持节点数计算，已从新定义与输出中移除。
+- 幻觉率继续复用 ``compute_competition_claim_metrics``：金标 verdict 作为判定输入，
   只统计最终发布叶子资源上的事实 Claim。
 - 难度适配复用 ``evaluate_difficulty_fixtures``：predicted_difficulty 由系统策略
   ``difficulty_for_tier``（目标能力节点 tier）计算，与 GenerationJobService 的链路一致。
@@ -33,6 +38,15 @@ from app.models.reviews.claims import (
     materialize_claims,
     materialize_judgements,
 )
+from app.models.reviews.quality_metrics import (
+    EvaluationQualityManifestV2,
+    EvaluationQualityCaseV2,
+    OrdinaryCoverageCaseV1,
+    OrdinaryCoverageEvaluationV1,
+    OrdinaryCoverageTargetV1,
+    QualityEvidenceMode,
+    QualityMetricStatus,
+)
 from app.services.reports.p0_09_acceptance import MetricGate
 from app.services.reports.competition_evidence import (
     confined_path, json_hash, validate_source_snapshot,
@@ -45,10 +59,15 @@ from app.services.reviews.claim_evaluation import (
     evaluate_difficulty_fixtures,
     final_published_leaf_ids,
 )
+from app.services.reviews.quality_metrics import ordinary_coverage_evaluation
+from app.services.reviews.quality_evaluation import manifest_hash
 
 
 SUITE_ID = "rag-competition-gold-suite"
-SUITE_VERSION = "v1"
+SUITE_VERSION = "v2"
+METRIC_DEFINITION_VERSION = "resource-quality/v2"
+COVERAGE_FIXTURE_VERSION = "ordinary-coverage/v2"
+REPORT_SCHEMA_VERSION = "2.0"
 GOLD_RESOURCE_ID = "gold-claims-resource"
 GOLD_RUN_ID = "gold-competition-run"
 GOLD_PROMPT_VERSION = "gold-v1"
@@ -60,11 +79,14 @@ class CompetitionMetricReport(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    report_schema_version: str = REPORT_SCHEMA_VERSION
+    metric_definition_version: str = METRIC_DEFINITION_VERSION
     suite_id: str
     suite_version: str
     mode: str
     case_count: int = Field(ge=0)
     claim_metrics: CompetitionClaimMetrics
+    ordinary_coverage: OrdinaryCoverageEvaluationV1
     difficulty: DifficultyEvaluation
     gates: list[MetricGate]
     evidence_scope: str = "offline_gold"
@@ -76,10 +98,12 @@ class CompetitionMetricReport(BaseModel):
     case_results: list[dict[str, Any]] = Field(default_factory=list)
     official_gates: list[MetricGate] = Field(default_factory=list)
     independent_quality_review: str = "NOT_RUN"
+    quality_manifest: EvaluationQualityManifestV2 | None = None
+    quality_case_records: list[EvaluationQualityCaseV2] = Field(default_factory=list)
 
 
 def default_suite_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "competition" / "suite.json"
+    return Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "competition" / "suite_v2.json"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -96,17 +120,23 @@ def load_suite(
     expected_suite_version: str | None = None,
     kb_root: str | Path | None = None,
 ) -> dict[str, Any]:
-    """加载套件清单并聚合画像、用例与金标 Claim 三个子文件。
+    """加载套件清单并聚合画像、用例、金标 Claim 与普通覆盖四个子文件。
 
     默认按仓库内 RAG 套件的常量做防漂移校验；迁移到新领域时传入该领域
     套件自己的 suite_id/version 与知识库根目录，评测代码本身不依赖任何
-    领域特定逻辑。
+    领域特定逻辑。显式提供 v1 套件会失败：旧 Claim 覆盖公式不再生成新报告。
     """
     suite_path = Path(path) if path else default_suite_path()
     manifest = _read_json(suite_path)
     if manifest.get("suite_id") != (expected_suite_id or SUITE_ID):
         raise ValueError("unexpected competition suite_id")
-    if manifest.get("suite_version") != (expected_suite_version or SUITE_VERSION):
+    version = manifest.get("suite_version")
+    if version == "v1":
+        raise ValueError(
+            "competition suite v1 uses the retired Claim knowledge-coverage definition; "
+            "use suite_v2.json (ordinary-target-coverage/v2)"
+        )
+    if version != (expected_suite_version or SUITE_VERSION):
         raise ValueError("unexpected competition suite_version")
     root = suite_path.parent
     files = manifest.get("files") or {}
@@ -115,6 +145,9 @@ def load_suite(
         suite[f"{name}_payload"] = _read_json(confined_path(root, files[name]))
     if files.get("sources"):
         suite["sources_payload"] = _read_json(confined_path(root, files["sources"]))
+    if not files.get("coverage"):
+        raise ValueError("competition suite v2 requires an ordinary coverage fixture")
+    suite["coverage_payload"] = _read_json(confined_path(root, files["coverage"]))
     validate_suite(suite, kb_root=kb_root)
     return suite
 
@@ -241,6 +274,38 @@ def validate_suite(suite: dict[str, Any], *, kb_root: str | Path | None = None) 
         raise ValueError("case target nodes lack gold reference")
     if suite.get("sources_payload") is not None:
         validate_source_snapshot(suite["sources_payload"], suite["knowledge_base_id"], claims, kb_root)
+    _validate_coverage_fixture(suite, case_list)
+
+
+def _validate_coverage_fixture(suite: dict[str, Any], case_list: list[dict[str, Any]]) -> None:
+    payload = suite.get("coverage_payload")
+    if payload is None:
+        raise ValueError("competition suite v2 requires a coverage payload")
+    if payload.get("coverage_fixture_version") != suite.get("coverage_fixture_version"):
+        raise ValueError("coverage fixture version drift")
+    if payload.get("coverage_fixture_version") != COVERAGE_FIXTURE_VERSION:
+        raise ValueError("unsupported coverage fixture version")
+    if payload.get("knowledge_base_id") != suite["knowledge_base_id"]:
+        raise ValueError("coverage knowledge_base_id drift")
+    by_case = {item["case_id"]: item for item in payload.get("cases") or []}
+    if set(by_case) != {case["case_id"] for case in case_list}:
+        raise ValueError("coverage cases must match the selected cases exactly")
+    for case in case_list:
+        entry = by_case[case["case_id"]]
+        targets = [item["target_id"] for item in entry.get("targets") or []]
+        if not bool(entry.get("observed", True)):
+            # A failed/not-generated case keeps its place in the planned
+            # denominator but carries no target verdicts.  Accepting targets
+            # here would let a partial attempt masquerade as observed.
+            if targets:
+                raise ValueError(
+                    f"unobserved coverage case cannot carry target results: {case['case_id']}"
+                )
+            continue
+        if len(set(targets)) != len(targets):
+            raise ValueError(f"duplicate coverage target: {case['case_id']}")
+        if set(targets) != set(case["target_skill_nodes"]):
+            raise ValueError(f"coverage targets drift from case targets: {case['case_id']}")
 
 
 def build_gold_claims(claims_payload: dict[str, Any]) -> tuple[list, list]:
@@ -315,6 +380,34 @@ def compute_difficulty_results(
     return results
 
 
+def build_ordinary_coverage_cases(
+    coverage_payload: dict[str, Any],
+    *,
+    case_ids: list[str] | None = None,
+) -> list[OrdinaryCoverageCaseV1]:
+    """Turn the coverage fixture into validated per-case unit results."""
+    selected = set(case_ids) if case_ids is not None else None
+    cases: list[OrdinaryCoverageCaseV1] = []
+    for entry in coverage_payload["cases"]:
+        if selected is not None and entry["case_id"] not in selected:
+            continue
+        observed = bool(entry.get("observed", True))
+        cases.append(OrdinaryCoverageCaseV1(
+            case_id=entry["case_id"],
+            observed=observed,
+            failure_code=entry.get("failure_code"),
+            targets=tuple(
+                OrdinaryCoverageTargetV1(target_id=item["target_id"], covered=bool(item["covered"]))
+                for item in entry.get("targets") or ()
+            ),
+        ))
+    return cases
+
+
+def _planned_units(cases_payload: dict[str, Any], coverage_payload: dict[str, Any]) -> int:
+    return sum(len(set(case["target_skill_nodes"])) for case in cases_payload["cases"])
+
+
 def evaluate_competition_metrics(
     suite: dict[str, Any],
     *,
@@ -324,6 +417,7 @@ def evaluate_competition_metrics(
     validate_suite(suite, kb_root=kb_root)
     claims_payload = suite["claims_payload"]
     cases_payload = suite["cases_payload"]
+    coverage_payload = suite["coverage_payload"]
     thresholds = suite["competition_thresholds"]
 
     resource = LearningResource(
@@ -341,7 +435,6 @@ def evaluate_competition_metrics(
         resources=[resource],
         claims=records,
         judgements=judgements,
-        target_skill_node_ids=claims_payload["target_skill_nodes"],
     )
 
     node_tiers = load_skill_node_tiers(suite["knowledge_base_id"], kb_root=kb_root)
@@ -349,11 +442,19 @@ def evaluate_competition_metrics(
         compute_difficulty_results(cases_payload, node_tiers),
     )
 
+    coverage = ordinary_coverage_evaluation(
+        build_ordinary_coverage_cases(coverage_payload),
+        planned_case_total=len(cases_payload["cases"]),
+        planned_unit_total=_planned_units(cases_payload, coverage_payload),
+        fixture_version=coverage_payload["coverage_fixture_version"],
+        evidence_mode=QualityEvidenceMode.OFFLINE_GOLD,
+    )
+
     case_count = len(cases_payload["cases"])
     measurable = case_count >= int(thresholds.get("minimum_case_count", OFFICIAL_MINIMUM_CASE_COUNT))
     mode_note = "offline gold fixtures; official live-model numbers require RUN_LIVE_LLM=1 evaluation"
     hallucination = claim_metrics.claim_hallucination_rate
-    coverage = claim_metrics.knowledge_coverage_rate
+    coverage_metric = coverage.metric
     accuracy = difficulty.accuracy
     gates = [
         MetricGate(
@@ -380,11 +481,19 @@ def evaluate_competition_metrics(
             metric_id="M-COVERAGE",
             official_definition="核心知识点覆盖率",
             official_threshold=">= 90%",
-            formula="target skill nodes covered by supported factual claims / target nodes",
+            formula="covered (case_id, target_id) units from the ordinary review / planned case-target units",
             sample_count=case_count,
-            actual_value=coverage,
-            status=("PASS" if measurable and coverage is not None and coverage >= float(thresholds["knowledge_coverage_min"]) else "FAIL" if measurable else "NOT_MEASURABLE"),
-            evidence=f"{mode_note}; covered={claim_metrics.covered_skill_total}/{claim_metrics.target_skill_total}",
+            actual_value=coverage_metric.value,
+            status=(
+                "PASS" if measurable and coverage_metric.status is QualityMetricStatus.COMPLETE
+                and coverage_metric.value is not None
+                and coverage_metric.value >= float(thresholds["knowledge_coverage_min"])
+                else "FAIL" if measurable else "NOT_MEASURABLE"
+            ),
+            evidence=(
+                f"{mode_note}; covered={coverage.covered_unit_total}/{coverage.planned_unit_total}; "
+                f"missing_cases={coverage.missing_case_count}"
+            ),
         ),
     ]
     case_results = []
@@ -401,16 +510,71 @@ def evaluate_competition_metrics(
         mode=suite["mode"],
         case_count=case_count,
         claim_metrics=claim_metrics,
+        ordinary_coverage=coverage,
         difficulty=difficulty,
         gates=gates,
-        evidence_scope="offline_gold: curated claim labels and difficulty policy; no generated cases",
+        evidence_scope="offline_gold: curated claim labels, curated ordinary coverage and difficulty policy; no generated cases",
         source_snapshot_hash=json_hash(suite["sources_payload"]) if suite.get("sources_payload") else None,
         suite_data_hash=json_hash(suite),
         selected_case_count=case_count,
         completed_generation_count=0,
         case_results=case_results,
         official_gates=_unmeasured_official_gates(gates, "no real generation or independent quality review", 0),
+        **_evaluation_records(suite, build_live_plan(suite), case_results, coverage, "offline_gold"),
     )
+
+
+def _evaluation_records(suite, plans, results, coverage, mode):
+    """Export case records with exactly the frozen case-target denominator."""
+    manifest = EvaluationQualityManifestV2(
+        evaluation_id=json_hash({"suite": json_hash(suite), "results": results, "mode": mode}),
+        experiment_name="competition", suite_id=suite["suite_id"], suite_version=suite["suite_version"],
+        fixture_version=suite["cases_payload"]["fixture_version"],
+        coverage_fixture_version=coverage.coverage_fixture_version, evidence_mode=mode,
+        source_snapshot_hash=json_hash(suite.get("sources_payload") or {}),
+        suite_data_hash=json_hash(suite),
+        selected_case_targets={plan.case_id: tuple(sorted(set(plan.target_skill_nodes))) for plan in plans},
+    )
+    identity = manifest_hash(manifest)
+    observations = {case.case_id: case for case in coverage.cases}
+    by_id = {result["case_id"]: result for result in results}
+    records = []
+    for plan in plans:
+        result = by_id[plan.case_id]
+        output = result.get("output") or {}
+        quality = result.get("resource_quality") or {}
+        claim = quality.get("claim") or {}
+        counts = claim.get("counts") or {}
+        factual = counts.get("factual_claim_total", 0)
+        risk = counts.get("contradicted_claim_total", 0) + counts.get("not_in_evidence_claim_total", 0)
+        state = claim.get("status", "unavailable")
+        if mode == "offline_gold":
+            gold = [item for item in suite["claims_payload"]["claims"]
+                    if item.get("knowledge_point_id") in plan.target_skill_nodes
+                    and item.get("claim_type") == "factual"]
+            factual = len(gold)
+            risk = sum(item.get("verdict") in {"contradicted", "not_in_evidence"} for item in gold)
+            state = "complete" if factual else "not_applicable"
+            counts = {
+                "claim_total": factual, "factual_claim_total": factual,
+                "supported_claim_total": factual - risk,
+                "contradicted_claim_total": sum(item.get("verdict") == "contradicted" for item in gold),
+                "not_in_evidence_claim_total": sum(item.get("verdict") == "not_in_evidence" for item in gold),
+            }
+        records.append(EvaluationQualityCaseV2(
+            manifest_hash=identity, case_id=plan.case_id,
+            generation_status=("reference_only" if mode == "offline_gold" else
+                               "completed" if result["status"] == "COMPLETED" else "failed"),
+            expected_difficulty=plan.expected_difficulty,
+            predicted_difficulty=(result.get("policy_decisions", {}).get("predicted_difficulty")
+                                  if mode == "offline_gold" else output.get("difficulty")),
+            run_id=result.get("run_id"), resource_id=quality.get("resource_id"),
+            resource_version=quality.get("resource_version"), review_id=quality.get("review_id"),
+            ordinary_coverage=observations[plan.case_id], claim_status=state,
+            claim_counts=counts if state == "complete" else None,
+            failure_code=observations[plan.case_id].failure_code,
+        ))
+    return {"quality_manifest": manifest, "quality_case_records": records}
 
 
 def _unmeasured_official_gates(gates: list[MetricGate], reason: str, sample_count: int) -> list[MetricGate]:
@@ -434,7 +598,7 @@ def _case_reference(suite: dict[str, Any], plan: LiveCasePlan) -> dict[str, Any]
 
 # ---------------------------------------------------------------------------
 # Live 评测通路：兼容真实 API 测试。
-# 通路完整实现（画像落库 -> 生产生成链路 -> Claim 审核判定 -> 三项指标），
+# 通路完整实现（画像落库 -> 生产生成链路 -> Claim 审核判定 -> 普通审核覆盖 -> 三项指标），
 # 但当前未执行真实 API 验证；调用方在 is_live_ready() 未就绪时必须显式
 # SKIP，不得静默降级为离线结论。
 # ---------------------------------------------------------------------------
@@ -525,17 +689,42 @@ def _build_live_request(profile: LearnerProfile, plan: LiveCasePlan) -> Generate
     )
 
 
+def coverage_case_from_quality(plan: LiveCasePlan, quality_items, resource: LearningResource) -> OrdinaryCoverageCaseV1:
+    """Read the persisted ordinary-review projection; never re-score the text."""
+    item = next((entry for entry in quality_items if entry.resource_id == resource.resource_id), None)
+    if item is None or item.coverage.status is not QualityMetricStatus.COMPLETE:
+        failure = "COVERAGE_NOT_MEASURED" if item is None else item.coverage.status.value.upper()
+        return OrdinaryCoverageCaseV1(
+            case_id=plan.case_id, observed=False, failure_code=failure,
+        )
+    targets = {entry.target_id: entry.status == "covered" for entry in item.target_coverage}
+    if (set(targets) != set(plan.target_skill_nodes)
+            or item.run_id != resource.run_id or item.resource_version != resource.version
+            or item.review_id != resource.review_id):
+        return OrdinaryCoverageCaseV1(
+            case_id=plan.case_id, observed=False, failure_code="COVERAGE_BINDING_MISMATCH",
+        )
+    return OrdinaryCoverageCaseV1(
+        case_id=plan.case_id,
+        observed=True,
+        targets=tuple(
+            OrdinaryCoverageTargetV1(target_id=node, covered=targets[node])
+            for node in plan.target_skill_nodes
+        ),
+    )
+
+
 def evaluate_live_metrics(
     suite: dict[str, Any],
     *,
     max_cases: int | None = None,
     container: Any = None,
 ) -> CompetitionMetricReport:
-    """真实模型评测：生产生成链路 + Claim 审核判定 + 同一套三项指标。
+    """真实模型评测：生产生成链路 + Claim 审核判定 + 普通审核覆盖 + 同一套三项指标。
 
-    与离线模式的差别只在输入来源：资源与 Claim 判定来自真实 Run 的持久化
-    投影，不使用金标标注。生成失败的用例不会静默消失——完成的用例数不足
-    比赛门槛时，Gate 输出 NOT_MEASURABLE 而非虚报。
+    与离线模式的差别只在输入来源：资源、Claim 判定与普通审核覆盖来自真实
+    Run 的持久化投影，不使用金标标注。生成失败的用例不会静默消失——完成的
+    用例数不足比赛门槛时，Gate 输出 NOT_MEASURABLE 而非虚报。
     """
     ready, reason = is_live_ready()
     if not ready:
@@ -553,12 +742,14 @@ def evaluate_live_metrics(
         plans = plans[:max_cases]
 
     thresholds = suite["competition_thresholds"]
-    claims_payload = suite["claims_payload"]
+    coverage_payload = suite["coverage_payload"]
     resources: list[LearningResource] = []
     claims: list[Any] = []
     judgements: list[Any] = []
     difficulty_results: list[DifficultyFixtureResult] = []
+    coverage_cases: list[OrdinaryCoverageCaseV1] = []
     case_results: list[dict[str, Any]] = []
+    quality_service = container.resource_quality_query_service()
     for plan in plans:
         result = _case_reference(suite, plan)
         result.update(status="FAILED", run_id=None, runtime_events=[], output=None)
@@ -594,6 +785,19 @@ def evaluate_live_metrics(
             ]
             result["claims"] = [item.model_dump(mode="json") for item in claim_response.claims]
             result["judgements"] = [item.model_dump(mode="json") for item in claim_response.judgements]
+            quality = quality_service.get_run_quality(job.run_id)
+            candidates = [item for item in run_resources if item.resource_type == plan.resource_type]
+            if candidates:
+                current = max(candidates, key=lambda item: (item.version, item.resource_id))
+                coverage_cases.append(coverage_case_from_quality(plan, quality.items, current))
+                selected_quality = next((item for item in quality.items
+                                         if item.resource_id == current.resource_id), None)
+                if selected_quality is not None:
+                    result["resource_quality"] = selected_quality.model_dump(mode="json")
+            else:
+                coverage_cases.append(OrdinaryCoverageCaseV1(
+                    case_id=plan.case_id, observed=False, failure_code="NO_RESOURCE",
+                ))
             stage = "publication"
             leaf_ids = final_published_leaf_ids(run_resources)
             leaves = [item for item in run_resources if item.publication_status == "published"
@@ -609,6 +813,10 @@ def evaluate_live_metrics(
         except Exception as error:
             result["failure_stage"] = stage
             result["error_type"] = type(error).__name__
+            if not any(case.case_id == plan.case_id for case in coverage_cases):
+                coverage_cases.append(OrdinaryCoverageCaseV1(
+                    case_id=plan.case_id, observed=False, failure_code="CASE_EXECUTION_FAILED",
+                ))
         # Failed cases stay in the adaptation denominator; they cannot disappear.
         difficulty_results.append(DifficultyFixtureResult(
             case_id=plan.case_id, fixture_version=suite["cases_payload"]["fixture_version"],
@@ -620,20 +828,27 @@ def evaluate_live_metrics(
         resources=resources,
         claims=claims,
         judgements=judgements,
-        target_skill_node_ids=claims_payload["target_skill_nodes"],
     )
     difficulty = evaluate_difficulty_fixtures(difficulty_results)
+    coverage = ordinary_coverage_evaluation(
+        coverage_cases,
+        planned_case_total=len(plans),
+        planned_unit_total=sum(len(plan.target_skill_nodes) for plan in plans),
+        fixture_version=coverage_payload["coverage_fixture_version"],
+        evidence_mode=QualityEvidenceMode.LIVE_MODEL,
+    )
 
     completed = sum(item["status"] == "COMPLETED" for item in case_results)
     minimum = int(thresholds.get("minimum_case_count", OFFICIAL_MINIMUM_CASE_COUNT))
-    measurable = (completed >= minimum and completed == len(plans)
+    measurable = (len(plans) >= minimum
                   and len({item["background_id"] for item in case_results}) >= 3
                   and len({plan.resource_type for plan in plans}) >= 3
-                  and suite.get("sources_payload") is not None
-                  and claim_metrics.factual_claim_total > 0
-                  and claim_metrics.metric_status.value == "complete")
+                  and suite.get("sources_payload") is not None)
+    claim_measurable = (measurable and completed == len(plans)
+                        and claim_metrics.factual_claim_total > 0
+                        and claim_metrics.metric_status.value == "complete")
     hallucination = claim_metrics.claim_hallucination_rate
-    coverage = claim_metrics.knowledge_coverage_rate
+    coverage_metric = coverage.metric
     accuracy = difficulty.accuracy
     gates = [
         MetricGate(
@@ -643,7 +858,7 @@ def evaluate_live_metrics(
             formula="(contradicted + not_in_evidence) / factual_claim_total on final published leaves",
             sample_count=completed,
             actual_value=hallucination,
-            status=("PASS" if measurable and hallucination is not None and hallucination < float(thresholds["hallucination_rate_max"]) else "FAIL" if measurable else "NOT_MEASURABLE"),
+            status=("PASS" if claim_measurable and hallucination is not None and hallucination < float(thresholds["hallucination_rate_max"]) else "FAIL" if claim_measurable else "NOT_MEASURABLE"),
             evidence=f"live model run; completed={completed}/{len(plans)}; factual_claims={claim_metrics.factual_claim_total}",
         ),
         MetricGate(
@@ -660,11 +875,20 @@ def evaluate_live_metrics(
             metric_id="M-COVERAGE",
             official_definition="核心知识点覆盖率",
             official_threshold=">= 90%",
-            formula="target skill nodes covered by supported factual claims / target nodes",
+            formula="covered (case_id, target_id) units from the ordinary review / planned case-target units",
             sample_count=completed,
-            actual_value=coverage,
-            status=("PASS" if measurable and coverage is not None and coverage >= float(thresholds["knowledge_coverage_min"]) else "FAIL" if measurable else "NOT_MEASURABLE"),
-            evidence=f"live model run; completed={completed}/{len(plans)}; covered={claim_metrics.covered_skill_total}/{claim_metrics.target_skill_total}",
+            actual_value=coverage_metric.value,
+            status=(
+                "PASS" if measurable and coverage_metric.status is QualityMetricStatus.COMPLETE
+                and coverage_metric.value is not None
+                and coverage_metric.value >= float(thresholds["knowledge_coverage_min"])
+                else "FAIL" if measurable and coverage_metric.status is QualityMetricStatus.COMPLETE else "NOT_MEASURABLE"
+            ),
+            evidence=(
+                f"live model run; completed={completed}/{len(plans)}; "
+                f"covered={coverage.covered_unit_total}/{coverage.planned_unit_total}; "
+                f"missing_cases={coverage.missing_case_count}"
+            ),
         ),
     ]
     return CompetitionMetricReport(
@@ -673,6 +897,7 @@ def evaluate_live_metrics(
         mode="live_model",
         case_count=completed,
         claim_metrics=claim_metrics,
+        ordinary_coverage=coverage,
         difficulty=difficulty,
         gates=gates,
         evidence_scope="live_model: generated resources with production self-review; independent quality review not run",
@@ -683,4 +908,5 @@ def evaluate_live_metrics(
         failed_case_count=len(plans) - completed,
         case_results=case_results,
         official_gates=_unmeasured_official_gates(gates, "independent quality review NOT_RUN; production self-review only", completed),
+        **_evaluation_records(suite, plans, case_results, coverage, "live_model"),
     )

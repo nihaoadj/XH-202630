@@ -11,6 +11,7 @@ from typing import Any, Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.retrieval.knowledge_ids import normalize_text, sha256_hex
+from app.models.generation.progress import RunPublishSummary
 from app.models.knowledge.knowledge import EvidenceItem, SourceLocator
 
 
@@ -178,6 +179,8 @@ class RunSummary(StrictPersistenceModel):
     updated_at: datetime
     ended_at: datetime | None = None
     replay_completeness: ReplayCompleteness
+    # Derived at query time from persisted facts; never written to a snapshot.
+    publish_summary: RunPublishSummary | None = None
 
     @classmethod
     def from_record(cls, record: AgentRunRecord) -> "RunSummary":
@@ -426,6 +429,7 @@ class BeginStepCommand(StrictPersistenceModel):
 
 
 class CompleteStepCommand(StrictPersistenceModel):
+    review_audit: dict[str, Any] | None = None
     run_id: str
     step_id: str
     trace: dict[str, Any]
@@ -483,6 +487,47 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
     """Build the bounded allow-list projection used for read-only replay."""
 
     projection: dict[str, Any] = {}
+    if state.get("claim_extraction_policy") is not None:
+        for key in ("claim_extraction_mode", "claim_extraction_policy", "claim_extraction_policy_hash"):
+            projection[key] = _jsonable(state[key])
+    if state.get("claim_extraction_refs"):
+        projection["claim_extraction_refs"] = _jsonable(state["claim_extraction_refs"])
+    if state.get("claim_evidence_retrieval_policy") is not None:
+        for key in (
+            "claim_evidence_retrieval_policy",
+            "claim_evidence_retrieval_policy_hash",
+        ):
+            if key not in state or state[key] is None:
+                raise ValueError("supplement checkpoint frozen fields missing")
+            projection[key] = _jsonable(state[key])
+        projection["claim_evidence_retrieval_refs"] = _jsonable(
+            list(state.get("claim_evidence_retrieval_refs", []))[:100]
+        )
+        projection["claim_evidence_hard_block_resource_ids"] = list(
+            state.get("claim_evidence_hard_block_resource_ids", [])
+        )[:100]
+    if state.get("lecture_review_contract_version") is not None:
+        for key in ("lecture_review_contract_version", "lecture_review_policy", "lecture_review_policy_hash"):
+            if key not in state or state[key] is None:
+                raise ValueError("lecture checkpoint frozen fields missing")
+            projection[key] = _jsonable(state[key])
+        if state.get("lecture_stop_reasons"):
+            projection["lecture_stop_reasons"] = _jsonable(state["lecture_stop_reasons"])
+    if state.get("resource_review_contract_version") is not None:
+        resource_keys = ("resource_review_contract_version", "resource_review_policy", "resource_review_policy_hash")
+        if state["resource_review_contract_version"] == "1.1":
+            resource_keys += ("resource_review_identity", "resource_review_identity_hash")
+        for key in resource_keys:
+            if key not in state or state[key] is None:
+                raise ValueError("resource checkpoint frozen fields missing")
+            if key in state:
+                projection[key] = _jsonable(state[key])
+        if state.get("resource_stop_reasons"):
+            projection["resource_stop_reasons"] = _jsonable(state["resource_stop_reasons"])
+    if state.get("review_policy") is not None:
+        projection["review_policy"] = _jsonable(state["review_policy"])
+    if state.get("review_audit_refs"):
+        projection["review_audit_refs"] = _jsonable(state["review_audit_refs"])
     scalar_fields = (
         "schema_version",
         "run_id",
@@ -494,6 +539,7 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "generation_mode",
         "include_review",
         "include_claim_check",
+        "include_claim_evidence_retrieval",
         "max_iterations",
         "claim_max_iterations",
         "workflow_status",

@@ -59,6 +59,14 @@ def main() -> int:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     container = init_container()
+    # Bypass LLM-call accounting (T41): one optional writer child per Worker
+    # host process; a failure only disables accounting persistence.
+    from app.services.runs.llm_accounting_runtime import (
+        start_llm_accounting_runtime,
+        stop_llm_accounting_runtime,
+    )
+
+    start_llm_accounting_runtime()
     executor = container.courseware_executor()
     server: ThreadingHTTPServer | None = None
 
@@ -75,6 +83,7 @@ def main() -> int:
         signal.signal(signal.SIGBREAK, stop)
     if args.once:
         result = executor.run_once()
+        stop_llm_accounting_runtime()
         logging.info("courseware worker one-shot claimed=%s processed=%s failed=%s", result["claimed"], result["processed"], result["failed"])
         return 0 if result["failed"] == 0 else 1
 
@@ -99,6 +108,7 @@ def main() -> int:
         executor.run_forever()
         return 0
     finally:
+        stop_llm_accounting_runtime()
         server.shutdown()
         server.server_close()
         server_thread.join(timeout=2)

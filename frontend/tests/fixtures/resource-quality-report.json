@@ -1,0 +1,375 @@
+{
+  "resource_quality_summary": {
+    "schema_version": "1.0",
+    "metric_policy_version": "resource-quality/v2",
+    "resource_total": 2,
+    "coverage": {
+      "schema_version": "1.0",
+      "metric_id": "core_knowledge_coverage",
+      "definition_version": "ordinary-target-coverage/v2",
+      "value": 0.8,
+      "status": "complete",
+      "source": "ordinary_review",
+      "numerator": 4,
+      "denominator": 5,
+      "assessment": "not_met",
+      "threshold": {
+        "comparator": "gte",
+        "value": 0.9
+      },
+      "evidence_mode": "production_audit",
+      "reason_codes": []
+    },
+    "coverage_buckets": {
+      "complete": 2,
+      "pending": 0,
+      "incomplete": 0,
+      "failed": 0,
+      "not_requested": 0,
+      "not_applicable": 0,
+      "unavailable": 0,
+      "legacy_unavailable": 0
+    },
+    "coverage_target_total": 5,
+    "coverage_covered_target_total": 4,
+    "coverage_missing_target_total": 1,
+    "coverage_unknown_resource_total": 0,
+    "claim_buckets": {
+      "complete": 0,
+      "reference": 1,
+      "pending": 0,
+      "incomplete": 0,
+      "failed": 0,
+      "not_requested": 1,
+      "not_applicable": 0,
+      "unavailable": 0,
+      "legacy_unavailable": 0
+    },
+    "claim_verified_resource_total": 0,
+    "claim_risk_fact_total": 0,
+    "claim_factual_total": 0,
+    "claim_unverified_subset_rate": null,
+    "reference_resource_total": 1,
+    "reference_value": 0.05,
+    "reason_codes": []
+  },
+  "recent_resource_quality": [
+    {
+      "schema_version": "1.0",
+      "metric_policy_version": "resource-quality/v2",
+      "run_id": "run-quality",
+      "resource_spec_id": null,
+      "resource_id": "resource-measured",
+      "resource_version": 1,
+      "resource_type": "讲义",
+      "topic": "T48",
+      "display_order": 0,
+      "published": true,
+      "review_id": "rv-resource-measured",
+      "coverage": {
+        "schema_version": "1.0",
+        "metric_id": "core_knowledge_coverage",
+        "definition_version": "ordinary-target-coverage/v2",
+        "value": 0.75,
+        "status": "complete",
+        "source": "ordinary_review",
+        "numerator": 3,
+        "denominator": 4,
+        "assessment": "not_met",
+        "threshold": {
+          "comparator": "gte",
+          "value": 0.9
+        },
+        "evidence_mode": "production_audit",
+        "reason_codes": []
+      },
+      "hallucination": {
+        "schema_version": "1.0",
+        "metric_id": "hallucination_rate",
+        "definition_version": "ordinary-approved-reference/v1",
+        "value": 0.05,
+        "status": "reference",
+        "source": "ordinary_rule_reference",
+        "numerator": null,
+        "denominator": null,
+        "assessment": "not_assessed",
+        "threshold": null,
+        "evidence_mode": "rule_reference",
+        "reason_codes": [
+          "ORDINARY_REFERENCE_UNCALIBRATED"
+        ]
+      },
+      "factual_support": null,
+      "claim": {
+        "requested": true,
+        "status": "reference",
+        "review_id": null,
+        "counts": null,
+        "hallucination": {
+          "schema_version": "1.0",
+          "metric_id": "hallucination_rate",
+          "definition_version": "ordinary-approved-reference/v1",
+          "value": 0.05,
+          "status": "reference",
+          "source": "ordinary_rule_reference",
+          "numerator": null,
+          "denominator": null,
+          "assessment": "not_assessed",
+          "threshold": null,
+          "evidence_mode": "rule_reference",
+          "reason_codes": [
+            "ORDINARY_REFERENCE_UNCALIBRATED"
+          ]
+        },
+        "support_rate": null,
+        "progress": {
+          "schema_version": "1.0",
+          "metric_id": "claim_check_progress",
+          "definition_version": "claim-risk/v1",
+          "value": null,
+          "status": "not_applicable",
+          "source": "none",
+          "numerator": null,
+          "denominator": null,
+          "assessment": "not_applicable",
+          "threshold": null,
+          "evidence_mode": "production_audit",
+          "reason_codes": []
+        },
+        "failure_code": null,
+        "reason_codes": [
+          "ORDINARY_REFERENCE_UNCALIBRATED"
+        ]
+      },
+      "ordinary_review": {
+        "status": "complete",
+        "contract_version": null,
+        "review_id": "rv-resource-measured",
+        "review_step_id": null,
+        "review_step_sequence": null,
+        "decision": "approve",
+        "factual_evidence": "pass",
+        "difficulty": "pass",
+        "self_contained": "pass",
+        "target_total": 4,
+        "covered_target_total": 3,
+        "missing_target_total": 1,
+        "truncated_issue_count": false,
+        "failure_code": null,
+        "reason_codes": []
+      },
+      "difficulty_fit": {
+        "dimension_status": "pass",
+        "estimated_difficulty": "中级",
+        "match_status": "matched",
+        "scale_version": "declared-band/v1",
+        "reason_codes": []
+      },
+      "issue_statistics": {
+        "history_completeness": "complete",
+        "open_issue_total": 0,
+        "open_by_severity": null,
+        "open_by_dimension": null,
+        "fixed_issue_total": null,
+        "false_positive_issue_total": null,
+        "still_open_issue_total": 0,
+        "unverifiable_issue_total": null,
+        "reopened_issue_total": null,
+        "blocked_by_issue_total": 0,
+        "reason_codes": []
+      },
+      "source_binding": {
+        "status": "complete",
+        "source_ref_total": 0,
+        "verified_ref_total": 0,
+        "unique_document_total": 0,
+        "reason_codes": []
+      },
+      "target_coverage": [
+        {
+          "target_id": "node-0",
+          "display_name": null,
+          "status": "covered",
+          "paragraph_id": null,
+          "heading_path": [],
+          "unit_id": "unit-0",
+          "reason_code": null
+        },
+        {
+          "target_id": "node-1",
+          "display_name": null,
+          "status": "covered",
+          "paragraph_id": null,
+          "heading_path": [],
+          "unit_id": "unit-1",
+          "reason_code": null
+        },
+        {
+          "target_id": "node-2",
+          "display_name": null,
+          "status": "covered",
+          "paragraph_id": null,
+          "heading_path": [],
+          "unit_id": "unit-2",
+          "reason_code": null
+        },
+        {
+          "target_id": "node-3",
+          "display_name": null,
+          "status": "missing",
+          "paragraph_id": null,
+          "heading_path": [],
+          "unit_id": null,
+          "reason_code": null
+        }
+      ],
+      "availability": "available",
+      "reason_codes": []
+    },
+    {
+      "schema_version": "1.0",
+      "metric_policy_version": "resource-quality/v2",
+      "run_id": "run-quality",
+      "resource_spec_id": null,
+      "resource_id": "resource-no-claim",
+      "resource_version": 1,
+      "resource_type": "讲义",
+      "topic": "T48",
+      "display_order": 0,
+      "published": true,
+      "review_id": "rv-resource-no-claim",
+      "coverage": {
+        "schema_version": "1.0",
+        "metric_id": "core_knowledge_coverage",
+        "definition_version": "ordinary-target-coverage/v2",
+        "value": 1.0,
+        "status": "complete",
+        "source": "ordinary_review",
+        "numerator": 1,
+        "denominator": 1,
+        "assessment": "met",
+        "threshold": {
+          "comparator": "gte",
+          "value": 0.9
+        },
+        "evidence_mode": "production_audit",
+        "reason_codes": []
+      },
+      "hallucination": {
+        "schema_version": "1.0",
+        "metric_id": "hallucination_rate",
+        "definition_version": "claim-risk/v1",
+        "value": null,
+        "status": "not_requested",
+        "source": "none",
+        "numerator": null,
+        "denominator": null,
+        "assessment": "not_assessed",
+        "threshold": null,
+        "evidence_mode": "production_audit",
+        "reason_codes": [
+          "CLAIM_CHECK_NOT_REQUESTED"
+        ]
+      },
+      "factual_support": null,
+      "claim": {
+        "requested": false,
+        "status": "not_requested",
+        "review_id": null,
+        "counts": null,
+        "hallucination": {
+          "schema_version": "1.0",
+          "metric_id": "hallucination_rate",
+          "definition_version": "claim-risk/v1",
+          "value": null,
+          "status": "not_requested",
+          "source": "none",
+          "numerator": null,
+          "denominator": null,
+          "assessment": "not_assessed",
+          "threshold": null,
+          "evidence_mode": "production_audit",
+          "reason_codes": [
+            "CLAIM_CHECK_NOT_REQUESTED"
+          ]
+        },
+        "support_rate": null,
+        "progress": {
+          "schema_version": "1.0",
+          "metric_id": "claim_check_progress",
+          "definition_version": "claim-risk/v1",
+          "value": null,
+          "status": "not_applicable",
+          "source": "none",
+          "numerator": null,
+          "denominator": null,
+          "assessment": "not_applicable",
+          "threshold": null,
+          "evidence_mode": "production_audit",
+          "reason_codes": []
+        },
+        "failure_code": null,
+        "reason_codes": [
+          "CLAIM_CHECK_NOT_REQUESTED"
+        ]
+      },
+      "ordinary_review": {
+        "status": "complete",
+        "contract_version": null,
+        "review_id": "rv-resource-no-claim",
+        "review_step_id": null,
+        "review_step_sequence": null,
+        "decision": "approve",
+        "factual_evidence": "pass",
+        "difficulty": "pass",
+        "self_contained": "pass",
+        "target_total": 1,
+        "covered_target_total": 1,
+        "missing_target_total": 0,
+        "truncated_issue_count": false,
+        "failure_code": null,
+        "reason_codes": []
+      },
+      "difficulty_fit": {
+        "dimension_status": "pass",
+        "estimated_difficulty": "中级",
+        "match_status": "matched",
+        "scale_version": "declared-band/v1",
+        "reason_codes": []
+      },
+      "issue_statistics": {
+        "history_completeness": "complete",
+        "open_issue_total": 0,
+        "open_by_severity": null,
+        "open_by_dimension": null,
+        "fixed_issue_total": null,
+        "false_positive_issue_total": null,
+        "still_open_issue_total": 0,
+        "unverifiable_issue_total": null,
+        "reopened_issue_total": null,
+        "blocked_by_issue_total": 0,
+        "reason_codes": []
+      },
+      "source_binding": {
+        "status": "complete",
+        "source_ref_total": 0,
+        "verified_ref_total": 0,
+        "unique_document_total": 0,
+        "reason_codes": []
+      },
+      "target_coverage": [
+        {
+          "target_id": "node-0",
+          "display_name": null,
+          "status": "covered",
+          "paragraph_id": null,
+          "heading_path": [],
+          "unit_id": "unit-0",
+          "reason_code": null
+        }
+      ],
+      "availability": "available",
+      "reason_codes": []
+    }
+  ]
+}

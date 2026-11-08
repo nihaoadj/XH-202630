@@ -20,6 +20,20 @@
         </div>
 
         <p v-if="item.learning_objective" class="execution-objective">{{ item.learning_objective }}</p>
+        <div v-if="qualityItemFor(item)" class="execution-quality-line" :class="`is-${qualityTone(qualityItemFor(item).hallucination)}`">
+          <span class="execution-quality-field">
+            <small>知识覆盖</small>
+            <em v-if="qualityItemFor(item).coverage.denominator != null">{{ qualityItemFor(item).coverage.numerator }} / {{ qualityItemFor(item).coverage.denominator }} 个目标</em>
+            <strong>{{ qualityValueText(qualityItemFor(item).coverage) }}</strong>
+            <em>{{ qualityMetricShort(qualityItemFor(item).coverage) }}</em>
+          </span>
+          <span class="execution-quality-field">
+            <small>幻觉率</small>
+            <strong>{{ qualityValueText(qualityItemFor(item).hallucination) }}</strong>
+            <em>{{ qualityMetricShort(qualityItemFor(item).hallucination) }}</em>
+          </span>
+        </div>
+        <p v-if="qualityItemFor(item)" class="execution-objective">难度审核：{{ dimensionStatusLabel(qualityItemFor(item).difficulty_fit?.dimension_status) }} · 声明难度：{{ qualityItemFor(item).difficulty_fit?.estimated_difficulty || '未记录' }}</p>
         <div class="execution-status-line" role="status" aria-live="polite" aria-atomic="true">
           <span class="execution-status-context">{{ item.resource_type }}：{{ phaseMeta(item).label }}。</span>
           <span v-if="item.validation_status" class="execution-status-field"><small>校验</small><strong>{{ validationStatusLabel(item.validation_status) }}</strong></span>
@@ -71,6 +85,10 @@
 <script setup>
 import { computed } from 'vue'
 import { resourceRepresentationLabel } from '../../utils/generationDisplay'
+import {
+  dimensionStatusLabel, qualityMetricText, qualityTone, qualityValueText, reasonText,
+  sourceLabel, statusLabel,
+} from '../../utils/qualityMetricsPresentation.js'
 import { resourceAgentLabel, resourceStatusMeta, validationStatusLabel } from './resourceStatusPresentation.js'
 
 const props = defineProps({
@@ -79,6 +97,7 @@ const props = defineProps({
   retryingKey: { type: String, default: '' },
   retryEnabled: { type: Boolean, default: true },
   claimReports: { type: Object, default: () => ({}) },
+  qualityMetrics: { type: Object, default: () => ({}) },
 })
 
 defineEmits(['open-resource', 'retry-resource', 'open-claim-report', 'inspect-resource'])
@@ -99,14 +118,16 @@ function phaseMeta(item) {
 }
 
 function publicationLabel(item) {
-  if (item.publication_status !== 'published') return '尚未发布'
-  return item.resource_execution_state === 'approved' ? '已发布' : '已有版本已发布'
+  if (item.publication_status === 'published') {
+    return item.resource_execution_state === 'approved' ? '已发布' : '已有版本已发布'
+  }
+  // The current attempt is still failed/pending, but an earlier published
+  // version of the same logical resource is readable and can be opened.
+  return item.readable_resource_id ? '已有版本已发布' : '尚未发布'
 }
 
 function canOpen(item) {
-  return item.resource_execution_state === 'approved'
-    && item.publication_status === 'published'
-    && Boolean(item.resource_id)
+  return Boolean(item.readable_resource_id)
 }
 
 function canRetry(item) {
@@ -125,6 +146,18 @@ function isPublicationPending(item) {
 
 function percent(value) {
   return `${(Number(value) * 100).toFixed(1)}%`
+}
+
+function qualityItemFor(item) {
+  // The backend item binds to the exact run/resource version; the card only
+  // projects it, it never recomputes or back-fills a value.
+  return props.qualityMetrics[item.resource_id] || null
+}
+
+function qualityMetricShort(metric) {
+  const reason = reasonText(metric)
+  return reason ? `${sourceLabel(metric)} · ${statusLabel(metric)} · ${reason}`
+    : `${sourceLabel(metric)} · ${statusLabel(metric)}`
 }
 
 function claimStatusLabel(status) {
@@ -153,6 +186,12 @@ function reviewStatusLabel(status) {
 .execution-phase { display:flex; align-items:center; gap:4px; max-width:120px; min-width:0; padding-top:1px; color:var(--execution-tone); font-size:12px; font-weight:500; line-height:1.6; overflow-wrap:anywhere; }
 .execution-phase svg { width:16px; height:16px; flex:none; }
 .execution-objective { margin:8px 0 0; color:var(--resource-muted); font-size:13px; line-height:1.8; overflow-wrap:anywhere; }
+.execution-quality-line { display:flex; flex-wrap:wrap; gap:4px 14px; margin:8px 0 0; padding:6px 8px; border-radius:5px; background:#f6f9fb; }
+.execution-quality-line.is-attention { background:#fff7ec; }
+.execution-quality-field { display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 6px; min-width:0; line-height:1.6; }
+.execution-quality-field small { color:var(--resource-muted); font-size:12px; }
+.execution-quality-field strong { color:var(--resource-ink); font-size:12px; font-weight:600; }
+.execution-quality-field em { color:var(--resource-muted); font-size:12px; font-style:normal; overflow-wrap:anywhere; }
 .execution-status-line { position:relative; display:flex; flex-wrap:wrap; gap:4px 12px; margin:8px 0 0; }
 .execution-status-context { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .execution-status-field { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 6px; min-width:0; max-width:100%; line-height:1.6; }

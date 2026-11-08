@@ -1,0 +1,13 @@
+{
+  "facts": [
+    {
+      "end": 65,
+      "fact_id": "t04_code-f1",
+      "start": 51,
+      "text": "按分数降序保留前 k 个候选"
+    }
+  ],
+  "python_chars": 768,
+  "text": "t04_code.md",
+  "text_sha256": "3caee35d863f9582487ee3add87b0da70abdc17562e42c48536efa3c1371074a"
+}

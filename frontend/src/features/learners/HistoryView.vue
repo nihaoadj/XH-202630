@@ -82,7 +82,7 @@
             <header class="panel-head">
               <div class="journey-heading">
                 <span class="archive-kicker">02 / LEARNING JOURNEY</span>
-                <div class="journey-title-row"><h2 id="journey-title">学习进程链路</h2><span class="round-count">当前显示 <b>{{ orderedRounds.length }}</b> 轮</span></div>
+                <div class="journey-title-row"><h2 id="journey-title">学习进程链路</h2><span class="round-count">当前显示 <b>{{ orderedRounds.length + learningRounds.length }}</b> 轮</span></div>
                 <p class="panel-caption">资源、测评、反馈与路径变化，按生成批次串联。未发生的环节会明确标记。</p>
               </div>
               <div class="round-filters">
@@ -107,7 +107,7 @@
 
             <div class="journey-scroll" role="region" aria-label="学习进程记录" tabindex="0">
               <p v-if="journeyError" class="journey-error" role="alert">{{ journeyError }}</p>
-              <div v-if="!filteredRounds.length && !orderedEvents.length" class="history-empty journey-empty" role="status">
+              <div v-if="!filteredRounds.length && !orderedEvents.length && !learningRounds.length" class="history-empty journey-empty" role="status">
                 <el-icon aria-hidden="true"><Clock /></el-icon>
                 <span class="archive-kicker">YOUR JOURNEY STARTS HERE</span>
                 <h3>尚未记录学习链路</h3>
@@ -125,6 +125,7 @@
                   </div>
                 </article>
 
+                <LearningRoundHistory v-for="round in learningRounds" :key="`learning-${round.round_id}`" :round="round" :learner-id="activeLearnerId" />
                 <article v-for="(round, index) in orderedRounds" :key="round.round_id || round.batch_id || round.run_id" class="journey-chain-item" :class="[{ failed: round.status === 'failed', running: ['running', 'queued'].includes(round.status) }, { followup: round.is_followup }]" :aria-label="`${round.topic} 学习链路`">
                   <div class="journey-chain-rail"><span>{{ String(orderedEvents.length + index + 1).padStart(2, '0') }}</span></div>
                   <div class="journey-chain-content">
@@ -170,7 +171,7 @@
                 </article>
               </div>
               <el-button v-if="journey.next_offset !== null" class="load-more" :loading="loadingMore" @click="loadMore">加载更多轮次<el-icon v-if="!loadingMore" aria-hidden="true"><ArrowDown /></el-icon></el-button>
-              <div v-else-if="orderedRounds.length || orderedEvents.length" class="journey-end"><span />当前记录已展示完毕<span /></div>
+              <div v-else-if="orderedRounds.length || orderedEvents.length || learningRounds.length" class="journey-end"><span />当前记录已展示完毕<span /></div>
             </div>
           </section>
         </template>
@@ -193,6 +194,7 @@ import { useRouter } from 'vue-router'
 import { knowledgeApi } from '../knowledge/api.js'
 import { learningHistoryApi, profileApi } from './api.js'
 import { useAppStore } from '../../stores/app'
+import LearningRoundHistory from './LearningRoundHistory.vue'
 import { formatDateTime } from '../../utils/generationDisplay'
 
 const router = useRouter(); const store = useAppStore()
@@ -205,6 +207,7 @@ let historyMounted = true
 const filteredProfiles = computed(() => profiles.value.filter((profile) => !skillFilter.value || profile.skill_level === skillFilter.value))
 const filteredRounds = computed(() => (journey.value?.rounds || []).filter((round) => (!statusFilter.value || round.status === statusFilter.value) && withinPeriod(round.occurred_at)))
 const orderedRounds = computed(() => [...filteredRounds.value].sort((left, right) => new Date(left.occurred_at || 0).getTime() - new Date(right.occurred_at || 0).getTime()))
+const learningRounds = computed(() => (journey.value?.learning_rounds || []).filter(round => withinPeriod(round.created_at) && (!statusFilter.value || (statusFilter.value === 'completed' ? round.members.every(member => member.state === 'completed') : statusFilter.value === 'failed' ? round.members.some(member => member.state === 'failed') : round.members.some(member => member.state === 'producing')))))
 const orderedEvents = computed(() => (journey.value?.unlinked_events || []).filter((event) => withinPeriod(event.occurred_at)).slice().sort((left, right) => new Date(left.occurred_at || 0).getTime() - new Date(right.occurred_at || 0).getTime()))
 function resolveTrackName(id) { return tracks.value.find((item) => item.track_id === id || item.knowledge_base_id === id)?.name || id || '未命名方向' }
 function profileDisplayName(profile) { const snapshot = profile?.learning_preferences?.metadata?.user_profile_snapshot; return snapshot?.display_name || snapshot?.name || profile?.learner_type || '未命名画像' }
@@ -281,7 +284,7 @@ async function loadJourney(learnerId, offset = 0) {
     if (!isCurrent()) return
     if (res.data.learner_id !== learnerId) throw new Error('学习记录与当前画像不一致，请重新加载')
     if (offset && journey.value?.learner_id !== learnerId) return
-    journey.value = offset ? { ...journey.value, rounds: [...journey.value.rounds, ...res.data.rounds], next_offset: res.data.next_offset } : res.data
+    journey.value = offset ? { ...journey.value, rounds: [...journey.value.rounds, ...res.data.rounds], learning_rounds: [...(journey.value.learning_rounds || []), ...(res.data.learning_rounds || [])].filter((round, index, rows) => rows.findIndex(item => item.round_id === round.round_id) === index), next_offset: res.data.next_offset } : res.data
   } catch (error) {
     if (!isCurrent()) return
     journeyError.value = error?.response?.data?.message || error?.message || '学习旅程加载失败'

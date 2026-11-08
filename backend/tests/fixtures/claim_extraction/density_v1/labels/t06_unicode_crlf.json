@@ -1,0 +1,13 @@
+{
+  "facts": [
+    {
+      "end": 22,
+      "fact_id": "t06_unicode_crlf-f1",
+      "start": 5,
+      "text": "重排序模型通常比粗排模型更慢但更准"
+    }
+  ],
+  "python_chars": 102,
+  "text": "t06_unicode_crlf.md",
+  "text_sha256": "28b4f758f9d9e86867c8392e5275e7e2eeee1403903a91a0f1b6394a11849b6e"
+}

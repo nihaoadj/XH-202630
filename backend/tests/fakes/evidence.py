@@ -172,3 +172,8 @@ class ScriptedEvidenceRetriever:
         if not self.batches:
             raise AssertionError("No scripted EvidenceBatch remains")
         return self.batches.pop(0)
+
+    def retrieve_with_deadline(
+        self, request: RetrievalRequest, *, timeout_seconds: float | None = None,
+    ) -> EvidenceBatch:
+        return self.retrieve(request)

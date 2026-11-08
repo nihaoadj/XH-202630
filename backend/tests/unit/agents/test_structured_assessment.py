@@ -64,6 +64,26 @@ def test_assessment_calls_once_per_target_node_and_renders_without_answers():
     assert "### 单选题" in artifact.content_text and "### 多选题" in artifact.content_text and "### 问答题" in artifact.content_text
 
 
+def test_assessment_validation_failure_costs_two_calls_not_four():
+    """One knowledge point costs at most one validation retry, and the inner
+    transport retry stays disabled so 2 x 2 amplification cannot return."""
+
+    evidence = make_evidence(evidence_id="ev-assessment-retry")
+    spec = build_resource_specs(run_id="run-assessment-retry", resource_types=["分阶测试题"], topic="检索",
+        difficulty="中级", learning_plan={}, evidence=[evidence], target_skill_nodes=["node-a"])[0]
+    context = ResourceGenerationContext(
+        run_id="run-assessment-retry", batch_id="batch-assessment-retry", topic="检索", evidence=[evidence],
+    )
+
+    # First outcome is a schema-invalid payload, second one is a valid block.
+    gateway = ScriptedLLMGateway([{"broken": "payload"}, _block("node-a", evidence.evidence_id)])
+    artifact = AssessmentAgent().generate(spec, context, llm_gateway=gateway)
+
+    assert len(gateway.calls) == 2
+    assert all(call["options"].max_attempts == 1 for call in gateway.calls)
+    assert artifact.artifact_data["assessment_package"]["node_blocks"][0]["skill_node_id"] == "node-a"
+
+
 def test_assessment_revision_prompt_includes_scoped_reviewer_feedback():
     evidence = make_evidence(evidence_id="ev-assessment-revision")
     spec = build_resource_specs(run_id="run-assessment-revision", resource_types=["分阶测试题"], topic="检索",

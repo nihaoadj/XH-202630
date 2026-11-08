@@ -370,6 +370,31 @@ class MasteryService:
             raise ValueError("correction targets must belong to one learning tier")
         return int(next(iter(tiers)))
 
+    def require_feedback_prerequisites(self, profile: LearnerProfile, *, point_scores: dict[str, float]) -> None:
+        """Mark low-score prerequisites without changing the active tier or path."""
+        if self.curriculum_repo is None or not profile.knowledge_base_id:
+            return
+        graph = {node.node_id: node for node in self._nodes(profile.knowledge_base_id)}
+        by_tier: dict[int, dict[str, float]] = {}
+        for node_id, score in point_scores.items():
+            if node_id in graph:
+                by_tier.setdefault(self._node_tier(graph[node_id]), {})[node_id] = score
+        targets = set()
+        for tier, scores in by_tier.items():
+            if tier <= 1 or not any(score < 0.60 for score in scores.values()):
+                continue
+            # Preserve the existing two-target limit within a tier, while
+            # allowing independent review evidence from a different tier.
+            recommended, _, _ = self.recommend_feedback_targets(
+                profile, action="remediate", point_scores=scores,
+            )
+            targets.update(recommended)
+        if targets:
+            self.curriculum_repo.require_placement_verification(
+                profile.learner_id, profile.knowledge_base_id, node_ids=sorted(targets),
+                now=datetime.now(timezone.utc),
+            )
+
     def apply_tier_feedback(
         self, profile: LearnerProfile, *, point_scores: dict[str, float],
     ) -> LearnerTierProgressV1 | None:
@@ -388,14 +413,7 @@ class MasteryService:
         )
         updated = state
         if low and assessed_tier > 1:
-            targets, _, _ = self.recommend_feedback_targets(
-                profile, action="remediate", point_scores=point_scores,
-            )
-            if self.curriculum_repo is not None:
-                self.curriculum_repo.require_placement_verification(
-                    profile.learner_id, profile.knowledge_base_id or "", node_ids=targets,
-                    now=datetime.now(timezone.utc),
-                )
+            self.require_feedback_prerequisites(profile, point_scores=point_scores)
             # A feedback result only creates a recommendation. The learner
             # must explicitly choose a lower-tier target before active_tier changes.
             updated = state

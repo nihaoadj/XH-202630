@@ -1,43 +1,1385 @@
 {
   "schema_version": "1.0",
   "profiles": {
-    "quick": ["architecture", "frontend-contracts", "backend-smoke", "competition", "frontend-unit"],
-    "regression": ["architecture", "frontend-contracts", "backend-lint", "dependency-check", "pip-check", "frontend-lint", "frontend-typecheck", "backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build"],
-    "acceptance": ["architecture", "frontend-contracts", "backend-lint", "dependency-check", "pip-check", "frontend-lint", "frontend-typecheck", "backend-full", "competition", "courseware-eval", "frontend-unit", "frontend-build", "frontend-browser"]
+    "quick": [
+      "architecture",
+      "frontend-contracts",
+      "backend-smoke",
+      "competition",
+      "frontend-unit"
+    ],
+    "regression": [
+      "architecture",
+      "frontend-contracts",
+      "backend-lint",
+      "dependency-check",
+      "pip-check",
+      "frontend-lint",
+      "frontend-typecheck",
+      "backend-full",
+      "competition",
+      "courseware-eval",
+      "frontend-unit",
+      "frontend-build"
+    ],
+    "acceptance": [
+      "architecture",
+      "frontend-contracts",
+      "backend-lint",
+      "dependency-check",
+      "pip-check",
+      "frontend-lint",
+      "frontend-typecheck",
+      "backend-full",
+      "competition",
+      "courseware-eval",
+      "frontend-unit",
+      "frontend-build",
+      "frontend-browser"
+    ]
   },
   "frontend_groups": {
     "unit": [
-      "unit/utils/workflowEvents.test.mjs", "tutorState.test.mjs", "learnerMastery.test.mjs", "onboardingState.test.mjs",
-      "learningReport.test.mjs", "resourceShelfOrder.test.mjs", "resourceMarkdownTables.test.mjs", "coursewareEvents.test.mjs",
-      "coursewareUserJourney.test.mjs", "coursewareSourcePolicy.test.mjs", "requestContextRace.test.mjs", "unit/utils/workflowDetailPresentation.test.mjs", "contracts.test.mjs", "generationPreparation.test.mjs", "apiModules.test.mjs"
+      "unit/utils/workflowEvents.test.mjs",
+      "tutorState.test.mjs",
+      "learnerMastery.test.mjs",
+      "onboardingState.test.mjs",
+      "learningReport.test.mjs",
+      "resourceShelfOrder.test.mjs",
+      "resourceMarkdownTables.test.mjs",
+      "coursewareEvents.test.mjs",
+      "coursewareUserJourney.test.mjs",
+      "coursewareSourcePolicy.test.mjs",
+      "requestContextRace.test.mjs",
+      "unit/utils/workflowDetailPresentation.test.mjs",
+      "contracts.test.mjs",
+      "generationPreparation.test.mjs",
+      "apiModules.test.mjs",
+      "publicationSummary.test.mjs",
+      "resourceQuality.test.mjs"
     ],
     "browser": [
-      "landingBrowser.test.mjs", "featureShowcaseBrowser.test.mjs", "dashboardBrowser.test.mjs", "onboardingBrowser.test.mjs",
-      "learningReportBrowser.test.mjs", "coursewareBrowser.test.mjs", "generationBrowser.test.mjs", "feedbackBrowser.test.mjs",
-      "historyUiBrowser.test.mjs", "reportUiBrowser.test.mjs", "userProfileUiBrowser.test.mjs", "profileRequestBrowser.test.mjs",
-      "motionBrowser.test.mjs", "tutorUiBrowser.test.mjs", "coursewareSyncBrowser.test.mjs", "resourceMarkdownTablesBrowser.test.mjs", "workspaceLayoutBrowser.test.mjs", "onboardingContinuityBrowser.test.mjs"
+      "landingBrowser.test.mjs",
+      "featureShowcaseBrowser.test.mjs",
+      "dashboardBrowser.test.mjs",
+      "onboardingBrowser.test.mjs",
+      "learningReportBrowser.test.mjs",
+      "coursewareBrowser.test.mjs",
+      "generationBrowser.test.mjs",
+      "feedbackBrowser.test.mjs",
+      "historyUiBrowser.test.mjs",
+      "reportUiBrowser.test.mjs",
+      "userProfileUiBrowser.test.mjs",
+      "profileRequestBrowser.test.mjs",
+      "motionBrowser.test.mjs",
+      "tutorUiBrowser.test.mjs",
+      "coursewareSyncBrowser.test.mjs",
+      "resourceMarkdownTablesBrowser.test.mjs",
+      "workspaceLayoutBrowser.test.mjs",
+      "onboardingContinuityBrowser.test.mjs",
+      "coursewareContentReviewBrowser.test.mjs",
+      "publicationSummaryBrowser.test.mjs",
+      "resourceQualityBrowser.test.mjs"
     ]
   },
   "suites": [
-    {"id": "backend-lint", "purpose": "后端和脚本的错误预防静态检查", "evidence_type": "static_analysis", "timeout_seconds": 180, "command": ["{python}", "-m", "ruff", "check", "backend/app", "backend/tests", "scripts", "backend/scripts"]},
-    {"id": "architecture", "purpose": "共享层/API 的 AST 导入边界与精确兼容例外", "evidence_type": "static_analysis", "timeout_seconds": 180, "command": ["{python}", "scripts/check_architecture.py"]},
-    {"id": "frontend-contracts", "purpose": "Pydantic 公开契约生成产物无漂移", "evidence_type": "contract_schema", "timeout_seconds": 180, "command": ["{python}", "scripts/export_frontend_contracts.py", "--check"]},
-    {"id": "dependency-check", "purpose": "Python 声明、哈希锁和安装版本一致性", "evidence_type": "dependency_metadata", "timeout_seconds": 180, "command": ["{python}", "scripts/check_dependencies.py"]},
-    {"id": "pip-check", "purpose": "Python 安装包依赖兼容性", "evidence_type": "dependency_metadata", "timeout_seconds": 180, "command": ["{python}", "-m", "pip", "check"]},
-    {"id": "frontend-lint", "purpose": "全部前端 src JS/Vue 错误预防检查", "evidence_type": "static_analysis", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/eslint/bin/eslint.js", "src"]},
-    {"id": "frontend-typecheck", "purpose": "关键 API/SSE、课件发送器、报告 adapter 与请求 guard 的严格 JSDoc 类型检查", "evidence_type": "type_analysis", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/typescript/bin/tsc", "-p", "tsconfig.quality.json"]},
-    {"id": "backend-smoke", "purpose": "核心契约、发布策略、指标与测试工具快速回归", "evidence_type": "deterministic", "timeout_seconds": 180, "command": ["{python}", "-m", "pytest", "backend/tests/unit/models", "backend/tests/unit/policies", "backend/tests/unit/reports", "backend/tests/unit/tooling", "-q", "--junitxml={output}/backend-smoke.xml"]},
-    {"id": "backend-unit", "purpose": "后端领域与共享能力单元测试", "evidence_type": "deterministic", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/unit", "-q", "--junitxml={output}/backend-unit.xml"]},
-    {"id": "backend-integration", "purpose": "API、服务、仓储、工作流集成", "evidence_type": "deterministic", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/integration", "-q", "--junitxml={output}/backend-integration.xml"]},
-    {"id": "backend-api", "purpose": "HTTP、DTO、认证与状态码契约", "evidence_type": "deterministic", "timeout_seconds": 300, "command": ["{python}", "-m", "pytest", "backend/tests/integration/api", "-q", "--junitxml={output}/backend-api.xml"]},
-    {"id": "backend-workflow", "purpose": "生成、证据、审核纠偏、Claim 与发布", "evidence_type": "deterministic", "timeout_seconds": 300, "command": ["{python}", "-m", "pytest", "backend/tests/integration/workflow", "-q", "--junitxml={output}/backend-workflow.xml"]},
-    {"id": "backend-migration", "purpose": "数据库迁移与旧数据兼容", "evidence_type": "deterministic", "timeout_seconds": 300, "command": ["{python}", "-m", "pytest", "backend/tests/migrations", "-q", "--junitxml={output}/backend-migration.xml"]},
-    {"id": "backend-e2e", "purpose": "生命周期、重启、回放和进程恢复", "evidence_type": "deterministic_process", "timeout_seconds": 600, "command": ["{python}", "-m", "pytest", "backend/tests/e2e", "-q", "--junitxml={output}/backend-e2e.xml"]},
-    {"id": "backend-full", "purpose": "全部后端回归，真实模型测试明确跳过", "evidence_type": "deterministic_process", "timeout_seconds": 1200, "command": ["{python}", "-m", "pytest", "backend/tests", "-q", "--junitxml={output}/backend-full.xml"]},
-    {"id": "competition", "purpose": "比赛数据、指标与策略金标回归，不能证明真实生成质量", "evidence_type": "offline_gold", "timeout_seconds": 180, "command": ["{python}", "backend/scripts/competition_eval.py", "--output", "{output}/competition.json"]},
-    {"id": "courseware-eval", "purpose": "互动课件冻结评测与安全硬门", "evidence_type": "frozen_evaluation", "timeout_seconds": 180, "command": ["{python}", "backend/scripts/courseware_eval.py", "--manifest", "backend/tests/fixtures/courseware/evals/manifest.json", "--baseline", "backend/tests/fixtures/courseware/evals/baseline.json", "--output", "{output}/courseware.json"]},
-    {"id": "frontend-unit", "purpose": "全部前端状态、策略、事件与资源排序测试", "evidence_type": "deterministic", "timeout_seconds": 180, "command": ["{node}", "frontend/tests/run.mjs", "unit", "--output", "{output}/frontend-unit.json"]},
-    {"id": "frontend-build", "purpose": "前端生产构建", "evidence_type": "build", "cwd": "frontend", "timeout_seconds": 180, "command": ["{node}", "node_modules/vite/bin/vite.js", "build"]},
-    {"id": "frontend-browser", "purpose": "全部浏览器专项（含隔离阅读器表格），需先完成前端构建", "evidence_type": "browser_fixture", "timeout_seconds": 1200, "command": ["{node}", "frontend/tests/run.mjs", "browser", "--output", "{output}/frontend-browser.json"]}
+    {
+      "id": "resource-review-focused",
+      "purpose": "T27 审核规则、语义门禁、完整逐题结论、私有持久化与既有工作流契约",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/agents/test_review_profiles.py",
+        "backend/tests/unit/agents/test_review_prompt_builder.py",
+        "backend/tests/unit/agents/test_review_execution_audit.py",
+        "backend/tests/unit/agents/test_practice_semantic_review.py",
+        "backend/tests/unit/agents/test_assessment_combined_review.py",
+        "backend/tests/integration/workflow/test_resource_review_v2.py",
+        "backend/tests/integration/persistence/test_private_review_audit.py",
+        "backend/tests/unit/tooling/test_resource_review_eval.py",
+        "backend/tests/unit/db/courseware/test_checkpoint_order.py",
+        "backend/tests/integration/courseware/test_executor_recovery.py",
+        "backend/tests/integration/courseware/test_workflow_equivalence.py",
+        "backend/tests/unit/agents/test_resource_type_agents.py",
+        "backend/tests/unit/agents/test_practice_guide_v2.py",
+        "backend/tests/unit/agents/test_assessment_scope_review.py",
+        "backend/tests/unit/agents/test_structured_assessment.py",
+        "backend/tests/integration/workflow/test_p0_05_review_revision.py",
+        "backend/tests/integration/workflow/test_workflow_controls.py",
+        "backend/tests/integration/workflow/test_claim_workflow.py",
+        "backend/tests/integration/services/test_generation_finalization.py",
+        "backend/tests/unit/core/test_llm_gateway.py",
+        "backend/tests/unit/models/test_workflow_state.py",
+        "backend/tests/e2e/test_durable_workflow_runner.py",
+        "backend/tests/integration/api/test_resource_api.py",
+        "backend/tests/integration/api/test_review_api.py",
+        "-q",
+        "--junitxml={output}/resource-review-focused.xml"
+      ]
+    },
+    {
+      "id": "resource-review-eval",
+      "purpose": "T27 冻结合成审核 fixture 与离线策略门，不代表真实模型质量",
+      "evidence_type": "offline_scripted_policy",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "backend/scripts/resource_review_eval.py",
+        "--output",
+        "{output}/resource-review.json"
+      ]
+    },
+    {
+      "id": "backend-lint",
+      "purpose": "后端和脚本的错误预防静态检查",
+      "evidence_type": "static_analysis",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "-m",
+        "ruff",
+        "check",
+        "backend/app",
+        "backend/tests",
+        "scripts",
+        "backend/scripts"
+      ]
+    },
+    {
+      "id": "architecture",
+      "purpose": "共享层/API 的 AST 导入边界与精确兼容例外",
+      "evidence_type": "static_analysis",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "scripts/check_architecture.py"
+      ]
+    },
+    {
+      "id": "frontend-contracts",
+      "purpose": "Pydantic 公开契约生成产物无漂移",
+      "evidence_type": "contract_schema",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "scripts/export_frontend_contracts.py",
+        "--check"
+      ]
+    },
+    {
+      "id": "dependency-check",
+      "purpose": "Python 声明、哈希锁和安装版本一致性",
+      "evidence_type": "dependency_metadata",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "scripts/check_dependencies.py"
+      ]
+    },
+    {
+      "id": "pip-check",
+      "purpose": "Python 安装包依赖兼容性",
+      "evidence_type": "dependency_metadata",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "-m",
+        "pip",
+        "check"
+      ]
+    },
+    {
+      "id": "frontend-lint",
+      "purpose": "全部前端 src JS/Vue 错误预防检查",
+      "evidence_type": "static_analysis",
+      "cwd": "frontend",
+      "timeout_seconds": 180,
+      "command": [
+        "{node}",
+        "node_modules/eslint/bin/eslint.js",
+        "src"
+      ]
+    },
+    {
+      "id": "frontend-typecheck",
+      "purpose": "关键 API/SSE、课件发送器、报告 adapter 与请求 guard 的严格 JSDoc 类型检查",
+      "evidence_type": "type_analysis",
+      "cwd": "frontend",
+      "timeout_seconds": 180,
+      "command": [
+        "{node}",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.quality.json"
+      ]
+    },
+    {
+      "id": "backend-smoke",
+      "purpose": "核心契约、发布策略、指标与测试工具快速回归",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models",
+        "backend/tests/unit/policies",
+        "backend/tests/unit/reports",
+        "backend/tests/unit/tooling",
+        "-q",
+        "--junitxml={output}/backend-smoke.xml"
+      ]
+    },
+    {
+      "id": "backend-unit",
+      "purpose": "后端领域与共享能力单元测试",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit",
+        "-q",
+        "--junitxml={output}/backend-unit.xml"
+      ]
+    },
+    {
+      "id": "backend-integration",
+      "purpose": "API、服务、仓储、工作流集成",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration",
+        "-q",
+        "--junitxml={output}/backend-integration.xml"
+      ]
+    },
+    {
+      "id": "backend-api",
+      "purpose": "HTTP、DTO、认证与状态码契约",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/api",
+        "-q",
+        "--junitxml={output}/backend-api.xml"
+      ]
+    },
+    {
+      "id": "backend-workflow",
+      "purpose": "生成、证据、审核纠偏、Claim 与发布",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/workflow",
+        "-q",
+        "--junitxml={output}/backend-workflow.xml"
+      ]
+    },
+    {
+      "id": "backend-migration",
+      "purpose": "数据库迁移与旧数据兼容",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/migrations",
+        "-q",
+        "--junitxml={output}/backend-migration.xml"
+      ]
+    },
+    {
+      "id": "backend-e2e",
+      "purpose": "生命周期、重启、回放和进程恢复",
+      "evidence_type": "deterministic_process",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/e2e",
+        "-q",
+        "--junitxml={output}/backend-e2e.xml"
+      ]
+    },
+    {
+      "id": "backend-full",
+      "purpose": "全部后端回归，真实模型测试明确跳过",
+      "evidence_type": "deterministic_process",
+      "timeout_seconds": 1200,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests",
+        "-q",
+        "--junitxml={output}/backend-full.xml"
+      ]
+    },
+    {
+      "id": "competition",
+      "purpose": "比赛数据、指标与策略金标回归，不能证明真实生成质量",
+      "evidence_type": "offline_gold",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "backend/scripts/competition_eval.py",
+        "--output",
+        "{output}/competition.json"
+      ]
+    },
+    {
+      "id": "courseware-eval",
+      "purpose": "互动课件冻结评测与安全硬门",
+      "evidence_type": "frozen_evaluation",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "backend/scripts/courseware_eval.py",
+        "--manifest",
+        "backend/tests/fixtures/courseware/evals/manifest.json",
+        "--baseline",
+        "backend/tests/fixtures/courseware/evals/baseline.json",
+        "--output",
+        "{output}/courseware.json"
+      ]
+    },
+    {
+      "id": "frontend-unit",
+      "purpose": "全部前端状态、策略、事件与资源排序测试",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{node}",
+        "frontend/tests/run.mjs",
+        "unit",
+        "--output",
+        "{output}/frontend-unit.json"
+      ]
+    },
+    {
+      "id": "frontend-build",
+      "purpose": "前端生产构建",
+      "evidence_type": "build",
+      "cwd": "frontend",
+      "timeout_seconds": 180,
+      "command": [
+        "{node}",
+        "node_modules/vite/bin/vite.js",
+        "build"
+      ]
+    },
+    {
+      "id": "frontend-browser",
+      "purpose": "全部浏览器专项（含隔离阅读器表格），需先完成前端构建",
+      "evidence_type": "browser_fixture",
+      "timeout_seconds": 1200,
+      "command": [
+        "{node}",
+        "frontend/tests/run.mjs",
+        "browser",
+        "--output",
+        "{output}/frontend-browser.json"
+      ]
+    },
+    {
+      "id": "courseware-content-review-focused",
+      "purpose": "T28 field approval, fixed projections, budget/CAS, recovery and legacy compatibility",
+      "evidence_type": "deterministic_process",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models/test_courseware_content_review.py",
+        "backend/tests/unit/core/test_courseware_content_review.py",
+        "backend/tests/unit/agents/test_courseware_content_review.py",
+        "backend/tests/unit/agents/test_courseware_content_review_budget.py",
+        "backend/tests/integration/courseware/test_content_review.py",
+        "backend/tests/integration/courseware/test_content_review_persistence.py",
+        "backend/tests/e2e/courseware/test_content_review_recovery.py",
+        "backend/tests/unit/tooling/test_courseware_content_review_eval.py",
+        "backend/tests/integration/courseware/test_executor_recovery.py",
+        "backend/tests/integration/courseware/test_workflow_equivalence.py",
+        "backend/tests/integration/courseware/test_api.py",
+        "backend/tests/e2e/courseware/test_c1_process_fault_matrix.py",
+        "backend/tests/unit/db/courseware/test_checkpoint_order.py",
+        "backend/tests/integration/workflow/test_resource_retry.py",
+        "backend/tests/unit/services/test_resource_retry_service.py",
+        "backend/tests/unit/agents/test_lecture_teaching_contract.py",
+        "-q",
+        "--junitxml={output}/courseware-content-review-focused.xml"
+      ]
+    },
+    {
+      "id": "courseware-content-review-eval",
+      "purpose": "T28 actual engine/workflow scripted replay; not real model quality",
+      "evidence_type": "offline_scripted_policy",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "backend/scripts/courseware_content_review_eval.py",
+        "--output",
+        "{output}/courseware-content-review.json"
+      ]
+    },
+    {
+      "id": "claim-extraction-focused",
+      "purpose": "T31 neutral extraction spans, frozen policy, budgets/CAS and interruption/new-run retry compatibility",
+      "evidence_type": "deterministic_process",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/agents/test_claim_extraction_batching.py",
+        "backend/tests/unit/agents/test_claim_estimation.py",
+        "backend/tests/integration/persistence/test_claim_estimate_attempts.py",
+        "backend/tests/migrations/test_p0_37_claim_estimate.py",
+        "backend/tests/unit/models/test_claim_extraction_policy.py",
+        "backend/tests/integration/persistence/test_claim_extraction_ledger.py",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py",
+        "backend/tests/e2e/test_claim_extraction_recovery.py",
+        "backend/tests/migrations/test_p0_36_claim_extraction.py",
+        "backend/tests/unit/tooling/test_claim_extraction_eval.py",
+        "backend/tests/unit/models/test_claim_contracts.py",
+        "backend/tests/unit/agents/test_claim_evaluation.py",
+        "backend/tests/integration/workflow/test_claim_workflow.py",
+        "backend/tests/e2e/test_durable_workflow_runner.py",
+        "backend/tests/unit/models/test_claim_density_policy.py",
+        "backend/tests/unit/agents/test_claim_density_batching.py",
+        "backend/tests/unit/tooling/test_live_lecture_budget.py",
+        "backend/tests/unit/tooling/test_claim_density_eval.py",
+        "-q",
+        "--junitxml={output}/claim-extraction-focused.xml"
+      ]
+    },
+    {
+      "id": "claim-extraction-eval",
+      "purpose": "T31 frozen scripted extraction policy gate; real recall and Judge capacity NOT_RUN_OFFLINE",
+      "evidence_type": "offline_scripted_policy",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "backend/scripts/claim_extraction_eval.py",
+        "--output",
+        "{output}/claim-extraction.json"
+      ]
+    },
+    {
+      "id": "claim-density-eval",
+      "purpose": "T37 density packing offline diagnostics on frozen synthetic fixtures; model recall and live cost NOT_RUN",
+      "evidence_type": "offline_scripted_policy",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "backend/scripts/claim_density_eval.py",
+        "--manifest",
+        "backend/tests/fixtures/claim_extraction/density_v1/manifest.json",
+        "--output",
+        "{output}/density.json"
+      ]
+    },
+    {
+      "id": "lecture-review-focused",
+      "purpose": "T38 lecture policy, ledger, directed revision, private audit and compatibility; no live quality claim",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/persistence/test_lecture_review_audit.py",
+        "backend/tests/unit/agents/test_lecture_audit_v2.py",
+        "backend/tests/unit/agents/test_lecture_ledger.py",
+        "backend/tests/unit/agents/test_lecture_review_authority.py",
+        "backend/tests/unit/agents/test_lecture_review_contract.py",
+        "backend/tests/unit/agents/test_lecture_review_engine.py",
+        "backend/tests/unit/agents/test_lecture_submission.py",
+        "backend/tests/e2e/test_lecture_durable_boundaries.py",
+        "backend/tests/unit/agents/test_lecture_teaching_contract.py",
+        "backend/tests/integration/workflow/test_p0_05_review_revision.py",
+        "backend/tests/integration/workflow/test_resource_review_v2.py",
+        "backend/tests/integration/workflow/test_claim_workflow.py",
+        "backend/tests/integration/workflow/test_resource_retry.py",
+        "backend/tests/integration/services/test_generation_dispatch.py",
+        "backend/tests/integration/services/test_generation_finalization.py",
+        "backend/tests/integration/persistence/test_private_review_audit.py",
+        "backend/tests/integration/api/test_generate_jobs_api.py",
+        "backend/tests/integration/api/test_resource_api.py",
+        "backend/tests/integration/api/test_review_api.py",
+        "backend/tests/unit/agents/test_resource_type_agents.py",
+        "backend/tests/unit/core/test_markdown_structure.py",
+        "backend/tests/e2e/test_durable_workflow_runner.py",
+        "backend/tests/unit/tooling/test_lecture_review_eval.py",
+        "backend/tests/unit/tooling/test_lecture_review_live.py",
+        "backend/tests/integration/workflow/test_lecture_five_types_compat.py",
+        "-q",
+        "--junitxml={output}/lecture-review-focused.xml"
+      ]
+    },
+    {
+      "id": "lecture-review-eval",
+      "purpose": "T38 frozen scripted production reviewer gate; live quality NOT_RUN_LIVE",
+      "evidence_type": "offline_scripted_policy",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "backend/scripts/lecture_review_eval.py",
+        "--mode",
+        "offline",
+        "--manifest",
+        "backend/tests/fixtures/resource_reviews/lecture_issue_v1/manifest.json",
+        "--output",
+        "{output}/lecture-review.json"
+      ]
+    },
+    {
+      "id": "lecture-review-v2-focused",
+      "purpose": "T39 V2 contract, derived coverage, bounded correction, durable guard, V3 audit, attempt accounting, correction-failure diagnostics, end-to-end node chain and direct compatibility; no live quality claim",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/persistence/test_lecture_review_crashes.py",
+        "backend/tests/integration/persistence/test_lecture_worker_epoch.py",
+        "backend/tests/unit/agents/test_lecture_review_v2_contract.py",
+        "backend/tests/unit/agents/test_lecture_review_v2_engine.py",
+        "backend/tests/unit/agents/test_lecture_review_v2_boundaries.py",
+        "backend/tests/unit/agents/test_lecture_review_v2_eval.py",
+        "backend/tests/integration/persistence/test_lecture_review_v2_guard.py",
+        "backend/tests/integration/persistence/test_lecture_review_v2_runner_guard.py",
+        "backend/tests/integration/persistence/test_lecture_review_audit.py",
+        "backend/tests/integration/workflow/test_lecture_v2_end_to_end.py",
+        "backend/tests/e2e/test_lecture_durable_boundaries.py",
+        "backend/tests/integration/workflow/test_lecture_five_types_compat.py",
+        "backend/tests/integration/workflow/test_claim_workflow.py",
+        "backend/tests/integration/workflow/test_resource_retry.py",
+        "backend/tests/integration/services/test_generation_dispatch.py",
+        "backend/tests/integration/services/test_generation_finalization.py",
+        "backend/tests/integration/api/test_generate_jobs_api.py",
+        "backend/tests/integration/api/test_resource_api.py",
+        "backend/tests/integration/api/test_review_api.py",
+        "backend/tests/unit/core/test_markdown_structure.py",
+        "-q",
+        "--junitxml={output}/lecture-review-v2-focused.xml"
+      ]
+    },
+    {
+      "id": "lecture-review-v2-eval",
+      "purpose": "T39 frozen cross-topic V2 case set replayed through the production V2 engine and bounded correction (--contract-version 2.0); real_model_quality=NOT_RUN_LIVE",
+      "evidence_type": "offline_engine_replay",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "backend/scripts/lecture_review_eval.py",
+        "--mode",
+        "offline",
+        "--contract-version",
+        "2.0",
+        "--manifest",
+        "backend/tests/fixtures/resource_reviews/lecture_issue_v2/manifest.json",
+        "--output",
+        "{output}/lecture-review-v2.json"
+      ]
+    },
+    {
+      "id": "llm-accounting-equivalence",
+      "purpose": "T41 current-code accounting off/on differential; not a historical baseline",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 360,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/workflow/test_llm_accounting_equivalence.py",
+        "-q",
+        "--junitxml={output}/llm-accounting-equivalence.xml"
+      ]
+    },
+    {
+      "id": "llm-accounting-focused",
+      "purpose": "T41 全链路旁路计量的模型/核心/仓储/隔离/迁移/API/文本/课件/e2e 契约与故障矩阵",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 1200,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models/test_llm_accounting.py",
+        "backend/tests/unit/core/test_llm_accounting.py",
+        "backend/tests/unit/core/test_llm_accounting_regressions.py",
+        "backend/tests/unit/tooling/test_llm_accounting_baseline.py",
+        "backend/tests/integration/workflow/test_llm_accounting_text.py",
+        "backend/tests/integration/workflow/test_llm_accounting_live_regressions.py",
+        "backend/tests/integration/courseware/test_llm_accounting.py",
+        "backend/tests/integration/persistence/test_llm_accounting_repository.py",
+        "backend/tests/integration/services/test_llm_accounting_isolation.py",
+        "backend/tests/integration/api/test_llm_accounting_api.py",
+        "backend/tests/migrations/test_llm_accounting_schema.py",
+        "backend/tests/e2e/test_llm_accounting_recovery.py",
+        "backend/tests/e2e/courseware/test_llm_accounting_worker.py",
+        "-q",
+        "--junitxml={output}/llm-accounting-focused.xml"
+      ]
+    },
+    {
+      "id": "claim-e11-unit",
+      "purpose": "T42 中立 v2 来源定位的契约/定位/评测器单元，以及复用的 density/contracts/batching/estimation 单元",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models/test_claim_source_locating_policy.py",
+        "backend/tests/unit/agents/test_claim_source_locating.py",
+        "backend/tests/unit/tooling/test_claim_source_locating_eval.py",
+        "backend/tests/unit/models/test_claim_density_policy.py",
+        "backend/tests/unit/models/test_claim_contracts.py",
+        "backend/tests/unit/agents/test_claim_extraction_batching.py",
+        "backend/tests/unit/agents/test_claim_estimation.py",
+        "backend/tests/unit/agents/test_claim_density_batching.py",
+        "-q",
+        "--junitxml={output}/claim-e11-unit.xml"
+      ]
+    },
+    {
+      "id": "claim-e11-integration",
+      "purpose": "T42 v2 来源定位的 workflow/持久化/API 集成，以及复用的 ledger/attempt 持久化与指定冻结 node id",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/workflow/test_claim_source_locating.py",
+        "backend/tests/integration/workflow/test_claim_source_locating_repairs.py",
+        "backend/tests/integration/persistence/test_claim_source_locating_persistence.py",
+        "backend/tests/integration/api/test_claim_source_locating_api.py",
+        "backend/tests/integration/persistence/test_claim_extraction_ledger.py",
+        "backend/tests/integration/persistence/test_claim_estimate_attempts.py",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py::test_submission_state_and_dispatch_freeze_policy_not_latest_configuration",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py::test_all_candidates_one_original_judge_and_no_extra_evidence_in_extract",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py::test_completed_extractor_same_active_session_is_zero_call_idempotent_read",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py::test_judge_configuration_drift_is_zero_judge_calls",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py::test_resource_overflow_is_failed_without_dropping_candidates_or_batching_judge",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py::test_single_resource_retry_freezes_new_policy_and_uses_child_evidence",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py::test_assessment_runtime_payload_controls_bypass_not_submission_mode",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py::test_real_graph_claim_rework_uses_same_session_and_remaining_budget",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_supported_claim_completes_and_approves",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_checklist_claim_extractor_uses_canonical_text_for_source_spans",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_claim_extractor_and_judge_invoke_once_per_resource",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_claim_enabled_publication_fails_closed_without_resource_metric",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes",
+        "backend/tests/integration/api/test_review_api.py::test_review_endpoint_returns_claim_evidence_and_handles_missing_resource",
+        "backend/tests/integration/api/test_resource_api.py::test_resource_filter_and_resource_id_download",
+        "-q",
+        "--junitxml={output}/claim-e11-integration.xml"
+      ]
+    },
+    {
+      "id": "claim-e11-recovery",
+      "purpose": "T42 v2 进程故障矩阵、独立重试身份与排队任务冻结，以及复用的 T31 恢复故障边界",
+      "evidence_type": "deterministic_process",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/e2e/test_claim_source_locating_recovery.py",
+        "backend/tests/e2e/test_claim_extraction_recovery.py",
+        "-q",
+        "--junitxml={output}/claim-e11-recovery.xml"
+      ]
+    },
+    {
+      "id": "claim-e11-eval",
+      "purpose": "T42 冻结合成来源定位验收门，经生产 locate 入口运行 acceptance 分区；不代表真实模型质量",
+      "evidence_type": "offline_scripted_policy",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "backend/scripts/claim_source_locating_eval.py",
+        "--manifest",
+        "backend/tests/fixtures/claim_extraction/source_locating_v2/manifest.json",
+        "--split",
+        "acceptance",
+        "--output",
+        "{output}/claim-source-locating.json"
+      ]
+    },
+    {
+      "id": "resource-issue-focused",
+      "purpose": "T44 通用资源审核：契约、适配器、引擎、定向返工、工作流路由、策略分派、V4 审计、公开投影、故障恢复与冻结评测",
+      "evidence_type": "deterministic_process",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models/test_resource_review_contract.py",
+        "backend/tests/unit/agents/test_resource_issue_adapters.py",
+        "backend/tests/unit/agents/test_resource_issue_engine.py",
+        "backend/tests/unit/agents/test_resource_issue_closure_regressions.py",
+        "backend/tests/unit/agents/test_resource_issue_revision.py",
+        "backend/tests/integration/workflow/test_resource_issue_workflow.py",
+        "backend/tests/integration/workflow/test_resource_issue_six_types.py",
+        "backend/tests/integration/services/test_resource_issue_dispatch.py",
+        "backend/tests/integration/persistence/test_resource_issue_audit.py",
+        "backend/tests/integration/api/test_resource_issue_public_projection.py",
+        "backend/tests/e2e/test_resource_issue_recovery.py",
+        "backend/tests/unit/tooling/test_resource_issue_eval.py",
+        "-q",
+        "--junitxml={output}/resource-issue-focused.xml"
+      ]
+    },
+    {
+      "id": "resource-issue-eval",
+      "purpose": "T44 冻结合成资源审核案例经生产引擎、真实路由与 V4 仓储回放；不代表真实模型质量",
+      "evidence_type": "offline_scripted_policy",
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "backend/scripts/resource_issue_eval.py",
+        "--mode",
+        "offline",
+        "--manifest",
+        "backend/tests/fixtures/resource_reviews/resource_issue_v1/manifest.json",
+        "--output",
+        "{output}/resource-issue.json"
+      ]
+    },
+    {
+      "id": "resource-issue-compat",
+      "purpose": "T44 直接相关的旧版本/专业规则/审计/预算接口兼容回归（按文件/nodeid 去重）",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/agents/test_lecture_review_v2_contract.py",
+        "backend/tests/unit/agents/test_lecture_review_v2_engine.py",
+        "backend/tests/unit/agents/test_lecture_review_v2_boundaries.py",
+        "backend/tests/unit/agents/test_review_profiles.py",
+        "backend/tests/unit/agents/test_review_prompt_builder.py",
+        "backend/tests/unit/agents/test_assessment_scope_review.py",
+        "backend/tests/unit/agents/test_assessment_combined_review.py",
+        "backend/tests/unit/agents/test_practice_semantic_review.py",
+        "backend/tests/unit/agents/test_practice_guide_v2.py",
+        "backend/tests/unit/agents/test_review_practice_v2.py",
+        "backend/tests/integration/persistence/test_private_review_audit.py",
+        "backend/tests/integration/persistence/test_lecture_review_v2_guard.py",
+        "backend/tests/integration/persistence/test_lecture_review_v2_runner_guard.py",
+        "backend/tests/integration/persistence/test_lecture_review_crashes.py",
+        "backend/tests/integration/workflow/test_lecture_v2_end_to_end.py",
+        "backend/tests/integration/workflow/test_lecture_five_types_compat.py",
+        "backend/tests/integration/workflow/test_resource_review_v2.py",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_claim_audit_selects_only_ordinary_review_approved_resources",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_claim_revision_uses_its_own_budget_and_preserves_ordinary_budget",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_exhausted_claim_budget_finalizes_without_borrowing_ordinary",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_real_ordinary_revision_keeps_its_own_route",
+        "backend/tests/integration/workflow/test_claim_source_locating.py::test_v2_chain_locates_spans_and_preserves_judge_for_each_type",
+        "backend/tests/integration/workflow/test_llm_accounting_text.py::test_business_projection_identical_with_and_without_scope",
+        "backend/tests/integration/api/test_review_api.py::test_review_endpoint_returns_claim_evidence_and_handles_missing_resource",
+        "-q",
+        "--junitxml={output}/resource-issue-compat.xml"
+      ]
+    },
+    {
+      "id": "claim-revision-unit",
+      "purpose": "T46 两类修订输入模型/构造/六类Prompt路由单元，及既有普通审核修订与测评作用域反馈",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models/test_revision_inputs.py",
+        "backend/tests/unit/agents/test_claim_revision_inputs.py",
+        "backend/tests/unit/agents/test_revision_prompt_routing.py",
+        "backend/tests/unit/agents/test_resource_issue_revision.py",
+        "backend/tests/unit/agents/test_structured_assessment.py::test_assessment_revision_prompt_includes_scoped_reviewer_feedback",
+        "-q",
+        "--junitxml={output}/claim-revision-unit.xml"
+      ]
+    },
+    {
+      "id": "claim-revision-integration",
+      "purpose": "T46 prepare/generator 定向修订工作流与 retry 导入集成，及既有 Claim 预算/路由/类型输出兼容",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/workflow/test_claim_targeted_revision.py",
+        "backend/tests/integration/services/test_claim_revision_retry.py",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_not_in_evidence_generates_claim_targeted_revision",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_claim_revision_uses_its_own_budget_and_preserves_ordinary_budget",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_exhausted_claim_budget_finalizes_without_borrowing_ordinary",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_real_ordinary_revision_keeps_its_own_route",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_non_revision_never_uses_stale_claim_instructions",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_structured_assessment_uses_internal_audit_instead_of_public_markdown_claims",
+        "backend/tests/integration/workflow/test_resource_issue_workflow.py::test_prepare_revision_builds_resource_work_order",
+        "backend/tests/integration/workflow/test_resource_issue_workflow.py::test_claim_only_revision_marks_claim_kind",
+        "backend/tests/integration/workflow/test_lecture_five_types_compat.py::test_new_lecture_real_nodes_revision_recheck_claim_publication",
+        "backend/tests/integration/workflow/test_lecture_five_types_compat.py::test_claim_history_cannot_expand_next_ordinary_revision_to_sibling_spec",
+        "-q",
+        "--junitxml={output}/claim-revision-integration.xml"
+      ]
+    },
+    {
+      "id": "claim-revision-recovery",
+      "purpose": "T46 私有输入不入有界 checkpoint、故障中断语义、单资源 retry 新Run重构输入与父版本审计保留",
+      "evidence_type": "deterministic_process",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/persistence/test_revision_input_recovery.py",
+        "backend/tests/e2e/test_resource_issue_recovery.py::test_resource_issue_fault_boundaries",
+        "backend/tests/integration/workflow/test_resource_retry.py::test_real_graph_retry_skips_upstream_and_generates_one_resource",
+        "backend/tests/unit/services/test_resource_retry_service.py::test_feedback_merges_only_selected_claim_instructions_and_deduplicates",
+        "backend/tests/unit/services/test_resource_retry_service.py::test_internal_context_tampering_rejected",
+        "backend/tests/unit/services/test_resource_retry_service.py::test_sqlite_create_claim_and_restart_reads_persisted_context",
+        "backend/tests/integration/workflow/test_p0_09_acceptance_contract.py::test_claim_revision_preserves_v1_and_v2_audits",
+        "-q",
+        "--junitxml={output}/claim-revision-recovery.xml"
+      ]
+    },
+    {
+      "id": "claim-revision-contract",
+      "purpose": "T46 公开 API 契约与 workflow state 序列化无漂移、私有输入不泄漏",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/api/test_review_api.py::test_review_endpoint_returns_claim_evidence_and_handles_missing_resource",
+        "backend/tests/integration/api/test_resource_api.py::test_resource_filter_and_resource_id_download",
+        "backend/tests/unit/models/test_workflow_state.py",
+        "-q",
+        "--junitxml={output}/claim-revision-contract.xml"
+      ]
+    },
+    {
+      "id": "publication-policy-focused",
+      "purpose": "T47 自动发布判定等价提取：新纯函数单测、原始节点金标与既有普通审核/Claim/strict 终态契约",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/agents/test_publication_policy.py",
+        "backend/tests/integration/workflow/test_publication_equivalence.py",
+        "backend/tests/integration/workflow/test_workflow_controls.py::test_include_review_false_skips_reviewer_and_returns_unreviewed_draft",
+        "backend/tests/integration/workflow/test_workflow_controls.py::test_review_approve_marks_resources_approved",
+        "backend/tests/integration/workflow/test_workflow_controls.py::test_decide_node_keeps_each_resource_review_lineage_isolated",
+        "backend/tests/integration/workflow/test_workflow_controls.py::test_decide_node_preserves_prior_approval_for_untouched_revision_resource",
+        "backend/tests/integration/workflow/test_workflow_controls.py::test_terminal_review_decisions_are_not_approved",
+        "backend/tests/integration/workflow/test_workflow_controls.py::test_strict_mode_never_approves_degraded_output",
+        "backend/tests/unit/agents/test_llm_failure_policy.py::test_reviewer_does_not_re_review_or_publish_generation_failure",
+        "backend/tests/unit/agents/test_llm_failure_policy.py::test_finalizer_cannot_override_locked_human_review_execution",
+        "backend/tests/integration/workflow/test_p0_05_review_revision.py::test_review_policy_fails_closed_and_requires_executable_revision",
+        "backend/tests/integration/workflow/test_p0_09_acceptance_contract.py::test_publication_policy_rejects_every_non_final_review_state",
+        "-q",
+        "--junitxml={output}/publication-policy-focused.xml"
+      ]
+    },
+    {
+      "id": "publication-summary-focused",
+      "purpose": "T47 发布汇总聚合、SQL/Memory 只读一致性、有界查询与 Job/Run/timeline 响应一致",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/services/test_publication_summary.py",
+        "backend/tests/integration/persistence/test_publication_summary_read_model.py",
+        "backend/tests/integration/api/test_publication_summary_api.py",
+        "-q",
+        "--junitxml={output}/publication-summary-focused.xml"
+      ]
+    },
+    {
+      "id": "publication-ui-focused",
+      "purpose": "T47 前端发布汇总投影、响应 guard、可读版本选择与发布决定请求竞态",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{node}",
+        "frontend/tests/publicationSummary.test.mjs"
+      ]
+    },
+    {
+      "id": "publication-browser",
+      "purpose": "T47 真实构建应用上的错峰发布、终态后用户决定、分页、竞态、旧版本阅读与旧响应回退",
+      "evidence_type": "browser_fixture",
+      "timeout_seconds": 600,
+      "command": [
+        "{node}",
+        "frontend/tests/publicationSummaryBrowser.test.mjs"
+      ]
+    },
+    {
+      "id": "publication-compat-focused",
+      "purpose": "T47 终态后用户决定的刷新语义，以及既有 Claim 门禁、发布持久化、正文读取与旧 API 兼容（含冻结legacy协议的SQL资源重试）",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/services/test_publication_refresh.py",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_supported_claim_completes_and_approves",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_structured_assessment_uses_internal_audit_instead_of_public_markdown_claims",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_claim_enabled_publication_fails_closed_without_resource_metric",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_completed_claim_audit_waits_for_user_decision_at_eighty_percent",
+        "backend/tests/integration/workflow/test_claim_workflow.py::test_completed_claim_audit_never_warning_publishes_contradicted_fact",
+        "backend/tests/integration/services/test_generation_finalization.py::test_sql_finalization_uses_recorder_owned_review_and_is_idempotent",
+        "backend/tests/integration/services/test_generation_finalization.py::test_reconcile_allows_unpublished_degraded_resource_without_review_record",
+        "backend/tests/integration/services/test_generation_finalization.py::test_reconcile_uses_materialized_review_link_for_published_revision",
+        "backend/tests/integration/services/test_generation_finalization.py::test_sql_reconcile_preserves_recorder_owned_resource_review_id",
+        "backend/tests/integration/workflow/test_resource_retry.py::test_sql_generation_service_persists_retry_evidence_claims_and_lineage",
+        "backend/tests/integration/api/test_resource_api.py::test_resource_filter_and_resource_id_download",
+        "backend/tests/integration/api/test_resource_api.py::test_resource_service_returns_published_detail_without_skill_node_validation",
+        "backend/tests/integration/api/test_generate_jobs_api.py::test_create_generation_job_and_query_status",
+        "backend/tests/integration/api/test_run_api.py::test_run_summary_and_paginated_timeline_are_queryable",
+        "backend/tests/integration/api/test_run_api.py::test_run_api_returns_stable_404_and_validates_limit",
+        "-q",
+        "--junitxml={output}/publication-compat-focused.xml"
+      ]
+    },
+    {
+      "id": "resource-quality-unit",
+      "purpose": "T48 指标口径单元：普通审核目标覆盖、参考 5% 不判达标、状态不混同、难度仅用标注样本",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/reviews/test_quality_metrics.py",
+        "-q",
+        "--junitxml={output}/resource-quality-unit.xml"
+      ]
+    },
+    {
+      "id": "resource-quality-query",
+      "purpose": "T48 版本化质量查询：精确绑定、安全投影、SQL/Memory 共同快照与只读 API",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/services/test_resource_quality_query.py",
+        "backend/tests/integration/api/test_resource_quality_api.py",
+        "-q",
+        "--junitxml={output}/resource-quality-query.xml"
+      ]
+    },
+    {
+      "id": "resource-quality-report",
+      "purpose": "T48 报告消费与 report-read/2 watermark 闭包升级/回滚",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/services/test_resource_quality_report.py",
+        "backend/tests/migrations/test_resource_quality_watermarks.py",
+        "-q",
+        "--junitxml={output}/resource-quality-report.xml"
+      ]
+    },
+    {
+      "id": "resource-quality-evaluation",
+      "purpose": "T48 评测 v2：普通审核覆盖为 M-COVERAGE 唯一来源，v1 文件保留且缺失案例留在分母",
+      "evidence_type": "offline_scripted_policy",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/reports/test_resource_quality_evaluation_v2.py",
+        "backend/tests/integration/api/test_evaluation_api.py",
+        "backend/tests/integration/workflow/test_p0_09_acceptance_contract.py",
+        "backend/tests/unit/agents/test_claim_evaluation.py::test_competition_metric_only_counts_final_published_leaf",
+        "backend/tests/unit/agents/test_claim_evaluation.py::test_difficulty_evaluation_uses_fixed_fixture_version_and_confusion_matrix",
+        "backend/tests/unit/reports/test_competition_evidence.py::test_hallucination_strict_boundary_and_inclusive_accuracy_boundary",
+        "backend/tests/unit/reports/test_competition_evidence.py::test_live_failures_remain_in_denominator_and_exception_text_is_redacted",
+        "backend/tests/integration/api/test_run_api.py::test_claim_endpoint_reports_started_but_failed_audit_without_claim_rows",
+        "backend/tests/integration/api/test_run_api.py::test_claim_endpoint_reports_structured_assessment_skip_without_claim_rows",
+        "backend/tests/unit/reports/test_report_snapshots.py::test_semantic_revision_normalizes_only_computation_metadata_and_covers_new_fields",
+        "-q",
+        "--junitxml={output}/resource-quality-evaluation.xml"
+      ]
+    },
+    {
+      "id": "resource-quality-ui",
+      "purpose": "T48 前端指标呈现、契约守卫、API 路径与请求世代（无浏览器）",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{node}",
+        "frontend/tests/resourceQuality.test.mjs"
+      ]
+    },
+    {
+      "id": "resource-quality-browser",
+      "purpose": "T48 真实构建产物的报告质量区块：来源可见、5% 参考不达标、未测显示破折号",
+      "evidence_type": "browser_fixture",
+      "timeout_seconds": 600,
+      "command": [
+        "{node}",
+        "frontend/tests/resourceQualityBrowser.test.mjs"
+      ]
+    },
+    {
+      "id": "learning-round-contracts",
+      "purpose": "T49 轮次契约、单节点/Claim 计划与可信作用域",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models/test_learning_round_contracts.py",
+        "backend/tests/unit/services/test_learning_round_plans.py",
+        "backend/tests/unit/services/test_generation_round_context.py",
+        "-q",
+        "--junitxml={output}/learning-round-contracts.xml"
+      ]
+    },
+    {
+      "id": "learning-round-persistence",
+      "purpose": "T49 P2轮次仓储SQL/Memory、约束与增量迁移专项",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/persistence/test_learning_round_repository.py",
+        "backend/tests/migrations/test_p0_38_learning_rounds.py",
+        "-q",
+        "--junitxml={output}/learning-round-persistence.xml"
+      ]
+    },
+    {
+      "id": "learning-round-budget",
+      "purpose": "T49 预算预留/结算、跨线程与重试传播、未知用量和旧网关兼容",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/core/test_round_budget_guard.py",
+        "backend/tests/unit/core/test_round_budget_propagation.py",
+        "backend/tests/integration/persistence/test_round_budget_reservations.py",
+        "backend/tests/unit/core/test_llm_gateway.py",
+        "backend/tests/unit/core/test_llm_accounting_regressions.py",
+        "-q",
+        "--junitxml={output}/learning-round-budget.xml"
+      ]
+    },
+    {
+      "id": "learning-round-transactions",
+      "purpose": "T49 共享事务回滚、容器UOW接线与原续生成原子性",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/persistence/test_round_unit_of_work.py",
+        "backend/tests/unit/core/test_round_container_wiring.py",
+        "backend/tests/integration/services/test_generation_continuation_atomicity.py",
+        "-q",
+        "--junitxml={output}/learning-round-transactions.xml"
+      ]
+    },
+    {
+      "id": "learning-round-policies",
+      "purpose": "T49 补救生命周期/稳定排序与附带复习资格",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/policies/test_remediation_priority.py",
+        "backend/tests/unit/policies/test_review_eligibility.py",
+        "-q",
+        "--junitxml={output}/learning-round-policies.xml"
+      ]
+    },
+    {
+      "id": "learning-round-generation",
+      "purpose": "T49 主/复习生产、本轮纠错、来源/事务/额度边界与恢复、legacy导入",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/services/test_round_generation.py",
+        "backend/tests/integration/services/test_round_continuations.py",
+        "backend/tests/integration/services/test_round_failure_recovery.py",
+        "backend/tests/integration/services/test_round_boundaries.py",
+        "backend/tests/integration/services/test_round_legacy_adapter.py",
+        "-q",
+        "--junitxml={output}/learning-round-generation.xml"
+      ]
+    },
+    {
+      "id": "learning-round-api",
+      "purpose": "T49 轮次接口、仅review纠错响应与旧测评入口封闭",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/api/test_learning_round_api.py",
+        "-q",
+        "--junitxml={output}/learning-round-api.xml"
+      ]
+    },
+    {
+      "id": "learning-round-projections",
+      "purpose": "T49 历史轮次分页、报告主目标/缓存同源与复习先修验证",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/services/test_round_history_report.py",
+        "backend/tests/integration/services/test_round_cache_prerequisites.py",
+        "-q",
+        "--junitxml={output}/learning-round-projections.xml"
+      ]
+    },
+    {
+      "id": "learning-round-compat",
+      "purpose": "T49 直接关联的旧反馈/生成/历史/报告回归",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models/test_feedback_loop_contracts.py",
+        "backend/tests/unit/services/test_feedback_assessment_scoring.py",
+        "backend/tests/unit/services/test_feedback_preparation.py",
+        "backend/tests/unit/policies/test_feedback_correction_scope.py",
+        "backend/tests/integration/services/test_generation_focus.py",
+        "backend/tests/integration/services/test_resource_batch_generation.py",
+        "backend/tests/integration/services/test_generation_continuation_atomicity.py",
+        "backend/tests/integration/services/test_feedback_loop_service.py",
+        "backend/tests/integration/api/test_feedback_loop_api.py",
+        "backend/tests/integration/api/test_learning_history_api.py::test_learning_journey_keeps_correction_package_assessment_in_a_separate_round",
+        "backend/tests/unit/reports/test_report_visualizations.py::test_learning_path_current_nodes_use_latest_effective_generation_batch",
+        "backend/tests/unit/reports/test_report_visualizations.py::test_learning_path_focus_only_contains_latest_batch_nodes",
+        "backend/tests/integration/services/test_report_read_model.py::test_followup_insert_update_and_delete_change_revision_without_profile_version_bump",
+        "backend/tests/integration/services/test_report_read_model.py::test_missing_watermark_trigger_and_mixed_dependencies_disable_cache",
+        "-q",
+        "--junitxml={output}/learning-round-compat.xml"
+      ]
+    },
+    {
+      "id": "learning-round-recovery",
+      "purpose": "T49 SQLite 文件重开、排队/租约回收、失败重试绑定与 legacy 任务恢复",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/e2e/test_learning_round_restart.py",
+        "-q",
+        "--junitxml={output}/learning-round-recovery.xml"
+      ]
+    },
+    {
+      "id": "learning-round-frontend",
+      "purpose": "T49 轮次纯生产模块、命令上下文、联合草稿与旧入口守卫",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{node}",
+        "frontend/tests/e14Round.test.mjs"
+      ]
+    },
+    {
+      "id": "learning-round-browser",
+      "purpose": "T49 新构建页面的节点切换、联合提交、双纠错/仅review、历史与窄屏键盘",
+      "evidence_type": "browser_fixture",
+      "timeout_seconds": 900,
+      "command": [
+        "{node}",
+        "frontend/tests/e14RoundBrowser.test.mjs"
+      ]
+    },
+    {
+      "id": "claim-evidence-retrieval-unit",
+      "purpose": "T50 开关/冻结、查询分批与公平配额、回退、重判校验、纯有效判定解析",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/unit/models/test_claim_evidence_retrieval.py",
+        "backend/tests/unit/agents/test_claim_evidence_retrieval.py",
+        "backend/tests/unit/reviews/test_claim_resolution.py",
+        "backend/tests/unit/agents/test_evidence_epoch.py",
+        "backend/tests/unit/agents/test_supplement_dispatch_boundary.py",
+        "backend/tests/unit/agents/test_supplement_truncation.py",
+        "-q",
+        "--junitxml={output}/claim-evidence-retrieval-unit.xml"
+      ]
+    },
+    {
+      "id": "claim-evidence-retrieval-persistence",
+      "purpose": "T50 SQL/Memory 账本、会话CAS、批原子提交、硬阻断与激活、迁移幂等、发布事务守卫",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/persistence/test_claim_evidence_retrieval.py",
+        "backend/tests/integration/persistence/test_publication_guard.py",
+        "backend/tests/migrations/test_p0_39_claim_evidence_retrieval.py",
+        "-q",
+        "--junitxml={output}/claim-evidence-retrieval-persistence.xml"
+      ]
+    },
+    {
+      "id": "claim-evidence-retrieval-workflow",
+      "purpose": "T50 实际图路由、补检/重判节点、反证阻断、无新证据跳过、额度边界、子版本证据上下文与恢复解析",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/workflow/test_claim_evidence_retrieval.py",
+        "backend/tests/integration/services/test_claim_evidence_retrieval_retry.py",
+        "backend/tests/integration/workflow/test_claim_evidence_retrieval_graph.py",
+        "backend/tests/integration/workflow/test_claim_evidence_closed_branch.py",
+        "backend/tests/integration/services/test_supplement_round_entries.py",
+        "backend/tests/integration/services/test_generation_dispatch.py::test_background_failed_run_retry_also_persists_its_frozen_dispatch",
+        "backend/tests/integration/services/test_feedback_loop_service.py::test_claim_followup_splits_multiple_resource_types_into_independent_runs",
+        "-q",
+        "--junitxml={output}/claim-evidence-retrieval-workflow.xml"
+      ]
+    },
+    {
+      "id": "claim-evidence-retrieval-recovery",
+      "purpose": "T50 补检账本/快照/节点/checkpoint 边界的离线恢复与发布事务守卫",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/e2e/test_claim_evidence_retrieval_recovery.py",
+        "backend/tests/e2e/test_resource_issue_recovery.py",
+        "backend/tests/e2e/test_claim_evidence_retrieval_reconcile.py",
+        "-q",
+        "--junitxml={output}/claim-evidence-retrieval-recovery.xml"
+      ]
+    },
+    {
+      "id": "claim-evidence-retrieval-api",
+      "purpose": "T50 只读摘要API、权限/404/422 与质量投影有效轮读取",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/api/test_claim_evidence_retrieval_api.py",
+        "backend/tests/integration/services/test_claim_evidence_retrieval_quality.py",
+        "backend/tests/integration/api/test_generation_switch_guard_api.py",
+        "backend/tests/integration/services/test_report_supplement_invalidation.py",
+        "-q",
+        "--junitxml={output}/claim-evidence-retrieval-api.xml"
+      ]
+    },
+    {
+      "id": "claim-evidence-retrieval-compat",
+      "purpose": "T50 直接关联的既有Claim工作流、定向返工、仓储、质量与重试回归",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "backend/tests/integration/workflow/test_claim_workflow.py",
+        "backend/tests/integration/workflow/test_claim_targeted_revision.py",
+        "backend/tests/integration/services/test_claim_revision_retry.py",
+        "backend/tests/integration/persistence/test_claim_repository.py",
+        "backend/tests/integration/services/test_resource_quality_query.py",
+        "backend/tests/integration/api/test_resource_quality_api.py",
+        "backend/tests/integration/services/test_resource_quality_report.py",
+        "backend/tests/integration/persistence/test_revision_input_recovery.py",
+        "backend/tests/integration/services/test_resource_aware_retrieval.py",
+        "backend/tests/integration/workflow/test_resource_retry.py",
+        "backend/tests/unit/services/test_resource_retry_service.py",
+        "-q",
+        "--junitxml={output}/claim-evidence-retrieval-compat.xml"
+      ]
+    },
+    {
+      "id": "claim-evidence-retrieval-ui",
+      "purpose": "T50 前端补检开关、草稿/继承、禁用与有效历史展示",
+      "evidence_type": "deterministic",
+      "timeout_seconds": 180,
+      "command": [
+        "{node}",
+        "frontend/tests/claimEvidenceRetrieval.test.mjs"
+      ]
+    },
+    {
+      "id": "claim-evidence-retrieval-browser",
+      "purpose": "T50 构建产物下的开关、审核详情与轮次入口浏览器专项",
+      "evidence_type": "browser_fixture",
+      "timeout_seconds": 900,
+      "command": [
+        "{node}",
+        "frontend/tests/claimEvidenceRetrievalBrowser.test.mjs"
+      ]
+    }
   ]
 }

@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.models.feedback.rounds import LearningRoundDetailV1
 from app.models.learning_documents.schemas import LearnerProfile
 
 
@@ -70,6 +71,7 @@ class LearningJourneyRound(BaseModel):
 class LearningJourneyResponse(BaseModel):
     """Read-only full-chain view.  Legacy facts remain separate rather than guessed."""
 
+    learning_rounds: List[LearningRoundDetailV1] = Field(default_factory=list)
     learner_id: str
     profile: LearnerProfile
     current_state: LearningJourneyCurrentState

@@ -1,0 +1,13 @@
+{
+  "facts": [
+    {
+      "end": 30,
+      "fact_id": "t08_mixed-f1",
+      "start": 12,
+      "text": "RAG 系统由检索与生成两个阶段组成"
+    }
+  ],
+  "python_chars": 761,
+  "text": "t08_mixed.md",
+  "text_sha256": "b856a2b09fa2834ed3409621eb87ef70fbd9e73bb296b06676d4fcf6af9be206"
+}

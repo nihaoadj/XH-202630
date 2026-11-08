@@ -9,6 +9,7 @@ export function useFeedbackFollowup({
   selectingOption,
   selectedResourceTypes,
   includeClaimCheck,
+  includeClaimEvidenceRetrieval,
   generationOptions,
   selectedDifficulty,
   learningIntent,
@@ -39,6 +40,9 @@ export function useFeedbackFollowup({
         option_id: optionId,
         resource_types: selectedResourceTypes.value,
         include_claim_check: includeClaimCheck.value,
+        include_claim_evidence_retrieval: Boolean(
+          includeClaimCheck.value && includeClaimEvidenceRetrieval?.value,
+        ),
         ...(!generationOptions.value ? { difficulty: selectedDifficulty.value } : {}),
         ...(generationOptions.value ? {
           learning_intent: learningIntent.value,
@@ -71,6 +75,9 @@ export function useFeedbackFollowup({
         learner_id: learnerId, attempt_id: attemptId,
         option_id: option.option_id, learning_intent: 'reinforce_weakness',
         include_claim_check: includeClaimCheck.value,
+        include_claim_evidence_retrieval: Boolean(
+          includeClaimCheck.value && includeClaimEvidenceRetrieval?.value,
+        ),
         selected_skill_node_ids: option.recommended_target_ids,
         next_generation_snapshot_hash: option.snapshot_hash,
       })

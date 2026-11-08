@@ -300,6 +300,10 @@ class SQLLearnerRepository(BaseLearnerRepository):
                     | _matches_resource_or_run(ResourceReviewORM, resource_ids, run_ids)
                 ).delete(synchronize_session=False)
 
+                from app.db.feedback.round_sql_repository import delete_round_facts
+
+                delete_round_facts(db, learner_id)
+
                 # Feedback-loop descendants reference attempts, decisions,
                 # paths and/or runs.  Delete their deepest rows first.
                 db.query(FeedbackFollowUpRunORM).filter(

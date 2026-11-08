@@ -79,7 +79,11 @@ def test_small_fixture_values_are_not_reported_as_official_metric_passes():
     by_id = {item.metric_id: item for item in metrics}
     assert by_id["M-HALLUCINATION"].actual_value == 0.0
     assert by_id["M-DIFFICULTY"].actual_value == 1.0
-    assert by_id["M-COVERAGE"].actual_value == 1.0
+    # Coverage is no longer derived from Claim knowledge-point relations; this
+    # fixture has no ordinary-review target ledger, so it stays unmeasured.
+    assert by_id["M-COVERAGE"].actual_value is None
+    assert by_id["M-COVERAGE"].status == "NOT_MEASURABLE"
+    assert "ordinary-review" in by_id["M-COVERAGE"].evidence
     assert {item.status for item in metrics} == {"NOT_MEASURABLE"}
     assert by_id["M-FEEDBACK-UPLIFT"].actual_value is None
 
@@ -142,11 +146,10 @@ def test_claim_revision_preserves_v1_and_v2_audits():
         resources=resources,
         claims=claims,
         judgements=judgements,
-        target_skill_node_ids=["kp-rrf"],
     )
     assert metric.metric_status == "complete"
     assert metric.claim_hallucination_rate == 0.0
-    assert metric.knowledge_coverage_rate == 1.0
+    assert metric.supported_claim_total == 1
 
 
 def test_publication_policy_rejects_every_non_final_review_state():

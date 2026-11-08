@@ -1,0 +1,36 @@
+{
+  "suite_id": "rag-competition-gold-suite",
+  "suite_version": "v2",
+  "fixture_version": "v1",
+  "coverage_fixture_version": "ordinary-coverage/v2",
+  "metric_definition_version": "resource-quality/v2",
+  "knowledge_base_id": "rag_engineering_training",
+  "mode": "offline_gold",
+  "competition_thresholds": {
+    "hallucination_rate_max": 0.05,
+    "difficulty_match_accuracy_min": 0.85,
+    "knowledge_coverage_min": 0.90,
+    "minimum_case_count": 50
+  },
+  "files": {
+    "profiles": "profiles/rag_engineering_learners.json",
+    "cases": "cases/rag_engineering_cases.json",
+    "claims": "claims/rag_engineering_claims.json",
+    "sources": "sources.json",
+    "coverage": "coverage/ordinary_coverage_v2.json"
+  },
+  "evaluation_notes": "v2 套件：覆盖率只读普通审核逐目标结果（case_id, target_id 单位），不再使用 Claim 知识点关联。Claim 幻觉率与难度策略公式保持 v1 定义；profiles/cases/claims/sources 复用 v1 数据文件并保留原 fixture_version。",
+  "metric_definitions": {
+    "hallucination_rate": "(contradicted + not_in_evidence) / factual_claim_total，仅统计最终发布叶子资源上的事实 Claim",
+    "difficulty_match_accuracy": "expected_difficulty == predicted_difficulty 的用例数 / 全部已选用例数（失败案例保留在分母）",
+    "knowledge_coverage_rate": "被有效普通审核判为 covered 的 (case_id, target_id) 单位数 / 全部已选 case 的冻结目标单位数"
+  },
+  "live_mode": {
+    "enabled_by": "RUN_LIVE_LLM=1 且 LLM_API_KEY 为真实凭据",
+    "generation_path": "GenerationJobService 生产生成链路（含 Review 与 Claim 审核）",
+    "verdict_source": "Claim 审核管线对冻结 Evidence 的真实判定，不使用金标标注",
+    "coverage_source": "本次普通审核账本的逐目标持久化投影，不进行第二次模型评分",
+    "predicted_difficulty_source": "生成资源自身的 difficulty 字段（系统策略产出）",
+    "status": "通路已实现，暂未执行真实 API 验证；未就绪时调用方必须显式 SKIP 而非静默降级"
+  }
+}

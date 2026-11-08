@@ -18,7 +18,8 @@ def _locked(method):
 class MemoryLearnerRepository(BaseLearnerRepository):
     """内存实现的学习者画像仓库，用于开发与演示阶段"""
 
-    def __init__(self):
+    def __init__(self, round_repository=None):
+        self._round_repository = round_repository
         self._store: Dict[str, LearnerProfile] = {}
         self._lock = RLock()
 
@@ -33,6 +34,9 @@ class MemoryLearnerRepository(BaseLearnerRepository):
     @_locked
     def delete(self, learner_id: str) -> bool:
         if learner_id in self._store:
+            if self._round_repository is not None:
+                with self._round_repository.transaction() as rounds:
+                    rounds.delete_learner(learner_id)
             del self._store[learner_id]
             return True
         return False

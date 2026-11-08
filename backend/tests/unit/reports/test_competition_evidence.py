@@ -84,7 +84,7 @@ def test_hallucination_strict_boundary_and_inclusive_accuracy_boundary():
     baseline = module.evaluate_competition_metrics(suite)
     suite["competition_thresholds"]["hallucination_rate_max"] = baseline.claim_metrics.claim_hallucination_rate
     suite["competition_thresholds"]["difficulty_match_accuracy_min"] = baseline.difficulty.accuracy
-    suite["competition_thresholds"]["knowledge_coverage_min"] = 1.0
+    suite["competition_thresholds"]["knowledge_coverage_min"] = baseline.ordinary_coverage.metric.value
     gates = {item.metric_id: item.status for item in module.evaluate_competition_metrics(suite).gates}
     assert gates == {"M-HALLUCINATION": "FAIL", "M-DIFFICULTY": "PASS", "M-COVERAGE": "PASS"}
 
@@ -114,8 +114,16 @@ def test_live_failures_remain_in_denominator_and_exception_text_is_redacted(monk
         def get_claims(self, run_id):
             return SimpleNamespace(claims=[], judgements=[])
 
+    class Quality:
+        def get_run_quality(self, run_id):
+            return SimpleNamespace(items=[])
+
     jobs = Jobs()
-    container = SimpleNamespace(generation_job_service=lambda: jobs, run_query_service=lambda: Query())
+    container = SimpleNamespace(
+        generation_job_service=lambda: jobs,
+        run_query_service=lambda: Query(),
+        resource_quality_query_service=lambda: Quality(),
+    )
     report = module.evaluate_live_metrics(module.load_suite(), max_cases=3, container=container)
     assert report.selected_case_count == report.difficulty.case_total == 3
     assert report.failed_case_count == 2 and report.completed_generation_count == 1

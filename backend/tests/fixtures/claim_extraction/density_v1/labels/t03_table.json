@@ -1,0 +1,13 @@
+{
+  "facts": [
+    {
+      "end": 67,
+      "fact_id": "t03_table-f1",
+      "start": 51,
+      "text": "该阶段使用交叉编码器对候选集重排"
+    }
+  ],
+  "python_chars": 369,
+  "text": "t03_table.md",
+  "text_sha256": "cd56ab10a4703b96c3a4e6dde23755fa41306cca59c06ffe1076d437a63be00f"
+}

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from app.models.feedback.rounds import LearningRoundDetailV1
 from app.models.learning_documents.schemas import (
     AgentTrace,
     FeedbackRecord,
@@ -14,6 +15,7 @@ from app.models.learning_documents.schemas import (
     LearningResource,
 )
 from app.models.learners.mastery import AbilityNodeProjectionV1, NextGenerationOptionsV1, WeaknessPriorityV1
+from app.models.reviews.quality_metrics import EvaluationResourceQualityV2, ResourceQualityMetricsV1, ResourceQualitySummaryV1
 
 
 class ReportRadar(BaseModel):
@@ -171,6 +173,8 @@ class ReportRevisionPartsV1(BaseModel):
 
 
 class ReportResponse(BaseModel):
+    learning_round_summary: LearningRoundDetailV1 | None = None
+    remediation_needs: List[Dict[str, Any]] = Field(default_factory=list)
     # Keep the original fields below intact: report 4.1 is deliberately an
     # additive read contract for existing report consumers.
     report_schema_version: str = "4.1"
@@ -184,6 +188,11 @@ class ReportResponse(BaseModel):
     weakness_groups: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
     resource_credibility_summary: Dict[str, Any] = Field(default_factory=dict)
     recent_resource_credibility: List[Dict[str, Any]] = Field(default_factory=list)
+    # Additive T48 block: the same versioned metrics exposed by the run quality
+    # endpoint.  Missing/None keeps every legacy consumer valid; the frontend
+    # shows "unknown" and never back-fills a number from a legacy score.
+    resource_quality_summary: Optional[ResourceQualitySummaryV1] = None
+    recent_resource_quality: List[ResourceQualityMetricsV1] = Field(default_factory=list)
     as_of_profile_version: int = 1
     generated_at: datetime
     learner_id: str
@@ -237,6 +246,8 @@ class EvaluationSummary(BaseModel):
     metrics: Dict[str, float]
     ablation: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: Optional[datetime] = None
+    resource_quality_evaluations: List[EvaluationResourceQualityV2] = Field(default_factory=list)
+    resource_quality_invalid_row_total: int = Field(default=0, ge=0)
 
 
 class ReportWindow(BaseModel):

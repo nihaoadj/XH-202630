@@ -23,12 +23,25 @@ from app.db.shared.models import Base, KnowledgeBaseORM, LearnerProfileORM, User
 from app.models.generation.dispatch import RESOURCE_RETRY_WORKFLOW_VERSION
 from app.main import application_exception_handler
 from app.models.generation.resource_retry import ResourceRetryContext
+from app.models.reviews.revision_inputs import ORDINARY_KIND, REVISION_INPUT_ENVELOPE_VERSION
 from app.models.knowledge.knowledge import EvidenceItem, ScoreKind, SourceLocator, SourceType
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
 from app.models.shared.agent_contracts import ResourceSpec
 from app.models.shared.persistence import PersistedEvidenceSnapshot, WorkflowCheckpoint, canonical_hash
 from app.services.generation.jobs import GenerationJobService
 from app.services.generation.resource_retry import prepare_resource_retry
+
+
+@pytest.fixture(autouse=True)
+def _freeze_legacy_review_strategies(monkeypatch):
+    # This suite exercises the legacy TEXT-workflow retry path. The T45 defaults
+    # (neutral claim + resource_issue) must not leak into these frozen fixtures,
+    # so pin the strategies the historical dispatch snapshots were built for.
+    # ``get_settings`` is lru_cached, so patch the module-level name that
+    # ``_dispatch_snapshot`` actually resolves rather than the env/cache.
+    from app.config import Settings
+    legacy = Settings(claim_extraction_strategy="legacy_v3", resource_review_strategy="compat")
+    monkeypatch.setattr("app.services.generation.jobs.get_settings", lambda: legacy)
 
 
 def source_state(repo=None):
@@ -97,6 +110,70 @@ def prepare(s, **overrides):
                                   overrides.get("spec_id", s.spec.resource_spec_id), overrides.get("representation", "text"))
 
 
+def attach_supplement(source):
+    from app.models.reviews.claim_evidence_retrieval import build_evidence_set
+    from app.models.reviews.evidence_lineage import evidence_from_snapshot, evidence_item_hash
+
+    item = evidence_from_snapshot(source.evidence)
+    item = item.model_copy(update={
+        "evidence_id": "added", "chunk_id": "added-chunk", "config_hash": "b" * 64,
+        "locator": item.locator.model_copy(update={"chunk_id": "added-chunk"}),
+    })
+    snapshot = PersistedEvidenceSnapshot.from_evidence(item, run_id="source", retrieval_step_id="supplement")
+    scope = build_evidence_set(
+        run_id="source", resource_id="parent", resource_version=1, review_id="review",
+        purpose="generation", session_id=None, base_evidence_ids=source.spec.evidence_ids,
+        added_evidence_ids=["added"], snapshot_hashes={"added": evidence_item_hash(item)},
+        manifest=[{"evidence_id": "added", "excerpt_hash": item.excerpt_hash}],
+    )
+    source.generation.supplement_repository = SimpleNamespace(list_evidence_sets=lambda ids: [scope])
+    source.audit.list_evidence = lambda run: [source.evidence, snapshot]
+    source.audit.list_steps = lambda run: [SimpleNamespace(step_id="supplement", run_id="source", status="success")]
+    return snapshot, scope
+
+
+def test_prepare_and_import_authorized_supplement_keeps_source_frozen(source):
+    from app.agents.resource_workflows.learning_documents.resource_retry import reuse_resource_context_node
+    from app.services.generation.generation import build_workflow_state
+
+    before = source.spec.model_dump(mode="json")
+    attach_supplement(source)
+    context = prepare(source)
+    assert context.supplement_context.evidence[0].evidence_id == "added"
+    child, _ = source.service.create_resource_retry(source.learner, "source", source.spec.resource_spec_id, "text")
+    frozen = source.repo.get_dispatch(child.run_id)["dispatch_snapshot"]["resource_retry_context"]
+    restored = ResourceRetryContext.from_snapshot(frozen)
+    assert restored == context
+    state = build_workflow_state(context.learner, context.request, run_id=child.run_id,
+                                 claim_extraction_snapshot={}, lecture_review_snapshot={}, resource_review_snapshot={})
+    state["resource_retry_context"] = frozen
+    imported = reuse_resource_context_node(state)
+    assert len(imported["retrieved_evidence"]) == 2
+    assert all(item.evidence_id not in {"evidence", "added"} for item in imported["retrieved_evidence"])
+    assert source.spec.model_dump(mode="json") == before
+
+
+@pytest.mark.parametrize("damage", ["missing", "running", "audit", "foreign"])
+def test_prepare_does_not_create_retry_with_invalid_supplement(source, damage):
+    snapshot, scope = attach_supplement(source)
+    if damage == "missing":
+        source.audit.list_evidence = lambda run: [source.evidence]
+    elif damage == "running":
+        source.audit.list_steps = lambda run: [SimpleNamespace(step_id="supplement", run_id="source", status="running")]
+    elif damage == "audit":
+        scope = scope.model_copy(update={"purpose": "audit"})
+        source.generation.supplement_repository.list_evidence_sets = lambda ids: [scope]
+        # Audit-only evidence never enters the new generation pool.
+        assert prepare(source).supplement_context is None
+        return
+    else:
+        source.audit.list_evidence = lambda run: [source.evidence, snapshot.model_copy(update={"run_id": "foreign"})]
+    with pytest.raises(ApplicationError) as caught:
+        source.service.create_resource_retry(source.learner, "source", source.spec.resource_spec_id, "text")
+    assert caught.value.status_code == 409
+    assert len(source.repo._store) == 1
+
+
 @pytest.mark.parametrize("status", ["completed", "failed"])
 def test_prepare_child_is_frozen_single_spec_and_source_unchanged(source, status):
     s = source
@@ -109,7 +186,9 @@ def test_prepare_child_is_frozen_single_spec_and_source_unchanged(source, status
     assert context.diagnosis == {"summary": "frozen diagnosis"}
     assert context.learning_plan == {"goal": "frozen plan"}
     assert context.spec == s.spec and context.evidence == [s.evidence]
-    assert len(context.revision_feedback["revision_instructions"]) == 1
+    assert context.revision_feedback["schema_version"] == REVISION_INPUT_ENVELOPE_VERSION
+    assert context.revision_feedback["kind"] == ORDINARY_KIND
+    assert len(context.revision_feedback["input"]["feedback"]["revision_instructions"]) == 1
     child, req = s.service.create_resource_retry(s.learner, "source", s.spec.resource_spec_id, "text")
     repeated, _ = s.service.create_resource_retry(s.learner, "source", s.spec.resource_spec_id, "text")
     assert child.run_id == repeated.run_id != "source"
@@ -179,13 +258,19 @@ def test_feedback_merges_only_selected_claim_instructions_and_deduplicates(sourc
         "revision_instructions": [own, claim, {"target_resource_type": "实操指南", "instruction": "other"}],
         "issues": [{"resource_id": "parent", "message": "own"}, {"resource_id": "other", "message": "other"}]}}
     s.checkpoint = s.checkpoint.model_copy(update={"state_projection": projection, "state_hash": canonical_hash(projection)})
-    feedback = prepare(s).revision_feedback
+    revision = prepare(s).revision_feedback
+    assert revision["schema_version"] == REVISION_INPUT_ENVELOPE_VERSION
+    assert revision["kind"] == ORDINARY_KIND
+    feedback = revision["input"]["feedback"]
     assert feedback["revision_instructions"] == [own, claim]
     assert feedback["issues"] == [{"resource_id": "parent", "message": "own"}]
 
 
-def test_missing_checkpoint_and_context_size_budget_reject(source, monkeypatch):
+@pytest.mark.parametrize("supplement", [False, True])
+def test_missing_checkpoint_and_context_size_budget_reject(source, monkeypatch, supplement):
     s = source
+    if supplement:
+        attach_supplement(source)
     checkpoints = s.audit.list_checkpoints
     s.audit.list_checkpoints = lambda run: []
     with pytest.raises(ApplicationError) as caught:
@@ -355,3 +440,21 @@ def test_api_request_body_cannot_inject_context_and_error_statuses(source, monke
     source.repo._dispatch_metadata["source"]["dispatch_snapshot"] = None
     response = client.post(path, json={"resource_retry_context": {"learner": "injected"}})
     assert response.status_code == 409 and not scheduled
+
+
+@pytest.mark.parametrize("damage,expected", [("missing", "缺少"), ("mismatch", "不一致"), ("capacity", "容量")])
+def test_retry_failure_messages_are_actionable_and_do_not_expose_internal_errors(source, monkeypatch, damage, expected):
+    if damage == "missing":
+        source.audit.list_evidence = lambda run: []
+    elif damage == "mismatch":
+        source.repo._dispatch_metadata["source"]["dispatch_snapshot"]["request_hash"] = "0" * 64
+    else:
+        monkeypatch.setattr("app.services.generation.resource_retry.get_settings",
+                            lambda: SimpleNamespace(workflow_checkpoint_max_bytes=1))
+    with pytest.raises(ApplicationError) as caught:
+        prepare(source)
+    assert caught.value.status_code == 409
+    message = caught.value.public_message
+    assert expected in message and "整个批次" in message
+    assert "Traceback" not in message and "SELECT" not in message
+    assert len(source.repo._store) == 1

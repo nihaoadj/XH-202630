@@ -1,0 +1,2810 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-11-07T09:30:00+00:00",
+  "note": "Observed values from the unmodified decide_node (T47 baseline).",
+  "cases": [
+    {
+      "case_id": "ordinary_approve",
+      "note": "普通审核 approve：唯一自动发布路径。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "not_requested",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "ordinary_reject",
+      "note": "普通审核 reject：资源拒绝且不发布。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "reject",
+          "status": "reject",
+          "passed": false,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "rejected",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "failed",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "failed",
+        "claim_check_status": "not_requested",
+        "final_decision": "审核拒绝"
+      }
+    },
+    {
+      "case_id": "ordinary_human_review",
+      "note": "普通审核 human_review：保持待复核。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "human_review",
+          "status": "human_review",
+          "passed": false,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "human_review",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "human_review",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "human_review",
+        "claim_check_status": "not_requested",
+        "final_decision": "返工额度已用尽或审核无法自动决策，需人工复核"
+      }
+    },
+    {
+      "case_id": "ordinary_revise",
+      "note": "普通审核 revise 且返工额度耗尽：落入人工复核而非发布。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "revise",
+          "status": "revise",
+          "passed": false,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "human_review",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "human_review",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "human_review",
+        "claim_check_status": "not_requested",
+        "final_decision": "返工额度已用尽或审核无法自动决策，需人工复核"
+      }
+    },
+    {
+      "case_id": "untouched_approved_sibling",
+      "note": "聚合 revise 下未重生成的已批准资源保持自身审批并继续发布。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        },
+        {
+          "resource_id": "res-2",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": "approved",
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          },
+          {
+            "resource_id": "res-2",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {
+          "res-1": {
+            "decision": "approve"
+          }
+        },
+        "review_result": {
+          "decision": "revise",
+          "status": "revise",
+          "passed": false,
+          "review_ids": {
+            "res-1": "review-res-1",
+            "res-2": "review-res-2"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          },
+          {
+            "resource_id": "res-2",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-2",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          },
+          {
+            "resource_id": "res-2",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-2"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "not_requested",
+        "final_decision": "返工额度已用尽或审核无法自动决策，需人工复核"
+      }
+    },
+    {
+      "case_id": "generation_locked",
+      "note": "执行记录 validation_status=failed 的资源被锁定为人工复核；兄弟资源不受影响。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        },
+        {
+          "resource_id": "res-2",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "failed"
+          },
+          {
+            "resource_id": "res-2",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {
+          "res-2": {
+            "decision": "approve"
+          }
+        },
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1",
+            "res-2": "review-res-2"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "human_review",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          },
+          {
+            "resource_id": "res-2",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-2",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "human_review",
+            "review_id": "review-res-1"
+          },
+          {
+            "resource_id": "res-2",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-2"
+          }
+        ],
+        "workflow_status": "human_review",
+        "claim_check_status": "not_requested",
+        "final_decision": "返工额度已用尽或审核无法自动决策，需人工复核"
+      }
+    },
+    {
+      "case_id": "strict_with_degradation",
+      "note": "strict+降级：资源级仍按自身 approve 发布、Run 聚合 completed；这是基线实际行为，T47 不修 strict 优先级。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "strict",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": [
+          {
+            "error_code": "RESOURCE_DEGRADED"
+          }
+        ]
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "not_requested",
+        "final_decision": "严格模式下存在降级结果，需人工复核"
+      }
+    },
+    {
+      "case_id": "claim_disabled",
+      "note": "未启用 Claim 审核：不进入 Claim 门禁。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "not_requested",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_complete_publishes",
+      "note": "Claim eligible 且指标 complete：门禁通过并发布。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "complete",
+            "claim_total": 5,
+            "factual_claim_total": 5,
+            "supported_claim_total": 5,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": 1.0,
+            "review_id": "review-res-1",
+            "claim_metric_status": "complete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_metric_missing_fails_closed",
+      "note": "Claim eligible 但无指标记录：门禁失败闭锁为人工复核。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "human_review",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "human_review",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_failed_resource",
+      "note": "Claim 失败资源即便指标 complete 也不发布。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [
+          "res-1"
+        ],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "complete",
+            "claim_total": 5,
+            "factual_claim_total": 5,
+            "supported_claim_total": 5,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "human_review",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": 1.0,
+            "review_id": "review-res-1",
+            "claim_metric_status": "complete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "human_review",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_user_review_at_threshold",
+      "note": "事实通过率恰为阈值 0.60、contradicted=0 且有 not_in_evidence：等待用户决定。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "complete",
+            "claim_total": 5,
+            "factual_claim_total": 5,
+            "supported_claim_total": 3,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 2,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "human_review",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": true,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": 0.6,
+            "review_id": "review-res-1",
+            "claim_metric_status": "complete",
+            "claim_publish_decision": "pending"
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "human_review",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "human_review",
+        "claim_check_status": "completed",
+        "final_decision": "Claim 审核报告待用户决定是否发布"
+      }
+    },
+    {
+      "case_id": "claim_below_user_review_threshold",
+      "note": "通过率 0.40 低于用户复核阈值：不进入待决定，指标 complete 时仍自动发布。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "complete",
+            "claim_total": 5,
+            "factual_claim_total": 5,
+            "supported_claim_total": 2,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 3,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": 0.4,
+            "review_id": "review-res-1",
+            "claim_metric_status": "complete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_contradicted_not_user_review",
+      "note": "存在 contradicted 事实时不进入用户复核路径。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "complete",
+            "claim_total": 5,
+            "factual_claim_total": 5,
+            "supported_claim_total": 4,
+            "contradicted_claim_total": 1,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": 0.8,
+            "review_id": "review-res-1",
+            "claim_metric_status": "complete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_not_applicable",
+      "note": "指标 not_applicable 视为门禁通过。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "not_applicable",
+            "claim_total": 0,
+            "factual_claim_total": 0,
+            "supported_claim_total": 0,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": "not_applicable",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_zero_factual_denominator",
+      "note": "零事实分母：通过率为 None，不阻断发布。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "complete",
+            "claim_total": 0,
+            "factual_claim_total": 0,
+            "supported_claim_total": 0,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": "complete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_partial_publish_disabled",
+      "note": "指标 incomplete 且 partial-publish 关闭：闭锁为人工复核。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "failed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "incomplete",
+            "claim_total": 0,
+            "factual_claim_total": 0,
+            "supported_claim_total": 0,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "human_review",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": "incomplete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "human_review",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "failed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_partial_publish_enabled",
+      "note": "指标 incomplete 且 partial-publish 开启：降级发布并置 claim_degraded_publish。",
+      "settings": {
+        "claim_partial_publish": true,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "failed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "incomplete",
+            "claim_total": 0,
+            "factual_claim_total": 0,
+            "supported_claim_total": 0,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": true,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": "incomplete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "failed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_problem_with_partial_publish",
+      "note": "存在 Claim 问题但 partial-publish 允许：降级发布。",
+      "settings": {
+        "claim_partial_publish": true,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "incomplete",
+            "claim_total": 0,
+            "factual_claim_total": 0,
+            "supported_claim_total": 0,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 0,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [
+            {
+              "resource_id": "res-1",
+              "code": "evidence_gap"
+            }
+          ],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": true,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": "incomplete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "claim_user_review_disabled",
+      "note": "用户复核开关关闭：满足阈值也不进入待决定。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": false,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": true,
+        "claim_check_status": "completed",
+        "claim_eligible_resource_ids": [
+          "res-1"
+        ],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {
+          "res-1": {
+            "metric_status": "complete",
+            "claim_total": 5,
+            "factual_claim_total": 5,
+            "supported_claim_total": 3,
+            "contradicted_claim_total": 0,
+            "not_in_evidence_claim_total": 2,
+            "non_factual_claim_total": 0,
+            "incomplete_claim_total": 0
+          }
+        },
+        "resource_review_results": {},
+        "review_result": {
+          "decision": "approve",
+          "status": "approve",
+          "passed": true,
+          "review_ids": {
+            "res-1": "review-res-1"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": 0.6,
+            "review_id": "review-res-1",
+            "claim_metric_status": "complete",
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          }
+        ],
+        "workflow_status": "completed",
+        "claim_check_status": "completed",
+        "final_decision": "审核通过"
+      }
+    },
+    {
+      "case_id": "two_resources_isolated",
+      "note": "同 Run 两份资源各自按审批结果决定，互不影响。",
+      "settings": {
+        "claim_partial_publish": false,
+        "claim_user_review_enabled": true,
+        "claim_user_review_min_factual_pass_rate": 0.6
+      },
+      "resources": [
+        {
+          "resource_id": "res-1",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        },
+        {
+          "resource_id": "res-2",
+          "learner_id": null,
+          "topic": null,
+          "resource_type": "讲义",
+          "difficulty": "初级",
+          "storage_type": "text",
+          "content_text": "合成内容，仅用于等价性基线。",
+          "file_path": null,
+          "file_size": null,
+          "mime_type": null,
+          "knowledge_points": [
+            "kp-1"
+          ],
+          "source_refs": [],
+          "learning_path_node": null,
+          "review_status": null,
+          "review_id": null,
+          "publication_status": "unpublished",
+          "published_at": null,
+          "run_id": "run-t47",
+          "batch_id": null,
+          "resource_spec_id": null,
+          "resource_family_id": null,
+          "representation": "text",
+          "claim_count": null,
+          "legacy_reviewer_score": null,
+          "claim_hallucination_rate": null,
+          "claim_metric_status": null,
+          "claim_degraded_publish": false,
+          "claim_factual_pass_rate": null,
+          "claim_warning_publish": false,
+          "claim_publish_decision_pending": false,
+          "claim_publish_decision": null,
+          "hallucination_rate": null,
+          "difficulty_match": null,
+          "version": 1,
+          "parent_resource_id": null,
+          "created_at": null,
+          "exercise_items": []
+        }
+      ],
+      "state": {
+        "schema_version": "1.0",
+        "run_id": "run-t47",
+        "generation_attempt": 1,
+        "revision_count": 0,
+        "max_iterations": 2,
+        "claim_revision_count": 0,
+        "claim_max_iterations": 1,
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          },
+          {
+            "resource_id": "res-2",
+            "resource_execution_state": "generated",
+            "validation_status": "validated"
+          }
+        ],
+        "generation_mode": "standard",
+        "include_review": true,
+        "include_claim_check": false,
+        "claim_check_status": "not_requested",
+        "claim_eligible_resource_ids": [],
+        "claim_failed_resource_ids": [],
+        "claim_metrics": {},
+        "resource_review_results": {
+          "res-1": {
+            "decision": "approve"
+          },
+          "res-2": {
+            "decision": "reject"
+          }
+        },
+        "review_result": {
+          "decision": "revise",
+          "status": "revise",
+          "passed": false,
+          "review_ids": {
+            "res-1": "review-res-1",
+            "res-2": "review-res-2"
+          },
+          "issues": [],
+          "revision_instructions": [],
+          "hallucination_score": 0.1
+        },
+        "trace": [],
+        "errors": []
+      },
+      "expected": {
+        "resources": [
+          {
+            "resource_id": "res-1",
+            "review_status": "approved",
+            "publication_status": "published",
+            "published_at": "2026-11-07T09:30:00+00:00",
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-1",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          },
+          {
+            "resource_id": "res-2",
+            "review_status": "rejected",
+            "publication_status": "unpublished",
+            "published_at": null,
+            "claim_publish_decision_pending": false,
+            "claim_degraded_publish": false,
+            "claim_warning_publish": false,
+            "claim_factual_pass_rate": null,
+            "review_id": "review-res-2",
+            "claim_metric_status": null,
+            "claim_publish_decision": null
+          }
+        ],
+        "resource_executions": [
+          {
+            "resource_id": "res-1",
+            "resource_execution_state": "approved",
+            "review_id": "review-res-1"
+          },
+          {
+            "resource_id": "res-2",
+            "resource_execution_state": "failed",
+            "review_id": "review-res-2"
+          }
+        ],
+        "workflow_status": "human_review",
+        "claim_check_status": "not_requested",
+        "final_decision": "返工额度已用尽或审核无法自动决策，需人工复核"
+      }
+    }
+  ],
+  "provenance": "expected 由改动前的真实 decide_node 在同一合成状态、冻结 UTC 时钟与固定 Settings 下生成；测试只读取本文件的字面期望并与真实节点输出整体比对，运行时不重新生成期望。"
+}

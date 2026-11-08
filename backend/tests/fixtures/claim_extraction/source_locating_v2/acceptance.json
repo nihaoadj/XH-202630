@@ -1,0 +1,2402 @@
+[
+  {
+    "id": "acceptance-exact-000",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-001",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-002",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-003",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-004",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-005",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-006",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-007",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-008",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-009",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-010",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-011",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-012",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-013",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-014",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-015",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-016",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-017",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-018",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-exact-019",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-000",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "操作说明：\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-001",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 64,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "观察  记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 64,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-002",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 60,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "操作说明：\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 60,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-003",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 62,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "观察  记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 62,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-004",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 60,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "操作说明：\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 60,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-005",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 64,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "观察  记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 64,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-006",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "操作说明：\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-007",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 64,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "观察  记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 64,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-008",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 60,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "操作说明：\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 60,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-009",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 62,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "观察  记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 62,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-010",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 60,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "操作说明：\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 60,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-011",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 64,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "观察  记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 64,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-012",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "操作说明：\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-013",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 64,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "观察  记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 64,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-014",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 60,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "操作说明：\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 60,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-015",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 62,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "观察  记录：河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 62,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-016",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 60,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "操作说明：\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 60,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-017",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 64,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "观察  记录：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 64,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-018",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "操作说明：\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-format-019",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 64,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "观察  记录：面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 64,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-000",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-001",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-002",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 63,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "他检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 63,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-003",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "河流调查小组拿着编号7记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-004",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "修修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-005",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 66,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "他检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 66,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-006",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-007",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-008",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 63,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "他检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 63,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-009",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "河流调查小组拿着编号7记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-010",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "修修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-011",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 66,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "他检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 66,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-012",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-013",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-014",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 63,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": "他检查记录后说明：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 63,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-015",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "河流调查小组拿着编号7记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-016",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "修修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-017",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 66,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": "他检查记录后说明：舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 66,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-018",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 55,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-edit-019",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 57,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-000",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号8的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-001",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "龘包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-002",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 109,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-003",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "acceptance短句",
+    "unit_start": 0,
+    "unit_end": 12,
+    "unit_kind": "paragraph",
+    "ref": "acceptance短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-004",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-005",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-006",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "海海岸巡查员沿着编号7的栈道寻找潮潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-007",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-008",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。\n叙述   开头：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 124,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-009",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "河流调查小组拿着不编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-010",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号8的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-011",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "龘台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-012",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 111,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-013",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "acceptance短句",
+    "unit_start": 0,
+    "unit_end": 12,
+    "unit_kind": "paragraph",
+    "ref": "acceptance短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-014",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-015",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-016",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "修修复师从编号7的纸盒取出旧照片并并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-017",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-018",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。\n叙述   开头：海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 126,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-019",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面包师将不编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-020",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号8的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-021",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "龘流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-022",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 109,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-023",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "acceptance短句",
+    "unit_start": 0,
+    "unit_end": 12,
+    "unit_kind": "paragraph",
+    "ref": "acceptance短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-024",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-025",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-026",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "天天文社成员使用编号7的星图辨认夜夜空中相邻的星座，并沿着图示方向调整观测位置，收工",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-027",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-028",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。\n叙述   开头：修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 124,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-029",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "舞台工作人员检查不编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-030",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号8的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-031",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "龘包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-032",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。\n天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 109,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-033",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "acceptance短句",
+    "unit_start": 0,
+    "unit_end": 12,
+    "unit_kind": "paragraph",
+    "ref": "acceptance短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-034",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-035",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-036",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "海海岸巡查员沿着编号7的栈道寻找潮潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-037",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-038",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。\n叙述   开头：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 124,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-039",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "河流调查小组拿着不编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-040",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号8的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-041",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "龘台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-042",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。\n海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 111,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-043",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "acceptance短句",
+    "unit_start": 0,
+    "unit_end": 12,
+    "unit_kind": "paragraph",
+    "ref": "acceptance短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-044",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-045",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-046",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "修修复师从编号7的纸盒取出旧照片并并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-047",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-048",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。\n叙述   开头：海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 126,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-049",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "面包师将编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "面包师将不编号7烤盘中的面团移入发酵柜，等待表面形成细密气孔后取出整形，并把这次制作的过程记在厨房日志中供学徒查阅。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-050",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "天文社成员使用编号8的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工时擦净镜片并盖好仪器保护罩。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-051",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "龘流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-052",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。\n修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 109,
+    "unit_kind": "paragraph",
+    "ref": "修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-053",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "acceptance短句",
+    "unit_start": 0,
+    "unit_end": 12,
+    "unit_kind": "paragraph",
+    "ref": "acceptance短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-054",
+    "source_group": "acceptance-source-0",
+    "source_template": "acceptance-template-0",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "海岸巡查员沿着编号7的栈道寻找潮汐留下的标记，并在纸图上圈出漂流木所在区域，返程时把观察所得交给值班人员归档。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-055",
+    "source_group": "acceptance-source-1",
+    "source_template": "acceptance-template-1",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙乙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-056",
+    "source_group": "acceptance-source-2",
+    "source_template": "acceptance-template-2",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "天文社成员使用编号7的星图辨认夜空中相邻的星座，并沿着图示方向调整观测位置，收工",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "天天文社成员使用编号7的星图辨认夜夜空中相邻的星座，并沿着图示方向调整观测位置，收工",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-057",
+    "source_group": "acceptance-source-3",
+    "source_template": "acceptance-template-3",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "河流调查小组拿着编号7的记录板观察岸边石块与水流的接触位置，绘制现场草图后比较不同河段的形状，再收齐测绘工具。",
+    "unit_start": 0,
+    "unit_end": 55,
+    "unit_kind": "paragraph",
+    "ref": "丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁丁",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-058",
+    "source_group": "acceptance-source-4",
+    "source_template": "acceptance-template-4",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。\n叙述   开头：修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "unit_start": 0,
+    "unit_end": 124,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：修复师从编号7的纸盒取出旧照片并戴好棉质手套，先用软毛刷清扫边缘再放入透明保护袋，并在登记簿注明处理的经过。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "acceptance-reject-059",
+    "source_group": "acceptance-source-5",
+    "source_template": "acceptance-template-5",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "舞台工作人员检查编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "unit_start": 0,
+    "unit_end": 57,
+    "unit_kind": "paragraph",
+    "ref": "舞台工作人员检查不编号7的幕布挂钩是否稳固，并把道具沿后台通道摆放整齐，演出结束后重新清点归还的物品并登记破损情况。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  }
+]

@@ -26,6 +26,9 @@
     "src/features/runs/queryApi.js",
     "src/features/runs/api.js",
     "src/features/reports/api.js",
-    "src/features/reports/reportStreamClient.js"
+    "src/features/reports/reportStreamClient.js",
+    "src/features/generation/roundApi.js",
+    "src/features/feedback/roundApi.js",
+    "src/features/feedback/roundEvaluationState.js"
   ]
 }

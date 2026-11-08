@@ -93,3 +93,15 @@ def test_low_feedback_only_recommends_prerequisite_and_does_not_auto_downgrade()
     assert base.placement_exempt is False
     assert base.placement_verification_required is False
     assert service.apply_tier_feedback(profile, point_scores={"base": 0.8}).active_tier == 2
+
+
+def test_mixed_tier_low_evidence_marks_each_prerequisite_without_tier_transition():
+    service, learners = _service()
+    profile = learners.get("learner")
+    service.finalize_initial_placement(profile, tier=3)
+    service.require_feedback_prerequisites(profile, point_scores={"middle": .5, "advanced": .5})
+    records, _ = service.curriculum_progress(profile)
+    by_id = {row.skill_node_id: row for row in records}
+    assert by_id["base"].placement_verification_required is True
+    assert by_id["middle"].placement_verification_required is True
+    assert service.initialize_tier_progress(profile).active_tier == 3

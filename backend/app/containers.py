@@ -4,6 +4,7 @@ from dependency_injector import containers, providers
 
 from app.agents.resource_workflows.learning_documents.workflow import build_workflow
 from app.agents.learning_agents.tutor_agent import TutorAgent, TutorContextBuilder
+from app.agents.resource_workflows.learning_documents.claim_extraction.profiles import load_counter
 from app.config import get_settings
 from app.core.retrieval.retriever import EvidenceRetriever
 from app.core.llm.transport import LangChainChatTransport
@@ -12,7 +13,9 @@ from app.core.retrieval.vector_store import ChromaVectorSearchBackend, get_vecto
 from app.db.audit.repository import create_audit_repository
 from app.db.shared.database import get_session_factory
 from app.db.claim.repository import create_claim_repository
+from app.db.claim.supplement import create_supplement_repository
 from app.db.diagnosis.repository import create_diagnosis_repository
+from app.db.feedback.round_repository import create_round_repository
 from app.db.feedback.repository import create_feedback_repository
 from app.db.feedback.feedback_loop_repository import create_feedback_loop_repository
 from app.db.generation.repository import create_generation_job_repository
@@ -31,6 +34,7 @@ from app.models.shared.llm import LLMCallOptions
 from app.services.learners.diagnosis import DiagnosisService
 from app.services.auth.authentication import AuthService
 from app.services.reports.evaluation import EvaluationService
+from app.services.feedback.round_learning import RoundLearningService
 from app.services.feedback.feedback import FeedbackService
 from app.services.generation.jobs import GenerationJobService
 from app.services.generation.generation import GenerationService
@@ -46,7 +50,12 @@ from app.services.courseware import CoursewareService
 from app.agents.resource_workflows.interactive_courseware.worker import CoursewareSceneWorker
 from app.services.courseware.executor import CoursewareExecutor
 from app.services.resource_library import ResourceLibraryService
+from app.services.reviews.claim_evidence_retrieval_query import (
+    ClaimEvidenceRetrievalQueryService,
+)
+from app.services.reviews.quality_query import ResourceQualityQueryService
 from app.services.reviews.reviews import ReviewService
+from app.services.runs.llm_accounting import LLMAccountingQueryService
 from app.services.runs.queries import RunQueryService
 from app.services.runs.events import RunEventStreamService
 from app.services.users.users import UserService
@@ -54,8 +63,26 @@ from app.services.runs.workflow_artifact_recorder import WorkflowArtifactRecorde
 from app.services.tutor.tutor import TutorService
 
 
+def _llm_accounting_query_db_path() -> str | None:
+    """Resolve the independent accounting DB path for the read-only query service."""
+
+    from app.services.runs.llm_accounting_runtime import (
+        resolve_llm_accounting_db_path,
+    )
+
+    settings = get_settings()
+    if not settings.llm_accounting_enabled:
+        return None
+    path = resolve_llm_accounting_db_path()
+    return str(path) if path is not None else None
+
+
 class Container(containers.DeclarativeContainer):
     config = providers.Configuration()
+    llm_accounting_query_service = providers.Singleton(
+        LLMAccountingQueryService,
+        db_path=providers.Callable(_llm_accounting_query_db_path),
+    )
 
     runtime_settings = providers.Singleton(get_settings)
     llm_transport = providers.Singleton(
@@ -89,8 +116,12 @@ class Container(containers.DeclarativeContainer):
     vector_store = providers.Singleton(get_vector_store)
     db_session_factory = providers.Singleton(get_session_factory)
 
+    round_repository = providers.Singleton(
+        create_round_repository, db_type=config.db_type, session_factory=db_session_factory,
+    )
     learner_repository = providers.Singleton(
         create_learner_repository,
+        round_repository=round_repository,
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
@@ -147,6 +178,12 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
+    supplement_repository = providers.Singleton(
+        create_supplement_repository,
+        claim_repository=claim_repository,
+        audit_repository=audit_repository,
+        resource_repository=resource_repository,
+    )
     diagnosis_repository = providers.Singleton(
         create_diagnosis_repository,
         db_type=config.db_type,
@@ -200,11 +237,15 @@ class Container(containers.DeclarativeContainer):
         catalog=knowledge_catalog,
         vector_index=knowledge_vector_index,
     )
+    claim_extraction_counter = providers.Singleton(load_counter, settings=runtime_settings, gateway=llm_gateway)
     workflow = providers.Singleton(
         build_workflow,
+        claim_extraction_counter=claim_extraction_counter,
         llm_gateway=llm_gateway,
         evidence_retriever=evidence_retriever,
         lifecycle_repository=audit_repository,
+        claim_repository=claim_repository,
+        supplement_repository=supplement_repository,
         resource_progress_recorder=providers.Singleton(
             WorkflowArtifactRecorder,
             resource_repository=resource_repository,
@@ -221,8 +262,11 @@ class Container(containers.DeclarativeContainer):
         resource_repo=resource_repository,
         workflow=workflow,
         audit_repo=audit_repository,
+        claim_extraction_gateway=llm_gateway,
+        claim_extraction_counter=claim_extraction_counter,
         knowledge_catalog=knowledge_catalog,
         claim_repo=claim_repository,
+        supplement_repository=supplement_repository,
     )
     generation_job_service = providers.Singleton(
         GenerationJobService,
@@ -230,6 +274,7 @@ class Container(containers.DeclarativeContainer):
         generation_service=generation_service,
         mastery_service=mastery_service,
         dispatch_mode=config.generation_dispatch_mode,
+        round_repository=round_repository,
     )
     resource_service = providers.Singleton(ResourceService, repo=resource_repository)
     courseware_service = providers.Singleton(
@@ -269,7 +314,34 @@ class Container(containers.DeclarativeContainer):
         mastery_service=mastery_service,
         resource_repo=resource_repository,
     )
+    from app.services.feedback.round_uow import RoundUnitOfWork
+    # Resolved per request by the continuation endpoints. Injecting this
+    # factory into GenerationJobService at construction would create an eager
+    # cycle (job service -> factory -> feedback service -> job service).
+    round_uow_factory = providers.Factory(
+        RoundUnitOfWork, rounds=round_repository, feedback=feedback_service, learners=learner_repository,
+    )
+
+    round_learning_service = providers.Singleton(
+        RoundLearningService, repository=round_repository, feedback_service=feedback_service,
+        learner_repository=learner_repository, settings=runtime_settings,
+    )
     report_read_repository = providers.Singleton(SQLReportReadRepository, session_factory=db_session_factory)
+    resource_quality_query_service = providers.Singleton(
+        ResourceQualityQueryService,
+        audit_repository=audit_repository,
+        resource_repository=resource_repository,
+        claim_repository=claim_repository,
+        generation_job_repository=generation_job_repository,
+        supplement_repository=supplement_repository,
+    )
+    claim_evidence_retrieval_query_service = providers.Singleton(
+        ClaimEvidenceRetrievalQueryService,
+        audit_repository=audit_repository,
+        claim_repository=claim_repository,
+        supplement_repository=supplement_repository,
+        generation_job_repository=generation_job_repository,
+    )
     report_service = providers.Singleton(
         ReportService,
         resource_repo=resource_repository,
@@ -282,6 +354,8 @@ class Container(containers.DeclarativeContainer):
         diagnosis_repo=diagnosis_repository,
         read_repo=report_read_repository,
         profile_repo=learner_repository,
+        quality_service=resource_quality_query_service,
+        round_service=round_learning_service,
     )
     tutor_context_builder = providers.Singleton(
         TutorContextBuilder,
@@ -319,6 +393,8 @@ class Container(containers.DeclarativeContainer):
         resource_repository=resource_repository,
         claim_repository=claim_repository,
         feedback_loop_repository=feedback_loop_repository,
+        generation_job_repository=generation_job_repository,
+        supplement_repository=supplement_repository,
     )
     run_event_stream_service = providers.Singleton(
         RunEventStreamService,
@@ -350,6 +426,7 @@ class Container(containers.DeclarativeContainer):
         resource_repo=resource_repository,
         audit_repo=audit_repository,
         knowledge_service=knowledge_service,
+        round_service=round_learning_service,
     )
 
 

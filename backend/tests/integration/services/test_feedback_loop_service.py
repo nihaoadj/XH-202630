@@ -262,7 +262,8 @@ def test_custom_followup_selection_generates_the_checked_resource_types():
     assert relation["parent_run_id"] == "source-run"
 
 
-def test_claim_followup_splits_multiple_resource_types_into_independent_runs():
+@pytest.mark.parametrize("supplement", [False, True])
+def test_claim_followup_splits_multiple_resource_types_into_independent_runs(supplement):
     service, learners, jobs, profile, resource = _setup()
     result = service.process_learning_attempt(profile, resource, _request(0.4))
     selected = service.choose_followup(
@@ -270,13 +271,16 @@ def test_claim_followup_splits_multiple_resource_types_into_independent_runs():
         FeedbackFollowupSelection(
             learner_id="learner", attempt_id=result.attempt.attempt_id,
             option_id="custom-selection", resource_types=["讲义", "分阶测试题"],
-            include_claim_check=True,
+            include_claim_check=True, include_claim_evidence_retrieval=supplement,
         ),
     )
     assert len(selected.followup_run_ids) == 2
     assert selected.followup_run_id == selected.followup_run_ids[0]
     assert sorted(jobs.get(run_id).request_payload["resource_types"] for run_id in selected.followup_run_ids) == [["分阶测试题"], ["讲义"]]
     assert all(service.feedback_loop_repo.get_followup_relation(run_id)["relation_type"] == "selection" for run_id in selected.followup_run_ids)
+
+    assert all(jobs.get(ident).request_payload["include_claim_evidence_retrieval"] is supplement
+               for ident in selected.followup_run_ids)
 
 
 def test_same_idempotency_key_replays_without_second_profile_update_or_job():

@@ -85,7 +85,8 @@ async def lifespan(app: FastAPI):
                 from app.services.generation.reconciliation import GenerationReconciler
                 result = GenerationReconciler(container.generation_job_repository(),
                     container.feedback_loop_repository(), settings.generation_queue_timeout_seconds,
-                    curriculum=container.curriculum_repository()).run_once()
+                    curriculum=container.curriculum_repository(),
+                    supplement_repository=container.supplement_repository()).run_once()
                 if result["failed_run_ids"] or result["feedback"]:
                     logger.warning("Reconciled generation jobs failed=%s followups=%s",
                                    len(result["failed_run_ids"]), result["feedback"])
@@ -122,7 +123,21 @@ async def lifespan(app: FastAPI):
     # Courseware execution is deliberately owned by the standalone
     # ``backend/scripts/courseware_worker.py`` process. The Web process only
     # serves APIs/SSE and must not run long tasks in its lifespan.
-    yield
+    # Bypass LLM-call accounting (T41): start the optional writer child at an
+    # explicit lifecycle point; failures only disable persistence.
+    from app.services.runs.llm_accounting_runtime import (
+        start_llm_accounting_runtime,
+        stop_llm_accounting_runtime,
+    )
+
+    try:
+        start_llm_accounting_runtime()
+    except Exception:
+        logger.warning("llm-accounting runtime startup failed type=runtime_start")
+    try:
+        yield
+    finally:
+        stop_llm_accounting_runtime()
 
 
 app = FastAPI(

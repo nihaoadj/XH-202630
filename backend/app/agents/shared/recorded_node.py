@@ -34,6 +34,8 @@ NODE_METADATA: dict[str, tuple[str, str]] = {
     "finalize_draft": ("supervisor", "草稿终结"),
     "claim_extract": ("claim_extractor", "独立 Claim 抽取"),
     "claim_judge": ("claim_judge", "冻结证据 Claim 判定"),
+    "claim_evidence_retrieve": ("claim_evidence_retrieval", "Claim 缺证补检"),
+    "claim_evidence_rejudge": ("claim_evidence_rejudge", "补证后 Claim 重判"),
     "claim_decide": ("claim_supervisor", "Claim 确定性决策"),
     "finalize": ("supervisor", "协同决策"),
     "finalize_evidence_insufficient": ("supervisor", "证据不足终结"),
@@ -110,6 +112,13 @@ class RecordedNode:
             raise _persistence_failure(exc) from exc
 
         token = bind_recorded_step_context(context)
+        # Bypass LLM-call accounting (T41): bind the preallocated step
+        # identity so downstream gateway calls can be attributed.  Purely
+        # observational; failures degrade to a no-op scope.
+        from app.agents.shared.llm_accounting import recorded_step_scope
+
+        accounting_cm = recorded_step_scope(context)
+        accounting_cm.__enter__()
         try:
             output = self.node(state)
         except Exception as exc:
@@ -133,7 +142,7 @@ class RecordedNode:
                 "error_code": error_code,
                 "error_message": (
                     f"工作流步骤执行失败（{type(exc).__name__}）"
-                    + (f"：{_safe_exception_detail(exc)}" if str(exc).strip() else "")
+                    + (f"：{_safe_exception_detail(exc)}" if self.node_name != "review" and str(exc).strip() else "")
                 )[:512],
                 "started_at": started_at.isoformat(),
                 "ended_at": ended_at.isoformat(),
@@ -152,6 +161,10 @@ class RecordedNode:
                 raise _persistence_failure(persistence_exc) from persistence_exc
             raise
         finally:
+            try:
+                accounting_cm.__exit__(None, None, None)
+            except Exception:
+                pass
             reset_recorded_step_context(token)
 
         trace_items = output.get("trace", []) if isinstance(output, dict) else []
@@ -180,6 +193,7 @@ class RecordedNode:
                     step_id=step_id,
                     trace=trace,
                     evidence=evidence,
+                    review_audit=output.get("review_audit") if self.node_name == "review" else None,
                     ended_at=datetime.now(timezone.utc),
                 )
             )

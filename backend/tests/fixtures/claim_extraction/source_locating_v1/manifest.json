@@ -1,0 +1,45 @@
+{
+  "schema_version": "source-locating-fixtures-1.0",
+  "synthetic": true,
+  "splits": {
+    "calibration": {
+      "path": "calibration.json",
+      "sha256": "a52d4167225c6543e03e32db3abbc8d05dd0fd102d910f564c2eb370ac8b457d",
+      "count": 120
+    },
+    "acceptance": {
+      "path": "acceptance.json",
+      "sha256": "25f389ebf341a0e14a80195d8d2ecfa722ca61875725436706356e93ef9a8c8e",
+      "count": 120
+    }
+  },
+  "source_groups": [
+    "讲义",
+    "实操",
+    "测试",
+    "案例",
+    "清单",
+    "混合"
+  ],
+  "category_counts": {
+    "exact": 20,
+    "format": 20,
+    "edit": 20,
+    "reject": 60
+  },
+  "legacy_snapshot": {
+    "path": "policies/estimate_2_0_baseline.json",
+    "sha256": "4a00bd7a49d86cfb1127bb84135ae6be95dc57e33a7083f699562d2f9a0c2b57",
+    "note": "frozen v1 EstimatePolicy without source_locating; byte-compat reference"
+  },
+  "rules_parameters": {
+    "path": "rules_parameters.json"
+  },
+  "frozen_gates": {
+    "unique_exact_span_accuracy": 1.0,
+    "format_recovery_min": 0.95,
+    "edit_recovery_min": 0.8,
+    "must_reject_wrong_accept": 0,
+    "accepted_wrong_span": 0
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "provenance": "synthetic-scripted-v1",
+  "files": [
+    {
+      "path": "cases.json",
+      "sha256": "7878aacce2f94614c35eac2638a9a417f2bb0daab95b9f30af95693939574858"
+    },
+    {
+      "path": "boundaries.json",
+      "sha256": "750a856341e31575401da739831ddeede87ed6efcd8c851dad176219815044b3"
+    }
+  ]
+}

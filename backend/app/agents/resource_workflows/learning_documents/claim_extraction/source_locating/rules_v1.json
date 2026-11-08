@@ -1,0 +1,23 @@
+{
+  "version": "rules-v1",
+  "thresholds": {
+    "max_edits": 2,
+    "max_edit_ratio": 0.04,
+    "min_effective_chars": 40,
+    "min_score_margin": 0.02,
+    "max_unit_chars": 16000,
+    "max_candidate_chars": 2000,
+    "max_dp_cells_per_ref": 2000000,
+    "max_distinct_intervals": 32,
+    "max_work_cells_per_batch": 8000000
+  },
+  "function_words": ["的", "了", "着", "过", "是", "很", "在", "与", "和", "及", "而", "或", "也", "就"],
+  "controlled_typo_pairs": [["的", "地"], ["的", "得"], ["做", "作"], ["他", "她"], ["哪", "那"], ["已", "己"]],
+  "protected": {
+    "negation": ["没有", "不能", "不", "非", "无", "未", "没", "别", "否", "勿"],
+    "quantifier": ["所有", "每个", "全部", "至少", "最多", "一切", "任何", "若干", "一些", "唯一", "仅"],
+    "conditional_modal": ["如果", "则", "若", "可能", "必须", "应当", "应该", "可以", "需要", "才能"],
+    "relation_order": ["大于", "小于", "等于", "高于", "低于", "之前", "之后", "首先", "其次", "然后", "最后", "第"],
+    "unit_version": ["版本", "千克", "公里", "千米", "小时", "米", "克", "元", "秒", "分", "天", "年", "个", "条", "次"]
+  }
+}

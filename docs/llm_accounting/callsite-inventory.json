@@ -1,0 +1,371 @@
+{
+  "schema_version": "llm-accounting-callsite-inventory-v1",
+  "generated_at": "2026-11-06T08:20:00Z",
+  "method": "rg-scan of backend/app for LLMGateway public entry points, transport calls, thread pools and budget wrappers",
+  "observation_note": "Covered labels describe static gateway/scope wiring only, not verified full-chain equivalence. Historical pre-implementation baseline is NOT_PROVEN. Invalid test references are diagnostics, not evidence.",
+  "status_legend": {
+    "covered": "observed via the unified gateway decorators plus the bound scope in the listed file",
+    "covered_transitive": "delegates to the real gateway (budget/guard wrapper); observed at the underlying gateway entry",
+    "no_call_branch": "a workflow/runner entry that does not itself issue a model call",
+    "non_generation": "outside the text/courseware generation run scope (tutor/grader/feedback/live-eval)",
+    "retained_unused": "defined but no production caller found (kept, not force-enabled)",
+    "unresolved": "would block the gate if any existed; none remain"
+  },
+  "callsites": [
+    {
+      "file": "agents/resource_agents/base.py",
+      "functions": [
+        "invoke",
+        "invoke_plain_text"
+      ],
+      "method": "invoke_structured/invoke_plain_text",
+      "domain": "learning_documents",
+      "stage": "generate",
+      "status": "covered",
+      "test": "backend/tests/integration/workflow/test_llm_accounting_text.py::test_resource_generation_agent_binds_resource_scope"
+    },
+    {
+      "file": "agents/resource_agents/text.py",
+      "functions": [
+        "generate"
+      ],
+      "method": "invoke_plain_text",
+      "domain": "learning_documents",
+      "stage": "generate",
+      "status": "covered",
+      "test": "backend/tests/unit/agents/test_resource_type_agents.py"
+    },
+    {
+      "file": "agents/resource_agents/practice.py",
+      "functions": [
+        "generate"
+      ],
+      "method": "invoke",
+      "domain": "learning_documents",
+      "stage": "generate",
+      "status": "covered",
+      "test": "backend/tests/unit/agents/test_resource_type_agents.py"
+    },
+    {
+      "file": "agents/resource_agents/case_study.py",
+      "functions": [
+        "generate"
+      ],
+      "method": "invoke_plain_text",
+      "domain": "learning_documents",
+      "stage": "generate",
+      "status": "covered",
+      "test": "backend/tests/unit/agents/test_resource_type_agents.py"
+    },
+    {
+      "file": "agents/resource_agents/assessment.py",
+      "functions": [
+        "generate"
+      ],
+      "method": "invoke",
+      "domain": "learning_documents",
+      "stage": "generate",
+      "status": "covered",
+      "test": "backend/tests/unit/agents/test_resource_type_agents.py"
+    },
+    {
+      "file": "agents/resource_agents/checklist.py",
+      "functions": [
+        "generate"
+      ],
+      "method": "invoke",
+      "domain": "learning_documents",
+      "stage": "generate",
+      "status": "covered",
+      "test": "backend/tests/unit/agents/test_resource_type_agents.py"
+    },
+    {
+      "file": "agents/resource_agents/correction_package.py",
+      "functions": [
+        "generate"
+      ],
+      "method": "invoke_plain_text",
+      "domain": "learning_documents",
+      "stage": "generate",
+      "status": "covered",
+      "test": "backend/tests/unit/agents/test_resource_type_agents.py"
+    },
+    {
+      "file": "agents/learning_agents/diagnosis_agent.py",
+      "functions": [
+        "diagnose_node"
+      ],
+      "method": "invoke_structured",
+      "domain": "learning_documents",
+      "stage": "diagnose",
+      "status": "covered",
+      "test": "backend/tests/integration/workflow/test_llm_accounting_text.py"
+    },
+    {
+      "file": "agents/resource_workflows/learning_documents/planner_agent.py",
+      "functions": [
+        "plan_node"
+      ],
+      "method": "invoke_structured",
+      "domain": "learning_documents",
+      "stage": "plan",
+      "status": "covered",
+      "test": "backend/tests/integration/workflow/test_llm_accounting_text.py"
+    },
+    {
+      "file": "agents/resource_workflows/learning_documents/reviewing/executor.py",
+      "functions": [
+        "invoke_review"
+      ],
+      "method": "invoke_structured",
+      "domain": "learning_documents",
+      "stage": "review",
+      "status": "covered",
+      "test": "backend/tests/integration/workflow/test_resource_review_v2.py"
+    },
+    {
+      "file": "agents/resource_workflows/learning_documents/reviewer_agent.py",
+      "functions": [
+        "review_node"
+      ],
+      "method": "invoke_review",
+      "domain": "learning_documents",
+      "stage": "review",
+      "status": "covered_transitive",
+      "test": "backend/tests/integration/workflow/test_resource_review_v2.py"
+    },
+    {
+      "file": "agents/resource_workflows/learning_documents/claim_review_agent.py",
+      "functions": [
+        "_legacy_claim_extract_node",
+        "repair",
+        "_judge_claims_node"
+      ],
+      "method": "invoke_structured",
+      "domain": "learning_documents",
+      "stage": "claim_extract/claim_judge",
+      "status": "covered",
+      "test": "backend/tests/integration/workflow/test_llm_accounting_text.py::test_claim_extract_and_judge_observed_with_stages"
+    },
+    {
+      "file": "agents/resource_workflows/learning_documents/claim_extraction/executor.py",
+      "functions": [
+        "execute_extraction"
+      ],
+      "method": "invoke_structured",
+      "domain": "learning_documents",
+      "stage": "claim_extract",
+      "status": "covered",
+      "test": "backend/tests/integration/workflow/test_llm_accounting_text.py"
+    },
+    {
+      "file": "agents/resource_workflows/learning_documents/claim_extraction/budget.py",
+      "functions": [
+        "GuardedJudgeGateway.invoke_structured"
+      ],
+      "method": "invoke_structured",
+      "domain": "learning_documents",
+      "stage": "claim_judge",
+      "status": "covered_transitive",
+      "test": "backend/tests/integration/workflow/test_claim_extraction_v2.py"
+    },
+    {
+      "file": "agents/resource_workflows/interactive_courseware/planner_agent.py",
+      "functions": [
+        "build_courseware_spec",
+        "review-practice-enrichment branch"
+      ],
+      "method": "invoke_structured",
+      "domain": "courseware",
+      "stage": "planning",
+      "status": "covered",
+      "test": "backend/tests/integration/courseware/test_llm_accounting.py"
+    },
+    {
+      "file": "agents/resource_workflows/interactive_courseware/scene_composer_agent.py",
+      "functions": [
+        "compose_courseware_scene"
+      ],
+      "method": "invoke_structured",
+      "domain": "courseware",
+      "stage": "composing",
+      "status": "covered",
+      "test": "backend/tests/integration/courseware/test_llm_accounting.py"
+    },
+    {
+      "file": "agents/resource_workflows/interactive_courseware/quality_reviewer_agent.py",
+      "functions": [
+        "review_courseware_quality_decision"
+      ],
+      "method": "invoke_structured",
+      "domain": "courseware",
+      "stage": "quality_review",
+      "status": "covered",
+      "test": "backend/tests/integration/courseware/test_llm_accounting.py"
+    },
+    {
+      "file": "agents/resource_workflows/interactive_courseware/content_review/executor.py",
+      "functions": [
+        "execute_batch"
+      ],
+      "method": "invoke_structured",
+      "domain": "courseware",
+      "stage": "content_review",
+      "status": "covered",
+      "test": "backend/tests/integration/courseware/test_llm_accounting.py"
+    },
+    {
+      "file": "agents/resource_workflows/interactive_courseware/budget.py",
+      "functions": [
+        "BudgetedCoursewareGateway.invoke_structured"
+      ],
+      "method": "invoke_structured",
+      "domain": "courseware",
+      "stage": "planning/quality_review/revision",
+      "status": "covered_transitive",
+      "test": "backend/tests/integration/courseware/test_llm_accounting.py"
+    },
+    {
+      "file": "agents/resource_workflows/interactive_courseware/practice_structure_agent.py",
+      "functions": [
+        "extract_practice_step_structure"
+      ],
+      "method": "invoke_structured",
+      "domain": "courseware",
+      "stage": "practice_structure",
+      "status": "retained_unused",
+      "test": "backend/tests/unit/agents/test_practice_structure_agent.py"
+    },
+    {
+      "file": "agents/resource_workflows/interactive_courseware/stages.py",
+      "functions": [
+        "resolve_scene_candidates"
+      ],
+      "method": "ThreadPoolExecutor(map, max_workers=2)",
+      "domain": "courseware",
+      "stage": "composing",
+      "status": "covered",
+      "test": null,
+      "invalid_previous_test_reference": "backend/tests/integration/courseware/test_llm_accounting.py::test_scene_thread_pool_context",
+      "test_evidence": "NOT_VERIFIED"
+    },
+    {
+      "file": "core/llm/gateway.py",
+      "functions": [
+        "invoke_structured",
+        "invoke_plain_text"
+      ],
+      "method": "public entry points",
+      "domain": "shared",
+      "stage": "gateway",
+      "status": "covered",
+      "test": "backend/tests/unit/core/test_llm_accounting.py"
+    },
+    {
+      "file": "core/llm/gateway.py",
+      "functions": [
+        "_invoke_transport_with_hard_timeout"
+      ],
+      "method": "transport.invoke",
+      "domain": "shared",
+      "stage": "transport",
+      "status": "covered",
+      "test": null,
+      "invalid_previous_test_reference": "backend/tests/unit/core/test_llm_accounting.py::test_helper_observation",
+      "test_evidence": "NOT_VERIFIED"
+    },
+    {
+      "file": "core/llm/transport.py",
+      "functions": [
+        "LangChainChatTransport._call"
+      ],
+      "method": "client.invoke/runnable.invoke",
+      "domain": "shared",
+      "stage": "transport",
+      "status": "covered",
+      "test": "backend/tests/unit/core/test_llm_gateway.py"
+    },
+    {
+      "file": "services/runs/durable_workflow_runner.py",
+      "functions": [
+        "invoke"
+      ],
+      "method": "workflow.invoke (graph)",
+      "domain": "learning_documents",
+      "stage": "runner",
+      "status": "no_call_branch",
+      "test": "backend/tests/e2e/test_durable_workflow_runner.py"
+    },
+    {
+      "file": "services/generation/generation.py",
+      "functions": [
+        "_generate_run_and_finalize"
+      ],
+      "method": "DurableWorkflowRunner.invoke",
+      "domain": "learning_documents",
+      "stage": "root",
+      "status": "no_call_branch",
+      "test": "backend/tests/integration/services/test_generation_finalization.py"
+    },
+    {
+      "file": "agents/learning_agents/tutor_agent.py",
+      "functions": [
+        "answer"
+      ],
+      "method": "invoke_structured",
+      "domain": "tutor",
+      "stage": "tutor",
+      "status": "non_generation",
+      "test": null
+    },
+    {
+      "file": "agents/learning_agents/short_answer_grader_agent.py",
+      "functions": [
+        "grade"
+      ],
+      "method": "invoke_structured",
+      "domain": "grader",
+      "stage": "grading",
+      "status": "non_generation",
+      "test": null
+    },
+    {
+      "file": "agents/learning_agents/feedback_analysis_agent.py",
+      "functions": [
+        "analyze"
+      ],
+      "method": "invoke_structured",
+      "domain": "feedback",
+      "stage": "feedback",
+      "status": "non_generation",
+      "test": null
+    },
+    {
+      "file": "core/courseware/live_model.py",
+      "functions": [
+        "live model entry"
+      ],
+      "method": "invoke_structured",
+      "domain": "eval",
+      "stage": "live_eval",
+      "status": "non_generation",
+      "test": null
+    }
+  ],
+  "unresolved": [],
+  "thread_pools": [
+    {
+      "file": "agents/resource_workflows/learning_documents/generator_agent.py",
+      "executor": "ThreadPoolExecutor(max_workers)",
+      "context_propagation": "existing copy_context().run preserved",
+      "status": "covered"
+    },
+    {
+      "file": "agents/resource_workflows/interactive_courseware/stages.py",
+      "executor": "ThreadPoolExecutor(max_workers=min(2, scenes))",
+      "context_propagation": "per-item context captured and bound in worker",
+      "status": "covered"
+    }
+  ],
+  "historical_baseline_status": "NOT_PROVEN"
+}

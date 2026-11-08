@@ -1,4 +1,6 @@
 """内存实现的生成资源仓库"""
+import functools
+import threading
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -9,15 +11,45 @@ from app.models.learning_documents.invariants import immutable_resource_payload
 from app.db.audit.base import PersistenceConflict
 
 
+def _locked(method):
+    """Serialize one public repository operation on the instance RLock.
+
+    The same re-entrant lock is held by the cross-repository quality snapshot,
+    so a reader inside that region never observes a half-applied write.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class MemoryResourceRepository(BaseResourceRepository):
     """内存实现的生成资源仓库，用于开发与演示阶段"""
 
-    def __init__(self):
+    def __init__(self, publication_guard=None):
         self._store: Dict[str, LearningResource] = {}
         self._learner_index: Dict[str, List[str]] = {}
         self.associations: Dict[str, Dict[str, str | None]] = {}
         self._specs: Dict[str, ResourceSpecRecord] = {}
         self._executions: Dict[tuple[str, str, str], ResourceExecutionRecord] = {}
+        self._lock = threading.RLock()
+        # Optional durable lookup wired by the container: it reads the same
+        # supplement sessions the workflow writes, never an in-memory list.
+        self.publication_guard = publication_guard
+
+    def _assert_publishable(
+        self, *, run_id: str | None, resource_id: str, resource_version: int,
+    ) -> None:
+        if self.publication_guard is None or not run_id:
+            return
+        from app.db.claim.publication import assert_publication_allowed
+
+        assert_publication_allowed(self.publication_guard(
+            run_id, resource_id, int(resource_version),
+        ))
 
     def get(self, resource_id: str) -> Optional[LearningResource]:
         resource = self._store.get(resource_id)
@@ -27,6 +59,11 @@ class MemoryResourceRepository(BaseResourceRepository):
         resource = self._store.get(resource_id)
         if resource is None:
             return None
+        if publish:
+            self._assert_publishable(
+                run_id=resource.run_id, resource_id=resource.resource_id,
+                resource_version=resource.version,
+            )
         updated = resource.model_copy(update={
             "publication_status": "published" if publish else "unpublished",
             "published_at": datetime.now(timezone.utc) if publish else None,
@@ -35,6 +72,31 @@ class MemoryResourceRepository(BaseResourceRepository):
         })
         self._store[resource_id] = updated
         return updated.model_copy(deep=True)
+
+    def revoke_publication(
+        self, *, run_id: str, resource_id: str, resource_version: int,
+    ) -> bool:
+        """Withdraw a published version when a counter-evidence batch commits."""
+
+        resource = self._store.get(resource_id)
+        if (
+            resource is None
+            or resource.run_id != run_id
+            or resource.version != int(resource_version)
+        ):
+            return False
+        if (
+            resource.publication_status != "published"
+            and resource.claim_publish_decision is None
+        ):
+            return False
+        self._store[resource_id] = resource.model_copy(update={
+            "publication_status": "unpublished",
+            "published_at": None,
+            "claim_publish_decision_pending": False,
+            "claim_publish_decision": None,
+        })
+        return True
 
     def save(
         self,
@@ -60,6 +122,13 @@ class MemoryResourceRepository(BaseResourceRepository):
         existing = self._store.get(resource.resource_id)
         if existing and immutable_resource_payload(existing) != immutable_resource_payload(normalized):
             raise PersistenceConflict("resource immutable payload conflict")
+        if normalized.publication_status == "published":
+            # Same critical section as the write: the shared guard resolves the
+            # persisted round state before this version can become visible.
+            self._assert_publishable(
+                run_id=effective_run_id, resource_id=normalized.resource_id,
+                resource_version=normalized.version,
+            )
         if effective_run_id is not None:
             for stored_id, association in self.associations.items():
                 stored = self._store.get(stored_id)
@@ -227,3 +296,16 @@ class MemoryResourceRepository(BaseResourceRepository):
             ),
             key=lambda item: (item.resource_spec_id, item.representation),
         )
+
+
+# Every public operation runs under the shared re-entrant lock. Applying it
+# once avoids a partially annotated class where one new method silently escapes
+# the snapshot guarantee.
+for _name, _attribute in list(MemoryResourceRepository.__dict__.items()):
+    if _name.startswith("_") or not callable(_attribute):
+        continue
+    if getattr(_attribute, "_snapshot_locked", False):
+        continue
+    _wrapped = _locked(_attribute)
+    _wrapped._snapshot_locked = True
+    setattr(MemoryResourceRepository, _name, _wrapped)

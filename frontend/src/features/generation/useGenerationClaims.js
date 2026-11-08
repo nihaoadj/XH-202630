@@ -20,8 +20,14 @@ export function useGenerationClaims({
   refreshStatus,
   messages,
 }) {
+  // The publication decision needs its own version counter: reusing the report
+  // loader's counter would make an unrelated refresh cancel an in-flight POST.
+  let decisionRequestVersion = 0
+
   watch([selectedRunId, selectedLearnerId], () => {
     nextRequestVersion()
+    decisionRequestVersion += 1
+    claimDecisionLoading.value = false
     claimReports.value = {}
     claimReportVisible.value = false
     selectedClaimReportId.value = ''
@@ -105,17 +111,25 @@ export function useGenerationClaims({
   async function decideClaimPublication(publish) {
     const resourceId = selectedClaimReportId.value
     if (!resourceId || claimDecisionLoading.value) return
+    const learnerId = selectedLearnerId.value
+    const runId = selectedRunId.value
+    const version = ++decisionRequestVersion
+    const isCurrent = () => isMounted() && version === decisionRequestVersion
+      && learnerId === selectedLearnerId.value && runId === selectedRunId.value
     claimDecisionLoading.value = true
     try {
       await resourceApi.decideClaimPublication(resourceId, publish)
+      if (!isCurrent()) return
       messages.success(publish ? '资源已发布。' : '资源已保留为未发布。')
       claimReportVisible.value = false
-      await refreshStatus()
-      await loadClaimReports(selectedRunId.value)
+      // A finished run still changes its publication facts here, so force both
+      // reads instead of relying on the normal terminal refresh path.
+      await refreshStatus({ forceResources: true, forceClaims: true })
     } catch (error) {
+      if (!isCurrent()) return
       messages.error(error?.response?.data?.detail || '发布决定提交失败')
     } finally {
-      claimDecisionLoading.value = false
+      if (isCurrent()) claimDecisionLoading.value = false
     }
   }
 

@@ -16,16 +16,19 @@
           <label v-if="isResourceContent && resources.length > 1" class="resource-picker primary-resource-picker">关联资源<select :value="resourceId" aria-label="审核资源" @change="$emit('update:resourceId', $event.target.value)"><option v-for="(item, index) in resources" :key="item.resource_id" :value="item.resource_id">{{ resourceOption(item, index) }}</option></select></label>
           <p v-else-if="isResourceContent && resource" class="detail-resource-caption">{{ resourceTitle }}<span>本次执行关联版本</span></p>
           <section v-if="contentKind === 'evidence'" class="retrieval-result" aria-label="检索证据">
+            <ClaimEvidenceRetrievalPanel v-if="role.key === 'claim_evidence_retrieve' && claimEnabled" :summary="claimRetrieval" />
             <dl v-if="retrievalStats.length" class="retrieval-stats"><div v-for="item in retrievalStats" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl>
             <WorkflowEvidencePanel :sources="nodeEvidence" />
           </section>
           <template v-else-if="contentKind === 'review'">
-            <WorkflowReviewPanel :reviews="reviews" :step="step" />
+            <WorkflowReviewPanel :reviews="reviews" :step="step" :quality="qualityForSelected" />
             <details v-if="hasRevisions" class="review-revisions detail-disclosure"><summary>修订前后对照 · {{ chain.length }} 个版本</summary><WorkflowVersionPanel :chain="chain" :resource-id="resourceId" :all-reviews="snapshot.reviews || []" :run-id="runId" /></details>
           </template>
           <section v-else-if="contentKind === 'claims'" class="claim-verification detail-module" aria-label="陈述事实核验">
             <el-alert v-if="claimsError && claimEnabled" :title="claimsError" type="warning" :closable="false" show-icon />
             <div class="claim-audit-heading detail-section-heading"><span class="section-number">CLAIM / EVIDENCE</span><h3>{{ claimAuditSummary(metric, claimEnabled) }}</h3></div>
+            <p v-if="role.key === 'claim_evidence_rejudge'" class="result-caption">本步骤仅重新核对首次缺证的事实陈述；下方展示所选资源当前的有效判定。</p>
+            <ClaimEvidenceRetrievalPanel v-if="claimEnabled" :summary="claimRetrieval" />
             <ClaimEvidenceList v-if="claimEnabled && resource" :key="resourceId" :rows="rows" focus-first><template v-if="rows.length" #summary><div class="claim-verdict-counts"><span v-for="item in verdictCounts" :key="item.verdict" :class="`is-${item.verdict}`" :aria-label="`${item.label} ${item.count}`">{{ item.shortLabel }} <strong>{{ item.count }}</strong></span></div></template></ClaimEvidenceList>
             <p v-else-if="claimEnabled" class="empty-note">本节点未关联可核验的资源，无法展示 Claim 判定。</p>
             <p v-else class="result-caption">此节点没有启用事实核验，不能据此认为事实通过。</p>
@@ -48,6 +51,7 @@
 <script setup>
 import { computed } from 'vue'
 import ClaimEvidenceList from './ClaimEvidenceList.vue'
+import ClaimEvidenceRetrievalPanel from './ClaimEvidenceRetrievalPanel.vue'
 import WorkflowNodeResult from './workflow-detail/WorkflowNodeResult.vue'
 import WorkflowReviewPanel from './workflow-detail/WorkflowReviewPanel.vue'
 import WorkflowEvidencePanel from './workflow-detail/WorkflowEvidencePanel.vue'
@@ -60,7 +64,9 @@ import './workflow-detail/workflowDetail.css'
 const props = defineProps({
   visible: Boolean, loading: Boolean, error: { type: String, default: '' }, claimsError: { type: String, default: '' },
   snapshot: { type: Object, default: () => ({}) }, claims: { type: Object, default: () => ({}) },
+  quality: { type: Object, default: null },
   step: { type: Object, default: null }, resourceId: { type: String, default: '' }, runId: { type: String, default: '' }, claimEnabled: { type: Boolean, default: true },
+  claimRetrieval: { type: Object, default: null },
 })
 defineEmits(['update:visible', 'update:resourceId', 'refresh'])
 const role = computed(() => detailRole(props.step))
@@ -71,6 +77,7 @@ const runResources = computed(() => (props.snapshot.resource_versions || []).fil
 const resources = computed(() => props.step ? associatedStepResources(props.snapshot, props.step, props.runId) : runResources.value)
 const resource = computed(() => resources.value.find(item => item.resource_id === props.resourceId))
 const resourceTitle = computed(() => resource.value ? `${resource.value.resource_type || '学习资源'} · v${resource.value.version || '?'}` : '')
+const qualityForSelected = computed(() => (props.quality && resource.value && props.quality.resource_id === resource.value.resource_id) ? props.quality : null)
 const reviews = computed(() => resource.value ? (props.snapshot.reviews || []).filter(item => item.resource_id === resource.value.resource_id && item.run_id === props.runId
   && (!props.step?.review_ids?.length || props.step.review_ids.includes(item.review_id)))
   .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))) : [])

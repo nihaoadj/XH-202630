@@ -1,5 +1,5 @@
 import { api } from '../../api/client.js'
-import { requireJobResponse } from '../../contracts/guards.js'
+import { requireJobListResponse, requireJobResponse } from '../../contracts/guards.js'
 
 /** @typedef {import('../../contracts/generated/contracts').GenerateRequest} GenerateRequest */
 /** @typedef {import('../../contracts/generated/contracts').GenerationJobCreateResponse} CreatedJob */
@@ -17,7 +17,7 @@ export const generateApi = {
     return Promise.all([generateApi.createJob(data)])
   },
   /** @param {string} learnerId @returns {Promise<import('axios').AxiosResponse<import('../../contracts/generated/contracts').GenerationJobListResponse>>} */
-  listJobs: learnerId => api.get('/generate/jobs', { params: { learner_id: learnerId } }),
+  listJobs: learnerId => api.get('/generate/jobs', { params: { learner_id: learnerId } }).then(requireJobListResponse),
   /** @param {string} runId @returns {Promise<import('axios').AxiosResponse<Job>>} */
   getJobStatus: runId => api.get(`/generate/jobs/${runId}`).then(requireJobResponse),
   /** @param {string} batchId @param {import('../../contracts/generated/contracts').ContinueResourceBatchRequest} data @returns {Promise<import('axios').AxiosResponse<CreatedJob>>} */

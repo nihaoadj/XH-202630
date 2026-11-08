@@ -120,6 +120,48 @@ def test_materialize_claims_rebases_an_exact_source_text_with_a_stale_offset():
     assert claims[0].source_end == 3 + len("Python 使用缩进定义代码块。")
 
 
+def test_omitted_offset_pair_is_accepted_and_rebased():
+    """0/0 means "no offsets"; the server re-locates from the exact quote."""
+
+    claims = materialize_claims(
+        candidates=[
+            ClaimCandidate(
+                claim_text="代码块由缩进定义",
+                claim_type=ClaimType.FACTUAL,
+                source_text="Python 使用缩进定义代码块。",
+                source_start=0,
+                source_end=0,
+            )
+        ],
+        resource_content="开头。Python 使用缩进定义代码块。结尾。",
+        resource_id="res",
+        resource_version=1,
+        review_id="rev",
+        run_id="run",
+        allowed_evidence_ids=set(),
+        allowed_knowledge_point_ids=set(),
+        extractor_prompt_version="p0-06-extract-v3",
+        extractor_model=None,
+    )
+    assert claims[0].source_start == 3
+    assert claims[0].source_end == 3 + len("Python 使用缩进定义代码块。")
+
+
+@pytest.mark.parametrize(
+    ("source_start", "source_end"),
+    [(5, 0), (10, 4), (-1, 6)],
+)
+def test_invalid_offsets_are_still_rejected(source_start: int, source_end: int):
+    with pytest.raises(ValidationError):
+        ClaimCandidate(
+            claim_text="事实",
+            claim_type=ClaimType.FACTUAL,
+            source_text="事实",
+            source_start=source_start,
+            source_end=source_end,
+        )
+
+
 def test_metric_counts_claim_once_with_multiple_evidence():
     claims = _claims()
     judgements = materialize_judgements(

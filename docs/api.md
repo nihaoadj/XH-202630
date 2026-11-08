@@ -1,11 +1,17 @@
 # API 文档
 
+T41 修复口径：`known_*` 按字段分别累计，其他字段未知不丢弃已知输入用量；`complete_*` 仅在所有调用的该字段可靠时返回，否则为 null。共享调用仅进入一个以规范资源集合标识的 shared 分区，分区可加总，不再对每个资源标签重复累计。缺失计量库查询不创建目录或文件；异步 writer 正常空闲不会退出，缺少 end 的片段不能封为完整。全链路实施前历史基线仍未证明，不能把局部回归通过当作完整等价验收。
+
+T41 LLM 调用旁路计量：新增两个只读端点，复用既有认证/画像可见性，不改变旧接口行为。`GET /api/runs/{run_id}/llm-accounting`（文本任务，额外经 `run.learner_id` 走画像访问校验）与 `GET /api/resources/courseware/jobs/{run_id}/llm-accounting`（课件任务，沿用 `_authorized_job` 等价校验）；不存在/不可见统一 404，非法参数 422。参数 `include_calls=false`、`stage`（受控枚举）、`cursor`（不透明复合游标）、`limit`（1..100，默认 20）。响应含 `availability`（available/partial/pending/not_recorded/unavailable）、capture/attempt/usage/attribution 完整性、`coverage_complete`/`as_of`、`task_summary`/`stage_summaries`/`resource_partition_summaries`、当前页 `segments`/可选 `calls`、`next_cursor`/`has_more` 与 `incomplete_reasons`。查询零写入，缺库/损坏返回 200+unavailable/partial。旧 `GenerateResponse`/`RunTimeline`/`JobDetail` 与报告字段不变，旧扁平 trace 明确为历史口径，新旧不相加。
+
 T29兼容说明：HTTP/DTO/状态码不变。新legacy学习检索使用`learning-tasks-v2`/`source-balanced-global-v2`内部版本；TopK在完整候选校验后参与最终预算`min(max_evidence, top_k_per_query×query_count)`。该版本Evidence.query_rank表示owner在完整有界窗口的名次，可能超过单query TopK，但不超过20；最终Evidence.rank仍连续，最多8条、每条摘录最多1200字符。旧Tutor/E1和冻结证据维持旧语义；现有retrieval_profile只增加追踪字段，不新增端点。
 
 > 项目编号：XH-202630
 > 文档版本：2.3
-> 文档更新时间：2026-10-23
+> 文档更新时间：2026-10-27
 > 说明：本文档以当前代码实现为准，覆盖 `backend/app/api` 中已经启用的核心接口。
+
+资源分区按调用归属可相加：`resource` 只进入 `resource_labels[0]` 的一个 `exclusive` 分区，其余标签（类型、批次、review ID）保留为描述明细；`resource_set` 的标签集合整体进入一个 `shared` 分区，其余进入 `unallocated`。新文本调用在产物物化后将临时 spec 主标签绑定实际 `resource_id`，审核/Claim 以实际资源 ID 为主标签；未物化的调用保留 spec 标识。历史记录不回写 ID 映射，但查询同样只按主标签累计，避免附加标签重复计数。
 
 ## 1. 基本信息
 
@@ -100,6 +106,16 @@ POST /api/auth/register 或 POST /api/auth/login
 | 资源生成 | `POST` | `/api/generate/jobs` | 创建异步资源生成任务 |
 | 资源生成 | `GET` | `/api/generate/jobs` | 按学习者查询生成任务列表 |
 | 资源生成 | `GET` | `/api/generate/jobs/{run_id}` | 查询生成任务状态 |
+| 学习轮次 | `GET` | `/api/generate/capabilities` | 新轮次能力握手；含协议版本与创建开关 |
+| 学习轮次 | `POST` | `/api/generate/rounds` | 创建单主节点（可选附带复习）轮次及全部任务 |
+| 学习轮次 | `GET` | `/api/feedback/rounds` | 按学习者分页查询轮次 |
+| 学习轮次 | `GET` | `/api/feedback/rounds/{round_id}` | 轮次成员、阶段、任务与当前状态 |
+| 学习轮次 | `GET` | `/api/feedback/rounds/{round_id}/candidates` | 下一轮主/复习候选与纠错目标 |
+| 学习轮次 | `POST` | `/api/feedback/rounds/next/select` | 确认下一轮：一个主节点、可选一个复习节点 |
+| 学习轮次 | `POST` | `/api/feedback/rounds/{round_id}/corrections` | 本轮 1–2 个目标的纠错阶段与任务 |
+| 学习轮次 | `POST` | `/api/feedback/rounds/{round_id}/stages/{stage_id}/evaluation-session` | 创建/读取冻结联合题组 |
+| 学习轮次 | `POST` | `/api/feedback/rounds/{round_id}/stages/{stage_id}/attempts` | 同页一次提交、分别判分 |
+| 学习轮次 | `GET` | `/api/feedback/rounds/{round_id}/stages/{stage_id}/result` | 查询持久联合结果或评分中状态 |
 | 资源 | `GET` | `/api/resources/{learner_id}` | 查询资源列表 |
 | 资源 | `GET` | `/api/resources/file/{resource_id}` | 下载资源文件 |
 | 资源 | `GET` | `/api/resources/items/{resource_id}` | 已发布文本详情 |
@@ -122,6 +138,7 @@ POST /api/auth/register 或 POST /api/auth/login
 | Run 回放 | `GET` | `/api/runs/{run_id}/timeline` | 持久化时间线 |
 | Run 回放 | `GET` | `/api/runs/{run_id}/evidence` | 冻结证据详情 |
 | Run 回放 | `GET` | `/api/runs/{run_id}/claims` | Claim 报告与指标 |
+| Run 回放 | `GET` | `/api/runs/{run_id}/claim-evidence-retrieval` | 补检状态、计数与证据 scope（T50，只读） |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/timeline` | 查询学习过程时间线 |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/journey` | 按批次组织学习轮次 |
 | 报告 | `GET` | `/api/report/{learner_id}` | 查询学习报告 |
@@ -291,8 +308,11 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 - `include_review`
 - `include_claim_check`
 - `max_iterations`（默认 `2`，表示首次生成之外最多进行两次普通审核返工）
-- `claim_max_iterations`（默认 `0`，当前 Claim 审核只判定、不自动返工；显式传入非零值可开启有界返工）
-- `constraints`
+- `claim_max_iterations`（默认 `1`，Claim专用返工最多1次；显式 `0` 禁用。额度为0或用尽后转人工复核、保持未发布，不借用普通返工额度）
+
+Claim 抽取策略属于服务端私有策略，不增加GenerateRequest、constraints、响应或事件字段。默认legacy_v3，新策略neutral_estimate_v1在提交时冻结2.0私有policy和独立dispatch，旧Worker拒绝未知版本；无需外部tokenizer/profile或校准PASS。无效窗口/估算配置沿WORKFLOW_CONTRACT_INVALID拒绝；抽取零候选、超限或范围不完整沿原Claim失败路径，不裁候选、不拆Judge。旧neutral_batch_v1快照保留读取但受控拒绝执行，重试创建新run并冻结新策略。实际用量超过估算时如实入账、保留有效结果并限制后续请求，不增加公开字段；私有批次/票据/会话不进入detail/timeline/events/SSE。公开Claim沿原span、ID、Judge evidence_ids及指标语义，complete不表示全文事实已召回。T37 的密度装箱子契约（`density_batching`）同样属于私有快照：不进入 GenerateRequest、响应、detail/timeline/events/SSE 或 Markdown，旧 2.0 快照序列化时省略该键以保持原 hash；它只改变批次划分，不改变公开状态码、Claim DTO 或判定语义。
+
+T42 的 `source_locating` 子契约与 `location_diagnostics` 定位诊断同属私有字段：不进 GenerateRequest、响应、`GET /api/runs/{run_id}/claims` 及其余 detail/timeline/events/SSE，也不进 ClaimRecord 或前端导出契约。公开的 `source_text`/`source_start`/`source_end` 语义不变——始终是从冻结正文截取的权威原文与全文半开区间（由程序定位并回写），HTTP 状态码、Claim DTO 字段与 Judge 判定语义均不改变。
 
 示例：
 
@@ -355,8 +375,43 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 - `started_at`
 - `finished_at`
 - `resource_progress_summary`
+- `publish_summary`（可选，缺失或 `null` 表示旧响应）
+- `round_binding`（可空；仅当服务端绑定表确实记录该 Run 时返回 `round_id`/`member_id`/`stage_id`/`stage_node_id`/`role`。该字段由服务器解析，客户端提交同名结构不构成授权；缺省表示旧任务，不能据此推断主/复习角色）
 
-`resource_progress_summary` 包含 `total`、`counts`、`approved`、`human_review`、`failed`、`published`、`can_finalize` 和 `items`。每个 `items[]` 是一个资源表示的公开执行投影，包含 `resource_spec_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`attempt`、`resource_id`、`review_id`、`error_code`、`agent_name`、`prompt_version`、`artifact_format` 与 `validation_status`。
+`resource_progress_summary` 包含 `total`、`counts`、`approved`、`human_review`、`failed`、`published`、`can_finalize` 和 `items`。每个 `items[]` 是一个资源表示的公开执行投影，包含 `resource_spec_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`attempt`、`resource_id`、`review_id`、`error_code`、`agent_name`、`prompt_version`、`artifact_format` 与 `validation_status`。该字段语义不变，仍按执行记录计数，`can_finalize` 不是发布许可。
+
+`publish_summary` 是同一次查询派生的只读发布事实，Task 列表、Task 详情、`GET /api/runs/{run_id}` 与 `GET /api/runs/{run_id}/timeline` 返回同一对象语义（timeline 只通过 `run.publish_summary` 携带，没有顶层副本）：
+
+| 字段 | 语义 |
+|---|---|
+| `schema_version` | 派生对象的版本，固定 `1.0`，与持久快照版本无关 |
+| `total` | 本次请求的逻辑资源总数；无法恢复分母时为 `null` |
+| `published` | 已确认存在可读已发布正文的逻辑资源数；`partial` 时为已确认数量，无法确认时 `null` |
+| `unpublished` | 仅在 `completeness=complete` 时为 `total - published`，否则 `null` |
+| `pending_review` | 尚无可读已发布正文且当前待用户决定的逻辑资源数，不是全部 `human_review`；未知为 `null` |
+| `completeness` | `complete` / `partial` / `unavailable`，描述数据完整性，不是任务执行状态 |
+| `incomplete_reasons` | 受控原因码，按枚举声明顺序去重：`request_missing`、`spec_request_mismatch`、`logical_identity_missing`、`resource_reference_missing`、`unsupported_representation`、`repository_unavailable`、`lineage_conflict` |
+
+计数单位为逻辑资源，不是执行项或版本：同一 `resource_spec_id` 的多个版本只计一次；请求三份、两份已发布、一份失败且无产物时为 `2/3`。`completeness=complete` 时满足 `published + unpublished = total` 且 `0 <= pending_review <= unpublished`。查询零写入、不新增事件、不重算发布许可；存储故障按原有错误合同抛出，只有依赖缺失才返回 `unavailable`。
+
+```json
+{
+  "run_id": "run_1",
+  "learner_id": "learner_1",
+  "topic": "RAG 检索",
+  "job_status": "failed",
+  "resource_progress_summary": { "total": 3, "counts": {"approved": 2, "failed": 1}, "approved": 2, "failed": 1, "published": 2, "can_finalize": true, "items": [] },
+  "publish_summary": {
+    "schema_version": "1.0",
+    "total": 3,
+    "published": 2,
+    "unpublished": 1,
+    "pending_review": 0,
+    "completeness": "complete",
+    "incomplete_reasons": []
+  }
+}
+```
 
 说明：
 
@@ -396,6 +451,20 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 
 - 前端可据此默认展示当前 `running/queued` 任务，并允许切换查看历史任务。
 - 当前资源生成页已按任务维度展示，不再只依赖单个 `run_id` 查询参数驱动整页。
+- T49 起，新轮次任务在 `round_binding` 中返回服务端冻结的成员与阶段；前端按该绑定导航，不按角色字符串猜测。
+
+### 8.4 学习轮次创建入口（T49）
+
+`GET /api/generate/capabilities` 返回 `protocol_version`、`round_creation_enabled`、`single_target_required=true`、`round_query_available`、`round_recovery_available`。前端按此握手决定是否展示附带复习与轮次入口，不读取浏览器环境变量。
+
+`POST /api/generate/rounds` 接受 `GenerateRoundCreateRequestV1`：`learner_id`、`knowledge_base_id`、`topic`、`target_skill_nodes`（恰好 1 个）、`resource_types`、`profile_focus_mode`、`include_claim_check`、`selection_key`（8–128）。`constraints` 仅允许 `supplemental_requirements`，其他键由服务器冻结，客户端传入同名键不构成授权。返回 202 `RoundCreationResponseV1`：
+
+- `round_id`、`stage_id`、`state`
+- `primary_node_id`：整轮冻结的主节点；即使当前阶段只有复习任务也返回原主节点
+- `primary_default_run_id`：仅当本阶段确有主节点任务时给出首个真实 Run，否则为 `null`
+- `members[]`：`member_id`（round_node_id）、`node_id`、`role`、`stage_node_id`、`batch_id`、`job_ids`、`resource_types`、`difficulty`、`resource_ids`、`state`、`failed_job_count`
+
+普通新建只允许一个主节点；附带复习只出现在反馈后的下一轮选择。`POST /api/generate/jobs` 仍按原单任务契约工作，目标上限为 1，不自动加入轮次；已有客户端多次 POST 不会被拼成同一轮次。
 
 ## 9. 资源接口
 
@@ -497,11 +566,21 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 
 ### 9.7 `POST /api/generate/jobs/{run_id}/resource-specs/{resource_spec_id}/representations/{representation}/retry`
 
+源资料已使用的补检证据也可随单份重生成导入：服务端仅选择该版本及其同 Run 祖先 generation scope 授权的证据，核验 scope/hash/KB/检索步骤完成状态，复制为新 Run 的初始冻结证据。新任务重新抽取和审核，不沿用旧通过结论。无新增模型或检索调用；合并后最多20条初始证据，完整冻结上下文受 `workflow_checkpoint_max_bytes`（默认64 KiB）限制，超限或来源不完整返回409。该内部导入合同不接受客户端覆盖。
+
 单份失败文本资源重生成。无需请求体，客户端不能传入或覆盖冻结上下文；`representation` 目前只接受 `text`。可选 `Idempotency-Key`，按当前学习者和源 Run/spec/表示隔离；省略时由服务端冻结上下文 hash 生成稳定幂等键。同一输入重复提交返回同一 child Run，显式 key 与输入冲突返回 409。成功为 `200 + GenerationJobCreateResponse`，新 `run_id`、原 `batch_id`，仍经现有队列/后台调度。
 
 源任务须已 completed/failed，且指定执行项为 failed/human_review/revision_requested；已发布资源不接受该入口。复用原画像、诊断、学习计划、spec、证据和该份审核反馈，只从 `reuse_context -> generate` 开始，随后保留普通审核、Claim 和发布门禁。普通/Claim 自动返工次数重新计数，不修改原失败记录。已有正文作为上一版本，新资源保留 family、version+1 和 parent；无正文的生成失败从 v1 开始。
 
 不可访问或 spec 不属于该 Run 返回 404；源任务未终止、状态不允许、缺少完整可信冻结记录、hash/范围损坏或不支持跨资源依赖返回 409；非法表示或幂等键返回 422。不会自动降级到完整重新生成；用户可另行明确选择批次完整重生。新版本执行失败后，可针对该 child Run 再发起下一次手动尝试，不能用同一幂等请求制造重复任务。历史记录缺原查询正文时保留 query_hash 并显式标注缺失，不重新检索补造。
+
+### 9.8 `GET /api/runs/{run_id}/claim-evidence-retrieval`
+
+T50 只读摘要。沿用 Run 认证与归属校验，不存在/不可见返回既有 404 形状；查询零写入，不会触发任何补检、检索或模型调用，也不暴露 Prompt、查询原文、模型思考、endpoint 或密钥。
+
+响应为版本化 `ClaimEvidenceRetrievalSummaryV1`（`contract_version=claim-evidence-retrieval/v1`）：`requested`、`status`（`not_requested`/`not_applicable`/`pending`/`querying`/`retrieving`/`rejudging`/`completed`/`no_new_evidence`/`unavailable`/`budget_exhausted`/`blocked`/`interrupted`）、`reason_code`、`resource_id`/`resource_version`/`review_id`、`target/attempted/remaining` 计数、`query_total`、`logical_call_total`、`attempt_total`、`known_tokens`、`unknown_tokens`、初次与有效判定计数（`initial_*`/`effective_*`）、`factual_claim_total`、`evidence_scope_ids` 以及每会话摘要（含 `active`/`hard_block`）。`unknown_tokens` 表示供应商用量未知的保守预留，不会被记为 0。
+
+公开 Claim DTO 与 `GET /api/runs/{run_id}/claims` 返回的始终是**生效集合**（每 Claim 唯一）；历史轮次只通过该只读摘要与授权审核详情查看。
 
 ## 10. 学习历史接口
 
@@ -526,6 +605,7 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 
 - `offset`：轮次偏移量，默认 `0`。
 - `limit`：每页轮次数，默认 `20`，最大 `50`。
+- T49 起响应新增 `learning_rounds`（新协议轮次详情列表），`rounds` 只保留未绑定新轮次的旧批次；两者按 `created_at DESC, round_id DESC` 合并分页，`total_rounds`/`next_offset` 以合并后的产品轮次计数，不会因任务 join 重复或遗漏。旧纠错容器的 `round_summary` 挂在来源旧轮次的 `run_summary.learning_round` 下。
 
 每个轮次包含唯一的 `round_id`、`batch_id`、该批次下的 `run_ids` 和一个用于打开运行详情的代表 `run_id`，以及生成状态、资源发布摘要、正式测评结果、反馈决策、掌握度与路径变化、以及经过脱敏的运行/审核摘要。同一批次内的普通追加与定向重试只形成一个轮次，并共用该批次的反馈与路径变化链路；反馈后的个性化纠错训练包及其新分阶测试题即使复用原 `batch_id`，也会形成独立轮次，使用自己的测评、反馈和路径变化。旧记录缺少关联键或运行审计时会保留为独立历史，不会推测其因果关系。该接口是本地持久化事实的展示投影，并非实时生产监控。
 
@@ -578,6 +658,8 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 - `metadata`：可选；前端反思保存在 `metadata.learning_reflection`，不接受客户端聚合成绩替代服务端判分
 
 批次提交使用同一契约的 `/api/feedback/attempts/batch/submit`，将 `run_id` 换为 `batch_id`；初始学习与普通批次用该入口，纠错再测用独立 Run。`answers[]` 为 `{ "question_id": "...", "answer": "..." }`；多选答案为列表。
+
+T49 起，若 `run_id` 或提交涉及的任何资源所属 Run 已绑定学习轮次，该入口返回 422 `ROUND_ASSESSMENT_INVALID`（消息含 `round_id`），要求改走轮次联合测评。没有新绑定的旧任务、旧资源与已冻结的历史会话保持原行为；该限制只针对分别提交同一轮次某一组题。
 
 返回重点字段：
 
@@ -645,6 +727,40 @@ Claim 审核阶段按资源推送脱敏进度：`claim_metric_status`、事实 C
 
 资源级事件可额外包含以下公开字段：`resource_spec_id`、`resource_family_id`、`resource_type`、`representation`、`resource_execution_state`、`worker_step_id`、`resource_id`、`review_id`、`agent_name`、`prompt_version`、`artifact_format`、`validation_status`。客户端必须忽略未知新增字段，并按 `sequence`/`event_id` 去重。
 
+### 11.6 学习轮次查询、联合测评与本轮纠错（T49）
+
+所有轮次接口都以 `ensure_profile_access` 校验真实归属；不存在或越权统一 404，不泄漏他人记录。
+
+| 方法与路径 | 请求重点 | 行为与返回 |
+|---|---|---|
+| `GET /api/feedback/rounds?learner_id=&offset=&limit=` | 分页参数（`limit` 1–100） | `LearningRoundListV1`：稳定 `created_at DESC, round_id DESC`，含成员状态摘要与 `total` |
+| `GET /api/feedback/rounds/{round_id}` | 无 | `LearningRoundDetailV1`：固定角色、各阶段、stage_node、真实 `job_ids`、资源与补救摘要、`available_actions` |
+| `GET /api/feedback/rounds/{round_id}/candidates` | 无 | `RoundCandidatesV1`：`generation_options`、`eligible_review_nodes`、`correction_targets`、`profile_version` |
+| `POST /api/feedback/rounds/next/select` | `learner_id`、`source_attempt_id`、`primary_node_id`、`primary_learning_intent`、`primary_resource_types`、`review_node_id` 可空、`include_claim_check`、`selection_key` | 202 `RoundCreationResponseV1`；服务端校验主节点资格与复习资格（已发布资源 + 有效正式测评，同归属且不同节点），原子创建轮次与全部任务 |
+| `POST /api/feedback/rounds/{round_id}/corrections` | `learner_id`、`targets`（1–2 个 `{node_id, source_attempt_id}`，节点不重复）、`selection_key`、`include_claim_check` | 202 `RoundCreationResponseV1`；同轮新纠错阶段，每目标独立 `个性化纠错训练包 + 分阶测试题`。仅复习目标时 `primary_node_id` 仍是整轮主节点，`primary_default_run_id` 为 `null` |
+| `POST /api/feedback/rounds/{round_id}/stages/{stage_id}/evaluation-session` | `learner_id` | `RoundEvaluationSessionV1`：按角色分组、每组 100 分、公开题不含量与答案；资源未就绪 409 `ROUND_STAGE_NOT_READY` |
+| `POST /api/feedback/rounds/{round_id}/stages/{stage_id}/attempts` | `learner_id`、`session_id`、`manifest_hash`、`idempotency_key`、`expected_profile_version`、`submitted_at`、`answers`、`learning_reflection` | 200 `RoundFeedbackResultV1`；同 key 同 hash 正在评分返回 202 `RoundAttemptProcessingV1`；不同 key/内容或租约冲突 409 `ROUND_ATTEMPT_CONFLICT` |
+| `GET /api/feedback/rounds/{round_id}/stages/{stage_id}/result` | 无 | 已提交 200 持久联合结果；没有正式Attempt（含评分租约已过期）200 `not_submitted`；有效评分租约期间202且 `retry_after_seconds=2` |
+
+联合提交语义：
+
+- 一次请求必须包含该阶段全部必答题，缺少、重复、未知或跨阶段题目返回 422 `ROUND_ASSESSMENT_INVALID`；不接受客户端 `role`、`score` 或资源列表覆盖。
+- 服务端分别按节点判分，写一条正式 Attempt、每节点一条 `feedback_node_decisions` 与掌握证据，画像版本只 N→N+1 一次。
+- 根决策只取本次参与的主节点；仅复习纠错或历史轮次迟到结果时根动作为 `hold`，`path_node_id` 为空，复习节点仍更新自身掌握与补救。
+- 评分在写事务外执行，正式提交在 `RoundUnitOfWork` 内 CAS 校验租约、画像版本、manifest 与资源 hash；失败整体回滚。
+- 资源快照被替换后不允许“猜测新版”继续提交，返回 409 并保留原冻结记录。
+- 预算不足返回 409 `ROUND_BUDGET_EXHAUSTED`（纠错额度为 `ROUND_CORRECTION_BUDGET_EXHAUSTED`），未知用量按预留保守记账，不把未判分写成 0。
+
+轮次相关错误码：`ROUND_SELECTION_INVALID`、`ROUND_ASSESSMENT_INVALID`（422）；`ROUND_SELECTION_CONFLICT`、`ROUND_STAGE_NOT_READY`、`ROUND_ATTEMPT_CONFLICT`、`ROUND_CORRECTION_BUDGET_EXHAUSTED`、`ROUND_BUDGET_EXHAUSTED`、`ROUND_CREATION_DISABLED`（409）；`ROUND_LEGACY_UNAVAILABLE`（409，旧题源无法核验）；持久层不可用沿用 503。所有新错误使用统一 `{status, code, message, detail}` body，前端据 `code` 分支，不解析自然语言。
+
+评分进程中断后，GET只投影租约状态，不删除原提交的key/hash或修改画像。页面在租约过期后恢复冻结题组和原草稿，由用户显式重试完整原payload；不同key或内容仍返回409，旧owner不能在新owner接管后写入。未找到原草稿时明确提示无法恢复，不自动重建原提交。
+
+正式联合提交中，非主节点的高阶低分也执行既有先修补验标记；按学习阶复用原推荐范围和上限，未找到低阶先修时沿用原弱项回退策略。标记与Attempt、画像、课程状态在同一事务回滚；只由当前轮次主节点决定阶推进。报告缓存同时核验轮次仓储与报告读取仓储使用相同session factory，Memory或其他数据源混用时关闭该SQL缓存路径。
+
+轮次成员状态按尚未发布的资源类型和有效retry关系计算：有生产/恢复任务正在排队或运行时为`producing`，全部所需资源发布后为`awaiting_assessment`；仍未解决的终态失败计入`failed_job_count`，无待运行恢复时成员为`failed`。原失败Run继续保留作审计，已恢复的历史失败不再阻止状态前进；部分资源恢复不掩盖其他资源失败。
+
+`POST /api/feedback/followups/select` 仍接受旧入口：对无 `round_context` 的旧 Attempt 选择纠错时，由 `LegacyRoundAdapter` 以旧证据冻结 `legacy-correction/v1` 容器（成员角色均为 `legacy`，不发明 primary），返回原 `FeedbackLoopResult` 并附加可空 `round_summary` 与完整任务关系；新轮次 Attempt 必须使用版本化纠错接口，违规请求 422。
+
 ## 12. 前端调用约定
 
 | 页面 / 用途 | 当前调用 |
@@ -660,6 +776,8 @@ Claim 审核阶段按资源推送脱敏进度：`claim_metric_status`、事实 C
 | 纠错包重新验证 | `GET /api/feedback/evaluation/run/{learner_id}/{run_id}` -> `POST /api/feedback/attempts/run/submit` |
 | 反馈报告 / 下一步 | `GET /api/feedback/results/{learner_id}`，通过 `POST /api/feedback/followups/select` 确认 |
 | 学习历史 `/learning/history` | `GET /api/learning-history/{learner_id}/journey?offset=0&limit=20`；timeline 是兼容时间线 |
+| 轮次生成 `/generate`（T49） | `GET /api/generate/capabilities` 握手；`GET /api/feedback/rounds/{round_id}` 取成员与阶段；Job 的 `round_binding` 定位真实 Run 与成员 |
+| 轮次反馈 `/feedback`（T49） | `GET .../rounds/{round_id}` -> `POST .../evaluation-session` -> `POST .../attempts` -> 轮询 `GET .../result`；纠错 `POST /api/feedback/rounds/{round_id}/corrections`；下一轮 `POST /api/feedback/rounds/next/select` |
 | 学习报告 `/report` | 带 `window_days=7|30|90` 和 `If-None-Match` 的快照，独立报告 events 流触发重新拉取 |
 
 页面 URL 的查询参数使用 `learnerId`、`runId`、`batchId`、`resourceId` 等前端上下文名，API 参数沿用 snake_case；`/resources?focus=1` 只切换阅读外壳。画像 / 窗口切换时取消旧更新流并使旧响应失效，不能将旧画像的数据带入新请求结果。
@@ -702,10 +820,14 @@ GenerationJob 预分配 run_id
 关键契约：
 
 - `max_iterations` 是最大业务返工次数，不包含首次生成；LLM 技术重试不增加该值。
-- `claim_max_iterations` 默认 `0`，当前 Claim 审核只判定、不自动返工；显式传入非零值时，才启用 Claim 审核发现事实/证据问题后的定向返工，不占用 `max_iterations`。运行状态分别记录 `revision_count` 与 `claim_revision_count`。
+- `claim_max_iterations`默认1，允许一次Claim专用返工且不占普通`max_iterations`。显式0或额度耗尽时，Claim要求修订的资源进入人工复核并保持未发布，不再退到普通返工。普通审核自身的返工仍由`max_iterations`控制。运行状态分别记录 `revision_count` 与 `claim_revision_count`。
 - Reviewer 决策为 `approve | revise | reject | human_review`。
+- 实操结构通过后执行一次语义审核；测评默认 `two_stage_v1`，合并候选未启用。审核策略只由服务端冻结，公开请求不能指定。此次不新增 HTTP 路径、DTO 字段或事件 payload；`review_audit_v1`、逐题 findings、策略快照和含答案题卷为内部数据，不经 ReviewSummary、公开 AgentTrace 或 timeline 输出。
+- 结构化测评的摘要描述与修订动作由程序按原问题码和合法题号生成受控文案，保留决策、严重性、评分及优先级，避免模型在自由文本中回显内部题干或答案。
+- 公开 trace 的 `input_tokens/output_tokens/total_tokens` 继续表示原最后一次模型调用，不能当作多资源或两阶段的总成本；私有 ledger 才按各逻辑调用汇总，未知用量不以零替代。历史实操的结构批准不证明完成了新增语义审核或实际执行。
 - `issues` 是带 code、severity、目标资源/知识点的结构化数组。
 - `revision_instructions` 包含 issue_codes、target_resource_type、action、priority 和系统生成的 instruction_id。
+- T46 的生成端私有修订输入 `resource_review_revision`（普通审核）与 `claim_review_revision`（Claim 审核）是服务端内部字段：不进 GenerateRequest、响应、ReviewSummary、公开 trace、timeline、events 或 SSE，也不进前端导出契约；公开的 `issues`/`revision_instructions`/Claim DTO 语义不变，本次不新增 HTTP 路径、DTO 字段、表或事件 payload。
 - revise 必须携带可执行指令；指令无效、证据不足、Reviewer 异常或额度耗尽时进入 human_review。
 - Generator 返工时读取上一版本，只为指令命中的资源类型创建新 resource_id/version；未命中类型沿用当前版本。
 - `review_status` 与 `publication_status` 分离。只有最终 approve 的当前叶子版本可以 published。
@@ -722,6 +844,8 @@ GenerationJob 预分配 run_id
 retrieval_status、final_decision、时间戳和 replay_completeness。不存在时返回
 `404 + WORKFLOW_RUN_NOT_FOUND`。
 
+摘要额外返回可选 `publish_summary`（字段与语义见 [8.2](#82-get-apigeneratejobsrun_id)）。它以该 Run 对应 GenerationJob 的 `request_payload` 为请求依据；没有 Job 时不推测原始请求，`total` 为 `null` 并给出 `request_missing`。执行引用的资源若属于其他逻辑槽，则给出 `lineage_conflict`；引用缺失或冲突时 `pending_review` 为 `null`，不将其他资源的待决定状态重复计入，已确认的发布数量仍按各自逻辑槽计算。`publish_summary` 由查询时派生，不写入 `AgentRunRecord`、checkpoint 或公开事件，旧记录经 `RunSummary.from_record()` 转换后该字段为 `null`。
+
 ### 14.2 `GET /api/runs/{run_id}/timeline`
 
 按 event_sequence 返回 Step、Event、Checkpoint、Evidence、resource_versions 和
@@ -730,6 +854,8 @@ reviews。查询参数：
 - `after_sequence`：默认 0。
 - `limit`：1..500。
 - `next_event_sequence`：存在下一页时返回。
+
+`run.publish_summary` 与 [14.1](#141-get-apirunsrun_id) 使用同一聚合结果，且不受事件分页影响；本接口不额外增加顶层发布汇总字段。Timeline 已读取的 `resource_versions` 会被复用，不会重复查询。
 
 该接口只读数据库，不调用 LLM、Embedding 或 Chroma，也不等于自动 resume。
 
@@ -784,6 +910,20 @@ Invoke-RestMethod -Method Post `
 `WORKFLOW_PERSISTENCE_UNAVAILABLE`、`WORKFLOW_PERSISTENCE_CONFLICT`、
 `EVIDENCE_INSUFFICIENT`、`EVIDENCE_PROVENANCE_INVALID` 和细分 LLM 错误码。
 响应不得包含 prompt、模型原文、API Key、数据库连接串或原始 provider 异常。
+
+### 14.7 `GET /api/runs/{run_id}/resource-quality`
+
+只读、版本化的资源质量投影，与学习资源读模型、旧 `GenerateReport` payload 和 checkpoint/hash 分离。可选 `resource_id` 精确查看一版；不传则返回该 Run 已持久化资源各版本的元数据，排序为 `spec.display_order`、`version`、`resource_id`。不返回正文、Claim 清单、答案、rubric、Prompt 或证据摘录。
+
+- 响应：`schema_version=1.0`、`metric_policy_version=resource-quality/v2`、`run_id`、`source_revision`、`availability`、`items[]`、`summary`、`reason_codes[]`。
+- 逐资源项绑定 `(run_id, resource_spec_id, resource_id, resource_version, review_id)`；跨 Run、父/子版本或旧版本混入不会借用结果。`resource_id` 不属于该 Run 返回 404；Run 不可见（含其他账号）统一 404；`resource_id` 超过 128 字符返回 422。
+- 状态分别表达 `complete / reference / pending / incomplete / failed / not_applicable / not_requested / unavailable / legacy_unavailable`。无值返回 `value=null`，不得填 0；历史缺失使用 `legacy_unavailable`。
+- 覆盖：`coverage` 只使用普通审核逐知识点结果，`已覆盖冻结目标数 ÷ 冻结目标总数`。Claim 知识点关联、单资源 `coverage_rate`、模型自评分都不参与。空目标集不是 0/0 或 100%。
+- 幻觉率：Claim 完整且 `factual_claim_total>0` 时复用现有核验统计；未开启 Claim 且同版普通审核通过证据成立时返回 `status=reference`、`value=0.05`、无分子分母、`assessment=not_assessed`、`evidence_mode=rule_reference`，前端标注“普通审核参考／待核验”，不写入 `claim_hallucination_rate`、不判达标、不参与均值。Claim 已开启但失败/未完成/不适用时返回 null 状态，不回退 5%。
+- 难度：`difficulty_fit` 只表达单资源离散结构（matched/too_easy/challenging/too_hard/not_measured），不折算为“难度适配准确率”。
+- 阈值（后端注册表唯一来源）：覆盖率 `>= 0.90`；幻觉率 `< 0.05`；难度适配准确率 `>= 0.85`（仅标注评测）。真实 5% 不满足严格 `<5%`。
+- 报告新增可选字段：`resource_quality_summary` 与 `recent_resource_quality`，复用同一投影；二者只聚合当前可见已发布文本资源的冻结目标单位，缺任一应测结果时汇总 `status=incomplete`、`value=null`。旧 `resource_credibility_summary/recent_resource_credibility` 保留为历史兼容字段，不是第二套新口径，后续物理删除需独立计划。
+- 评测：`suite_v2.json` 与 `ordinary_coverage_v2.json` 定义 v2；v1 `suite.json` 与旧报告原字节保留，显式加载 v1 会被拒绝并提示使用 v2。离线 PASS 与 `official_gates=NOT_MEASURABLE` 分开输出。
 
 ## 15. P0-09 接口验收口径
 
@@ -966,3 +1106,41 @@ POST /api/resources/courseware/jobs/batch
 ## 19. 复习清单 V2 互动课件兼容
 
 互动课件仍使用既有的创建、预览、学习事件和进度 HTTP 路径。选择含 `review_practice_payload` 的“复习清单”时，服务端自动生成 V2 主动回忆课件；学习事件只接受答案揭示与三态自评的受控状态，不新增作答提交接口。
+
+## 统一课件审核的私有边界
+
+`content_v1` 不增加公开 HTTP/DTO/认证/请求选项或事件字段。策略只由服务端在创建时冻结；请求幂等 hash 保持原公开语义，开关切换不拆分同一请求。初始 outbox 的私有 `content_review_binding` 与内部 spec 交叉核验；只有两处均无新策略时按 legacy 解释，任何单边丢失或版本不符均阻断。
+
+详细字段结论、批准值、原始依据、Prompt 与私有调用账本只在内部 JSON，detail/reviews/events/artifact 不透传它们。新审核异常使用既有任务隔离/发布阻断状态和受控错误类别；不公开模型自由输出中的原文。已发布资源读取保持只读，场景重试、Worker、刷新、publish 与 release coordinator 均核验相同内容门。
+
+
+T37 2026-11-05容量修复只涉及私有estimate结果合同与验收工具：支持冻结额度内最多128条候选，旧1.0仍64。公开HTTP/DTO/认证/错误码/事件与Claim判定语义不变，不新增审核绕过入口。到达claim_extract或job=completed均不等于Claim成功；私有验收报告须检查最终资源版本及完整判定。
+
+### T38 私有审核边界
+
+讲义问题账本、核销历史、冻结策略及 `review_audit_v2` 是内部数据，不新增公开 HTTP/DTO/SSE 字段。公开审核继续展示最多三条问题及一条修订摘要。`evidence_insufficient`、合同无效和无进展使用既有未发布/复核状态承载，不能视为通过；没有新增人工审核工作台。
+
+T39：HTTP/DTO/认证/状态码/事件契约不变。`lecture_issue_v2` 只影响讲义审核内部策略与私有审计（`review_audit_v3`），公开响应仍返回原受控摘要；不新增端点，不改 Claim 与发布接口。
+
+T44：HTTP/DTO/认证/状态码/事件契约不变。`resource_issue_v1` 只影响六类文本资源的审核内部策略与私有审计（`review_audit_v4`），公开响应仍返回原受控摘要（最多三条问题及一条修订摘要），不新增端点，不改 Claim 与发布接口。
+
+T44 修复续作的执行身份（模型/角色与 hash）、父版完整结构包和核销重放信息均为私有字段，不进入公开审核响应。发布前缺失或非法私有审计受控失败，不能先写入已发布资源再检查。执行信封升级为 1.1，不改变公开 DTO；旧 1.0 记录保留只读。
+
+
+### T48 验收修复：项目评测的版本化数据
+
+`GET /api/evaluation/summary` 保留 `sample_count/metrics/ablation/created_at`，追加：
+
+- `resource_quality_evaluations`：`EvaluationResourceQualityV2[]`，默认空。每组有冻结 `manifest`、`manifest_hash`、`status`（complete/incomplete/invalid）、计划/接收/失败案例数、已知/覆盖/预期案例目标单位数、未知案例ID，以及独立的 `coverage/hallucination/difficulty` 三个 `RateMetricV1`。记录齐全不表示三项实测均齐全。
+- `resource_quality_invalid_row_total`：被隔离的结构或身份无效行数，默认0；无效组的数值为空，不影响旧摘要或其他有效组。实际数据库读取错误仍保留接口错误语义。
+
+唯一新版行入口是 `ContestEvalResultORM.metrics.resource_quality_case_v2`：`{"manifest": <EvaluationQualityManifestV2>, "case": <EvaluationQualityCaseV2>}`。同组至少一行含完整 manifest，其他行可只含 case 并以其 `manifest_hash` 引用；`row.case_id/experiment_name` 必须与 case/manifest 一致。CLI顶层 `quality_manifest` 和 `quality_case_records` 可按此映射，不将报告aggregate作为额外case写入。本次不自动导入生产数据库。
+
+Manifest冻结 `evaluation_id/experiment_name/suite_id/suite_version/fixture_version/coverage_fixture_version/metric_definition_version/evidence_mode/source_snapshot_hash/suite_data_hash/selected_case_targets`。Case保存预期/预测难度、生成状态、Run/资源/版本/审核绑定、普通覆盖逐目标结果与完整Claim分类计数/状态。相同case相同payload只算一次，冲突、目标混绑或跨case重用同一live资源版本使组invalid；缺case保留冻结分母并显示incomplete；live与offline不混算。
+
+`offline_gold` 固定标记离线计算验证，不构成正式比赛质量达标；`live_model` 是生产自审结果，正式独立质量门另行验证。旧metrics平均值不能补入新版三项指标。覆盖独立于Claim及发布状态；难度失败案例算错且不从计划分母删除；Claim仅完整且符合评测范围时计数。
+
+Run质量查询按 `display_order/resource_version/resource_id` 排序，布尔 `difficulty_match` 不转换为准确率；未知请求开关不推断成关闭或开启。5%仅为开关明确且同版普通审核通过后的未校准规则参考，不是风险上限。Claim失败/进行中先于部分落库结果判断，不显示假0%或达标。
+
+
+T48 收尾复查修复：同资源普通审核以最新持久step_sequence为准，较晚损坏审核覆盖较早有效记录，同序冲突失败优先；不可从旧Review补5%参考，后续合法审核可恢复。评测Case的`expected_difficulty`和非null的`predicted_difficulty`统一为1..32字符；空值/超长值在逐行校验时隔离，相关组invalid，其他合法组与旧摘要仍正常返回，不截断标签或吞聚合异常。

@@ -192,3 +192,12 @@ kill/restart、备份恢复或 CI artifact 证据。
 8. 可选安全分支：使用无 Frozen Evidence、无 SourceRef 且检索不可用的 fixture，展示 HTTP 200 `evidence_insufficient`，并说明该轮不会调用模型自由知识回答。
 
 演示结束后记录 Git SHA、suite/fixture 版本、APP_MODE、DB_TYPE、默认 KB、offline/runtime/live 结果以及所有 FAIL/NOT_MEASURABLE。不要因为现场演示成功而把未执行的统计评测标成 PASS。
+
+## 9. 资源质量三项指标演示（T48）
+
+1. 在生成页打开一个已发布资源卡，指出“知识覆盖”与“幻觉率”旁的来源与测量状态：覆盖只来自普通审核逐知识点结果，幻觉率来自 Claim 核验。
+2. 打开普通审核详情，展示逐知识点 covered/missing 与问题统计；说明 5% 参考仅在未开启 Claim 且同版普通审核通过时出现，标签是“普通审核参考／待核验”，不是达标绿勾。
+3. 打开一个未开启 Claim 的资源，展示幻觉率为 `—` 与“未开启 Claim 核验”，而不是 0%。
+4. 打开 Claim 报告，若 Claim 完整则展示核验分子/分母；若失败或未完成，展示对应状态并说明不回退 5%。
+5. 打开学情报告的“生成资源质量摘要”，说明这是当前可见已发布文本资源的资源目标覆盖汇总（非课程全图节点覆盖率），缺任一应测结果时汇总显示未完成。
+6. 演示离线评测时明确：`suite_v2` 的 `M-COVERAGE` 只读普通审核，离线 PASS 与 `official_gates=NOT_MEASURABLE` 同时存在，不能把 fixture 结果当作正式模型质量。

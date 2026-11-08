@@ -4,6 +4,10 @@ from typing import Any
 
 TEXT_WORKFLOW_VERSION = "learning_documents.v1"
 RESOURCE_RETRY_WORKFLOW_VERSION = "learning_documents.resource_retry.v1"
+ESTIMATE_TEXT_WORKFLOW_VERSION = "learning_documents.claim_estimate.v1"
+ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION = "learning_documents.resource_retry.claim_estimate.v1"
+NEUTRAL_TEXT_WORKFLOW_VERSION = "learning_documents.claim_neutral.v1"
+NEUTRAL_RESOURCE_RETRY_WORKFLOW_VERSION = "learning_documents.resource_retry.claim_neutral.v1"
 
 
 @dataclass(frozen=True)

@@ -1,412 +1,63 @@
-import json
+"""Review orchestration: selection, deterministic gates and state aggregation."""
+
 import uuid
 from datetime import datetime, timezone
-from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.learning_documents.state import AgentState
-from app.agents.shared.evidence_scope import evidence_for_resource, validate_payload_evidence
+from app.agents.shared.evidence_scope import (
+    resolve_review_evidence_context,
+    validate_payload_evidence,
+)
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.core.retrieval.evidence import source_refs_are_scoped
 from app.core.security.errors import ApplicationError, ErrorCode
-from app.models.shared.agent_contracts import (
-    NodeResult,
-    PracticeGuidePackageV3,
-    ReviewLLMOutput,
-    ReviewerInput,
-    ReviewerOutput,
-    build_trace_item,
-    make_error_info,
-    start_step,
-)
+from app.models.shared.agent_contracts import ReviewerInput, build_trace_item, make_error_info, start_step
 from app.models.shared.llm import LLMCallContext
-from app.models.shared.assessment import (
-    ASSESSMENT_QUESTION_QUOTAS,
-    ASSESSMENT_SCORE_BY_TYPE,
-    ASSESSMENT_SCORE_DECIMAL_PLACES,
-    ASSESSMENT_TOTAL_SCORE,
-)
 from app.models.shared.workflow import ResourceStatus, ReviewDecision, StepStatus
+from app.models.reviews.review_audit import (ReviewAuditRecordV2, ReviewAuditRecordV3, ReviewAuditRecordV4,
+    ReviewPolicySnapshotV1, ReviewResourceAuditV1, review_audit_envelope)
 from app.agents.shared.policies import decide_review, locked_human_review_resource_ids
 from app.agents.shared.validators import revision_instructions_are_valid
 from app.agents.resource_workflows.learning_documents.generator_agent import progress_summary
+from app.agents.resource_workflows.learning_documents.reviewing import (
+    ReviewAuditInput, ReviewCallCollector, ReviewInputBudgetError, build_review_audit,
+    build_review_prompt, build_review_request, check_resource_structure, invoke_review,
+    normalize_review_result, resolve_review_profile, select_specialties,
+)
+from app.agents.resource_workflows.learning_documents.reviewing.checks import node_tier_difficulty_review
+from app.agents.resource_workflows.learning_documents.reviewing.results import decorate_review_items, normalize_node_tier_review
+from app.agents.resource_workflows.learning_documents.reviewing.telemetry import issue_locations
+from app.agents.resource_workflows.learning_documents.reviewing.lecture_guard import assert_review_entry_allowed
 from app.agents.resource_workflows.learning_documents.specialized_reviews.assessment_scope import (
-    review_assessment_scope,
+    review_assessment_scope, review_assessment_combined,
 )
-from app.agents.resource_agents.lecture_contract import (
-    LECTURE_REVIEW_GUIDANCE, node_display_names, teaching_contract,
-)
-
-
-REVIEW_PROMPT = """你是一名严格的内容审核 Agent。请对以下学习资源进行审核，重点检查：
-1. 是否存在与专业知识片段不符的事实错误（幻觉）。
-2. 操作步骤是否符合行业规范。
-3. 资源难度是否与学习者水平匹配。对“复习清单”，难度审核的首要依据是资源覆盖的能力节点是否属于冻结的目标节点阶级，
-   不是题目数量、题型表面复杂度或文字中是否出现“综合/挑战”等词。高级难度必须覆盖高级（tier=3）能力节点；
-   中级必须覆盖中级（tier=2）节点；初级必须覆盖初级（tier=1）节点。复习清单保持主动回忆结构，
-   不能因为其包含回忆题或辨析题就判定高级节点“不够高级”。其他资源沿用其既有的难度审核口径。
-4. 内容是否完整覆盖目标知识点。
-
-资源类型解释：当 resource_type 为“分阶测试题”时，V2 固定结构是每个能力节点恰有 2 道单选（基础）、2 道多选（进阶）、2 道问答（挑战）。应同时审核题型配额、题型与难度阶段映射、可判定性、证据范围和知识点覆盖。
-当输入含有“内部结构化题卷”时，逐题范围与证据审核已经由独立专用审核器完成。你只做包级补充审核：
-不得复述题干、选项、正确答案、参考答案、rubric、evidence 或逐题清单；不得重新解释已通过的逐题范围结论。
-复习清单标题是服务端按批次主题生成的展示标题；审核内容是否匹配时，以当前目标能力节点和 Evidence 为准，
-不要仅因标题比当前节点更宽泛就提出覆盖或结构问题。
-对于“个性化纠错训练包”，Markdown 标题、章节顺序、章节拆分和小节命名仅是生成建议；不要仅因这些排版差异提出 structure_quality 或要求返工。仍需审核事实、Evidence 范围、知识点覆盖、难度和练习内容是否可用。
-若没有新的包级事实、结构或难度问题，直接输出 approve 和空 issues；每个字段使用最短必要中文。
-
-请用 JSON 格式输出：
-{
-  "decision": "approve" | "revise" | "reject" | "human_review",
-  "hallucination_score": float (0-1, 越高表示幻觉越严重),
-  "issues": [{
-    "code": "factual_risk|evidence_gap|procedure_error|difficulty_mismatch|coverage_gap|structure_quality|other",
-    "severity": "low|medium|high|critical",
-    "resource_type": "目标资源类型或 null",
-    "knowledge_point": "目标知识点或 null",
-    "description": "问题描述"
-  }],
-  "difficulty_match": bool,
-  "coverage_rate": float (0-1),
-  "suggestion": "审核判断或改进建议",
-  "revision_instructions": [{
-    "issue_codes": ["关联问题码"],
-    "target_resource_type": "必须是待审核资源类型之一",
-    "action": "可直接执行的修改要求",
-    "priority": 1
-  }]
-}
-revise 必须包含至少一条 revision_instructions；approve 不得包含 revision_instructions。
-最多输出 3 条 issues、1 条 revision_instruction；每条描述与 action 不超过 120 个中文字符。
-不要包含额外解释。
-"""
-
-
-STRUCTURED_MARKDOWN_SECTIONS = {
-    "复习清单": ("使用说明", "节点知识小结", "答案与证据解释", "自评与下一步"),
-    "案例分析": ("案例背景", "任务目标", "分析过程", "参考方案", "复盘要点"),
-    "个性化纠错训练包": ("本次强化目标", "薄弱模式概览", "参考答案与分层反馈", "达标标准", "后续复习动作", "总结"),
-}
-
-
-def _node_tier_difficulty_review(resource, state: AgentState) -> dict | None:
-    """Enforce difficulty from the frozen target-node tier, not surface form."""
-
-    if resource.resource_type != "复习清单":
-        return None
-    constraints = state.get("constraints", {})
-    target_tier = constraints.get("target_tier")
-    expected_difficulty = state.get("difficulty_preference")
-    target_nodes = {str(item) for item in state.get("target_skill_nodes", []) if str(item).strip()}
-    covered_nodes = {str(item) for item in resource.knowledge_points if str(item).strip()}
-    if target_tier is None or not expected_difficulty:
-        return None
-
-    valid = (
-        resource.difficulty == expected_difficulty
-        and bool(target_nodes)
-        and bool(covered_nodes)
-        and covered_nodes <= target_nodes
-    )
-    if valid:
-        return None
-    return {
-        "decision": "revise",
-        "hallucination_score": 0.0,
-        "issues": [{
-            "code": "difficulty_mismatch",
-            "severity": "high",
-            "resource_type": resource.resource_type,
-            "knowledge_point": None,
-            "description": "资源覆盖节点未满足冻结目标阶级，不能据此证明资源难度匹配。",
-        }],
-        "difficulty_match": False,
-        "coverage_rate": 0.0,
-        "suggestion": "仅覆盖冻结目标能力节点，并保持资源难度与目标阶级一致。",
-        "revision_instructions": [{
-            "issue_codes": ["difficulty_mismatch"],
-            "target_resource_type": resource.resource_type,
-            "action": "按冻结目标节点阶级重建资源，不以题型或措辞替代节点覆盖。",
-            "priority": 1,
-        }],
-    }
-
-
-def _normalize_node_tier_review(raw: dict, resource, state: AgentState) -> dict:
-    """Remove false difficulty findings when the target-node contract passes."""
-
-    if resource.resource_type != "复习清单":
-        return raw
-    if _node_tier_difficulty_review(resource, state) is not None:
-        return raw
-    if state.get("constraints", {}).get("target_tier") is None:
-        return raw
-    normalized = dict(raw)
-    normalized["difficulty_match"] = True
-    issues = [item for item in normalized.get("issues", []) if item.get("code") != "difficulty_mismatch"]
-    instructions = [
-        item for item in normalized.get("revision_instructions", [])
-        if "difficulty_mismatch" not in item.get("issue_codes", [])
-    ]
-    normalized["issues"] = issues
-    normalized["revision_instructions"] = instructions
-    if normalized.get("decision") == "revise" and not issues and not instructions:
-        normalized["decision"] = "approve"
-        normalized["suggestion"] = "目标能力节点阶级与资源难度一致；继续按证据和结构审核。"
-    return normalized
-
-
-def _deterministic_resource_structure_review(resource) -> dict | None:
-    """Apply hard specialized safety checks before the advisory LLM review."""
-
-    if resource.resource_type == "分阶测试题" and resource.assessment_payload is not None:
-        blocks = resource.assessment_payload.get("node_blocks", [])
-        expected_fields = ("single_choice_questions", "multiple_choice_questions", "short_answer_questions")
-        questions = [
-            question
-            for block in blocks
-            for field_name in expected_fields
-            for question in block.get(field_name, [])
-        ] if isinstance(blocks, list) else []
-        score_valid = (
-            round(sum(float(item.get("max_score", 0)) for item in questions), ASSESSMENT_SCORE_DECIMAL_PLACES) == ASSESSMENT_TOTAL_SCORE
-            and all(
-                round(
-                    sum(float(item.get("max_score", 0)) for item in questions if item.get("question_type") == question_type),
-                    ASSESSMENT_SCORE_DECIMAL_PLACES,
-                ) == ASSESSMENT_SCORE_BY_TYPE[question_type] * quota
-                for question_type, quota in ASSESSMENT_QUESTION_QUOTAS.items()
-            )
-            and all(
-                round(float(item.get("max_score", 0)), ASSESSMENT_SCORE_DECIMAL_PLACES) == float(item.get("max_score", 0))
-                for item in questions
-            )
-        )
-        valid = bool(blocks) and all(
-            len(block.get("single_choice_questions", [])) == ASSESSMENT_QUESTION_QUOTAS["single_choice"]
-            and len(block.get("multiple_choice_questions", [])) == ASSESSMENT_QUESTION_QUOTAS["multiple_choice"]
-            and len(block.get("short_answer_questions", [])) == ASSESSMENT_QUESTION_QUOTAS["short_answer"]
-            and all(item.get("difficulty_stage") == "基础" for item in block.get("single_choice_questions", []))
-            and all(item.get("difficulty_stage") == "进阶" for item in block.get("multiple_choice_questions", []))
-            and all(item.get("difficulty_stage") == "挑战" for item in block.get("short_answer_questions", []))
-            and all(block.get(field_name) for field_name in expected_fields)
-            for block in blocks
-        ) and score_valid
-        if valid and all(f"### {title}" in (resource.content_text or "") for title in ("单选题（基础）", "多选题（进阶）", "问答题（挑战）")):
-            return None
-        return {
-            "decision": "revise", "hallucination_score": 0.0,
-            "issues": [{"code": "structure_quality", "severity": "high", "resource_type": resource.resource_type,
-                        "knowledge_point": None, "description": "结构化测试题必须每节点含 2 基础单选、2 进阶多选、2 挑战问答，并按题型与阶段渲染。"}],
-            "difficulty_match": True, "coverage_rate": 0.0, "suggestion": "按固定 V2 题组结构重建。",
-            "revision_instructions": [{"issue_codes": ["structure_quality"], "target_resource_type": resource.resource_type,
-                                        "action": "恢复每节点固定题型配额、题型阶段映射及 Markdown 分类。", "priority": 1}],
-        }
-    if resource.resource_type == "复习清单" and resource.review_practice_payload is not None:
-        package = resource.review_practice_payload
-        blocks = package.get("node_blocks", []) if isinstance(package, dict) else []
-        valid = bool(blocks) and all(
-            1 <= len(block.get("recall_questions", [])) <= 4
-            and 1 <= len(block.get("distinction_questions", [])) <= 4
-            and len(str(block.get("knowledge_summary") or "").strip()) >= 100
-            and bool(block.get("summary_evidence_ids"))
-            and set(block.get("summary_evidence_ids") or []) <= set(block.get("evidence_ids") or [])
-            and len(block.get("omitted_slots", [])) == 10 - len(block.get("recall_questions", [])) - len(block.get("distinction_questions", [])) - (
-                len(block.get("example_recognition_questions") or [])
-                or int(bool(block.get("example_recognition")))
-            )
-            for block in blocks
-        )
-        content = resource.content_text or ""
-        if valid and "### 节点知识小结" in content and content.find("## 答案与证据解释") > content.find("## 节点") and "<script" not in content.lower():
-            return None
-        return {"decision": "revise", "hallucination_score": 0.0, "issues": [{"code": "structure_quality", "severity": "high", "resource_type": resource.resource_type, "knowledge_point": None, "description": "主动回忆清单必须满足每节点最低 1+1+0、带证据的节点知识小结、缺省槽位可审计，且答案统一位于文末。"}], "difficulty_match": True, "coverage_rate": 0.0, "suggestion": "按 V3 主动回忆结构重建。", "revision_instructions": [{"issue_codes": ["structure_quality"], "target_resource_type": resource.resource_type, "action": "恢复节点题组、知识小结、缺省原因和文末答案区。", "priority": 1}]}
-    # Correction packages are prose-first. Their Markdown headings and order
-    # are advisory and must not block ordinary or Claim review. Keep the script
-    # check as a safety boundary, not a formatting requirement.
-    if resource.resource_type == "个性化纠错训练包":
-        content = (resource.content_text or "").strip()
-        if "<script" not in content.lower():
-            return None
-        return {
-            "decision": "revise",
-            "hallucination_score": 0.0,
-            "issues": [{
-                "code": "structure_quality",
-                "severity": "high",
-                "resource_type": resource.resource_type,
-                "knowledge_point": None,
-                "description": "检测到脚本标记，资源只能包含安全的 Markdown 文本。",
-            }],
-            "difficulty_match": True,
-            "coverage_rate": 0.0,
-            "suggestion": "删除脚本标记后再审核。",
-            "revision_instructions": [{
-                "issue_codes": ["structure_quality"],
-                "target_resource_type": resource.resource_type,
-                "action": "删除 HTML/script 标记，仅保留安全的学习文本。",
-                "priority": 1,
-            }],
-        }
-
-    required_sections = STRUCTURED_MARKDOWN_SECTIONS.get(resource.resource_type)
-    if not required_sections:
-        return None
-    content = (resource.content_text or "").strip()
-    missing_sections = [
-        section for section in required_sections
-        if (f"### {section}" if section == "节点知识小结" else f"## {section}") not in content
-    ]
-    has_script = "<script" in content.lower()
-    correction_sections = ("错误模式", "核心概念补救", "正误对照", "完整示例", "引导式练习", "同构练习", "迁移练习")
-    correction_missing = (
-        [section for section in correction_sections if f"### {section}" not in content]
-        if resource.resource_type == "个性化纠错训练包" else []
-    )
-    if content.startswith("# ") and not missing_sections and not correction_missing and not has_script:
-        return None
-    description = (
-        "缺少唯一一级标题。"
-        if not content.startswith("# ")
-        else f"缺少必要章节：{'、'.join([*missing_sections, *correction_missing])}。"
-        if missing_sections or correction_missing
-        else "检测到脚本标记，资源只能包含 Markdown 文本。"
-    )
-    return {
-        "decision": "revise",
-        "hallucination_score": 0.0,
-        "issues": [{
-            "code": "structure_quality",
-            "severity": "high",
-            "resource_type": resource.resource_type,
-            "knowledge_point": None,
-            "description": description,
-        }],
-        "difficulty_match": True,
-        "coverage_rate": 0.0,
-        "suggestion": "请补齐资源结构后重新生成。",
-        "revision_instructions": [{
-            "issue_codes": ["structure_quality"],
-            "target_resource_type": resource.resource_type,
-            "action": description,
-            "priority": 1,
-        }],
-    }
-
-
-def _internal_assessment_review_payload(resource) -> str:
-    """Expose the canonical answer-bearing payload only to the internal reviewer."""
-    if resource.resource_type != "分阶测试题" or not resource.assessment_payload:
-        return ""
-    return json.dumps({
-        "audit_scope": "internal_only_do_not_repeat_answers_in_review",
-        "assessment_package": resource.assessment_payload,
-    }, ensure_ascii=False, separators=(",", ":"))
-
-
-def _deterministic_practice_guide_review(resource) -> dict:
-    """Keep the practice-guide release gate focused on usable structure.
-
-    Generated instructional snippets can legitimately show credentials or
-    script-like text. Those snippets are not treated as live code or secrets,
-    so they must not cause a retry; correctness is assessed by the normal
-    evidence and content review path.
-    """
-    package = getattr(resource, "practice_guide_payload", None)
-    try:
-        valid_package = isinstance(package, dict) and package.get("schema_version") == "3.0"
-        if valid_package:
-            PracticeGuidePackageV3.model_validate(
-                {key: value for key, value in package.items() if key != "payload_hash"}
-            )
-    except ValueError:
-        valid_package = False
-    if not valid_package:
-        return {
-            "decision": "revise", "hallucination_score": 0.0,
-            "issues": [{"code": "structure_quality", "severity": "high",
-                        "resource_type": resource.resource_type, "knowledge_point": None,
-                        "description": "实操指南缺少有效的 V3 固定阶段 JSON，禁止仅以 Markdown 发布。"}],
-            "difficulty_match": True, "coverage_rate": 0.0,
-            "suggestion": "重新生成并持久化四阶段结构化 JSON，再渲染 Markdown。",
-            "revision_instructions": [{"issue_codes": ["structure_quality"],
-                                        "target_resource_type": resource.resource_type,
-                                        "action": "生成有效的 V3 固定阶段 JSON，并由该 JSON 确定性渲染 Markdown。", "priority": 1}],
-        }
-    content = resource.content_text or ""
-    required_sections = ("准备阶段", "实操阶段", "验证阶段", "复盘阶段")
-    missing_sections = [section for section in required_sections if section not in content]
-    if missing_sections:
-        description = f"缺少必要章节：{'、'.join(missing_sections)}。"
-        return {
-            "decision": "revise", "hallucination_score": 0.0,
-            "issues": [{"code": "procedure_error", "severity": "high",
-                        "resource_type": resource.resource_type, "knowledge_point": None,
-                        "description": description}],
-            "difficulty_match": True, "coverage_rate": 1.0,
-            "suggestion": "请按检查项修正后重新生成。",
-            "revision_instructions": [{"issue_codes": ["procedure_error"],
-                                        "target_resource_type": resource.resource_type,
-                                        "action": description, "priority": 1}],
-        }
-    return {
-        "decision": "approve", "hallucination_score": 0.0, "issues": [],
-        "difficulty_match": True, "coverage_rate": 1.0,
-        "suggestion": "实操指南已通过结构检查；内容正确性按通用证据审核结果判定。",
-        "revision_instructions": [],
-    }
 
 
 def _fail_closed_review_error(error):
-    """Keep review outages safe without converting a valid artifact into a failed Run.
-
-    Review is a release gate, not an artifact producer.  If it cannot produce
-    a decision, the only safe result is ``human_review`` and an unpublished
-    resource.  This does not use the general degraded-generation opt-in: that
-    policy applies to fabricating replacement content, whereas this branch
-    creates no content and can never auto-publish.
-    """
-
     return error
-
-
-def _decorate_review_items(review: dict, *, run_id: str, generation_attempt: int) -> dict:
-    decorated = dict(review)
-    decorated["issues"] = [
-        {
-            "issue_id": str(
-                uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"{run_id}:review:{generation_attempt}:issue:{index}",
-                )
-            ),
-            **item,
-        }
-        for index, item in enumerate(review.get("issues", []), start=1)
-        if isinstance(item, dict)
-    ]
-    decorated["revision_instructions"] = [
-        {
-            "instruction_id": str(
-                uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"{run_id}:review:{generation_attempt}:instruction:{index}",
-                )
-            ),
-            **item,
-        }
-        for index, item in enumerate(review.get("revision_instructions", []), start=1)
-        if isinstance(item, dict)
-    ]
-    return decorated
 
 
 def review_node(
     state: AgentState,
     *,
     llm_gateway: LLMGateway,
+    review_repository=None,
 ) -> dict:
     """Review canonical text resources independently and aggregate deterministically."""
     node_input = ReviewerInput.model_validate(state)
+    policy = ReviewPolicySnapshotV1.model_validate(node_input.review_policy or {})
+    collector = ReviewCallCollector()
+    resource_audits = []
+    lecture_ledgers = dict(state.get("lecture_ledgers") or {})
+    current_lecture_ledgers = []
+    lecture_stop_reasons = dict(state.get("lecture_stop_reasons") or {})
+    lecture_repairs = []
+    lecture_contract_version = state.get("lecture_review_contract_version")
+    resource_ledgers = dict(state.get("resource_ledgers") or {})
+    current_resource_ledgers = []
+    resource_stop_reasons = dict(state.get("resource_stop_reasons") or {})
+    resource_repairs = []
+    resource_contract_version = state.get("resource_review_contract_version")
     # A revision run replaces only the resource types named by the previous
     # review instructions.  Previously approved siblings are immutable from a
     # review perspective: re-reviewing them allocates fresh review IDs for an
@@ -437,7 +88,6 @@ def review_node(
     evidence = node_input.retrieved_evidence
     step_context = start_step(state, attempt=node_input.generation_attempt)
     review_ids = {resource.resource_id: str(uuid.uuid4()) for resource in resources}
-    context = "\n\n".join(f"[证据 {item.evidence_id}] {item.excerpt}" for item in evidence)
     results: dict[str, dict] = {}
     errors = []
     trace_error = None
@@ -445,22 +95,15 @@ def review_node(
 
     if not resources:
         try:
-            last_llm_result = llm_gateway.invoke_structured(
-                messages=[
-                    SystemMessage(content=REVIEW_PROMPT),
-                    HumanMessage(content="待审核资源为空；禁止自动批准。"),
-                ],
-                output_schema=ReviewLLMOutput,
-                context=LLMCallContext(
-                    run_id=node_input.run_id,
-                    step_id=step_context["step_id"],
-                    node_name="reviewer",
-                    schema_name=ReviewLLMOutput.__name__,
+            profile = resolve_review_profile(resource_type="__empty_resource__", phase="empty_resource_compat_v1", policy=policy)
+            request = build_review_request(profile=profile, prompt_bundle=build_review_prompt(profile=profile),
+                                            audit_input=ReviewAuditInput())
+            last_llm_result = invoke_review(
+                request=request, llm_gateway=llm_gateway, collector=collector,
+                call_context=LLMCallContext(run_id=node_input.run_id, step_id=step_context["step_id"],
+                    node_name="reviewer", schema_name=profile.output_schema.__name__,
                     generation_attempt=node_input.generation_attempt,
-                    workflow_deadline_at=state.get("workflow_deadline_at"),
-                ),
-                options=llm_gateway.options_for("reviewer", temperature=0.0),
-            )
+                    workflow_deadline_at=state.get("workflow_deadline_at")))
             trace_error = _fail_closed_review_error(make_error_info(
                 ErrorCode.WORKFLOW_CONTRACT_INVALID,
                 source="reviewer",
@@ -484,16 +127,23 @@ def review_node(
 
     used_evidence_ids = set()
     for resource in resources:
-        evidence = evidence_for_resource(state, resource)
+        evidence = resolve_review_evidence_context(state, resource)
+        # A changed evidence context is handled by the engine as an audited new
+        # epoch: the previous ledger stays immutable and the new one carries its
+        # open issues and stop counter.  Losing the predecessor here would let an
+        # authorised evidence change silently reset unresolved defects.
         validate_payload_evidence(resource, evidence)
+        review_state = {**state, "lecture_ledgers": lecture_ledgers, "resource_ledgers": resource_ledgers}
         used_evidence_ids.update(item.evidence_id for item in evidence)
-        context = "\n\n".join(f"[证据 {item.evidence_id}] {item.excerpt}" for item in evidence)
         invalid_source_refs = not source_refs_are_scoped(resource.source_refs, evidence)
         error = None
         specialized_review = None
+        structure_status = "not_checked"
+        error_category = None
+        calls_before = len(collector.calls)
         tier_contract = node_input.constraints.get("target_tier")
         expected_difficulty = node_input.difficulty_preference
-        node_tier_review = _node_tier_difficulty_review(resource, state)
+        node_tier_review = node_tier_difficulty_review(resource, state)
         if resource.resource_id in locked_resource_ids:
             raw = {
                 "decision": "human_review",
@@ -535,117 +185,177 @@ def review_node(
                                "description": "资源引用未能映射到本次检索证据"}],
                    "difficulty_match": False, "coverage_rate": 0.0,
                    "suggestion": "引用证据不完整，禁止自动批准。", "revision_instructions": []}
-        elif structured_review := _deterministic_resource_structure_review(resource):
-            raw = structured_review
-        elif resource.resource_type == "分阶测试题" and resource.assessment_payload is not None:
+        elif state.get("resource_review_policy"):
+            structure_status = "passed"
             try:
-                specialized_review = review_assessment_scope(
-                    resource=resource,
-                    evidence=evidence,
-                    target_skill_nodes=list(state.get("target_skill_nodes", [])),
-                    llm_gateway=llm_gateway,
-                    context=LLMCallContext(
-                        run_id=node_input.run_id, step_id=step_context["step_id"],
-                        node_name="assessment_scope_reviewer",
-                        schema_name="AssessmentScopeReviewV1",
-                        generation_attempt=node_input.generation_attempt,
-                        workflow_deadline_at=state.get("workflow_deadline_at"),
-                    ),
+                call_context = LLMCallContext(
+                    run_id=node_input.run_id, step_id=step_context["step_id"], node_name="reviewer",
+                    schema_name=("ResourceReviewRecheckV1" if resource.resource_spec_id in resource_ledgers
+                                 else "ResourceReviewInitialV1"),
+                    generation_attempt=node_input.generation_attempt,
+                    workflow_deadline_at=state.get("workflow_deadline_at"))
+
+                def resource_guard(*, step_id, generation_attempt):
+                    assert_review_entry_allowed(
+                        repository=review_repository, run_id=node_input.run_id,
+                        step_id=step_id, generation_attempt=generation_attempt)
+
+                from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.engine import (
+                    review_resource_v1,
                 )
-                if not specialized_review.passed:
-                    raw = {
-                        "decision": "revise", "hallucination_score": 0.0,
-                        "issues": specialized_review.issues,
-                        "difficulty_match": True, "coverage_rate": 0.0,
-                        "suggestion": "逐题范围审核发现越界或证据不足，需定向重建。",
-                        "revision_instructions": specialized_review.revision_instructions,
-                    }
+                outcome = review_resource_v1(
+                    state=review_state, resource=resource, evidence=evidence,
+                    step_id=step_context["step_id"], context=call_context,
+                    gateway=llm_gateway, collector=collector,
+                    review_id=review_ids[resource.resource_id], step_guard=resource_guard)
+                raw, last_llm_result = outcome.raw, outcome.last_llm_result
+                stop_reason = outcome.stop_reason
+                if outcome.repair is not None:
+                    resource_repairs.append(outcome.repair)
+                if outcome.ledger is not None:
+                    resource_ledgers[resource.resource_spec_id] = outcome.ledger.model_dump(mode="json")
+                    current_resource_ledgers.append(outcome.ledger)
+                if stop_reason:
+                    resource_stop_reasons[resource.resource_spec_id] = stop_reason
+                    if stop_reason == "program_gate_failed":
+                        structure_status = "failed"
+            except (LLMGatewayError, ValueError) as exc:
+                if isinstance(exc, LLMGatewayError):
+                    error = _fail_closed_review_error(exc.error)
+                    last_llm_result = exc
+                    error_category = exc.error.category
                 else:
-                    internal_assessment = _internal_assessment_review_payload(resource)
-                    user_input = (f"专业知识片段：\n{context}\n\n待审核的唯一资源：\n"
-                                  f"resource_id={resource.resource_id}\nresource_type={resource.resource_type}\n"
-                                  f"难度={resource.difficulty}\n{resource.content_text or ''}\n\n"
-                                  f"目标难度：{node_input.difficulty_preference or '按画像与诊断结果'}\n"
-                                  f"生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}"
-                                  f"\n\n仅供内部审核的完整结构化题卷（含答案、rubric 与 evidence ID；不得在输出中复述）：\n{internal_assessment}")
-                    last_llm_result = llm_gateway.invoke_structured(
-                        messages=[SystemMessage(content=REVIEW_PROMPT), HumanMessage(content=user_input)],
-                        output_schema=ReviewLLMOutput,
-                        context=LLMCallContext(run_id=node_input.run_id, step_id=step_context["step_id"],
-                            node_name="reviewer", schema_name=ReviewLLMOutput.__name__,
-                            generation_attempt=node_input.generation_attempt,
-                            workflow_deadline_at=state.get("workflow_deadline_at")),
-                        options=llm_gateway.options_for("reviewer", temperature=0.0).model_copy(
-                            update={"max_output_tokens": 12288}
-                        ))
-                    raw = last_llm_result.output.model_dump(mode="python")
-            except LLMGatewayError as exc:
-                error = _fail_closed_review_error(exc.error)
-                last_llm_result = exc
+                    error_category = "input_budget" if isinstance(exc, ReviewInputBudgetError) else "review_validation"
+                    error = _fail_closed_review_error(make_error_info(
+                        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, source="reviewer",
+                        attempt=node_input.generation_attempt, category=error_category))
                 raw = {"decision": "human_review", "hallucination_score": 0.5,
                        "issues": [{"code": "evidence_gap", "severity": "high",
                                    "resource_type": resource.resource_type, "knowledge_point": None,
-                                   "description": "测评范围审核不可用，无法安全完成自动审核"}],
+                                   "description": "审核能力不可用或结果无效，无法安全完成自动审核。"}],
                        "difficulty_match": False, "coverage_rate": 0.0,
-                       "suggestion": "", "revision_instructions": []}
-            except ValueError:
-                error = _fail_closed_review_error(make_error_info(
-                    ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, source="assessment_scope_reviewer",
-                    attempt=node_input.generation_attempt, category="assessment_scope"))
-                raw = {"decision": "human_review", "hallucination_score": 0.5,
-                       "issues": [{"code": "evidence_gap", "severity": "high",
-                                   "resource_type": resource.resource_type, "knowledge_point": None,
-                                   "description": "测评范围审核结果无效，无法安全完成自动审核"}],
-                       "difficulty_match": False, "coverage_rate": 0.0,
-                       "suggestion": "", "revision_instructions": []}
-        elif resource.resource_type == "实操指南":
-            raw = _deterministic_practice_guide_review(resource)
+                       "suggestion": "保持未发布。", "revision_instructions": []}
+        elif structured_review := check_resource_structure(resource=resource, context=state):
+            raw = structured_review
         else:
-            internal_assessment = _internal_assessment_review_payload(resource)
-            user_input = (f"专业知识片段：\n{context}\n\n待审核的唯一资源：\n"
-                          f"resource_id={resource.resource_id}\nresource_type={resource.resource_type}\n"
-                          f"难度={resource.difficulty}\n{resource.content_text or ''}\n\n"
-                          f"目标难度：{node_input.difficulty_preference or '按画像与诊断结果'}\n"
-                          f"生成约束：{json.dumps(node_input.constraints, ensure_ascii=False)}"
-                          + (f"\n\n仅供内部审核的完整结构化题卷（含答案、rubric 与 evidence ID；不得在输出中复述）：\n{internal_assessment}"
-                             if internal_assessment else ""))
-            review_system = REVIEW_PROMPT
-            if resource.resource_type == "讲义":
-                review_system += LECTURE_REVIEW_GUIDANCE
-                user_input += "\n\n讲义教学控制信息：" + json.dumps({
-                    "knowledge_point_display_names": node_display_names(resource.knowledge_points, evidence),
-                    "teaching_contract": teaching_contract(resource.difficulty, len(resource.knowledge_points),
-                        target_tier=node_input.constraints.get("target_tier")),
-                }, ensure_ascii=False)
+            structure_status = "passed"
             try:
-                last_llm_result = llm_gateway.invoke_structured(
-                    messages=[SystemMessage(content=review_system), HumanMessage(content=user_input)],
-                    output_schema=ReviewLLMOutput,
-                    context=LLMCallContext(run_id=node_input.run_id, step_id=step_context["step_id"],
-                        node_name="reviewer", schema_name=ReviewLLMOutput.__name__,
+                if resource.resource_type == "分阶测试题" and resource.assessment_payload is not None:
+                    combined = policy.assessment_strategy == "combined_v2"
+                    assessment_review = review_assessment_combined if combined else review_assessment_scope
+                    specialized_review = assessment_review(
+                        resource=resource, evidence=evidence,
+                        target_skill_nodes=list(state.get("target_skill_nodes", [])),
+                        llm_gateway=llm_gateway, collector=collector,
+                        review_id=review_ids[resource.resource_id], policy=policy,
+                        context=LLMCallContext(
+                            run_id=node_input.run_id, step_id=step_context["step_id"],
+                            node_name="reviewer" if combined else "assessment_scope_reviewer",
+                            schema_name="AssessmentCombinedReviewV2" if combined else "AssessmentScopeReviewV1",
+                            generation_attempt=node_input.generation_attempt,
+                            workflow_deadline_at=state.get("workflow_deadline_at")))
+                    if combined or not specialized_review.passed:
+                        raw = specialized_review.summary
+                        if combined:
+                            last_llm_result = specialized_review.llm_result
+                    else:
+                        raw = None
+                else:
+                    raw = None
+                if raw is None and resource.resource_type == "讲义" and state.get("lecture_review_policy"):
+                    call_context = LLMCallContext(
+                        run_id=node_input.run_id, step_id=step_context["step_id"], node_name="reviewer",
+                        schema_name=("LectureRecheckReviewV2" if lecture_contract_version == "2.0"
+                                     else "LectureRecheckReviewV1")
+                        if resource.resource_spec_id in lecture_ledgers else
+                        ("LectureInitialReviewV2" if lecture_contract_version == "2.0"
+                         else "LectureInitialReviewV1"),
                         generation_attempt=node_input.generation_attempt,
-                        workflow_deadline_at=state.get("workflow_deadline_at")),
-                    options=llm_gateway.options_for("reviewer", temperature=0.0).model_copy(
-                        update={"max_output_tokens": 12288}
-                    ))
-                raw = last_llm_result.output.model_dump(mode="python")
-            except LLMGatewayError as exc:
-                error = _fail_closed_review_error(exc.error)
-                last_llm_result = exc
+                        workflow_deadline_at=state.get("workflow_deadline_at"))
+                    if lecture_contract_version == "2.0":
+                        from app.agents.resource_workflows.learning_documents.reviewing.lecture_engine_v2 import review_lecture_v2
+
+                        def guard(*, step_id, generation_attempt):
+                            # Fail closed: a V2 sendable entry must have a durable
+                            # repository and a fenced owner/lease.  Passing None here
+                            # raises inside assert_review_entry_allowed, never silently
+                            # skipping the guard.
+                            assert_review_entry_allowed(
+                                repository=review_repository, run_id=node_input.run_id,
+                                step_id=step_id, generation_attempt=generation_attempt)
+                        outcome = review_lecture_v2(
+                            state=review_state, resource=resource, evidence=evidence,
+                            step_id=step_context["step_id"], context=call_context,
+                            gateway=llm_gateway, collector=collector,
+                            review_id=review_ids[resource.resource_id], step_guard=guard)
+                        raw, last_llm_result = outcome.raw, outcome.last_llm_result
+                        stop_reason = outcome.stop_reason
+                        if outcome.repair is not None:
+                            lecture_repairs.append(outcome.repair)
+                        if outcome.ledger is not None:
+                            lecture_ledgers[resource.resource_spec_id] = outcome.ledger.model_dump(mode="json")
+                            current_lecture_ledgers.append(outcome.ledger)
+                    else:
+                        from app.agents.resource_workflows.learning_documents.reviewing.lecture_engine import review_lecture
+                        raw, ledger, last_llm_result, stop_reason = review_lecture(
+                            state=review_state, resource=resource, evidence=evidence, step_id=step_context["step_id"],
+                            context=call_context, gateway=llm_gateway, collector=collector,
+                            review_id=review_ids[resource.resource_id])
+                        lecture_ledgers[resource.resource_spec_id] = ledger.model_dump(mode="json")
+                        current_lecture_ledgers.append(ledger)
+                    if stop_reason:
+                        lecture_stop_reasons[resource.resource_spec_id] = stop_reason
+                if raw is None:
+                    phase = ("practice_semantic_v2" if resource.resource_type == "实操指南" else
+                             "assessment_package_v1" if resource.resource_type == "分阶测试题" else "content_v2")
+                    profile = resolve_review_profile(resource_type=resource.resource_type, phase=phase, policy=policy)
+                    bundle = build_review_prompt(profile=profile, enabled_specialties=select_specialties(profile=profile, resource=resource))
+                    request = build_review_request(profile=profile, prompt_bundle=bundle, audit_input=ReviewAuditInput(
+                        resource=resource, evidence=tuple(evidence), difficulty=node_input.difficulty_preference,
+                        constraints=node_input.constraints, policy=policy))
+                    last_llm_result = invoke_review(request=request, llm_gateway=llm_gateway, collector=collector,
+                        review_id=review_ids[resource.resource_id],
+                        call_context=LLMCallContext(run_id=node_input.run_id, step_id=step_context["step_id"],
+                            node_name="reviewer", schema_name=profile.output_schema.__name__,
+                            generation_attempt=node_input.generation_attempt,
+                            workflow_deadline_at=state.get("workflow_deadline_at")))
+                    try:
+                        raw = normalize_review_result(output=last_llm_result.output, resource_context=resource)
+                    except ValueError:
+                        collector.invalid_result(call_id=last_llm_result.call_id)
+                        raise
+            except (LLMGatewayError, ValueError) as exc:
+                if isinstance(exc, LLMGatewayError):
+                    error = _fail_closed_review_error(exc.error)
+                    last_llm_result = exc
+                    error_category = exc.error.category
+                else:
+                    error_category = "input_budget" if isinstance(exc, ReviewInputBudgetError) else "review_validation"
+                    error_source = "reviewer"
+                    if (resource.resource_type == "分阶测试题" and resource.assessment_payload is not None
+                            and policy.assessment_strategy == "two_stage_v1"):
+                        error_category, error_source = "assessment_scope", "assessment_scope_reviewer"
+                    error = _fail_closed_review_error(make_error_info(
+                        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, source=error_source,
+                        attempt=node_input.generation_attempt, category=error_category))
                 raw = {"decision": "human_review", "hallucination_score": 0.5,
                        "issues": [{"code": "evidence_gap", "severity": "high",
                                    "resource_type": resource.resource_type, "knowledge_point": None,
-                                   "description": "审核能力暂不可用，无法安全完成自动审核"}],
+                                   "description": "审核能力不可用或结果无效，无法安全完成自动审核。"}],
                        "difficulty_match": False, "coverage_rate": 0.0,
-                       "suggestion": "", "revision_instructions": []}
-        raw = _normalize_node_tier_review(raw, resource, state)
-        decorated = _decorate_review_items(raw, run_id=f"{node_input.run_id}:{resource.resource_id}",
+                       "suggestion": "保持未发布。", "revision_instructions": []}
+        if (state.get("lecture_review_policy") and resource.resource_type == "讲义"
+                and not any(l.binding.resource_id == resource.resource_id for l in current_lecture_ledgers)
+                and raw.get("decision") == "revise"):
+            raw = {**raw, "decision": "human_review", "revision_instructions": []}
+            lecture_stop_reasons[resource.resource_spec_id] = "program_gate_failed"
+        raw = normalize_node_tier_review(raw, resource, state)
+        decorated = decorate_review_items(raw, run_id=f"{node_input.run_id}:{resource.resource_id}",
                                            generation_attempt=node_input.generation_attempt)
         if specialized_review is not None:
             decorated["specialized_reviews"] = {
-                "assessment_scope": {
-                    "passed": specialized_review.passed,
-                    "findings": specialized_review.findings,
+                "assessment_combined" if policy.assessment_strategy == "combined_v2" else "assessment_scope": {
+                    "passed": specialized_review.passed, "findings": specialized_review.findings,
                 }
             }
         valid = revision_instructions_are_valid(decorated.get("revision_instructions", []),
@@ -661,6 +371,20 @@ def review_node(
                           "resource_type": resource.resource_type,
                           "revision_count": node_input.revision_count})
         results[resource.resource_id] = decorated
+        calls = collector.calls[calls_before:]
+        resource_audits.append(ReviewResourceAuditV1(
+            resource_id=resource.resource_id, review_id=review_ids[resource.resource_id],
+            resource_spec_id=resource.resource_spec_id, resource_type=resource.resource_type,
+            structure_status=structure_status if structure_status == "passed" or resource.resource_id in locked_resource_ids else "failed",
+            semantic_status=("unavailable" if error and structure_status == "passed" else
+                             "passed" if structure_status == "passed" and decision == ReviewDecision.APPROVE else
+                             "failed" if structure_status == "passed" else "not_run"),
+            decision=decision.value, profiles=[c.phase for c in calls],
+            prompt_fingerprints=[c.prompt_fingerprint for c in calls],
+            findings=specialized_review.findings if specialized_review is not None else [],
+            issue_locations=issue_locations(review=decorated, resource=resource),
+            error_category=error_category,
+        ))
         if error:
             trace_error = trace_error or error
             errors.append(error.model_dump(mode="json"))
@@ -715,6 +439,8 @@ def review_node(
         }[decision]
         published = (
             decision == "approve"
+            and not (state.get("lecture_review_policy") and resource.resource_type == "讲义")
+            and not state.get("resource_review_policy")
             and not state.get("include_claim_check", False)
             and not (
                 state.get("generation_mode") == "strict"
@@ -763,7 +489,46 @@ def review_node(
         llm_metadata=last_llm_result.trace_metadata() if last_llm_result else None,
     )
 
+    audit = build_review_audit(collector=collector, run_id=node_input.run_id, step_id=step_context["step_id"],
+        generation_attempt=node_input.generation_attempt, revision_count=node_input.revision_count,
+        policy=policy, decision=aggregate_decision.value, resources=resource_audits)
+    if state.get("lecture_review_policy") and lecture_contract_version == "2.0":
+        audit = ReviewAuditRecordV3.model_validate({**audit.model_dump(mode="json"), "schema_version": "3.0",
+            "lecture_review_policy": state["lecture_review_policy"],
+            "lecture_review_policy_hash": state["lecture_review_policy_hash"],
+            "lecture_ledgers": [ledger.model_dump(mode="json") for ledger in current_lecture_ledgers],
+            "repairs": [repair.as_dict() | {"review_id": review_ids[repair.resource_id]}
+                        for repair in lecture_repairs]})
+    elif state.get("lecture_review_policy"):
+        audit = ReviewAuditRecordV2.model_validate({**audit.model_dump(mode="json"), "schema_version": "2.0",
+            "lecture_review_policy": state["lecture_review_policy"],
+            "lecture_review_policy_hash": state["lecture_review_policy_hash"],
+            "lecture_ledgers": [ledger.model_dump(mode="json") for ledger in current_lecture_ledgers]})
+    elif state.get("resource_review_policy"):
+        audit = ReviewAuditRecordV4.model_validate({**audit.model_dump(mode="json"), "schema_version": "4.0",
+            "resource_review_policy": state["resource_review_policy"],
+            "resource_review_policy_hash": state["resource_review_policy_hash"],
+            "resource_ledgers": [ledger.model_dump(mode="json") for ledger in current_resource_ledgers],
+            "repairs": [repair.as_dict() | {"review_id": review_ids[repair.resource_id]}
+                        for repair in resource_repairs]})
+    envelope = review_audit_envelope(audit, run_id=node_input.run_id, step_id=step_context["step_id"])
+    audit_ref = {"step_id": step_context["step_id"], "audit_hash": envelope["audit_hash"],
+                 "review_ids": [item.review_id for item in resource_audits]}
+    if state.get("lecture_review_policy"):
+        audit_ref.update({"schema_version": "3.0" if lecture_contract_version == "2.0" else "2.0", "lecture_resources": [
+            {"resource_id": l.binding.resource_id, "resource_spec_id": l.binding.resource_spec_id,
+             "version": l.binding.version, "content_hash": l.binding.content_hash,
+             "lineage_id": l.binding.lineage_id} for l in current_lecture_ledgers]})
+    elif state.get("resource_review_policy"):
+        audit_ref.update({"schema_version": "4.0", "resource_ledgers": [
+            {"resource_id": l.binding.resource_id, "resource_spec_id": l.binding.resource_spec_id,
+             "version": l.binding.version, "artifact_exact_hash": l.binding.artifact_exact_hash,
+             "lineage_id": l.binding.lineage_id} for l in current_resource_ledgers]})
     return {
+        **({"lecture_ledgers": lecture_ledgers, "lecture_stop_reasons": lecture_stop_reasons} if state.get("lecture_review_policy") else {}),
+        **({"resource_ledgers": resource_ledgers, "resource_stop_reasons": resource_stop_reasons} if state.get("resource_review_policy") else {}),
+        "review_audit": audit.model_dump(mode="json"),
+        "review_audit_refs": [*state.get("review_audit_refs", []), audit_ref],
         "review_result": review,
         # A targeted revision reviews only the newly generated resource types.
         # Preserve decisions for untouched siblings so the final aggregation

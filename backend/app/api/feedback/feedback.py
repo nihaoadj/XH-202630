@@ -189,6 +189,13 @@ def select_feedback_followup(
             schedule_generation(service.generation_job_service, background_tasks, learner, generate_request, run_id)
 
     try:
+        if payload.option_id == "personalized-correction-package-v1":
+            from app.api.feedback.rounds import schedule_round
+            from app.services.feedback.legacy_round_adapter import LegacyRoundAdapter
+            round_service = container.round_learning_service()
+            result, created = LegacyRoundAdapter(round_service).choose_correction(profile, payload)
+            schedule_round(round_service, profile, created, background_tasks)
+            return result
         return service.choose_followup(profile, payload, schedule_followup=schedule)
     except ApplicationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code.value) from exc

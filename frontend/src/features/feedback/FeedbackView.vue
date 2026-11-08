@@ -10,17 +10,19 @@
         </label>
         <label class="task-filter-field">
           <span class="task-selection-label">本轮资源批次<small aria-hidden="true">BATCH</small></span>
-          <el-select v-model="selectedRunId" filterable aria-label="本轮资源批次" placeholder="选择要反馈的学习资源批次" class="task-select" popper-class="refined-select-dropdown" @change="selectBatch">
+          <el-select v-model="selectedRunId" filterable aria-label="本轮资源批次" placeholder="选择要反馈的学习资源批次" class="task-select" popper-class="refined-select-dropdown" @change="selectBatch(true)">
             <el-option v-for="task in taskGroups" :key="task.runId" :label="task.label" :value="task.runId" />
           </el-select>
         </label>
-        <el-button class="start-evaluation-button" type="primary" :icon="VideoPlay" @click="startEvaluation" :disabled="!selectedRunId">{{ selectedBatchHasFeedback ? '再次测评' : '开始测评' }}</el-button>
+        <el-button v-if="!activeRoundId" class="start-evaluation-button" type="primary" :icon="VideoPlay" @click="startEvaluation" :disabled="!selectedRunId">{{ selectedBatchHasFeedback ? '再次测评' : '开始测评' }}</el-button>
       </div>
 
       <p v-if="!activeTask" class="task-empty-tip">暂时没有可用于反馈的资源任务，请先完成一轮学习资源生成。</p>
     </section>
 
-    <section v-if="!result" ref="workspaceRef" class="feedback-workspace" :class="{ 'has-empty-evaluation': !evaluation.questions.length }" v-module-motion="evaluation.questions.length ? selectedRunId : 'preparation'">
+    <RoundFeedbackWorkspace v-if="activeRoundId" :key="`${form.learner_id}:${activeRoundId}`" :round-id="activeRoundId" :learner-id="form.learner_id" :initial-stage-id="activeRoundStageId" :reflection="roundReflection" @hint="requestRoundTutorHint" />
+
+    <section v-if="!activeRoundId && !result" ref="workspaceRef" class="feedback-workspace" :class="{ 'has-empty-evaluation': !evaluation.questions.length }" v-module-motion="evaluation.questions.length ? selectedRunId : 'preparation'">
       <article class="evaluation-panel" :class="{ 'is-empty-evaluation': !evaluation.questions.length }">
         <div class="section-heading">
           <div>
@@ -124,7 +126,7 @@
       </aside>
     </section>
 
-    <section v-if="result" id="feedback-report" ref="resultPanelRef" class="result-panel" v-module-motion="{ key: selectedRunId, appear: true }">
+    <section v-if="!activeRoundId && result" id="feedback-report" ref="resultPanelRef" class="result-panel" v-module-motion="{ key: selectedRunId, appear: true }">
       <header class="result-header">
         <div class="result-summary">
         <span class="page-kicker">03 / LEARNING REVIEW</span>
@@ -178,14 +180,14 @@
               <el-radio-group v-if="!isDowngradeLearning" v-model="learningIntent" class="intent-mode-choice">
                 <el-radio-button :label="isUpgradeLearning ? 'upgrade_learning' : 'learn_new_knowledge'">学习新节点</el-radio-button>
                 <el-radio-button label="reinforce_weakness">复习旧节点</el-radio-button>
-                <el-radio-button v-if="canUseMixedIntent" label="learn_new_and_reinforce">一新一旧</el-radio-button>
+
               </el-radio-group>
               <small v-if="isDowngradeLearning">{{ nextStepRecommendation.alternative_learning_description || nextStepRecommendation.description }}</small>
-              <small v-else>仅显示当前学习阶的节点；每次最多选择 2 个，不跨阶补位。</small>
+              <small v-else>仅显示当前学习阶的节点；每次选择 1 个，不跨阶补位。</small>
             </div>
             <div v-if="generationOptions && isDowngradeLearning" class="intent-node-row">
-              <span>{{ learningModeLabel }}目标（最多 2 个；低一阶或同阶前置）：</span>
-              <el-checkbox-group v-model="selectedIntentNodes" class="resource-type-choice" :max="2">
+              <span>{{ learningModeLabel }}目标（选 1 个；低一阶或同阶前置）：</span>
+              <el-checkbox-group v-model="selectedIntentNodes" class="resource-type-choice" :max="1">
                 <el-checkbox v-for="node in learningCandidates" :key="node.skill_node_id" :label="node.skill_node_id" :disabled="node.blocked_by_node_ids?.length > 0">
                   {{ node.name }} · 第 {{ node.tier }} 阶<span v-if="learningIntent === 'downgrade_learning'">（{{ downgradeCandidateLabel(node) }}）</span><span v-else-if="node.priority_group === 'learned'">（已学习）</span><small v-if="node.blocked_by_node_ids?.length">（需先学习前置能力）</small>
                 </el-checkbox>
@@ -194,8 +196,8 @@
               <em v-if="!learningCandidates.length">当前没有可用于{{ learningModeLabel }}的节点。</em>
             </div>
             <div v-if="generationOptions && !isDowngradeLearning && learningIntent !== 'learn_new_and_reinforce'" class="intent-node-row">
-              <span>选择能力节点（最多 2 个）：</span>
-              <el-checkbox-group v-model="selectedIntentNodes" class="resource-type-choice" :max="2">
+              <span>选择能力节点（选 1 个）：</span>
+              <el-checkbox-group v-model="selectedIntentNodes" class="resource-type-choice" :max="1">
                 <el-checkbox v-for="node in intentCandidates" :key="node.skill_node_id" :label="node.skill_node_id" :disabled="node.blocked_by_node_ids?.length > 0">
                   {{ node.name }} · 第 {{ node.tier }} 阶<small v-if="node.blocked_by_node_ids?.length">（需先学习前置能力）</small>
                 </el-checkbox>
@@ -216,6 +218,7 @@
             <el-checkbox label="案例分析">案例分析</el-checkbox>
           </el-checkbox-group>
           <el-checkbox v-model="includeClaimCheck" class="claim-check-choice">启用 Claim 审核</el-checkbox>
+          <el-checkbox v-model="includeClaimEvidenceRetrieval" class="claim-check-choice" :disabled="!includeClaimCheck">证据不足时补检知识库</el-checkbox>
           <el-select v-if="!generationOptions" v-model="selectedDifficulty" class="difficulty-choice" aria-label="资源难度">
             <el-option label="初级" value="初级" />
             <el-option label="中级" value="中级" />
@@ -275,6 +278,7 @@ import { formatDateTime } from '../../utils/generationDisplay'
 import PreparationPanel from '../../components/PreparationPanel.vue'
 import TutorDrawer from '../tutor/TutorDrawer.vue'
 import { useFeedbackEvaluation } from './useFeedbackEvaluation.js'
+import RoundFeedbackWorkspace from './RoundFeedbackWorkspace.vue'
 import { useFeedbackFollowup } from './useFeedbackFollowup.js'
 import { createRequestGuard } from '../../utils/requestContext.js'
 
@@ -300,6 +304,19 @@ const feedbackResults = ref([])
 const profiles = ref([])
 const tracks = ref([])
 const selectedRunId = ref(route.query.batchId || route.query.runId || localStorage.getItem('current_generation_run_id') || '')
+const routeRoundId = ref(String(route.query.roundId || ''))
+const roundTutorResource = ref(null)
+const activeRoundBinding = computed(() => generationJobs.value.find(job => job.run_id === selectedRunId.value || (job.batch_id || job.run_id) === selectedRunId.value)?.round_binding || null)
+const activeRoundId = computed(() => routeRoundId.value || activeRoundBinding.value?.round_id || '')
+const activeRoundStageId = computed(() => String(routeRoundId.value ? route.query.stageId || '' : activeRoundBinding.value?.stage_id || ''))
+const roundReflection = computed(() => ({ completed: form.completed, time_spent_seconds: form.time_spent_seconds,
+  self_rating: form.self_rating, difficulty_feeling: form.difficulty_feeling, helpful_part: form.helpful_part,
+  confusing_part: form.confusing_part, comment: form.comment }))
+function requestRoundTutorHint(question) {
+  roundTutorResource.value = resources.value.find(resource => resource.learning_path_node === question.skill_node_id) || null
+  requestTutorHint(question)
+}
+
 const submitting = ref(false)
 const feedbackStatus = ref('')
 const selectingOption = ref('')
@@ -307,6 +324,7 @@ const result = ref(null)
 const feedbackContextVersion = ref(0)
 const selectedResourceTypes = ref([])
 const includeClaimCheck = ref(false)
+const includeClaimEvidenceRetrieval = ref(false)
 const selectedDifficulty = ref('中级')
 const learningIntent = ref('reinforce_weakness')
 const selectedIntentNodes = ref([])
@@ -415,6 +433,7 @@ const activeTask = computed(() => taskGroups.value.find((item) => item.runId ===
 const selectedBatchHasFeedback = computed(() => Boolean(taskGroups.value.find((item) => item.runId === selectedRunId.value)?.completed))
 const pendingCorrectionRunId = computed(() => activeTask.value?.pendingCorrectionRunId || '')
 const tutorResource = computed(() => {
+  if (activeRoundId.value && roundTutorResource.value) return roundTutorResource.value
   const questionResourceId = String(tutorQuestion.value?.question_id || '').split(':', 1)[0]
   return activeTask.value?.resources?.find((item) => item.resource_id === questionResourceId)
     || activeTask.value?.resources?.[0]
@@ -479,7 +498,6 @@ const reviewIntentCandidates = computed(() => [
   ...(generationOptions.value?.reinforce_weakness || []),
   ...(generationOptions.value?.cross_tier_prerequisite_review || []),
 ])
-const canUseMixedIntent = computed(() => newIntentCandidates.value.some((item) => !(item.blocked_by_node_ids || []).length) && reviewIntentCandidates.value.length > 0)
 const selectedNodesForFollowup = computed(() => learningIntent.value === 'learn_new_and_reinforce'
   ? [...selectedNewIntentNodes.value, ...selectedReviewIntentNodes.value]
   : selectedIntentNodes.value)
@@ -516,7 +534,7 @@ watch(result, (value) => {
       : recommendation.learning_intent || recommendation.alternative_learning_intent || scoreBasedIntent
     const usingAlternativeIntent = Boolean(scoreRequiresDowngrade)
       || (!recommendation.learning_intent && Boolean(recommendation.alternative_learning_intent))
-    const supportedIntents = ['downgrade_learning', 'upgrade_learning', 'learn_new_knowledge', 'reinforce_weakness', 'learn_new_and_reinforce']
+    const supportedIntents = ['downgrade_learning', 'upgrade_learning', 'learn_new_knowledge', 'reinforce_weakness']
     learningIntent.value = supportedIntents.includes(suggestedIntent)
       ? suggestedIntent
       : 'learn_new_knowledge'
@@ -529,7 +547,7 @@ watch(result, (value) => {
     const defaultNodeIds = usingAlternativeIntent
       ? (recommendation.alternative_learning_node_ids || [])
       : (recommendation.default_learning_node_ids || recommendation.default_new_node_ids || recommendation.default_review_node_ids || [])
-    selectedIntentNodes.value = [...defaultNodeIds].slice(0, 2)
+    selectedIntentNodes.value = [...defaultNodeIds].slice(0, 1)
     if (learningIntent.value !== 'learn_new_and_reinforce') resetIntentNodes(selectedIntentNodes.value)
   } else {
     selectedIntentNodes.value = []
@@ -570,8 +588,8 @@ function resetIntentNodes(preferredIds = []) {
     .map((item) => item.skill_node_id)
   const preferred = preferredIds.filter((id) => candidates.includes(id))
   selectedIntentNodes.value = preferred.length
-    ? preferred.slice(0, 2)
-    : isTierLearning.value || learningIntent.value === 'learn_new_knowledge' ? candidates.slice(0, 1) : candidates.slice(0, 2)
+    ? preferred.slice(0, 1)
+    : isTierLearning.value || learningIntent.value === 'learn_new_knowledge' ? candidates.slice(0, 1) : candidates.slice(0, 1)
 }
 function downgradeCandidateLabel(node) {
   if (node?.reason_codes?.includes('SAME_TIER_PREREQUISITE')) return '同阶前置'
@@ -595,7 +613,8 @@ async function startEvaluation() {
     scrollToWorkspace()
   }
 }
-function selectBatch() {
+function selectBatch(fromUser = false) {
+  if (fromUser) { routeRoundId.value = ''; roundTutorResource.value = null }
   feedbackContextVersion.value += 1
   selectingOption.value = ''
   const existing = feedbackResults.value.find((item) => (
@@ -636,6 +655,7 @@ async function loadProfiles() {
   }
 }
 async function handleProfileChange() {
+  routeRoundId.value = ''; roundTutorResource.value = null
   feedbackContextVersion.value += 1
   resourceRequests.invalidate()
   form.learner_id = selectedLearnerId.value
@@ -702,7 +722,7 @@ const {
   selectFeedbackOption, selectCorrectionPackage, goToFollowupRun, dispose: disposeFollowup,
 } = useFeedbackFollowup({
   feedbackApi,
-  form, result, selectingOption, selectedResourceTypes, includeClaimCheck, generationOptions,
+  form, result, selectingOption, selectedResourceTypes, includeClaimCheck, includeClaimEvidenceRetrieval, generationOptions,
   selectedDifficulty, learningIntent, selectedNodesForFollowup, correctionPackageOption,
   router, messages: ElMessage, contextVersion: feedbackContextVersion,
 })

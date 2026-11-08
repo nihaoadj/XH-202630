@@ -18,15 +18,23 @@ from app.models.learning_documents.schemas import LearningResource
 
 
 class CompetitionClaimMetrics(BaseModel):
+    """Claim-only competition metrics.
+
+    Knowledge coverage is intentionally absent: it has exactly one source (the
+    ordinary per-target review) and is reported by ``OrdinaryCoverageEvaluation``
+    through the same pure calculation used by the run quality projection.  Claim
+    test coverage is not content coverage and must never stand in for it.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     metric_status: ClaimMetricStatus
     claim_hallucination_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     factual_claim_total: int = Field(ge=0)
     unsupported_claim_total: int = Field(ge=0)
-    target_skill_total: int = Field(ge=0)
-    covered_skill_total: int = Field(ge=0)
-    knowledge_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    supported_claim_total: int = Field(default=0, ge=0)
+    contradicted_claim_total: int = Field(default=0, ge=0)
+    not_in_evidence_claim_total: int = Field(default=0, ge=0)
 
 
 class DifficultyFixtureResult(BaseModel):
@@ -64,7 +72,6 @@ def compute_competition_claim_metrics(
     resources: Iterable[LearningResource],
     claims: Iterable[ClaimRecord],
     judgements: Iterable[ClaimJudgement],
-    target_skill_node_ids: Iterable[str],
 ) -> CompetitionClaimMetrics:
     leaf_ids = final_published_leaf_ids(resources)
     selected_claims = [
@@ -77,19 +84,22 @@ def compute_competition_claim_metrics(
         if item.resource_id in leaf_ids and item.status == ClaimJudgementStatus.COMPLETED
     }
     incomplete = [item for item in selected_claims if item.claim_id not in completed]
-    unsupported = sum(
-        completed[item.claim_id].verdict in {ClaimVerdict.CONTRADICTED, ClaimVerdict.NOT_IN_EVIDENCE}
+    supported = sum(
+        completed[item.claim_id].verdict == ClaimVerdict.SUPPORTED
         for item in selected_claims
         if item.claim_id in completed
     )
-    target_ids = set(target_skill_node_ids)
-    covered_ids = {
-        item.knowledge_point_id
+    contradicted = sum(
+        completed[item.claim_id].verdict == ClaimVerdict.CONTRADICTED
         for item in selected_claims
-        if item.knowledge_point_id in target_ids
-        and item.claim_id in completed
-        and completed[item.claim_id].verdict == ClaimVerdict.SUPPORTED
-    }
+        if item.claim_id in completed
+    )
+    absent = sum(
+        completed[item.claim_id].verdict == ClaimVerdict.NOT_IN_EVIDENCE
+        for item in selected_claims
+        if item.claim_id in completed
+    )
+    unsupported = contradicted + absent
     if incomplete:
         metric_status = ClaimMetricStatus.INCOMPLETE
         hallucination_rate = None
@@ -104,9 +114,9 @@ def compute_competition_claim_metrics(
         claim_hallucination_rate=hallucination_rate,
         factual_claim_total=len(selected_claims),
         unsupported_claim_total=unsupported,
-        target_skill_total=len(target_ids),
-        covered_skill_total=len(covered_ids),
-        knowledge_coverage_rate=(len(covered_ids) / len(target_ids)) if target_ids else None,
+        supported_claim_total=supported,
+        contradicted_claim_total=contradicted,
+        not_in_evidence_claim_total=absent,
     )
 
 

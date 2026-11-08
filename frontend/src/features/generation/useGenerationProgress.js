@@ -5,6 +5,11 @@ import {
   applyRunSnapshot, createInitialTimelineState, hydrateWorkflowTimeline, reduceWorkflowEvent,
 } from '../../utils/workflowEventReducer.js'
 
+// Existing durable events only signal "facts changed"; every refresh re-queries
+// the persisted state, so duplicates, replays and out-of-order delivery cannot
+// inflate a counter.
+const QUALITY_REFRESH_EVENTS = new Set(['resource_published', 'resource_publication_decided', 'resource_version_created', 'review_persisted', 'revision_requested', 'claim_extraction_completed', 'claim_judgement_completed', 'claim_review_failed', 'claim_metric_computed'])
+
 /** Track the selected text-generation run; the page owns shared state and cleanup. */
 export function useGenerationProgress({
   selectedRunId,
@@ -14,6 +19,7 @@ export function useGenerationProgress({
   isMounted,
   refreshStatus,
   loadClaimReports,
+  loadResourceQuality,
 }) {
   const pollTimer = ref(null)
   let streamClient = null
@@ -28,6 +34,7 @@ export function useGenerationProgress({
   }
 
   function closeRealtime() {
+    cancelPublishedResourceRefresh()
     streamGeneration += 1
     streamClient?.close()
     streamClient = null
@@ -42,13 +49,12 @@ export function useGenerationProgress({
 
   function queuePublishedResourceRefresh(runId) {
     if (runId !== selectedRunId.value || publishedResourceRefreshTimer !== null) return
-    // A resource_published event is appended only after the resource itself is
-    // durable. Coalesce a burst from the same reviewer/finalizer node so the
-    // resource list and job summary refresh once rather than once per resource.
+    // These events follow persisted changes. Coalesce review/Claim/publication
+    // signals within a bounded window; cards never poll independently.
     publishedResourceRefreshTimer = setTimeout(() => {
       publishedResourceRefreshTimer = null
       if (runId === selectedRunId.value) void refreshStatus()
-    }, 0)
+    }, 200)
   }
 
   async function hydrateTimeline(runId, generation) {
@@ -109,14 +115,17 @@ export function useGenerationProgress({
       onWorkflowEvent: (event) => {
         if (generation !== streamGeneration) return
         timelineState.value = reduceWorkflowEvent(timelineState.value, event)
-        if (event.event_type === 'resource_published') queuePublishedResourceRefresh(runId)
+        if (QUALITY_REFRESH_EVENTS.has(event.event_type)) queuePublishedResourceRefresh(runId)
       },
       onTerminal: async () => {
         if (generation !== streamGeneration) return
+        cancelPublishedResourceRefresh()
         connectionStatus.value = 'terminal'
         await refreshStatus()
         if (generation !== streamGeneration) return
         await loadClaimReports(runId)
+        if (generation !== streamGeneration) return
+        if (loadResourceQuality) await loadResourceQuality(runId)
         if (generation !== streamGeneration) return
         // The durable Run event can be observed immediately before the
         // background task marks its GenerationJob completed. Keep a short

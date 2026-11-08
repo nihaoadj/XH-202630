@@ -444,6 +444,8 @@ async function main() {
     assert.deepEqual(write.body, expected)
     await waitForPatchResponse(write)
     assert.equal(write.responseStatus, 200)
+    // The fixture records HTTP status before the browser processes the response.
+    await waitFor(async () => save.evaluate((element) => !element.disabled && !element.classList.contains('is-loading')), 'profile save completed')
     const stored = await localStoredUser(shortPage)
     assert.equal(stored.id, 'fixture-user-42')
     assert.deepEqual(stored.profile, currentUser)
