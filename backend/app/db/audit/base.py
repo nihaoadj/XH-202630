@@ -165,6 +165,47 @@ class BaseAuditRepository(ABC):
     def complete_step(self, command: CompleteStepCommand) -> AgentStepRecord:
         pass
 
+    def append_step_evidence(
+        self,
+        *,
+        run_id: str,
+        step_id: str,
+        evidence: Iterable["PersistedEvidenceSnapshot"],
+        now: datetime | None = None,
+    ) -> list[str]:
+        """Append snapshots to a still-running step; used by T50 retrieval batches.
+
+        A custom repository that predates the Claim supplement feature simply
+        refuses: the optional feature is then unavailable, never silently
+        weakened into reusing the step-level snapshot channel.
+        """
+        raise PersistenceConflict("evidence append is not supported by this repository")
+
+    def append_step_evidence_in_session(
+        self,
+        db,
+        *,
+        run_id: str,
+        step_id: str,
+        evidence: Iterable["PersistedEvidenceSnapshot"],
+        now: datetime | None = None,
+    ) -> list[str]:
+        """Same append inside a caller-owned transaction."""
+        raise PersistenceConflict("evidence append is not supported by this repository")
+
+    def update_claim_metrics(
+        self,
+        *,
+        review_id: str,
+        claim_total: int,
+        supported: int,
+        contradicted: int,
+        absent: int,
+        factual: int,
+    ) -> None:
+        """Refresh the legacy review summary after a supplement activation."""
+        return None
+
     @abstractmethod
     def save_checkpoint(
         self,

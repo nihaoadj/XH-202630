@@ -182,6 +182,16 @@ HTTP 端点实现统一归所属 `features/<domain>/api.js`，Run 查询沿用 `
 `styles/selects.css` 由 `main.js` 在主题后加载，统一 Element Plus Select、Teleport 下拉菜单及原生单选 select 的视觉 token、焦点和选中状态。领域页面只保留选择器布局/宽度及必要高度适配，不重复覆盖圆角、背景和焦点。菜单样式限定真实 Select/Dropdown 类，普通输入框、Tooltip/Popover 与课件 iframe 资产沿用各自规则；所有业务绑定与原生键盘行为保持。
 
 
+### 3.5 Claim 缺证补检（T50）
+
+- 工作流节点与调度：`agents/resource_workflows/learning_documents/claim_evidence_retrieval/`（`policy.py`/`queries.py`/`retrieval.py`/`rejudge.py`/`budget.py`/`nodes.py`）。只在新冻结策略开启时接线 `claim_evidence_retrieve` → `claim_evidence_rejudge`，关闭分支保持原图与行为。
+- 契约与有效判定：`models/reviews/claim_evidence_retrieval.py`（策略/会话/批次/重判 DTO、`round_one_identity`）与 `models/reviews/claim_resolution.py`（纯解析器，所有生产读取共用）。
+- 持久化：`db/claim/supplement.py`（SQL/Memory 账本、会话 CAS、批原子提交、激活）与 `db/claim/supplement_models.py`（侧表）；`db/claim/publication.py` 是自动收尾、用户确认、事件重放与仓储写入共用的发布 guard，在写事务内重读会话与硬阻断。
+- 证据范围：`agents/shared/evidence_scope.py` 的 `resolve_review_evidence_context`/`resolve_generation_evidence_context` 只合并显式授权的 scope 证据；父版本 spec、allocation 与原快照保持不变。`models/reviews/evidence_lineage.py` 逐边核验同 Run/spec/family 和连续版本，后继保留祖先 generation scope；普通审核在证据 hash 不变时保留 ledger；变化时建立带前序 ledger hash 的 evidence epoch，逐项承接未结问题及停止计数，已结问题重新全文审核。scope 的版本、Run、KB 或快照漂移均失败关闭。Durable runner 从持久资源、scope 与快照恢复运行时授权，缺项失败关闭。
+- 并发与执行权：发布写入和补检 session 创建共用资源写锁，创建阻断 session 同事务撤销已有发布；Memory 固定 resource→audit→supplement 锁顺序，SQLite 使用 UPDATE 获取写锁。补检关键提交校验实际 owner/lease 和目标 Run，SQL 继续复用全局执行 fencing。
+- 只读查询：`services/reviews/claim_evidence_retrieval_query.py`；API 通过 Service 访问，不直接读写数据库或模型。
+- 单份 retry：`models/generation/resource_retry.py::RetrySupplementContext` 冻结来源 scope/父链身份与补证 snapshot；准备阶段只选择同 Run 实际父链上的 generation 授权，完成检索步骤和 hash 校验后封入服务端 dispatch。`reuse_context` 将授权补证并入新 Run 初始 spec/allocation，使用新 evidence ID、导入 config hash 与 step 归属；原 spec/快照/判定不变。新 query purpose 表示该类型的导入授权，保留实际 source query hash，不制造 node 归属。同 chunk/query 的不同摘录在连续 retry 时继续按 excerpt hash 区分；业务父链跨 Run 只在冻结 source_resource 指定的边界停止，证据授权不跨过该边界。
+
 ## 4. 当前主流程调用链
 
 ### 4.1 用户资料、画像与诊断

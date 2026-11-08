@@ -34,6 +34,10 @@ from app.models.reviews.claims import (
     ClaimRecord,
     compute_claim_metric,
 )
+from app.models.reviews.claim_resolution import (
+    ClaimResolutionConflict,
+    resolve_effective_claim_judgements,
+)
 from app.models.reviews.quality_metrics import (
     COVERAGE_DEFINITION_VERSION,
     ClaimQualityV1,
@@ -220,11 +224,13 @@ class ResourceQualityQueryService:
         resource_repository,
         claim_repository=None,
         generation_job_repository=None,
+        supplement_repository=None,
     ):
         self.audit_repository = audit_repository
         self.resource_repository = resource_repository
         self.claim_repository = claim_repository
         self.generation_job_repository = generation_job_repository
+        self.supplement_repository = supplement_repository
 
     # -- public API ------------------------------------------------------
     def get_run_quality(self, run_id: str, *, resource_id: str | None = None) -> RunResourceQualityResponseV1:
@@ -278,6 +284,7 @@ class ResourceQualityQueryService:
             resource_repository=self.resource_repository,
             claim_repository=self.claim_repository,
             generation_job_repository=self.generation_job_repository,
+            supplement_repository=self.supplement_repository,
         )
 
     # -- assembly --------------------------------------------------------
@@ -685,14 +692,43 @@ class ResourceQualityQueryService:
         if projection.get("claim_check_status") == "pending":
             return claim_quality(None, requested=True, status="pending",
                                  review_id=resource.review_id, pending=True)
-        if self._conflicting_judgements(claims, judgements):
+        sessions = [
+            item for item in bundle.supplement_sessions
+            if (item.resource_id, item.resource_version, item.review_id)
+            == (resource.resource_id, resource.version, resource.review_id)
+        ]
+        supplements = [
+            item for item in bundle.supplement_judgements
+            if (item.resource_id, item.resource_version, item.review_id)
+            == (resource.resource_id, resource.version, resource.review_id)
+        ]
+        try:
+            resolution = resolve_effective_claim_judgements(
+                judgements, sessions, supplements,
+            )
+        except ClaimResolutionConflict:
+            return claim_quality(
+                None, requested=True, status="incomplete",
+                review_id=resource.review_id, conflict=True,
+                reason_codes=("CLAIM_JUDGEMENT_CONFLICT",),
+            )
+        effective = resolution.judgements
+        # Round-0 disagreement on a substituted Claim is historical, not a data
+        # conflict; every other Claim keeps the original strict check.
+        if self._conflicting_judgements(
+            claims,
+            [
+                item for item in judgements
+                if item.claim_id not in set(resolution.substituted_claim_ids)
+            ],
+        ):
             return claim_quality(
                 None, requested=True, status="incomplete",
                 review_id=resource.review_id, conflict=True,
                 reason_codes=("CLAIM_JUDGEMENT_CONFLICT",),
             )
         if claims:
-            summary = compute_claim_metric(claims, judgements)
+            summary = compute_claim_metric(claims, effective.values())
             if summary.metric_status is ClaimMetricStatus.INCOMPLETE:
                 return claim_quality(
                     summary, requested=True, status="incomplete",

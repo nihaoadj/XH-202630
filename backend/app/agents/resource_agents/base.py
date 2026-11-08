@@ -84,7 +84,12 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         by_id = {item.evidence_id: item for item in context.evidence}
         if any(evidence_id not in by_id for evidence_id in spec.evidence_ids):
             raise ApplicationError(ErrorCode.EVIDENCE_SCOPE_VIOLATION, status_code=422)
-        return [by_id[evidence_id] for evidence_id in spec.evidence_ids]
+        # Authorised child-generation excerpts are the only additions; they are
+        # validated against the same context pool the frozen spec was checked in.
+        extra = [item for item in context.supplement_evidence_ids if item not in spec.evidence_ids]
+        if any(evidence_id not in by_id for evidence_id in extra):
+            raise ApplicationError(ErrorCode.EVIDENCE_SCOPE_VIOLATION, status_code=422)
+        return [by_id[evidence_id] for evidence_id in [*spec.evidence_ids, *extra]]
 
     def common_prompt_payload(
         self,

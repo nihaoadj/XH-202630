@@ -10,6 +10,45 @@ from app.models.knowledge.knowledge import EvidenceAllocation, RESOURCE_AWARE_ST
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
 from app.models.shared.agent_contracts import ResourceSpec
 from app.models.shared.persistence import PersistedEvidenceSnapshot, canonical_hash
+from app.models.reviews.claim_evidence_retrieval import ClaimReviewEvidenceSetV1
+from app.models.reviews.evidence_lineage import evidence_from_snapshot, evidence_item_hash
+
+
+class RetryEvidenceIdentity(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    resource_id: str
+    resource_version: int = Field(ge=1)
+
+
+class RetrySupplementContext(BaseModel):
+    """Verified source grants; new runs import snapshots, never old verdicts."""
+    model_config = ConfigDict(extra="forbid")
+    lineage: list[RetryEvidenceIdentity] = Field(min_length=1, max_length=100)
+    scopes: list[ClaimReviewEvidenceSetV1] = Field(min_length=1, max_length=100)
+    evidence: list[PersistedEvidenceSnapshot] = Field(min_length=1, max_length=16)
+
+    def validate_source(self, *, run_id, knowledge_base_id, parent, base_ids):
+        identities = {(item.resource_id, item.resource_version) for item in self.lineage}
+        if parent is None or (parent.resource_id, parent.version) not in identities:
+            raise ValueError("retry supplement parent missing")
+        allowed, hashes = set(), {}
+        for scope in self.scopes:
+            if (scope.run_id != run_id or scope.purpose != "generation"
+                    or (scope.resource_id, scope.resource_version) not in identities):
+                raise ValueError("retry supplement grant mismatch")
+            for ident in scope.added_evidence_ids:
+                value = scope.snapshot_hashes[ident]
+                if ident in hashes and hashes[ident] != value:
+                    raise ValueError("retry supplement grants conflict")
+                hashes[ident] = value
+                allowed.add(ident)
+        ids = [item.evidence_id for item in self.evidence]
+        if len(ids) != len(set(ids)) or set(ids) != allowed - set(base_ids):
+            raise ValueError("retry supplement snapshots differ from grants")
+        for item in self.evidence:
+            if (item.run_id != run_id or item.knowledge_base_id != knowledge_base_id
+                    or evidence_item_hash(evidence_from_snapshot(item)) != hashes[item.evidence_id]):
+                raise ValueError("retry supplement snapshot mismatch")
 
 
 class ResourceRetryContext(BaseModel):
@@ -31,6 +70,7 @@ class ResourceRetryContext(BaseModel):
     retrieval_config_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     source_resource: LearningResource | None = None
     revision_feedback: dict[str, Any] = Field(default_factory=dict)
+    supplement_context: RetrySupplementContext | None = None
     context_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @classmethod
@@ -77,4 +117,11 @@ class ResourceRetryContext(BaseModel):
             or self.source_resource.representation != "text"
         ):
             raise ValueError("resource retry parent scope mismatch")
+        if self.supplement_context is not None:
+            self.supplement_context.validate_source(
+                run_id=self.source_run_id, knowledge_base_id=kb, parent=self.source_resource,
+                base_ids=self.spec.evidence_ids,
+            )
+            if len(self.spec.evidence_ids) + len(self.supplement_context.evidence) > 20:
+                raise ValueError("retry frozen evidence exceeds limit")
         return self

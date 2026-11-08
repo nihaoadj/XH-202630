@@ -7,6 +7,7 @@ import { canInspectStep } from './workflowPresentation.js'
 export function useGenerationAudit({ selectedRunId, selectedLearnerId }) {
   const visible = ref(false), loading = ref(false), error = ref(''), claimsError = ref('')
   const snapshot = ref({}), claims = ref({}), step = ref(null), resourceId = ref('')
+  const claimRetrieval = ref(null)
   let resourceSpecId = ''
   let representation = ''
   const guard = createRequestGuard(() => ({ learner: selectedLearnerId.value, run: selectedRunId.value, visible: visible.value }))
@@ -15,6 +16,7 @@ export function useGenerationAudit({ selectedRunId, selectedLearnerId }) {
     guard.invalidate()
     visible.value = false; loading.value = false; error.value = ''; claimsError.value = ''
     snapshot.value = {}; claims.value = {}; step.value = null; resourceId.value = ''
+    claimRetrieval.value = null
     resourceSpecId = ''
     representation = ''
   }
@@ -26,9 +28,10 @@ export function useGenerationAudit({ selectedRunId, selectedLearnerId }) {
     if (!selectedRunId.value || !visible.value) return
     const request = guard.capture(), runId = selectedRunId.value
     loading.value = true; error.value = ''; claimsError.value = ''
-    snapshot.value = {}; claims.value = {}
-    const [timelineResult, claimsResult] = await Promise.allSettled([
+    snapshot.value = {}; claims.value = {}; claimRetrieval.value = null
+    const [timelineResult, claimsResult, supplementResult] = await Promise.allSettled([
       runApi.timeline(runId, { limit: 500 }), runApi.claims(runId),
+      runApi.claimEvidenceRetrieval(runId),
     ])
     if (!request.isCurrent()) return
     if (timelineResult.status === 'fulfilled' && (!timelineResult.value.data?.run?.run_id || timelineResult.value.data.run.run_id === runId)) {
@@ -49,6 +52,15 @@ export function useGenerationAudit({ selectedRunId, selectedLearnerId }) {
     if (claimsResult.status === 'fulfilled' && (!claimsResult.value.data?.run_id || claimsResult.value.data.run_id === runId)) {
       claims.value = claimsResult.value.data || {}
     } else claimsError.value = 'Claim 判定加载失败，不能据此判断事实已通过。'
+    if (
+      supplementResult.status === 'fulfilled'
+      && (!supplementResult.value.data?.run_id || supplementResult.value.data.run_id === runId)
+    ) {
+      claimRetrieval.value = supplementResult.value.data || null
+    } else if (supplementResult.status === 'rejected' && supplementResult.reason?.response?.status !== 404) {
+      // A missing summary must never be displayed as "supplement passed".
+      claimRetrieval.value = null
+    }
     loading.value = false
   }
   function openStep(value) {
@@ -64,5 +76,8 @@ export function useGenerationAudit({ selectedRunId, selectedLearnerId }) {
     representation = value.representation || 'text'
     visible.value = true; refresh()
   }
-  return { visible, loading, error, claimsError, snapshot, claims, step, resourceId, refresh, openStep, openResource }
+  return {
+    visible, loading, error, claimsError, snapshot, claims, step, resourceId,
+    claimRetrieval, refresh, openStep, openResource,
+  }
 }

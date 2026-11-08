@@ -26,6 +26,7 @@
           <section v-else-if="contentKind === 'claims'" class="claim-verification detail-module" aria-label="陈述事实核验">
             <el-alert v-if="claimsError && claimEnabled" :title="claimsError" type="warning" :closable="false" show-icon />
             <div class="claim-audit-heading detail-section-heading"><span class="section-number">CLAIM / EVIDENCE</span><h3>{{ claimAuditSummary(metric, claimEnabled) }}</h3></div>
+            <ClaimEvidenceRetrievalPanel v-if="claimEnabled" :summary="claimRetrieval" />
             <ClaimEvidenceList v-if="claimEnabled && resource" :key="resourceId" :rows="rows" focus-first><template v-if="rows.length" #summary><div class="claim-verdict-counts"><span v-for="item in verdictCounts" :key="item.verdict" :class="`is-${item.verdict}`" :aria-label="`${item.label} ${item.count}`">{{ item.shortLabel }} <strong>{{ item.count }}</strong></span></div></template></ClaimEvidenceList>
             <p v-else-if="claimEnabled" class="empty-note">本节点未关联可核验的资源，无法展示 Claim 判定。</p>
             <p v-else class="result-caption">此节点没有启用事实核验，不能据此认为事实通过。</p>
@@ -48,6 +49,7 @@
 <script setup>
 import { computed } from 'vue'
 import ClaimEvidenceList from './ClaimEvidenceList.vue'
+import ClaimEvidenceRetrievalPanel from './ClaimEvidenceRetrievalPanel.vue'
 import WorkflowNodeResult from './workflow-detail/WorkflowNodeResult.vue'
 import WorkflowReviewPanel from './workflow-detail/WorkflowReviewPanel.vue'
 import WorkflowEvidencePanel from './workflow-detail/WorkflowEvidencePanel.vue'
@@ -62,6 +64,7 @@ const props = defineProps({
   snapshot: { type: Object, default: () => ({}) }, claims: { type: Object, default: () => ({}) },
   quality: { type: Object, default: null },
   step: { type: Object, default: null }, resourceId: { type: String, default: '' }, runId: { type: String, default: '' }, claimEnabled: { type: Boolean, default: true },
+  claimRetrieval: { type: Object, default: null },
 })
 defineEmits(['update:visible', 'update:resourceId', 'refresh'])
 const role = computed(() => detailRole(props.step))

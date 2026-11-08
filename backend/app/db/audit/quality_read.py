@@ -35,6 +35,11 @@ from app.db.audit.base import (
 )
 from app.models.learning_documents.schemas import LearningResource
 from app.db.learning_documents.models import ResourceExecutionRecord, ResourceSpecRecord
+from app.models.reviews.claim_evidence_retrieval import (
+    ClaimEvidenceRetrievalSessionV1,
+    ClaimReviewEvidenceSetV1,
+    ClaimSupplementJudgementV1,
+)
 from app.models.reviews.claims import ClaimJudgement, ClaimRecord
 from app.models.shared.persistence import (
     AgentRunRecord,
@@ -54,12 +59,14 @@ _SQL_REPOSITORIES = {
     ("app.db.audit.sql_repository", "SQLAuditRepository"),
     ("app.db.learning_documents.sql_repository", "SQLResourceRepository"),
     ("app.db.claim.sql_repository", "SQLClaimRepository"),
+    ("app.db.claim.supplement", "SQLClaimSupplementRepository"),
     ("app.db.generation.sql_repository", "SQLGenerationJobRepository"),
 }
 _MEMORY_REPOSITORIES = {
     ("app.db.audit.memory", "MemoryAuditRepository"),
     ("app.db.learning_documents.memory", "MemoryResourceRepository"),
     ("app.db.claim.memory", "MemoryClaimRepository"),
+    ("app.db.claim.supplement", "MemoryClaimSupplementRepository"),
     ("app.db.generation.memory", "MemoryGenerationJobRepository"),
 }
 
@@ -85,6 +92,9 @@ class QualitySourceBundle:
     resources: tuple[LearningResource, ...] = ()
     claims: tuple[ClaimRecord, ...] = ()
     judgements: tuple[ClaimJudgement, ...] = ()
+    supplement_sessions: tuple[ClaimEvidenceRetrievalSessionV1, ...] = ()
+    supplement_judgements: tuple[ClaimSupplementJudgementV1, ...] = ()
+    evidence_sets: tuple[ClaimReviewEvidenceSetV1, ...] = ()
     reviews: tuple[tuple[str, Any], ...] = ()
     failure_code: str | None = None
 
@@ -100,11 +110,14 @@ def read_quality_sources(
     resource_repository,
     claim_repository,
     generation_job_repository=None,
+    supplement_repository=None,
 ) -> QualitySourceBundle:
     """Return one consistent, detached source packet for ``run_id``."""
     repositories = [audit_repository, resource_repository, claim_repository]
     if generation_job_repository is not None:
         repositories.append(generation_job_repository)
+    if supplement_repository is not None:
+        repositories.append(supplement_repository)
     mode = _read_mode(repositories)
     if mode == NATIVE_SQL:
         return _read_sql(run_id, repositories=repositories)
@@ -133,7 +146,14 @@ def _bound_copy(repository, session_factory):
 
 def _read_sql(run_id: str, *, repositories) -> QualitySourceBundle:
     audit_repository, resource_repository, claim_repository = repositories[:3]
-    job_repository = repositories[3] if len(repositories) > 3 else None
+    job_repository = next(
+        (item for item in repositories[3:] if hasattr(item, "get") and item.__class__.__name__.startswith("SQLGeneration")),
+        None,
+    )
+    supplement_repository = next(
+        (item for item in repositories[3:] if "Supplement" in item.__class__.__name__),
+        None,
+    )
     engine = audit_repository.session_factory.kw["bind"]
     connection = engine.connect()
     dbapi = connection.connection.dbapi_connection
@@ -166,6 +186,10 @@ def _read_sql(run_id: str, *, repositories) -> QualitySourceBundle:
         resource = _bound_copy(resource_repository, bound)
         claim = _bound_copy(claim_repository, bound)
         job_repo = _bound_copy(job_repository, bound) if job_repository is not None else None
+        supplement_repo = (
+            _bound_copy(supplement_repository, bound)
+            if supplement_repository is not None else None
+        )
         run = audit.get_run(run_id)
         job = job_repo.get(run_id) if job_repo is not None and run is not None else None
         if run is None:
@@ -187,6 +211,18 @@ def _read_sql(run_id: str, *, repositories) -> QualitySourceBundle:
             resources=resources,
             claims=tuple(claim.list_claims_by_runs([run_id])),
             judgements=tuple(claim.list_judgements_by_runs([run_id])),
+            supplement_sessions=(
+                tuple(supplement_repo.list_sessions([run_id]))
+                if supplement_repo is not None else ()
+            ),
+            supplement_judgements=(
+                tuple(supplement_repo.list_supplements([run_id]))
+                if supplement_repo is not None else ()
+            ),
+            evidence_sets=(
+                tuple(supplement_repo.list_evidence_sets([run_id]))
+                if supplement_repo is not None else ()
+            ),
             reviews=tuple(audit.get_reviews_by_resources(
                 [item.resource_id for item in resources],
             ).items()) if resources else (),
@@ -211,10 +247,18 @@ def _read_sql(run_id: str, *, repositories) -> QualitySourceBundle:
 
 def _read_memory(run_id: str, *, repositories) -> QualitySourceBundle:
     audit_repository, resource_repository, claim_repository = repositories[:3]
-    job_repository = repositories[3] if len(repositories) > 3 else None
+    job_repository = next(
+        (item for item in repositories[3:] if "Generation" in item.__class__.__name__),
+        None,
+    )
+    supplement_repository = next(
+        (item for item in repositories[3:] if "Supplement" in item.__class__.__name__),
+        None,
+    )
     # Fixed acquisition order; no other repository nests these locks.
     ordered = [repository for repository in (job_repository, audit_repository,
-                                             resource_repository, claim_repository)
+                                             resource_repository, claim_repository,
+                                             supplement_repository)
                if repository is not None]
     with ExitStack() as stack:
         for repository in ordered:
@@ -240,6 +284,18 @@ def _read_memory(run_id: str, *, repositories) -> QualitySourceBundle:
             resources=resources,
             claims=tuple(claim_repository.list_claims_by_runs([run_id])),
             judgements=tuple(claim_repository.list_judgements_by_runs([run_id])),
+            supplement_sessions=(
+                tuple(supplement_repository.list_sessions([run_id]))
+                if supplement_repository is not None else ()
+            ),
+            supplement_judgements=(
+                tuple(supplement_repository.list_supplements([run_id]))
+                if supplement_repository is not None else ()
+            ),
+            evidence_sets=(
+                tuple(supplement_repository.list_evidence_sets([run_id]))
+                if supplement_repository is not None else ()
+            ),
             reviews=tuple(audit_repository.get_reviews_by_resources(
                 [item.resource_id for item in resources],
             ).items()) if resources else (),

@@ -218,6 +218,7 @@
             <el-checkbox label="案例分析">案例分析</el-checkbox>
           </el-checkbox-group>
           <el-checkbox v-model="includeClaimCheck" class="claim-check-choice">启用 Claim 审核</el-checkbox>
+          <el-checkbox v-model="includeClaimEvidenceRetrieval" class="claim-check-choice" :disabled="!includeClaimCheck">证据不足时补检知识库</el-checkbox>
           <el-select v-if="!generationOptions" v-model="selectedDifficulty" class="difficulty-choice" aria-label="资源难度">
             <el-option label="初级" value="初级" />
             <el-option label="中级" value="中级" />
@@ -323,6 +324,7 @@ const result = ref(null)
 const feedbackContextVersion = ref(0)
 const selectedResourceTypes = ref([])
 const includeClaimCheck = ref(false)
+const includeClaimEvidenceRetrieval = ref(false)
 const selectedDifficulty = ref('中级')
 const learningIntent = ref('reinforce_weakness')
 const selectedIntentNodes = ref([])
@@ -720,7 +722,7 @@ const {
   selectFeedbackOption, selectCorrectionPackage, goToFollowupRun, dispose: disposeFollowup,
 } = useFeedbackFollowup({
   feedbackApi,
-  form, result, selectingOption, selectedResourceTypes, includeClaimCheck, generationOptions,
+  form, result, selectingOption, selectedResourceTypes, includeClaimCheck, includeClaimEvidenceRetrieval, generationOptions,
   selectedDifficulty, learningIntent, selectedNodesForFollowup, correctionPackageOption,
   router, messages: ElMessage, contextVersion: feedbackContextVersion,
 })

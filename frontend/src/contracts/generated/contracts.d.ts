@@ -185,6 +185,7 @@ export type ClaimStatusBucketsV1 = {
 
 export type ContinueResourceBatchRequest = {
   "include_claim_check"?: (boolean) | (null);
+  "include_claim_evidence_retrieval"?: (boolean) | (null);
   "instructions"?: (string) | (null);
   "learner_id": string;
   "replace_existing_types"?: boolean;
@@ -521,6 +522,7 @@ export type GenerateCreateRequest = {
   "difficulty_preference"?: (string) | (null);
   "generation_mode"?: ("draft" | "standard" | "strict") | (null);
   "include_claim_check"?: boolean;
+  "include_claim_evidence_retrieval"?: boolean;
   "include_review"?: boolean;
   "knowledge_base_id"?: (string) | (null);
   "learner_id": string;
@@ -538,6 +540,7 @@ export type GenerateRequest = {
   "difficulty_preference"?: (string) | (null);
   "generation_mode"?: ("draft" | "standard" | "strict") | (null);
   "include_claim_check"?: boolean;
+  "include_claim_evidence_retrieval"?: boolean;
   "include_review"?: boolean;
   "knowledge_base_id"?: (string) | (null);
   "learner_id": string;
@@ -555,6 +558,7 @@ export type GenerateRoundCreateRequestV1 = {
   "difficulty_preference"?: (string) | (null);
   "generation_mode"?: ("draft" | "standard" | "strict") | (null);
   "include_claim_check"?: boolean;
+  "include_claim_evidence_retrieval"?: boolean;
   "include_review"?: boolean;
   "knowledge_base_id"?: (string) | (null);
   "learner_id": string;
@@ -1321,6 +1325,7 @@ export type RoundCandidatesV1 = {
 
 export type RoundCorrectionSelectionV1 = {
   "include_claim_check"?: boolean;
+  "include_claim_evidence_retrieval"?: boolean;
   "learner_id": string;
   "schema_version"?: "1.0";
   "selection_key": string;
@@ -1411,6 +1416,7 @@ export type RoundMemberSummaryV1 = {
 
 export type RoundNextSelectionV1 = {
   "include_claim_check"?: boolean;
+  "include_claim_evidence_retrieval"?: boolean;
   "learner_id": string;
   "primary_learning_intent": LearningIntent;
   "primary_node_id": string;

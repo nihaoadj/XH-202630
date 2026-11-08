@@ -11,7 +11,11 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.learning_documents.state import AgentState
-from app.agents.shared.evidence_scope import evidence_for_resource, validate_payload_evidence, contract_error
+from app.agents.shared.evidence_scope import (
+    contract_error,
+    resolve_review_evidence_context,
+    validate_payload_evidence,
+)
 from app.agents.shared.llm_accounting import stage_labeled_scope
 from app.config import get_settings
 from app.core.security.errors import ErrorCode
@@ -338,7 +342,7 @@ def _legacy_claim_extract_node(
         if item.resource_type == "分阶测试题" and item.assessment_payload is not None
     }
     for resource in all_resources:
-        resource_evidence = evidence_for_resource(state, resource)
+        resource_evidence = resolve_review_evidence_context(state, resource)
         validate_payload_evidence(resource, resource_evidence)
     resources = [item for item in all_resources if item.resource_id not in assessment_resource_ids]
     evidence = state.get("retrieved_evidence", [])
@@ -376,7 +380,7 @@ def _legacy_claim_extract_node(
     used_evidence_ids = set()
     repaired_claim_count = 0
     for index, resource in enumerate(resources):
-        evidence = evidence_for_resource(state, resource)
+        evidence = resolve_review_evidence_context(state, resource)
         validate_payload_evidence(resource, evidence)
         allowed_evidence = {item.evidence_id for item in evidence}
         used_evidence_ids.update(allowed_evidence)
@@ -556,7 +560,7 @@ def _neutral_claim_extract_node(state, *, llm_gateway, repository, counter):
     claims, refs, failed, errors, assessments = [], [], [], [], []
     last_result = None
     for index, resource in enumerate(resources):
-        evidence = evidence_for_resource(state, resource)
+        evidence = resolve_review_evidence_context(state, resource)
         validate_payload_evidence(resource, evidence)
         if resource.resource_type == "分阶测试题" and resource.assessment_payload is not None:
             assessments.append(resource.resource_id)
@@ -625,7 +629,7 @@ def _judge_claims_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
                         resource_ids=state.get("claim_eligible_resource_ids", []))
     for resource in state.get("generated_resources", []):
         if resource.resource_id in assessment_resource_ids:
-            validate_payload_evidence(resource, evidence_for_resource(state, resource))
+            validate_payload_evidence(resource, resolve_review_evidence_context(state, resource))
     evidence = state.get("retrieved_evidence", [])
     claims_by_resource: dict[str, list[ClaimRecord]] = defaultdict(list)
     for item in claims:
@@ -640,7 +644,7 @@ def _judge_claims_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
     for index, (resource_id, resource_claims) in enumerate(judge_items):
         if resource_id not in resource_by_id:
             raise contract_error()
-        evidence = evidence_for_resource(state, resource_by_id[resource_id])
+        evidence = resolve_review_evidence_context(state, resource_by_id[resource_id])
         used_evidence_ids.update(item.evidence_id for item in evidence)
         judge_deadline = _resource_deadline(
             state.get("workflow_deadline_at"),
@@ -825,6 +829,7 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
             "legacy_reviewer_score": review.get("hallucination_score"),
         })
         resources = {item.resource_id: item for item in state.get("generated_resources", [])}
+        hard_block_ids = set(state.get("claim_evidence_hard_block_resource_ids", []))
         existing_issue_resources = {
             str(item.get("resource_id"))
             for item in review.get("issues", [])
@@ -848,6 +853,37 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
                 "knowledge_point": None,
                 "description": "该资源的 Claim 审核未完成，需要人工复核。",
             })
+        for resource_id in sorted(hard_block_ids):
+            resource = resources.get(resource_id)
+            if resource is None:
+                continue
+            review.setdefault("issues", []).append({
+                "issue_id": str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{state.get('run_id')}:claim-evidence-hard-block:{resource_id}",
+                )),
+                "code": "factual_risk",
+                "severity": "high",
+                "resource_type": resource.resource_type,
+                "resource_id": resource.resource_id,
+                "resource_version": resource.version,
+                "claim_ids": [],
+                "knowledge_point": None,
+                "description": "补检发现新反证或来源冲突，该版本不得发布，需修订后重新审核。",
+            })
+            review.setdefault("revision_instructions", []).append({
+                "instruction_id": str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{state.get('run_id')}:claim-evidence-instruction:{resource_id}",
+                )),
+                "issue_codes": ["factual_risk"],
+                "target_resource_type": resource.resource_type,
+                "target_claim_ids": [],
+                "action": "依据新增证据修正或删除与反证冲突的陈述，并重新进行 Claim 抽取与判定。",
+                "priority": 1,
+            })
+            if not bad:
+                decision = ReviewDecision.REVISE
         if incomplete:
             decision = ReviewDecision.HUMAN_REVIEW
         elif bad:
@@ -877,8 +913,10 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
                 })
         else:
             # Claim approval only clears the Claim gate for eligible resources.
-            # It must not overwrite a sibling's ordinary-review hold.
-            decision = ordinary_decision
+            # It must not overwrite a sibling's ordinary-review hold.  A
+            # persisted round-1 hard block is never cleared by an ordinary
+            # approval, so it still forces a targeted revision.
+            decision = ReviewDecision.REVISE if hard_block_ids else ordinary_decision
         review.update({
             "decision": decision.value,
             "status": decision.value,

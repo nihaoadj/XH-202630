@@ -160,6 +160,31 @@ class Settings(BaseSettings):
     # (explicit, used by test fixtures) keeps the historical v1 prompt with no
     # source locating sub-contract.
     claim_extraction_source_locating_mode: Literal["exact_v1", "tolerant_v1"] | None = "tolerant_v1"
+    # T50 optional Claim evidence retrieval.  Engineering limits only: they are
+    # frozen into each Run and are not a measured latency, cost or recall claim.
+    claim_evidence_retrieval_query_batch_claims: int = Field(default=16, ge=1, le=16)
+    claim_evidence_retrieval_rejudge_batch_claims: int = Field(default=16, ge=1, le=16)
+    claim_evidence_retrieval_queries_per_claim: int = Field(default=2, ge=1, le=3)
+    claim_evidence_retrieval_max_queries_per_claim: int = Field(default=3, ge=1, le=3)
+    claim_evidence_retrieval_max_queries: int = Field(default=96, ge=1, le=96)
+    claim_evidence_retrieval_queries_per_request: int = Field(default=6, ge=1, le=6)
+    claim_evidence_retrieval_max_new_excerpts_per_resource: int = Field(default=8, ge=1, le=8)
+    claim_evidence_retrieval_max_new_excerpts: int = Field(default=16, ge=1, le=16)
+    claim_evidence_retrieval_max_logical_calls: int = Field(default=16, ge=1, le=16)
+    claim_evidence_retrieval_max_attempts: int = Field(default=24, ge=1, le=24)
+    claim_evidence_retrieval_attempts_per_call: int = Field(default=3, ge=1, le=3)
+    claim_evidence_retrieval_query_input_cap: int = Field(default=16384, ge=1024, le=65536)
+    claim_evidence_retrieval_query_output_cap: int = Field(default=4096, ge=512, le=8192)
+    claim_evidence_retrieval_rejudge_input_cap: int = Field(default=32768, ge=1024, le=131072)
+    claim_evidence_retrieval_rejudge_output_cap: int = Field(default=8192, ge=512, le=16384)
+    claim_evidence_retrieval_rejudge_truncated_output_cap: int = Field(default=16384, ge=512, le=32768)
+    claim_evidence_retrieval_max_estimated_tokens: int = Field(default=196608, ge=1024)
+    claim_evidence_retrieval_attempt_timeout_seconds: float = Field(default=180.0, gt=0, le=180, allow_inf_nan=False)
+    claim_evidence_retrieval_retrieval_timeout_seconds: float = Field(default=120.0, gt=0, le=120, allow_inf_nan=False)
+    claim_evidence_retrieval_max_wall_seconds: float = Field(default=600.0, gt=0, le=600, allow_inf_nan=False)
+    claim_evidence_retrieval_downstream_reserve_seconds: float = Field(default=300.0, ge=0, le=600, allow_inf_nan=False)
+    claim_evidence_retrieval_excerpt_chars: int = Field(default=2000, ge=100, le=4000)
+    claim_evidence_retrieval_excerpt_structural_cap: int = Field(default=4000, ge=100, le=10000)
     # Resource generation produces the user-facing artifact. It receives one
     # additional bounded recovery attempt for empty provider responses, while
     # supporting nodes (review/diagnosis/claim checks) retain the global limit.
@@ -545,6 +570,17 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
         if self.claim_schema_repair_attempts > self.claim_max_attempts - 1:
             raise ValueError("CFG_INVALID_CLAIM_RETRY_POLICY")
+        if self.claim_evidence_retrieval_queries_per_claim > self.claim_evidence_retrieval_max_queries_per_claim:
+            raise ValueError("CFG_INVALID_CLAIM_EVIDENCE_RETRIEVAL_POLICY")
+        if self.claim_evidence_retrieval_downstream_reserve_seconds >= self.claim_evidence_retrieval_max_wall_seconds:
+            raise ValueError("CFG_INVALID_CLAIM_EVIDENCE_RETRIEVAL_POLICY")
+        if self.claim_evidence_retrieval_excerpt_chars > self.claim_evidence_retrieval_excerpt_structural_cap:
+            raise ValueError("CFG_INVALID_CLAIM_EVIDENCE_RETRIEVAL_POLICY")
+        if self.claim_evidence_retrieval_max_estimated_tokens < (
+            self.claim_evidence_retrieval_rejudge_input_cap
+            + self.claim_evidence_retrieval_rejudge_output_cap
+        ):
+            raise ValueError("CFG_INVALID_CLAIM_EVIDENCE_RETRIEVAL_POLICY")
         if self.retrieval_min_evidence > self.retrieval_max_evidence:
             raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
         if self.retrieval_timeout_seconds >= self.llm_workflow_timeout_seconds:

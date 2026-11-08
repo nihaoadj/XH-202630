@@ -128,9 +128,16 @@ def evidence_id(
     retrieval_query_hash: str,
     knowledge_chunk_id: str,
     config_hash: str,
+    excerpt_identity: str | None = None,
 ) -> str:
-    return _identifier(
-        "ev",
+    """Stable evidence identity.
+
+    ``excerpt_identity`` is additive: legacy callers omit it and keep the exact
+    historical ID material, while a targeted window must be a distinct snapshot
+    from another window of the same Chunk.
+    """
+
+    parts: list[object] = [
         KNOWLEDGE_SCHEMA_VERSION,
         run_id,
         step_id,
@@ -138,4 +145,7 @@ def evidence_id(
         retrieval_query_hash,
         knowledge_chunk_id,
         config_hash,
-    )
+    ]
+    if excerpt_identity is not None:
+        parts.append(excerpt_identity)
+    return _identifier("ev", *parts)

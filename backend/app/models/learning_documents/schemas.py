@@ -235,6 +235,10 @@ class GenerateRequest(BaseModel):
     )
     include_review: bool = Field(default=True, description="是否进入审核")
     include_claim_check: bool = Field(default=False, description="是否进行 Claim 级审核；开启后建议每任务只生成一个资源")
+    include_claim_evidence_retrieval: bool = Field(
+        default=False,
+        description="事实 Claim 首次缺证时补检知识库并重判；需同时开启普通审核与 Claim 审核",
+    )
     # Initial generation plus two revisions means at most three visible attempts.
     max_iterations: int = Field(default=2, ge=0, le=3, description="最大业务返工次数")
     claim_max_iterations: int = Field(
@@ -273,6 +277,24 @@ class GenerateRequest(BaseModel):
 
     @model_validator(mode="after")
     def require_resource_review_for_claim_audit(self) -> "GenerateRequest":
+        from app.models.reviews.claim_evidence_retrieval import validate_feature_switch
+
+        if self.include_claim_evidence_retrieval:
+            if "include_claim_check" not in self.model_fields_set:
+                # Legacy/omitted requests are interpreted as closed; asking for
+                # supplements without an explicit Claim audit is invalid.
+                raise ValueError(
+                    "include_claim_evidence_retrieval requires include_claim_check=true"
+                )
+            validate_feature_switch(
+                include_claim_evidence_retrieval=True,
+                include_claim_check=self.include_claim_check,
+                include_review=self.include_review,
+            )
+            if len(self.resource_types) != 1:
+                raise ValueError(
+                    "include_claim_evidence_retrieval requires one resource_type per request"
+                )
         if self.include_claim_check and not self.include_review:
             # Keep the explicit no-review/draft path usable.  A caller that
             # did not send this field receives the effective safe default for
@@ -347,6 +369,10 @@ class ContinueResourceBatchRequest(BaseModel):
     include_claim_check: Optional[bool] = Field(
         default=None,
         description="可选：覆盖源任务的 Claim 审核设置；省略时沿用源任务",
+    )
+    include_claim_evidence_retrieval: Optional[bool] = Field(
+        default=None,
+        description="可选：覆盖源任务的 Claim 补检设置；省略时继承，显式 false 关闭",
     )
     source_run_id: Optional[str] = Field(
         default=None,

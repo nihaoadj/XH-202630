@@ -103,6 +103,10 @@ def _config_payload(
 ) -> dict:
     policy_payload = policy.model_dump(mode="json")
     policy_payload.pop("strategy_version")
+    if policy_payload.get("excerpt_strategy") == "prefix":
+        # Keep every historical config hash byte-for-byte identical.
+        for key in ("excerpt_strategy", "excerpt_chars", "excerpt_structural_cap"):
+            policy_payload.pop(key, None)
     payload = {
         "schema_version": "1.0",
         "collection_resolver_version": "kb-hash-v1",
@@ -726,37 +730,62 @@ class EvidenceRetriever:
         retrieved_at = self.clock()
         evidence: list[EvidenceItem] = []
         evidence_by_chunk: dict[str, str] = {}
-        for rank, (candidate, chunk, normalized_score) in enumerate(ranked, start=1):
+        rank = 0
+        for candidate, chunk, normalized_score in ranked:
             hashed_query = query_hash(candidate.query)
-            excerpt = normalize_text(normalize_text(chunk.text)[: policy.max_excerpt_chars])
-            item = EvidenceItem(
-                evidence_id=evidence_id(
-                    run_id=request.run_id,
-                    step_id=request.step_id,
-                    knowledge_base_id=request.knowledge_base_id,
-                    retrieval_query_hash=hashed_query,
-                    knowledge_chunk_id=chunk.chunk_id,
+            if policy.excerpt_strategy == "claim_window_v1":
+                from app.core.retrieval.excerpt import build_excerpt_windows
+
+                windows = build_excerpt_windows(
+                    chunk.text,
+                    [candidate.query],
+                    excerpt_chars=policy.excerpt_chars or policy.max_excerpt_chars,
+                    structural_cap=policy.excerpt_structural_cap or policy.max_excerpt_chars,
+                )
+                excerpts = [
+                    (window.text, window.excerpt_identity) for window in windows
+                ] or [(
+                    normalize_text(normalize_text(chunk.text)[: policy.max_excerpt_chars]),
+                    None,
+                )]
+            else:
+                excerpts = [(
+                    normalize_text(normalize_text(chunk.text)[: policy.max_excerpt_chars]),
+                    None,
+                )]
+            for excerpt, identity in excerpts:
+                rank += 1
+                item = EvidenceItem(
+                    evidence_id=evidence_id(
+                        run_id=request.run_id,
+                        step_id=request.step_id,
+                        knowledge_base_id=request.knowledge_base_id,
+                        retrieval_query_hash=hashed_query,
+                        knowledge_chunk_id=chunk.chunk_id,
+                        config_hash=config_hash,
+                        excerpt_identity=identity,
+                    ),
+                    knowledge_base_id=chunk.knowledge_base_id,
+                    document_id=chunk.document_id,
+                    document_version=chunk.document_version,
+                    chunk_id=chunk.chunk_id,
+                    query=candidate.query,
+                    query_hash=hashed_query,
+                    query_rank=candidate.query_rank,
+                    rank=rank,
+                    raw_score=candidate.raw_score,
+                    score_kind=candidate.score_kind,
+                    normalized_score=normalized_score,
+                    excerpt=excerpt,
+                    excerpt_hash=sha256_hex(excerpt),
+                    locator=chunk.locator,
                     config_hash=config_hash,
-                ),
-                knowledge_base_id=chunk.knowledge_base_id,
-                document_id=chunk.document_id,
-                document_version=chunk.document_version,
-                chunk_id=chunk.chunk_id,
-                query=candidate.query,
-                query_hash=hashed_query,
-                query_rank=candidate.query_rank,
-                rank=rank,
-                raw_score=candidate.raw_score,
-                score_kind=candidate.score_kind,
-                normalized_score=normalized_score,
-                excerpt=excerpt,
-                excerpt_hash=sha256_hex(excerpt),
-                locator=chunk.locator,
-                config_hash=config_hash,
-                retrieved_at=retrieved_at,
-            )
-            evidence.append(item)
-            evidence_by_chunk[chunk.chunk_id] = item.evidence_id
+                    retrieved_at=retrieved_at,
+                )
+                evidence.append(item)
+                evidence_by_chunk[chunk.chunk_id] = item.evidence_id
+        if len(evidence) > policy.max_evidence_count:
+            evidence = evidence[: policy.max_evidence_count]
         node_evidence_map: dict[str, list[str]] = {}
         for node_id in node_order:
             ordered = sorted(

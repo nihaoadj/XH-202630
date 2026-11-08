@@ -281,6 +281,27 @@ backend/chroma_db/
 
 ORM 入口是 `db/shared/models.py` 与 `db/courseware/models.py`，初始化与迁移装配位于 `db/shared/database.py`。Tutor 不写掌握度；课件交互自评不替代正式反馈成绩。
 
+### 3.11 Claim 缺证补检（T50，附加表）
+
+迁移 `backend/app/db/migrations/p0_39_claim_evidence_retrieval.py` 只新增侧表，不改既有列、唯一约束或行。原有 `resource_claims`、`claim_judgements`、`retrieval_evidence_snapshots` 仍是首轮判定与证据正文的唯一事实源。
+
+| 表 | 关键约束 | 用途 |
+|---|---|---|
+| `claim_evidence_retrieval_runs` | PK `run_id`，FK `agent_runs` | 冻结策略、预算账本（预留/已知/未知用量、逻辑调用、attempt、query 数）、owner/epoch |
+| `claim_evidence_retrieval_sessions` | PK `session_id`；UNIQUE run/resource/version/review | 每资源版本一个补检会话，终态不可改，`hard_block` 只允许 false→true |
+| `claim_evidence_retrieval_batches` | PK `batch_id`；UNIQUE session/kind/ordinal | query/retrieve/rejudge 批，payload ≤1 MiB |
+| `claim_evidence_retrieval_attempts` | PK `attempt_id`；UNIQUE batch/logical_call/attempt_no | 每次真实发送的预留与结算；未知用量保留预留 |
+| `claim_review_evidence_sets` | PK `scope_id`；UNIQUE run/resource/version/purpose/session | 受控证据 scope（audit/generation）与有序 manifest hash |
+| `claim_supplement_judgements` | PK `judgement_id`；UNIQUE session/claim | 第二轮判定，`round_no=1`，引用同 Run 已持久化快照 |
+| `claim_supplement_evidence` | UNIQUE judgement/evidence | 新判定与既有快照的关联，不写入旧 `claim_evidence` 外键 |
+
+- 生效集合由 `models/reviews/claim_resolution.py` 统一解析：只有 `active=true` 且 `completed` 的会话替换首次 `not_in_evidence` 项，其余沿用首轮。历史差异不视为数据冲突；同一激活轮重复不同 payload 仍是硬错误。
+- 激活在同一事务内校验证据 scope 身份、持久化第二轮集合身份与拟激活指标一致，然后写会话、scope 与 review 汇总；重复激活幂等，不同内容冲突。
+- 新反证批提交时在同一事务写 `hard_block` 并把该资源版本置为未发布（版本级安全戳）；`db/claim/publication.py` 在每次发布写入的事务内重读会话状态。
+- 补检 session 创建和发布使用同一资源写锁；创建 pending 等阻断 session 时原子撤销已发布状态。首次保存为 published 同样执行 guard，避免检查与写入之间插入新 session。
+- 证据继承通过持久 parent 链验证 run/spec/family/version，连续返工保留祖先 generation scope；恢复验证 manifest、快照 hash 与 KB 绑定。补检重判、激活和证据 scope 写入在执行上下文中校验 owner/lease 与目标 Run，失租拒绝提交。
+- 单资源 retry 把选中资料的授权补证导入为新 Run 初始快照；来源 scope、原始 snapshot 与父链身份保存在冻结 `ResourceRetryContext.supplement_context` 中。复制后的 evidence ID/config/snapshot hash 属于新 Run/reuse_context step，不复制旧补检 session、Claim/Judgement 或通过结论；新正文重新生成审核。新 spec/allocation 扩展不会修改源记录，不需要新表或迁移。
+
 ## 4. 当前 API 与数据库的关系
 
 ### 4.1 学习目录

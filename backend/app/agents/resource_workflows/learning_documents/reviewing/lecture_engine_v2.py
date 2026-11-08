@@ -18,7 +18,9 @@ from uuid import uuid4
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.llm.gateway import LLMGatewayError
+from app.models.reviews.evidence_context import build_carry_over, context_fields
 from app.models.reviews.lecture_review import LectureReviewBindingV1
+from app.models.reviews.lecture_review_v2 import LectureIssueHistoryV2
 from app.models.reviews.lecture_review_v2 import (
     LectureReviewOutputV2,
     LectureReviewPolicyV2,
@@ -145,13 +147,16 @@ def _frozen_inputs(*, state, resource, evidence):
     return policy, spec_id, targets, frozen_evidence
 
 
-def _binding(*, state, resource, spec_id: str, frozen_evidence: list[dict]) -> LectureReviewBindingV1:
-    return LectureReviewBindingV1(
-        run_id=state["run_id"], resource_spec_id=spec_id,
-        lineage_id=resource.resource_family_id, resource_id=resource.resource_id,
-        version=resource.version, content_hash=text_hash(resource.content_text or ""),
-        evidence_snapshot_hash=canonical_hash({"evidence": frozen_evidence}),
-        policy_hash=state["lecture_review_policy_hash"])
+def _binding(*, state, resource, spec_id: str, frozen_evidence: list[dict],
+             previous_binding=None) -> LectureReviewBindingV1:
+    identity = {
+        "run_id": state["run_id"], "resource_spec_id": spec_id,
+        "lineage_id": resource.resource_family_id, "resource_id": resource.resource_id,
+        "version": resource.version, "content_hash": text_hash(resource.content_text or ""),
+        "evidence_snapshot_hash": canonical_hash({"evidence": frozen_evidence}),
+        "policy_hash": state["lecture_review_policy_hash"]}
+    identity.update(context_fields(previous_binding, identity))
+    return LectureReviewBindingV1(**identity)
 
 
 def _summary(*, decision: str, output: LectureReviewOutputV2, spec_id: str, resource,
@@ -179,9 +184,14 @@ def _summary(*, decision: str, output: LectureReviewOutputV2, spec_id: str, reso
 def review_lecture_v2(*, state, resource, evidence, step_id, context, gateway, collector, review_id,
                       step_guard=None) -> LectureReviewOutcome:
     policy, spec_id, targets, frozen_evidence = _frozen_inputs(state=state, resource=resource, evidence=evidence)
-    binding = _binding(state=state, resource=resource, spec_id=spec_id, frozen_evidence=frozen_evidence)
     previous_data = (state.get("lecture_ledgers") or {}).get(spec_id)
     previous = LectureLedgerV2.model_validate(previous_data) if previous_data else None
+    binding = _binding(state=state, resource=resource, spec_id=spec_id,
+                       frozen_evidence=frozen_evidence,
+                       previous_binding=previous.binding if previous else None)
+    carry_over = None
+    if previous is not None and previous.binding.evidence_snapshot_hash != binding.evidence_snapshot_hash:
+        carry_over = build_carry_over(previous, history_model=LectureIssueHistoryV2)
     revision = (state.get("lecture_revision") or {}).get(spec_id) or {}
     previous_content = revision.get("previous_content") if previous else None
     if previous and previous_content is None:
@@ -241,7 +251,7 @@ def review_lecture_v2(*, state, resource, evidence, step_id, context, gateway, c
             targets=targets, evidence_hashes={e["evidence_id"]: e["excerpt_hash"] for e in frozen_evidence},
             teaching_rule_ids=RULE_IDS,
             revision_kind="claim" if revision.get("claim_only") else "ordinary",
-            coverage_threshold=policy.coverage_threshold)
+            coverage_threshold=policy.coverage_threshold, carry_over=carry_over)
     except LectureReviewValidationError as error:
         collector.invalid_result(call_id=result.call_id)
         remaining = policy.max_physical_attempts - used
@@ -286,7 +296,7 @@ def review_lecture_v2(*, state, resource, evidence, step_id, context, gateway, c
                 targets=targets, evidence_hashes={e["evidence_id"]: e["excerpt_hash"] for e in frozen_evidence},
                 teaching_rule_ids=RULE_IDS,
                 revision_kind="claim" if revision.get("claim_only") else "ordinary",
-                coverage_threshold=policy.coverage_threshold)
+                coverage_threshold=policy.coverage_threshold, carry_over=carry_over)
         except LectureReviewValidationError as second_error:
             collector.invalid_result(call_id=second.call_id)
             repair = _record(resource=resource, attempted=True,

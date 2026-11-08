@@ -85,7 +85,8 @@ async def lifespan(app: FastAPI):
                 from app.services.generation.reconciliation import GenerationReconciler
                 result = GenerationReconciler(container.generation_job_repository(),
                     container.feedback_loop_repository(), settings.generation_queue_timeout_seconds,
-                    curriculum=container.curriculum_repository()).run_once()
+                    curriculum=container.curriculum_repository(),
+                    supplement_repository=container.supplement_repository()).run_once()
                 if result["failed_run_ids"] or result["feedback"]:
                     logger.warning("Reconciled generation jobs failed=%s followups=%s",
                                    len(result["failed_run_ids"]), result["feedback"])

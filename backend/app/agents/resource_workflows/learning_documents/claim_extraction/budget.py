@@ -417,7 +417,7 @@ class GuardedJudgeGateway:
         return self.gateway.options_for(*args, **kwargs)
 
     def invoke_structured(self, **kwargs):
-        from app.agents.shared.evidence_scope import evidence_for_resource
+        from app.agents.shared.evidence_scope import resolve_review_evidence_context
         from app.models.reviews.claims import ClaimRecord, ClaimJudgementLLMOutput
         snapshot = validate_entry(self.state, self.repository)
         if snapshot is None:
@@ -436,7 +436,7 @@ class GuardedJudgeGateway:
         resource = next(r for r in self.state["generated_resources"] if r.resource_id == resource_id)
         current_review_id = self.state.get("review_result", {}).get("review_ids", {}).get(resource_id) or resource.review_id
         claims = [ClaimRecord.model_validate(c) for c in self.state["extracted_claims"] if c["resource_id"] == resource_id]
-        evidence = evidence_for_resource(self.state, resource)
+        evidence = resolve_review_evidence_context(self.state, resource)
         result = next((r for r in snapshot.state.results.values() if r.resource_id == resource_id
                        and r.resource_version == resource.version and r.generation_attempt == self.state.get("generation_attempt", 1)
                        and r.final_result_hash == digest(claims)), None)

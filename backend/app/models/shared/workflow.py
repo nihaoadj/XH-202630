@@ -14,6 +14,7 @@ from app.models.knowledge.knowledge import EvidenceAllocation, EvidenceItem, Ret
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
 from app.models.reviews.review_audit import ReviewAuditRecordV2, ReviewAuditRecordV1, ReviewPolicySnapshotV1
 from app.models.reviews.claim_extraction import PolicyContract
+from app.models.reviews.claim_evidence_retrieval import ClaimEvidenceRetrievalPolicyV1
 
 
 WORKFLOW_SCHEMA_VERSION = "1.0"
@@ -141,6 +142,17 @@ class WorkflowState(TypedDict, total=False):
     claim_extraction_policy: Dict[str, Any] | None
     claim_extraction_policy_hash: str | None
     claim_extraction_refs: List[Dict[str, Any]]
+    claim_evidence_retrieval_policy: Dict[str, Any] | None
+    claim_evidence_retrieval_policy_hash: str | None
+    claim_evidence_retrieval_refs: List[Dict[str, Any]]
+    claim_evidence_new_evidence_ids: List[str]
+    claim_evidence_hard_block_resource_ids: List[str]
+    # Runtime-only channels: bounded supplements authorised for one resource
+    # version and the screenshot of the scopes they came from.  Neither is part
+    # of the checkpoint projection; the durable scope rows are the authority.
+    supplement_retrieved_evidence: List[EvidenceItem]
+    claim_evidence_scopes: Dict[str, List[Dict[str, Any]]]
+    claim_evidence_lineage: Dict[str, Dict[str, Any]]
     lecture_dispatch_snapshot: Dict[str, Any]
     lecture_review_contract_version: str
     lecture_review_policy: Dict[str, Any]
@@ -176,6 +188,7 @@ class WorkflowState(TypedDict, total=False):
     generation_mode: str
     include_review: bool
     include_claim_check: bool
+    include_claim_evidence_retrieval: bool
     max_iterations: int
     claim_max_iterations: int
     constraints: Dict[str, Any]
@@ -235,6 +248,8 @@ class WorkflowStateSnapshot(BaseModel):
     claim_extraction_policy: PolicyContract | None = None
     claim_extraction_policy_hash: str | None = None
     claim_extraction_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    claim_evidence_retrieval_policy: "ClaimEvidenceRetrievalPolicyV1 | None" = None
+    claim_evidence_retrieval_policy_hash: str | None = None
     """Validated, JSON-serializable snapshot used at the workflow boundary."""
 
     schema_version: Literal["1.0"] = WORKFLOW_SCHEMA_VERSION
@@ -268,6 +283,7 @@ class WorkflowStateSnapshot(BaseModel):
     generation_mode: Literal["draft", "standard", "strict"] = "standard"
     include_review: bool = True
     include_claim_check: bool = False
+    include_claim_evidence_retrieval: bool = False
     max_iterations: int = Field(default=2, ge=0, le=3)
     claim_max_iterations: int = Field(default=1, ge=0, le=3)
     constraints: Dict[str, Any] = Field(default_factory=dict)
@@ -307,6 +323,9 @@ class WorkflowStateSnapshot(BaseModel):
     assessment_claim_skipped_resource_ids: List[str] = Field(default_factory=list)
     claim_failed_resource_ids: List[str] = Field(default_factory=list)
     claim_eligible_resource_ids: List[str] = Field(default_factory=list)
+    claim_evidence_retrieval_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    claim_evidence_new_evidence_ids: List[str] = Field(default_factory=list)
+    claim_evidence_hard_block_resource_ids: List[str] = Field(default_factory=list)
     final_decision: str = ""
     trace: List[Dict[str, Any]] = Field(default_factory=list)
     errors: List[ErrorInfo] = Field(default_factory=list)
@@ -331,6 +350,12 @@ class WorkflowStateSnapshot(BaseModel):
                 payload.pop(key, None)
         elif self.claim_extraction_policy is not None:
             payload["claim_extraction_policy"] = self.claim_extraction_policy.model_dump(mode="json")
+        if self.claim_evidence_retrieval_policy is None:
+            for key in (
+                "claim_evidence_retrieval_policy",
+                "claim_evidence_retrieval_policy_hash",
+            ):
+                payload.pop(key, None)
         if self.lecture_review_contract_version is None:
             for key in ("lecture_review_contract_version", "lecture_review_policy", "lecture_review_policy_hash", "lecture_ledgers", "lecture_revision", "lecture_stop_reasons"):
                 payload.pop(key, None)
@@ -342,6 +367,10 @@ class WorkflowStateSnapshot(BaseModel):
         payload["learner"] = self.learner
         payload["generated_resources"] = self.generated_resources
         payload["workflow_status"] = self.workflow_status.value
+        if self.claim_evidence_retrieval_policy is not None:
+            payload["claim_evidence_retrieval_policy"] = (
+                self.claim_evidence_retrieval_policy.model_dump(mode="json")
+            )
         payload["claim_check_status"] = self.claim_check_status.value
         payload["retrieval_status"] = self.retrieval_status.value
         return payload  # type: ignore[return-value]

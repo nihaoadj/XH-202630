@@ -13,6 +13,7 @@ from app.core.retrieval.vector_store import ChromaVectorSearchBackend, get_vecto
 from app.db.audit.repository import create_audit_repository
 from app.db.shared.database import get_session_factory
 from app.db.claim.repository import create_claim_repository
+from app.db.claim.supplement import create_supplement_repository
 from app.db.diagnosis.repository import create_diagnosis_repository
 from app.db.feedback.round_repository import create_round_repository
 from app.db.feedback.repository import create_feedback_repository
@@ -49,6 +50,9 @@ from app.services.courseware import CoursewareService
 from app.agents.resource_workflows.interactive_courseware.worker import CoursewareSceneWorker
 from app.services.courseware.executor import CoursewareExecutor
 from app.services.resource_library import ResourceLibraryService
+from app.services.reviews.claim_evidence_retrieval_query import (
+    ClaimEvidenceRetrievalQueryService,
+)
 from app.services.reviews.quality_query import ResourceQualityQueryService
 from app.services.reviews.reviews import ReviewService
 from app.services.runs.llm_accounting import LLMAccountingQueryService
@@ -174,6 +178,12 @@ class Container(containers.DeclarativeContainer):
         db_type=config.db_type,
         session_factory=db_session_factory,
     )
+    supplement_repository = providers.Singleton(
+        create_supplement_repository,
+        claim_repository=claim_repository,
+        audit_repository=audit_repository,
+        resource_repository=resource_repository,
+    )
     diagnosis_repository = providers.Singleton(
         create_diagnosis_repository,
         db_type=config.db_type,
@@ -234,6 +244,8 @@ class Container(containers.DeclarativeContainer):
         llm_gateway=llm_gateway,
         evidence_retriever=evidence_retriever,
         lifecycle_repository=audit_repository,
+        claim_repository=claim_repository,
+        supplement_repository=supplement_repository,
         resource_progress_recorder=providers.Singleton(
             WorkflowArtifactRecorder,
             resource_repository=resource_repository,
@@ -254,6 +266,7 @@ class Container(containers.DeclarativeContainer):
         claim_extraction_counter=claim_extraction_counter,
         knowledge_catalog=knowledge_catalog,
         claim_repo=claim_repository,
+        supplement_repository=supplement_repository,
     )
     generation_job_service = providers.Singleton(
         GenerationJobService,
@@ -320,6 +333,14 @@ class Container(containers.DeclarativeContainer):
         resource_repository=resource_repository,
         claim_repository=claim_repository,
         generation_job_repository=generation_job_repository,
+        supplement_repository=supplement_repository,
+    )
+    claim_evidence_retrieval_query_service = providers.Singleton(
+        ClaimEvidenceRetrievalQueryService,
+        audit_repository=audit_repository,
+        claim_repository=claim_repository,
+        supplement_repository=supplement_repository,
+        generation_job_repository=generation_job_repository,
     )
     report_service = providers.Singleton(
         ReportService,
@@ -373,6 +394,7 @@ class Container(containers.DeclarativeContainer):
         claim_repository=claim_repository,
         feedback_loop_repository=feedback_loop_repository,
         generation_job_repository=generation_job_repository,
+        supplement_repository=supplement_repository,
     )
     run_event_stream_service = providers.Singleton(
         RunEventStreamService,

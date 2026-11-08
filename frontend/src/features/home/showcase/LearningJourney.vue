@@ -18,7 +18,7 @@
         </article>
       </div>
     </div>
-    <div class="journey-profile" aria-live="polite"><div><span class="journey-current-label">{{ activeNode.name }} · 第 {{ activeNode.tier }} 阶</span><h3>先修：{{ prerequisiteNames || '无' }}</h3></div><p>定阶豁免不等于已掌握。<br />本阶节点完成后，才解锁下一阶。</p></div>
+    <div class="journey-profile" aria-live="polite"><div><span class="journey-current-label">{{ activeNode.name }} · 第 {{ activeNode.tier }} 阶</span><h3>先修：{{ prerequisiteNames || '无' }}</h3></div></div>
     <div class="feature-demo-note"><el-icon aria-hidden="true"><InfoFilled /></el-icon>项目机制示意 · 默认 RAG 图谱 · 点击阶层标题切换诊断起点</div>
   </section>
 </template>

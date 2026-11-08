@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from app.config import Settings
 from app.db.audit.base import BaseAuditRepository
+from app.db.claim.publication import PublicationBarrier
 from app.models.learning_documents.schemas import LearningResource
 from app.models.shared.persistence import WorkflowEventType
 
@@ -45,7 +46,15 @@ def decide_claim_publication(
     metric = claims_response.resource_metrics.get(resource_id)
     if metric is None or metric.contradicted_claim_total > 0:
         raise ResourcePublicationConflict("存在矛盾事实 Claim，禁止发布")
-    updated = service.update_publication_decision(resource_id, publish=publish)
+    try:
+        updated = service.update_publication_decision(resource_id, publish=publish)
+    except PublicationBarrier as exc:
+        # The repository re-read the durable round inside its own transaction;
+        # an in-flight, interrupted or hard-blocked version cannot be released
+        # by confirming here.
+        raise ResourcePublicationConflict(
+            "该资源版本的 Claim 补检尚未结束或已发现反证，不能确认发布"
+        ) from exc
     if updated is not None:
         _record_publication_event(updated, audit_factory)
     return updated

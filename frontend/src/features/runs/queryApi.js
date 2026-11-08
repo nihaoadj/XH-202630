@@ -16,4 +16,10 @@ export const runApi = {
    * @param {string} runId @returns {Promise<import('axios').AxiosResponse<import('../../contracts/generated/contracts').RunResourceQualityResponseV1>>}
    */
   resourceQuality: runId => api.get(`/runs/${runId}/resource-quality`).then(requireRunResourceQualityResponse),
+  /**
+   * Read-only supplement summary.  It never triggers retrieval and exposes only
+   * status, counts and evidence scope ids.
+   * @param {string} runId @returns {Promise<import('axios').AxiosResponse<import('../../contracts/generated/contracts').ClaimEvidenceRetrievalSummaryV1>>}
+   */
+  claimEvidenceRetrieval: runId => api.get(`/runs/${runId}/claim-evidence-retrieval`),
 }

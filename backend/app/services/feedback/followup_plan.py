@@ -14,12 +14,21 @@ class FollowupRequestPlan:
     resource_types: list[str]
     source_batch_id: str | None
 
-    def requests(self, *, include_claim_check: bool) -> list[GenerateRequest]:
+    def requests(
+        self, *, include_claim_check: bool,
+        include_claim_evidence_retrieval: bool = False,
+    ) -> list[GenerateRequest]:
         # Called within the Service's original job-creation exception boundary.
+        supplement = include_claim_evidence_retrieval and include_claim_check
         if include_claim_check and len(self.resource_types) > 1:
             return [self.request.model_copy(update={
                 "resource_types": [resource_type], "include_claim_check": True,
+                "include_claim_evidence_retrieval": supplement,
             }) for resource_type in self.resource_types]
+        if self.request.include_claim_evidence_retrieval != supplement:
+            return [self.request.model_copy(update={
+                "include_claim_evidence_retrieval": supplement,
+            })]
         return [self.request]
 
 
@@ -69,6 +78,11 @@ def build_followup_plan(
         profile_focus_mode="off", generation_mode="standard", include_review=True,
         # Multi-resource Claim requests are split before creating jobs.
         include_claim_check=selection.include_claim_check and len(resource_types) == 1,
+        include_claim_evidence_retrieval=(
+            selection.include_claim_evidence_retrieval
+            and selection.include_claim_check
+            and len(resource_types) == 1
+        ),
         max_iterations=2,
         constraints=constraints,
     )

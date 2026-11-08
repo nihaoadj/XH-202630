@@ -60,11 +60,15 @@ def replay_ledger(payload: dict) -> ResourceLedgerV1:
 
 
 def replay_resource_artifacts(*, ledger: ResourceLedgerV1, resources: list,
-                              adapter, targets: list[str], evidence) -> ResourceLedgerV1:
+                              adapter, targets: list[str], evidence,
+                              predecessor: ResourceLedgerV1 | None = None,
+                              predecessor_resource=None) -> ResourceLedgerV1:
     """Rebuild observations through the production gate and validators, without LLM calls.
 
     Hash-valid self-consistent JSON is insufficient: decisions and gate migration
-    must agree with the actual versioned artifacts before publication.
+    must agree with the actual versioned artifacts before publication.  A ledger
+    that starts a new evidence epoch is replayed against its immutable
+    predecessor and that predecessor's actual artifact.
     """
     from .engine import run_program_gate, migrate_program_gate
     from .ledger import append_model_observation_v1, append_program_gate_observation_v1
@@ -72,25 +76,37 @@ def replay_resource_artifacts(*, ledger: ResourceLedgerV1, resources: list,
         raise ValueError("resource recovery artifact count mismatch")
     rebuilt = None
     parent_material = None
-    for resource, observation in zip(resources, ledger.observations):
+    carry_over = ledger.carry_over
+    if carry_over is not None:
+        if predecessor is None or predecessor_resource is None:
+            raise ValueError("resource epoch replay requires its predecessor")
+        rebuilt = predecessor
+        parent_material = adapter.build_material(
+            resource=predecessor_resource, evidence=evidence, spec=None, targets=targets)
+        if parent_material.artifact_exact_hash != carry_over.previous_content_hash:
+            raise ValueError("resource epoch predecessor artifact mismatch")
+    parent_text = parent_material.text if parent_material is not None else None
+    for index, (resource, observation) in enumerate(zip(resources, ledger.observations)):
         material = adapter.build_material(resource=resource, evidence=evidence, spec=None, targets=targets)
         verify_binding_hashes(binding=observation.binding, material=material, evidence=evidence)
         gate = migrate_program_gate(run_program_gate(resource=resource, material=material,
                                                      binding=observation.binding), rebuilt)
         kwargs = dict(previous=rebuilt, binding=observation.binding, step_id=observation.step_id,
                       material=material,
-                      parent_comparison_hash=parent_material.comparison_hash if parent_material else None)
+                      parent_comparison_hash=parent_material.comparison_hash if parent_material else None,
+                      carry_over=carry_over if index == 0 else None)
         if observation.origin == "program_gate":
             rebuilt = append_program_gate_observation_v1(**kwargs, gate=gate)
         else:
             if not gate.passed:
                 raise ValueError("resource recovery semantic observation bypasses program gate")
             rebuilt = append_model_observation_v1(**kwargs, output=observation.output,
-                adapter=adapter, parent_text=parent_material.text if parent_material else None,
+                adapter=adapter, parent_text=parent_text,
                 parent_material=parent_material, revision_kind=observation.revision_kind, gate=gate)
         if rebuilt.observations[-1] != observation:
             raise ValueError("resource persisted observation differs from gate/decision replay")
         parent_material = material
+        parent_text = material.text
     if rebuilt != ledger:
         raise ValueError("resource persisted ledger differs from replay")
     return rebuilt

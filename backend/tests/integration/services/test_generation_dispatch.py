@@ -335,3 +335,20 @@ def test_periodic_reconciliation_repairs_curriculum_crash_window(state):
     with s.factory() as db:
         assert db.get(LearnerCurriculumNodeORM, "stale").progress_status == "unplanned"
         assert db.get(LearnerCurriculumNodeORM, "newer").scheduled_run_id == "new-run"
+
+
+def test_background_failed_run_retry_also_persists_its_frozen_dispatch(state):
+    s = state
+    s.service.dispatch_mode = "background"
+    s.service.generation_service.freeze_claim_extraction = lambda req: {"frozen_test_marker": "new-attempt"}
+    s.repo.create("failed-background", s.learner.learner_id, s.req.topic, None, s.req.model_dump(mode="json"))
+    start_run(s, SimpleNamespace(run_id="failed-background", owner="owner"))
+    s.audit.fail_run("failed-background", error_code="SYNTHETIC_FAILURE", occurred_at=datetime.now(timezone.utc))
+    s.repo.mark_failed("failed-background", "synthetic")
+    retry = s.service.create_job(s.learner, s.req, run_id="failed-background", retry_failed=True)
+    assert retry.run_id != "failed-background"
+    assert s.repo.get("failed-background").job_status == "failed"
+    snapshot = s.repo.get_dispatch(retry.run_id)["dispatch_snapshot"]
+    assert snapshot["request_hash"] == canonical_hash(s.req.model_dump(mode="json"))
+    assert snapshot["learner"] == s.learner.model_dump(mode="json")
+    assert snapshot["frozen_test_marker"] == "new-attempt"

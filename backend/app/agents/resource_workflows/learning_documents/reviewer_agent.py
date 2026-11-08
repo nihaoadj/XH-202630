@@ -4,7 +4,10 @@ import uuid
 from datetime import datetime, timezone
 
 from app.agents.resource_workflows.learning_documents.state import AgentState
-from app.agents.shared.evidence_scope import evidence_for_resource, validate_payload_evidence
+from app.agents.shared.evidence_scope import (
+    resolve_review_evidence_context,
+    validate_payload_evidence,
+)
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.core.retrieval.evidence import source_refs_are_scoped
 from app.core.security.errors import ApplicationError, ErrorCode
@@ -124,8 +127,13 @@ def review_node(
 
     used_evidence_ids = set()
     for resource in resources:
-        evidence = evidence_for_resource(state, resource)
+        evidence = resolve_review_evidence_context(state, resource)
+        # A changed evidence context is handled by the engine as an audited new
+        # epoch: the previous ledger stays immutable and the new one carries its
+        # open issues and stop counter.  Losing the predecessor here would let an
+        # authorised evidence change silently reset unresolved defects.
         validate_payload_evidence(resource, evidence)
+        review_state = {**state, "lecture_ledgers": lecture_ledgers, "resource_ledgers": resource_ledgers}
         used_evidence_ids.update(item.evidence_id for item in evidence)
         invalid_source_refs = not source_refs_are_scoped(resource.source_refs, evidence)
         error = None
@@ -196,7 +204,7 @@ def review_node(
                     review_resource_v1,
                 )
                 outcome = review_resource_v1(
-                    state=state, resource=resource, evidence=evidence,
+                    state=review_state, resource=resource, evidence=evidence,
                     step_id=step_context["step_id"], context=call_context,
                     gateway=llm_gateway, collector=collector,
                     review_id=review_ids[resource.resource_id], step_guard=resource_guard)
@@ -276,7 +284,7 @@ def review_node(
                                 repository=review_repository, run_id=node_input.run_id,
                                 step_id=step_id, generation_attempt=generation_attempt)
                         outcome = review_lecture_v2(
-                            state=state, resource=resource, evidence=evidence,
+                            state=review_state, resource=resource, evidence=evidence,
                             step_id=step_context["step_id"], context=call_context,
                             gateway=llm_gateway, collector=collector,
                             review_id=review_ids[resource.resource_id], step_guard=guard)
@@ -290,7 +298,7 @@ def review_node(
                     else:
                         from app.agents.resource_workflows.learning_documents.reviewing.lecture_engine import review_lecture
                         raw, ledger, last_llm_result, stop_reason = review_lecture(
-                            state=state, resource=resource, evidence=evidence, step_id=step_context["step_id"],
+                            state=review_state, resource=resource, evidence=evidence, step_id=step_context["step_id"],
                             context=call_context, gateway=llm_gateway, collector=collector,
                             review_id=review_ids[resource.resource_id])
                         lecture_ledgers[resource.resource_spec_id] = ledger.model_dump(mode="json")

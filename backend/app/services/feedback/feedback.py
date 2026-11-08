@@ -972,7 +972,10 @@ class FeedbackService:
         )
         source_batch_id = plan.source_batch_id
         try:
-            requests = plan.requests(include_claim_check=selection.include_claim_check)
+            requests = plan.requests(
+                include_claim_check=selection.include_claim_check,
+                include_claim_evidence_retrieval=selection.include_claim_evidence_retrieval,
+            )
             jobs = []
             for index, item_request in enumerate(requests):
                 item_run_id = run_id if len(requests) == 1 else self._stable_id("run", run_id, item_request.resource_types[0])

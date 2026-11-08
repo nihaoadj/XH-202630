@@ -20,9 +20,17 @@ from app.agents.resource_workflows.learning_documents.claim_review_agent import 
     claim_extract_node,
     claim_judge_node,
 )
+from app.agents.resource_workflows.learning_documents.claim_evidence_retrieval.nodes import (
+    claim_evidence_rejudge_node,
+    claim_evidence_retrieve_node,
+)
 from app.agents.resource_workflows.learning_documents.state import AgentState
 from app.agents.shared.retrieval import retrieve_node
-from app.agents.shared.evidence_scope import evidence_for_resource
+from app.agents.shared.evidence_scope import (
+    evidence_for_resource,
+    resolve_review_evidence_context,
+    supplement_evidence_for_resource,
+)
 from app.core.security.errors import ErrorCode
 from app.core.retrieval.retriever import (
     EvidenceRetriever,
@@ -41,7 +49,16 @@ from app.models.shared.workflow import (
     StepStatus,
     WorkflowStatus,
 )
-from app.models.reviews.claims import ClaimJudgement, ClaimMetricStatus, ClaimRecord
+from app.models.reviews.claims import (
+    ClaimJudgement,
+    ClaimMetricStatus,
+    ClaimRecord,
+    ClaimVerdict,
+)
+from app.models.reviews.claim_evidence_retrieval import (
+    ACTIVE_STATUSES as _CLAIM_EVIDENCE_ACTIVE,
+    ClaimEvidenceRetrievalStatus,
+)
 from app.agents.resource_workflows.learning_documents.revision_inputs import (
     build_claim_review_revision_input,
     build_resource_review_revision_input,
@@ -55,6 +72,9 @@ from app.agents.shared.policies import (
 )
 from app.models.knowledge.knowledge import RetrievalStatus
 from app.agents.shared.recorded_node import recorded_node
+
+
+CLAIM_EVIDENCE_ACTIVE_STATUS_VALUES = frozenset(item.value for item in _CLAIM_EVIDENCE_ACTIVE)
 
 
 def _review_decision(state: AgentState) -> ReviewDecision:
@@ -281,6 +301,38 @@ def route_after_claim_extract(state: AgentState) -> str:
     )
 
 
+def route_after_initial_claim_judge(state: AgentState) -> str:
+    """Only an enabled, fully completed first round may start supplements."""
+
+    if not state.get("include_claim_evidence_retrieval", False):
+        return "claim_decide"
+    if not state.get("claim_evidence_retrieval_policy"):
+        return "claim_decide"
+    if state.get("claim_check_status") != ClaimCheckStatus.COMPLETED.value:
+        return "claim_decide"
+    if state.get("claim_failed_resource_ids"):
+        return "claim_decide"
+    round0 = [
+        item for item in state.get("claim_judgements", [])
+        if isinstance(item, dict)
+        and item.get("verdict") == ClaimVerdict.NOT_IN_EVIDENCE.value
+    ]
+    claims = {str(item.get("claim_id")): item for item in state.get("extracted_claims", []) if isinstance(item, dict)}
+    if not any(
+        claims.get(str(item.get("claim_id")), {}).get("claim_type") == "factual"
+        for item in round0
+    ):
+        return "claim_decide"
+    return "claim_evidence_retrieve"
+
+
+def route_after_claim_evidence_retrieve(state: AgentState) -> str:
+    refs = state.get("claim_evidence_retrieval_refs", [])
+    if any(item.get("status") == "rejudging" for item in refs if isinstance(item, dict)):
+        return "claim_evidence_rejudge"
+    return "claim_decide"
+
+
 def route_after_claim_decide(state: AgentState) -> str:
     if _review_decision(state) != ReviewDecision.REVISE:
         return "finalize"
@@ -360,7 +412,7 @@ def _generation_revision_inputs(
                 targets=tuple(frozen_targets.get(resource.resource_spec_id, [])),
                 claims=claims,
                 judgements=judgements,
-                evidence=evidence_for_resource(state, resource),
+                evidence=resolve_review_evidence_context(state, resource, purpose="audit"),
             )
             if model.problems:
                 result[resource.resource_spec_id] = pack_revision_input(model)
@@ -505,6 +557,37 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
                 targets=tuple(frozen_targets[resource.resource_spec_id])).as_dict()
     constraints = dict(state.get("constraints") or {})
     constraints["revision_feedback"] = review_feedback
+    if claim_only:
+        # Bounded, explicitly authorised supplement excerpts for the child
+        # version.  They are review evidence, not new source_refs: the frozen
+        # spec and its evidence ids stay untouched.
+        supplement_excerpts: list[dict[str, str]] = []
+        seen_supplement_ids: set[str] = set()
+        for resource in state.get("generated_resources", []):
+            if resource.resource_type not in targets:
+                continue
+            allowed = {
+                evidence_id
+                for scope in state.get("claim_evidence_scopes", {}).get(resource.resource_id, [])
+                if scope.get("purpose") == "generation"
+                for evidence_id in scope.get("added_evidence_ids", [])
+            }
+            # Only the explicitly authorised supplements: this path must not
+            # re-validate the frozen spec (the revision input does that).
+            for item in supplement_evidence_for_resource(
+                state, resource, purpose="generation",
+            ):
+                if item.evidence_id not in allowed or item.evidence_id in seen_supplement_ids:
+                    continue
+                seen_supplement_ids.add(item.evidence_id)
+                supplement_excerpts.append({
+                    "evidence_id": item.evidence_id,
+                    "excerpt": item.excerpt[:2000],
+                })
+        if supplement_excerpts:
+            constraints["claim_revision_supplement_evidence"] = supplement_excerpts[:8]
+        else:
+            constraints.pop("claim_revision_supplement_evidence", None)
     # Build the private generation revision inputs before the old claims /
     # judgements are cleared below; they are read from the frozen domain
     # objects only and never survive into a later round unless rebuilt here.
@@ -562,6 +645,9 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
         "claim_judgements": [],
         "claim_metrics": {},
         "claim_eligible_resource_ids": [],
+        "claim_evidence_retrieval_refs": [],
+        "claim_evidence_new_evidence_ids": [],
+        "claim_evidence_hard_block_resource_ids": [],
         "claim_check_status": ClaimCheckStatus.PENDING.value,
         "revision_count": revision_count,
         "claim_revision_count": claim_revision_count,
@@ -623,6 +709,28 @@ def finalize_draft_node(state: AgentState) -> dict[str, Any]:
     }
 
 
+def _claim_evidence_barrier_ids(state: AgentState, resource) -> bool:
+    """Temporary barrier: this version's round is still running or interrupted.
+
+    A revision clears the refs, so the child version is judged on its own round
+    while the parent version keeps its own durable barrier.
+    """
+
+    for item in state.get("claim_evidence_retrieval_refs", []) or []:
+        if not isinstance(item, dict) or item.get("resource_id") != resource.resource_id:
+            continue
+        if item.get("resource_version") not in {None, resource.version}:
+            continue
+        status = str(item.get("status") or "")
+        if (
+            item.get("hard_block")
+            or status in CLAIM_EVIDENCE_ACTIVE_STATUS_VALUES
+            or status == ClaimEvidenceRetrievalStatus.INTERRUPTED.value
+        ):
+            return True
+    return False
+
+
 def decide_node(state: AgentState) -> dict[str, Any]:
     """Finalize review semantics without silently approving risky output."""
     step_context = start_step(state)
@@ -673,6 +781,7 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     claim_eligible_ids = set(state.get("claim_eligible_resource_ids", []))
     claim_metrics = state.get("claim_metrics", {})
     claim_failed_ids = set(state.get("claim_failed_resource_ids", []))
+    claim_hard_block_ids = set(state.get("claim_evidence_hard_block_resource_ids", []))
     claim_problem_ids = {
         str(item.get("resource_id"))
         for item in review.get("issues", [])
@@ -714,6 +823,8 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             not_in_evidence_claim_total=int(
                 metric.get("not_in_evidence_claim_total", 0) or 0
             ),
+            claim_hard_block=canonical_id in claim_hard_block_ids,
+            claim_publication_barrier=_claim_evidence_barrier_ids(state, resource),
             allow_partial_claim_publish=allow_partial_claim_publish,
             claim_user_review_enabled=allow_claim_user_review,
             claim_user_review_min_factual_pass_rate=claim_user_review_threshold,
@@ -844,6 +955,8 @@ def build_workflow(
     resource_progress_recorder: Any | None = None,
     claim_extraction_repository=None,
     claim_extraction_counter=None,
+    claim_repository=None,
+    supplement_repository=None,
 ):
     """Build the synchronous workflow with the P0-03 evidence boundary."""
     gateway = llm_gateway or default_llm_gateway()
@@ -883,8 +996,36 @@ def build_workflow(
 
     claim_capabilities = dict(repository=claim_extraction_repository, counter=claim_extraction_counter)
 
+    supplement_capabilities: dict[str, Any] = {
+        "repository": supplement_repository,
+        "claim_repository": claim_repository,
+        "audit_repository": lifecycle_repository,
+        "retriever": retriever,
+    }
+
+    def bind_supplement(node):
+        def invoke(state):
+            if supplement_capabilities["repository"] is None:
+                return {
+                    "current_node": node.__name__,
+                    "trace": [],
+                    "errors": [],
+                }
+            return node(
+                state,
+                llm_gateway=gateway,
+                **({"evidence_retriever": supplement_capabilities["retriever"]}
+                   if node is claim_evidence_retrieve_node else {}),
+                supplement_repository=supplement_capabilities["repository"],
+                claim_repository=supplement_capabilities["claim_repository"],
+                audit_repository=supplement_capabilities["audit_repository"],
+            )
+        return invoke
+
     add_recorded("claim_extract", bind_claim(claim_extract_node))
     add_recorded("claim_judge", bind_claim(claim_judge_node))
+    add_recorded("claim_evidence_retrieve", bind_supplement(claim_evidence_retrieve_node))
+    add_recorded("claim_evidence_rejudge", bind_supplement(claim_evidence_rejudge_node))
     add_recorded("claim_decide", claim_decide_node)
     add_recorded("finalize", decide_node)
     add_recorded("finalize_evidence_insufficient", finalize_evidence_insufficient_node)
@@ -931,7 +1072,23 @@ def build_workflow(
         route_after_claim_extract,
         {"claim_judge": "claim_judge", "claim_decide": "claim_decide"},
     )
-    workflow.add_edge("claim_judge", "claim_decide")
+    workflow.add_conditional_edges(
+        "claim_judge",
+        route_after_initial_claim_judge,
+        {
+            "claim_evidence_retrieve": "claim_evidence_retrieve",
+            "claim_decide": "claim_decide",
+        },
+    )
+    workflow.add_conditional_edges(
+        "claim_evidence_retrieve",
+        route_after_claim_evidence_retrieve,
+        {
+            "claim_evidence_rejudge": "claim_evidence_rejudge",
+            "claim_decide": "claim_decide",
+        },
+    )
+    workflow.add_edge("claim_evidence_rejudge", "claim_decide")
     workflow.add_conditional_edges(
         "claim_decide",
         route_after_claim_decide,

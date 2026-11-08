@@ -13,10 +13,13 @@ logger = logging.getLogger(__name__)
 class GenerationWorker:
     def __init__(self, jobs, feedback, service_factory, *, lease_seconds=1260,
                  poll_seconds=2.0, shutdown_seconds=30.0, queued_timeout_seconds=1260,
-                 ready=lambda: True, curriculum=None):
+                 ready=lambda: True, curriculum=None, supplement_repository=None):
         self.jobs = jobs
         self.service_factory = service_factory
-        self.reconciler = GenerationReconciler(jobs, feedback, queued_timeout_seconds, curriculum=curriculum)
+        self.reconciler = GenerationReconciler(
+            jobs, feedback, queued_timeout_seconds, curriculum=curriculum,
+            supplement_repository=supplement_repository,
+        )
         self.lease_seconds = lease_seconds
         self.poll_seconds = poll_seconds
         self.shutdown_seconds = shutdown_seconds

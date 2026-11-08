@@ -22,6 +22,130 @@ from tests.fakes.llm import ScriptedLLMGateway
 TYPES = ["讲义", "实操指南", "分阶测试题", "案例分析", "复习清单"]
 
 
+def with_supplement(state, *, same_chunk=False):
+    from app.models.reviews.claim_evidence_retrieval import build_evidence_set
+    from app.models.reviews.evidence_lineage import evidence_from_snapshot, evidence_item_hash
+
+    context = state["resource_retry_context"]
+    item = make_evidence(evidence_id="old-supplement", chunk_id="supplement-chunk")
+    if same_chunk:
+        from app.core.retrieval.knowledge_ids import sha256_hex
+        base = PersistedEvidenceSnapshot.model_validate_json(json.dumps(context["evidence"][0]))
+        item = evidence_from_snapshot(base).model_copy(update={
+            "evidence_id": "old-supplement", "excerpt": "another frozen window",
+            "excerpt_hash": sha256_hex("another frozen window"),
+        })
+    item = item.model_copy(update={"config_hash": "9" * 64})
+    snapshot = PersistedEvidenceSnapshot.from_evidence(item, run_id="old-run", retrieval_step_id="supplement-step")
+    parent = context["source_resource"]
+    scope = build_evidence_set(
+        run_id="old-run", resource_id=parent["resource_id"], resource_version=parent["version"],
+        review_id="old-review", purpose="generation", session_id=None,
+        base_evidence_ids=context["spec"]["evidence_ids"], added_evidence_ids=[item.evidence_id],
+        snapshot_hashes={item.evidence_id: evidence_item_hash(evidence_from_snapshot(snapshot))},
+        manifest=[{"evidence_id": item.evidence_id, "excerpt_hash": item.excerpt_hash}],
+    )
+    context["supplement_context"] = {
+        "lineage": [{"resource_id": parent["resource_id"], "resource_version": parent["version"]}],
+        "scopes": [scope.model_dump(mode="json")], "evidence": [snapshot.model_dump(mode="json")],
+    }
+    context["context_hash"] = canonical_hash({key: value for key, value in context.items() if key != "context_hash"})
+    return state
+
+
+@pytest.mark.parametrize("e1", [False, True])
+def test_retry_import_includes_authorized_supplements_as_new_frozen_evidence(e1):
+    state = with_supplement(fixture_state(e1=e1))
+    before = deepcopy(state["resource_retry_context"])
+    result = reuse_resource_context_node(state)
+    pool = result["retrieved_evidence"]
+    assert len(pool) == len(before["spec"]["evidence_ids"]) + 1
+    assert pool[-1].chunk_id == "supplement-chunk"
+    assert pool[-1].evidence_id != "old-supplement"
+    assert len({item.config_hash for item in pool}) == 1
+    assert pool[-1].config_hash != "9" * 64
+    assert result["resource_specs"][0]["evidence_ids"] == [item.evidence_id for item in pool]
+    assert pool[-1].evidence_id not in result["node_evidence_map"]["node"]
+    assert state["resource_retry_context"] == before
+    if e1:
+        EvidenceAllocation.model_validate(result["evidence_allocation"]).validate_evidence(pool, ["讲义"])
+
+
+@pytest.mark.parametrize("damage", ["run", "kb", "missing", "purpose", "hash"])
+def test_retry_import_rejects_corrupt_supplement_context(damage):
+    state = with_supplement(fixture_state())
+    context = state["resource_retry_context"]
+    extra = context["supplement_context"]
+    if damage == "missing":
+        extra["evidence"] = []
+    elif damage in {"run", "kb"}:
+        extra["evidence"][0]["run_id" if damage == "run" else "knowledge_base_id"] = "foreign"
+    elif damage == "purpose":
+        extra["scopes"][0]["purpose"] = "audit"
+    else:
+        extra["evidence"][0]["excerpt"] = "tampered"
+    context["context_hash"] = canonical_hash({key: value for key, value in context.items() if key != "context_hash"})
+    with pytest.raises(ApplicationError):
+        reuse_resource_context_node(state)
+
+
+def test_second_retry_preserves_distinct_excerpt_windows_without_new_supplements():
+    state = with_supplement(fixture_state(), same_chunk=True)
+    first = reuse_resource_context_node(state)
+    context = deepcopy(state["resource_retry_context"])
+    context.pop("supplement_context")
+    context.update(source_run_id="new-run", source_spec_id=first["resource_specs"][0]["resource_spec_id"],
+                   spec=first["resource_specs"][0], retrieval_config_hash=first["retrieval_config_hash"],
+                   evidence_allocation=first["evidence_allocation"], query_texts={},
+                   evidence=[PersistedEvidenceSnapshot.from_evidence(item, run_id="new-run", retrieval_step_id="import")
+                             .model_dump(mode="json") for item in first["retrieved_evidence"]])
+    context["source_resource"].update(resource_id="first-retry", run_id="new-run", version=4,
+                                      resource_spec_id=context["source_spec_id"], parent_resource_id="old-resource")
+    context["context_hash"] = canonical_hash({key: value for key, value in context.items() if key != "context_hash"})
+    second = reuse_resource_context_node({**state, "run_id": "third-run", "resource_retry_context": context})
+    assert len(second["retrieved_evidence"]) == len(first["retrieved_evidence"])
+    assert len({item.evidence_id for item in second["retrieved_evidence"]}) == len(second["retrieved_evidence"])
+    assert {item.excerpt_hash for item in second["retrieved_evidence"]} == {
+        item.excerpt_hash for item in first["retrieved_evidence"]
+    }
+
+
+@pytest.mark.parametrize("base_count", [4, 5])
+def test_retry_import_checks_the_combined_twenty_evidence_limit(base_count):
+    from app.models.reviews.claim_evidence_retrieval import build_evidence_set
+    from app.models.reviews.evidence_lineage import evidence_from_snapshot, evidence_item_hash
+
+    state = fixture_state()
+    context = state["resource_retry_context"]
+    while len(context["evidence"]) < base_count:
+        index = len(context["evidence"])
+        item = make_evidence(evidence_id=f"base-{index}", chunk_id=f"base-chunk-{index}")
+        context["evidence"].append(PersistedEvidenceSnapshot.from_evidence(
+            item, run_id="old-run", retrieval_step_id="old-retrieve").model_dump(mode="json"))
+        context["spec"]["evidence_ids"].append(item.evidence_id)
+    snapshots = [PersistedEvidenceSnapshot.from_evidence(
+        make_evidence(evidence_id=f"extra-{index}", chunk_id=f"extra-chunk-{index}"),
+        run_id="old-run", retrieval_step_id="supplement-step",
+    ) for index in range(16)]
+    scope = build_evidence_set(
+        run_id="old-run", resource_id="old-resource", resource_version=3, review_id="old-review",
+        purpose="generation", session_id=None, base_evidence_ids=context["spec"]["evidence_ids"],
+        added_evidence_ids=[item.evidence_id for item in snapshots],
+        snapshot_hashes={item.evidence_id: evidence_item_hash(evidence_from_snapshot(item)) for item in snapshots},
+        manifest=[{"evidence_id": item.evidence_id, "excerpt_hash": item.excerpt_hash} for item in snapshots],
+    )
+    context["supplement_context"] = {
+        "lineage": [{"resource_id": "old-resource", "resource_version": 3}],
+        "scopes": [scope.model_dump(mode="json")], "evidence": [item.model_dump(mode="json") for item in snapshots],
+    }
+    context["context_hash"] = canonical_hash({key: value for key, value in context.items() if key != "context_hash"})
+    if base_count == 4:
+        assert len(reuse_resource_context_node(state)["retrieved_evidence"]) == 20
+    else:
+        with pytest.raises(ApplicationError):
+            reuse_resource_context_node(state)
+
+
 def fixture_state(resource_type="讲义", *, e1=False):
     evidence = [make_evidence(evidence_id=f"old-{i}", chunk_id=f"chunk-{i}", rank=i + 1) for i in range(3)]
     allocation = None
@@ -148,8 +272,10 @@ def test_real_graph_retry_skips_upstream_and_generates_one_resource(monkeypatch,
     _exercise_graph(monkeypatch, resource_type, e1, claim)
 
 
-def _exercise_graph(monkeypatch, resource_type, e1, claim, invoke=None):
+def _exercise_graph(monkeypatch, resource_type, e1, claim, invoke=None, supplement=False):
     state = fixture_state(resource_type, e1=e1)
+    if supplement:
+        with_supplement(state)
     state["include_claim_check"] = claim
     calls = []
 
@@ -207,7 +333,8 @@ def _exercise_graph(monkeypatch, resource_type, e1, claim, invoke=None):
     assert not {"diagnose", "retrieve", "plan"} & {item["node_name"] for item in result["trace"]}
 
 
-def test_sql_generation_service_persists_retry_evidence_claims_and_lineage(tmp_path, monkeypatch):
+@pytest.mark.parametrize("supplement", [False, True])
+def test_sql_generation_service_persists_retry_evidence_claims_and_lineage(tmp_path, monkeypatch, supplement):
     from datetime import datetime, timezone
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -282,7 +409,7 @@ def test_sql_generation_service_persists_retry_evidence_claims_and_lineage(tmp_p
         assert steps[0].node_name == "reuse_context" and steps[0].status == "success"
         assert len(audit.list_checkpoints("new-run")) == len(steps)
         cloned = audit.list_evidence("new-run")
-        assert len(cloned) == 2 and all(item.retrieval_step_id == steps[0].step_id for item in cloned)
+        assert len(cloned) == (3 if supplement else 2) and all(item.retrieval_step_id == steps[0].step_id for item in cloned)
         assert all(item.run_id == "new-run" for item in cloned)
         child_ids = {item.evidence_id for item in cloned}
         spec = resources.get_spec(generated.resource_spec_id)
@@ -297,6 +424,6 @@ def test_sql_generation_service_persists_retry_evidence_claims_and_lineage(tmp_p
         return graph.last
 
     try:
-        _exercise_graph(monkeypatch, "讲义", True, True, invoke=invoke)
+        _exercise_graph(monkeypatch, "讲义", True, True, invoke=invoke, supplement=supplement)
     finally:
         engine.dispose()

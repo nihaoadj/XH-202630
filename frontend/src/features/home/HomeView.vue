@@ -95,14 +95,6 @@
           </button>
         </div>
       </div>
-      <aside class="learning-route-panel" aria-labelledby="learning-loop-heading">
-        <div class="section-heading"><div><span class="section-index">02 / PROGRESS</span><h3 id="learning-loop-heading">你的学习闭环</h3></div><span class="loop-symbol" aria-hidden="true">↗</span></div>
-        <ol class="route-list">
-          <li><b aria-hidden="true">01</b><div><span>阅读资源</span><small>学习当前批次内容，建立知识基础</small></div></li>
-          <li><b aria-hidden="true">02</b><div><span>完成反馈</span><small>记录正式测评结果，识别能力差距</small></div></li>
-          <li><b aria-hidden="true">03</b><div><span>选择下一步</span><small>强化薄弱点，或继续探索新知识</small></div></li>
-        </ol>
-      </aside>
     </section>
     <footer class="workspace-footer"><span>让知识有依据，让成长有路径。</span><span>智域匠学 <span aria-hidden="true">/</span> DOMAIN SKILL WORKBENCH</span></footer>
     <el-dialog v-model="profileDialogVisible" class="profile-switch-dialog" title="切换学习画像" width="560px" append-to-body align-center>
@@ -175,7 +167,7 @@ function scheduleLayout() {
     const area = root.closest('.content-area')
     const bounds = area.getBoundingClientRect()
     // Enable a fixed canvas only when its actual content fits, including user text.
-    const regions = [root, ...root.querySelectorAll('.workspace-heading, .home-hero, .hero-copy, .learning-summary, .summary-item, .workspace-grid, .tool-grid, .tool-card, .learning-route-panel, .route-list, .workspace-footer')]
+    const regions = [root, ...root.querySelectorAll('.workspace-heading, .home-hero, .hero-copy, .learning-summary, .summary-item, .workspace-grid, .tool-grid, .tool-card, .workspace-footer')]
     const overflow = regions.some((node) => node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1)
     const clippedText = [...root.querySelectorAll('h2, h3, p, strong, small, button, .hero-footnote, .workspace-footer')].some((node) => {
       const rect = node.getBoundingClientRect()
@@ -404,7 +396,7 @@ onBeforeUnmount(() => {
 .summary-stage strong { font-size:23px; }
 .summary-resource strong { color:var(--metric-accent); font-size:29px; font-weight:600; }
 .summary-time strong { font-size:16px; }
-.workspace-grid { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(270px,.8fr); gap:42px; padding-top:28px; }
+.workspace-grid { display:block; padding-top:28px; }
 .learning-tools { min-width:0; }
 .section-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:19px; }
 .section-heading h3 { margin:6px 0 0; font-size:21px; font-weight:650; line-height:1.4; }
@@ -424,15 +416,6 @@ onBeforeUnmount(() => {
 .tool-index { position:absolute; top:12px; right:16px; color:var(--wb-muted); font:10px/1.5 Consolas,'SFMono-Regular',monospace; }
 .tool-arrow { color:#496580; font-size:18px; transition:transform 180ms ease; }
 .tool-card:hover .tool-arrow { transform:translateX(3px); }
-.learning-route-panel { min-width:0; padding-left:32px; border-left:1px solid var(--wb-line); }
-.loop-symbol { color:#47798b; font-size:30px; font-weight:300; }
-.route-list { margin:0; padding:0; border-top:1px solid var(--wb-line); border-bottom:1px solid var(--wb-line); list-style:none; }
-.route-list li { position:relative; display:flex; gap:14px; align-items:center; min-height:74px; }
-.route-list li:not(:last-child)::after { position:absolute; top:calc(50% + 19px); bottom:calc(-50% + 19px); left:14px; width:1px; background:#c3cfd9; content:''; }
-.route-list b { display:grid; width:29px; height:29px; flex:0 0 29px; place-items:center; border:1px solid #a9bbc9; border-radius:3px; background:var(--wb-canvas); color:#446074; font:12px/1 Consolas,'SFMono-Regular',monospace; }
-.route-list li:first-child b { border-color:#22687b; background:#e4f3f3; color:#165369; }
-.route-list span { display:block; padding-top:3px; font-size:14px; font-weight:600; line-height:1.5; }
-.route-list small { display:block; margin-top:4px; color:var(--wb-muted); font-size:12px; line-height:1.65; }
 .workspace-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; margin-top:27px; padding-top:16px; border-top:1px solid var(--wb-line); color:var(--wb-muted); font-size:11px; line-height:1.8; }
 .workspace-footer > span:last-child { font-size:10px; }
 .workspace-footer > span:last-child > span { margin:0 7px; }
@@ -484,7 +467,6 @@ onBeforeUnmount(() => {
   .hero-code { display:none; }
   .hero-visual { padding-right:14px; padding-left:0; }
   .workspace-grid { gap:26px; grid-template-columns:minmax(0,1.3fr) minmax(250px,.8fr); }
-  .learning-route-panel { padding-left:24px; }
   .tool-card { gap:12px; padding-right:17px; }
   .tool-card:nth-child(even) { padding-left:18px; }
 }
@@ -493,10 +475,6 @@ onBeforeUnmount(() => {
   .hero-copy h2 { font-size:27px; }
   .caption-code { display:none; }
   .workspace-grid { grid-template-columns:1fr; gap:28px; }
-  .learning-route-panel { padding:0; border-left:0; }
-  .route-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; }
-  .route-list li { min-height:0; }
-  .route-list li:not(:last-child)::after { display:none; }
   .summary-item { padding-inline:16px; }
   .summary-code { display:none; }
 }
@@ -536,9 +514,6 @@ onBeforeUnmount(() => {
   .tool-grid { grid-template-columns:1fr; }
   .tool-card,.tool-card:nth-child(even) { min-height:98px; padding:20px 20px 20px 10px; }
   .tool-card:nth-child(odd) { border-right:0; }
-  .route-list { display:flex; flex-direction:column; gap:0; }
-  .route-list li { min-height:76px; }
-  .route-list li:not(:last-child)::after { display:block; }
   .workspace-footer { margin-top:16px; }
 }
 .home-page.is-fit-layout {
@@ -577,8 +552,7 @@ onBeforeUnmount(() => {
 .is-fit-layout .summary-resource strong { font-size:clamp(25px,3.4dvh,32px); }
 .is-fit-layout .summary-time strong { font-size:clamp(14px,1.8dvh,18px); }
 .is-fit-layout .workspace-grid { min-height:0; gap:32px; padding:0; }
-.is-fit-layout .learning-tools,.is-fit-layout .learning-route-panel { display:flex; min-height:0; flex-direction:column; }
-.is-fit-layout .learning-route-panel { padding-left:25px; }
+.is-fit-layout .learning-tools { display:flex; height:100%; min-height:0; flex-direction:column; }
 .is-fit-layout .section-heading { flex:0 0 auto; gap:12px; margin-bottom:clamp(8px,1.1dvh,15px); }
 .is-fit-layout .section-index { display:block; font-size:10px; line-height:1.4; }
 .is-fit-layout .section-heading h3 { margin-top:2px; font-size:clamp(17px,2.3dvh,22px); line-height:1.2; }
@@ -587,13 +561,6 @@ onBeforeUnmount(() => {
 .is-fit-layout .tool-copy strong { font-size:clamp(14px,1.9dvh,18px); line-height:1.4; }
 .is-fit-layout .tool-copy small { margin-top:3px; font-size:12px; line-height:1.4; }
 .is-fit-layout .tool-index { top:7px; font-size:9px; }
-.is-fit-layout .route-list { display:grid; flex:1 1 0; min-height:0; grid-template-rows:repeat(3,minmax(0,1fr)); }
-.is-fit-layout .route-list li { min-height:0; gap:12px; }
-.is-fit-layout .route-list span { padding-top:1px; font-size:13px; line-height:1.4; }
-.is-fit-layout .route-list small { margin-top:3px; font-size:11px; line-height:1.4; }
-.is-fit-layout .route-list b { width:25px; height:25px; flex-basis:25px; font-size:11px; }
-.is-fit-layout .route-list li:not(:last-child)::after { left:12px; }
-.is-fit-layout .loop-symbol { font-size:24px; line-height:1; }
 .is-fit-layout .workspace-footer { margin:0; padding-top:3px; font-size:10px; line-height:1.4; }
 @media (max-height:720px) and (min-width:1100px) {
   .home-page.is-fit-layout { grid-template-rows:auto minmax(218px,1.1fr) auto minmax(150px,1fr) auto; }
@@ -613,5 +580,12 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion:reduce) {
   .home-page *, .home-page *::before { transition:none !important; animation:none !important; }
   :global(.profile-switch-dialog *) { transition:none !important; animation:none !important; }
+}
+@media (min-width:1100px) {
+  .tool-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .tool-card { padding-inline:20px; border-right:1px solid var(--wb-line); }
+  .tool-card:nth-child(even) { padding-left:20px; }
+  .tool-card:last-child { border-right:0; }
+  .is-fit-layout .tool-grid { grid-template-rows:minmax(0,1fr); }
 }
 </style>

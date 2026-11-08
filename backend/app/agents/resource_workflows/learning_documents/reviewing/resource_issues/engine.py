@@ -21,8 +21,10 @@ from uuid import uuid4
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.llm.gateway import LLMGatewayError
+from app.models.reviews.evidence_context import build_carry_over, context_fields
 from app.models.reviews.resource_review import (
     ResourceGateKeyV1,
+    ResourceIssueHistoryV1,
     ResourceIssueV1,
     ResourceLedgerV1,
     ResourceLocationV1,
@@ -105,17 +107,20 @@ def _freeze_inputs(*, state, resource, evidence):
     return policy, spec_id, targets, frozen_evidence
 
 
-def _binding(*, state, resource, spec_id, frozen_evidence, material) -> ResourceReviewBindingV1:
-    return ResourceReviewBindingV1(
-        run_id=state["run_id"], resource_spec_id=spec_id,
-        lineage_id=resource.resource_family_id, resource_id=resource.resource_id,
-        resource_type=resource.resource_type, version=resource.version,
-        text_exact_hash=material.text_exact_hash,
-        structured_payload_hash=material.structured_payload_hash,
-        artifact_exact_hash=material.artifact_exact_hash,
-        comparison_hash=material.comparison_hash,
-        evidence_snapshot_hash=_evidence_hash(frozen_evidence),
-        policy_hash=state["resource_review_policy_hash"])
+def _binding(*, state, resource, spec_id, frozen_evidence, material,
+             previous_binding=None) -> ResourceReviewBindingV1:
+    identity = {
+        "run_id": state["run_id"], "resource_spec_id": spec_id,
+        "lineage_id": resource.resource_family_id, "resource_id": resource.resource_id,
+        "resource_type": resource.resource_type, "version": resource.version,
+        "text_exact_hash": material.text_exact_hash,
+        "structured_payload_hash": material.structured_payload_hash,
+        "artifact_exact_hash": material.artifact_exact_hash,
+        "comparison_hash": material.comparison_hash,
+        "evidence_snapshot_hash": _evidence_hash(frozen_evidence),
+        "policy_hash": state["resource_review_policy_hash"]}
+    identity.update(context_fields(previous_binding, identity))
+    return ResourceReviewBindingV1(**identity)
 
 
 def _evidence_hash(frozen_evidence: list[dict]) -> str:
@@ -318,12 +323,16 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
         state=state, resource=resource, evidence=evidence)
     adapter = adapter_for(resource.resource_type)
     material = adapter.build_material(resource=resource, evidence=evidence, spec=None, targets=targets)
-    binding = _binding(state=state, resource=resource, spec_id=spec_id,
-                       frozen_evidence=frozen_evidence, material=material)
-    verify_binding_hashes(binding=binding, material=material, evidence=evidence)
 
     previous_data = (state.get("resource_ledgers") or {}).get(spec_id)
     previous = ResourceLedgerV1.model_validate(previous_data) if previous_data else None
+    binding = _binding(state=state, resource=resource, spec_id=spec_id,
+                       frozen_evidence=frozen_evidence, material=material,
+                       previous_binding=previous.binding if previous else None)
+    verify_binding_hashes(binding=binding, material=material, evidence=evidence)
+    carry_over = None
+    if previous is not None and previous.binding.evidence_snapshot_hash != binding.evidence_snapshot_hash:
+        carry_over = build_carry_over(previous, history_model=ResourceIssueHistoryV1)
     revision = (state.get("resource_revision") or {}).get(spec_id) or {}
     parent_text = revision.get("previous_text") if previous else None
     parent_material = None
@@ -348,7 +357,8 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
     if not gate.passed:
         ledger = append_program_gate_observation_v1(
             previous=previous, binding=binding, step_id=step_id, gate=gate, material=material,
-            parent_comparison_hash=previous.observations[-1].comparison_hash if previous else None)
+            parent_comparison_hash=previous.observations[-1].comparison_hash if previous else None,
+            carry_over=carry_over)
         raw = _gate_summary(gate=gate, material=material, resource_id=resource.resource_id,
                             resource_spec_id=spec_id)
         return ResourceReviewOutcome(raw=raw, ledger=ledger, last_llm_result=None,
@@ -397,7 +407,8 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
             material=material, adapter=adapter, parent_text=parent_text, parent_material=parent_material,
             parent_comparison_hash=previous.observations[-1].comparison_hash if previous else None,
             revision_kind=revision_kind, coverage_threshold=policy.coverage_threshold,
-            max_consecutive_unchanged=policy.max_consecutive_unchanged, gate=gate)
+            max_consecutive_unchanged=policy.max_consecutive_unchanged, gate=gate,
+            carry_over=carry_over)
     except ValidationError as error:
         collector.invalid_result(call_id=result.call_id)
         remaining = policy.max_physical_attempts - used
@@ -441,7 +452,8 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
                 material=material, adapter=adapter, parent_text=parent_text, parent_material=parent_material,
                 parent_comparison_hash=previous.observations[-1].comparison_hash if previous else None,
                 revision_kind=revision_kind, coverage_threshold=policy.coverage_threshold,
-                max_consecutive_unchanged=policy.max_consecutive_unchanged, gate=gate)
+                max_consecutive_unchanged=policy.max_consecutive_unchanged, gate=gate,
+                carry_over=carry_over)
         except ValidationError as second_error:
             collector.invalid_result(call_id=second.call_id)
             repair = _record(resource=resource, attempted=True,

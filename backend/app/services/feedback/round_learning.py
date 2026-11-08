@@ -54,7 +54,8 @@ class RoundLearningService:
             raise invalid(ErrorCode.GENERATION_TARGET_INVALID)
         self.feedback.mastery_service.validate_generation_targets(profile, ids)
         return self._create_round(profile, payload.selection_key, payload.model_dump(mode="json"),
-                                  ids[0], payload.resource_types, payload.include_claim_check)
+                                  ids[0], payload.resource_types, payload.include_claim_check,
+                                  include_claim_evidence_retrieval=payload.include_claim_evidence_retrieval)
 
     def next(self, profile, payload):
         if not self.settings.learning_round_creation_enabled:
@@ -80,10 +81,12 @@ class RoundLearningService:
         return self._create_round(profile, payload.selection_key, payload.model_dump(mode="json"),
                                   payload.primary_node_id, payload.primary_resource_types, payload.include_claim_check,
                                   review_node_id=payload.review_node_id, source_attempt_id=source.attempt_id,
-                                  parent_round_id=context.get("round_id"), intent=intent)
+                                  parent_round_id=context.get("round_id"), intent=intent,
+                                  include_claim_evidence_retrieval=payload.include_claim_evidence_retrieval)
 
     def _create_round(self, profile, key, selection, primary_node_id, resource_types, claim,
-                      review_node_id=None, source_attempt_id=None, parent_round_id=None, intent=None):
+                      review_node_id=None, source_attempt_id=None, parent_round_id=None, intent=None,
+                      include_claim_evidence_retrieval=False):
         request_hash = canonical_hash(selection)
         round_id = round_identity("round", profile.learner_id, key)
         stage_id = round_identity("stage", round_id, "initial")
@@ -120,11 +123,13 @@ class RoundLearningService:
                 ))
                 plans = [plan_member(round_id=round_id, stage_id=stage_id, learner_id=current.learner_id,
                                      knowledge_base_id=current.knowledge_base_id, node=nodes[primary_node_id], role="primary",
-                                     primary_resource_types=resource_types, include_claim_check=claim)]
+                                     primary_resource_types=resource_types, include_claim_check=claim,
+                                     include_claim_evidence_retrieval=include_claim_evidence_retrieval)]
                 if review_node_id:
                     plans.append(plan_member(round_id=round_id, stage_id=stage_id, learner_id=current.learner_id,
                                              knowledge_base_id=current.knowledge_base_id, node=nodes[review_node_id], role="review",
-                                             primary_resource_types=[], include_claim_check=claim))
+                                             primary_resource_types=[], include_claim_check=claim,
+                                             include_claim_evidence_retrieval=include_claim_evidence_retrieval))
                 for plan in plans:
                     uow.rounds.insert("learning_round_nodes", dict(
                         round_node_id=plan.member_id, round_id=round_id, skill_node_id=plan.node_id,

@@ -222,6 +222,12 @@ T9知识库资料现按 `teaching/zh`、`references/{zh,en}`、`licenses/`、`pr
 
 独立查询预算 `RESOURCE_AWARE_RETRIEVAL_MAX_QUERIES=10`，精排最多20个唯一chunk且每owner最多top_k，最终证据数及摘录上限仍由原配置控制（默认8条×1200字符）。启用前必须明确填写 `RESOURCE_AWARE_PLANNER_CONTEXT_TOKENS` 为部署模型窗口；完整 messages、schema 和1024预留的UTF-8字节数作为保守 token 估计，与 `RESOURCE_AWARE_PLANNER_INPUT_BUDGET_TOKENS=32768` 和实际输出预留核对。未配置窗口／超预算沿原严格失败或显式规则降级，不删证据。策略在实际执行建立 Run 时冻结，尚在队列中的 job 仍按执行时配置选择；关闭开关不改历史 Evidence/spec。已实施功能和验证结果见 [项目更新说明](docs/project-update-2026-10-26.md)；详细计划与证据保留在本地，真实模型质量、时延及净成本尚待另行授权对照，保持默认关闭。
 
+### 可选 Claim 缺证补检（T50）
+
+`include_claim_evidence_retrieval=false` 为默认值；只有显式开启并同时满足 `include_claim_check=true`、`include_review=true` 才会在首次 Claim 判定后，对**首次 `not_in_evidence` 的事实 Claim** 追加一次知识库补检与重判。原 `supported`/`contradicted`/非事实判定、正文、spec、allocation 与证据快照均不变；全部预期批次成功后才原子激活，指标以全部事实 Claim 为分母。新反证/来源冲突会永久阻断该资源版本发布（用户确认不能清除），进行中或中断的版本同样保持未发布；所有自动收尾、用户确认、事件重放与仓储写入共用同一持久 guard。新增摘录只通过受控 child evidence scope 进入返工版本的生成、引用校验、普通审核与 Claim 抽取/判定；单资源重试遇到补证上下文时显式拒绝而不是静默降级。
+
+只读摘要：`GET /api/runs/{run_id}/claim-evidence-retrieval`。专项命令：`python scripts/run_tests.py --suite claim-evidence-retrieval-unit --suite claim-evidence-retrieval-persistence --suite claim-evidence-retrieval-workflow --suite claim-evidence-retrieval-recovery --suite claim-evidence-retrieval-api --suite claim-evidence-retrieval-compat --output output/test-runs/t50-check`（前端另跑 `claim-evidence-retrieval-ui`/`-browser`）。全部模型为 mock/scripted；真实召回、误放率、费用与最坏时延未验证，不能把离线通过当作质量或生产就绪结论。设计与证据见 [T50 计划](docs/update_plan/T50.md)。
+
 ## 测试运行
 
 Claim 中立抽取默认 `CLAIM_EXTRACTION_STRATEGY=neutral_estimate_v1`，使用无外部资产的字符估算：ASCII/CJK/其他Unicode系数0.3/0.6/1，完整实际请求统一增加15%余量，每消息8和请求128的包装余量只计一次。无需tokenizer下载、PROFILE路径/ID或校准PASS。短文单批、长文按需分批、程序汇总，同资源一次原Judge；无额外Evidence和模型整合调用。每个真实attempt发送前CAS预留本次输入估算及实际输出cap，返回按可靠usage核销，未知用量保留预留并阻止自动补调；实际超估不丢有效结果，超支入账后阻断下一请求。正常批次及同图返工共享run预算，中断按原失败/新run重试。配置与迁移见[部署说明](docs/deployment.md#claim-中立抽取候选)。估算不是精确token或计费硬上限；真实冒烟和质量对照分别验证，本轮按用户要求只做代码与离线验证。T37 为 `neutral_estimate_v1` 增加冻结的密度装箱子契约（`density_batching`，version `claim-density-v1`）：按 paragraph/list/table/code 的原文字符数预估候选数，与既有 token 上界**同时**约束装箱；标题与空行不占风险权重，但仍完整送模型并逐 unit 回执；仅当候选批只含 1 个 unit 时豁免密度。`CLAIM_EXTRACTION_DENSITY_ENABLED` / `_PRIOR` / `RISK_SHARE` 只影响此后冻结的新 Run——旧 2.0 快照不含该键、hash 与原 token 装箱保持不变。触顶判废、细分、预算、CAS 与 Judge 均不变；密度是调度启发式，不构成事实召回或成本改善证明。

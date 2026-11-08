@@ -34,12 +34,14 @@ class RunQueryService:
         feedback_loop_repository: BaseFeedbackLoopRepository | None = None,
         *,
         generation_job_repository: BaseGenerationJobRepository | None = None,
+        supplement_repository=None,
     ):
         self.repository = repository
         self.resource_repository = resource_repository
         self.claim_repository = claim_repository
         self.feedback_loop_repository = feedback_loop_repository
         self.generation_job_repository = generation_job_repository
+        self.supplement_repository = supplement_repository
 
     def get_run(self, run_id: str) -> AgentRunRecord:
         run = self.repository.get_run(run_id)
@@ -218,6 +220,20 @@ class RunQueryService:
                     resource_metrics=metrics,
                 )
             return RunClaimsResponse(run_id=run_id)
+        # The public contract exposes exactly one effective judgement per Claim.
+        # Full history stays on the dedicated read API.
+        from app.models.reviews.claim_resolution import resolve_effective_claim_judgements
+
+        sessions = (
+            self.supplement_repository.list_sessions([run_id])
+            if self.supplement_repository is not None else []
+        )
+        supplements = (
+            self.supplement_repository.list_supplements([run_id])
+            if self.supplement_repository is not None else []
+        )
+        resolution = resolve_effective_claim_judgements(judgements, sessions, supplements)
+        judgements = resolution.ordered()
         resource_ids = sorted({item.resource_id for item in claims})
         metrics = {
             resource_id: compute_claim_metric(

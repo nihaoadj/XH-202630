@@ -1,4 +1,8 @@
 from app.db.migrations.p0_38_learning_rounds import apply_p0_38_learning_rounds_migration
+from app.db.migrations.p0_39_claim_evidence_retrieval import (
+    apply_p0_39_claim_evidence_retrieval_migration,
+    rollback_p0_39_claim_evidence_retrieval_migration,
+)
 """Small versioned migrations required for additive schema upgrades."""
 
 from app.db.migrations.p0_04 import apply_p0_04_migration
@@ -42,6 +46,8 @@ from app.db.migrations.p0_37_claim_estimate import apply_p0_37_claim_estimate_mi
 
 __all__ = [
     "apply_p0_38_learning_rounds_migration",
+    "apply_p0_39_claim_evidence_retrieval_migration",
+    "rollback_p0_39_claim_evidence_retrieval_migration",
     "apply_p0_37_claim_estimate_migration",
     "apply_p0_36_claim_extraction_migration",
     "apply_p0_04_migration",

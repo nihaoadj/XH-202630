@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .evidence_context import EvidenceContextCarryOverV1
+
 
 class LectureContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -45,6 +47,8 @@ class LectureReviewBindingV1(LectureContract):
     version: int = Field(ge=1)
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     evidence_snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence_context_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    parent_evidence_context_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     policy_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -186,6 +190,9 @@ class LectureLedgerV1(LectureContract):
     binding: LectureReviewBindingV1
     issues: list[LectureIssueHistoryV1] = Field(default_factory=list)
     observations: list[LectureObservationV1] = Field(min_length=1)
+    # Only present when this ledger starts a new evidence epoch.  The
+    # predecessor ledger itself is stored unchanged in the audit history.
+    carry_over: EvidenceContextCarryOverV1 | None = None
 
     @model_validator(mode="after")
     def validate_chain(self):
@@ -195,11 +202,24 @@ class LectureLedgerV1(LectureContract):
             raise ValueError("ledger duplicate observation step")
         if len({entry.issue.issue_id for entry in self.issues}) != len(self.issues):
             raise ValueError("ledger duplicate issue")
+        carried = []
+        if self.carry_over is not None:
+            if self.carry_over.previous_evidence_snapshot_hash == self.binding.evidence_snapshot_hash:
+                raise ValueError("carry-over does not change the evidence context")
+            if self.binding.version != self.carry_over.previous_version + 1:
+                raise ValueError("carry-over must start at the direct successor version")
+            carried = [LectureIssueHistoryV1.model_validate(item) for item in self.carry_over.open_issues]
+            if any(item.status != "open" for item in carried):
+                raise ValueError("carry-over may only carry open issues")
+            if ([item.issue for item in self.issues[:len(carried)]]
+                    != [item.issue for item in carried]):
+                raise ValueError("carried issue definitions were rewritten")
         previous = None
-        count = 0
-        reconstructed = {}
+        count = self.carry_over.consecutive_unchanged if self.carry_over is not None else 0
+        reconstructed = {item.issue.issue_id: item for item in carried}
         for entry in self.observations:
-            for key in ("run_id", "resource_spec_id", "lineage_id", "policy_hash", "evidence_snapshot_hash"):
+            for key in ("run_id", "resource_spec_id", "lineage_id", "policy_hash",
+                        "evidence_snapshot_hash", "evidence_context_id", "parent_evidence_context_hash"):
                 if getattr(entry.binding, key) != getattr(self.binding, key):
                     raise ValueError("ledger mixed frozen context")
             if previous is not None:
@@ -207,6 +227,11 @@ class LectureLedgerV1(LectureContract):
                     raise ValueError("ledger observation version chain mismatch")
                 if entry.unchanged != (entry.comparison_hash == previous.comparison_hash):
                     raise ValueError("ledger unchanged observation mismatch")
+            elif self.carry_over is not None:
+                if entry.parent_content_hash != self.carry_over.previous_content_hash:
+                    raise ValueError("ledger epoch opening parent mismatch")
+                if entry.unchanged != (entry.comparison_hash == self.carry_over.previous_comparison_hash):
+                    raise ValueError("ledger epoch opening unchanged mismatch")
             elif entry.parent_content_hash is not None or entry.unchanged:
                 raise ValueError("initial observation cannot be a revision")
             if entry.revision_kind == "ordinary":

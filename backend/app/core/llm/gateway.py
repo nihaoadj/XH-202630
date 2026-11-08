@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from app.core.llm.budget import LLMBudgetGuard, reserve_call, budgeted_transport_call, effective_context
+from app.core.llm.budget import (
+    LLMBudgetGuard,
+    LLMBudgetUnavailable,
+    budgeted_transport_call,
+    effective_context,
+    reserve_call,
+)
 
 import json
 import logging
@@ -667,11 +673,31 @@ class LLMGateway:
                 timeout = min(timeout, getattr(ticket, "timeout_seconds", timeout))
             attempt_started = self.monotonic()
             raw: RawLLMResponse | None = None
-            reservation = reserve_call(self.budget_guard, context, attempt, next_output_tokens, timeout)
+            try:
+                reservation = reserve_call(
+                    self.budget_guard, context, attempt, next_output_tokens, timeout,
+                )
+            except Exception as exc:
+                # The upper production/round guard refused before any dispatch.
+                # The local observer must settle its reservation as definitively
+                # not sent instead of leaving it reserved forever.
+                if attempt_observer is not None:
+                    not_sent = getattr(attempt_observer, "on_attempt_not_sent", None)
+                    if callable(not_sent):
+                        not_sent(ticket, exc)
+                raise
             transport_error = None
+
+            def _before_send():
+                if attempt_observer is not None:
+                    on_dispatch = getattr(attempt_observer, "on_dispatch", None)
+                    if callable(on_dispatch):
+                        on_dispatch(ticket)
+
             try:
                 raw = budgeted_transport_call(
                     _invoke_transport_with_hard_timeout, self.budget_guard, reservation,
+                    before_send=_before_send,
                     transport=self.transport,
                     timeout_seconds=timeout,
                     messages=prepared_messages,
@@ -688,6 +714,11 @@ class LLMGateway:
                     retry_allowed = attempt_observer.on_attempt_error(ticket, transport_error, elapsed)
                 else:
                     retry_allowed = attempt_observer.after_attempt(ticket, raw, elapsed)
+            if isinstance(transport_error, LLMBudgetUnavailable):
+                # A scoped capacity refusal happens before the dispatch intent,
+                # so it must surface as a budget decision instead of being
+                # retried as a provider error.
+                raise transport_error
             try:
                 if transport_error is not None:
                     raise transport_error

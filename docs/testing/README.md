@@ -298,3 +298,11 @@ T49 单主节点/反馈双节点学习轮次专项（2026-11-07 收尾）：先�
 - `learning-round-generation` 本轮扩至 49 项：两目标拒绝、review 资格、need 跨轮保留、同源题 ID 分别映射、95% 可纠错、重复提交冲突、跨阶段会话拒绝、仅 review 六题复测（根 path hold、主结果与 tier 不变、画像只 +1）、资源缺组 not-ready。
 - A01–A20 的逐项用例映射、证据路径和“通过/部分”判定见 `docs/update_plan/T49.md` 第 16 节。A07、A08、A14、A15 仍为部分；A03/A04/A19 为服务级或仓储级证据。
 - 确定性限制：95% 用例在 `RoundAssessment.prepare` 注入已判分成绩；仅 review 复测把短答评分替换为确定性 1.0，避免真实 LLM。未运行后端全量、完整 regression/acceptance、真实模型、生产迁移/部署与多浏览器矩阵；本地 PASS 不代表 CI、生产就绪或整体验收。
+
+T50 可选 Claim 缺证补检专项（2026-11-08 修复轮）：先执行 `npm --prefix frontend run build`，再运行 `python scripts/run_tests.py --suite claim-evidence-retrieval-unit --suite claim-evidence-retrieval-persistence --suite claim-evidence-retrieval-workflow --suite claim-evidence-retrieval-recovery --suite claim-evidence-retrieval-api --suite claim-evidence-retrieval-compat --output output/test-runs/t50-check`、`python scripts/run_tests.py --suite claim-evidence-retrieval-ui --suite claim-evidence-retrieval-browser --output output/test-runs/t50-frontend-check`；静态门禁为 `scripts/check_architecture.py`、`scripts/export_frontend_contracts.py --check`、改动文件 Ruff 与 `git -c core.whitespace=cr-at-eol diff --check`。输出目录必须为空；浏览器专项依赖刚构建的 `frontend/dist`。
+
+- `claim-evidence-retrieval-persistence` 同时包含发布事务 guard（进行中/中断屏障、硬阻断不可清除、反证撤销已发布版本、父版本阻断不影响子版本），其中会话创建与发布竞争同时验证 SQLite/Memory；旧的并发硬阻断 CAS 用例仍仅在 Memory 执行，SQLite 参数 1 项跳过可见。
+- `claim-evidence-retrieval-workflow` 含真实 SQL 节点顺序（先保存 scope 再激活、重复激活幂等）、A23 的 100+2 目标集合与伪造非目标拒绝、子版本受控证据上下文与 retry/恢复解析，完整编译图使用真实 Gateway＋scripted transport；另含主/复习双成员实际预算组合、后台冻结、连续两次新 Run 重试。
+- `claim-evidence-retrieval-recovery` 用同一 SQLite 文件上的新 engine/仓储模拟进程重启，验证补检进行中版本不可发布、`interrupted` 保持屏障、反证批与撤回持久、激活指标重放一致；不启动 Worker 或真实服务。
+- 测试进程内由 `backend/tests/conftest.py` 提供已评审的 `RESOURCE_REVIEW_CONTEXT_TOKENS=129024`（与 `.env.example` 一致），不修改实际 `.env`、不关闭审核策略；临时目录一律 `--basetemp` 隔离。
+- 确定性限制：所有调用为 mock/scripted，未启用 `RUN_LIVE_LLM`/`COURSEWARE_LIVE_EVAL`。真实召回、误放率、费用、最坏时延、真实 Provider 故障注入、CI 与部署均 NOT_RUN；ledger evidence epoch、单资源 retry 补证继承、连续失败重试、实际 reconcile 与轮次预算组合已有离线专项；当前状态及逐项证据见 `docs/update_plan/T50.md`。

@@ -63,6 +63,8 @@ class PublicationReason(str, Enum):
     CLAIM_GATE_FAILED = "claim_gate_failed"
     CLAIM_METRIC_INCOMPLETE = "claim_metric_incomplete"
     CLAIM_USER_REVIEW_REQUIRED = "claim_user_review_required"
+    CLAIM_EVIDENCE_HARD_BLOCK = "claim_evidence_hard_block"
+    CLAIM_EVIDENCE_IN_FLIGHT = "claim_evidence_in_flight"
     STRICT_DEGRADATION = "strict_degradation"
 
 
@@ -115,6 +117,13 @@ class PublicationInputs:
     allow_partial_claim_publish: bool = False
     claim_user_review_enabled: bool = False
     claim_user_review_min_factual_pass_rate: float = 0.0
+    # A persisted round-1 counter-evidence or source conflict permanently binds
+    # this resource version.  It is checked before every other allowance.
+    claim_hard_block: bool = False
+    # An in-flight or interrupted claim-evidence round keeps this version
+    # unpublished for now; the durable guard in the repositories is the final
+    # authority and re-reads the same state before any publication write.
+    claim_publication_barrier: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,7 +170,13 @@ def resolve_publication(inputs: PublicationInputs) -> PublicationDecision:
         and inputs.not_in_evidence_claim_total > 0
     )
 
-    if inputs.is_locked:
+    if inputs.claim_hard_block:
+        review_status = ResourceStatus.HUMAN_REVIEW
+        reason = PublicationReason.CLAIM_EVIDENCE_HARD_BLOCK
+    elif inputs.claim_publication_barrier:
+        review_status = ResourceStatus.HUMAN_REVIEW
+        reason = PublicationReason.CLAIM_EVIDENCE_IN_FLIGHT
+    elif inputs.is_locked:
         review_status = ResourceStatus.HUMAN_REVIEW
         reason = PublicationReason.GENERATION_LOCKED
     elif (

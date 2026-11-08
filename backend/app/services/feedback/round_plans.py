@@ -35,6 +35,7 @@ def plan_member(
     node: SkillNode, role: Literal["primary", "review", "legacy"],
     primary_resource_types: list[str], include_claim_check: bool,
     correction_focus: dict | None = None,
+    include_claim_evidence_retrieval: bool = False,
 ) -> RoundMemberPlan:
     """A node's role/stage determines its resources before any job is created."""
     if node.knowledge_base_id != knowledge_base_id or node.tier not in {1, 2, 3}:
@@ -66,6 +67,9 @@ def plan_member(
         learner_id=learner_id, knowledge_base_id=knowledge_base_id, topic=node.name,
         target_skill_nodes=[node.node_id], profile_focus_mode="off", resource_types=list(group),
         difficulty_preference=difficulty, include_claim_check=include_claim_check,
+        include_claim_evidence_retrieval=(
+            include_claim_evidence_retrieval and include_claim_check
+        ),
         include_review=True, generation_mode="standard", max_iterations=2, constraints=constraints,
     ) for group in groups)
     return RoundMemberPlan(member_id, node.node_id, node.name, node.tier, role,

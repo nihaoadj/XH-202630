@@ -21,6 +21,7 @@ from app.models.reviews.resource_review import (
     model_issue_id,
     program_issue_id,
 )
+from app.models.reviews.evidence_context import EvidenceContextCarryOverV1, validate_carry_over
 from app.models.shared.persistence import canonical_hash
 
 from .adapters.base import ResourceMaterial
@@ -38,11 +39,13 @@ def _check_temp_ids(output: ResourceReviewOutputV1, previous: ResourceLedgerV1 |
 
 
 def _freeze_previous(previous: ResourceLedgerV1 | None, binding: ResourceReviewBindingV1,
-                     step_id: str) -> tuple[list[ResourceIssueHistoryV1], int]:
+                     step_id: str, carry_over=None) -> tuple[list[ResourceIssueHistoryV1], int, object]:
     if previous is None:
-        return [], 0
+        if carry_over is not None:
+            raise ValueError("carry-over requires its predecessor ledger")
+        return [], 0, None
     old = previous.binding
-    for key in ("run_id", "resource_spec_id", "lineage_id", "evidence_snapshot_hash",
+    for key in ("run_id", "resource_spec_id", "lineage_id",
                 "policy_hash", "resource_type"):
         if getattr(old, key) != getattr(binding, key):
             raise ValueError("ledger resource or frozen context mismatch")
@@ -50,7 +53,18 @@ def _freeze_previous(previous: ResourceLedgerV1 | None, binding: ResourceReviewB
         raise ValueError("ledger parent version mismatch")
     if len({entry.step_id for entry in previous.observations}) != len(previous.observations):
         raise ValueError("ledger duplicate observation step")
-    return list(previous.issues), previous.observations[-1].consecutive_unchanged
+    if old.evidence_snapshot_hash != binding.evidence_snapshot_hash:
+        if carry_over is None:
+            raise ValueError("ledger resource or frozen context mismatch")
+        carried = validate_carry_over(
+            carry_over, binding=binding, previous_ledger=previous,
+            history_model=ResourceIssueHistoryV1)
+        if carry_over.previous_comparison_hash != previous.observations[-1].comparison_hash:
+            raise ValueError("carry-over predecessor comparison hash mismatch")
+        return carried, carry_over.consecutive_unchanged, carry_over
+    if carry_over is not None:
+        raise ValueError("carry-over requires a changed evidence context")
+    return list(previous.issues), previous.observations[-1].consecutive_unchanged, previous.carry_over
 
 
 def _char_delta(parent_text: str | None, text: str) -> tuple[int, int]:
@@ -80,6 +94,7 @@ def append_model_observation_v1(
     max_consecutive_unchanged: int = 2,
     gate: ResourceProgramGateResultV1 | None = None,
     parent_material=None,
+    carry_over: EvidenceContextCarryOverV1 | None = None,
 ) -> ResourceLedgerV1:
     """Return a new ledger with one model observation; callers persist atomically."""
     if revision_kind not in {"ordinary", "claim"}:
@@ -100,7 +115,8 @@ def append_model_observation_v1(
                 "BINDING_MISMATCH", "parent_material", "parent text or comparison hash mismatch")
     _check_temp_ids(output, previous)
 
-    histories, count = _freeze_previous(previous, binding, step_id)
+    histories, count, carried = _freeze_previous(previous, binding, step_id, carry_over)
+    epoch_start = previous is not None and carry_over is not None
     if previous is not None and any(entry.step_id == step_id for entry in previous.observations):
         # Idempotent replay: the same step may only produce one observation.
         raise ValueError("observation replay conflict")
@@ -158,8 +174,8 @@ def append_model_observation_v1(
         revision_kind=revision_kind, unchanged=unchanged, consecutive_unchanged=consecutive,
         characters_added=added, characters_removed=removed, gate=gate, output=normalized,
         coverage_rate=result.coverage_rate, decision=decision)
-    return ResourceLedgerV1(binding=binding, issues=updated,
-                            observations=[*(previous.observations if previous else []), observation])
+    return ResourceLedgerV1(binding=binding, issues=updated, carry_over=carried,
+                            observations=[*([] if epoch_start else (previous.observations if previous else [])), observation])
 
 
 def append_program_gate_observation_v1(
@@ -170,6 +186,7 @@ def append_program_gate_observation_v1(
     gate: ResourceProgramGateResultV1,
     material: ResourceMaterial,
     parent_comparison_hash: str | None,
+    carry_over: EvidenceContextCarryOverV1 | None = None,
 ) -> ResourceLedgerV1:
     """Record a deterministic gate failure with zero semantic calls.
 
@@ -184,7 +201,8 @@ def append_program_gate_observation_v1(
     if material.artifact_exact_hash != binding.artifact_exact_hash:
         raise ValidationError("BINDING_MISMATCH", "binding.artifact_exact_hash",
                               "bound content does not match the frozen artifact")
-    histories, count = _freeze_previous(previous, binding, step_id)
+    histories, count, carried = _freeze_previous(previous, binding, step_id, carry_over)
+    epoch_start = previous is not None and carry_over is not None
     if previous is not None and any(entry.step_id == step_id for entry in previous.observations):
         raise ValueError("observation replay conflict")
 
@@ -231,8 +249,8 @@ def append_program_gate_observation_v1(
         revision_kind="ordinary", unchanged=unchanged, consecutive_unchanged=count,
         characters_added=0, characters_removed=0, gate=gate, output=None,
         coverage_rate=None, decision=None)
-    return ResourceLedgerV1(binding=binding, issues=updated,
-                            observations=[*(previous.observations if previous else []), observation])
+    return ResourceLedgerV1(binding=binding, issues=updated, carry_over=carried,
+                            observations=[*([] if epoch_start else (previous.observations if previous else [])), observation])
 
 
 def replay_resource_ledger(data: dict) -> ResourceLedgerV1:

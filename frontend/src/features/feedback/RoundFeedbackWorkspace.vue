@@ -43,6 +43,7 @@
       </section>
     </section>
     <el-checkbox v-model="includeClaimCheck" :disabled="Boolean(actionBusy)">启用 Claim 审核</el-checkbox>
+    <el-checkbox v-model="includeClaimEvidenceRetrieval" :disabled="Boolean(actionBusy) || !includeClaimCheck">证据不足时补检知识库</el-checkbox>
     <p v-if="actionError" role="alert" class="round-error">{{ actionError }}</p>
   </section>
 </template>
@@ -74,6 +75,7 @@ const primaryNodeId = ref('')
 const includeReview = ref(false)
 const reviewNodeId = ref('')
 const includeClaimCheck = ref(false)
+const includeClaimEvidenceRetrieval = ref(false)
 const resourceTypes = ['讲义', '实操指南', '分阶测试题', '复习清单', '案例分析']
 const primaryResourceTypes = ref(['讲义', '实操指南', '分阶测试题'])
 let version = 0
@@ -152,12 +154,14 @@ async function perform(kind, build, invoke) {
 }
 function correct() {
   return perform('correction', () => ({ learner_id: props.learnerId, include_claim_check: includeClaimCheck.value,
+    include_claim_evidence_retrieval: Boolean(includeClaimCheck.value && includeClaimEvidenceRetrieval.value),
     targets: correctionTargets.value.filter(target => selectedCorrectionNodes.value.includes(target.node_id)) }), data => roundFeedbackApi.correct(props.roundId, data))
 }
 function nextRound() {
   return perform('next', () => ({ learner_id: props.learnerId, source_attempt_id: result.value.attempt_id,
     primary_node_id: primaryNodeId.value, primary_learning_intent: intent.value, primary_resource_types: primaryResourceTypes.value,
-    review_node_id: includeReview.value ? reviewNodeId.value : null, include_claim_check: includeClaimCheck.value }), roundFeedbackApi.next)
+    review_node_id: includeReview.value ? reviewNodeId.value : null, include_claim_check: includeClaimCheck.value,
+    include_claim_evidence_retrieval: Boolean(includeClaimCheck.value && includeClaimEvidenceRetrieval.value) }), roundFeedbackApi.next)
 }
 async function refreshProfile() {
   const captured = version

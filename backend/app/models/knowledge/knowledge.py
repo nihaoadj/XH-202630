@@ -220,6 +220,12 @@ class RetrievalPolicy(StrictKnowledgeModel):
     min_evidence_count: int = Field(default=1, ge=1, le=20)
     max_evidence_count: int = Field(default=8, ge=1, le=20)
     max_excerpt_chars: int = Field(default=1200, ge=100, le=10000)
+    # T50 optional, versioned excerpt policy.  ``prefix`` keeps every existing
+    # caller byte-for-byte; ``claim_window_v1`` selects an exact contiguous
+    # sentence window around the query terms instead of a prefix.
+    excerpt_strategy: Literal["prefix", "claim_window_v1"] = "prefix"
+    excerpt_chars: Optional[int] = Field(default=None, ge=100, le=10000)
+    excerpt_structural_cap: Optional[int] = Field(default=None, ge=100, le=10000)
     distance_metric: Literal["cosine"] = "cosine"
     query_strategy_version: str = "deterministic-v1"
     ranking_strategy_version: str = "normalized-score-v1"

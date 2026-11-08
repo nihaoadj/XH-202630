@@ -52,7 +52,10 @@ class SQLClaimRepository(BaseClaimRepository):
                     if existing.claim_hash != claim.claim_hash:
                         raise PersistenceConflict("claim immutable payload conflict")
                     continue
-                judgement = next(item for item in judgements if item.claim_id == claim.claim_id)
+                # A per-resource Judge failure legitimately leaves this claim
+                # without a verdict. Persist its immutable extraction while
+                # the summary below stays incomplete; never invent support.
+                judgement = next((item for item in judgements if item.claim_id == claim.claim_id), None)
                 db.add(ResourceClaimORM(
                     claim_id=claim.claim_id,
                     review_id=claim.review_id,
@@ -73,8 +76,8 @@ class SQLClaimRepository(BaseClaimRepository):
                     extractor_model=claim.extractor_model,
                     extractor_prompt_version=claim.extractor_prompt_version,
                     claim_hash=claim.claim_hash,
-                    supported=judgement.verdict == "supported",
-                    confidence=judgement.confidence,
+                    supported=judgement is not None and judgement.verdict == "supported",
+                    confidence=judgement.confidence if judgement is not None else None,
                     evidence_refs=claim.source_evidence_ids,
                     created_at=claim.created_at,
                 ))

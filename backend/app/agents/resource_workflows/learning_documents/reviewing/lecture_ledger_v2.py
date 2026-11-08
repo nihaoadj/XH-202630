@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from difflib import SequenceMatcher
 
+from app.models.reviews.evidence_context import (
+    EvidenceContextCarryOverV1,
+    validate_carry_over,
+)
 from app.models.reviews.lecture_review import LectureReviewBindingV1
 from app.models.reviews.lecture_review_v2 import (
     LectureIssueHistoryV2,
@@ -30,7 +34,8 @@ def append_lecture_observation_v2(*, previous: LectureLedgerV2 | None,
                                   previous_content: str | None, parent_resource_id: str | None,
                                   targets: list[str], evidence_hashes: dict[str, str],
                                   teaching_rule_ids: set[str], revision_kind: str = "ordinary",
-                                  coverage_threshold: float = 0.8) -> LectureLedgerV2:
+                                  coverage_threshold: float = 0.8,
+                                  carry_over: EvidenceContextCarryOverV1 | None = None) -> LectureLedgerV2:
     """Return a new ledger; callers must atomically persist it before checkpointing.
 
     New issue IDs in model output are temporary. Only the server assigns logical
@@ -63,7 +68,7 @@ def append_lecture_observation_v2(*, previous: LectureLedgerV2 | None,
     digest = canonical_hash(normalized.model_dump(mode="json"))
     if previous is not None:
         old = previous.binding
-        for key in ("run_id", "resource_spec_id", "lineage_id", "evidence_snapshot_hash", "policy_hash"):
+        for key in ("run_id", "resource_spec_id", "lineage_id", "policy_hash"):
             if getattr(old, key) != getattr(binding, key):
                 raise ValueError("ledger resource or frozen context mismatch")
         replay = [entry for entry in previous.observations if entry.step_id == step_id]
@@ -74,12 +79,29 @@ def append_lecture_observation_v2(*, previous: LectureLedgerV2 | None,
         if (binding.version != old.version + 1 or parent_resource_id != old.resource_id or
                 previous_content is None or text_hash(previous_content) != old.content_hash):
             raise ValueError("ledger parent version or content mismatch")
-        histories = list(previous.issues)
-        count = previous.observations[-1].consecutive_unchanged
+        if old.evidence_snapshot_hash != binding.evidence_snapshot_hash:
+            if carry_over is None:
+                raise ValueError("ledger resource or frozen context mismatch")
+            carried_histories = validate_carry_over(
+                carry_over, binding=binding, previous_ledger=previous,
+                history_model=LectureIssueHistoryV2)
+            if carry_over.previous_comparison_hash != previous.observations[-1].comparison_hash:
+                raise ValueError("carry-over predecessor comparison hash mismatch")
+            histories, count, carried = (
+                carried_histories, carry_over.consecutive_unchanged, carry_over)
+        else:
+            if carry_over is not None:
+                raise ValueError("carry-over requires a changed evidence context")
+            histories = list(previous.issues)
+            count = previous.observations[-1].consecutive_unchanged
+            carried = previous.carry_over
     else:
+        if carry_over is not None:
+            raise ValueError("carry-over requires its predecessor ledger")
         if previous_content is not None or parent_resource_id is not None:
             raise ValueError("revision requires its previous ledger")
-        histories, count = [], 0
+        histories, count, carried = [], 0, None
+    epoch_start = previous is not None and carry_over is not None
     if len({item.issue.issue_id for item in histories}) != len(histories):
         raise ValueError("ledger contains duplicate identities")
     existing_ids = {item.issue.issue_id for item in histories}
@@ -121,5 +143,5 @@ def append_lecture_observation_v2(*, previous: LectureLedgerV2 | None,
         characters_added=added, characters_removed=removed,
         coverage_rate=derived_coverage_rate(normalized.targets),
         output=normalized, decision=result.decision)
-    return LectureLedgerV2(binding=binding, issues=updated,
-                           observations=[*(previous.observations if previous else []), observation])
+    return LectureLedgerV2(binding=binding, issues=updated, carry_over=carried,
+                           observations=[*([] if epoch_start else (previous.observations if previous else [])), observation])

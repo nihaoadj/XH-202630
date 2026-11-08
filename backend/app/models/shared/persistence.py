@@ -492,6 +492,20 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
             projection[key] = _jsonable(state[key])
     if state.get("claim_extraction_refs"):
         projection["claim_extraction_refs"] = _jsonable(state["claim_extraction_refs"])
+    if state.get("claim_evidence_retrieval_policy") is not None:
+        for key in (
+            "claim_evidence_retrieval_policy",
+            "claim_evidence_retrieval_policy_hash",
+        ):
+            if key not in state or state[key] is None:
+                raise ValueError("supplement checkpoint frozen fields missing")
+            projection[key] = _jsonable(state[key])
+        projection["claim_evidence_retrieval_refs"] = _jsonable(
+            list(state.get("claim_evidence_retrieval_refs", []))[:100]
+        )
+        projection["claim_evidence_hard_block_resource_ids"] = list(
+            state.get("claim_evidence_hard_block_resource_ids", [])
+        )[:100]
     if state.get("lecture_review_contract_version") is not None:
         for key in ("lecture_review_contract_version", "lecture_review_policy", "lecture_review_policy_hash"):
             if key not in state or state[key] is None:
@@ -525,6 +539,7 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "generation_mode",
         "include_review",
         "include_claim_check",
+        "include_claim_evidence_retrieval",
         "max_iterations",
         "claim_max_iterations",
         "workflow_status",

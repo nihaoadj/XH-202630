@@ -248,6 +248,9 @@ class ResourceGenerationContext(BaseModel):
     learner_profile_summary: Dict[str, Any] = Field(default_factory=dict)
     learning_path: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
     evidence: List[EvidenceItem] = Field(min_length=1, max_length=100)
+    # Bounded subset of ``evidence`` explicitly authorised by the child
+    # generation scope.  Empty for a first generation and every closed run.
+    supplement_evidence_ids: List[str] = Field(default_factory=list, max_length=16)
     node_evidence_map: Dict[str, List[str]] = Field(default_factory=dict)
     continuation_context: List[Dict[str, Any]] = Field(default_factory=list, max_length=20)
     constraints: Dict[str, Any] = Field(default_factory=dict)
@@ -274,6 +277,15 @@ class ResourceGenerationContext(BaseModel):
         if len(evidence_ids) != len(set(evidence_ids)):
             raise ValueError("generation context evidence_id must be unique")
         return values
+
+    @model_validator(mode="after")
+    def validate_supplement_ids(self) -> "ResourceGenerationContext":
+        if len(self.supplement_evidence_ids) != len(set(self.supplement_evidence_ids)):
+            raise ValueError("supplement evidence ids must be unique")
+        known = {item.evidence_id for item in self.evidence}
+        if set(self.supplement_evidence_ids) - known:
+            raise ValueError("supplement evidence must be part of the context pool")
+        return self
 
 
 class ResourceArtifactMetadata(BaseModel):

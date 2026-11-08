@@ -138,6 +138,7 @@ POST /api/auth/register 或 POST /api/auth/login
 | Run 回放 | `GET` | `/api/runs/{run_id}/timeline` | 持久化时间线 |
 | Run 回放 | `GET` | `/api/runs/{run_id}/evidence` | 冻结证据详情 |
 | Run 回放 | `GET` | `/api/runs/{run_id}/claims` | Claim 报告与指标 |
+| Run 回放 | `GET` | `/api/runs/{run_id}/claim-evidence-retrieval` | 补检状态、计数与证据 scope（T50，只读） |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/timeline` | 查询学习过程时间线 |
 | 学习历史 | `GET` | `/api/learning-history/{learner_id}/journey` | 按批次组织学习轮次 |
 | 报告 | `GET` | `/api/report/{learner_id}` | 查询学习报告 |
@@ -565,11 +566,21 @@ T42 的 `source_locating` 子契约与 `location_diagnostics` 定位诊断同属
 
 ### 9.7 `POST /api/generate/jobs/{run_id}/resource-specs/{resource_spec_id}/representations/{representation}/retry`
 
+源资料已使用的补检证据也可随单份重生成导入：服务端仅选择该版本及其同 Run 祖先 generation scope 授权的证据，核验 scope/hash/KB/检索步骤完成状态，复制为新 Run 的初始冻结证据。新任务重新抽取和审核，不沿用旧通过结论。无新增模型或检索调用；合并后最多20条初始证据，完整冻结上下文受 `workflow_checkpoint_max_bytes`（默认64 KiB）限制，超限或来源不完整返回409。该内部导入合同不接受客户端覆盖。
+
 单份失败文本资源重生成。无需请求体，客户端不能传入或覆盖冻结上下文；`representation` 目前只接受 `text`。可选 `Idempotency-Key`，按当前学习者和源 Run/spec/表示隔离；省略时由服务端冻结上下文 hash 生成稳定幂等键。同一输入重复提交返回同一 child Run，显式 key 与输入冲突返回 409。成功为 `200 + GenerationJobCreateResponse`，新 `run_id`、原 `batch_id`，仍经现有队列/后台调度。
 
 源任务须已 completed/failed，且指定执行项为 failed/human_review/revision_requested；已发布资源不接受该入口。复用原画像、诊断、学习计划、spec、证据和该份审核反馈，只从 `reuse_context -> generate` 开始，随后保留普通审核、Claim 和发布门禁。普通/Claim 自动返工次数重新计数，不修改原失败记录。已有正文作为上一版本，新资源保留 family、version+1 和 parent；无正文的生成失败从 v1 开始。
 
 不可访问或 spec 不属于该 Run 返回 404；源任务未终止、状态不允许、缺少完整可信冻结记录、hash/范围损坏或不支持跨资源依赖返回 409；非法表示或幂等键返回 422。不会自动降级到完整重新生成；用户可另行明确选择批次完整重生。新版本执行失败后，可针对该 child Run 再发起下一次手动尝试，不能用同一幂等请求制造重复任务。历史记录缺原查询正文时保留 query_hash 并显式标注缺失，不重新检索补造。
+
+### 9.8 `GET /api/runs/{run_id}/claim-evidence-retrieval`
+
+T50 只读摘要。沿用 Run 认证与归属校验，不存在/不可见返回既有 404 形状；查询零写入，不会触发任何补检、检索或模型调用，也不暴露 Prompt、查询原文、模型思考、endpoint 或密钥。
+
+响应为版本化 `ClaimEvidenceRetrievalSummaryV1`（`contract_version=claim-evidence-retrieval/v1`）：`requested`、`status`（`not_requested`/`not_applicable`/`pending`/`querying`/`retrieving`/`rejudging`/`completed`/`no_new_evidence`/`unavailable`/`budget_exhausted`/`blocked`/`interrupted`）、`reason_code`、`resource_id`/`resource_version`/`review_id`、`target/attempted/remaining` 计数、`query_total`、`logical_call_total`、`attempt_total`、`known_tokens`、`unknown_tokens`、初次与有效判定计数（`initial_*`/`effective_*`）、`factual_claim_total`、`evidence_scope_ids` 以及每会话摘要（含 `active`/`hard_block`）。`unknown_tokens` 表示供应商用量未知的保守预留，不会被记为 0。
+
+公开 Claim DTO 与 `GET /api/runs/{run_id}/claims` 返回的始终是**生效集合**（每 Claim 唯一）；历史轮次只通过该只读摘要与授权审核详情查看。
 
 ## 10. 学习历史接口
 

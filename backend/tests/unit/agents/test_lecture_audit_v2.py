@@ -42,6 +42,6 @@ def test_v2_rejects_policy_corruption_and_unknown_schema():
     data["lecture_review_policy_hash"] = "f" * 64
     with pytest.raises(ValueError, match="policy hash"):
         review_audit_envelope(data, run_id="run", step_id="step1")
-    data["schema_version"] = "4.0"
+    data["schema_version"] = "999.0"
     with pytest.raises(ValueError, match="unknown"):
         review_audit_envelope(data, run_id="run", step_id="step1")

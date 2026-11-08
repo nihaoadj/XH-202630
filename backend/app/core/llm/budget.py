@@ -76,7 +76,14 @@ def reserve_call(guard: LLMBudgetGuard | None, context: LLMCallContext, attempt:
     return guard.reserve(context, attempt, context.budget_input_token_cap + output_cap, runtime_seconds)
 
 
-def budgeted_transport_call(invoke, guard: LLMBudgetGuard | None, reservation: str | None, **kwargs):
+def budgeted_transport_call(invoke, guard: LLMBudgetGuard | None, reservation: str | None,
+                            *, before_send=None, **kwargs):
+    """Send once, settling the upper reservation afterwards.
+
+    ``before_send`` runs immediately before the transport is entered: it is the
+    only point where a caller can persist a durable dispatch intent after every
+    local pre-check has passed and before any provider can observe the request.
+    """
     guard = _guard(guard)
     raw = None
     started = time.monotonic()
@@ -91,6 +98,8 @@ def budgeted_transport_call(invoke, guard: LLMBudgetGuard | None, reservation: s
             envelope = {"messages": messages, "schema": schema.model_json_schema() if schema is not None else {}}
             if len(json.dumps(envelope, ensure_ascii=False).encode("utf-8")) + 4096 > active.input_cap:
                 raise LLMBudgetUnavailable("ROUND_INPUT_CAPACITY_EXCEEDED")
+        if before_send is not None:
+            before_send()
         raw = invoke(**kwargs)
         return raw
     finally:

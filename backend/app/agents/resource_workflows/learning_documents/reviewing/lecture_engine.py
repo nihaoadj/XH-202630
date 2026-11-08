@@ -5,7 +5,11 @@ import json
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.models.reviews.lecture_review import LectureReviewOutputV1, LectureReviewPolicyV1, LectureReviewBindingV1, LectureLedgerV1
+from app.models.reviews.evidence_context import build_carry_over, context_fields
+from app.models.reviews.lecture_review import (
+    LectureIssueHistoryV1, LectureLedgerV1, LectureReviewBindingV1,
+    LectureReviewOutputV1, LectureReviewPolicyV1,
+)
 from app.models.shared.persistence import canonical_hash
 from .types import ReviewProfile, PromptFragment, ReviewRequest
 from .prompts.builder import build_review_prompt
@@ -62,12 +66,18 @@ def review_lecture(*, state, resource, evidence, step_id, context, gateway, coll
     if spec["resource_family_id"] != resource.resource_family_id or spec["difficulty"] != resource.difficulty:
         raise ValueError("lecture frozen resource specification mismatch")
     frozen_evidence = [{"evidence_id": e.evidence_id, "excerpt_hash": text_hash(e.excerpt), "excerpt": e.excerpt} for e in sorted(evidence, key=lambda item: item.evidence_id)]
-    binding = LectureReviewBindingV1(run_id=state["run_id"], resource_spec_id=spec_id,
-        lineage_id=resource.resource_family_id, resource_id=resource.resource_id,
-        version=resource.version, content_hash=text_hash(resource.content_text or ""),
-        evidence_snapshot_hash=canonical_hash({"evidence": frozen_evidence}), policy_hash=state["lecture_review_policy_hash"])
     previous_data = (state.get("lecture_ledgers") or {}).get(spec_id)
     previous = LectureLedgerV1.model_validate(previous_data) if previous_data else None
+    identity = {"run_id": state["run_id"], "resource_spec_id": spec_id,
+        "lineage_id": resource.resource_family_id, "resource_id": resource.resource_id,
+        "version": resource.version, "content_hash": text_hash(resource.content_text or ""),
+        "evidence_snapshot_hash": canonical_hash({"evidence": frozen_evidence}),
+        "policy_hash": state["lecture_review_policy_hash"]}
+    identity.update(context_fields(previous.binding if previous else None, identity))
+    binding = LectureReviewBindingV1(**identity)
+    carry_over = None
+    if previous is not None and previous.binding.evidence_snapshot_hash != binding.evidence_snapshot_hash:
+        carry_over = build_carry_over(previous, history_model=LectureIssueHistoryV1)
     revision = (state.get("lecture_revision") or {}).get(spec_id) or {}
     previous_content = revision.get("previous_content") if previous else None
     if previous and previous_content is None:
@@ -94,7 +104,8 @@ def review_lecture(*, state, resource, evidence, step_id, context, gateway, coll
             output=output, content=resource.content_text or "", previous_content=previous_content,
             parent_resource_id=resource.parent_resource_id if previous else None,
             targets=targets, evidence_hashes={e["evidence_id"]: e["excerpt_hash"] for e in frozen_evidence}, teaching_rule_ids=RULE_IDS,
-            revision_kind="claim" if revision.get("claim_only") else "ordinary")
+            revision_kind="claim" if revision.get("claim_only") else "ordinary",
+            carry_over=carry_over)
     except ValueError:
         collector.invalid_result(call_id=result.call_id)
         raise

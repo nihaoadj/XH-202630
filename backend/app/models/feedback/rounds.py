@@ -100,8 +100,19 @@ class GenerateRoundCreateRequestV1(GenerateCreateRequest):
 
     @model_validator(mode="after")
     def require_resource_review_for_claim_audit(self) -> GenerateRoundCreateRequestV1:
+        from app.models.reviews.claim_evidence_retrieval import validate_feature_switch
+
         if self.include_claim_check and not self.include_review:
             raise ValueError("include_claim_check requires include_review=true")
+        validate_feature_switch(
+            include_claim_evidence_retrieval=self.include_claim_evidence_retrieval,
+            include_claim_check=self.include_claim_check,
+            include_review=self.include_review,
+        )
+        if self.include_claim_evidence_retrieval and len(self.resource_types) != 1:
+            raise ValueError(
+                "include_claim_evidence_retrieval requires one resource_type per request"
+            )
         return self
 
 
@@ -114,6 +125,7 @@ class RoundNextSelectionV1(RoundModel):
     primary_resource_types: list[str] = Field(min_length=1, max_length=5)
     review_node_id: str | None = Field(default=None, min_length=1, max_length=128)
     include_claim_check: bool = False
+    include_claim_evidence_retrieval: bool = False
     selection_key: str = Field(min_length=8, max_length=128)
 
     @field_validator("primary_resource_types")
@@ -126,10 +138,17 @@ class RoundNextSelectionV1(RoundModel):
 
     @model_validator(mode="after")
     def validate_selection(self) -> RoundNextSelectionV1:
+        from app.models.reviews.claim_evidence_retrieval import validate_feature_switch
+
         if self.review_node_id == self.primary_node_id:
             raise ValueError("primary and review must be different nodes")
         if len(set(self.primary_resource_types)) != len(self.primary_resource_types):
             raise ValueError("resource types must be unique")
+        validate_feature_switch(
+            include_claim_evidence_retrieval=self.include_claim_evidence_retrieval,
+            include_claim_check=self.include_claim_check,
+            include_review=True,
+        )
         return self
 
 
@@ -144,11 +163,19 @@ class RoundCorrectionSelectionV1(RoundModel):
     targets: list[RoundCorrectionTargetV1] = Field(min_length=1, max_length=2)
     selection_key: str = Field(min_length=8, max_length=128)
     include_claim_check: bool = False
+    include_claim_evidence_retrieval: bool = False
 
     @model_validator(mode="after")
     def validate_targets(self) -> RoundCorrectionSelectionV1:
+        from app.models.reviews.claim_evidence_retrieval import validate_feature_switch
+
         if len({target.node_id for target in self.targets}) != len(self.targets):
             raise ValueError("correction targets must have distinct nodes")
+        validate_feature_switch(
+            include_claim_evidence_retrieval=self.include_claim_evidence_retrieval,
+            include_claim_check=self.include_claim_check,
+            include_review=True,
+        )
         return self
 
 

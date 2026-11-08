@@ -172,6 +172,12 @@
           默认开启。对生成内容中的可验证事实进行证据核验与定向纠错。
           <template v-if="!appendReviewEnabled">当前源任务未启用普通审核，不能单独开启 Claim 审核。</template>
         </p>
+        <el-checkbox v-model="appendIncludeClaimEvidenceRetrieval" :disabled="!appendIncludeClaimCheck">
+          证据不足时补检知识库
+        </el-checkbox>
+        <p>
+          仅对首次缺少证据的事实陈述追加一次知识库检索并重新核对；关闭 Claim 审核时一并关闭。
+        </p>
       </div>
       <template #footer>
         <el-button @click="appendDialogVisible = false">取消</el-button>
@@ -179,7 +185,7 @@
       </template>
     </el-dialog>
 
-    <WorkflowDetailDialog v-model:visible="auditVisible" v-model:resource-id="auditResourceId" :loading="auditLoading" :error="auditError" :claims-error="auditClaimsError" :snapshot="auditSnapshot" :claims="auditClaims" :quality="auditQualityItem" :step="auditStep" :run-id="selectedRunId" :claim-enabled="selectedJob?.request_payload?.include_claim_check !== false" @refresh="refreshQualityAudit" />
+    <WorkflowDetailDialog v-model:visible="auditVisible" v-model:resource-id="auditResourceId" :loading="auditLoading" :error="auditError" :claims-error="auditClaimsError" :snapshot="auditSnapshot" :claims="auditClaims" :claim-retrieval="auditClaimRetrieval" :quality="auditQualityItem" :step="auditStep" :run-id="selectedRunId" :claim-enabled="selectedJob?.request_payload?.include_claim_check !== false" @refresh="refreshQualityAudit" />
     <el-dialog v-model="claimReportVisible" class="production-dialog claim-report-dialog" width="min(760px, calc(100vw - 32px))">
       <template #header>
         <div class="claim-report-header">
@@ -359,6 +365,7 @@ let generationMounted = true
 const appendDialogVisible = ref(false)
 const selectedAppendResourceTypes = ref([])
 const appendIncludeClaimCheck = ref(true)
+const appendIncludeClaimEvidenceRetrieval = ref(false)
 const coursewareComposerVisible = ref(false)
 const coursewareWorkspace = ref(null)
 const selectedRunId = ref(initialRunId)
@@ -474,6 +481,7 @@ const selectedClaimQuality = computed(() => resourceQuality.value[selectedClaimR
 const {
   visible: auditVisible, loading: auditLoading, error: auditError, claimsError: auditClaimsError,
   snapshot: auditSnapshot, claims: auditClaims, step: auditStep, resourceId: auditResourceId,
+  claimRetrieval: auditClaimRetrieval,
   refresh: refreshAudit, openStep: openAuditStep, openResource: openAuditResource,
 } = useGenerationAudit({ selectedRunId, selectedLearnerId })
 const retryableResourceTypes = computed(() => {
@@ -1029,6 +1037,8 @@ function appendResources() {
     .map((option) => option.type)
   appendIncludeClaimCheck.value = appendReviewEnabled.value
     && sourceJob.request_payload?.include_claim_check !== false
+  appendIncludeClaimEvidenceRetrieval.value = appendIncludeClaimCheck.value
+    && sourceJob.request_payload?.include_claim_evidence_retrieval === true
   appendDialogVisible.value = true
 }
 
@@ -1077,7 +1087,10 @@ async function handleCoursewarePublished(coursewareJob) {
 async function regeneratePendingResources() {
   const sourceJob = selectedJob.value
   const resourceTypes = retryableResourceTypes.value
-  const plan = planRegeneratePending(sourceJob, resourceTypes, appendIncludeClaimCheck.value)
+  const plan = planRegeneratePending(
+    sourceJob, resourceTypes, appendIncludeClaimCheck.value,
+    appendIncludeClaimEvidenceRetrieval.value,
+  )
   if (!plan) {
     ElMessage.warning('当前任务没有可重新生成的资源')
     return
@@ -1104,7 +1117,10 @@ function applyAcceptedGeneration(runId) {
 async function confirmAppendResources() {
   const sourceJob = appendTargetJob.value
   const resourceTypes = [...new Set(selectedAppendResourceTypes.value)]
-  const plan = planAppendResources(sourceJob, resourceTypes, appendIncludeClaimCheck.value)
+  const plan = planAppendResources(
+    sourceJob, resourceTypes, appendIncludeClaimCheck.value,
+    appendIncludeClaimEvidenceRetrieval.value,
+  )
   if (!plan) {
     ElMessage.warning('请至少选择一种要追加的资源类型')
     return

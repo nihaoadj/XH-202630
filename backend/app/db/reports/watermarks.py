@@ -2,8 +2,9 @@
 from app.db.feedback.round_models import ROUND_MODELS
 from app.db.shared.models import Base
 from app.db.shared import extended_models as _extended_models  # noqa: F401
+from app.db.claim import supplement_models as _supplement_models  # noqa: F401
 
-PROTOCOL = "report-read/3"
+PROTOCOL = "report-read/4"
 TABLE = "report_read_watermarks"
 WATCHED_TABLES = tuple(model.__tablename__ for model in ROUND_MODELS) + (
     "learner_profiles", "generated_resources", "generation_jobs", "feedback_records",
@@ -18,6 +19,13 @@ WATCHED_TABLES = tuple(model.__tablename__ for model in ROUND_MODELS) + (
     # frozen specs, run request snapshots and checkpoints.  Without these the
     # report could keep serving a cached body after a review correction.
     "agent_runs", "agent_steps", "workflow_checkpoints", "resource_specs",
+    # T50: activation, hard blocks and round-1 judgements are Claim facts the
+    # report and publication gates read.  A cached report must expire when any
+    # of them changes, including the budget ledger (attempt/session states).
+    "claim_evidence_retrieval_runs", "claim_evidence_retrieval_sessions",
+    "claim_evidence_retrieval_batches", "claim_evidence_retrieval_attempts",
+    "claim_review_evidence_sets", "claim_supplement_judgements",
+    "claim_supplement_evidence",
 )
 JOB_COLUMNS = {
     "run_id", "batch_id", "learner_id", "knowledge_base_id", "topic", "status",

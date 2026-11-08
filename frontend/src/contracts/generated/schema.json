@@ -1541,6 +1541,19 @@
           "description": "可选：覆盖源任务的 Claim 审核设置；省略时沿用源任务",
           "title": "Include Claim Check"
         },
+        "include_claim_evidence_retrieval": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选：覆盖源任务的 Claim 补检设置；省略时继承，显式 false 关闭",
+          "title": "Include Claim Evidence Retrieval"
+        },
         "instructions": {
           "anyOf": [
             {
@@ -3831,6 +3844,12 @@
           "title": "Include Claim Check",
           "type": "boolean"
         },
+        "include_claim_evidence_retrieval": {
+          "default": false,
+          "description": "事实 Claim 首次缺证时补检知识库并重判；需同时开启普通审核与 Claim 审核",
+          "title": "Include Claim Evidence Retrieval",
+          "type": "boolean"
+        },
         "include_review": {
           "default": true,
           "description": "是否进入审核",
@@ -3966,6 +3985,12 @@
           "default": false,
           "description": "是否进行 Claim 级审核；开启后建议每任务只生成一个资源",
           "title": "Include Claim Check",
+          "type": "boolean"
+        },
+        "include_claim_evidence_retrieval": {
+          "default": false,
+          "description": "事实 Claim 首次缺证时补检知识库并重判；需同时开启普通审核与 Claim 审核",
+          "title": "Include Claim Evidence Retrieval",
           "type": "boolean"
         },
         "include_review": {
@@ -4104,6 +4129,12 @@
           "default": false,
           "description": "是否进行 Claim 级审核；开启后建议每任务只生成一个资源",
           "title": "Include Claim Check",
+          "type": "boolean"
+        },
+        "include_claim_evidence_retrieval": {
+          "default": false,
+          "description": "事实 Claim 首次缺证时补检知识库并重判；需同时开启普通审核与 Claim 审核",
+          "title": "Include Claim Evidence Retrieval",
           "type": "boolean"
         },
         "include_review": {
@@ -9759,6 +9790,11 @@
           "title": "Include Claim Check",
           "type": "boolean"
         },
+        "include_claim_evidence_retrieval": {
+          "default": false,
+          "title": "Include Claim Evidence Retrieval",
+          "type": "boolean"
+        },
         "learner_id": {
           "maxLength": 64,
           "minLength": 1,
@@ -10379,6 +10415,11 @@
         "include_claim_check": {
           "default": false,
           "title": "Include Claim Check",
+          "type": "boolean"
+        },
+        "include_claim_evidence_retrieval": {
+          "default": false,
+          "title": "Include Claim Evidence Retrieval",
           "type": "boolean"
         },
         "learner_id": {

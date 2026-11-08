@@ -474,6 +474,73 @@ class MemoryAuditRepository(BaseAuditRepository):
                 )
             return record
 
+    def append_step_evidence(
+        self,
+        *,
+        run_id: str,
+        step_id: str,
+        evidence,
+        now: datetime | None = None,
+    ) -> list[str]:
+        with self._lock:
+            return self._append_evidence_locked(
+                run_id=run_id, step_id=step_id, evidence=evidence, now=now,
+            )
+
+    def append_step_evidence_in_session(
+        self,
+        db,
+        *,
+        run_id: str,
+        step_id: str,
+        evidence,
+        now: datetime | None = None,
+    ) -> list[str]:
+        # The memory supplement repository already holds this lock in the fixed
+        # audit -> claim order, so the nested acquisition is re-entrant.
+        return self.append_step_evidence(
+            run_id=run_id, step_id=step_id, evidence=evidence, now=now,
+        )
+
+    def _append_evidence_locked(self, *, run_id, step_id, evidence, now) -> list[str]:
+        run = self._require_run(run_id)
+        step = self.steps.get(run_id, {}).get(step_id)
+        if step is None:
+            raise RunNotFound("step not found")
+        if step.run_id != run_id:
+            raise PersistenceConflict("step run id mismatch")
+        if step.status != "running":
+            raise PersistenceConflict("evidence can only be appended to a running step")
+        occurred_at = now or _utcnow()
+        saved: list[str] = []
+        for snapshot in evidence:
+            if snapshot.run_id != run_id or snapshot.retrieval_step_id != step_id:
+                raise PersistenceConflict("evidence is outside the current run/step")
+            knowledge_base_id = run.get("knowledge_base_id")
+            if knowledge_base_id and snapshot.knowledge_base_id != knowledge_base_id:
+                raise PersistenceConflict("evidence is outside the current knowledge base")
+            existing = self.evidence.get(run_id, {}).get(snapshot.evidence_id)
+            if existing is not None:
+                if existing.snapshot_hash != snapshot.snapshot_hash:
+                    raise PersistenceConflict("evidence snapshot is immutable")
+                if existing.retrieval_step_id != step_id:
+                    raise PersistenceConflict("evidence cannot move between steps")
+                continue
+            self.evidence.setdefault(run_id, {})[snapshot.evidence_id] = snapshot.model_copy(deep=True)
+            saved.append(snapshot.evidence_id)
+        if saved:
+            self._append_event(
+                run,
+                WorkflowEventType.EVIDENCE_SNAPSHOT_SAVED,
+                payload={"evidence_ids": saved, "count": len(saved)},
+                occurred_at=occurred_at,
+                step_id=step.step_id,
+                step_sequence=step.step_sequence,
+                node_name=step.node_name,
+                status=step.status,
+            )
+        return saved
+
     def get_step_review_audit(self, run_id: str, step_id: str):
         with self._lock:
             run = self._require_run(run_id)
@@ -834,6 +901,35 @@ class MemoryAuditRepository(BaseAuditRepository):
             "review_hash": review_hash,
         }
         return review_id
+
+    def update_claim_metrics(
+        self,
+        *,
+        review_id: str,
+        claim_total: int,
+        supported: int,
+        contradicted: int,
+        absent: int,
+        factual: int,
+    ) -> None:
+        """Persist the effective round-1 summary on the existing review row.
+
+        ``review_hash`` keeps describing the originally persisted payload, so a
+        replay of that same round-0 record stays idempotent instead of reverting
+        the activated metric.
+        """
+
+        with self._lock:
+            review = self.reviews.get(review_id)
+            if review is None:
+                raise PersistenceConflict("supplement review missing")
+            risk = contradicted + absent
+            review["claim_total"] = claim_total
+            review["claim_supported"] = supported
+            review["claim_unsupported"] = risk
+            review["suspected_hallucinations"] = risk
+            review["claim_hallucination_rate"] = (risk / factual) if factual else 0.0
+            review["claim_metric_status"] = "complete" if factual else "not_applicable"
 
     def list_reviews_by_run(self, run_id: str) -> list[dict[str, Any]]:
         self.get_run(run_id)

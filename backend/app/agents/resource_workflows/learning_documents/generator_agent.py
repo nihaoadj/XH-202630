@@ -8,7 +8,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Protocol
 
 from app.agents.shared.policies import target_resource_types
-from app.agents.shared.evidence_scope import allocation_for_state, validate_spec, contract_error, validate_payload_evidence
+from app.agents.shared.evidence_scope import (
+    allocation_for_state,
+    contract_error,
+    resolve_generation_evidence_context,
+    validate_payload_evidence,
+    validate_spec,
+)
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
 from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
 from app.agents.resource_workflows.learning_documents.state import AgentState
@@ -149,6 +155,10 @@ def _context(
                     if previous is None or revision.get("parent_resource_id") != previous.resource_id:
                         raise contract_error()
                     constraints["resource_revision"] = revision
+    generation_evidence, supplement_ids = (
+        resolve_generation_evidence_context(state, spec, previous)
+        if spec is not None else (node_input.retrieved_evidence, [])
+    )
     return ResourceGenerationContext(
         run_id=node_input.run_id,
         batch_id=node_input.batch_id,
@@ -161,7 +171,8 @@ def _context(
             "learning_goal": learner.learning_goal,
         },
         learning_path=list(node_input.learning_plan.get("learning_path", []))[:50],
-        evidence=validate_spec(state, spec) if spec else node_input.retrieved_evidence,
+        evidence=generation_evidence,
+        supplement_evidence_ids=supplement_ids,
         node_evidence_map=spec.node_evidence_map if spec else node_input.node_evidence_map,
         continuation_context=list(node_input.constraints.get("continuation_context", []))[:12],
         constraints=constraints,
@@ -191,9 +202,20 @@ def _materialize(
     node_input: GeneratorInput,
     previous: LearningResource | None,
     spec: ResourceSpec,
+    context: ResourceGenerationContext | None = None,
 ) -> LearningResource:
     metadata = artifact.metadata
     data = artifact.artifact_data
+    allowed_ids = list(spec.evidence_ids)
+    if context is not None:
+        allowed_ids.extend(
+            item for item in context.supplement_evidence_ids
+            if item not in allowed_ids
+        )
+    pool = [
+        item for item in (context.evidence if context is not None else node_input.retrieved_evidence)
+        if item.evidence_id in allowed_ids
+    ]
     resource = LearningResource(
         resource_id=str(uuid.uuid4()), learner_id=node_input.learner.learner_id,
         topic=node_input.topic, run_id=node_input.run_id, batch_id=node_input.batch_id,
@@ -206,7 +228,7 @@ def _materialize(
         # agent-added subpoints, but never allow an artifact to drop a selected
         # target node before publication and curriculum accounting.
         knowledge_points=list(dict.fromkeys([*spec.knowledge_points, *artifact.knowledge_points])),
-        source_refs=source_refs_from_evidence([item for item in node_input.retrieved_evidence if item.evidence_id in spec.evidence_ids]),
+        source_refs=source_refs_from_evidence(pool),
         review_status=(ResourceStatus.PENDING_REVIEW.value if node_input.include_review
                        else ResourceStatus.UNREVIEWED_DRAFT.value),
         version=(previous.version + 1) if previous else 1,
@@ -219,8 +241,8 @@ def _materialize(
         practice_guide_payload=data.get("practice_guide_package"),
         practice_guide_payload_hash=(data.get("practice_guide_package") or {}).get("payload_hash"),
     )
-    validate_payload_evidence(resource, [item for item in node_input.retrieved_evidence if item.evidence_id in spec.evidence_ids])
-    if not set(metadata.source_evidence_ids) <= set(spec.evidence_ids):
+    validate_payload_evidence(resource, pool)
+    if not set(metadata.source_evidence_ids) <= set(allowed_ids):
         raise contract_error()
     return resource
 
@@ -411,7 +433,7 @@ def generate_node(
             if artifact is None:
                 artifact = agent.generate(spec, context, llm_gateway=llm_gateway)
             _validate_artifact_scope(artifact, spec, node_input.target_skill_nodes)
-            resource = _materialize(artifact, node_input, old, spec)
+            resource = _materialize(artifact, node_input, old, spec, context)
             llm_metadata = artifact.llm_metadata
             execution = _execution(spec, resource, agent, attempt=node_input.generation_attempt,
                                    worker_step_id=context.step_id,
@@ -487,7 +509,15 @@ def generate_node(
         evidence_refs=[item.evidence_id for item in node_input.retrieved_evidence],
         resource_ids=[item.resource_id for item in generated_now], attempt=node_input.generation_attempt,
         step_context=step_context, llm_metadata=llm_metadata)
-    return {"resource_specs": [item.model_dump(mode="json") for item in specs],
+    lineage = dict(state.get("claim_evidence_lineage") or {})
+    if state.get("include_claim_evidence_retrieval") or state.get("claim_evidence_scopes"):
+        for item in [*node_input.generated_resources, *resources, *([source] if source is not None else [])]:
+            lineage[item.resource_id] = {key: getattr(item, key) for key in (
+                "resource_id", "run_id", "resource_spec_id", "resource_family_id",
+                "version", "parent_resource_id",
+            )}
+    return {"claim_evidence_lineage": lineage,
+            "resource_specs": [item.model_dump(mode="json") for item in specs],
             "resource_executions": executions, "resource_progress_summary": progress_summary(executions),
             "generated_resources": resources, "current_node": "generator", "trace": [trace_item],
             "errors": errors, "generation_attempt": node_input.generation_attempt,

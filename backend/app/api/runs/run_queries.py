@@ -7,8 +7,12 @@ from app.api.dependencies import ensure_profile_access
 from app.config import get_settings
 from app.models.shared.llm_accounting import TaskLLMAccountingResponseV1
 from app.models.shared.persistence import PersistedEvidenceSnapshot, RunSummary, RunTimeline
+from app.models.reviews.claim_evidence_retrieval import ClaimEvidenceRetrievalSummaryV1
 from app.models.reviews.claims import RunClaimsResponse
 from app.models.reviews.quality_metrics import RunResourceQualityResponseV1
+from app.services.reviews.claim_evidence_retrieval_query import (
+    ClaimEvidenceRetrievalNotFound,
+)
 from app.services.reviews.quality_query import ResourceQualityNotFound
 from app.services.runs.llm_accounting import LLMAccountingQueryService
 from app.services.runs.queries import RunQueryService
@@ -93,6 +97,32 @@ def get_run_evidence(run_id: str, request: Request):
 def get_run_claims(run_id: str, request: Request):
     service: RunQueryService = request.app.container.run_query_service()
     return service.get_claims(run_id)
+
+
+@router.get(
+    "/{run_id}/claim-evidence-retrieval",
+    response_model=ClaimEvidenceRetrievalSummaryV1,
+)
+def get_run_claim_evidence_retrieval(
+    run_id: str,
+    request: Request,
+    resource_id: str | None = Query(default=None, min_length=1, max_length=128),
+):
+    """Read-only supplement summary; it never starts or retries retrieval."""
+
+    run_service: RunQueryService = request.app.container.run_query_service()
+    run = run_service.get_run(run_id)
+    learner_id = getattr(run, "learner_id", None)
+    profile = (
+        request.app.container.profile_service().get(learner_id) if learner_id else None
+    )
+    if ensure_profile_access(request, profile) is None:
+        raise HTTPException(status_code=404, detail="工作流任务不存在")
+    service = request.app.container.claim_evidence_retrieval_query_service()
+    try:
+        return service.get(run_id, resource_id=resource_id)
+    except ClaimEvidenceRetrievalNotFound as exc:
+        raise HTTPException(status_code=404, detail="工作流任务不存在") from exc
 
 
 @router.get("/{run_id}/resource-quality", response_model=RunResourceQualityResponseV1)

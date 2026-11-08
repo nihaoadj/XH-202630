@@ -333,6 +333,21 @@ Invoke-RestMethod http://127.0.0.1:8082/metrics
 
 Web `/health=200` 不代表任何 Worker 已运行；还应分别核对 8081 和 8082 的 `/health/ready=200`。公共健康接口只检查默认知识库和核心依赖。完整多知识库详情需配置 `ADMIN_HEALTH_TOKEN` 并调用管理员接口，见 [API 文档](api.md)。
 
+### Claim 缺证补检配置（T50）
+
+功能默认关闭，只有请求显式传 `include_claim_evidence_retrieval=true` 且同时开启普通审核与 Claim 审核才生效；服务端不会因为配置存在而自动开启。以下环境变量提供**工程限额**（tokens/attempts/墙钟），在 Run 创建时冻结，数值不是实测延迟或费用：
+
+| 变量 | 默认 | 说明 |
+|---|---:|---|
+| `CLAIM_EVIDENCE_RETRIEVAL_MAX_QUERIES` | 96 | 任务总查询数 |
+| `CLAIM_EVIDENCE_RETRIEVAL_MAX_NEW_EXCERPTS[_PER_RESOURCE]` | 16 / 8 | 按新增内容身份计数 |
+| `CLAIM_EVIDENCE_RETRIEVAL_MAX_LOGICAL_CALLS` / `_MAX_ATTEMPTS` | 16 / 24 | query+rejudge 共用 |
+| `CLAIM_EVIDENCE_RETRIEVAL_MAX_ESTIMATED_TOKENS` | 196608 | 全部 attempt 的输入估算＋输出预留 |
+| `CLAIM_EVIDENCE_RETRIEVAL_MAX_WALL_SECONDS` / `_DOWNSTREAM_RESERVE_SECONDS` | 600 / 300 | 补检累计墙钟与后续处理预留 |
+| `CLAIM_EVIDENCE_RETRIEVAL_EXCERPT_CHARS` / `_EXCERPT_STRUCTURAL_CAP` | 2000 / 4000 | 连续原文窗口 |
+
+完整变量见 `backend/.env.example`。部署顺序：备份 → additive schema（`p0_39`）→ 支持新表的后端 → 前端。回滚只影响新建请求：已冻结任务按其策略执行到终态或显式中断，旧二进制不得处理含新表事实的 Run。补检 Observer 与学习轮次 production scope 的预算取交集，不存在用补检余额替换原预算的路径。
+
 ## 6. SQLite 数据保护与模式边界
 
 Windows索引路径注意：当前`chroma-hnswlib 0.7.6`原生文件接口由`core/retrieval/hnsw_windows.py`按系统ANSI代码页适配，Python侧SQLite/Chroma配置路径仍不变，不需搬目录或更换模型。仅该版本/Windows/非ASCII str路径生效；系统代码页无法表示的字符仍显式报错，应选可表示路径。若已有`Cannot open header file`，兼容适配不会自动补出损坏索引，必须先停服、备份，再按知识库对账流程从保留原文重建目标集合；不能对所有集合做reset。重启验收应包含真实向量query和HNSW四文件，而不是只有SQL count/HTTP health。

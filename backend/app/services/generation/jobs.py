@@ -447,7 +447,8 @@ class GenerationJobService:
                     run_id = self.job_repo.create_retry(parent_id, run_id=retry_id,
                         learner_id=req.learner_id, topic=req.topic, knowledge_base_id=knowledge_base_id,
                         request_payload=req.model_dump(mode="json"), batch_id=batch_id,
-                        dispatch_snapshot=self._dispatch_snapshot(learner, req) if self.durable_dispatch else None,
+                        dispatch_snapshot=self._dispatch_snapshot(learner, req) if (self.durable_dispatch
+                            or callable(getattr(self.generation_service, "freeze_claim_extraction", None))) else None,
                         submission_hash=submission_hash)
                     existing = self.job_repo.get(run_id)
                 else:
@@ -465,7 +466,8 @@ class GenerationJobService:
                 knowledge_base_id=knowledge_base_id,
                 request_payload=req.model_dump(mode="json"),
                 **({"dispatch_snapshot": self._dispatch_snapshot(learner, req, resource_retry_context),
-                    "submission_hash": submission_hash} if self.durable_dispatch or resource_retry_context is not None else
+                    "submission_hash": submission_hash} if (self.durable_dispatch or resource_retry_context is not None
+                        or callable(getattr(self.generation_service, "freeze_claim_extraction", None))) else
                    {"submission_hash": submission_hash} if submission_hash and hasattr(self.job_repo, "get_dispatch") else {}),
             )
             job_status = "queued"
@@ -500,6 +502,15 @@ class GenerationJobService:
         if freeze is not None:
             snapshot.update(freeze(request))
         elif request.include_claim_check and get_settings().claim_extraction_strategy != "legacy_v3":
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+        freeze_supplement = getattr(
+            self.generation_service, "freeze_claim_evidence_retrieval", None,
+        )
+        if freeze_supplement is not None:
+            snapshot.update(freeze_supplement(request))
+        elif request.include_claim_evidence_retrieval:
+            # A worker without the feature must reject the dispatch instead of
+            # silently running the closed graph.
             raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
         if resource_retry_context is not None:
             context = ResourceRetryContext.from_snapshot(resource_retry_context)
@@ -570,15 +581,30 @@ class GenerationJobService:
             if (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (claim.snapshot.get("resource_retry_context") is not None):
                 raise ValueError("retry dispatch version mismatch")
             private = snapshot_fields(claim.snapshot)
+            from app.agents.resource_workflows.learning_documents.claim_evidence_retrieval.policy import (
+                PRIVATE_FIELDS as SUPPLEMENT_FIELDS,
+                policy_from_state,
+            )
+
+            supplement_private = {
+                key: claim.snapshot[key]
+                for key in SUPPLEMENT_FIELDS
+                if key in claim.snapshot
+            }
             policy = policy_from_input({"include_claim_check": req.include_claim_check, **private})
             if (version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None):
                 raise ValueError("frozen extraction dispatch mismatch")
+            if bool(supplement_private) != req.include_claim_evidence_retrieval:
+                raise ValueError("frozen supplement dispatch mismatch")
+            if supplement_private:
+                policy_from_state(supplement_private)
             with execution_fence(ExecutionFence(claim.run_id, claim.owner, claim.epoch)):
                 retry_context = claim.snapshot.get("resource_retry_context")
                 preflight_failed = False
                 response = self._generate_with_budget(
                     learner, req, run_id=claim.run_id, batch_id=claim.batch_id,
                     **({"claim_extraction_snapshot": private} if hasattr(self.generation_service, "freeze_claim_extraction") else {}),
+                    **({"claim_evidence_retrieval_snapshot": supplement_private} if hasattr(self.generation_service, "freeze_claim_evidence_retrieval") else {}),
                     **({"resource_retry_context": retry_context} if retry_context is not None else {}),
                     **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": claim.snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
                     **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": claim.snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}))
@@ -720,6 +746,9 @@ class GenerationJobService:
                 if canonical_hash(req.model_dump(mode="json")) != snapshot.get("request_hash"):
                     raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
             private = snapshot_fields(snapshot)
+            supplement_private = {key: snapshot[key] for key in (
+                "claim_evidence_retrieval_policy", "claim_evidence_retrieval_policy_hash",
+            ) if key in snapshot}
             policy = policy_from_input({"include_claim_check": req.include_claim_check, **private})
             if snapshot and ((version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None)):
                 raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
@@ -730,6 +759,8 @@ class GenerationJobService:
                 batch_id=effective_batch_id,
                 **({"resource_retry_context": retry_context} if retry_context is not None else {}),
                 **({"claim_extraction_snapshot": private} if hasattr(self.generation_service,"freeze_claim_extraction") else {}),
+                **({"claim_evidence_retrieval_snapshot": supplement_private}
+                   if hasattr(self.generation_service, "freeze_claim_evidence_retrieval") else {}),
                 **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
                 **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}),
             )

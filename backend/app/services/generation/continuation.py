@@ -120,6 +120,21 @@ def prepare_continuation(
     }
     if payload.include_claim_check is not None:
         request_updates["include_claim_check"] = payload.include_claim_check
+    from app.models.reviews.claim_evidence_retrieval import normalize_inherited_switch
+
+    effective_claim_check = (
+        payload.include_claim_check
+        if payload.include_claim_check is not None
+        else source_request.include_claim_check
+    )
+    # A continuation inherits the source supplement switch unless it closes it
+    # explicitly; closing Claim review always closes supplements.
+    request_updates["include_claim_evidence_retrieval"] = normalize_inherited_switch(
+        requested=payload.include_claim_evidence_retrieval,
+        inherited=source_request.include_claim_evidence_retrieval,
+        inherited_claim_check=source_request.include_claim_check,
+        effective_claim_check=bool(effective_claim_check),
+    )
     try:
         # Revalidate the copied request so an explicit Claim option cannot
         # bypass the invariant that Claim review requires normal review.

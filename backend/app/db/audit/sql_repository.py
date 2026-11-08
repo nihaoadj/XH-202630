@@ -574,6 +574,118 @@ class SQLAuditRepository(BaseAuditRepository):
             db.refresh(step)
             return self._step_record(step)
 
+    def _append_evidence_in_session(
+        self,
+        db: Session,
+        *,
+        run_id: str,
+        step_id: str,
+        evidence,
+        now: datetime | None = None,
+    ) -> list[str]:
+        """Insert snapshots into a still-running step inside one transaction."""
+        occurred_at = now or datetime.now(timezone.utc)
+        run = self._require_run(db, run_id)
+        step = db.query(AgentStepORM).filter_by(step_id=step_id).with_for_update().first()
+        if step is None:
+            raise RunNotFound("step not found")
+        if step.run_id != run_id:
+            raise PersistenceConflict("step run id mismatch")
+        if step.status != "running":
+            raise PersistenceConflict("evidence can only be appended to a running step")
+        saved: list[str] = []
+        for snapshot in evidence:
+            if snapshot.run_id != run_id or snapshot.retrieval_step_id != step_id:
+                raise PersistenceConflict("evidence is outside the current run/step")
+            if run.knowledge_base_id and snapshot.knowledge_base_id != run.knowledge_base_id:
+                raise PersistenceConflict("evidence is outside the current knowledge base")
+            existing = db.get(RetrievalEvidenceSnapshotORM, snapshot.evidence_id)
+            if existing is not None:
+                if existing.snapshot_hash != snapshot.snapshot_hash:
+                    raise PersistenceConflict("evidence snapshot is immutable")
+                if existing.retrieval_step_id != step_id:
+                    raise PersistenceConflict("evidence cannot move between steps")
+                continue
+            payload = snapshot.model_dump(mode="python")
+            payload["locator"] = snapshot.locator.model_dump(mode="json")
+            db.add(RetrievalEvidenceSnapshotORM(**payload))
+            saved.append(snapshot.evidence_id)
+        if saved:
+            self._append_event(
+                db,
+                run,
+                WorkflowEventType.EVIDENCE_SNAPSHOT_SAVED,
+                payload={"evidence_ids": saved, "count": len(saved)},
+                occurred_at=occurred_at,
+                step_id=step.step_id,
+                step_sequence=step.step_no,
+                node_name=step.node_name or step.agent_name,
+                status=step.status,
+            )
+        db.flush()
+        return saved
+
+    def append_step_evidence_in_session(
+        self,
+        db: Session,
+        *,
+        run_id: str,
+        step_id: str,
+        evidence,
+        now: datetime | None = None,
+    ) -> list[str]:
+        return self._append_evidence_in_session(
+            db, run_id=run_id, step_id=step_id, evidence=evidence, now=now,
+        )
+
+    def append_step_evidence(
+        self,
+        *,
+        run_id: str,
+        step_id: str,
+        evidence,
+        now: datetime | None = None,
+    ) -> list[str]:
+        from app.db.shared.retry import run_with_sqlite_retry
+
+        def once() -> list[str]:
+            with self.session_factory() as db:
+                saved = self._append_evidence_in_session(
+                    db, run_id=run_id, step_id=step_id, evidence=evidence, now=now,
+                )
+                db.commit()
+                return saved
+
+        return run_with_sqlite_retry(once)
+
+    def update_claim_metrics(
+        self,
+        *,
+        review_id: str,
+        claim_total: int,
+        supported: int,
+        contradicted: int,
+        absent: int,
+        factual: int,
+    ) -> None:
+        from app.db.shared.retry import run_with_sqlite_retry
+
+        def once() -> None:
+            with self.session_factory() as db:
+                review = db.get(ResourceReviewORM, review_id)
+                if review is None:
+                    raise PersistenceConflict("supplement review missing")
+                risk = contradicted + absent
+                review.claim_total = claim_total
+                review.claim_supported = supported
+                review.claim_unsupported = risk
+                review.suspected_hallucinations = risk
+                review.claim_hallucination_rate = (risk / factual) if factual else 0.0
+                review.claim_metric_status = "complete" if factual else "not_applicable"
+                db.commit()
+
+        run_with_sqlite_retry(once)
+
     def get_step_review_audit(self, run_id: str, step_id: str):
         with self.session_factory() as db:
             run = self._require_run(db, run_id)

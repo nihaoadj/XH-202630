@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections import Counter
 from typing import Any
 
 from app.agents.shared.evidence_scope import contract_error, validate_spec
@@ -16,6 +17,7 @@ from app.models.shared.agent_contracts import ResourceSpec, build_trace_item, st
 from app.models.shared.persistence import PersistedEvidenceSnapshot, canonical_hash
 from app.models.shared.workflow import StepStatus
 from app.models.reviews.revision_inputs import ClaimReviewRevisionInput, ResourceReviewRevisionInput
+from app.models.generation.resource_retry import RetrySupplementContext
 from app.agents.resource_workflows.learning_documents.revision_inputs import (
     is_revision_input_envelope,
     pack_revision_input,
@@ -140,28 +142,71 @@ def reuse_resource_context_node(state: dict[str, Any]) -> dict[str, Any]:
         config_hash = context["retrieval_config_hash"]
         if any(item.config_hash != config_hash for item in snapshots) or (allocation and allocation.config_hash != config_hash):
             raise ValueError("retrieval config differs from frozen evidence")
+        supplement = None
+        if context.get("supplement_context") is not None:
+            supplement = _json_model(RetrySupplementContext, context["supplement_context"])
+            supplement.validate_source(
+                run_id=context["source_run_id"], knowledge_base_id=state.get("knowledge_base_id"),
+                parent=_json_model(LearningResource, context["source_resource"]), base_ids=spec.evidence_ids,
+            )
+            by_id.update({item.evidence_id: item for item in supplement.evidence})
+            config_hash = retrieval_config_hash({
+                "retry_import_context": context["context_hash"],
+                "source_config_hash": context["retrieval_config_hash"],
+            })
+        import_ids = [*spec.evidence_ids, *(
+            [item.evidence_id for item in supplement.evidence] if supplement else []
+        )]
+        if len(import_ids) > 20:
+            raise ValueError("retry frozen evidence exceeds limit")
         step = start_step(state)
         mapping = {}
         evidence = []
         queries = context.get("query_texts") or {}
-        for old_id in spec.evidence_ids:
+        identities = Counter((by_id[ident].knowledge_base_id, by_id[ident].query_hash, by_id[ident].chunk_id)
+                             for ident in import_ids)
+        for old_id in import_ids:
             snapshot = by_id[old_id]
+            include_excerpt = supplement is not None or identities[
+                snapshot.knowledge_base_id, snapshot.query_hash, snapshot.chunk_id
+            ] > 1
             new_id = evidence_id(run_id=state["run_id"], step_id=step["step_id"],
                                  knowledge_base_id=snapshot.knowledge_base_id,
                                  retrieval_query_hash=snapshot.query_hash,
-                                 knowledge_chunk_id=snapshot.chunk_id, config_hash=config_hash)
+                                 knowledge_chunk_id=snapshot.chunk_id, config_hash=config_hash,
+                                 **({"excerpt_identity": snapshot.excerpt_hash} if include_excerpt else {}))
+            if new_id in mapping.values():
+                raise ValueError("retry evidence identity collision")
             mapping[old_id] = new_id
             query = queries.get(old_id)
             if query and query_hash(query) != snapshot.query_hash:
                 raise ValueError("historical query hash mismatch")
             payload = snapshot.model_dump(mode="json", exclude={"run_id", "retrieval_step_id", "snapshot_hash", "persisted_at"})
-            payload.update(evidence_id=new_id, query=query or "历史检索文本未持久化，仅保留哈希：" + snapshot.query_hash)
+            payload.update(evidence_id=new_id, config_hash=config_hash,
+                           query=query or "历史检索文本未持久化，仅保留哈希：" + snapshot.query_hash)
             evidence.append(_json_model(EvidenceItem, payload))
         projected = _project_allocation(allocation, spec.resource_type, mapping, step["step_id"]) if allocation else None
+        if supplement and projected:
+            data = projected.model_dump(mode="json")
+            for item in supplement.evidence:
+                ident = mapping[item.evidence_id]
+                data["evidence_ids"].append(ident)
+                data["resource_specific_evidence_ids"][spec.resource_type].append(ident)
+                data["evidence_query_hashes"][ident] = [item.query_hash]
+                # This purpose records import authorisation by the source
+                # generation scope; it does not invent a node query binding.
+                purpose = {"node_id": None, "resource_type": spec.resource_type}
+                purposes = data["query_bindings"].setdefault(item.query_hash, [])
+                if purpose not in purposes:
+                    purposes.append(purpose)
+            data["config_hash"] = config_hash
+            data["binding_hash"] = retrieval_config_hash(data["query_bindings"])
+            data["allocation_hash"] = retrieval_config_hash({key: value for key, value in data.items() if key != "allocation_hash"})
+            projected = _json_model(EvidenceAllocation, data)
         spec_data = spec.model_dump(mode="json")
         spec_data.update(
             resource_spec_id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{state['run_id']}:{context['source_spec_id']}")),
-            evidence_ids=[mapping[item] for item in spec.evidence_ids],
+            evidence_ids=[mapping[item] for item in import_ids],
             node_evidence_map=_remap(spec.node_evidence_map, mapping),
         )
         cloned_spec = _json_model(ResourceSpec, spec_data)
