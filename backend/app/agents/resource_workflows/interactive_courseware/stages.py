@@ -46,7 +46,7 @@ def prepare_design(
         if source.get("role") != "practice":
             continue
         package = source.get("practice_guide_payload")
-        if not isinstance(package, dict) or package.get("schema_version") != "3.0":
+        if not isinstance(package, dict) or package.get("schema_version") not in {"3.0", "4.0", "5.0", "6.0"}:
             code = "COURSEWARE_PRACTICE_JSON_REQUIRED"
             return DesignStageResult(failure=StageFailure(
                 "rejected_admission", code,

@@ -140,16 +140,13 @@ class AssessmentAdapter:
         for question in questions:
             qid = question["question_id"]
             item = by_id[qid]
-            supported = item.supported_evidence_ids
-            require(len(supported) <= 1 and len(supported) == len(set(supported)),
-                    "FINDING_INVALID", f"findings.{qid}.supported_evidence_ids",
-                    "at most one supported evidence per question")
+            supported = list(dict.fromkeys(item.supported_evidence_ids))
             require(not (set(supported) - allowed_by_question[qid]),
                     "FINDING_INVALID", f"findings.{qid}.supported_evidence_ids",
                     "supported evidence outside the question whitelist")
-            require(not (item.scope_decision == "in_scope" and len(supported) != 1),
+            require(not (item.scope_decision == "in_scope" and not supported),
                     "FINDING_INVALID", f"findings.{qid}.supported_evidence_ids",
-                    "in_scope requires exactly one supported evidence")
+                    "in_scope requires supporting evidence")
             require(objective[qid] == (item.rubric_check == "not_applicable"),
                     "FINDING_INVALID", f"findings.{qid}.rubric_check",
                     "rubric status incompatible with question type")

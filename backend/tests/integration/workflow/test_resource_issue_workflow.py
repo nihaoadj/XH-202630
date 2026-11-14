@@ -113,3 +113,37 @@ def test_claim_only_revision_marks_claim_kind():
 def test_route_after_review_revises_when_under_budget():
     state = _state()
     assert route_after_review(state) == "prepare_revision"
+
+
+def test_failed_claim_revision_placeholder_finalizes_without_using_parent_ledger(monkeypatch):
+    from app.agents.resource_workflows.learning_documents import workflow
+    state = _state(claim_only=True)
+    failed = _resource().model_copy(update={
+        "resource_id": "failed-child", "parent_resource_id": "res-1", "version": 2,
+        "review_status": "human_review", "content_text": "generation failed",
+    })
+    sibling = _resource().model_copy(update={
+        "resource_id": "sibling", "resource_spec_id": "other-spec",
+        "review_status": "approved",
+    })
+    state.update(generated_resources=[failed, sibling], include_claim_check=False,
+                 claim_revision_count=1,
+                 resource_executions=[{"resource_id": failed.resource_id,
+                    "resource_spec_id": "spec-1", "validation_status": "failed"}],
+                 resource_review_results={"failed-child": {"decision": "human_review"},
+                                          "sibling": {"decision": "approve"}})
+    parent_ledger = state["resource_ledgers"]["spec-1"]
+    monkeypatch.setattr(workflow, "get_settings", lambda: SimpleNamespace(claim_partial_publish=False))
+    assert route_after_review(state) == "finalize"
+    result = workflow.decide_node(state)
+    resources = {r.resource_id: r for r in result["generated_resources"]}
+    assert resources["failed-child"].publication_status == "unpublished"
+    assert resources["sibling"].publication_status == "published"
+    assert state["resource_ledgers"]["spec-1"] == parent_ledger
+
+
+def test_initial_generation_placeholder_keeps_existing_retry_path():
+    state = _state()
+    state["resource_ledgers"] = {}
+    state["resource_executions"][0]["validation_status"] = "failed"
+    assert route_after_review(state) == "prepare_revision"

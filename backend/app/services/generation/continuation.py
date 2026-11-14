@@ -94,7 +94,7 @@ def prepare_continuation(
         raise BatchContinuationError(status_code=404, detail=detail)
 
     try:
-        source_request = GenerateRequest.model_validate(source_job.request_payload)
+        source_request = GenerateRequest.from_frozen_payload(source_job.request_payload)
     except ValueError as exc:
         raise BatchContinuationError(
             status_code=409, detail="资源批次的原始生成参数不可用"
@@ -129,6 +129,9 @@ def prepare_continuation(
     )
     # A continuation inherits the source supplement switch unless it closes it
     # explicitly; closing Claim review always closes supplements.
+    request_updates["claim_workflow_version"] = "contradiction_first_v3"
+    if payload.claim_post_retrieval_max_iterations is not None:
+        request_updates["claim_post_retrieval_max_iterations"] = payload.claim_post_retrieval_max_iterations
     request_updates["include_claim_evidence_retrieval"] = normalize_inherited_switch(
         requested=payload.include_claim_evidence_retrieval,
         inherited=source_request.include_claim_evidence_retrieval,

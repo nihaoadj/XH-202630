@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 
 from app.core.security.errors import ErrorCode
+from app.db.feedback.round_base import RoundConflict
 from app.models.feedback.rounds import RoundEvaluationSessionV1
 from app.models.learning_documents.schemas import ResourceEvaluationQuestion, RunAttemptSubmitRequest
 from app.models.shared.persistence import canonical_hash
@@ -18,18 +19,25 @@ def resource_fingerprint(resource):
                            "publication": resource.publication_status})
 
 
+def latest_session(repository, stage_id):
+    return max(repository.find("learning_round_evaluation_sessions", stage_id=stage_id),
+               key=lambda row: row["ordinal"], default=None)
+
+
 class RoundAssessment:
     def __init__(self, service):
         self.service = service
 
-    def session(self, profile, round_id, stage_id):
+    def session(self, profile, round_id, stage_id, retake_from_session_id=None):
         service = self.service
         service._round(profile.learner_id, round_id)
+        if retake_from_session_id:
+            return self._retake(round_id, stage_id, retake_from_session_id)
         with service.repository.transaction() as tx:
             stage = tx.one("learning_round_stages", stage_id=stage_id)
             if not stage or stage["round_id"] != round_id:
                 raise invalid(ErrorCode.ROUND_ASSESSMENT_INVALID, 404)
-            saved = tx.one("learning_round_evaluation_sessions", stage_id=stage_id)
+            saved = latest_session(tx, stage_id)
             if saved:
                 if saved["manifest"].get("legacy_import"):
                     raise invalid(ErrorCode.ROUND_ASSESSMENT_INVALID, 409)
@@ -87,6 +95,46 @@ class RoundAssessment:
             public.require_members({item["round_node_id"] for item in stage_nodes})
             return public
 
+    def _retake(self, round_id, stage_id, source_id):
+        repository = self.service.repository
+        session_id = round_identity("session", stage_id, source_id)
+        try:
+            with repository.transaction() as tx:
+                stage = tx.one("learning_round_stages", stage_id=stage_id)
+                source = tx.one("learning_round_evaluation_sessions", session_id=source_id)
+                if not stage or stage["round_id"] != round_id or not source or source["stage_id"] != stage_id:
+                    raise invalid(ErrorCode.ROUND_ASSESSMENT_INVALID, 404)
+                existing = tx.one("learning_round_evaluation_sessions", session_id=session_id)
+                if existing:
+                    return self.public_session(existing)
+                stages = tx.find("learning_round_stages", round_id=round_id)
+                if (stage["ordinal"] != max(row["ordinal"] for row in stages)
+                        or source != latest_session(tx, stage_id) or not source["attempt_id"]
+                        or source["manifest"].get("legacy_import")):
+                    raise invalid(ErrorCode.ROUND_ATTEMPT_CONFLICT, 409)
+                self._validate_sources(source["manifest"])
+                budget = stage["budget_snapshot"]
+                # Only the first session has a frozen allocation. Retakes use
+                # that per-session limit with their own reservation ledger.
+                original_id = round_identity("session", stage_id)
+                for scopes in ("scopes", "runtime_scopes"):
+                    if original_id not in budget.get(scopes, {}):
+                        raise invalid(ErrorCode.ROUND_BUDGET_EXHAUSTED, 409)
+                tx.compare_and_set("learning_round_stages", stage_id, stage["row_version"], {
+                    "state": "awaiting_assessment", "completed_at": None,
+                })
+                row = tx.insert("learning_round_evaluation_sessions", {
+                    "session_id": session_id, "stage_id": stage_id, "ordinal": source["ordinal"] + 1,
+                    "manifest": source["manifest"], "manifest_hash": source["manifest_hash"],
+                    "created_at": datetime.now(timezone.utc),
+                })
+                return self.public_session(row)
+        except RoundConflict as error:
+            existing = repository.one("learning_round_evaluation_sessions", session_id=session_id)
+            if existing:
+                return self.public_session(existing)
+            raise invalid(ErrorCode.ROUND_ATTEMPT_CONFLICT, 409) from error
+
     @staticmethod
     def public_session(row):
         manifest = row["manifest"]
@@ -98,12 +146,8 @@ class RoundAssessment:
         expected = {question["question_id"] for group in manifest["groups"] for question in group["questions"]}
         if payload.manifest_hash != session["manifest_hash"] or {answer.question_id for answer in payload.answers} != expected:
             raise invalid(ErrorCode.ROUND_ASSESSMENT_INVALID)
+        self._validate_sources(manifest)
         sources = manifest["sources"]
-        for source in sources:
-            for snapshot in source["resources"]:
-                resource = self.service.feedback.resource_repo.get(snapshot["resource_id"])
-                if resource is None or resource.version != snapshot["version"] or resource_fingerprint(resource) != snapshot["hash"]:
-                    raise invalid(ErrorCode.ROUND_STAGE_NOT_READY, 409)
         anchor = self.service.feedback.resource_repo.get(sources[0]["anchor_resource_id"])
         questions = [ResourceEvaluationQuestion.model_validate(question) for group in manifest["groups"] for question in group["questions"]]
         run_payload = RunAttemptSubmitRequest(
@@ -132,3 +176,10 @@ class RoundAssessment:
                                               "session_id": session["session_id"], "manifest_hash": session["manifest_hash"],
                                               "roles": {group["node_id"]: group["role"] for group in manifest["groups"]}}
         return prepared, anchor
+
+    def _validate_sources(self, manifest):
+        for source in manifest["sources"]:
+            for snapshot in source["resources"]:
+                resource = self.service.feedback.resource_repo.get(snapshot["resource_id"])
+                if resource is None or resource.version != snapshot["version"] or resource_fingerprint(resource) != snapshot["hash"]:
+                    raise invalid(ErrorCode.ROUND_STAGE_NOT_READY, 409)

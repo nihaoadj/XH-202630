@@ -1,4 +1,4 @@
-import { nextTick } from 'vue'
+import { nextTick, ref } from 'vue'
 import { countTutorTurns } from '../../utils/tutorState.js'
 import { createRequestGuard } from '../../utils/requestContext.js'
 
@@ -12,8 +12,8 @@ export function useFeedbackEvaluation({
   result,
   evaluation,
   evaluationAnswers,
-  tutorOpen,
-  tutorQuestion,
+  tutorOpen = ref(false),
+  tutorQuestion = ref(null),
   tutorHelpCount,
   canSubmit,
   submitting,
@@ -122,7 +122,7 @@ export function useFeedbackEvaluation({
             time_spent_seconds: form.time_spent_seconds,
             self_rating: form.self_rating,
             difficulty_feeling: form.difficulty_feeling,
-            helpful_part: form.helpful_part.trim(),
+            ...(typeof form.helpful_part === 'string' ? { helpful_part: form.helpful_part.trim() } : {}),
             confusing_part: form.confusing_part.trim(),
             comment: form.comment.trim()
           }

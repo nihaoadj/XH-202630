@@ -52,7 +52,7 @@ from app.agents.resource_workflows.interactive_courseware.stages import (
 from app.agents.resource_workflows.interactive_courseware.composition import compose_scenes, default_title, resource_courseware_title
 from app.agents.resource_workflows.interactive_courseware.lineage import reconcile_stale_resources
 from app.core.courseware.review import quality_review, source_trace_review
-from app.agents.resource_workflows.interactive_courseware.source import CoursewareAdmissionError, admit_and_snapshot, content_hash, frozen_source_batch_id
+from app.agents.resource_workflows.interactive_courseware.source import CoursewareAdmissionError, admit_and_snapshot, content_hash, frozen_source_batch_id, source_display_summaries
 from app.agents.resource_workflows.interactive_courseware.release import CandidatePublication, CandidateReleaseCoordinator
 from app.agents.resource_workflows.interactive_courseware.content_review.lifecycle import ContentReviewLifecycle, verify_run_content
 from app.agents.resource_workflows.interactive_courseware.content_review.persistence import freeze_policy, read_state
@@ -1614,5 +1614,6 @@ class InteractiveCoursewareWorkflow:
             resource_id=row.get("resource_id"), source_batch_id=row.get("source_batch_id"), warnings=row.get("warnings") or [], error_code=row.get("error_code"),
             request_options=row.get("request_options") or {},
             quality_summary=quality_summary,
+            source_summary=source_display_summaries(self.resource_service, row),
             error_message=row.get("error_message"), created_at=row.get("created_at"), updated_at=row.get("updated_at"),
         )

@@ -25,6 +25,11 @@ def _profile():
     )
 
 
+def test_claim_publication_includes_eighty_five_percent(monkeypatch):
+    client, _, _ = _publication_client(monkeypatch, claim_factual_pass_rate=0.85)
+    assert client.post('/api/resources/items/claim-resource/claim-publication-decision', json={'publish':True}).status_code == 200
+
+
 def _publication_client(monkeypatch, *, user_id="owner", raise_server_exceptions=True, **resource_updates):
     trace = []
 
@@ -69,7 +74,7 @@ def _publication_client(monkeypatch, *, user_id="owner", raise_server_exceptions
         events.append((args, kwargs))
 
     monkeypatch.setattr(documents, "get_settings", provider(
-        "settings", SimpleNamespace(claim_user_review_min_factual_pass_rate=0.8),
+        "settings", SimpleNamespace(claim_user_review_min_factual_pass_rate=0.85),
     ))
     app = FastAPI()
 
@@ -178,6 +183,7 @@ def test_claim_publication_replay_preserves_a_legacy_random_event_id(monkeypatch
 @pytest.mark.parametrize("updates,detail,settings_called", [
     ({"claim_metric_status": "pending"}, "Claim 审核尚未完成", False),
     ({"claim_factual_pass_rate": None}, "事实 Claim 通过率未达到用户决策阈值", False),
+    ({"claim_factual_pass_rate": 0.8}, "事实 Claim 通过率未达到用户决策阈值", True),
     ({"claim_factual_pass_rate": 0.7}, "事实 Claim 通过率未达到用户决策阈值", True),
 ])
 def test_claim_conflict_keeps_status_message_and_short_circuit(monkeypatch, updates, detail, settings_called):

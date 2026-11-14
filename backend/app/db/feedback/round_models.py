@@ -108,7 +108,8 @@ class LearningRoundJobBindingORM(Base):
 class LearningRoundEvaluationSessionORM(Base):
     __tablename__ = "learning_round_evaluation_sessions"
     session_id = Column(String(128), primary_key=True)
-    stage_id = Column(String(128), ForeignKey("learning_round_stages.stage_id"), nullable=False, unique=True)
+    stage_id = Column(String(128), ForeignKey("learning_round_stages.stage_id"), nullable=False)
+    ordinal = Column(Integer, nullable=False, default=1, server_default="1")
     manifest_hash = Column(String(64), nullable=False)
     manifest = Column(JSON, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False)
@@ -121,6 +122,7 @@ class LearningRoundEvaluationSessionORM(Base):
     grading_lease_expires_at = Column(DateTime(timezone=True), nullable=True)
     row_version = Column(Integer, nullable=False, default=1)
     __table_args__ = (
+        UniqueConstraint("stage_id", "ordinal", name="uq_round_session_ordinal"),
         CheckConstraint("grading_state IN ('idle','grading','submitted')", name="ck_round_grading_state"),
         CheckConstraint("(grading_state = 'submitted' AND attempt_id IS NOT NULL) OR (grading_state != 'submitted' AND attempt_id IS NULL)", name="ck_round_session_submission"),
     )

@@ -1250,3 +1250,18 @@ T46 两类审核修订输入分离未新增表或列：`resource_review_revision
 迁移入口 `db/migrations/p0_38_learning_rounds.py`，注册于 `db/migrations/__init__.py`；`init_database` 在 `create_all` 前导入 `db/feedback/round_models.py`，随后执行既有增量迁移与 p0_38，最后幂等刷新 `p0_35` 报告触发器。重复执行不重置 epoch。报告侧 `report-read/3` 把新表纳入 `WATCHED_TABLES`，评分租约心跳与预算计数不触发报告重建。删除画像时在同一事务内先清会话 `attempt_id`、预算预留与节点决策，再删除轮次事实；Memory 与 SQL 语义一致。
 
 旧数据不批量回填：`legacy-correction/v1` 容器的 initial `batch_id` 为空并由私有 manifest 引用原批次与资源，`session.attempt_id` 指向真实旧 Attempt，禁止重评分或复制伪 Attempt。
+# T100 轮次再次测评
+
+T101 补救轮次在其初始主节点的 `learning_round_stage_nodes.request_snapshot` 中可保存 `remediation_original_node_id`，用于跨补学轮次恢复返回目标。原有快照仍可读取，无表结构迁移。
+
+`p0_41_round_retake` 为 `learning_round_evaluation_sessions` 增加阶段内序号。历史行的序号为 1，原会话 ID、正式 Attempt 和预算引用不变。每次再次测评使用独立会话，复用冻结题组；按 `(stage_id, ordinal)` 唯一且每会话只允许一条正式成绩。SQLite 更新后检查外键并重装报告缓存触发器。
+
+# T60 纠错包结构化存储
+
+`generated_resources`新增可空的`correction_package_payload`（JSON）及
+`correction_package_payload_hash`（SHA-256）列，由p0_40幂等迁移加入；历史Markdown行保持NULL，
+不回填、不重写旧正文。内部资源模型排除这两个字段的泛型API序列化，仓储与重试私有快照保留它们，
+同一资源ID/版本不允许覆盖不同规范包。新格式由服务端冻结任务身份明确启用；缺少该身份的历史任务继续原流程。
+
+
+T60 已接通新任务生成、SQL/memory 双向持久化、不可变内容保护、父版本修订、单资源重试与恢复。完整包留在资源仓储；checkpoint 保留资源 ID 与私有格式身份，不复制规范包到公开事件。旧列值 NULL 合法且不回填伪 JSON。迁移专项只操作隔离 SQLite 测试库，本机业务数据库尚未执行 p0_40。

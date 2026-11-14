@@ -56,10 +56,9 @@ def _approve_outcome(kwargs):
     """Echo the frozen binding and produce a clean, fully-covered approve."""
     human = kwargs["messages"][1]
     payload = json.loads(human.content)
-    binding = payload["binding"]
     targets = payload["targets"]
     return {
-        "binding": binding,
+        **({"binding": payload["binding"]} if "binding" in payload else {}),
         "dimensions": {"factual_evidence": "pass", "difficulty": "pass", "self_contained": "pass"},
         "targets": [{"target": t, "status": "covered", "reason": "已讲解", "location": {"kind": "root"}}
                     for t in targets],

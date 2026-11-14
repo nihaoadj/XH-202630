@@ -6,7 +6,7 @@ from app.models.learning_documents.schemas import LearningResource
 
 
 def immutable_resource_payload(resource: LearningResource) -> dict[str, Any]:
-    return resource.model_dump(
+    result = resource.model_dump(
         mode="json",
         include={
             "resource_id",
@@ -29,3 +29,8 @@ def immutable_resource_payload(resource: LearningResource) -> dict[str, Any]:
             "assessment_payload_hash",
         },
     )
+
+    if resource.correction_package_payload is not None:
+        result["correction_package_payload"] = resource.correction_package_payload
+        result["correction_package_payload_hash"] = resource.correction_package_payload_hash
+    return result

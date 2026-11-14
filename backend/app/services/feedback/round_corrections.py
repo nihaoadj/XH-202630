@@ -18,7 +18,9 @@ class RoundCorrections:
         service._round(profile.learner_id, round_id)
         targets = sorted((target.model_dump() for target in payload.targets), key=lambda target: target["node_id"])
         selection_hash = canonical_hash({"targets": targets, "include_claim_check": payload.include_claim_check,
-                                          "include_claim_evidence_retrieval": payload.include_claim_evidence_retrieval})
+                                          "include_claim_evidence_retrieval": payload.include_claim_evidence_retrieval,
+                                          **({"claim_post_retrieval_max_iterations": payload.claim_post_retrieval_max_iterations}
+                                             if payload.claim_post_retrieval_max_iterations else {})})
         stage_id = round_identity("stage", round_id, "correction", targets)
         with RoundUnitOfWork(service.repository, service.feedback, service.learners) as uow:
             parent = service._round(profile.learner_id, round_id, uow.rounds)
@@ -53,6 +55,7 @@ class RoundCorrections:
                                    knowledge_base_id=profile.knowledge_base_id, node=nodes[target["node_id"]], role=member["role"],
                                    primary_resource_types=[], include_claim_check=payload.include_claim_check,
                                    include_claim_evidence_retrieval=payload.include_claim_evidence_retrieval,
+                                   claim_post_retrieval_max_iterations=payload.claim_post_retrieval_max_iterations,
                                    correction_focus=focus)
                 # Imported legacy member IDs must retain their trusted identity.
                 if plan.member_id != member["round_node_id"]:

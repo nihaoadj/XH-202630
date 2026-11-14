@@ -86,7 +86,7 @@ def quality_review(document: dict[str, Any]) -> list[dict[str, Any]]:
     structured_practice_reflection = (
         final_scene.get("kind") == "practice"
         and final_scene.get("page_role") == "practice_workspace"
-        and final_scene.get("practice_json_schema_version") == "3.0"
+        and final_scene.get("practice_json_schema_version") in {"3.0", "4.0", "5.0", "6.0"}
         and final_scene.get("practice_variant") == "reflect"
     )
     if not kinds or (kinds[-1] != "recap" and not structured_practice_reflection):

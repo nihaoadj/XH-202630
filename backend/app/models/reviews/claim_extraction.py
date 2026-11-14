@@ -177,7 +177,7 @@ class EstimatePolicy(PrivateModel):
     judge_schema_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     target_tokens: int = Field(default=4096, gt=0, le=8192)
     context_tokens: int = Field(default=512, gt=0, le=1024)
-    batch_claims: int = Field(default=16, gt=0, le=20)
+    batch_claims: int = Field(default=16, gt=0, le=30)
     resource_claims: int = Field(default=48, gt=0, le=128)
     output_tokens: int = Field(default=32768, gt=0, le=32768)
     max_calls: int = Field(default=8, gt=0, le=64)
@@ -197,6 +197,9 @@ class EstimatePolicy(PrivateModel):
     # Optional private extension (T42). ``None`` means the policy was frozen
     # before programmatic source locating; same byte-compat contract as above.
     source_locating: SourceLocatingPolicy | None = None
+    structured_sources: dict | None = None
+    correction_sources: dict | None = None
+    input_contract: dict | None = None
 
     @model_serializer(mode="wrap")
     def _legacy_compatible_dump(self, handler):
@@ -206,6 +209,12 @@ class EstimatePolicy(PrivateModel):
                 data.pop("density_batching", None)
             if self.source_locating is None:
                 data.pop("source_locating", None)
+            if self.correction_sources is None:
+                data.pop("correction_sources", None)
+            if self.structured_sources is None:
+                data.pop("structured_sources", None)
+            if self.input_contract is None:
+                data.pop("input_contract", None)
         return data
 
     @model_validator(mode="after")
@@ -324,6 +333,28 @@ class BatchOutputV2(PrivateModel):
     units: list[UnitOutputV2] = Field(min_length=1, max_length=128)
 
 
+class LargeUnitOutput(UnitOutput):
+    claims: list[NeutralCandidate] = Field(default_factory=list, max_length=30)
+
+
+class LargeBatchOutput(BatchOutput):
+    units: list[LargeUnitOutput] = Field(min_length=1, max_length=128)
+
+
+class LargeUnitOutputV2(UnitOutputV2):
+    claims: list[NeutralCandidateV2] = Field(default_factory=list, max_length=30)
+
+
+class LargeBatchOutputV2(BatchOutputV2):
+    units: list[LargeUnitOutputV2] = Field(min_length=1, max_length=128)
+
+
+def batch_output_schema(batch_claims, is_v2):
+    if batch_claims > 20:
+        return LargeBatchOutputV2 if is_v2 else LargeBatchOutput
+    return BatchOutputV2 if is_v2 else BatchOutput
+
+
 class LocationDiagnostic(PrivateModel):
     """Bounded private locating audit for one original output candidate.
 
@@ -375,7 +406,7 @@ class ExtractionResult(PrivateModel):
     created_at: datetime
     status: Literal["running", "completed", "failed"] = "running"
     batches: list[ExtractionBatch] = Field(default_factory=list, max_length=128)
-    outputs: dict[str, BatchOutput | BatchOutputV2] = Field(default_factory=dict, max_length=64)
+    outputs: dict[str, BatchOutput | BatchOutputV2 | LargeBatchOutput | LargeBatchOutputV2] = Field(default_factory=dict, max_length=64)
     replaced_batches: list[str] = Field(default_factory=list, max_length=64)
     final_claims: list[ClaimRecord] = Field(default_factory=list, max_length=128)
     final_result_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -384,6 +415,7 @@ class ExtractionResult(PrivateModel):
     # any v1 run; omitted from serialization so old hashes stay byte-identical.
     location_diagnostics: dict[str, list[LocationDiagnostic]] | None = Field(default=None, max_length=64)
     location_failures: dict[str, list[LocationDiagnostic]] | None = Field(default=None, max_length=64)
+    source_snapshot: dict | None = None
 
     @model_serializer(mode="wrap")
     def _legacy_compatible_dump(self, handler):
@@ -392,6 +424,8 @@ class ExtractionResult(PrivateModel):
             data.pop("location_diagnostics", None)
         if self.location_failures is None and isinstance(data, dict):
             data.pop("location_failures", None)
+        if self.source_snapshot is None and isinstance(data, dict):
+            data.pop("source_snapshot", None)
         return data
 
 
@@ -500,6 +534,8 @@ def output_matches_policy(policy: ExtractionPolicy | EstimatePolicy, output: Bat
     ``BatchOutputV2`` and a v1/absent policy only ``BatchOutput``.
     """
     is_v2 = getattr(policy, "source_locating", None) is not None
+    if policy.batch_claims <= 20 and any(len(u.claims) > 20 for u in output.units):
+        return False
     return isinstance(output, BatchOutputV2) if is_v2 else isinstance(output, BatchOutput)
 
 
@@ -586,7 +622,7 @@ def validate_transition(old: ExtractionLedger, new: ExtractionLedger) -> None:
         raise ValueError("ledger counters must equal ticket charges")
     for key, previous in old.results.items():
         current = new.results[key]
-        identity = ("resource_id", "resource_version", "review_id", "content_hash", "evidence_hash", "generation_attempt", "created_at")
+        identity = ("resource_id", "resource_version", "review_id", "content_hash", "evidence_hash", "generation_attempt", "created_at", "source_snapshot")
         if any(getattr(previous, field) != getattr(current, field) for field in identity):
             raise ValueError("extraction result identity is immutable")
         if previous.status != "running" and current != previous:
@@ -620,8 +656,42 @@ def validate_snapshot(mode: str, payload: dict, row) -> LedgerSnapshot | None:
                 raise ValueError("extraction output version does not match frozen policy")
         if result.status == "completed" and (not result.final_claims or result.final_result_hash != digest(result.final_claims)):
             raise ValueError("extraction final result hash mismatch")
+        prompt_version = policy.prompt_version
+        if result.source_snapshot is not None:
+            from app.models.reviews.claims import UNIFIED_SOURCE_MARKERS
+            from app.models.reviews.claims import STRUCTURED_ASSESSMENT_SOURCE, STRUCTURED_CHECKLIST_SOURCE, CONTEXTUAL_CHECKLIST_SOURCE
+            from app.models.reviews.claims import STRUCTURED_CORRECTION_SOURCE, FILTERED_CORRECTION_SOURCE, COMPACT_CORRECTION_SOURCE, CONTEXTUAL_CORRECTION_SOURCE
+            source = result.source_snapshot
+            extension = (policy.correction_sources if source.get("prompt_version") in {STRUCTURED_CORRECTION_SOURCE, FILTERED_CORRECTION_SOURCE, COMPACT_CORRECTION_SOURCE, CONTEXTUAL_CORRECTION_SOURCE}
+                         else policy.input_contract if source.get("prompt_version") in UNIFIED_SOURCE_MARKERS
+                         else policy.structured_sources)
+            # v3 changes extraction semantics; the unified source envelope still
+            # uses the v2 layout. Practice's changed target set has its own marker.
+            source_version_matches = (extension is not None and (
+                source.get("version") == extension.get("version")
+                or (source.get("prompt_version") in UNIFIED_SOURCE_MARKERS
+                    and extension.get("version") in {"claim-input-context-v3", "claim-input-context-v4", "claim-input-context-v5"}
+                    and source.get("version") == "claim-input-context-v2")
+            ))
+            if (extension is None
+                    or not source_version_matches
+                    or source.get("resource_id") != result.resource_id
+                    or source.get("resource_version") != result.resource_version
+                    or source.get("audit_content_hash") != result.content_hash
+                    or source.get("prompt_version") not in {STRUCTURED_ASSESSMENT_SOURCE, STRUCTURED_CHECKLIST_SOURCE, CONTEXTUAL_CHECKLIST_SOURCE, STRUCTURED_CORRECTION_SOURCE, FILTERED_CORRECTION_SOURCE, COMPACT_CORRECTION_SOURCE, CONTEXTUAL_CORRECTION_SOURCE, *UNIFIED_SOURCE_MARKERS}):
+                raise ValueError("structured extraction source identity mismatch")
+            if source.get("prompt_version") == CONTEXTUAL_CHECKLIST_SOURCE and (
+                    (extension.get("checklist_context") or {}).get("version") != CONTEXTUAL_CHECKLIST_SOURCE):
+                raise ValueError("checklist extraction marker/policy version mismatch")
+            correction_versions = {STRUCTURED_CORRECTION_SOURCE: "correction-content-sources-v1",
+                                   FILTERED_CORRECTION_SOURCE: "correction-content-sources-v2",
+                                   COMPACT_CORRECTION_SOURCE: "correction-content-sources-v3",
+                                   CONTEXTUAL_CORRECTION_SOURCE: "correction-content-sources-v4"}
+            if source.get("prompt_version") in correction_versions and source.get("version") != correction_versions[source["prompt_version"]]:
+                raise ValueError("correction extraction marker/source version mismatch")
+            prompt_version = source["prompt_version"]
         if any((claim.run_id, claim.resource_id, claim.resource_version, claim.review_id, claim.extractor_prompt_version) !=
-               (snapshot.run_id, result.resource_id, result.resource_version, result.review_id, policy.prompt_version)
+               (snapshot.run_id, result.resource_id, result.resource_version, result.review_id, prompt_version)
                for claim in result.final_claims):
             raise ValueError("extraction final Claim identity mismatch")
     return snapshot
@@ -680,10 +750,12 @@ def validate_estimate_transition(old, new):
     # Apply unchanged result/terminal and close-session invariants to both versions.
     for key, prev in old.results.items():
         cur = new.results[key]
-        names = ("resource_id", "resource_version", "review_id", "content_hash", "evidence_hash", "generation_attempt", "created_at")
-        if any(getattr(prev, n) != getattr(cur, n) for n in names) or (prev.status != "running" and cur != prev):
+        names = ("resource_id", "resource_version", "review_id", "content_hash", "evidence_hash", "generation_attempt", "created_at", "source_snapshot")
+        if any(getattr(prev, n) != getattr(cur, n) for n in names) or (prev.status != "running" and digest(cur) != digest(prev)):
             raise ValueError("extraction result identity/terminal state immutable")
-        if any(cur.outputs.get(k) != value for k,value in prev.outputs.items()):
+        # A <=20-item new output may deserialize through the historical union
+        # member. Immutable data is its canonical payload, not Python subclass.
+        if any(k not in cur.outputs or digest(cur.outputs[k]) != digest(value) for k,value in prev.outputs.items()):
             raise ValueError("completed batch output immutable")
         for field in ("location_diagnostics", "location_failures"):
             previous = getattr(prev, field) or {}

@@ -12,6 +12,7 @@ export function useCoursewareTracking({
   connectionStatus,
   published,
   rememberedRunId,
+  preferredRunId = () => '',
   syncRoute,
   emit,
   messages,
@@ -60,7 +61,7 @@ export function useCoursewareTracking({
       return
     }
 
-    const restoredRunId = rememberedRunId()
+    const restoredRunId = preferredRunId() || rememberedRunId()
     try {
       const response = await coursewareApi.listJobs(learnerId)
       if (!request.isCurrent()) return
@@ -92,7 +93,9 @@ export function useCoursewareTracking({
       }
     }
     if (!request.isCurrent()) return
-    if (!jobs.value.some((job) => job.run_id === selectedRunId.value)) {
+    if (preferredRunId()) {
+      selectedRunId.value = preferredRunId()
+    } else if (!jobs.value.some((job) => job.run_id === selectedRunId.value)) {
       selectedRunId.value = jobs.value.some((job) => job.run_id === restoredRunId) ? restoredRunId : jobs.value[0]?.run_id || ''
     }
     await loadCurrentJob()

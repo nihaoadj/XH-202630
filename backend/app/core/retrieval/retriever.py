@@ -754,6 +754,8 @@ class EvidenceRetriever:
                     None,
                 )]
             for excerpt, identity in excerpts:
+                # Persisted snapshots validate the hash of normalized text.
+                excerpt = normalize_text(excerpt)
                 rank += 1
                 item = EvidenceItem(
                     evidence_id=evidence_id(

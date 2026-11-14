@@ -62,10 +62,19 @@ class DiagnosisService:
         return learner.knowledge_base_id, self._initial_round_questions(learner.knowledge_base_id, flow)
 
     @staticmethod
-    def _initial_recommended_node(node_ids: list[str], correct_counts: dict[str, int], nodes: dict[str, object]) -> str | None:
+    def _initial_recommended_node(
+        node_ids: list[str], correct_counts: dict[str, int], nodes: dict[str, object],
+        passed_node_ids: set[str] | None = None,
+    ) -> str | None:
         """Choose one weakest learnable node, respecting dependencies in the round."""
         if not node_ids:
             return None
+        passed = passed_node_ids or set()
+        remaining = [node_id for node_id in node_ids if node_id not in passed]
+        ready = [
+            node_id for node_id in remaining
+            if set(getattr(nodes.get(node_id), "prerequisites", [])) <= passed
+        ]
         def downstream_count(node_id: str) -> int:
             pending = list(getattr(nodes.get(node_id), "children", []))
             seen: set[str] = set()
@@ -78,7 +87,7 @@ class DiagnosisService:
             return len(seen)
 
         chosen = sorted(
-            node_ids,
+            ready or remaining or node_ids,
             key=lambda node_id: (correct_counts.get(node_id, 0), -downstream_count(node_id), node_id),
         )[0]
         round_ids = set(node_ids)
@@ -87,7 +96,7 @@ class DiagnosisService:
         seen = set(queue)
         while queue:
             node_id = queue.pop(0)
-            if node_id not in round_ids or node_id not in nodes:
+            if node_id in passed or node_id not in round_ids or node_id not in nodes:
                 continue
             prerequisites.append(node_id)
             for parent_id in getattr(nodes[node_id], "prerequisites", []):
@@ -225,8 +234,21 @@ class DiagnosisService:
                 initial_flow["final_tier"] = final_tier
                 initial_flow.setdefault("rounds", [])[-1]["status"] = "passed" if passed else "floor_reached"
                 learner.skill_level = difficulty_for_tier(final_tier)
+                node_passes = {
+                    node_id: {
+                        **item,
+                        "diagnostic_result_id": source_id,
+                        "passed_at": occurred_at.isoformat(),
+                    }
+                    for node_id, item in coverage.items()
+                    if item["measurement_status"] == "measured"
+                    and item["correct_question_count"] == item["valid_question_count"]
+                }
+                initial_flow["pass_policy_version"] = "initial-pass/v1"
+                initial_flow["node_passes"] = node_passes
                 initial_recommended_node_id = self._initial_recommended_node(
-                    list(raw_scores), {node_id: item["correct_question_count"] for node_id, item in coverage.items()}, nodes,
+                    list(raw_scores), {node_id: item["correct_question_count"] for node_id, item in coverage.items()},
+                    nodes, passed_node_ids=set(node_passes),
                 )
                 initial_flow["initial_recommended_node_id"] = initial_recommended_node_id
                 learner.learning_preferences.metadata["initial_diagnostic_flow"] = initial_flow

@@ -250,25 +250,9 @@ onMounted(() => fillForm(auth.currentUser))
 
 /* Keep the shared shell untouched; these rules match only this mounted page. */
 :global(.app-shell:has(.user-profile-page)) { background: #f5f7fa; }
-:global(.app-shell:has(.user-profile-page) .topbar) { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 16px; min-height: 60px; padding: 8px 28px; background: #fff; border-bottom: 1px solid #d9e4eb; box-shadow: none; }
-:global(.app-shell:has(.user-profile-page) .topbar-copy) { display: flex; flex-direction: row-reverse; justify-content: flex-end; align-items: center; gap: 14px; min-width: 0; }
-:global(.app-shell:has(.user-profile-page) .topbar-copy h1) { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.5; color: #132c40; white-space: nowrap; }
-:global(.app-shell:has(.user-profile-page) .topbar-kicker) { margin: 0; padding-left: 14px; border-left: 1px solid #d9e4eb; color: #536b7d; font: 10px/1.5 Consolas, monospace; letter-spacing: 0; }
-:global(.app-shell:has(.user-profile-page) .topbar-copy p) { display: none; }
-:global(.app-shell:has(.user-profile-page) .topbar-actions) { position: static; display: flex; width: auto; flex-wrap: nowrap; justify-content: flex-end; align-items: center; gap: 8px; margin: 0; transform: none; }
-:global(.app-shell:has(.user-profile-page) .topbar-action) { min-height: 44px; margin: 0 !important; padding: 10px 9px; border: 0 !important; border-radius: 5px !important; background: transparent !important; color: #536b7d !important; font-size: 12px; font-weight: 400; box-shadow: none !important; }
-:global(.app-shell:has(.user-profile-page) .topbar-action .el-icon) { width: 14px; height: 14px; font-size: 14px; color: #17447e; }
-:global(.app-shell:has(.user-profile-page) .topbar-action:hover) { background: #edf8f6 !important; color: #086575 !important; }
-:global(.app-shell:has(.user-profile-page) .topbar-action:focus-visible) { outline: 2px solid #167587; outline-offset: 2px; }
-:global(.app-shell:has(.user-profile-page) .topbar-meta) { display: flex; align-items: center; min-width: 0; width: auto; gap: 0; padding-left: 14px; border-left: 1px solid #d9e4eb; }
-:global(.app-shell:has(.user-profile-page) .topbar-meta > div) { min-width: 58px; padding: 0 6px; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
-:global(.app-shell:has(.user-profile-page) .topbar-meta > div:last-child) { display: none; }
-:global(.app-shell:has(.user-profile-page) .topbar-meta span) { font-size: 10px; line-height: 1.5; color: #536b7d; }
-:global(.app-shell:has(.user-profile-page) .topbar-meta strong) { max-width: 160px; margin-top: 3px; color: #132c40; white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
-:global(.app-shell:has(.user-profile-page) .content-area) { padding: 22px 28px 28px; background: #f5f7fa; overflow-y: auto; }
+:global(.app-shell:has(.user-profile-page) .content-area) { padding: 22px 28px 28px; overflow-y: auto; }
 
 @media (max-width: 1300px) {
-  :global(.app-shell:has(.user-profile-page) .topbar-kicker) { display: none; }
   .user-profile-page .profile-workspace { grid-template-columns: 260px minmax(0, 1fr); }
 }
 @media (max-width: 1080px) {
@@ -276,7 +260,6 @@ onMounted(() => fillForm(auth.currentUser))
   .account-panel { padding: 22px 20px; }
   .profile-editor-head { padding: 20px; }
   .profile-editor :deep(.el-form) { padding: 20px; }
-  :global(.app-shell:has(.user-profile-page) .topbar) { gap: 10px; }
 }
 @media (max-width: 860px) {
   .user-profile-page .profile-workspace { grid-template-columns: minmax(0, 1fr); gap: 18px; }
@@ -292,10 +275,6 @@ onMounted(() => fillForm(auth.currentUser))
   .account-purpose-note { margin-top: 12px; padding: 0; border: 0; }
 }
 @media (max-width: 760px) {
-  :global(.app-shell:has(.user-profile-page) .topbar) { padding: 8px 18px; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
-  :global(.app-shell:has(.user-profile-page) .topbar-actions) { grid-row: 2; grid-column: 1 / -1; justify-content: flex-start; }
-  :global(.app-shell:has(.user-profile-page) .topbar-action) { padding: 10px 8px; }
-  :global(.app-shell:has(.user-profile-page) .topbar-meta) { grid-row: 1; grid-column: 2; }
   :global(.app-shell:has(.user-profile-page) .content-area) { padding: 18px 18px 24px; }
   .user-profile-page .profile-page-intro { align-items: flex-start; flex-direction: column; gap: 16px; }
   .action-row { align-items: flex-start; }
@@ -322,6 +301,5 @@ onMounted(() => fillForm(auth.currentUser))
 }
 @media (prefers-reduced-motion: reduce) {
   .profile-save-button, .profile-direction-button, .profile-editor :deep(.el-input__wrapper), .profile-editor :deep(.el-input-number__increase), .profile-editor :deep(.el-input-number__decrease) { transition: none; }
-  :global(.app-shell:has(.user-profile-page) .topbar-action) { transition: none; }
 }
 </style>

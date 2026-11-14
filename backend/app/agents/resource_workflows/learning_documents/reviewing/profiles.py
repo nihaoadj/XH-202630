@@ -4,7 +4,7 @@ from types import MappingProxyType
 
 from app.models.learning_documents.types import canonical_resource_type
 from app.models.reviews.review_audit import PROFILE_VERSIONS, ReviewPolicySnapshotV1
-from app.models.shared.agent_contracts import AssessmentCombinedReviewV2, AssessmentScopeReviewV1, PracticeGuidePackageV3, ReviewLLMOutput
+from app.models.shared.agent_contracts import AssessmentCombinedReviewV2, AssessmentScopeReviewV1, ReviewLLMOutput, validate_practice_guide_package
 
 from .prompts.common import COMMON, EMPTY, OUTPUT
 from .prompts.resources.assessment import COMBINED, PACKAGE, SCOPE
@@ -55,10 +55,22 @@ def resolve_review_profile(*, resource_type: str, phase: str, policy: ReviewPoli
 def select_specialties(*, profile: ReviewProfile, resource) -> tuple[str, ...]:
     if profile.resource_type != "实操指南":
         return ()
-    package = PracticeGuidePackageV3.model_validate({k: v for k, v in (resource.practice_guide_payload or {}).items() if k != "payload_hash"})
+    package = validate_practice_guide_package({k: v for k, v in (resource.practice_guide_payload or {}).items() if k != "payload_hash"})
     # Read the validated schema, never infer code from keywords in Markdown.
     def has_code(value):
         if isinstance(value, dict):
             return bool(value.get("code_blocks")) or any(has_code(v) for v in value.values())
         return isinstance(value, list) and any(has_code(v) for v in value)
     return (CODE.id,) if has_code(package.model_dump(mode="python")) else ()
+
+
+def correction_content_profile(profile, *, compact=False):
+    """New identity selected only for T60 packages; historical profiles stay sealed."""
+    from dataclasses import replace
+    from .types import PromptFragment
+    from app.core.learning_documents.correction_package import CORRECTION_AUDIT_GUIDANCE, COMPACT_AUDIT_GUIDANCE
+    return replace(profile, version="correction-content-audit-v2" if compact else "correction-content-audit-v1",
+                   fragments=(profile.fragments[0],
+                                PromptFragment("correction.content", "2.0" if compact else "1.0",
+                                               COMPACT_AUDIT_GUIDANCE if compact else CORRECTION_AUDIT_GUIDANCE),
+                              profile.fragments[-1]))

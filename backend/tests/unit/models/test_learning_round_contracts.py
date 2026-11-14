@@ -127,6 +127,17 @@ def test_round_claim_request_allows_multi_resource_but_job_does_not():
         GenerateRoundCreateRequestV1.model_validate({**payload, "resource_types": ["个性化纠错训练包"]})
 
 
+def test_new_practice_request_disallows_claim_but_frozen_request_stays_readable():
+    payload = {"learner_id": "learner", "topic": "topic", "resource_types": ["实操指南"],
+               "include_claim_check": True}
+    with pytest.raises(ValidationError, match="实操指南不支持 Claim"):
+        GenerateCreateRequest.model_validate(payload)
+    assert GenerateRequest.model_validate(payload).include_claim_check is True
+    assert GenerateCreateRequest.model_validate({**payload, "include_claim_check": False}).include_claim_check is False
+    mixed_round = {**payload, "resource_types": ["讲义", "实操指南"], "selection_key": "selection-key"}
+    assert GenerateRoundCreateRequestV1.model_validate(mixed_round).include_claim_check is True
+
+
 def test_legacy_binding_cannot_claim_a_primary_or_create_initial_job():
     binding = {
         "protocol_version": "legacy-correction/v1", "round_id": "round", "member_id": "member",

@@ -9,8 +9,8 @@ from app.models.courseware.snapshots import LearnerContextSnapshot
 from tests.fakes.courseware_content_review import resource, candidate
 
 
-def prepared(group="review", values=None):
-    source = _snapshot(resource(group), content_review=True); adapter = resolve_adapter(source)
+def prepared(group="review", values=None, *, practice_version="3.0"):
+    source = _snapshot(resource(group, practice_version=practice_version), content_review=True); adapter = resolve_adapter(source)
     learning = adapter.refine_design(source, prepare_design([source], LearnerContextSnapshot(), {}).design)
     design = {"learning_design": learning.model_dump(mode="json"), "source_payload": source[adapter.source_key], "user_title": None}
     values = candidate(group) if values is None else values
@@ -86,6 +86,87 @@ def test_multi_example_bindings_and_old_single_example_have_frozen_ids():
     del source["blocks"][-2]
     with pytest.raises(ValueError):
         adapter.prepare("run", source, design, values)
+
+
+@pytest.mark.parametrize("version", ["3.0", "4.0", "5.0", "6.0"])
+def test_registered_practice_versions_validate_full_projection(version):
+    source, adapter, design, values, document = prepared("practice_code", practice_version=version)
+    assert adapter.version == "practice-guide-v1"
+    assert adapter.prepare("run", source, design, values).inventory.source_schema == version
+    assert adapter.validate_projection(source, design, values, document)["manifest"]
+    if version == "5.0":
+        phase = document["scenes"][1]
+        assert phase["component_blocks"][1]["steps"] == source["practice_guide_payload"]["preparation"]["items"]
+        assert phase["component_blocks"][-1]["steps"] == [
+            "输入记录：输入版本：1；预期结果：1。", "核对记录：记录输入、实际结果以及差异。",
+        ]
+
+
+@pytest.mark.parametrize("mutation", ["value", "order", "missing", "source_path", "evidence_path", "source_binding"])
+def test_v5_preparation_materials_cannot_be_swapped_or_misbound(mutation):
+    source, adapter, design, values, document = prepared("practice_code", practice_version="5.0")
+    phase = document["scenes"][1]
+    block = phase["component_blocks"][-1]
+    if mutation == "value":
+        block["steps"][0] = "其他资源的材料"
+    elif mutation == "order":
+        block["steps"].reverse()
+    elif mutation == "missing":
+        phase["component_blocks"].pop()
+    elif mutation == "source_path":
+        block["source_json_path"] = "preparation.items"
+    elif mutation == "evidence_path":
+        block["evidence_json_path"] = "reflection.evidence_ids"
+    else:
+        block["source_refs"][0]["source_block_ids"] = document["scenes"][2]["source_block_ids"]
+    with pytest.raises(ValueError):
+        adapter.validate_projection(source, design, values, document)
+
+
+def test_v5_empty_materials_preserve_existing_two_component_preparation():
+    from app.models.courseware.content_review import json_hash
+
+    source = resource("practice_code", practice_version="5.0")
+    package = source.practice_guide_payload
+    package["preparation"]["materials"] = []
+    raw = {k: v for k, v in package.items() if k != "payload_hash"}
+    package["payload_hash"] = source.practice_guide_payload_hash = json_hash(raw)
+    snapshot = _snapshot(source, content_review=True)
+    adapter = resolve_adapter(snapshot)
+    learning = adapter.refine_design(snapshot, prepare_design([snapshot], LearnerContextSnapshot(), {}).design)
+    design = {"learning_design": learning.model_dump(mode="json"), "source_payload": snapshot[adapter.source_key], "user_title": None}
+    scenes, _ = compose_scenes([snapshot], learning_design=learning)
+    document = {"title": resource_courseware_title(snapshot["topic"], [snapshot]), "scenes": scenes}
+    assert len(scenes[1]["component_blocks"]) == 2
+    assert adapter.validate_projection(snapshot, design, {}, document)["manifest"]
+
+
+@pytest.mark.parametrize("version", ["4.0", "5.0", "6.0"])
+@pytest.mark.parametrize("fault", ["hash", "invalid_steps"])
+def test_registered_new_practice_versions_keep_hash_and_version_constraints(version, fault):
+    from app.models.courseware.content_review import json_hash
+
+    source, adapter, *_ = prepared("practice_code", practice_version=version)
+    payload = source["practice_guide_payload"]
+    if fault == "hash":
+        source["practice_guide_payload_hash"] = "0" * 64
+    else:
+        payload["practice"]["steps"][0]["code_blocks"] = []
+        raw = {k: v for k, v in payload.items() if k != "payload_hash"}
+        payload["payload_hash"] = source["practice_guide_payload_hash"] = json_hash(raw)
+    with pytest.raises(ValueError):
+        adapter.validate_source(source)
+
+
+@pytest.mark.parametrize("fault", ["unknown_version", "ambiguous_version"])
+def test_practice_registry_remains_closed_to_unknown_or_ambiguous_sources(fault):
+    source = _snapshot(resource("practice_code"), content_review=True)
+    if fault == "unknown_version":
+        source["practice_guide_payload"]["schema_version"] = "7.0"
+    else:
+        source["review_practice_payload"] = {"schema_version": "2.0"}
+    with pytest.raises(ValueError):
+        resolve_adapter(source)
 
 
 def test_code_rule_is_per_item_and_noncode_requires_no_code():

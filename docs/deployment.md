@@ -19,7 +19,7 @@ T41 LLM 调用旁路计量：新增两个可选配置 `LLM_ACCOUNTING_ENABLED`�
 
 初始化、完整性及 preflight 脚本使用当前 `db/shared` 和 `core/retrieval` 入口。课件验收 CLI 保持在 `backend/scripts/`，业务执行器归于其 `courseware_harness/` 子包；按下文原命令运行即可，端口、环境变量与数据路径不变。
 
-Claim 审核完成但存在无证据事实时，`CLAIM_USER_REVIEW_ENABLED=true` 且事实通过率达到 `CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE`（默认 `0.60`）会等待用户在审核报告中决定是否发布；旧 `CLAIM_WARNING_PUBLISH_*` 配置不再触发自动发布。
+Claim 自动发布与用户决策采用文末 T58 双阈值配置。
 
 ## 2. 一键启动（推荐）
 
@@ -508,8 +508,9 @@ T17选材配置：`RETRIEVAL_TOP_K_DEFAULT=6`（旧环境显式设3会覆盖新�
 | `CLAIM_ESTIMATE_ASCII_WEIGHT` / `CJK_WEIGHT` / `UNICODE_WEIGHT` | 0.3 / 0.6 / 1；上述短名均沿用 `CLAIM_ESTIMATE_` 前缀 |
 | `CLAIM_ESTIMATE_MARGIN` | 0.15，只对完整实际请求统一加一次 |
 | `CLAIM_ESTIMATE_MESSAGE_OVERHEAD` / `REQUEST_OVERHEAD` | 8 / 128，消息与请求包装余量 |
-| `CLAIM_EXTRACTION_TARGET_TOKENS` / `CONTEXT_TOKENS` | 4096 / 512，完整首请求装批软目标及文内辅助上下文 |
-| `CLAIM_EXTRACTION_BATCH_CLAIMS` / `RESOURCE_CLAIMS` | 16 / 48，工程候选上限；触顶细分，不保证事实召回 |
+| `CLAIM_EXTRACTION_TARGET_TOKENS` / `CONTEXT_TOKENS` | 6144 / 512，完整首请求装批软目标及文内辅助上下文 |
+| `CLAIM_EXTRACTION_BATCH_CLAIMS` / `RESOURCE_CLAIMS` | 30 / 48，工程候选上限；触顶细分，不保证事实召回 |
+| `CLAIM_EXTRACTION_INPUT_VERSION` | 默认 `unified_context_v5`；统一规则区分本次资源自身的代码、配置、预期结果与可独立核验的技术知识。新实操指南把纯目标与验证清单作为只读背景，普通审核仍检查完整内容。`unified_context_v4` 及更早版本可用于旧任务恢复或新任务回退，不自动恢复容量值 |
 | `CLAIM_EXTRACTION_OUTPUT_TOKENS` | 32768（允许上限32768），抽取首次/修复相同cap |
 | `CLAIM_EXTRACTION_MAX_CALLS` / `MAX_ATTEMPTS` | 每run 8逻辑调用 / 24实际attempt，含父子批及同图返工 |
 | `CLAIM_EXTRACTION_MAX_TOKENS` / `MAX_REQUEST_SECONDS` | 每run 196608 / 480秒，按实际请求预留并核销 |
@@ -518,6 +519,10 @@ T17选材配置：`RETRIEVAL_TOP_K_DEFAULT=6`（旧环境显式设3会覆盖新�
 | `CLAIM_EXTRACTION_SOURCE_LOCATING_MODE` | `tolerant_v1`；仅对新建 `neutral_estimate_v1` 请求生效。`exact_v1`=neutral-v2 无偏移输出且只做唯一精确定位；`tolerant_v1` 另启用受控格式(B)与受限文字编辑(C)层；显式空值保持历史 v1 Prompt、无定位子契约 |
 
 表中未展开的后缀沿用相同前缀。`CLAIM_EXTRACTION_PROFILE_PATH`和`CLAIM_EXTRACTION_PROFILE_ID`只作为被忽略的弃用环境输入接受，不再影响启用；无需删除本地资产。配置由Container给Service/图注入同一估算器并在提交时冻结。窗口/模型/endpoint/thinking/估算参数及Judge合同漂移受控失败。没有自动修改实际.env或重启服务；部署者在任务空闲时统一更新Web/Worker代码及配置。
+
+T66 新任务默认完整首请求目标6144估算tokens、批次候选触顶阈值30；达到30仍判为可能截断并细分，成功批次少于30条，不静默截取。系统提示、输出schema、目标与只读背景均计入完整请求；单资源上限、总调用/尝试/token/时限保持原配置，不保证所有资源减少批次。结构字段的必要关联完整携带且计入完整请求，放不下时受控失败；相邻前文另受原512辅助预算限制，省略会标记budget_limited，不裁目标原文。
+
+私有 `input_contract` 绑定新规则hash及背景版本，缺少该键的历史任务保持原Prompt/hash/来源。大于20的批次阈值选用独立大输出载体，不改变旧schema hash；持久化按规范数据校验，不能用Python载体类差异误拒绝相同数据。Web与Worker须同版本加载配置；回退新任务时设置INPUT_VERSION=legacy_context_v1，并按需将TARGET_TOKENS/BATCH_CLAIMS恢复为原值。已有新任务必须由兼容新版本的代码继续处理，不能删冻结键伪装成旧任务；无数据库迁移或批量重放。本次实施同步本地.env这三个键，未重启服务或中断在途任务；重启后创建的新任务才读取新配置。
 
 T37 密度参数的冻结时点与升级顺序：三项设置在**新建 estimate Run 时**写入快照的 `density_batching` 子契约（含 `enabled=false`），此后修改环境变量只影响再之后冻结的任务。升级须停止接收新任务、等待已有任务安全结束，然后**同批升级 Web 与 Worker**——旧 Worker 的严格模型不含该字段，会拒绝新快照（受控失败、不产生模型调用），不会静默误读。新代码可读旧快照并按原 token 装箱。回退时把 `CLAIM_EXTRACTION_DENSITY_ENABLED=false` 用于后续新 Run 即可，不要用极大 prior 冒充关闭，也不要把新快照删字段伪装成旧任务。本任务无数据库表/列迁移，历史 `policy_json` 与 hash 原样保留。
 
@@ -563,4 +568,24 @@ T49 的 `p0_38_learning_rounds` 是增量迁移：注册轮次、成员、阶段
 
 `LEARNING_ROUND_CREATION_ENABLED=false` 是源码默认值。它控制新常规轮次及下一轮选择，不阻断已有轮次的查询、测评提交、纠错与合法恢复；普通旧入口仍可进行单目标生产。前端读取服务端 capability，不用浏览器自行启用。其余参数见 [backend/.env.example](../backend/.env.example)：纠错阶段额度每成员默认2（1–3），资源显式恢复额度默认2（0–3），每份资源token预算默认1,048,576（262,144–4,194,304）。额度、模型输入容量及deadline在创建时冻结，失败和重试不重置预算。
 
+单次输入容量使用 LLM_RESOURCE_GENERATOR_MAX_INPUT_TOKENS，源码默认、示例和当前本地配置为 262144。该值用于资源输入额度及新轮次阶段的 input_capacity，网关会计入 JSON Schema 和包装后再校验。普通审核仍检查输入估算加输出预留是否满足 RESOURCE_REVIEW_CONTEXT_TOKENS。修改需重启 Web 与文本 Worker；已有阶段冻结预算不会追溯改写，也不自动恢复失败任务。
+
 标准回退只关闭新创建开关，保留新增事实及其查询、提交与恢复代码。物理回退函数只允许空的新表；有业务事实时返回 `ROUND_ROLLBACK_HAS_FACTS`，不删除正式记录。测试只在隔离合成数据库演练，不自动修改实际业务库或本地 `.env`。启用与生产迁移仍需对应环境操作和验证，不由本地专项通过替代。
+
+
+Claim 发布规则（T58）：普通审核通过、Claim 指标完整、无矛盾、无硬阻断/补检屏障且未解决问题仅为缺证时，事实支持率 `supported_claim_total / factual_claim_total >= CLAIM_GAP_AUTO_PUBLISH_MIN_FACTUAL_PASS_RATE`（默认0.95）自动发布；`>= CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE`（默认0.85）但未达自动门槛时由用户决定；低于用户门槛不发布。两个边界均包含等号。配置在工作流终态读取，自动门槛不得低于用户门槛；已终态任务不批量重放。用户确认接口也使用包含等号的新门槛。
+
+
+### T60 新旧纠错任务部署顺序
+
+本更新没有新增运行配置，也不提高生成、审核、Claim 或补检预算。现有数据库初始化入口包含幂等 p0_40 迁移，为 generated_resources 添加 nullable correction_package_payload/hash；历史 Markdown 行保持 NULL。
+
+上线时先部署能读取新旧包和 `learning_documents.correction_json.v1` 封套的 worker 与服务端并应用迁移，再开放新任务提交。新封套验证后仍须验证完整内层 dispatch/hash；旧 worker 不支持该版本并拒绝消费，不能删除外层身份让其执行。已冻结旧任务和旧资源重试保持旧格式。
+
+回滚前停止新格式提交并排空或隔离新封套队列，保留读取新包的能力；既有新格式任务由支持该身份的 worker 处理或显式取消。默认保留 nullable 列和数据，不自动 DROP COLUMN，不把新任务降级为旧 Markdown。当前仅有本地离线专项证据；未迁移本机业务库、未部署，也没有本次真实模型质量验收。
+# 首批资源确认中的补检预算
+
+`CLAIM_POST_RETRIEVAL_DEFAULT_MAX_ITERATIONS` 控制新建任务开启补检且省略次数参数时的补检后修订预算，范围 0–3，默认 0。学习方向资源确认页只显示开关，次数由此配置指定。已冻结任务继续使用原预算，显式 API 参数保持兼容。
+
+
+T97：单资源重试冻结快照独立受 `RESOURCE_RETRY_SNAPSHOT_MAX_BYTES` 管理（默认8 MiB），不再复用64 KiB检查点投影上限。快照保留原版本与证据hash，不截断；实际模型输入仍受窗口/轮次预算保护。修改运行配置需重启Web与Worker。重试失败提示呈现服务端安全原因；审核教学缺陷明确引用冻结教学规则。

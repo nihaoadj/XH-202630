@@ -210,7 +210,7 @@ def build_courseware_spec(
                     "补充标题、教学意图和已注册组件偏好；不得重新生成、删除、重排或改写来源槽位。"
                     "只能使用 plan_enrichment_contract 中列出的 ID 与对应场景允许的组件；"
                     "recap 不接受 enrichment。数组顺序不重要，未知 ID 和未知组件会被拒绝。"
-                    "如果输入包含 schema_version=3.0 的实操指南，必须额外填写 practice_cover："
+                    "如果输入包含 schema_version=3.0、4.0、5.0 或 6.0 的实操指南，必须额外填写 practice_cover："
                     "cover_title 生成简洁、适合大标题展示的实操课件标题，不要带‘互动课件’、页码或长段落；"
                     "cover_lead 用一句话说明这份实操指南解决的实际任务；"
                     "learning_goal 用一句话说明完成这份实操指南后应具备的可观察能力；"
@@ -237,7 +237,7 @@ def build_courseware_spec(
                         for item in snapshots
                         if item.get("role") == "practice"
                         and isinstance(item.get("practice_guide_payload"), dict)
-                        and item["practice_guide_payload"].get("schema_version") == "3.0"
+                        and item["practice_guide_payload"].get("schema_version") in {"3.0", "4.0", "5.0", "6.0"}
                     ],
                     "learner_request": request_options or {},
                     **({"frozen_readable_evidence": [ref for source in snapshots for ref in source.get("content_review_evidence", [])], "course_rules": COURSE_RULE} if content_review else {}),
@@ -254,7 +254,7 @@ def build_courseware_spec(
             has_structured_practice = any(
                 item.get("role") == "practice"
                 and isinstance(item.get("practice_guide_payload"), dict)
-                and item["practice_guide_payload"].get("schema_version") == "3.0"
+                and item["practice_guide_payload"].get("schema_version") in {"3.0", "4.0", "5.0", "6.0"}
                 for item in snapshots
             )
             if has_structured_practice and result.output.practice_cover is None:

@@ -89,7 +89,7 @@ def practice_style_family(scene: dict) -> str | None:
         scene.get("layout_recipe_id") or scene.get("recipe_id") or ""
     ) in review_recipe_ids:
         return "review"
-    if scene.get("practice_json_schema_version") != "3.0":
+    if scene.get("practice_json_schema_version") not in {"3.0", "4.0", "5.0", "6.0"}:
         return None
     variant = str(scene.get("practice_variant") or "")
     if variant in {"prepare", "verify", "reflect"}:

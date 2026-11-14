@@ -38,6 +38,7 @@ MAX_QUERY_CHARS = 512
 MAX_CLAIM_QUERIES = 3
 MAX_EVIDENCE_CONFLICTS = 8
 MAX_BATCH_PAYLOAD_BYTES = 1024 * 1024
+MAX_BATCH_CLAIMS = 16
 
 
 class ClaimEvidenceRetrievalStatus(str, Enum):
@@ -391,6 +392,8 @@ class ClaimEvidenceRetrievalSessionV1(PolicyContractModel):
             raise ValueError("terminal session requires completed_at")
         if self.status not in TERMINAL_STATUSES and self.completed_at is not None:
             raise ValueError("non-terminal session forbids completed_at")
+        if len(self.evidence_scope_ids) != len(set(self.evidence_scope_ids)):
+            raise ValueError("evidence_scope_ids must be unique")
         if len(self.target_claim_ids) != len(set(self.target_claim_ids)):
             raise ValueError("target_claim_ids must be unique")
         return self
@@ -405,7 +408,7 @@ class ClaimEvidenceRetrievalBatchV1(PolicyContractModel):
     output_hash: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     status: ClaimEvidenceBatchStatus = ClaimEvidenceBatchStatus.PLANNED
     payload: dict[str, Any] = Field(default_factory=dict)
-    expected_claim_ids: list[str] = Field(default_factory=list, max_length=16)
+    expected_claim_ids: list[str] = Field(default_factory=list, max_length=MAX_BATCH_CLAIMS)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

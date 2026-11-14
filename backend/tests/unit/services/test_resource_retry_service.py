@@ -44,7 +44,7 @@ def _freeze_legacy_review_strategies(monkeypatch):
     monkeypatch.setattr("app.services.generation.jobs.get_settings", lambda: legacy)
 
 
-def source_state(repo=None):
+def source_state(repo=None, *, body="old draft"):
     learner = LearnerProfile(learner_id="learner", user_id="owner", learner_type="test",
                              education="本科", major="软件", learning_goal="frozen goal", knowledge_base_id="kb")
     req = GenerateRequest(learner_id="learner", topic="retry", knowledge_base_id="kb",
@@ -68,7 +68,7 @@ def source_state(repo=None):
     resources.save_spec(ResourceSpecRecord(run_id="source", **spec.model_dump(mode="json")))
     parent = LearningResource(resource_id="parent", learner_id="learner", run_id="source", batch_id="batch",
                               resource_spec_id=spec.resource_spec_id, resource_family_id=spec.resource_family_id,
-                              resource_type="讲义", topic="retry", difficulty="初级", content_text="old draft",
+                              resource_type="讲义", topic="retry", difficulty="初级", content_text=body,
                               knowledge_points=["node"], source_refs=[], publication_status="unpublished")
     resources.save(parent, "learner", "retry", run_id="source", batch_id="batch")
     resources.upsert_execution(ResourceExecutionRecord(run_id="source", resource_spec_id=spec.resource_spec_id,
@@ -278,7 +278,7 @@ def test_missing_checkpoint_and_context_size_budget_reject(source, monkeypatch, 
     assert caught.value.status_code == 409
     s.audit.list_checkpoints = checkpoints
     monkeypatch.setattr("app.services.generation.resource_retry.get_settings",
-                        lambda: SimpleNamespace(workflow_checkpoint_max_bytes=1))
+                        lambda: SimpleNamespace(resource_retry_snapshot_max_bytes=1, llm_resource_generator_max_input_tokens=262144))
     with pytest.raises(ApplicationError) as caught:
         prepare(s)
     assert caught.value.status_code == 409 and len(s.repo._store) == 1
@@ -450,11 +450,114 @@ def test_retry_failure_messages_are_actionable_and_do_not_expose_internal_errors
         source.repo._dispatch_metadata["source"]["dispatch_snapshot"]["request_hash"] = "0" * 64
     else:
         monkeypatch.setattr("app.services.generation.resource_retry.get_settings",
-                            lambda: SimpleNamespace(workflow_checkpoint_max_bytes=1))
+                            lambda: SimpleNamespace(resource_retry_snapshot_max_bytes=1, llm_resource_generator_max_input_tokens=262144))
     with pytest.raises(ApplicationError) as caught:
         prepare(source)
     assert caught.value.status_code == 409
     message = caught.value.public_message
-    assert expected in message and "整个批次" in message
+    assert expected in message
+    assert ("RESOURCE_RETRY_SNAPSHOT_MAX_BYTES" if damage == "capacity" else "整个批次") in message
     assert "Traceback" not in message and "SELECT" not in message
     assert len(source.repo._store) == 1
+
+
+@pytest.mark.parametrize("case,expected", [("missing", "generate"), ("validation", "generate"), ("ordinary", "revise"), ("technical", "recheck")])
+def test_manual_retry_action_and_single_body_budget(source, case, expected):
+    if case == "missing":
+        execution = source.resources.get_execution("source", source.spec.resource_spec_id, "text")
+        source.resources.upsert_execution(execution.model_copy(update={"resource_id": None}))
+    elif case == "validation":
+        execution = source.resources.get_execution("source", source.spec.resource_spec_id, "text")
+        source.resources.upsert_execution(execution.model_copy(update={"validation_status": "failed"}))
+    elif case == "technical":
+        source.audit.list_reviews_by_run = lambda run: []
+    context = prepare(source)
+    assert context.request.constraints["resource_retry_action"] == expected
+    assert context.request.constraints["resource_retry_single_pass"] is True
+    assert context.request.max_iterations == (1 if expected == "recheck" else 0)
+    assert context.request.claim_max_iterations == (1 if expected == "recheck" else 0)
+    assert source.repo.get("source").request_payload["max_iterations"] == 3
+    assert ResourceRetryContext.from_snapshot(context.model_dump(mode="json")) == context
+
+
+def test_recheck_snapshot_retains_private_canonical_body(source):
+    parent = source.resources.get("parent").model_copy(update={
+        "practice_guide_payload": {"schema_version": "1.0", "body": "frozen canonical body"}})
+    source.resources.save(parent, "learner", "retry", run_id="source", batch_id="batch")
+    source.audit.list_reviews_by_run = lambda run: []
+    context = prepare(source)
+    snapshot = context.model_dump(mode="json")
+    assert snapshot["source_resource"]["practice_guide_payload"] == parent.practice_guide_payload
+    assert ResourceRetryContext.from_snapshot(snapshot).source_resource.practice_guide_payload == parent.practice_guide_payload
+    assert "practice_guide_payload" not in parent.model_dump(mode="json")
+
+
+def test_unavailable_review_does_not_spend_body_budget_first(source):
+    source.audit.list_reviews_by_run = lambda run: [{"resource_id": "parent", "issues": [{
+        "code": "evidence_gap", "resource_type": "讲义", "description": "invalid reviewer output"}],
+        "revision_instructions": []}]
+    assert prepare(source).request.constraints["resource_retry_action"] == "recheck"
+
+
+def test_old_retry_context_missing_budget_fields_retains_legacy_hash(source):
+    raw = prepare(source).model_dump(mode="json")
+    raw.pop("input_capacity")
+    raw["request"].pop("max_iterations")
+    raw["request"].pop("claim_max_iterations")
+    normalized = {k:v for k,v in raw.items() if k != "context_hash"}
+    normalized["request"] = {**raw["request"], "max_iterations":2, "claim_max_iterations":1}
+    raw["context_hash"] = canonical_hash(normalized)
+    restored = ResourceRetryContext.from_snapshot(raw)
+    assert (restored.request.max_iterations, restored.request.claim_max_iterations) == (2,1)
+    assert restored.model_dump(mode="json", exclude={"context_hash"}) == normalized
+
+
+@pytest.mark.parametrize("state", ["generated", "reviewing", "claim_checking"])
+def test_failed_job_can_resume_interrupted_unpublished_resource(source, state):
+    source.repo.mark_failed("source", "INTERNAL_ERROR")
+    execution = source.resources.get_execution("source", source.spec.resource_spec_id, "text")
+    source.resources.upsert_execution(execution.model_copy(update={"state": state}))
+    source.audit.list_reviews_by_run = lambda run: []
+    context = prepare(source)
+    assert context.request.constraints["resource_retry_action"] == "recheck"
+    assert context.source_resource.content_text == "old draft"
+    assert context.input_capacity == 262144
+    assert ResourceRetryContext.from_snapshot(context.model_dump(mode="json")) == context
+    tampered = context.model_dump(mode="json")
+    tampered["input_capacity"] = 65536
+    with pytest.raises(ValueError, match="hash mismatch"):
+        ResourceRetryContext.from_snapshot(tampered)
+
+
+def test_completed_job_does_not_retry_successful_generation(source):
+    execution = source.resources.get_execution("source", source.spec.resource_spec_id, "text")
+    source.resources.upsert_execution(execution.model_copy(update={"state": "generated"}))
+    with pytest.raises(ApplicationError):
+        prepare(source)
+
+
+@pytest.mark.parametrize("sibling", [False, True])
+def test_interrupted_resource_without_own_claims_does_not_build_claim_revision(source, monkeypatch, sibling):
+    source.repo.mark_failed("source", "INTERNAL_ERROR")
+    execution = source.resources.get_execution("source", source.spec.resource_spec_id, "text")
+    source.resources.upsert_execution(execution.model_copy(update={"state": "generated"}))
+    source.audit.list_reviews_by_run = lambda run: []
+    source.generation.claim_repo = SimpleNamespace(
+        list_claims_by_run=lambda run: [SimpleNamespace(resource_id="sibling", resource_version=1)] if sibling else [],
+        list_judgements_by_run=lambda run: [],
+    )
+    def unexpected(**kwargs):
+        pytest.fail("No own Claims exist: Claim revision must not run")
+    monkeypatch.setattr("app.services.generation.resource_retry.build_claim_review_revision_input", unexpected)
+    assert prepare(source).request.constraints["resource_retry_action"] == "recheck"
+
+
+def test_large_retry_snapshot_is_independent_of_checkpoint_projection_limit():
+    source = source_state(body="frozen source\n" * 15000)
+    parent = source.resources.get("parent")
+    context = prepare(source)
+    encoded = json.dumps(context.model_dump(mode="json"), ensure_ascii=False).encode()
+    assert len(encoded) > 65536
+    assert context.source_resource.content_text == parent.content_text
+    assert context.spec.evidence_ids == source.spec.evidence_ids
+    assert ResourceRetryContext.from_snapshot(json.loads(encoded)).context_hash == context.context_hash

@@ -184,6 +184,7 @@ export type ClaimStatusBucketsV1 = {
 };
 
 export type ContinueResourceBatchRequest = {
+  "claim_post_retrieval_max_iterations"?: (number) | (null);
   "include_claim_check"?: (boolean) | (null);
   "include_claim_evidence_retrieval"?: (boolean) | (null);
   "instructions"?: (string) | (null);
@@ -370,7 +371,7 @@ export type CurrentReportResponse = {
   "recent_followup_runs"?: Array<Record<string, unknown>>;
   "recent_knowledge_state_mutations"?: Array<Record<string, unknown>>;
   "recent_resource_credibility"?: Array<Record<string, unknown>>;
-  "recent_resource_quality"?: Array<ResourceQualityMetricsV1>;
+  "recent_resource_quality"?: Array<ReportRecentResourceQualityV1>;
   "recent_resources"?: Array<LearningResource>;
   "remediation_needs"?: Array<Record<string, unknown>>;
   "report_availability"?: Record<string, unknown>;
@@ -379,6 +380,7 @@ export type CurrentReportResponse = {
   "resource_credibility_summary"?: Record<string, unknown>;
   "resource_difficulty_curve"?: (ResourceDifficultyCurveV1) | (null);
   "resource_difficulty_match"?: Array<Record<string, unknown>>;
+  "resource_quality_batches"?: Array<ReportResourceQualityBatchV1>;
   "resource_quality_summary"?: (ResourceQualitySummaryV1) | (null);
   "review_summary"?: Record<string, unknown>;
   "skill_level": string;
@@ -516,7 +518,10 @@ export type FeedbackRecord = {
 };
 
 export type GenerateCreateRequest = {
+  "claim_gap_revision_threshold"?: number;
   "claim_max_iterations"?: number;
+  "claim_post_retrieval_max_iterations"?: number;
+  "claim_workflow_version"?: "legacy_v1" | "contradiction_first_v1" | "contradiction_first_v2" | "contradiction_first_v3";
   "constraints"?: Record<string, unknown>;
   "diagnostic_result_id"?: (string) | (null);
   "difficulty_preference"?: (string) | (null);
@@ -534,7 +539,10 @@ export type GenerateCreateRequest = {
 };
 
 export type GenerateRequest = {
+  "claim_gap_revision_threshold"?: number;
   "claim_max_iterations"?: number;
+  "claim_post_retrieval_max_iterations"?: number;
+  "claim_workflow_version"?: "legacy_v1" | "contradiction_first_v1" | "contradiction_first_v2" | "contradiction_first_v3";
   "constraints"?: Record<string, unknown>;
   "diagnostic_result_id"?: (string) | (null);
   "difficulty_preference"?: (string) | (null);
@@ -552,7 +560,10 @@ export type GenerateRequest = {
 };
 
 export type GenerateRoundCreateRequestV1 = {
+  "claim_gap_revision_threshold"?: number;
   "claim_max_iterations"?: number;
+  "claim_post_retrieval_max_iterations"?: number;
+  "claim_workflow_version"?: "legacy_v1" | "contradiction_first_v1" | "contradiction_first_v2" | "contradiction_first_v3";
   "constraints"?: Record<string, unknown>;
   "diagnostic_result_id"?: (string) | (null);
   "difficulty_preference"?: (string) | (null);
@@ -859,6 +870,8 @@ export type LearningResource = {
   "claim_publish_decision_pending"?: boolean;
   "claim_warning_publish"?: boolean;
   "content_text"?: (string) | (null);
+  "correction_package_payload"?: (Record<string, unknown>) | (null);
+  "correction_package_payload_hash"?: (string) | (null);
   "created_at"?: (string) | (null);
   "difficulty": string;
   "difficulty_match"?: (boolean) | (null);
@@ -1088,6 +1101,41 @@ export type ReportRadar = {
   "values": Array<number>;
 };
 
+export type ReportRecentResourceQualityV1 = {
+  "availability"?: QualityAvailability;
+  "claim": ClaimQualityV1;
+  "coverage": RateMetricV1;
+  "difficulty_fit": DifficultyFitV1;
+  "display_order"?: number;
+  "factual_support"?: (RateMetricV1) | (null);
+  "hallucination": RateMetricV1;
+  "issue_statistics": IssueStatisticsV1;
+  "learning_node_id"?: (string) | (null);
+  "learning_node_name"?: (string) | (null);
+  "metric_policy_version"?: "resource-quality/v2";
+  "ordinary_review": OrdinaryReviewQualityV1;
+  "published"?: boolean;
+  "reason_codes"?: Array<string>;
+  "resource_id": string;
+  "resource_spec_id"?: (string) | (null);
+  "resource_type": string;
+  "resource_version": number;
+  "review_id"?: (string) | (null);
+  "run_id": string;
+  "schema_version"?: "1.0";
+  "source_binding": SourceBindingQualityV1;
+  "target_coverage"?: Array<CoverageTargetV1>;
+  "topic"?: string;
+};
+
+export type ReportResourceQualityBatchV1 = {
+  "created_at"?: (string) | (null);
+  "items"?: Array<ResourceQualityMetricsV1>;
+  "key": string;
+  "summary": ResourceQualitySummaryV1;
+  "topic": string;
+};
+
 export type ReportResponse = {
   "ability_nodes"?: Array<AbilityNodeProjectionV1>;
   "agent_flow"?: Array<AgentTrace>;
@@ -1132,7 +1180,7 @@ export type ReportResponse = {
   "recent_followup_runs"?: Array<Record<string, unknown>>;
   "recent_knowledge_state_mutations"?: Array<Record<string, unknown>>;
   "recent_resource_credibility"?: Array<Record<string, unknown>>;
-  "recent_resource_quality"?: Array<ResourceQualityMetricsV1>;
+  "recent_resource_quality"?: Array<ReportRecentResourceQualityV1>;
   "recent_resources"?: Array<LearningResource>;
   "remediation_needs"?: Array<Record<string, unknown>>;
   "report_availability"?: Record<string, unknown>;
@@ -1141,6 +1189,7 @@ export type ReportResponse = {
   "resource_credibility_summary"?: Record<string, unknown>;
   "resource_difficulty_curve"?: (ResourceDifficultyCurveV1) | (null);
   "resource_difficulty_match"?: Array<Record<string, unknown>>;
+  "resource_quality_batches"?: Array<ReportResourceQualityBatchV1>;
   "resource_quality_summary"?: (ResourceQualitySummaryV1) | (null);
   "review_summary"?: Record<string, unknown>;
   "skill_level": string;
@@ -1169,20 +1218,27 @@ export type ResourceDifficultyCurveV1 = {
 
 export type ResourceDifficultyPointV1 = {
   "batch_id"?: (string) | (null);
+  "claim_review_score"?: (number) | (null);
   "confidence": string;
   "credibility_grade"?: (string) | (null);
   "credibility_level"?: (string) | (null);
   "credibility_score"?: (number) | (null);
   "credibility_score_breakdown"?: (Record<string, unknown>) | (null);
+  "credibility_score_source"?: ("ordinary_review" | "claim") | (null);
+  "credibility_unavailable_reason"?: (string) | (null);
   "default_resource_difficulty_score"?: (number) | (null);
   "difficulty_adjustment"?: number;
+  "difficulty_fit_score"?: (number) | (null);
   "difficulty_gap"?: (number) | (null);
   "difficulty_source": "declared_band" | "deterministic_features" | "calibrated_history" | "unavailable";
+  "experience_score"?: (number) | (null);
   "feedback_count"?: number;
   "feedback_score"?: (number) | (null);
   "learner_readiness_score"?: (number) | (null);
   "match_status": "too_easy" | "matched" | "challenging" | "too_hard" | "not_measured";
-  "point_type"?: "resource" | "batch_average";
+  "objective_difficulty_adjustment"?: number;
+  "ordinary_review_score"?: (number) | (null);
+  "point_type"?: "resource" | "batch_average" | "batch_fit";
   "reason_codes"?: Array<string>;
   "resource_count"?: number;
   "resource_difficulty_score"?: (number) | (null);
@@ -1192,6 +1248,8 @@ export type ResourceDifficultyPointV1 = {
   "resource_type": string;
   "skill_name": string;
   "skill_node_id": string;
+  "subjective_difficulty_adjustment"?: number;
+  "subjective_feedback_count"?: number;
 };
 
 export type ResourceEvaluationQuestion = {
@@ -1316,14 +1374,17 @@ export type RoundBindingSummaryV1 = {
 };
 
 export type RoundCandidatesV1 = {
+  "confirmed_selection"?: (Record<string, unknown>) | (null);
   "correction_targets": Array<RoundCorrectionTargetV1>;
   "eligible_review_nodes": Array<NextGenerationCandidateV1>;
   "generation_options": NextGenerationOptionsV1;
   "profile_version": number;
+  "remediation_recommendation"?: (RoundRemediationRecommendationV1) | (null);
   "schema_version"?: "1.0";
 };
 
 export type RoundCorrectionSelectionV1 = {
+  "claim_post_retrieval_max_iterations"?: number;
   "include_claim_check"?: boolean;
   "include_claim_evidence_retrieval"?: boolean;
   "learner_id": string;
@@ -1356,6 +1417,7 @@ export type RoundEvaluationGroupV1 = {
 
 export type RoundEvaluationRequestV1 = {
   "learner_id": string;
+  "retake_from_session_id"?: (string) | (null);
 };
 
 export type RoundEvaluationSessionV1 = {
@@ -1415,6 +1477,8 @@ export type RoundMemberSummaryV1 = {
 };
 
 export type RoundNextSelectionV1 = {
+  "claim_post_retrieval_max_iterations"?: number;
+  "follow_remediation"?: boolean;
   "include_claim_check"?: boolean;
   "include_claim_evidence_retrieval"?: boolean;
   "learner_id": string;
@@ -1437,6 +1501,13 @@ export type RoundNodeFeedbackV1 = {
   "role": "primary" | "review" | "legacy";
   "score": number;
   "source_attempt_id"?: (string) | (null);
+};
+
+export type RoundRemediationRecommendationV1 = {
+  "kind": "prerequisite" | "downgrade" | "practice_prerequisite" | "return_to_original";
+  "node": NextGenerationCandidateV1;
+  "original_node_id": string;
+  "original_node_name": string;
 };
 
 export type RoundResultNotSubmittedV1 = {

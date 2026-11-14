@@ -13,7 +13,7 @@ T42 修复续作：新中立任务冻结 locator-v2，实际执行编辑比例�
 ## 项目亮点
 
 - 多智能体协同：基于 LangGraph 实现学情诊断、知识库检索、学习路径规划、个性化资源生成、审核纠偏、反馈决策等 Agent 的协同闭环。
-- 证据约束 Tutor：已发布资源与测评题支持多轮启发式导学；按Frozen Evidence、SourceRef、缺失时受控检索的原顺序取证，仅保留生成契约优化：正文与内部引用分离、证据不足可拒答。
+- 证据约束 Tutor：已发布资源支持多轮启发式导学，正式测评独立作答，不提供题目求助入口；按Frozen Evidence、SourceRef、缺失时受控检索的原顺序取证，仅保留生成契约优化：正文与内部引用分离、证据不足可拒答。
 - 反馈真实闭环：服务端判分的正式 Attempt 会原子更新知识点掌握度、画像版本和持久化学习路径；学习者确认下一步方案后创建异步生成任务，并保留父子 Run 来源关系。
 - 实时 Agent 轨迹：生成页通过 SSE 只读持久化 WorkflowEvent，支持 queued snapshot、断线续传、事件去重、terminal close 与轮询降级。
 - 幻觉防控：引入冻结 Evidence、独立 Claim 抽取/判定、审核纠偏与可复核指标。
@@ -230,9 +230,23 @@ T9知识库资料现按 `teaching/zh`、`references/{zh,en}`、`licenses/`、`pr
 
 ## 测试运行
 
+资源链路展示专项（T51）：运行 `node frontend/tests/resourceWorkflowPresentation.test.mjs`、`node frontend/tests/unit/utils/workflowEvents.test.mjs`、`node frontend/tests/e14Round.test.mjs`、`node frontend/tests/claimEvidenceRetrieval.test.mjs`；构建 `npm --prefix frontend run build` 后运行 `node frontend/tests/resourceWorkflowBrowser.test.mjs`。浏览器使用本机 Edge（可由 `RESOURCE_WORKFLOW_BROWSER_CHANNEL` / `TEST_BROWSER_CHANNEL` 覆盖），`TEST_RUN_OUTPUT` 可指定新的证据目录，默认 `frontend/tests/test-results/resource-workflow/`。覆盖当前 Run 内资源完整链路、共享阶段、返工/版本、精确详情、批次回退、T49 双节点/纠错/多任务、迟到结果与桌面/375px布局，不运行全量或真实模型。范围和实际证据见 [T51](docs/update_plan/T51.md)。
+
+T51 R2 将阶段/生产任务统一至顶部资源批次，学习节点改为轨迹标题旁单按钮，移除资源状态卡；阅读/报告/重试/过程详情由所选资源菜单承接。兼容检查可用 `PUBLICATION_BROWSER_CASES` 指定 `publicationSummaryBrowser.test.mjs` 的场景（逗号分隔），`RESOURCE_QUALITY_BROWSER_SCOPE=generation` 仅执行 `resourceQualityBrowser.test.mjs` 中的生成详情检查；未设置时保持原专项范围。实际命令和结果见 T51 R2。
+
 Claim 中立抽取默认 `CLAIM_EXTRACTION_STRATEGY=neutral_estimate_v1`，使用无外部资产的字符估算：ASCII/CJK/其他Unicode系数0.3/0.6/1，完整实际请求统一增加15%余量，每消息8和请求128的包装余量只计一次。无需tokenizer下载、PROFILE路径/ID或校准PASS。短文单批、长文按需分批、程序汇总，同资源一次原Judge；无额外Evidence和模型整合调用。每个真实attempt发送前CAS预留本次输入估算及实际输出cap，返回按可靠usage核销，未知用量保留预留并阻止自动补调；实际超估不丢有效结果，超支入账后阻断下一请求。正常批次及同图返工共享run预算，中断按原失败/新run重试。配置与迁移见[部署说明](docs/deployment.md#claim-中立抽取候选)。估算不是精确token或计费硬上限；真实冒烟和质量对照分别验证，本轮按用户要求只做代码与离线验证。T37 为 `neutral_estimate_v1` 增加冻结的密度装箱子契约（`density_batching`，version `claim-density-v1`）：按 paragraph/list/table/code 的原文字符数预估候选数，与既有 token 上界**同时**约束装箱；标题与空行不占风险权重，但仍完整送模型并逐 unit 回执；仅当候选批只含 1 个 unit 时豁免密度。`CLAIM_EXTRACTION_DENSITY_ENABLED` / `_PRIOR` / `RISK_SHARE` 只影响此后冻结的新 Run——旧 2.0 快照不含该键、hash 与原 token 装箱保持不变。触顶判废、细分、预算、CAS 与 Judge 均不变；密度是调度启发式，不构成事实召回或成本改善证明。
 
 专项命令：`python scripts/run_tests.py --suite claim-extraction-focused --suite claim-extraction-eval --output output/test-runs/claim-extraction-check`。输出目录必须为空；评测固定合成正文并调用实际抽取/判定代码，输出 `fixture_policy_gate`、`quality_gate=NOT_RUN_OFFLINE` 与 `judge_capacity_gate=NOT_RUN_OFFLINE`。范围处理清单不能充当事实召回分母，工程上限不能充当实测容量。
+
+T66：当时新任务默认 `CLAIM_EXTRACTION_INPUT_VERSION=unified_context_v1`、完整首请求目标6144估算tokens、每批候选触顶阈值30。测评题排除评分标准/分值，复习清单、纠错包和实操指南按字段筛选并关联题干、答案、解释或所属步骤；普通Markdown携带有界前文。背景只作消歧，不能另抽Claim或充当Evidence；实际知识即使疑似错误也须抽取，纯判题说明、错误示例与练习假设须区分。`source_text`始终来自本批目标连续原文，`claim_text`只依明确背景消歧。普通审核仍检查完整资源；Judge、补检、发布门槛及总预算保持。新规则与容量在创建时冻结，历史任务不重写；配置加载与回退见[部署说明](docs/deployment.md#claim-中立抽取候选)。专项：`python scripts/run_tests.py --suite claim-input-context-focused --output output/test-runs/claim-input-context-check`；验证为离线确定性，不证明真实模型已消除误分。
+
+T67：新任务默认 `CLAIM_EXTRACTION_INPUT_VERSION=unified_context_v2`。抽取提示词要求事实Claim是作者认可、主体和条件明确且能独立判定的知识断言；纯本篇题目、示例、答案关系标非事实，混合句仍抽具体知识；`claim_text`仅依明确背景消除代指，`source_text`保持逐字原文。旧任务按冻结v1恢复；Judge、输入分批和发布逻辑不变。离线测试不能证明真实模型分类已改善。
+
+T68：新任务默认 `CLAIM_EXTRACTION_INPUT_VERSION=unified_context_v3`。统一抽取规则区分外部知识事实与本次资源自身的参数、代码行为和预期结果；实操指南代码字段仅作只读背景，文字字段仍抽取实际知识，普通审核继续检查完整代码。旧v1/v2任务沿原冻结Prompt与来源标记恢复。离线验证不证明真实模型抽取质量或代码已运行。
+
+T69：新任务默认 `CLAIM_EXTRACTION_INPUT_VERSION=unified_context_v4`。统一规则区分合成练习的情境陈述与可独立核验的技术知识；实操指南从准备目标向步骤、验证及复盘传递只读背景，不按案例名称过滤字段。混合句仍抽技术断言，“只负责”等绝对判断仍须核验。旧v1–v3任务按冻结规则及来源标记恢复；Judge和发布规则不变。离线输入验证不代表真实模型已正确分类。
+
+T71：新任务默认 `CLAIM_EXTRACTION_INPUT_VERSION=unified_context_v5`，实操指南缩减 Claim 目标字段，纯目标、验证与清单保留为只读背景；统一规则继续抽独立技术知识，不把本篇代码/参数/预期结果作为外部事实。补检窗口在形成哈希前规范化边界空白。旧 v1–v4 Run 继续按冻结来源恢复；真实模型分类改善需独立复验。
 
 T42 程序化来源定位与受限文字容错（`neutral_estimate_v1`）：新版中立模型不再输出 `source_start/source_end`，程序在所属 target unit 内按 A 唯一精确 → B 受控格式（CRLF→LF、叙述内连续横向空白折叠）→ C 受限文字编辑分层定位，只允许漏抄虚词、意外重复相邻字符、受控错字对等有正反例支撑的编辑，保护数字/否定/量词/条件/关系顺序/单位版本，歧义与最佳/次佳差距不足即拒绝；定位成功从冻结正文截取真实 `source_text` 并计算偏移与 hash。`CLAIM_EXTRACTION_SOURCE_LOCATING_MODE=tolerant_v1`（默认）只影响新建 Run；`exact_v1` 关闭 B/C；显式空值保持历史 v1 Prompt。定位诊断私有化，不进公开 DTO/trace/SSE；Judge 输入/Prompt/schema/options/判定与发布逻辑不变，本版不增加来源核对模型调用、不声称完成来源语义核验。专项命令：`python scripts/run_tests.py --suite claim-e11-unit --suite claim-e11-integration --suite claim-e11-recovery --suite claim-e11-eval --output output/test-runs/t42-e11-r1`。所有样本合成，真实模型质量 `NOT_RUN`。启用/回滚见[部署说明](docs/deployment.md#claim-中立抽取候选)。
 
@@ -245,6 +259,8 @@ LLM 调用旁路计量专项：`python scripts/run_tests.py --suite llm-accounti
 
 资源质量指标与报告专项（T48）：先执行 `npm --prefix frontend run build`，再运行 `python scripts/run_tests.py --suite resource-quality-unit --suite resource-quality-query --suite resource-quality-report --suite resource-quality-evaluation --suite resource-quality-ui --output output/test-runs/t48-metrics` 与 `python scripts/run_tests.py --suite resource-quality-browser --output output/test-runs/t48-browser`（输出目录必须新建；运行器使用当前 Python 解释器，依赖须已安装在该解释器中）。核心知识点覆盖率只取普通审核逐目标结果（已覆盖冻结目标数 ÷ 冻结目标总数），不再由 Claim 知识点关联派生；幻觉率在 Claim 完整时使用核验统计，未开启 Claim 且同版普通审核符合通过证据时显示 5% 未校准参考（不写入 `claim_hallucination_rate`、不判达标、不参与均值）；难度适配准确率只来自带明确参考标签的标注样本。离线 v2 金标 PASS 与 `official_gates=NOT_MEASURABLE` 分开报告，不能当作正式模型质量成绩。
 
+
+新轮次单次输入容量由 LLM_RESOURCE_GENERATOR_MAX_INPUT_TOKENS 配置，默认 262144，覆盖网关 JSON Schema 包装的输入预留。显式 .env 值优先，修改后需重启 Web 与文本 Worker。已有轮次阶段保留创建时冻结的容量。
 
 学习轮次专项（T49）：先执行 `npm --prefix frontend run build`，再运行 `python scripts/run_tests.py --suite learning-round-contracts --suite learning-round-policies --suite learning-round-persistence --suite learning-round-budget --suite learning-round-transactions --suite learning-round-generation --suite learning-round-recovery --suite learning-round-api --suite learning-round-projections --suite learning-round-compat --output output/test-runs/t49-backend-r4`、`python scripts/run_tests.py --suite learning-round-frontend --output output/test-runs/t49-frontend-r2` 与 `python scripts/run_tests.py --suite learning-round-browser --output output/test-runs/t49-browser-r2`（输出目录必须新建）。覆盖单主节点/附带复习契约、联合冻结题组、一次提交分别判分、本轮纠错与仅复习复测、追加与失败恢复边界、SQLite 文件重开/租约回收/失败重试绑定、预算作用域跨线程/重试、历史与报告投影、容器事务接线及旧入口兼容；不运行全量后端或全部浏览器，也不启用真实模型。`LEARNING_ROUND_CREATION_ENABLED` 默认 false，配置与回滚见[部署说明](docs/deployment.md#t49-学习轮次存储与创建开关)。
 
@@ -356,9 +372,13 @@ npm --prefix frontend run build
 npm --prefix frontend run test:feedback-browser
 ```
 
-专项覆盖桌面展开/收起与手机布局、无可用批次、测评前状态、单选/多选/问答、未完成时禁用提交、反思字段 payload、反馈小结与逐题结果、纠错及新节点选择、下一步确认和原 `/generate` 路由，并检查 44px 操作目标、横向溢出、选中对比度、键盘焦点与减少动态效果。截图和 `summary.json` 位于 `frontend/tests/test-results/feedback-ui/`；Windows 默认使用 Edge，可通过 `FEEDBACK_BROWSER_CHANNEL` 或 `TEST_BROWSER_CHANNEL` 选择通道。
+专项覆盖桌面与手机布局、测评准备和三种题型、反思字段、反馈小结与逐题结果、纠错入口、单主节点与可选复习节点、轮次创建开关、下一轮确认及按主成员导航至 `/generate`。另检查 44px 操作目标、横向溢出、选中对比度、键盘焦点与减少动态效果。截图和 `summary.json` 位于 `frontend/tests/test-results/feedback-ui/`。Windows 默认使用 Edge，可通过 `FEEDBACK_BROWSER_CHANNEL` 或 `TEST_BROWSER_CHANNEL` 选择通道。
 
-Tutor 界面专项使用本地 HTTP fixture，覆盖普通/专注阅读和测评提示中的消息、引用、输入、等待与失败恢复，以及五页顶部辅助导航的颜色一致性；不调用真实 Tutor 模型：
+测评答题页专项：构建后运行 `node frontend/tests/feedbackBrowser.test.mjs --assessment`，仅验证桌面/手机单选、多选、问答、反思记录与提交字段，以及测评中无 Tutor 求助入口、面板或请求。轮次无求助入口由 `node frontend/tests/e14RoundBrowser.test.mjs` 验证；旧计数兼容由 `node frontend/tests/tutorState.test.mjs` 验证。使用本地 fixture，不调用真实模型。
+
+开始测评后两栏对齐专项：`node frontend/tests/feedbackBrowser.test.mjs --assessment-alignment`，使用6题长题组验证1651px普通/减少动态效果滚动后的两栏顶部差值不超过1px，以及390px手机堆叠；证据在 `frontend/tests/test-results/feedback-alignment-ui/`。
+
+Tutor 界面专项使用本地 HTTP fixture，覆盖普通/专注阅读中的消息、引用、输入、等待与失败恢复，以及测评无求助入口、五页顶部辅助导航的颜色一致性；不调用真实 Tutor 模型：
 
 ```powershell
 npm --prefix frontend run build
@@ -438,10 +458,24 @@ T37 修复（2026-11-05）：estimate 抽取结果载体支持最多128条，持
 
 默认 `LECTURE_REVIEW_STRATEGY=legacy_content_v2`。可选 `lecture_issue_v1`（T38）与 `lecture_issue_v2`（T39）仅用于讲义普通审核，需显式设置已确认的 `LECTURE_REVIEW_CONTEXT_TOKENS`；输出预算沿用 reviewer 配置并随任务冻结。配置变化只影响后续新任务。新策略以逐问题账本核销返工，不改变 Claim 与发布门禁。真实质量验收未运行，默认策略不切换。`lecture_issue_v2` 删除模型自填的总体 coverage 结论，只保留逐目标 covered/missing，覆盖比例、阻断判定与 approve/revise/human_review 全部由程序从冻结目标派生；覆盖问题必须写明受影响目标。三维语义判断（事实、难度、自包含）仍为独立判断。对白名单内的自相矛盾（目标集不全、缺失目标未关联问题、维度与问题冲突、风险分冲突、核销漏项、临时 ID 重复）允许一次有界纠正，与首次请求共享冻结的物理尝试上限 M，不增加全局重试。V2 首次请求前必须有持久 step 记录，旧 running/failed 审核步骤会让新调用被拒绝。真实模型质量仍未验收。专项命令见 docs/testing/README.md。
 
-Claim定向返工默认最多1次（`claim_max_iterations=1`），显式0可禁用；Claim要求修订但专用额度不可用时进入人工复核且未发布，不借普通`max_iterations`。普通审核返工默认仍为2。已冻结任务按保存值执行。
+Claim定向返工默认最多2次（`claim_max_iterations=2`），显式0可禁用；Claim要求修订但专用额度不可用时进入人工复核且未发布，不借普通`max_iterations`。普通审核返工默认3次。已冻结任务按保存值执行。
+
+T54：新任务开启Claim补检时，先处理明确矛盾，再对证据不足的事实补检。`claim_max_iterations` 控制补检前矛盾修订（默认1）；`claim_post_retrieval_max_iterations` 控制补检后修订（默认0，0–3）。1+1最多两次Claim正文修订，两阶段不互借/重领额度，每次改文仍须普通审核与新版本Claim审核。生成及学习后续资源表单在开启补检后提供次数配置。关闭补检和冻结的`legacy_v1`旧任务保留原顺序；证据上限仍每资源8/任务16，发布硬门不变。见[T54](docs/update_plan/T54.md)。
+
+T55：新任务升级为`contradiction_first_v2`。有矛盾触发补检前修订时，若同一资源的无证据事实Claim严格超过8条，也将这些缺证目标一起交给模型根据已有冻结证据修订；没有矛盾直接补检，<=8条只修矛盾。原有返工额度不增加；非目标内容通过原文坐标与保留区间提示尽量原样复制，修改后仍重新审核。旧v1任务冻结顺序和提示保持。详见[T55](docs/update_plan/T55.md)。
 
 ### 文本文档普通审核通用化（T44）
 
 新增内部策略 `RESOURCE_REVIEW_STRATEGY=resource_issue_v1`（默认启用；显式 `compat` 可回退历史各类型审核），让六类文本资源（讲义、实操指南、分阶测试题、案例分析、复习清单、内部纠错训练包）共用同一版本化闭环：证据约束问题登记、稳定 `issue_id`（`ri_`/`rip_` 前缀）、精确定向返工、逐问题核销、全文回归、无变化控制、程序硬门（结构失败零语义调用）与一次有界纠正；结构化资源的完整私有包也进入审核。启动须显式填写已核实的 `RESOURCE_REVIEW_CONTEXT_TOKENS`，缺失将拒绝初始化；示例及本地配置使用当前 reviewer 已声明的 129024，其他模型应按实际窗口配置。Claim 中立策略要求 `LLM_THINKING_MODE=disabled`。环境显式值优先；默认变更只影响此后新建且未被旧环境值覆盖的任务，已冻结任务不转换。当前策略已默认切换，真实模型质量仍未验收，未在本次执行真实调用或重启服务。策略在 Run 创建时冻结，回滚只影响后续新 Run；私有审计使用 `review_audit_v4` 命名空间，不做物理迁移。专项命令见 docs/testing/README.md。
 
 新版通用审核与讲义专用 issue 策略互斥：启用 `resource_issue_v1` 时设 `LECTURE_REVIEW_STRATEGY=legacy_content_v2`，关闭旧专用循环，由通用新审核接管讲义；本地已同步。其他部署显式设置的 `lecture_issue_v1/v2` 也须调整。若回退此前讲义 V2 行为，须同时设 `RESOURCE_REVIEW_STRATEGY=compat` 与 `LECTURE_REVIEW_STRATEGY=lecture_issue_v2`，并保留原讲义窗口。
+
+T52 统一资源重试/发布专项：使用项目 Python 运行 `python -m pytest backend/tests/unit/services/test_resource_retry_service.py backend/tests/integration/workflow/test_resource_retry.py backend/tests/integration/api/test_resource_use_cases.py backend/tests/unit/agents/test_publication_policy.py`；前端运行 `node frontend/tests/generationPreparation.test.mjs`，构建后运行 `node frontend/tests/resourceWorkflowBrowser.test.mjs`。Windows临时目录权限受限时，用新的 `--basetemp=output/test-runs/<本次编号>/tmp -o cache_dir=output/test-runs/<本次编号>/cache`，不删除其他测试目录。范围与结果见 [T52](docs/update_plan/T52.md)。
+
+T56：新请求冻结 `contradiction_first_v3`；同一资源当前版本/review已完成事实Claim缺证数严格超过冻结阈值 `claim_gap_revision_threshold`（默认8）时，即使没有矛盾也先定向修订。与矛盾修订共享补检前额度，额度耗尽且无矛盾可继续补检；修订仍重做普通审核/Claim并尽量保持非目标正文。v1/v2历史行为保留。补检检索批次仅关联本批查询的Claim，关联超过16时稳定拆分，保留共享查询全部映射与旧有效批次hash；证据上限8/16不变。详见[T56](docs/update_plan/T56.md)。
+
+Claim 完整审核的缺证资源：事实支持率 >=95% 自动发布；>=85%且<95%由用户决定；<85%不发布。自动门槛 `CLAIM_GAP_AUTO_PUBLISH_MIN_FACTUAL_PASS_RATE=0.95`，用户门槛 `CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE=0.85`，均包含等号；仍须普通审核通过、无矛盾与补检硬阻断。
+资源确认页的补检后修订次数由 `CLAIM_POST_RETRIEVAL_DEFAULT_MAX_ITERATIONS` 配置（0–3，默认0），配置后重启后端生效，详见 [部署说明](docs/deployment.md)。
+
+
+T97：单资源重试冻结快照独立受 `RESOURCE_RETRY_SNAPSHOT_MAX_BYTES` 管理（默认8 MiB），不再复用64 KiB检查点投影上限。快照保留原版本与证据hash，不截断；实际模型输入仍受窗口/轮次预算保护。修改运行配置需重启Web与Worker。重试失败提示呈现服务端安全原因；审核教学缺陷明确引用冻结教学规则。

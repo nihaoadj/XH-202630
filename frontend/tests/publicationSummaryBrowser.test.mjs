@@ -249,6 +249,8 @@ async function apiResponse(url, method, request, response) {
   if (claimsMatch && method === 'GET') {
     return json(response, { ...state.claims, run_id: decodeURIComponent(claimsMatch[1]) })
   }
+  const qualityMatch = pathname.match(/^\/api\/runs\/([^/]+)\/resource-quality$/)
+  if (qualityMatch && method === 'GET') return json(response, { run_id: decodeURIComponent(qualityMatch[1]), items: [] })
 
   const decisionMatch = pathname.match(/^\/api\/resources\/items\/([^/]+)\/claim-publication-decision$/)
   if (decisionMatch && method === 'POST') {
@@ -485,14 +487,13 @@ definitions.push({
   async execute(browser, base) {
     reset(twoOfThree('completed', { pending: true }))
     const page = await newPage(browser, base, 'decision-publish')
-    await waitForText(page, '.summary-count', '2 / 3')
-    await waitForText(page, '.production-status', '部分已发布（2/3）')
-    await page.locator('.execution-card', { hasText: '分阶测试题' })
-      .locator('button', { hasText: '审核报告' }).first().click()
+    await waitForText(page, '.production-status', '部分发布')
+    await waitForText(page, '.production-status', '部分发布')
+    await processResourceAction(page, '分阶测试题', '查看审核报告')
     await page.locator('.claim-report-dialog').waitFor({ state: 'visible' })
-    await page.locator('.claim-report-dialog').locator('button', { hasText: '确认发布' }).click()
-    await waitForText(page, '.summary-count', '3 / 3')
-    await waitForText(page, '.production-status', '已发布 3/3')
+    await page.locator('.claim-report-dialog').getByRole('button', { name: '发布', exact: true }).click()
+    await waitForText(page, '.production-status', '已发布')
+    await waitForText(page, '.production-status', '已发布')
     assert.ok(state.writes.some(item => item.path.endsWith('/res-c/claim-publication-decision')
       && item.body.publish === true), 'the publish decision reached the fixture')
     return page
@@ -504,14 +505,13 @@ definitions.push({
   async execute(browser, base) {
     reset(twoOfThree('completed', { pending: true }))
     const page = await newPage(browser, base, 'decision-reject')
-    await waitForText(page, '.summary-count', '2 / 3')
-    await page.locator('.execution-card', { hasText: '分阶测试题' })
-      .locator('button', { hasText: '审核报告' }).first().click()
+    await waitForText(page, '.production-status', '部分发布')
+    await processResourceAction(page, '分阶测试题', '查看审核报告')
     await page.locator('.claim-report-dialog').waitFor({ state: 'visible' })
     await page.locator('.claim-report-dialog').locator('button', { hasText: '暂不发布' }).click()
     await page.waitForTimeout(500)
-    await waitForText(page, '.summary-count', '2 / 3')
-    await waitForText(page, '.production-status', '部分已发布（2/3）')
+    await waitForText(page, '.production-status', '部分发布')
+    await waitForText(page, '.production-status', '部分发布')
     assert.ok(state.writes.some(item => item.body.publish === false), 'the rejection reached the fixture')
     return page
   },
@@ -530,10 +530,8 @@ definitions.push({
     )
     reset(scenario)
     const page = await newPage(browser, base, 'old-version')
-    await waitForText(page, '.summary-count', '2 / 3')
-    const card = page.locator('.execution-card', { hasText: '分阶测试题' })
-    await waitForText(page, '.execution-card', '已有版本已发布')
-    await card.locator('button', { hasText: '查看资源' }).click()
+    await waitForText(page, '.production-status', '部分发布')
+    await processResourceAction(page, '分阶测试题', '查看已发布资源')
     // The reader opens the published version by its exact id, not the failed
     // attempt and not a sibling of the same type.
     await waitForText(page, '.resource-stage', '分阶测试题')
@@ -557,11 +555,10 @@ definitions.push({
     )
     reset(scenario)
     const page = await newPage(browser, base, 'parent-linked')
-    await waitForText(page, '.summary-count', '3 / 3')
-    const card = page.locator('.execution-card', { hasText: '分阶测试题' })
-    await card.locator('button', { hasText: '查看资源' }).click()
+    await waitForText(page, '.production-status', '已发布')
+    await processResourceAction(page, '分阶测试题', '查看已发布资源')
     await waitForText(page, '.resource-stage', '唯一父子链阅读内容')
-    assert.ok((await card.locator('.execution-phase').textContent()).includes('失败'), 'reading a published descendant does not approve the current attempt')
+    assert.ok((await page.locator('.resource-chain-picker button[aria-pressed="true"]').getAttribute('aria-label')).includes('失败'), 'reading a published descendant does not approve the current attempt')
     return page
   },
 })
@@ -574,9 +571,10 @@ definitions.push({
     scenario.jobsByLearner['learner-1'][0].publish_summary = summary(3, 1, { completeness: 'partial' })
     reset(scenario)
     const page = await newPage(browser, base, 'running-partial')
-    await waitForText(page, '.production-status', '已确认 1 份已发布，汇总不完整')
-    await waitForText(page, '.delivery-count', '汇总不完整')
-    assert.ok(!(await page.locator('.delivery-count').textContent()).includes('/'), 'an incomplete header must not imply a verified ratio')
+    await waitForText(page, '.production-status', '生成中')
+    assert.equal(await page.locator('.delivery-count,.resource-progress-tree').count(), 0, 'removed status header must not be recreated')
+    assert.equal(await page.locator('.summary-count').count(), 0)
+    assert.doesNotMatch(await page.locator('.production-status').textContent(), /[0-9/]/)
     return page
   },
 })
@@ -724,6 +722,18 @@ definitions.push({
   },
 })
 
+async function selectProcessResource(page, type) {
+  const choice = page.locator('.resource-chain-picker button').filter({ hasText: type })
+  if (await choice.count()) await choice.first().click()
+  await page.getByRole('button', { name: '所选资源操作', exact: true }).waitFor()
+}
+
+async function processResourceAction(page, type, label) {
+  await selectProcessResource(page, type)
+  await page.getByRole('button', { name: '所选资源操作', exact: true }).click()
+  await page.getByRole('menuitem', { name: label, exact: true }).click()
+}
+
 async function runCase(browser, base, definition) {
   const started = Date.now()
   const entry = { id: definition.id, status: 'FAIL', duration_ms: 0 }
@@ -742,7 +752,7 @@ async function runCase(browser, base, definition) {
       entry.failure_screenshot = await capture(evidencePage, definition.id + '-failure')
       entry.console = consoleErrors.slice(-8)
       entry.requests = state.requests.slice(-30)
-      entry.cards = await evidencePage.locator('.execution-card').allTextContents().catch(() => [])
+      entry.resourceChoices = await evidencePage.locator('.resource-chain-picker button').allTextContents().catch(() => [])
     }
   } finally {
     entry.console_errors = consoleErrors.filter(error => !definition.expectedConsoleError?.(error.message))
@@ -761,7 +771,10 @@ async function main() {
   let browser
   try {
     browser = await chromium.launch(browserOptions('T47_BROWSER_CHANNEL'))
-    for (const definition of definitions) await runCase(browser, base, definition)
+    const requested = (process.env.PUBLICATION_BROWSER_CASES || '').split(',').filter(Boolean)
+    assert.ok(requested.every(id => definitions.some(item => item.id === id)), 'unknown publication browser case')
+    const selected = requested.length ? definitions.filter(item => requested.includes(item.id)) : definitions
+    for (const definition of selected) await runCase(browser, base, definition)
   } finally {
     if (browser) await browser.close().catch(() => {})
     await new Promise(resolve => server.close(resolve))

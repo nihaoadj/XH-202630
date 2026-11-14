@@ -68,7 +68,7 @@ def test_lecture_teaching_rules_are_fingerprinted_and_control_data_is_request_sc
     profile = resolve_review_profile(resource_type="讲义", phase="content_v2")
     bundle = build_review_prompt(profile=profile)
     fragment = next(item for item in bundle.fragments if item.id == "resource.text")
-    assert fragment.version == "2.1"
+    assert fragment.version == "2.2"
     assert all(rule in bundle.system_text for rule in TEACHING_RULES.values())
     legacy = replace(profile, fragments=tuple(
         replace(item, version="2.0", text=item.text.removesuffix(LECTURE_REVIEW_GUIDANCE))

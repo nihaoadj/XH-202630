@@ -310,6 +310,15 @@ function userFixture() {
 }
 
 function domainsResponse() {
+  if (state.scenario === 'track-artwork') {
+    const domains = structuredClone(domainFixture)
+    const descriptions = ['围绕文档解析、切分、Embedding、检索、重排、生成和评测的完整 RAG 工程链路训练。', '学习提示词结构化设计、上下文控制和效果评测。', '学习工具调用、任务规划、多 Agent 协作和流程编排。', '学习模型调用、流式输出、函数调用和应用集成。']
+    domains.domains[0].tracks = ['RAG 工程链路培训', 'Prompt 工程与评测', 'Agent 应用开发', '大模型 API 应用开发'].map((name,index) => ({
+      track_id:'artwork-' + index, name, description:descriptions[index],
+      metadata:{ available:index === 0, document_count:index === 0 ? 62 : 0, skill_node_count:index === 0 ? 13 : 0 },
+    }))
+    return domains
+  }
   if (state.scenario === 'many-domains') {
     return {
       domains: Array.from({ length: 10 }, (_, index) => ({
@@ -482,6 +491,13 @@ async function apiResponse(url, method, request, response) {
       page: 1,
       page_size: 50,
     })
+  }
+  if (pathname.endsWith('/initial-node-candidates') && method === 'GET') {
+    return json(response, [
+      { node_id: 'node-data-quality', name: '多中心数据口径核对', knowledge_base_id: 'track-main', tier: 1,
+        metadata: state.scenario === 'initial-node-selection' ? { initial_diagnostic_passed: true } : {} },
+      { node_id: 'node-source-tracing', name: '数据来源追踪', knowledge_base_id: 'track-main', tier: 1 },
+    ])
   }
   if (pathname.startsWith('/api/profiles/') && method === 'GET') return json(response, state.createdProfile || profileFixture(pathname.split('/').at(-1)))
   if (pathname === '/api/generate/jobs') return json(response, { items: [] })
@@ -1595,6 +1611,146 @@ async function saveSummary() {
   writeFileSync(summaryPath, JSON.stringify(state.evidence, null, 2) + '\n', 'utf8')
 }
 
+test('onboarding track artwork preserves four-card layout', { timeout:30000 }, async () => {
+  const server = makeServer()
+  await new Promise(resolve => server.listen(0,'127.0.0.1',resolve))
+  let browser
+  try {
+    browser = await chromium.launch(browserOptions('ONBOARDING_BROWSER_CHANNEL'))
+    const page = await createPage(browser, 'http://127.0.0.1:' + server.address().port, 'track-artwork', { width:1651,height:871 })
+    await setSidebarState(page,true)
+    await page.locator('.domain-grid .choice-card:not(:disabled)').first().click()
+    await page.getByRole('button',{ name:'下一步',exact:true }).click()
+    await page.locator('.track-stage-card').waitFor()
+    await settle(page)
+    assert.equal(await page.locator('.track-artwork').count(),3)
+    assert.equal(await page.locator('.track-grid .domain-emblem').count(),1)
+    const footerRows = await page.locator('.track-grid .choice-card').evaluateAll(cards => {
+      const rows = new Map()
+      for (const card of cards) {
+        const key = Math.round(card.getBoundingClientRect().top)
+        const footer = card.querySelector('.choice-bottom').getBoundingClientRect()
+        rows.set(key,[...(rows.get(key) || []),footer.top])
+      }
+      return [...rows.values()]
+    })
+    assert.ok(footerRows.every(tops => Math.max(...tops) - Math.min(...tops) < 2),JSON.stringify(footerRows))
+    await recordScreenshot(page,'track-distinct-artwork-1651x871')
+  } finally {
+    await browser?.close()
+    await new Promise(resolve => server.close(resolve))
+  }
+})
+
+test('onboarding initial node selection submits the chosen candidate', { timeout: 45000 }, async () => {
+  const server = makeServer()
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
+  let browser
+  try {
+    browser = await chromium.launch(browserOptions('ONBOARDING_BROWSER_CHANNEL'))
+    const page = await createPage(browser, 'http://127.0.0.1:' + server.address().port, 'initial-node-selection', viewports[0])
+    await page.setViewportSize({ width:1651, height:871 })
+    await setSidebarState(page, true)
+    const domainLayout = await page.evaluate(() => {
+      const widths = [...document.querySelectorAll('.domain-stage-card .overview-chip')]
+        .map(node => node.getBoundingClientRect().width)
+      const clipped = [...document.querySelectorAll('.domain-grid .choice-card')].filter(node => {
+        const bounds = node.getBoundingClientRect()
+        const children = [...node.querySelectorAll('.choice-topline,.choice-title,.choice-description,.choice-bottom')]
+        return children.some(child => child.getBoundingClientRect().bottom > bounds.bottom)
+      })
+      return { equalColumns:Math.max(...widths) - Math.min(...widths) < 2, clipped:clipped.length }
+    })
+    assert.deepEqual(domainLayout, { equalColumns:true, clipped:0 })
+    await recordScreenshot(page, 'domain-redesign-1651x871')
+    await page.locator('.domain-grid .choice-card:not(:disabled)').first().click()
+    await page.getByRole('button', { name:'下一步', exact:true }).click()
+    await page.locator('.track-stage-card').waitFor()
+    await settle(page)
+    const trackLayout = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('.track-grid .choice-card')]
+      const widths = [...document.querySelectorAll('.track-stage-card .overview-chip')].map(node => node.getBoundingClientRect().width)
+      return {
+        equalColumns:Math.max(...widths) - Math.min(...widths) < 2,
+        clipped:cards.some(card => [...card.querySelectorAll('.choice-topline,.choice-title,.choice-description,.choice-bottom')].some(child => child.getBoundingClientRect().bottom > card.getBoundingClientRect().bottom)),
+      }
+    })
+    assert.deepEqual(trackLayout, { equalColumns:true, clipped:false })
+    await recordScreenshot(page, 'track-redesign-1651x871')
+    await page.getByRole('button', { name:'上一步', exact:true }).click()
+    await reachReview(page)
+    await page.setViewportSize({ width:1651, height:871 })
+    await settle(page)
+    const reviewBounds = await page.locator('.review-stage-card .el-card__body').evaluate(body => {
+      const bounds = body.getBoundingClientRect()
+      const children = [...body.querySelectorAll('.diagnosis-result-card, .resource-type-grid .el-checkbox, .claim-review-control, .review-actions')]
+      return {
+        scrolling: body.scrollHeight > body.clientHeight + 1,
+        clipped: children.filter(node => {
+          const rect = node.getBoundingClientRect()
+          return rect.top < bounds.top || rect.bottom > bounds.bottom
+        }).map(node => node.className),
+      }
+    })
+    assert.deepEqual(reviewBounds, { scrolling:false, clipped:[] })
+    const auditAlignment = await page.evaluate(() => {
+      const summary = document.querySelector('.diagnosis-result-card').getBoundingClientRect()
+      const audit = document.querySelector('.claim-review-row').getBoundingClientRect()
+      return Math.abs(summary.bottom - audit.bottom) < 2
+    })
+    assert.equal(auditAlignment, true, 'Review controls should align with the diagnosis card bottom')
+    await recordScreenshot(page, 'review-audit-bottom-aligned-1651x871')
+    for (const viewport of [
+      { width:1651, height:871 },
+      { width:1393, height:871 },
+      { width:1366, height:768 },
+      { width:1280, height:720 },
+      { width:1024, height:768 },
+      { width:375, height:667 },
+    ]) {
+      await page.setViewportSize(viewport)
+      for (const collapsed of [false, true]) {
+        await setSidebarState(page, collapsed)
+        for (const name of ['上一步', '生成并进入状态页']) {
+          const button = page.locator('.review-actions').getByRole('button', { name, exact:true })
+          await button.scrollIntoViewIfNeeded()
+          const visibility = await button.evaluate(node => {
+            const rect = node.getBoundingClientRect()
+            const blocked = []
+            for (const x of [rect.left + 3, (rect.left + rect.right) / 2, rect.right - 3]) {
+              for (const y of [rect.top + 3, (rect.top + rect.bottom) / 2, rect.bottom - 3]) {
+                const hit = document.elementFromPoint(x, y)
+                if (!hit || !node.contains(hit)) blocked.push({ x, y })
+              }
+            }
+            return {
+              inViewport:rect.top >= 0 && rect.left >= 0 && rect.bottom <= innerHeight && rect.right <= innerWidth,
+              blocked,
+            }
+          })
+          assert.deepEqual(visibility, { inViewport:true, blocked:[] },
+            JSON.stringify({ viewport, collapsed, button:name }))
+          await button.click({ trial:true })
+        }
+      }
+    }
+    await page.setViewportSize({ width:1651, height:871 })
+    await settle(page)
+    await page.locator('.resource-selection-form').getByText('多中心数据口径核对（诊断推荐 · 可选择）', { exact: true }).click()
+    await page.getByRole('option', { name: '数据来源追踪' }).click()
+    await page.getByRole('button', { name: '生成并进入状态页' }).click()
+    await page.waitForURL(url => url.pathname === '/generate')
+    const submitted = state.writes.find(item => item.path === '/api/generate/jobs')
+    assert.deepEqual(submitted.body.target_skill_nodes, ['node-source-tracing'])
+  } finally {
+    await browser?.close()
+    await new Promise(resolve => server.close(resolve))
+  }
+})
+
 test('onboarding five-stage UI and API contract use an isolated browser fixture', { timeout: 240000 }, async () => {
   const server = makeServer()
   await new Promise((resolve, reject) => {
@@ -1782,7 +1938,7 @@ test('onboarding five-stage UI and API contract use an isolated browser fixture'
     await page.getByRole('button', { name: '提交诊断' }).click()
     await page.locator('.review-stage-card').waitFor()
     await assertStageFocus(page, '.review-stage-card', 'diagnosis submit to review')
-    await page.getByText('多中心数据口径核对', { exact: false }).waitFor()
+    await page.locator('.diagnosis-point-recommend').getByText('多中心数据口径核对', { exact: true }).waitFor()
     await assertLayout(page, viewports[0], 'review stage desktop')
     await assertContainedFormScroll(page, '.review-stage-card', 'desktop resource review contained scroll')
     await recordScreenshot(page, '05-review-desktop-1393x871')
@@ -1797,7 +1953,6 @@ test('onboarding five-stage UI and API contract use an isolated browser fixture'
     await recordScreenshot(page, '05-review-mobile-375x667-top')
     await assertReachableContent(page, 'narrow review reaches primary action')
     await recordScreenshot(page, '05-review-mobile-375x667-bottom')
-    await page.locator('.resource-selection-form textarea').fill('请优先解释数据质量判断依据，并提供可复核的多中心案例。  ')
     const payloadBeforeGeneration = state.writes.length
     const generateButton = page.getByRole('button', { name: '生成并进入状态页' })
     await submitWithLoading(page, generateButton, '/api/generate/jobs', 'generation submit with Claim disabled')
@@ -1806,7 +1961,7 @@ test('onboarding five-stage UI and API contract use an isolated browser fixture'
     assert.equal(primaryWrites.filter((item) => item.path === '/api/generate/jobs').length, 1, 'Claim disabled should submit one generation request for all selected types')
     assert.deepEqual(primaryWrites[0].body.resource_types, resourceTypes)
     assert.equal(primaryWrites[0].body.include_claim_check, false)
-    assert.equal(primaryWrites[0].body.constraints.supplemental_requirements, '请优先解释数据质量判断依据，并提供可复核的多中心案例。')
+    assert.equal(primaryWrites[0].body.constraints.supplemental_requirements, '')
     assert.equal(primaryWrites[0].body.learner_id, 'onboarding-fixture-user__track-main')
     assert.equal(primaryWrites[0].body.knowledge_base_id, 'track-main')
     assert.match(primaryWrites[0].body.topic, /临床数据分析与质量控制/)

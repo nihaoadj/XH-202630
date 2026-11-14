@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Literal
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_serializer, model_validator
 
 from app.models.knowledge.knowledge import EvidenceAllocation, RESOURCE_AWARE_STRATEGY
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile, LearningResource
@@ -51,6 +51,19 @@ class RetrySupplementContext(BaseModel):
                 raise ValueError("retry supplement snapshot mismatch")
 
 
+def retry_source_snapshot(resource):
+    """Private retry snapshots retain canonical bodies needed by reviewers."""
+    if resource is None:
+        return None
+    value = resource.model_dump(mode="json")
+    for field in ("assessment_payload", "review_practice_payload", "practice_guide_payload", "correction_package_payload"):
+        if getattr(resource, field, None) is not None:
+            value[field] = getattr(resource, field)
+            if getattr(resource, field + "_hash", None) is not None:
+                value[field + "_hash"] = getattr(resource, field + "_hash")
+    return value
+
+
 class ResourceRetryContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -70,8 +83,31 @@ class ResourceRetryContext(BaseModel):
     retrieval_config_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     source_resource: LearningResource | None = None
     revision_feedback: dict[str, Any] = Field(default_factory=dict)
+    correction_package_snapshot: dict | None = None
     supplement_context: RetrySupplementContext | None = None
+    input_capacity: int | None = Field(default=None, ge=1024, le=262144)
     context_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_serializer(mode="wrap")
+    def legacy_dump(self, handler):
+        data = handler(self)
+        if self.correction_package_snapshot is None:
+            data.pop("correction_package_snapshot", None)
+        if self.input_capacity is None:
+            data.pop("input_capacity", None)
+        return data
+
+    @field_serializer("request", when_used="json")
+    def serialize_request(self, value):
+        payload = value.model_dump(mode="json")
+        for key in ("claim_workflow_version", "claim_post_retrieval_max_iterations", "claim_gap_revision_threshold"):
+            if key not in value.model_fields_set:
+                payload.pop(key, None)
+        return payload
+
+    @field_serializer("source_resource", when_used="json")
+    def serialize_source_resource(self, value):
+        return retry_source_snapshot(value)
 
     @classmethod
     def from_snapshot(cls, value: dict) -> "ResourceRetryContext":
@@ -81,6 +117,11 @@ class ResourceRetryContext(BaseModel):
 
     @model_validator(mode="after")
     def validate_binding(self):
+        for field, historical_default in (("max_iterations", 2), ("claim_max_iterations", 1)):
+            if field not in self.request.model_fields_set:
+                object.__setattr__(self.request, field, historical_default)
+        if "claim_workflow_version" not in self.request.model_fields_set:
+            object.__setattr__(self.request, "claim_workflow_version", "legacy_v1")
         if canonical_hash(self.model_dump(mode="json", exclude={"context_hash"})) != self.context_hash:
             raise ValueError("resource retry context hash mismatch")
         if (self.request.learner_id != self.learner.learner_id

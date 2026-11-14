@@ -254,7 +254,7 @@ class Container(containers.DeclarativeContainer):
         ),
     )
 
-    profile_service = providers.Singleton(ProfileService, repo=learner_repository)
+    profile_service = providers.Singleton(ProfileService, repo=learner_repository, round_repository=round_repository)
     user_service = providers.Singleton(UserService, repo=user_repository)
     auth_service = providers.Singleton(AuthService, repo=user_repository)
     generation_service = providers.Singleton(
@@ -356,6 +356,7 @@ class Container(containers.DeclarativeContainer):
         profile_repo=learner_repository,
         quality_service=resource_quality_query_service,
         round_service=round_learning_service,
+        supplement_repo=supplement_repository,
     )
     tutor_context_builder = providers.Singleton(
         TutorContextBuilder,

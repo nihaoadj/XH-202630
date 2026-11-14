@@ -6,13 +6,14 @@ import pytest
 
 from app.core.courseware.learning_design import build_learning_design
 from app.core.courseware.renderer import render_courseware
+from app.core.courseware.content_review.adapters.practice_guide import PracticeGuideAdapter
 from app.agents.resource_workflows.interactive_courseware.planner_agent import build_courseware_spec
 from app.agents.resource_workflows.interactive_courseware.validators import (
     validate_scene_shape,
     validate_storyboard_bindings,
 )
 from app.models.learning_documents.schemas import LearningResource
-from app.models.shared.agent_contracts import PracticeGuidePackageV3
+from app.models.shared.agent_contracts import validate_practice_guide_package
 from app.services.courseware.composition import compose_scenes
 from app.services.courseware.source import (
     CoursewareAdmissionError,
@@ -24,37 +25,41 @@ from backend.tests.fakes.llm import ScriptedLLMGateway
 
 
 def _payload_hash(payload):
-    canonical = PracticeGuidePackageV3.model_validate(payload).model_dump(mode="json")
+    canonical = validate_practice_guide_package(payload).model_dump(mode="json")
     return hashlib.sha256(
         json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
 
 
-def test_structured_practice_payload_directly_drives_courseware_step_pages():
+@pytest.mark.parametrize("package_version", ["3.0", "4.0", "5.0", "6.0"])
+def test_structured_practice_payload_directly_drives_courseware_step_pages(package_version):
     payload = {
-        "schema_version": "3.0",
+        "schema_version": package_version,
         "title": "结构化实操指南",
         "preparation": {"phase_id": "prepare", "goal": "准备环境", "items": ["创建环境"], "evidence_ids": ["ev-1"]},
         "practice": {"phase_id": "practice", "goal": "执行并验证", "steps": [
             {"step_id": "step-1", "title": "准备环境", "instruction_text": "创建可用环境。", "code_blocks": [{"language": "bash", "code": "tool init", "purpose": "初始化环境", "evidence_ids": ["ev-1"]}], "verification": "环境可用", "evidence_ids": ["ev-1"]},
-            {"step_id": "step-2", "title": "执行验证", "instruction_text": "运行检查确认结果。", "code_blocks": [], "verification": "结果正确", "evidence_ids": ["ev-1"]},
+            {"step_id": "step-2", "title": "执行验证", "instruction_text": "运行检查确认结果。", "code_blocks": [{"language": "bash", "code": "tool check", "purpose": "验证输出", "evidence_ids": ["ev-1"]}] if package_version == "6.0" else [], "verification": "结果正确", "evidence_ids": ["ev-1"]},
         ]},
         "verification": {"phase_id": "verify", "goal": "确认完成", "checklist": ["完成验证"], "evidence_ids": ["ev-1"]},
         "reflection": {"phase_id": "reflect", "goal": "完成复盘", "summary": "根据验证结果完成复盘。", "evidence_ids": ["ev-1"]},
     }
+    if package_version == "5.0":
+        payload["preparation"]["materials"] = [{"name": "练习短文", "content": "这是完整的练习材料。"}]
     payload["payload_hash"] = _payload_hash(payload)
     source = LearningResource(resource_id="guide-json", resource_type="实操指南", difficulty="初级", content_text="# 旧 Markdown", knowledge_points=["node"], source_refs=[], practice_guide_payload=payload, practice_guide_payload_hash=payload["payload_hash"])
 
     snapshot = _snapshot(source)
+    assert PracticeGuideAdapter().validate_source(snapshot)["schema_version"] == package_version
     design = build_learning_design([snapshot])
     scenes, warnings = compose_scenes([snapshot], learning_design=design)
 
     assert [block["practice_step_id"] for block in snapshot["blocks"] if block.get("practice_step_id")] == ["step-1", "step-2"]
     practice_scenes = [scene for scene in design.storyboard.scenes if scene.kind == "practice"]
-    assert [scene.practice_variant for scene in practice_scenes] == ["prepare", "code", "guided", "verify", "reflect"]
+    assert [scene.practice_variant for scene in practice_scenes] == ["prepare", "code", "code" if package_version == "6.0" else "guided", "verify", "reflect"]
     assert warnings == []
     composed_practice_scenes = [scene for scene in scenes if scene["kind"] == "practice"]
-    assert all(scene["practice_json_schema_version"] == "3.0" for scene in composed_practice_scenes)
+    assert all(scene["practice_json_schema_version"] == package_version for scene in composed_practice_scenes)
     assert all(
         block["source_json_path"] and block["evidence_json_path"]
         for scene in composed_practice_scenes
@@ -73,7 +78,10 @@ def test_structured_practice_payload_directly_drives_courseware_step_pages():
     verify_scene = next(scene for scene in composed_practice_scenes if scene["practice_variant"] == "verify")
     assert [block["presentation_role"] for block in prepare_scene["component_blocks"]] == [
         "practice_phase_goal", "practice_phase_items",
+        *(["practice_phase_items"] if package_version == "5.0" else []),
     ]
+    if package_version == "5.0":
+        assert any("练习短文：这是完整的练习材料。" in block for block in prepare_scene["blocks"])
     assert [block["presentation_role"] for block in verify_scene["component_blocks"]] == [
         "practice_phase_completion", "practice_phase_items",
     ]
@@ -107,6 +115,8 @@ def test_structured_practice_payload_directly_drives_courseware_step_pages():
     assert 'VERIFICATION · CHECK' in rendered_phases
     assert 'PREPARATION ITEMS' in rendered_phases
     assert 'PHASE GOAL' in rendered_phases
+    if package_version == "5.0":
+        assert "练习短文：这是完整的练习材料。" in rendered_phases
     rendered_reflection = render_courseware({"title": "结构化实操", "scenes": [reflection_scene]}).decode("utf-8")
     assert 'data-practice-json-reflection="true"' in rendered_reflection
     assert 'data-practice-reflection-goal' in rendered_reflection

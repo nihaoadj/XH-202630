@@ -1,11 +1,10 @@
-"""实操指南 (practice guide) adapter: full V3 payload + rendered Markdown."""
+"""实操指南 adapter: full versioned payload + rendered Markdown."""
 
 from __future__ import annotations
 
 import copy
 
 from app.agents.resource_agents.practice import render_practice_guide_markdown
-from app.models.shared.agent_contracts import PracticeGuidePackageV3
 from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.adapters.base import (
     LocationIndex,
     ResourceMaterial,
@@ -20,7 +19,7 @@ from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.
 PRACTICE_RULE_IDS = ("self_contained", "target_coverage", "difficulty", "organization", "procedure")
 
 PHASE_FIELDS = {
-    "prepare": ("goal", "items", "evidence_ids"),
+    "prepare": ("goal", "items", "materials", "evidence_ids"),
     "practice": ("goal", "steps"),
     "verify": ("goal", "checklist", "evidence_ids"),
     "reflect": ("goal", "summary", "evidence_ids"),
@@ -43,6 +42,8 @@ class PracticeAdapter:
         package = resource.practice_guide_payload or {}
         steps = package.get("practice", {}).get("steps", [])
         unit_fields = {phase: frozenset(fields) for phase, fields in PHASE_FIELDS.items()}
+        if package.get("schema_version") != "5.0":
+            unit_fields["prepare"] = frozenset(field for field in PHASE_FIELDS["prepare"] if field != "materials")
         for step in steps:
             unit_fields[step.get("step_id")] = frozenset(STEP_FIELDS)
         return LocationIndex(

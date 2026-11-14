@@ -177,6 +177,14 @@ def practice_projection(snapshot, design, candidate, document):
             values = {"title": label, "lead": phase["goal"], "blocks": items if subject != "reflection" else [phase["summary"]], "conclusion": f"完成{label}后，再进入下一阶段。", "steps": items}
             blocks = [{"text": phase["goal"], "label": {"preparation": "阶段目标", "verification": "验证目标", "reflection": "复盘目标"}[subject]},
                       {"text": "准备项目" if subject == "preparation" else "最终检查项", "steps": items} if subject != "reflection" else {"text": phase["summary"], "label": "复盘小结"}]
+            if subject == "preparation" and p["schema_version"] == "5.0":
+                materials = [f"{item['name']}：{item['content']}" for item in phase.get("materials") or []]
+                if materials:
+                    values["blocks"] = [*items, *materials]
+                    blocks.append({"text": "本次使用的材料", "steps": materials,
+                                   "source_json_path": "preparation.materials",
+                                   "evidence_json_path": "preparation.evidence_ids",
+                                   "presentation_role": "practice_phase_items"})
         elif scene.get("page_role") == "cover":
             owner = "cover"; cover = candidate.get("practice_cover")
             if cover:
@@ -212,6 +220,8 @@ def practice_projection(snapshot, design, candidate, document):
         expected_components = (["key_point", *["code_block"]*len(steps[owner]["code_blocks"]), "callout"] if owner in steps else
             ["key_point", "steps" if owner != "reflection" else "callout"] if owner != "cover" else
             ["key_point", "callout"] if candidate.get("practice_cover") else ["callout", "key_point", "key_point"])
+        if owner == "preparation" and p["schema_version"] == "5.0" and p["preparation"].get("materials"):
+            expected_components.append("steps")
         if [b["component"] for b in components] != expected_components:
             raise ContentReviewBlocked("practice component binding changed")
         for j, block in enumerate(blocks):

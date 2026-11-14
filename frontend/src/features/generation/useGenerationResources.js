@@ -7,6 +7,7 @@ import { ref } from 'vue'
 export function useGenerationResources({ getContext, isMounted, listNodes, listRunResources, listLibraryResources, messages }) {
   const resources = ref([])
   const nodeTiers = ref({})
+  const nodeNames = ref({})
   const loadingResources = ref(false)
   const resourcesLoaded = ref(false)
   const selectedResourceId = ref('')
@@ -14,7 +15,10 @@ export function useGenerationResources({ getContext, isMounted, listNodes, listR
   let nodeTiersRequestVersion = 0
 
   function invalidateResources() { ++resourcesRequestVersion }
-  function invalidateNodeTiers() { ++nodeTiersRequestVersion }
+  function invalidateNodeTiers() {
+    ++nodeTiersRequestVersion
+    nodeNames.value = {}
+  }
 
   function resourceTierLabel(resource) {
     const tiers = [...new Set((resource?.knowledge_points || [])
@@ -30,17 +34,21 @@ export function useGenerationResources({ getContext, isMounted, listNodes, listR
       && learnerId === getContext().learnerId && knowledgeBaseId === getContext().knowledgeBaseId
     if (!knowledgeBaseId) {
       nodeTiers.value = {}
+      nodeNames.value = {}
       return
     }
     try {
       const response = await listNodes(knowledgeBaseId)
       if (!isCurrent()) return
-      nodeTiers.value = Object.fromEntries((response.data?.nodes || response.data || [])
+      const nodes = response.data?.nodes || response.data || []
+      nodeNames.value = Object.fromEntries(nodes.map(node => [node.node_id, node.name]))
+      nodeTiers.value = Object.fromEntries(nodes
         .map(node => [node.node_id, node.tier])
         .filter(([, tier]) => Number.isInteger(tier)))
     } catch (error) {
       if (!isCurrent()) return
       nodeTiers.value = {}
+      nodeNames.value = {}
       console.warn('学习节点阶级加载失败，标题将隐藏阶级信息', error)
     }
   }
@@ -143,7 +151,7 @@ export function useGenerationResources({ getContext, isMounted, listNodes, listR
   }
 
   return {
-    resources, nodeTiers, loadingResources, resourcesLoaded, selectedResourceId,
+    resources, nodeTiers, nodeNames, loadingResources, resourcesLoaded, selectedResourceId,
     resourceTierLabel, loadNodeTiers, loadResourcesForSelectedJob, loadCoursewareSourceResources,
     invalidateResources, invalidateNodeTiers,
   }

@@ -52,7 +52,7 @@ try {
   await assert.doesNotReject(() => page.getByRole('heading', { name: '学习报告', level: 2 }).waitFor())
   // Current ReportView displays the node mastery chart and credibility within the difficulty curve.
   assert.equal(await page.getByRole('heading', { name: '学习节点掌握图' }).count(), 1)
-  assert.equal(await page.getByRole('heading', { name: '资源难度匹配曲线' }).count(), 1)
+  assert.equal(await page.getByRole('heading', { name: '资源适配与审核' }).count(), 1)
   await page.getByLabel('学习者准备度、资源难度与资源可信度对比曲线').waitFor()
   assert.equal(await page.getByLabel('学习者准备度、资源难度与资源可信度对比曲线').count(), 1)
   await assert.doesNotReject(() => page.getByText('平均可信度 80 / 100 · 已量化 1 · Claim 通过 0 · 受 80 分上限约束 1').waitFor())

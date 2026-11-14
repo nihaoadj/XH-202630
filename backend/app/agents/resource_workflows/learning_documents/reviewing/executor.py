@@ -6,7 +6,20 @@ from .payloads import estimate_review_input
 
 
 class ReviewInputBudgetError(ValueError):
-    pass
+    def __init__(self, message, *, estimated_input_tokens=None, reserved_output_tokens=None, context_limit=None):
+        super().__init__(message)
+        self.estimated_input_tokens = estimated_input_tokens
+        self.reserved_output_tokens = reserved_output_tokens
+        self.context_limit = context_limit
+
+    def safe_detail(self):
+        import json
+        values = {"estimated_input_tokens": self.estimated_input_tokens,
+                  "reserved_output_tokens": self.reserved_output_tokens,
+                  "context_limit": self.context_limit}
+        if all(value is not None for value in values.values()):
+            values["exceeded_tokens"] = max(0, self.estimated_input_tokens + self.reserved_output_tokens - self.context_limit)
+        return json.dumps(values, sort_keys=True)
 
 
 def invoke_review(*, request, llm_gateway, call_context, collector, review_id=None,

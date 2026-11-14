@@ -16,6 +16,7 @@ from backend.scripts.report_benchmark import LEARNER, NOW, make_service, seed_da
 from app.api.dependencies import get_current_user
 from app.api.reports import report as routes
 from app.config import get_settings
+from app.db.claim.supplement import SQLClaimSupplementRepository
 from app.db.feedback.memory import MemoryFeedbackRepository
 from app.db.generation.memory import MemoryGenerationJobRepository
 from app.db.learners.sql_repository import SQLLearnerRepository
@@ -38,6 +39,9 @@ def reports(tmp_path):
     seed_database(engine, 10)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     service = make_service(factory)
+    service.supplement_repo = SQLClaimSupplementRepository(
+        claim_repository=service.claim_repo, audit_repository=service.audit_repo, session_factory=factory,
+    )
     service.profile_repo = SQLLearnerRepository(factory)
     service._clock = lambda: NOW
     profiles = ProfileService(service.profile_repo)

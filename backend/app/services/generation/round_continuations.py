@@ -90,10 +90,9 @@ def _create_bound_job(factory, service, learner, binding, request, run_id, submi
             counters = dict(stage_node["budget_counters"])
             recovery = dict(counters.get("resource_recoveries", {}))
             for resource in request.resource_types:
-                count = recovery.get(resource, 0)
-                if count >= stage["budget_snapshot"]["H"]:
-                    raise _invalid(ErrorCode.ROUND_CORRECTION_BUDGET_EXHAUSTED, 409)
-                recovery[resource] = count + 1
+                # Manual retries are user initiated; H bounds workflow work,
+                # while these counters record history rather than deny retries.
+                recovery[resource] = recovery.get(resource, 0) + 1
             counters["resource_recoveries"] = recovery
             uow.rounds.compare_and_set("learning_round_stage_nodes", stage_node["stage_node_id"],
                                       stage_node["row_version"], {"budget_counters": counters,

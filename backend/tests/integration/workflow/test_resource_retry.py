@@ -159,8 +159,9 @@ def fixture_state(resource_type="讲义", *, e1=False):
                     gaps=[], binding_hash=retrieval_config_hash(bindings))
         data["allocation_hash"] = retrieval_config_hash(data)
         allocation = EvidenceAllocation.model_validate(data)
+    plan = {"correction_focus_snapshot": {"ordered_target_nodes": [{"skill_node_id": "node"}]}} if resource_type == "个性化纠错训练包" else {}
     spec = build_resource_specs(run_id="old-run", resource_types=[resource_type], topic="冻结主题", difficulty="初级",
-                                learning_plan={}, evidence=evidence, target_skill_nodes=["node"],
+                                learning_plan=plan, evidence=evidence, target_skill_nodes=["node"],
                                 node_evidence_map={"node": [item.evidence_id for item in evidence]})[0]
     if allocation:
         ids = allocation.available_ids(resource_type)
@@ -427,3 +428,116 @@ def test_sql_generation_service_persists_retry_evidence_claims_and_lineage(tmp_p
         _exercise_graph(monkeypatch, "讲义", True, True, invoke=invoke, supplement=supplement)
     finally:
         engine.dispose()
+
+
+@pytest.mark.parametrize("action,ordinary,claim,allowed", [
+    ("revise", 0, 0, False), ("generate", 0, 0, False),
+    ("recheck", 0, 0, True), ("recheck", 1, 0, False), ("recheck", 0, 1, False),
+])
+def test_manual_retry_ordinary_and_claim_share_one_body_revision(action, ordinary, claim, allowed):
+    state = {"resource_retry_context": {"request": {"constraints": {
+        "resource_retry_single_pass": True, "resource_retry_action": action}}},
+        "revision_count": ordinary, "claim_revision_count": claim,
+        "max_iterations": 3, "claim_max_iterations": 3,
+        "review_result": {"decision": "revise", "revision_instructions": [
+            {"target_claim_ids": ["claim"], "target_resource_type": "讲义"}]}}
+    assert workflow._manual_revision_available(state) is allowed
+    assert (workflow.route_after_review(state) == "prepare_revision") is allowed
+    assert (workflow.route_after_claim_decide(state) == "prepare_claim_revision") is allowed
+
+
+def test_recheck_keeps_body_and_discards_prior_review_without_generator_call():
+    state = fixture_state()
+    context = state["resource_retry_context"]
+    context["request"] = {"constraints": {"resource_retry_single_pass": True, "resource_retry_action": "recheck"}}
+    payload = {"evidence_ids": ["old-0"], "text": "old-0", "nested": {"source_evidence_ids": ["old-1"]}}
+    payload["payload_hash"] = canonical_hash(payload)
+    context["source_resource"]["practice_guide_payload"] = payload
+    context["source_resource"]["practice_guide_payload_hash"] = payload["payload_hash"]
+    context["source_resource"].update(review_id="old-review", review_status="approved",
+        claim_metric_status="complete", claim_factual_pass_rate=1.0,
+        claim_publish_decision_pending=True, claim_publish_decision="pending")
+    context["context_hash"] = canonical_hash({k: v for k, v in context.items() if k != "context_hash"})
+    state.update(reuse_resource_context_node(state))
+    result = generator_agent.generate_node(state, llm_gateway=ScriptedLLMGateway([]))
+    resource = result["generated_resources"][0]
+    assert resource.practice_guide_payload["text"] == "old-0"
+    assert resource.practice_guide_payload["evidence_ids"] == [state["retrieved_evidence"][0].evidence_id]
+    assert resource.practice_guide_payload["nested"]["source_evidence_ids"] == [state["retrieved_evidence"][1].evidence_id]
+    assert resource.practice_guide_payload_hash != payload["payload_hash"]
+    assert payload["evidence_ids"] == ["old-0"]
+    assert resource.content_text == context["source_resource"]["content_text"]
+    assert resource.version == 4 and resource.parent_resource_id == "old-resource"
+    assert resource.run_id == "new-run" and resource.resource_id != "old-resource"
+    assert resource.review_id is None and resource.review_status == "pending_review"
+    assert resource.claim_metric_status is None and resource.claim_factual_pass_rate is None
+    assert not resource.claim_publish_decision_pending and resource.claim_publish_decision is None
+    assert resource.publication_status == "unpublished"
+    assert "保留正文" in result["trace"][0]["action"]
+
+
+@pytest.mark.parametrize("claim", [False, True])
+def test_single_pass_retry_uses_real_graph_and_preserves_claim_gate(monkeypatch, claim):
+    def invoke(state, gateway):
+        context = state["resource_retry_context"]
+        context["request"] = {"constraints": {"resource_retry_single_pass": True, "resource_retry_action": "revise"}}
+        context["context_hash"] = canonical_hash({k: v for k, v in context.items() if k != "context_hash"})
+        state["max_iterations"] = state["claim_max_iterations"] = 0
+        return workflow.build_workflow(llm_gateway=gateway).invoke(state)
+    _exercise_graph(monkeypatch, "讲义", False, claim, invoke=invoke)
+
+
+def test_recheck_real_graph_reaudits_adopted_body_before_publication(monkeypatch):
+    from app.models.shared.agent_contracts import build_trace_item
+    from app.models.shared.workflow import StepStatus
+    state = fixture_state()
+    state["include_claim_check"] = False
+    context = state["resource_retry_context"]
+    context["request"] = {"constraints": {"resource_retry_single_pass": True, "resource_retry_action": "recheck"}}
+    context["context_hash"] = canonical_hash({k: v for k, v in context.items() if k != "context_hash"})
+    seen = []
+    def review(current):
+        resource = current["generated_resources"][0]
+        assert resource.content_text == "旧版正文" and resource.review_id is None
+        assert resource.publication_status == "unpublished"
+        seen.append(resource.resource_id)
+        return {"review_result": {"decision": "approve", "passed": True, "issues": [], "revision_instructions": [],
+            "review_ids": {resource.resource_id: "fresh-review"}},
+            "trace": [build_trace_item(current, agent_name="reviewer", action="审核", status=StepStatus.SUCCESS,
+                input_summary="重新审核保留正文", output_summary="通过", decision_reason="测试审核")]}
+    monkeypatch.setattr(workflow, "review_node", review)
+    result = workflow.build_workflow(llm_gateway=ScriptedLLMGateway([])).invoke(state)
+    resource = result["generated_resources"][0]
+    assert seen == [resource.resource_id]
+    assert resource.content_text == "旧版正文" and resource.publication_status == "published"
+    assert resource.parent_resource_id == "old-resource" and resource.version == 4
+
+
+@pytest.mark.parametrize("resource_type", ["讲义", "个性化纠错训练包"])
+@pytest.mark.parametrize("decision", ["approve", "human_review"])
+def test_recheck_enters_actual_reviewer_and_obeys_publication_gate(resource_type, decision):
+    from app.core.retrieval.evidence import source_refs_from_evidence
+    from app.models.reviews.evidence_lineage import evidence_from_snapshot
+    state = fixture_state(resource_type)
+    state["include_claim_check"] = False
+    context = state["resource_retry_context"]
+    source_evidence = [evidence_from_snapshot(PersistedEvidenceSnapshot.model_validate_json(json.dumps(item)))
+                       for item in context["evidence"]]
+    context["source_resource"]["source_refs"] = [ref.model_dump(mode="json") for ref in source_refs_from_evidence(source_evidence)]
+    context["request"] = {"constraints": {"resource_retry_single_pass": True, "resource_retry_action": "recheck"}}
+    context["context_hash"] = canonical_hash({k: v for k, v in context.items() if k != "context_hash"})
+    gateway = ScriptedLLMGateway([{
+        "decision": decision, "hallucination_score": 0.0, "issues": [],
+        "difficulty_match": True, "coverage_rate": 1.0,
+        "suggestion": "离线审核", "revision_instructions": [],
+    }])
+    result = workflow.build_workflow(llm_gateway=gateway).invoke(state)
+    resource = result["generated_resources"][0]
+    assert len(gateway.calls) == 1  # Only review: never regenerate the body.
+    prompt = "\n".join(str(message.content) for message in gateway.calls[0]["messages"])
+    assert "旧版正文" in prompt
+    assert resource.content_text == "旧版正文"
+    assert resource.review_id is not None
+    assert resource.publication_status == ("published" if decision == "approve" else "unpublished")
+    assert result["review_result"]["review_ids"].get(resource.resource_id) == resource.review_id
+    assert all(item.get("error_code") != "WORKFLOW_CONTRACT_INVALID" for item in result["trace"])

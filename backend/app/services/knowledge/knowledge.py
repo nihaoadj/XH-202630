@@ -139,6 +139,10 @@ class KnowledgeService:
             if level and raw.get("level") != level:
                 continue
             payload = dict(raw)
+            payload["prerequisites"] = [
+                node_ids_by_name.get(prerequisite, prerequisite)
+                for prerequisite in raw.get("prerequisites", [])
+            ]
             payload["knowledge_base_id"] = manifest["knowledge_base_id"]
             payload["children"] = children.get(raw["node_id"], [])
             nodes.append(SkillNode(**payload))

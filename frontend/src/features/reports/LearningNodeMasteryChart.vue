@@ -6,7 +6,7 @@
     </div>
     <el-empty v-if="!nodes.length" description="当前方向还没有可展示的学习节点" :image-size="56" />
     <template v-else>
-      <v-chart class="chart" :option="option" autoresize aria-label="学习节点掌握图" />
+      <v-chart :init-options="initOptions" class="chart" :option="option" autoresize aria-label="学习节点掌握图" />
       <div class="legend" aria-label="学习节点状态图例">
         <span v-for="item in legend" :key="item.status"><i :style="{ background: item.color }" />{{ item.label }}</span>
       </div>
@@ -18,13 +18,14 @@
 <script setup>
 import { computed } from 'vue'
 import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
+import { SVGRenderer } from 'echarts/renderers'
 import { BarChart } from 'echarts/charts'
 import { DataZoomComponent, GridComponent, TooltipComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
+import VChart from './ReportEChart.vue'
 
-use([CanvasRenderer, BarChart, DataZoomComponent, GridComponent, TooltipComponent])
+use([SVGRenderer, BarChart, DataZoomComponent, GridComponent, TooltipComponent])
 
+const initOptions = Object.freeze({ renderer: 'svg' })
 const props = defineProps({ data: { type: Object, default: () => ({}) } })
 const nodes = computed(() => props.data?.nodes || [])
 const summary = computed(() => props.data?.summary || {})
@@ -37,8 +38,8 @@ const colors = Object.freeze({
 })
 const labels = Object.freeze({
   weak: '已验证薄弱',
-  learning: '学习中',
-  mastered: '已确认掌握',
+  learning: '部分掌握',
+  mastered: '掌握达标',
   self_reported: '自评待验证',
   unassessed: '未测量',
 })

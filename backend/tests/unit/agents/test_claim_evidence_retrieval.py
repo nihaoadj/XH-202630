@@ -348,6 +348,25 @@ def test_claim_window_reports_context_gap_for_an_oversize_chunk_without_terms():
     assert windows == []
 
 
+def test_claim_window_trims_boundary_whitespace_for_persisted_snapshot():
+    from app.core.retrieval.knowledge_ids import normalize_text, sha256_hex
+    from app.models.shared.persistence import PersistedEvidenceSnapshot
+
+    text = "第一句" + "背景" * 40 + "。\n\n  第二句描述事实。\n\n第三句" + "背景" * 40 + "。"
+    windows = build_excerpt_windows(text, ["第二句描述事实"], excerpt_chars=30, structural_cap=40)
+
+    assert windows
+    assert windows[0].text == "第二句描述事实。"
+    for window in windows:
+        assert normalize_text(window.text) == window.text
+        assert sha256_hex(normalize_text(window.text)) == window.excerpt_hash
+        assert normalize_text(text)[window.start:window.end] == window.text
+        item = evidence("ev-window", window.text).model_copy(update={"excerpt_hash": window.excerpt_hash})
+        assert PersistedEvidenceSnapshot.from_evidence(
+            item, run_id="run-1", retrieval_step_id="supplement"
+        ).excerpt_hash == window.excerpt_hash
+
+
 def test_supplement_deadline_is_the_tighter_of_wall_and_workflow_reserve():
     policy_value = policy()
     workflow = NOW + timedelta(seconds=400)

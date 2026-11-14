@@ -50,8 +50,18 @@ def profile_fragments(resource_type: str):
     return resource_profile_fragments(resource_type)
 
 
-def output_schema(resource_type: str, *, recheck: bool):
+def output_schema(resource_type: str, *, recheck: bool, input_contract: str | None = None):
     adapter_for(resource_type)  # validate the type first
+    if input_contract == "single_representation_v4":
+        from app.models.reviews.resource_review_model_output import MarkdownModelReviewV4, ModelReviewV4
+
+        return MarkdownModelReviewV4 if resource_type in {"讲义", "案例分析"} else ModelReviewV4
+    if input_contract == "single_representation_v3" and resource_type in {"讲义", "案例分析"}:
+        from app.models.reviews.resource_review_model_output import (
+            MarkdownModelReviewInitialV3,
+            MarkdownModelReviewRecheckV3,
+        )
+        return MarkdownModelReviewRecheckV3 if recheck else MarkdownModelReviewInitialV3
     return ResourceReviewRecheckV1 if recheck else ResourceReviewInitialV1
 
 

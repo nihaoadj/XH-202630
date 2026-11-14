@@ -86,7 +86,10 @@ class LearnerProfile(BaseModel):
     knowledge_base_id: Optional[str] = Field(default=None, description="当前知识库 ID")
     theory_scores: Dict[str, float] = Field(default_factory=dict, description="理论测试得分")
     knowledge_states: Dict[str, KnowledgeState] = Field(default_factory=dict, description="知识点掌握状态")
-    skill_level: str = Field(default="初级", description="技能水平")
+    skill_level: str = Field(default="初级", description="初始诊断技能水平，保留历史语义")
+    initial_skill_level: Optional[str] = Field(default=None, description="只读：初始诊断评级")
+    current_skill_level: Optional[str] = Field(default=None, description="只读：最近确认轮次主节点对应的当前评级")
+    current_skill_node_id: Optional[str] = Field(default=None, description="只读：当前评级对应的主节点 ID")
     weak_points: List[str] = Field(default_factory=list, description="知识盲区")
     strong_points: List[str] = Field(default_factory=list, description="优势领域")
     learning_goal: str = Field(..., description="学习目标")
@@ -239,12 +242,23 @@ class GenerateRequest(BaseModel):
         default=False,
         description="事实 Claim 首次缺证时补检知识库并重判；需同时开启普通审核与 Claim 审核",
     )
-    # Initial generation plus two revisions means at most three visible attempts.
-    max_iterations: int = Field(default=2, ge=0, le=3, description="最大业务返工次数")
+    # New tasks allow three ordinary revisions after the initial generation.
+    max_iterations: int = Field(default=3, ge=0, le=3, description="最大业务返工次数")
     claim_max_iterations: int = Field(
-        default=1, ge=0, le=3, description="Claim 审核专用最大返工次数；默认1次，0关闭专用返工，不借用普通返工额度"
+        default=2, ge=0, le=3, description="Claim 专用返工预算；开启补检时用于补检前矛盾或大量缺证修订，默认2次，不借普通审核额度"
     )
+    claim_post_retrieval_max_iterations: int = Field(
+        default=0, ge=0, le=3, description="补检后正文修订次数；默认0，结束并形成审核报告"
+    )
+    claim_gap_revision_threshold: int = Field(default=8, ge=0, le=128, description="补检前缺证修订阈值；严格超过才触发，与矛盾共享返工额度")
+    claim_workflow_version: Literal["legacy_v1", "contradiction_first_v1", "contradiction_first_v2", "contradiction_first_v3"] = "contradiction_first_v3"
     constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
+
+    @classmethod
+    def from_frozen_payload(cls, payload):
+        """Queued payloads without a routing version retain their old order."""
+        return cls.model_validate({"claim_workflow_version": "legacy_v1",
+                                   "max_iterations": 2, "claim_max_iterations": 1, **payload})
 
     @field_validator("topic")
     @classmethod
@@ -313,9 +327,27 @@ class GenerateCreateRequest(GenerateRequest):
 
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def default_post_retrieval_budget(cls, values):
+        if isinstance(values, dict) and values.get("include_claim_evidence_retrieval") is True and "claim_post_retrieval_max_iterations" not in values:
+            from app.config import get_settings
+
+            return {
+                **values,
+                "claim_post_retrieval_max_iterations": get_settings().claim_post_retrieval_default_max_iterations,
+            }
+        return values
+
     target_skill_nodes: List[str] = Field(
         default_factory=list, max_length=1, description="目标能力节点（最多一个）"
     )
+
+    @model_validator(mode="after")
+    def reject_practice_claim_audit(self) -> "GenerateCreateRequest":
+        if self.resource_types == ["实操指南"] and self.include_claim_check:
+            raise ValueError("实操指南不支持 Claim 审核；请关闭 Claim 审核与补检")
+        return self
 
 
 class GenerationJobCreateResponse(StatusResponse):
@@ -364,6 +396,7 @@ class ContinueResourceBatchRequest(BaseModel):
     """在既有资源批次内追加或替换指定资源。"""
 
     learner_id: str = Field(min_length=1)
+    claim_post_retrieval_max_iterations: Optional[int] = Field(default=None, ge=0, le=3)
     resource_types: List[str] = Field(min_length=1)
     instructions: Optional[str] = Field(default=None, max_length=2000)
     include_claim_check: Optional[bool] = Field(
@@ -502,6 +535,8 @@ class LearningResource(BaseModel):
     # deterministic projection and this payload feeds the courseware path.
     practice_guide_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
     practice_guide_payload_hash: Optional[str] = Field(default=None, exclude=True)
+    correction_package_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
+    correction_package_payload_hash: Optional[str] = Field(default=None, exclude=True)
 
 
 class ResourceClaim(BaseModel):

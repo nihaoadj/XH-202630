@@ -291,6 +291,7 @@ def test_router_only_enters_supplements_for_enabled_complete_rounds():
 
 def test_supported_round_one_activates_and_keeps_other_claims(storage):
     state = _state()
+    original_judgements = [ClaimJudgement.model_validate(j) for j in state["claim_judgements"]]
     claim_id = state["extracted_claims"][1]["claim_id"]
     def query_outcome(kwargs):
         import json
@@ -340,6 +341,16 @@ def test_supported_round_one_activates_and_keeps_other_claims(storage):
     metric = state["claim_metrics"]["res-claim"]
     assert metric["factual_claim_total"] == 2
     assert metric["supported_claim_total"] == 2
+    # Re-auditing a child version sees older activated sessions in the same
+    # repository. Those unrelated version bindings must not poison its metric.
+    from app.agents.resource_workflows.learning_documents.claim_evidence_retrieval.nodes import _effective_state
+    historical = session.model_copy(update={"session_id": "historical-session", "resource_id": "parent-resource"})
+    _, effective_metrics, blocks = _effective_state(
+        state=state, claims=[ClaimRecord.model_validate(c) for c in state["extracted_claims"]],
+        round0=original_judgements, sessions=[historical, session],
+        supplements=supplement.list_supplements(["run-claim"]))
+    assert effective_metrics["res-claim"]["supported_claim_total"] == 2
+    assert not blocks
     assert state["claim_evidence_hard_block_resource_ids"] == []
     # Text and round-0 rows are untouched.
     assert state["generated_resources"][0].content_text == "Python 使用缩进定义代码块。RAG 召回率不应低于 95%。"
@@ -1127,3 +1138,111 @@ def test_partial_supported_rejudge_then_failure_never_activates_the_round(storag
     assert state["claim_judgements"] == before
     assert state["claim_metrics"]["res-claim"]["factual_claim_total"] == 102
     assert state["claim_metrics"]["res-claim"]["supported_claim_total"] == 100
+
+
+@pytest.mark.parametrize("total_cap", [5, 16])
+def test_overlapping_retrieval_batches_select_one_bounded_union(storage, total_cap):
+    state = _state()
+    pol = policy().model_copy(update={"queries_per_request": 1,
+        "queries_per_claim": 3, "max_new_excerpts": total_cap})
+    state["claim_evidence_retrieval_policy"] = pol.model_dump(mode="json")
+    state["claim_evidence_retrieval_policy_hash"] = pol.policy_hash
+    claim_id = state["extracted_claims"][1]["claim_id"]
+    queries = ["gap query one", "gap query two", "gap query three"]
+    def output(kwargs):
+        import json
+        data = json.loads(kwargs["messages"][-1].content)
+        return {"batch_id": data["batch_id"], "input_hash": data["input_hash"],
+                "items": [{"claim_id": claim_id,
+                           "queries": [{"text": q} for q in queries]}]}
+    gateway = ObserverGateway([output])
+    batches = [EvidenceBatch(
+        status=RetrievalStatus.AVAILABLE, knowledge_base_id="kb-fixture",
+        evidence=[_new_evidence(f"chunk-{i}", f"independent evidence {i}", q)
+                  for i in indices],
+        query_hashes=[query_hash(q)], query_count=1,
+        candidate_count=len(indices), dropped_candidate_count=0, config_hash="9" * 64,
+    ) for q, indices in zip(queries, [range(7), range(2, 10), [9]])]
+    retrieved = _call_retrieve(state, storage, gateway, ScriptedEvidenceRetriever(batches))
+    session = storage[2].list_sessions(["run-claim"])[0]
+    assert session.status is ClaimEvidenceRetrievalStatus.REJUDGING
+    assert len(session.evidence_scope_ids) == min(8, total_cap)
+    assert len(set(session.evidence_scope_ids)) == len(session.evidence_scope_ids)
+    snapshots = storage[0].list_evidence("run-claim")
+    assert len(snapshots) == min(8, total_cap)
+    assert len({(e.chunk_id, e.excerpt_hash) for e in snapshots}) == len(snapshots)
+    saved = storage[2].list_batches(session.session_id)
+    assert sum(b.payload.get("selected_count", 0) for b in saved) == min(8, total_cap)
+    assert route_after_claim_evidence_retrieve({**state, **retrieved}) == "claim_evidence_rejudge"
+    # Replaying the completed retrieval boundary must not issue calls or charge quota again.
+    before = storage[2].get_run("run-claim")
+    _call_retrieve(state, storage, ObserverGateway([]), ScriptedEvidenceRetriever([]))
+    assert storage[2].get_run("run-claim") == before
+
+
+def test_retrieval_failure_closes_session_without_second_dto_read(storage, monkeypatch):
+    state = _state()
+    def broken(*args, **kwargs):
+        raise ValueError("invalid retrieval output")
+    monkeypatch.setattr(storage[2], "save_batch", broken)
+    # The node's initial lookup is allowed; a second lookup from its handler is forbidden.
+    original = storage[2].get_session
+    reads = []
+    def get_once(sid):
+        reads.append(sid)
+        assert len(reads) == 1
+        return original(sid)
+    monkeypatch.setattr(storage[2], "get_session", get_once)
+    result = _call_retrieve(state, storage, ObserverGateway([]), ScriptedEvidenceRetriever([]))
+    assert result["errors"]
+    assert storage[2].list_sessions(["run-claim"])[0].status is ClaimEvidenceRetrievalStatus.UNAVAILABLE
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_nineteen_missing_claims_retrieve_and_rejudge_in_bounded_batches(storage, shared, monkeypatch):
+    import json
+    from app.agents.resource_workflows.learning_documents.claim_evidence_retrieval.retrieval import plan_retrieval_batches
+    state = _state()
+    template = ClaimRecord.model_validate(state["extracted_claims"][1])
+    targets = [template.model_copy(update={"claim_id":f"clm_{i+100:032x}", "claim_index":i+1}) for i in range(19)]
+    state["extracted_claims"] = state["extracted_claims"][:1] + [c.model_dump(mode="json") for c in targets]
+    state["claim_judgements"] = state["claim_judgements"][:1] + [_judgement(c, ClaimVerdict.NOT_IN_EVIDENCE).model_dump(mode="json") for c in targets]
+    selected = {c.claim_id: (("shared evidence query" if shared else f"query-{c.claim_id}"),) for c in targets}
+    def queries(kwargs):
+        data = json.loads(kwargs["messages"][-1].content)
+        return {"batch_id":data["batch_id"], "input_hash":data["input_hash"],
+                "items":[{"claim_id":c["claim_id"], "queries":[{"text":selected[c["claim_id"]][0]}]} for c in data["claims"]]}
+    if shared:
+        # Existing quota allocation drops duplicate query ownership. Inject a
+        # shared mapping at this boundary to exercise the planner/node contract.
+        from app.agents.resource_workflows.learning_documents.claim_evidence_retrieval import nodes
+        monkeypatch.setattr(nodes, "collect_claim_queries", lambda **kwargs: (selected, (), {"selected":19}))
+    plans = plan_retrieval_batches(selected, session_id="placeholder", policy=policy())
+    new = _new_evidence("new-gap-evidence", "RAG claims supported by new evidence", next(iter(selected.values()))[0])
+    batches = [EvidenceBatch(status=RetrievalStatus.AVAILABLE, knowledge_base_id="kb-fixture",
+        evidence=[new], query_hashes=[query_hash(p.queries[0])], query_count=len(p.queries),
+        candidate_count=1, dropped_candidate_count=0, config_hash="9"*64) for p in plans]
+    retriever = ScriptedEvidenceRetriever(batches)
+    gateway = ObserverGateway([queries, queries])
+    state.update(_call_retrieve(state, storage, gateway, retriever))
+    repository = storage[2]
+    session = repository.list_sessions(["run-claim"])[0]
+    assert session.status is ClaimEvidenceRetrievalStatus.REJUDGING, state.get("errors")
+    assert len(retriever.calls) == len(plans)
+    saved = [b for b in repository.list_batches(session.session_id) if b.kind.value == "retrieve"]
+    assert all(len(b.expected_claim_ids) <= 16 for b in saved)
+    assert {cid for b in saved for cid in b.expected_claim_ids} == {c.claim_id for c in targets}
+    # A pre-existing batch replays with its frozen hash, without changing its row.
+    assert repository.save_batch(saved[0]) == saved[0]
+    assert len(session.evidence_scope_ids) <= 8
+    def rejudge(kwargs):
+        data = json.loads(kwargs["messages"][-1].content)
+        return {"judgements":[{"claim_id":c["claim_id"], "verdict":"supported",
+                "evidence_ids":[new.evidence_id], "reason":"frozen support", "confidence":.9} for c in data["claims"]]}
+    gateway.outcomes = [rejudge, rejudge]
+    state.update(_call_rejudge(state, storage, gateway))
+    assert repository.list_sessions(["run-claim"])[0].status is ClaimEvidenceRetrievalStatus.COMPLETED
+    assert all(j["verdict"] == "supported" for j in state["claim_judgements"])
+    before = repository.get_run("run-claim")
+    _call_retrieve(state, storage, ObserverGateway([]), ScriptedEvidenceRetriever([]))
+    assert repository.get_run("run-claim") == before

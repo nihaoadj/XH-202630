@@ -14,6 +14,7 @@ from app.models.knowledge.knowledge import (
     RetrievalStatus,
 )
 from app.models.reviews.claim_evidence_retrieval import (
+    MAX_BATCH_CLAIMS,
     ClaimEvidenceRetrievalPolicyV1,
     batch_id_for,
 )
@@ -57,13 +58,26 @@ def plan_retrieval_batches(
                 mapping[key].append(claim_id)
     plans: list[RetrievalBatchPlan] = []
     size = max(1, policy.queries_per_request)
-    for ordinal, start in enumerate(range(0, len(ordered), size)):
-        chunk = tuple(ordered[start:start + size])
-        if not chunk:
-            continue
+    chunks: list[dict[str, tuple[str, ...]]] = []
+    current: dict[str, tuple[str, ...]] = {}
+    current_ids: set[str] = set()
+    for query in ordered:
+        owners = mapping[query]
+        for start in range(0, len(owners), MAX_BATCH_CLAIMS):
+            ids = tuple(owners[start:start + MAX_BATCH_CLAIMS])
+            if current and (len(current) >= size or query in current
+                            or len(current_ids.union(ids)) > MAX_BATCH_CLAIMS):
+                chunks.append(current)
+                current, current_ids = {}, set()
+            current[query] = ids
+            current_ids.update(ids)
+    if current:
+        chunks.append(current)
+    for ordinal, chunk_mapping in enumerate(chunks):
+        chunk = tuple(chunk_mapping)
         payload = {
             "queries": list(chunk),
-            "claims": {query: mapping[query] for query in chunk},
+            "claims": {query: list(chunk_mapping[query]) for query in chunk},
         }
         input_hash = canonical_hash(payload)
         plans.append(RetrievalBatchPlan(
@@ -72,7 +86,7 @@ def plan_retrieval_batches(
             ),
             ordinal=ordinal,
             queries=chunk,
-            claim_ids_by_query={query: tuple(mapping[query]) for query in chunk},
+            claim_ids_by_query=chunk_mapping,
             input_hash=input_hash,
         ))
     return tuple(plans)

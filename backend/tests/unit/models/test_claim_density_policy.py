@@ -157,7 +157,8 @@ def test_historical_parser_view_rejects_new_snapshot_but_still_reads_old_ones():
 
     fields = {name: (field.annotation, field)
               for name, field in EstimatePolicy.model_fields.items()
-              if name not in {"density_batching", "source_locating"}}
+              if name not in {"density_batching", "source_locating", "correction_sources",
+                              "structured_sources", "input_contract"}}
     LegacyView = create_model("LegacyEstimatePolicyView",
                               __config__=ConfigDict(extra="forbid", frozen=True, protected_namespaces=()),
                               **fields)

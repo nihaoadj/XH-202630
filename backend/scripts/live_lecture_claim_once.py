@@ -166,6 +166,7 @@ def _summary(container, run_id: str) -> dict:
         "extraction": extraction,
         "nodes": nodes,
         "resources": [dict(item) for item in resources],
+        "current_resources": current_resources(resources),
         "claims_by_type": {item["claim_type"]: item["c"] for item in claims},
         "verdicts": {item["verdict"]: item["c"] for item in verdicts},
         "claim_metrics": claim_metrics,
@@ -176,6 +177,22 @@ def attempt_usage(attempts):
     return dict(input_tokens=sum(int(a.get('input_tokens') or 0) for a in attempts),
                 output_tokens=sum(int(a.get('output_tokens') or 0) for a in attempts),
                 unknown_attempts=sum(a.get('input_tokens') is None or a.get('output_tokens') is None for a in attempts))
+
+
+def current_resources(resources):
+    """Return lineage leaves, including failed leaves; never substitute a parent."""
+    parents = {r['parent_resource_id'] for r in resources if r.get('parent_resource_id')}
+    return sorted(
+        [dict(r) for r in resources if r['resource_id'] not in parents],
+        key=lambda r: (r.get('resource_type', ''), r.get('version', 0), r['resource_id']),
+    )
+
+
+def single_current_resource(resources):
+    leaves = current_resources(resources)
+    if len(leaves) != 1:
+        raise ValueError(f"expected one current resource, found {len(leaves)}")
+    return leaves[0]
 
 
 def current_resource_versions(resources):

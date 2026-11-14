@@ -1,6 +1,6 @@
 """Deterministic gates, independent of model invocation and workflow routing."""
 
-from app.models.shared.agent_contracts import PracticeGuidePackageV3
+from app.models.shared.agent_contracts import validate_practice_guide_package
 from app.models.shared.assessment import (
     ASSESSMENT_QUESTION_QUOTAS, ASSESSMENT_SCORE_BY_TYPE,
     ASSESSMENT_SCORE_DECIMAL_PLACES, ASSESSMENT_TOTAL_SCORE,
@@ -124,7 +124,14 @@ def check_markdown_structure(resource) -> dict | None:
     # check as a safety boundary, not a formatting requirement.
     if resource.resource_type == "个性化纠错训练包":
         content = (resource.content_text or "").strip()
-        if "<script" not in content.lower():
+        valid = "<script" not in content.lower()
+        if resource.correction_package_payload is not None:
+            try:
+                from app.core.learning_documents.correction_package import validated_correction_package
+                validated_correction_package(resource)
+            except ValueError:
+                valid = False
+        if valid:
             return None
         return {
             "decision": "revise",
@@ -134,7 +141,7 @@ def check_markdown_structure(resource) -> dict | None:
                 "severity": "high",
                 "resource_type": resource.resource_type,
                 "knowledge_point": None,
-                "description": "检测到脚本标记，资源只能包含安全的 Markdown 文本。",
+                "description": "纠错包结构、hash、目标、Markdown 投影或安全检查未通过。",
             }],
             "difficulty_match": True,
             "coverage_rate": 0.0,
@@ -201,9 +208,9 @@ def check_practice_structure(resource) -> dict | None:
     """
     package = getattr(resource, "practice_guide_payload", None)
     try:
-        valid_package = isinstance(package, dict) and package.get("schema_version") == "3.0"
+        valid_package = isinstance(package, dict) and package.get("schema_version") in {"3.0", "4.0", "5.0", "6.0"}
         if valid_package:
-            PracticeGuidePackageV3.model_validate(
+            validate_practice_guide_package(
                 {key: value for key, value in package.items() if key != "payload_hash"}
             )
     except ValueError:
@@ -213,12 +220,12 @@ def check_practice_structure(resource) -> dict | None:
             "decision": "revise", "hallucination_score": 0.0,
             "issues": [{"code": "structure_quality", "severity": "high",
                         "resource_type": resource.resource_type, "knowledge_point": None,
-                        "description": "实操指南缺少有效的 V3 固定阶段 JSON，禁止仅以 Markdown 发布。"}],
+                        "description": "实操指南缺少有效的固定阶段 JSON，禁止仅以 Markdown 发布。"}],
             "difficulty_match": True, "coverage_rate": 0.0,
-            "suggestion": "重新生成并持久化四阶段结构化 JSON，再渲染 Markdown。",
+            "suggestion": "重新生成并持久化有效的四阶段结构化 JSON，再渲染 Markdown。",
             "revision_instructions": [{"issue_codes": ["structure_quality"],
                                         "target_resource_type": resource.resource_type,
-                                        "action": "生成有效的 V3 固定阶段 JSON，并由该 JSON 确定性渲染 Markdown。", "priority": 1}],
+                                        "action": "生成有效的固定阶段 JSON，并由该 JSON 确定性渲染 Markdown。", "priority": 1}],
         }
     content = resource.content_text or ""
     required_sections = ("准备阶段", "实操阶段", "验证阶段", "复盘阶段")

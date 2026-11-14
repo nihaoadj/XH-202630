@@ -9,13 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.models.reviews.claim_extraction import (
-    BatchOutput,
-    BatchOutputV2,
     EstimatePolicy,
     ExtractionPolicy,
     PROMPT_VERSION,
     PROMPT_VERSION_V2,
     digest,
+    batch_output_schema,
 )
 
 from .prompts.extract import PROMPT as PROMPT_V1
@@ -37,14 +36,17 @@ class ContractSelection:
 def select_contract(policy: ExtractionPolicy | EstimatePolicy) -> ContractSelection:
     """Resolve the frozen extraction contract; rejects unknown/unsupported combos."""
     is_v2 = getattr(policy, "source_locating", None) is not None
+    from .input_context import prompt_for
+    schema = batch_output_schema(policy.batch_claims, is_v2)
     if is_v2:
         if policy.prompt_version != PROMPT_VERSION_V2:
             raise ValueError("source locating policy requires the neutral-v2 prompt")
         frozen = policy.source_locating
-        if (digest(PROMPT_V2) != frozen.extractor_prompt_hash
-                or digest(BatchOutputV2.model_json_schema()) != frozen.output_schema_hash):
+        prompt = prompt_for(PROMPT_V2, policy)
+        if (digest(prompt) != frozen.extractor_prompt_hash
+                or digest(schema.model_json_schema()) != frozen.output_schema_hash):
             raise ValueError("frozen extraction Prompt/schema drift")
-        return ContractSelection(PROMPT_VERSION_V2, PROMPT_V2, BatchOutputV2, True)
+        return ContractSelection(PROMPT_VERSION_V2, prompt, schema, True)
     if policy.prompt_version != PROMPT_VERSION:
         raise ValueError("unknown neutral extraction prompt version")
-    return ContractSelection(PROMPT_VERSION, PROMPT_V1, BatchOutput, False)
+    return ContractSelection(PROMPT_VERSION, prompt_for(PROMPT_V1, policy), schema, False)

@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -152,3 +153,36 @@ def test_settled_usage_returns_unused_reservation():
     # Real usage (25) leaves room for a second attempt on the same scope.
     service._generate_with_budget(learner, request, run_id="run-2")
     assert len(repository.find("learning_round_budget_reservations", scope_id="sn")) == 2
+
+
+@pytest.mark.parametrize("capacity,expected", [(262144, 262144), (None, INPUT_CAP)])
+def test_retry_input_capacity_is_frozen_separately_from_stage_budget(monkeypatch, capacity, expected):
+    repository = round_repository()
+    with repository.transaction() as tx:
+        tx.insert("learning_round_job_bindings", dict(
+            run_id="retry", stage_node_id="sn", relation_kind="retry",
+            created_at=datetime.now(timezone.utc),
+        ))
+    snapshot = {"frozen": True}
+    validated = []
+
+    def validate(value):
+        validated.append(value)
+        return SimpleNamespace(input_capacity=capacity)
+
+    monkeypatch.setattr("app.services.generation.jobs.ResourceRetryContext.from_snapshot", validate)
+    observed = []
+
+    def generate(*args, **kwargs):
+        context = effective_context(LLMCallContext(
+            run_id=kwargs["run_id"], step_id="review", node_name="review", schema_name="review"))
+        observed.append(context)
+
+    service, learner, request = service_for(repository, SimpleNamespace(generate_with_run_id=generate))
+    frozen = repository.one("learning_round_stages", stage_id="stage")["budget_snapshot"]
+    service._generate_with_budget(learner, request, run_id="retry", resource_retry_context=snapshot)
+    assert validated == [snapshot]
+    assert observed[0].budget_input_token_cap == expected
+    assert observed[0].budget_scope.scope_id == "sn"
+    assert repository.one("learning_round_stages", stage_id="stage")["budget_snapshot"] == frozen
+    assert not repository.find("learning_round_budget_reservations", scope_id="sn")

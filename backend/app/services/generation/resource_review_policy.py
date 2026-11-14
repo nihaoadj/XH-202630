@@ -32,6 +32,7 @@ def freeze_resource_review_policy(request, settings) -> dict:
         return {}
     # M is frozen from the reviewer options active at creation, never raised here.
     policy = ResourceReviewPolicyV1(
+        input_contract="single_representation_v4",
         context_tokens=settings.resource_review_context_tokens,
         max_output_tokens=settings.llm_max_output_tokens,
         max_physical_attempts=settings.llm_max_attempts).model_dump(mode="json")

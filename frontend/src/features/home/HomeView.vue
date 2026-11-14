@@ -1,18 +1,7 @@
 <template>
   <div ref="workbenchRoot" class="home-page" :class="{ 'is-fit-layout': fitLayout }">
-    <div class="workspace-heading">
-      <div class="workspace-intro">
-        <span class="workspace-eyebrow">YOUR LEARNING, CONNECTED</span>
-        <h2>从知识，到能力。</h2>
-        <p>以你的目标为起点，让每一步学习都有清晰的方向。</p>
-      </div>
-      <div class="workspace-heading-actions">
-        <el-button class="workspace-switch" :icon="Switch" :disabled="loadingProfiles" @click="profileDialogVisible = true">切换画像</el-button>
-        <el-button class="workspace-new" :icon="Plus" @click="$router.push('/learning/new')">新建学习方向</el-button>
-      </div>
-    </div>
-
     <section class="home-hero" aria-label="当前学习与推荐下一步" :aria-busy="loadingSummary">
+      <DashboardHeroAtmosphere />
       <div class="hero-copy">
         <div class="hero-intro">
           <span class="hero-eyebrow"><span class="focus-mark" aria-hidden="true"></span>当前学习方向 <span class="hero-code">LEARNING FOCUS / 01</span></span>
@@ -27,54 +16,62 @@
             <el-button class="workbench-primary" type="primary" :loading="loadingSummary" :disabled="loadingSummary" @click="$router.push(nextAction.to)">
               <span>{{ nextAction.button }}</span><el-icon aria-hidden="true"><ArrowRight /></el-icon>
             </el-button>
-            <el-button class="workbench-history" :icon="Clock" @click="$router.push('/learning/history')">查看学习历史</el-button>
+            <el-button class="workbench-switch" :icon="Switch" :disabled="loadingProfiles" @click="profileDialogVisible = true">切换画像</el-button>
           </div>
           <div class="hero-footnote"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1 10 6 15 8 10 10 8 15 6 10 1 8 6 6Z" stroke="currentColor" stroke-linejoin="round"/></svg>个性化路径<span class="footnote-divider" aria-hidden="true"></span>多智能体协作<span class="footnote-divider" aria-hidden="true"></span>证据溯源</div>
         </div>
       </div>
 
-      <div class="hero-visual" aria-hidden="true">
-        <svg class="knowledge-network" viewBox="0 0 540 330" fill="none">
+      <div class="hero-visual">
+        <svg
+          class="knowledge-network"
+          viewBox="0 0 540 345"
+          fill="none"
+          role="img"
+          aria-label="学习流程：选择方向并建立画像，完成能力诊断，生成资源，学习资源，提交测评反馈，再确认纠错或下一轮学习方案。"
+        >
           <defs>
             <linearGradient id="workbench-plane" x1="170" y1="100" x2="366" y2="215" gradientUnits="userSpaceOnUse"><stop stop-color="#77e9e1" stop-opacity=".23"/><stop offset="1" stop-color="#4389ed" stop-opacity=".06"/></linearGradient>
             <linearGradient id="workbench-edge" x1="165" y1="145" x2="370" y2="250" gradientUnits="userSpaceOnUse"><stop stop-color="#99f9eb"/><stop offset="1" stop-color="#4c8bdb"/></linearGradient>
             <radialGradient id="workbench-glow"><stop stop-color="#41b5d1" stop-opacity=".19"/><stop offset="1" stop-color="#41b5d1" stop-opacity="0"/></radialGradient>
+            <marker id="workbench-route-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="m2 1 4 3-4 3" stroke="#8abbd1" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
           </defs>
-          <ellipse cx="270" cy="190" rx="235" ry="142" fill="url(#workbench-glow)"/>
-          <g stroke="#7493b8" stroke-opacity=".16" stroke-width="1">
-            <path d="M34 210 270 73 506 210 270 347Z M67 190 303 327 M100 171 336 308 M133 152 369 289 M166 133 402 270 M199 114 435 251 M232 95 468 232 M67 232 303 95 M100 251 336 114 M133 270 369 133 M166 289 402 152 M199 308 435 171 M232 327 468 190"/>
+          <ellipse cx="270" cy="168" rx="235" ry="142" fill="url(#workbench-glow)"/>
+          <g transform="translate(0 -20)">
+            <g stroke="#7493b8" stroke-opacity=".20">
+              <path d="M34 210 270 73 506 210 270 347Z M67 190 303 327 M100 171 336 308 M133 152 369 289 M166 133 402 270 M199 114 435 251 M232 95 468 232 M67 232 303 95 M100 251 336 114 M133 270 369 133 M166 289 402 152 M199 308 435 171 M232 327 468 190"/>
+            </g>
+            <g stroke="url(#workbench-edge)" stroke-width="1.2" fill="url(#workbench-plane)">
+              <path d="m270 171 104 60-104 60-104-60Z"/><path d="m270 140 104 60-104 60-104-60Z"/><path d="m270 109 104 60-104 60-104-60Z"/>
+              <path d="M166 169v62M374 169v62M270 229v62" stroke-opacity=".65"/>
+            </g>
+            <path d="m270 140 49 29-49 29-49-29Z" fill="#8af1e1" fill-opacity=".16" stroke="#98f4e6" stroke-width="1.5"/>
+            <path d="m270 128 29 17v34l-29 17-29-17v-34Z" fill="#102d45" stroke="#9af4e5" stroke-width="1.4"/>
+            <path d="m241 145 29 17 29-17M270 162v34" stroke="#9af4e5" stroke-width="1.4"/>
+            <path d="m270 128 29 17-29 17-29-17Z" fill="#97f2e2" fill-opacity=".24"/>
+            <g fill="#9af4e5"><circle cx="166" cy="169" r="3"/><circle cx="374" cy="169" r="3"/><circle cx="270" cy="291" r="3"/><circle cx="270" cy="109" r="3"/></g>
           </g>
-          <g stroke="#5a82ae" stroke-opacity=".55" stroke-dasharray="4 6">
-            <path d="M270 166 114 111 M270 166 426 111 M270 203 114 258 M270 203 426 258 M270 150V58"/>
-            <ellipse cx="270" cy="184" rx="199" ry="106"/>
+          <g stroke="#729db9" stroke-opacity=".75" stroke-dasharray="4 5" marker-end="url(#workbench-route-arrow)">
+            <path d="M129 85Q188 52 247 49"/>
+            <path d="M289 50Q355 54 410 84"/>
+            <path d="M446 112Q479 164 447 215"/>
+            <path d="M412 245Q358 287 293 295"/>
+            <path d="M250 295Q180 288 130 246"/>
           </g>
-          <g stroke="url(#workbench-edge)" stroke-width="1.2" fill="url(#workbench-plane)">
-            <path d="m270 171 104 60-104 60-104-60Z"/><path d="m270 140 104 60-104 60-104-60Z"/><path d="m270 109 104 60-104 60-104-60Z"/>
-            <path d="M166 169v62M374 169v62M270 229v62" stroke-opacity=".65"/>
+          <g v-for="step in learningFlow" :key="step.label" :transform="`translate(${step.x} ${step.y})`">
+            <path d="m0-20 17 10v20l-17 10-17-10v-20Z" fill="#112f47" stroke="#7ddbd6" stroke-width="1.2"/>
+            <path :d="step.icon" stroke="#c0f7ef" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <text class="flow-label" :y="step.labelY">{{ step.label }}</text>
           </g>
-          <path d="m270 140 49 29-49 29-49-29Z" fill="#8af1e1" fill-opacity=".16" stroke="#98f4e6" stroke-width="1.5"/>
-          <path d="m270 128 29 17v34l-29 17-29-17v-34Z" fill="#102d45" stroke="#9af4e5" stroke-width="1.4"/>
-          <path d="m241 145 29 17 29-17M270 162v34" stroke="#9af4e5" stroke-width="1.4"/>
-          <path d="m270 128 29 17-29 17-29-17Z" fill="#97f2e2" fill-opacity=".24"/>
-          <g fill="#102b43" stroke="#7ddbd6" stroke-width="1.2">
-            <path d="m114 98 17 10v20l-17 10-17-10v-20Z"/><path d="m426 98 17 10v20l-17 10-17-10v-20Z"/>
-            <path d="m114 237 17 10v20l-17 10-17-10v-20Z"/><path d="m426 237 17 10v20l-17 10-17-10v-20Z"/>
-            <path d="m270 35 17 10v20l-17 10-17-10V45Z"/>
-          </g>
-          <g stroke="#b0f1e8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M108 122v-8m6 8v-13m6 13v-6M420 116h12m-6-6v12M108 253h12m-12 5h8M420 253l4 4 8-9M264 55l4 4 8-9"/>
-          </g>
-          <g fill="#b7cde3" font-size="12" text-anchor="middle" font-family="system-ui, Microsoft YaHei, sans-serif">
-            <text x="114" y="88">学情诊断</text><text x="426" y="88">路径规划</text><text x="114" y="302">资源生成</text><text x="426" y="302">审核溯源</text><text x="320" y="57" text-anchor="start">反馈进阶</text>
-          </g>
-          <g fill="#9af4e5"><circle cx="166" cy="169" r="3"/><circle cx="374" cy="169" r="3"/><circle cx="270" cy="291" r="3"/><circle cx="270" cy="109" r="3"/></g>
         </svg>
-        <div class="visual-caption"><span class="caption-line"></span>多智能体 · 学习协作<span class="caption-code">KNOWLEDGE → SKILL</span></div>
+        <div class="visual-caption" aria-hidden="true"><span class="caption-line"></span>学习流程</div>
       </div>
     </section>
 
     <section class="learning-summary" aria-label="当前学习摘要" :aria-busy="loadingSummary">
-      <article v-for="(item, index) in learningSummary" :key="item.label" class="summary-item" :class="['summary-' + summaryDecorations[index].kind]">
+      <article v-for="(item, index) in learningSummary" :key="item.label" class="summary-item" :class="['summary-' + summaryDecorations[index].kind]" :title="item.initial ? `初始诊断：${item.initial}` : undefined">
         <div class="summary-topline"><span class="summary-label">{{ item.label }}</span><span class="summary-code" aria-hidden="true">{{ summaryDecorations[index].code }}</span></div>
         <div class="summary-value"><span class="summary-icon" aria-hidden="true"><el-icon><component :is="summaryDecorations[index].icon" /></el-icon></span><strong>{{ item.value }}</strong></div>
       </article>
@@ -87,7 +84,7 @@
           <span class="section-description">连接每一步学习</span>
         </div>
         <div class="tool-grid">
-          <button v-for="tool in tools" :key="tool.title" type="button" class="tool-card" @click="$router.push(tool.to)">
+          <button v-for="tool in tools" :key="tool.title" type="button" class="tool-card" :class="tool.accent" @click="$router.push(tool.to)">
             <span class="tool-icon" aria-hidden="true"><el-icon><component :is="tool.icon" /></el-icon></span>
             <span class="tool-copy"><strong>{{ tool.title }}</strong><small>{{ tool.description }}</small></span>
             <span class="tool-index" aria-hidden="true">{{ tool.index }}</span>
@@ -110,7 +107,7 @@
         <button v-for="profile in profiles" :key="profile.learner_id" type="button" class="profile-option" :class="{ 'is-current': currentProfile?.learner_id === profile.learner_id }" :data-learner-id="profile.learner_id" :aria-pressed="currentProfile?.learner_id === profile.learner_id" @click="selectProfile(profile)">
           <span class="profile-option-icon" aria-hidden="true"><el-icon><User /></el-icon></span>
           <span class="profile-option-copy"><strong class="profile-option-name">{{ profileDisplayName(profile) }}</strong><span class="profile-option-direction">{{ resolveTrackName(profile.knowledge_base_id) }}</span><small>{{ profile.learning_goal || '尚未设置学习目标' }}</small></span>
-          <span class="profile-option-meta"><span class="profile-option-stage">{{ profile.skill_level || '待诊断' }}</span><span v-if="currentProfile?.learner_id === profile.learner_id" class="profile-option-current"><el-icon aria-hidden="true"><Check /></el-icon>当前画像</span></span>
+          <span class="profile-option-meta"><span class="profile-option-stage">{{ currentProfileRating(profile) || '待诊断' }}</span><span v-if="currentProfile?.learner_id === profile.learner_id" class="profile-option-current"><el-icon aria-hidden="true"><Check /></el-icon>当前画像</span></span>
         </button>
       </div>
       <template #footer>
@@ -122,9 +119,11 @@
 </template>
 
 <script setup>
+import { currentProfileRating, initialProfileRating } from '../../utils/profileRating.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, ChatDotRound, Check, Clock, Collection, Compass, DataAnalysis, Document, Plus, Reading, Switch, User } from '@element-plus/icons-vue'
+import DashboardHeroAtmosphere from './DashboardHeroAtmosphere.vue'
 import { generateApi } from '../generation/api.js'
 import { knowledgeApi } from '../knowledge/api.js'
 import { profileApi } from '../learners/api.js'
@@ -143,6 +142,14 @@ const profileListError = ref('')
 const profileDialogVisible = ref(false)
 const workbenchRoot = ref(null)
 const fitLayout = ref(false)
+const learningFlow = [
+  { label: '方向与画像', x: 110, y: 95, labelY: -30, icon: 'M5-5-2-2-5 5l7-3 3-7Z M-2-2 2 2 M0-8v1M0 7v1M-8 0h1M7 0h1' },
+  { label: '能力诊断', x: 270, y: 48, labelY: -29, icon: 'M-7 6h14M-5 2v-4M0 2v-8M5 2v-6' },
+  { label: '生成资源', x: 430, y: 95, labelY: -30, icon: 'M-6-8H2l4 4V8H-6Z M2-8v4h4 M0-1v6m-3-3h6' },
+  { label: '学习资源', x: 430, y: 233, labelY: 35, icon: 'M0-4c-3-2-6-2-8-1V6c3-1 5-1 8 1 3-2 5-2 8-1V-5c-2-1-5-1-8 1ZM0-4V7' },
+  { label: '测评反馈', x: 270, y: 297, labelY: 36, icon: 'M-7-7H7V4H1l-4 4V4h-4Z M-4-1l2 2 5-5' },
+  { label: '确认下一步', x: 110, y: 233, labelY: 35, icon: 'M-8 0h16M3-5l5 5-5 5' },
+]
 const summaryDecorations = [
   { kind: 'direction', code: 'TRACK / 01', icon: Compass },
   { kind: 'stage', code: 'PROFILE / 02', icon: User },
@@ -185,7 +192,7 @@ const currentDirection = computed(() => {
   const directionId = currentProfile.value?.knowledge_base_id || store.currentLearningDirectionId
   return tracks.value.find((track) => track.track_id === directionId || track.knowledge_base_id === directionId) || null
 })
-const profileStage = computed(() => currentProfile.value?.skill_level || (currentProfile.value ? '待诊断' : '未建立'))
+const profileStage = computed(() => currentProfileRating(currentProfile.value) || (currentProfile.value ? '待诊断' : '未建立'))
 const generatedResourceCount = computed(() => resources.value.length || jobs.value.reduce((total, job) => total + (job.resource_ids?.length || 0), 0))
 const latestLearningTime = computed(() => {
   const values = [
@@ -198,7 +205,7 @@ const latestLearningTime = computed(() => {
 
 const learningSummary = computed(() => [
   { label: '当前方向', value: currentDirection.value?.name || store.currentLearningDirectionName || '未选择' },
-  { label: '当前画像阶段', value: profileStage.value },
+  { label: '当前评级', value: profileStage.value, initial: initialProfileRating(currentProfile.value) },
   { label: '已生成资源数量', value: `${generatedResourceCount.value} 份` },
   { label: '最近一次学习时间', value: latestLearningTime.value },
 ])
@@ -299,10 +306,10 @@ async function loadSummary() {
 }
 
 const tools = [
-  { index: '01', title: '学习资源', description: '进入资源学习与阅读', to: '/resources', icon: Reading },
-  { index: '02', title: '练习反馈', description: '记录练习结果', to: '/feedback', icon: ChatDotRound },
-  { index: '03', title: '学习报告', description: '回看诊断与进步', to: '/report', icon: DataAnalysis },
-  { index: '04', title: '学习历史', description: '按画像查看内容', to: '/learning/history', icon: Document },
+  { index: '01', title: '学习资源', description: '进入资源学习与阅读', to: '/resources', icon: Reading, accent: 'tool-resources' },
+  { index: '02', title: '练习反馈', description: '记录练习结果', to: '/feedback', icon: ChatDotRound, accent: 'tool-feedback' },
+  { index: '03', title: '学习报告', description: '回看诊断与进步', to: '/report', icon: DataAnalysis, accent: 'tool-report' },
+  { index: '04', title: '学习历史', description: '按画像查看内容', to: '/learning/history', icon: Document, accent: 'tool-history' },
 ]
 
 watch([learningSummary, nextAction, loadingSummary], scheduleLayout, { flush: 'post' })
@@ -343,22 +350,36 @@ onBeforeUnmount(() => {
   padding-bottom: 6px;
   color: var(--wb-ink);
 }
-.workspace-heading { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:22px 0; }
-.workspace-eyebrow,.section-index { color:var(--wb-muted); font:500 11px/1.5 Consolas,'SFMono-Regular',monospace; }
-.workspace-heading h2 { margin:7px 0 6px; font-size:clamp(26px,2.2vw,30px); line-height:1.3; font-weight:650; }
-.workspace-heading p { margin:0; color:var(--wb-muted); font-size:14px; line-height:1.7; }
-.workspace-heading-actions { display:flex; flex:0 0 auto; gap:10px; }
-.workspace-new.el-button,.workspace-switch.el-button { height:44px; padding:0 17px; margin:0; border:1px solid #b4c0cd; border-radius:5px; background:transparent; color:var(--wb-ink); font-size:13px; font-weight:600; }
-.workspace-new.el-button:hover { border-color:var(--wb-ink); background:var(--wb-paper); }
-.workspace-switch.el-button { border-color:transparent; color:#315d87; }
-.workspace-switch.el-button:hover { border-color:#c5d5e3; background:#eaf0f6; }
-.workspace-switch.el-button:disabled { opacity:.55; cursor:wait; }
-.home-hero { position:relative; display:grid; grid-template-columns:minmax(0,1.1fr) minmax(320px,1fr); min-height:330px; overflow:hidden; border:1px solid #1a3450; border-radius:8px; background:var(--wb-night); color:var(--wb-on-night); }
-.home-hero::before { position:absolute; inset:0 auto 0 0; width:3px; background:var(--wb-accent); content:''; }
+.section-index { color:var(--wb-muted); font:500 11px/1.5 Consolas,'SFMono-Regular',monospace; }
+.home-hero {
+  position:relative;
+  display:grid;
+  grid-template-columns:minmax(0,1.1fr) minmax(320px,1fr);
+  min-height:330px;
+  isolation:isolate;
+  overflow:hidden;
+  border:1px solid #294764;
+  border-radius:8px;
+  background-color:var(--wb-night);
+  background-image:
+    radial-gradient(ellipse at 76% 42%,#20556a9e,transparent 58%),
+    linear-gradient(118deg,#101f35 10%,#162d47 58%,#101e34);
+  box-shadow:inset 0 1px #b5e2ff24,0 10px 24px #152e481a;
+  color:var(--wb-on-night);
+}
+.home-hero::before {
+  position:absolute;
+  z-index:2;
+  inset:0 auto 0 0;
+  width:3px;
+  background:linear-gradient(#a4f5df,#62b8cd 52%,#4373a966);
+  pointer-events:none;
+  content:'';
+}
 .hero-copy { z-index:1; display:flex; min-width:0; flex-direction:column; justify-content:space-between; gap:20px; padding:30px 18px 28px 36px; }
-.hero-eyebrow { display:flex; align-items:center; gap:9px; color:var(--wb-night-muted); font-size:12px; }
-.focus-mark { width:7px; height:7px; background:var(--wb-accent); }
-.hero-code { margin-left:12px; color:var(--wb-night-muted); font:11px/1.5 Consolas,'SFMono-Regular',monospace; }
+.hero-eyebrow { display:flex; align-items:center; gap:9px; color:var(--wb-night-muted); font-size:15px; font-weight:550; line-height:1.5; }
+.focus-mark { width:8px; height:8px; flex:0 0 8px; background:var(--wb-accent); }
+.hero-code { margin-left:12px; color:var(--wb-night-muted); font:12px/1.5 Consolas,'SFMono-Regular',monospace; }
 .hero-copy h2 { max-width:760px; margin:14px 0 0; color:var(--wb-on-night); font-size:clamp(26px,2.5vw,38px); font-weight:650; line-height:1.35; overflow-wrap:anywhere; text-wrap:balance; }
 .next-action-title { margin:0; color:var(--wb-on-night); font-size:16px; font-weight:500; line-height:1.6; }
 .hero-copy p { max-width:540px; margin:7px 0 0; color:var(--wb-night-muted); font-size:14px; line-height:1.8; text-wrap:pretty; }
@@ -368,55 +389,61 @@ onBeforeUnmount(() => {
 .workbench-primary.el-button:hover { border-color:#c7fff0; background:#c7fff0; color:var(--wb-accent-ink); }
 .workbench-primary .el-icon { font-size:18px; transition:transform 180ms ease; }
 .workbench-primary:hover .el-icon { transform:translateX(3px); }
-.workbench-history.el-button { height:46px; margin:0; padding:0 14px; border:1px solid #637a96; border-radius:5px; background:transparent; color:var(--wb-on-night); font-size:13px; font-weight:500; }
-.workbench-history.el-button:hover { border-color:var(--wb-night-muted); background:#1b3049; color:var(--wb-on-night); }
+.workbench-switch.el-button { height:46px; margin:0; padding:0 14px; border:1px solid #637a96; border-radius:5px; background:transparent; color:var(--wb-on-night); font-size:13px; font-weight:500; }
+.workbench-switch.el-button:hover { border-color:var(--wb-night-muted); background:#1b3049; color:var(--wb-on-night); }
+.workbench-switch.el-button:disabled { opacity:.58; cursor:wait; }
 .hero-footnote { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin-top:20px; color:var(--wb-night-muted); font-size:11px; line-height:1.6; }
 .hero-footnote > svg { color:var(--wb-accent); flex:0 0 16px; }
 .footnote-divider { width:1px; height:9px; margin:0 4px; background:#657f9a; }
-.hero-visual { position:relative; display:flex; min-width:0; flex-direction:column; justify-content:center; padding:8px 28px 18px 16px; background:radial-gradient(ellipse at 60% 55%,#18365066,transparent 65%); }
-.knowledge-network { display:block; width:100%; max-width:550px; max-height:300px; margin:0 auto; }
+.hero-visual { position:relative; display:flex; min-width:0; flex-direction:column; justify-content:center; padding:8px 28px 18px 16px; }
+.knowledge-network {
+  display:block;
+  width:100%;
+  max-width:550px;
+  max-height:300px;
+  margin:0 auto;
+  transform:translate(calc(var(--hero-x,0) * 12px),calc(var(--hero-y,0) * 8px));
+  transition:transform 420ms cubic-bezier(.18,.72,.28,1);
+}
+.flow-label { fill:#d0e2ed; font:500 15px/1.3 system-ui,'Microsoft YaHei',sans-serif; text-anchor:middle; }
 .visual-caption { display:flex; align-items:center; justify-content:center; gap:9px; color:var(--wb-night-muted); font-size:11px; }
 .caption-line { width:20px; height:1px; background:var(--wb-accent); }
-.caption-code { padding-left:12px; color:var(--wb-night-muted); font:10px/1.5 Consolas,'SFMono-Regular',monospace; }
-.learning-summary { display:grid; grid-template-columns:1.3fr .85fr .8fr 1.15fr; margin-top:18px; padding:0; border:1px solid var(--wb-line); border-radius:5px; background:var(--wb-paper); box-shadow:0 3px 10px #172c4504; }
-.summary-item { --metric-accent:#315d87; position:relative; display:flex; flex-direction:column; min-width:0; padding:17px 22px; border-left:1px solid var(--wb-line); }
-.summary-item::before { position:absolute; top:18px; bottom:18px; left:-1px; width:2px; background:var(--metric-accent); content:''; }
-.summary-item:first-child { border-left:0; }
-.summary-stage { --metric-accent:#665496; }
-.summary-resource { --metric-accent:#15677a; }
-.summary-time { --metric-accent:#536b87; }
+.learning-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin-top:18px; padding:0; overflow:hidden; border:1px solid var(--wb-line); border-radius:5px; background:var(--wb-paper); box-shadow:0 3px 10px #172c4504; }
+.summary-item { display:flex; flex-direction:column; min-width:0; padding:17px 22px; border-left:2px solid var(--column-ink); }
+.summary-direction,.tool-resources { --column-ink:#315d87; --column-surface:#f0f5fa; --column-line:#d8e2ed; }
+.summary-stage,.tool-feedback { --column-ink:#665496; --column-surface:#f5f1fa; --column-line:#e1daed; }
+.summary-resource,.tool-report { --column-ink:#15677a; --column-surface:#edf7f6; --column-line:#cfe4e7; }
+.summary-time,.tool-history { --column-ink:#536b87; --column-surface:#f0f5fa; --column-line:#d8e2ed; }
 .summary-topline { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px 10px; }
-.summary-label { color:var(--wb-muted); font-size:12px; line-height:1.5; }
+.summary-label { color:var(--wb-ink); font-size:15px; font-weight:600; line-height:1.5; }
 .summary-code { color:var(--wb-muted); font:9px/1.5 Consolas,'SFMono-Regular',monospace; }
 .summary-value { display:flex; align-items:center; gap:12px; min-width:0; min-height:52px; margin-top:auto; padding-top:8px; }
-.summary-icon { display:grid; width:32px; height:32px; flex:0 0 32px; place-items:center; border:1px solid #d8e2ed; border-radius:3px; background:#f0f5fa; color:var(--metric-accent); font-size:19px; }
-.summary-stage .summary-icon { border-color:#e1daed; background:#f5f1fa; }
-.summary-resource .summary-icon { border-color:#cfe4e7; background:#edf7f6; }
+.summary-icon { display:grid; width:32px; height:32px; flex:0 0 32px; place-items:center; border:1px solid var(--column-line); border-radius:3px; background:var(--column-surface); color:var(--column-ink); font-size:19px; }
 .summary-item strong { display:block; min-width:0; color:var(--wb-ink); font-size:18px; font-weight:650; line-height:1.3; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
 .summary-stage strong { font-size:23px; }
-.summary-resource strong { color:var(--metric-accent); font-size:29px; font-weight:600; }
+.summary-resource strong { color:var(--column-ink); font-size:29px; font-weight:600; }
 .summary-time strong { font-size:16px; }
 .workspace-grid { display:block; padding-top:28px; }
 .learning-tools { min-width:0; }
 .section-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:19px; }
+.section-index { display:block; font-size:12px; line-height:1.4; }
 .section-heading h3 { margin:6px 0 0; font-size:21px; font-weight:650; line-height:1.4; }
 .section-description { color:var(--wb-muted); font-size:12px; }
 .tool-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-top:1px solid var(--wb-line); }
-.tool-card { position:relative; display:grid; grid-template-columns:28px minmax(0,1fr) 20px; align-items:center; gap:15px; min-width:0; min-height:112px; padding:22px 25px 22px 14px; border:0; border-bottom:1px solid var(--wb-line); border-radius:0; background:transparent; color:var(--wb-ink); text-align:left; cursor:pointer; transition:background-color 180ms ease,color 180ms ease; }
+.tool-card { --tool-icon-size:clamp(48px,3.6vw,56px); position:relative; display:grid; grid-template-columns:var(--tool-icon-size) minmax(0,1fr) 18px; align-items:center; gap:15px; min-width:0; min-height:112px; padding:22px 25px 22px 14px; border:0; border-bottom:1px solid var(--wb-line); border-radius:0; background:transparent; color:var(--wb-ink); text-align:left; cursor:pointer; transition:background-color 180ms ease,color 180ms ease; }
 .tool-card:nth-child(odd) { border-right:1px solid var(--wb-line); }
 .tool-card:nth-child(even) { padding-left:27px; }
 .tool-card:hover { background:var(--wb-paper); }
-.tool-card::before { position:absolute; inset:0 auto 0 0; width:2px; background:var(--wb-focus); content:''; opacity:0; transition:opacity 180ms ease; }
-.tool-card:hover::before,.tool-card:focus-visible::before { opacity:1; }
-.tool-icon { color:#396588; font-size:24px; }
-.tool-icon .el-icon { display:flex; }
+.tool-card::before { position:absolute; inset:0 auto 0 0; width:2px; background:var(--column-ink); content:''; opacity:0; transition:opacity 180ms ease; }
+.tool-card:is(:hover,:focus-visible,:active)::before { opacity:1; }
+.tool-icon { display:grid; width:var(--tool-icon-size); aspect-ratio:1; place-items:center; border:1px solid var(--column-line); border-radius:12px; background:var(--column-surface); color:var(--column-ink); font-size:clamp(30px,2.1vw,34px); }
 .tool-copy { min-width:0; }
-.tool-copy strong { display:block; font-size:17px; font-weight:600; line-height:1.5; }
-.tool-copy small { display:block; margin-top:5px; color:var(--wb-muted); font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
-.tool-index { position:absolute; top:12px; right:16px; color:var(--wb-muted); font:10px/1.5 Consolas,'SFMono-Regular',monospace; }
+.tool-copy strong { display:block; font-size:22px; font-weight:650; line-height:1.4; }
+.tool-copy small { display:block; margin-top:5px; color:var(--wb-muted); font-size:14px; line-height:1.6; overflow-wrap:anywhere; }
+.tool-index { position:absolute; top:12px; right:16px; color:var(--wb-muted); font:11px/1.5 Consolas,'SFMono-Regular',monospace; }
 .tool-arrow { color:#496580; font-size:18px; transition:transform 180ms ease; }
 .tool-card:hover .tool-arrow { transform:translateX(3px); }
-.workspace-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; margin-top:27px; padding-top:16px; border-top:1px solid var(--wb-line); color:var(--wb-muted); font-size:11px; line-height:1.8; }
+.workspace-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; margin-top:27px; padding-top:16px; color:var(--wb-muted); font-size:11px; line-height:1.8; }
 .workspace-footer > span:last-child { font-size:10px; }
 .workspace-footer > span:last-child > span { margin:0 7px; }
 .home-page button:focus-visible { outline:3px solid var(--wb-focus); outline-offset:4px; }
@@ -451,7 +478,6 @@ onBeforeUnmount(() => {
 :global(.profile-switch-dialog .el-dialog__title) { color:#172c45; font-size:20px; font-weight:650; }
 :global(.profile-switch-dialog .el-dialog__headerbtn:focus-visible),:global(.profile-switch-dialog button:focus-visible) { outline:3px solid #2269ba; outline-offset:2px; }
 @media (min-width:1700px) {
-  .workspace-heading { padding:26px 0; }
   .hero-copy { padding:33px 0 30px 40px; }
   .home-hero { min-height:324px; }
   .hero-copy h2 { margin-top:21px; margin-bottom:15px; }
@@ -473,17 +499,12 @@ onBeforeUnmount(() => {
 @media (max-width:900px) {
   .home-hero { grid-template-columns:minmax(0,1fr) minmax(240px,.7fr); }
   .hero-copy h2 { font-size:27px; }
-  .caption-code { display:none; }
+  .flow-label { font-size:18px; }
   .workspace-grid { grid-template-columns:1fr; gap:28px; }
   .summary-item { padding-inline:16px; }
   .summary-code { display:none; }
 }
 @media (max-width:600px) {
-  .workspace-heading { align-items:flex-start; flex-wrap:wrap; gap:16px; padding:24px 0; }
-  .workspace-heading h2 { font-size:27px; }
-  .workspace-new.el-button { height:42px; }
-  .workspace-heading-actions { width:100%; gap:8px; }
-  .workspace-switch.el-button,.workspace-new.el-button { height:44px; padding-inline:12px; }
   :global(.profile-switch-dialog) { margin:12px auto; padding:20px; }
   .profile-options { max-height:48dvh; }
   .profile-option { gap:10px; padding:13px 10px; }
@@ -494,15 +515,13 @@ onBeforeUnmount(() => {
   .hero-actions { gap:10px; }
   .workbench-primary :deep(> span) { gap:16px; }
   .workbench-primary.el-button { padding-inline:14px; }
-  .workbench-history.el-button { padding-inline:10px; }
+  .workbench-switch.el-button { padding-inline:10px; }
   .hero-footnote { margin-top:23px; }
   .hero-visual { padding:4px 18px 20px; }
   .knowledge-network { max-width:320px; max-height:200px; }
   .learning-summary { grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:18px; }
   .summary-item { padding:17px 14px; }
-  .summary-item:nth-child(odd) { border-left:0; }
   .summary-item:nth-child(n+3) { border-top:1px solid var(--wb-line); }
-  .summary-item::before { top:17px; bottom:17px; }
   .summary-value { gap:9px; }
   .summary-icon { width:27px; height:27px; flex-basis:27px; font-size:17px; }
   .summary-item strong { font-size:14px; }
@@ -518,34 +537,25 @@ onBeforeUnmount(() => {
 }
 .home-page.is-fit-layout {
   display:grid;
-  grid-template-rows:auto minmax(218px,1.35fr) auto minmax(150px,1fr) auto;
+  grid-template-rows:minmax(218px,1.35fr) auto minmax(150px,1fr) auto;
   gap:clamp(8px,1.2dvh,16px);
   height:100%;
   min-height:0;
   padding:0;
 }
-.is-fit-layout .workspace-heading { min-width:0; gap:20px; padding:0; }
-.is-fit-layout .workspace-intro { display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 17px; align-items:center; }
-.is-fit-layout .workspace-eyebrow { grid-column:1/-1; font-size:10px; line-height:1.2; }
-.is-fit-layout .workspace-heading h2 { margin:0; font-size:clamp(22px,3dvh,30px); line-height:1.3; }
-.is-fit-layout .workspace-heading p { font-size:12px; }
-.is-fit-layout .workspace-new.el-button,.is-fit-layout .workspace-switch.el-button { height:40px; }
 .is-fit-layout .home-hero { min-height:0; grid-template-columns:minmax(0,1.1fr) minmax(300px,1fr); }
 .is-fit-layout .hero-copy { justify-content:space-between; gap:clamp(12px,1.8dvh,20px); padding:clamp(18px,2.3dvh,26px) 16px clamp(18px,2.3dvh,26px) clamp(24px,2.3vw,40px); }
 .is-fit-layout .hero-copy h2 { margin:clamp(10px,1.4dvh,16px) 0 0; font-size:clamp(26px,3.7dvh,38px); line-height:1.3; }
 .is-fit-layout .next-action-title { font-size:15px; line-height:1.6; }
 .is-fit-layout .hero-copy p { margin-top:7px; max-width:540px; font-size:13px; line-height:1.75; }
-.is-fit-layout .hero-eyebrow { font-size:11px; line-height:1.5; }
-.is-fit-layout .hero-code { font-size:10px; }
 .is-fit-layout .hero-actions { margin-top:0; }
-.is-fit-layout .workbench-primary.el-button,.is-fit-layout .workbench-history.el-button { height:40px; }
+.is-fit-layout .workbench-primary.el-button,.is-fit-layout .workbench-switch.el-button { height:40px; }
 .is-fit-layout .hero-footnote { margin-top:clamp(12px,1.8dvh,18px); font-size:11px; line-height:1.5; }
 .is-fit-layout .hero-visual { min-height:0; justify-content:center; padding:16px 22px 16px 8px; }
 .is-fit-layout .knowledge-network { min-height:0; max-height:calc(100% - 28px); flex:1 1 0; }
 .is-fit-layout .visual-caption { flex:0 0 auto; margin-top:5px; }
 .is-fit-layout .learning-summary { margin:0; }
 .is-fit-layout .summary-item { padding:clamp(10px,1.7dvh,18px) 19px; }
-.is-fit-layout .summary-item::before { top:13px; bottom:13px; }
 .is-fit-layout .summary-value { margin-top:auto; min-height:clamp(42px,6dvh,54px); padding-top:7px; }
 .is-fit-layout .summary-item strong { font-size:clamp(15px,2.1dvh,20px); }
 .is-fit-layout .summary-stage strong { font-size:clamp(19px,2.6dvh,25px); }
@@ -554,18 +564,17 @@ onBeforeUnmount(() => {
 .is-fit-layout .workspace-grid { min-height:0; gap:32px; padding:0; }
 .is-fit-layout .learning-tools { display:flex; height:100%; min-height:0; flex-direction:column; }
 .is-fit-layout .section-heading { flex:0 0 auto; gap:12px; margin-bottom:clamp(8px,1.1dvh,15px); }
-.is-fit-layout .section-index { display:block; font-size:10px; line-height:1.4; }
 .is-fit-layout .section-heading h3 { margin-top:2px; font-size:clamp(17px,2.3dvh,22px); line-height:1.2; }
 .is-fit-layout .tool-grid { flex:1 1 0; min-height:0; grid-template-rows:repeat(2,minmax(0,1fr)); }
 .is-fit-layout .tool-card { min-height:0; padding-block:10px; }
-.is-fit-layout .tool-copy strong { font-size:clamp(14px,1.9dvh,18px); line-height:1.4; }
-.is-fit-layout .tool-copy small { margin-top:3px; font-size:12px; line-height:1.4; }
-.is-fit-layout .tool-index { top:7px; font-size:9px; }
+.is-fit-layout .tool-copy strong { font-size:clamp(18px,2.6dvh,22px); }
+.is-fit-layout .tool-copy small { margin-top:3px; line-height:1.4; }
+.is-fit-layout .tool-index { top:7px; }
 .is-fit-layout .workspace-footer { margin:0; padding-top:3px; font-size:10px; line-height:1.4; }
 @media (max-height:720px) and (min-width:1100px) {
-  .home-page.is-fit-layout { grid-template-rows:auto minmax(218px,1.1fr) auto minmax(150px,1fr) auto; }
+  .home-page.is-fit-layout { grid-template-rows:minmax(218px,1.1fr) auto minmax(150px,1fr) auto; }
   .is-fit-layout .home-hero { grid-template-columns:minmax(0,1.25fr) minmax(260px,.8fr); }
-  .is-fit-layout .hero-copy { justify-content:center; gap:0; padding-block:13px; padding-right:0; }
+  .is-fit-layout .hero-copy { justify-content:center; gap:0; padding-block:10px; padding-right:0; }
   .is-fit-layout .hero-copy h2 { font-size:26px; line-height:1.25; margin:8px 0 6px; }
   .is-fit-layout .next-action-title { font-size:14px; line-height:1.5; }
   .is-fit-layout .hero-copy p { margin-top:4px; max-width:620px; font-size:12px; line-height:1.6; }
@@ -578,13 +587,14 @@ onBeforeUnmount(() => {
   .is-fit-layout .section-heading { margin-bottom:7px; }
 }
 @media (prefers-reduced-motion:reduce) {
-  .home-page *, .home-page *::before { transition:none !important; animation:none !important; }
+  .home-page *, .home-page *::before, .home-page *::after { transition:none !important; animation:none !important; }
+  .knowledge-network { transform:none; }
   :global(.profile-switch-dialog *) { transition:none !important; animation:none !important; }
 }
 @media (min-width:1100px) {
   .tool-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
-  .tool-card { padding-inline:20px; border-right:1px solid var(--wb-line); }
-  .tool-card:nth-child(even) { padding-left:20px; }
+  .tool-card,.tool-card:nth-child(even) { gap:clamp(9px,1vw,15px); padding-inline:clamp(12px,1.2vw,20px); }
+  .tool-card { border-right:1px solid var(--wb-line); }
   .tool-card:last-child { border-right:0; }
   .is-fit-layout .tool-grid { grid-template-rows:minmax(0,1fr); }
 }

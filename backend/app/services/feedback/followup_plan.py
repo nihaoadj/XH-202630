@@ -20,6 +20,37 @@ class FollowupRequestPlan:
     ) -> list[GenerateRequest]:
         # Called within the Service's original job-creation exception boundary.
         supplement = include_claim_evidence_retrieval and include_claim_check
+        focus = self.request.constraints.get("correction_focus_snapshot")
+        if focus and "个性化纠错训练包" in self.resource_types:
+            from copy import deepcopy
+            from app.core.learning_tiers import difficulty_for_tier
+            from app.models.shared.persistence import canonical_hash
+            result = []
+            for node in focus["ordered_target_nodes"]:
+                node_id = node["skill_node_id"]
+                tier = (node.get("node_context") or {}).get("tier") or node.get("tier")
+                difficulty = difficulty_for_tier(tier) if tier in {1, 2, 3} else self.request.difficulty_preference
+                single = deepcopy(focus)
+                single["ordered_target_nodes"] = [deepcopy(node)]
+                single["difficulty"] = difficulty
+                single["scaffolding_level"] = "high" if node.get("mastery_status") == "weak" else "medium"
+                single["parent_focus_snapshot_hash"] = focus.get("focus_snapshot_hash")
+                single["focus_snapshot_hash"] = canonical_hash({k:v for k,v in single.items() if k != "focus_snapshot_hash"})
+                constraints = {**self.request.constraints, "correction_focus_snapshot": single,
+                               "feedback_difficulty": difficulty}
+                history = [q for q in constraints.get("historical_assessment_questions", [])
+                           if q.get("skill_node_id") == node_id]
+                constraints["historical_assessment_questions"] = history
+                constraints["historical_assessment_questions_status"] = "available" if history else "unavailable"
+                groups = [[kind] for kind in self.resource_types] if include_claim_check else [self.resource_types]
+                for group in groups:
+                    result.append(self.request.model_copy(update={
+                        "target_skill_nodes": [node_id], "resource_types": list(group),
+                        "topic": f"{node.get('name') or node_id} · 薄弱点强化",
+                        "difficulty_preference": difficulty, "constraints": deepcopy(constraints),
+                        "include_claim_check": include_claim_check,
+                        "include_claim_evidence_retrieval": supplement}))
+            return result
         if include_claim_check and len(self.resource_types) > 1:
             return [self.request.model_copy(update={
                 "resource_types": [resource_type], "include_claim_check": True,
@@ -83,7 +114,7 @@ def build_followup_plan(
             and selection.include_claim_check
             and len(resource_types) == 1
         ),
-        max_iterations=2,
+        claim_post_retrieval_max_iterations=selection.claim_post_retrieval_max_iterations,
         constraints=constraints,
     )
     # A correction package supplements its source batch; other choices start a new one.

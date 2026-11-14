@@ -13,6 +13,25 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 CLAIM_SCHEMA_VERSION = "2.0"
+STRUCTURED_ASSESSMENT_SOURCE = "structured-assessment-v1"
+STRUCTURED_CHECKLIST_SOURCE = "structured-checklist-v1"
+CONTEXTUAL_CHECKLIST_SOURCE = "structured-checklist-v2"
+UNIFIED_ASSESSMENT_SOURCE = "structured-assessment-context-v2"
+UNIFIED_CHECKLIST_SOURCE = "structured-checklist-context-v3"
+UNIFIED_CORRECTION_SOURCE = "structured-correction-context-v5"
+UNIFIED_PRACTICE_SOURCE = "structured-practice-context-v1"
+UNIFIED_PRACTICE_SOURCE_V2 = "structured-practice-context-v2"
+UNIFIED_PRACTICE_SOURCE_V3 = "structured-practice-context-v3"
+UNIFIED_PRACTICE_SOURCE_V4 = "structured-practice-context-v4"
+UNIFIED_PRACTICE_SOURCE_V5 = "structured-practice-context-v5"
+UNIFIED_SOURCE_MARKERS = frozenset({UNIFIED_ASSESSMENT_SOURCE, UNIFIED_CHECKLIST_SOURCE,
+                                   UNIFIED_CORRECTION_SOURCE, UNIFIED_PRACTICE_SOURCE,
+                                   UNIFIED_PRACTICE_SOURCE_V2, UNIFIED_PRACTICE_SOURCE_V3,
+                                   UNIFIED_PRACTICE_SOURCE_V4, UNIFIED_PRACTICE_SOURCE_V5})
+STRUCTURED_CORRECTION_SOURCE = "structured-correction-v1"
+FILTERED_CORRECTION_SOURCE = "structured-correction-v2"
+COMPACT_CORRECTION_SOURCE = "structured-correction-v3"
+CONTEXTUAL_CORRECTION_SOURCE = "structured-correction-v4"
 # Bound the audit envelope per resource so extraction remains reviewable and
 # cannot consume the entire workflow budget on an unusually verbose response.
 MAX_CLAIMS_PER_RESOURCE = 20

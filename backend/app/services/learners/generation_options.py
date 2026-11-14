@@ -16,6 +16,7 @@ from app.models.learners.mastery import (
     NextGenerationOptionsV1,
 )
 from app.models.learning_documents.schemas import LearnerProfile, SkillNode
+from app.services.learners.initial_placement import initial_passed_node_ids
 
 
 def build_generation_options(
@@ -36,10 +37,13 @@ def build_generation_options(
 ) -> NextGenerationOptionsV1:
     """Project choices; defer the completion read until its original position."""
     downgrade_selection = True
+    passed = initial_passed_node_ids(profile)
 
     def prerequisite_blockers(node) -> list[str]:
         blocked: list[str] = []
         for prerequisite in node.prerequisites:
+            if prerequisite in passed:
+                continue
             if prerequisite not in names:
                 continue
             record = curriculum_nodes.get(prerequisite)
@@ -114,6 +118,7 @@ def build_generation_options(
         item.skill_node_id for item in curriculum_nodes.values()
         if item.placement_exempt or item.progress_status == CurriculumProgressStatus.COMPLETED
     }
+    completed_node_ids.update(passed)
     # A newly unlocked tier must start at the graph frontier. Do not
     # offer every unexposed node in the tier: a node is selectable only
     # when all of its direct prerequisites have been completed.
@@ -122,7 +127,11 @@ def build_generation_options(
         if node.prerequisites and set(node.prerequisites) <= completed_node_ids
     ]
     if active_tier == 1:
-        next_tier_nodes = [node for node in new_nodes if not node.prerequisites]
+        next_tier_nodes = [node for node in new_nodes if set(node.prerequisites) <= completed_node_ids]
+    # Passing an initial check unlocks descendants, while the passed node
+    # remains in explicit learning/review candidates.
+    pending_nodes = [node for node in next_tier_nodes if node.node_id not in passed]
+    next_tier_nodes = pending_nodes or next_tier_nodes
     learning_nodes = []
     seen_learning_ids: set[str] = set()
     downgrade_nodes = [node for node in nodes if get_node_tier(node) in {active_tier, active_tier - 1}]

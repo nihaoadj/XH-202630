@@ -61,7 +61,7 @@ def decide_attempt(attempt: LearningAttempt, context: FeedbackContext) -> Feedba
         target_knowledge_point_ids=tuple(
             item.knowledge_point_id for item in attempt.knowledge_point_results
         ),
-        decision_reason="总分达到 80% 且没有知识点阻断项，可以推进到后继或挑战节点。",
+        decision_reason="总分达到 80% 且没有知识点阻断项，可以选择符合条件的后续学习节点。",
         should_generate=True,
     )
 

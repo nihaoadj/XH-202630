@@ -4,7 +4,11 @@ from app.core.courseware.content_review.adapters.review_practice import ReviewPr
 from app.core.courseware.content_review.adapters.practice_guide import PracticeGuideAdapter
 from app.models.courseware.content_review import ContentReviewBlocked
 
-ADAPTERS = MappingProxyType({("复习清单", "2.0"): ReviewPracticeAdapter(), ("实操指南", "3.0"): PracticeGuideAdapter()})
+_PRACTICE_ADAPTER = PracticeGuideAdapter()
+ADAPTERS = MappingProxyType({
+    ("复习清单", "2.0"): ReviewPracticeAdapter(),
+    **{("实操指南", version): _PRACTICE_ADAPTER for version in ("3.0", "4.0", "5.0", "6.0")},
+})
 
 
 def resolve_adapter(snapshot, registry=ADAPTERS):

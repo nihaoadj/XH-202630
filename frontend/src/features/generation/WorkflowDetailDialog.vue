@@ -27,9 +27,16 @@
           <section v-else-if="contentKind === 'claims'" class="claim-verification detail-module" aria-label="陈述事实核验">
             <el-alert v-if="claimsError && claimEnabled" :title="claimsError" type="warning" :closable="false" show-icon />
             <div class="claim-audit-heading detail-section-heading"><span class="section-number">CLAIM / EVIDENCE</span><h3>{{ claimAuditSummary(metric, claimEnabled) }}</h3></div>
-            <p v-if="role.key === 'claim_evidence_rejudge'" class="result-caption">本步骤仅重新核对首次缺证的事实陈述；下方展示所选资源当前的有效判定。</p>
+            <p v-if="role.key === 'claim_evidence_rejudge'" class="result-caption">本步骤仅重新核对首次缺证的事实陈述。</p>
             <ClaimEvidenceRetrievalPanel v-if="claimEnabled" :summary="claimRetrieval" />
-            <ClaimEvidenceList v-if="claimEnabled && resource" :key="resourceId" :rows="rows" focus-first><template v-if="rows.length" #summary><div class="claim-verdict-counts"><span v-for="item in verdictCounts" :key="item.verdict" :class="`is-${item.verdict}`" :aria-label="`${item.label} ${item.count}`">{{ item.shortLabel }} <strong>{{ item.count }}</strong></span></div></template></ClaimEvidenceList>
+            <el-alert v-if="assessmentClaimSummaryOnly" title="仅展示测评审核汇总" type="info" :closable="false" show-icon>
+              <p class="result-caption">共抽取 {{ metric.claim_total }} 条陈述，其中 {{ metric.factual_claim_total }} 条属于事实陈述，{{ metric.supported_claim_total }} 条获得证据支持。</p>
+              <p v-if="metric.not_in_evidence_claim_total || metric.contradicted_claim_total || metric.incomplete_claim_total" class="result-caption">
+                缺少证据支持 {{ metric.not_in_evidence_claim_total }} 条，与证据矛盾 {{ metric.contradicted_claim_total }} 条，未完成判定 {{ metric.incomplete_claim_total }} 条。
+              </p>
+              <p class="result-caption">逐条陈述、判定理由和证据可能透露参考答案或解析，因此在此隐藏。</p>
+            </el-alert>
+            <ClaimEvidenceList v-else-if="claimEnabled && resource" :key="resourceId" :rows="rows" focus-first><template v-if="rows.length" #summary><div class="claim-verdict-counts"><span v-for="item in verdictCounts" :key="item.verdict" :class="`is-${item.verdict}`" :aria-label="`${item.label} ${item.count}`">{{ item.shortLabel }} <strong>{{ item.count }}</strong></span></div></template></ClaimEvidenceList>
             <p v-else-if="claimEnabled" class="empty-note">本节点未关联可核验的资源，无法展示 Claim 判定。</p>
             <p v-else class="result-caption">此节点没有启用事实核验，不能据此认为事实通过。</p>
           </section>
@@ -83,6 +90,8 @@ const reviews = computed(() => resource.value ? (props.snapshot.reviews || []).f
   .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))) : [])
 const metric = computed(() => resource.value ? props.claims.resource_metrics?.[resource.value.resource_id] : null)
 const rows = computed(() => props.claimEnabled && resource.value ? buildClaimRows(props.claims, props.resourceId, props.runId, props.snapshot.evidence, resource.value) : [])
+const assessmentClaimSummaryOnly = computed(() => props.claimEnabled && !props.claimsError
+  && resource.value?.resource_type === '分阶测试题' && metric.value?.claim_total > 0 && rows.value.length === 0)
 const verdictCounts = computed(() => Object.entries(verdictLabels).map(([verdict, label]) => ({ verdict, label,
   shortLabel: ({ supported: '证据支持', contradicted: '证据矛盾', not_in_evidence: '未获支持', incomplete: '未完成', non_factual: '非事实' })[verdict], count: rows.value.filter(row => row.verdict === verdict).length })).filter(item => item.count))
 const nodeEvidence = computed(() => [...new Set(props.step?.evidence_refs || [])].map(id => (props.snapshot.evidence || []).find(item => item.evidence_id === id && item.run_id === props.runId) || { evidence_id: id, missing: true }))

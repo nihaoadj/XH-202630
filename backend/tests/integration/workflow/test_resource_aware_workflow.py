@@ -106,6 +106,33 @@ def test_planner_sees_complete_unique_evidence_and_selected_types(monkeypatch):
     assert "fixture-gap" in prompt and "source.md" in prompt and "node_evidence_map" in prompt
     assert set(result["learning_plan"]["resource_requirements"]) == {"讲义", "案例分析"}
     assert result["trace"][0]["evidence_refs"] == [f"ev-{i}" for i in range(8)]
+    assert "手动填写诊断表" not in gateway.calls[0]["messages"][0].content
+    assert planner_agent.LECTURE_PLANNING_GUIDANCE in gateway.calls[0]["messages"][0].content
+
+
+def test_practice_planner_receives_executable_task_guidance_only_when_selected(monkeypatch):
+    state = state_fixture()
+    monkeypatch.setattr(planner_agent, "get_settings", lambda: SimpleNamespace(resource_aware_planner_context_tokens=100000, resource_aware_planner_input_budget_tokens=90000))
+    state["resource_types"] = ["实操指南"]
+    allocation = state["evidence_allocation"].model_dump(mode="json")
+    allocation["resource_types"] = ["实操指南"]
+    allocation["resource_specific_evidence_ids"] = {"实操指南": ["ev-1", "ev-2"]}
+    allocation["gaps"] = []
+    allocation["allocation_hash"] = retrieval_config_hash({key: value for key, value in allocation.items() if key != "allocation_hash"})
+    state["evidence_allocation"] = EvidenceAllocation.model_validate(allocation)
+    gateway = ScriptedLLMGateway([planner_result()])
+
+    result = planner_agent.plan_node(state, llm_gateway=gateway)
+
+    system_message, user_message = gateway.calls[0]["messages"]
+    assert "手动填写诊断表" in system_message.content
+    assert "实际运行程序或命令" in system_message.content
+    assert "首次使用时在哪一步用代码创建或定义" in system_message.content and "结果验证" in system_message.content
+    assert "每个独立步骤运行哪段代码" in system_message.content
+    assert planner_agent.LECTURE_PLANNING_GUIDANCE not in system_message.content
+    assert "目标能力节点" in user_message.content
+    assert "available_evidence_ids" in user_message.content
+    assert result["learning_plan"]["resource_requirements"] == {"实操指南": "未选要求"}
 
 
 @pytest.mark.parametrize("window,budget", [(None, 32768), (200000, 1), (1, 32768)])
@@ -235,3 +262,4 @@ def test_planner_budget_fallback_is_marked_and_scoped(monkeypatch):
     assert result["errors"][0]["category"] == "input_budget"
     assert "未执行 AI 规划" in result["learning_plan"]["decision_reason"]
     assert set(result["learning_plan"]["resource_requirements"]) == {"讲义", "案例分析"}
+    assert "冻结证据支持的短例" in result["learning_plan"]["resource_requirements"]["讲义"]

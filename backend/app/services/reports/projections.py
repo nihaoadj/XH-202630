@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from app.models.learners.mastery import MASTERY_CONFIRMATION_THRESHOLD
-from app.services.reports.difficulty_matching import STRATEGY_VERSION, match_difficulty
 from datetime import datetime, timezone
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -405,7 +404,7 @@ def _build_resource_difficulty_curve(
     resources,
     *,
     credibility_items = None,
-    credibility_summary = None,
+    claim_enabled_by_run = None,
     attempts = None,
     ordered_ability_nodes: Callable,
     utc: Callable,
@@ -417,40 +416,25 @@ def _build_resource_difficulty_curve(
         (item["resource_id"], item.get("resource_version")): item
         for item in (credibility_items or [])
     }
-    feedback_by_resource = {}
-    for attempt in attempts or []:
-        resource_id = getattr(attempt, "source_resource_id", None)
-        score = getattr(attempt, "overall_score", None)
-        if resource_id and isinstance(score, (int, float)) and 0 <= score <= 1:
-            key = (resource_id, getattr(attempt, "source_resource_version", 1))
-            feedback_by_resource.setdefault(key, []).append(float(score))
-
-    def calibrated_match(match, feedback_scores):
-        """Raise difficulty only when formal feedback is below 60%."""
-        if match.score is None or match.gap is None or not feedback_scores:
-            return match, None, 0.0
-        feedback_score = sum(feedback_scores) / len(feedback_scores)
-        if feedback_score >= 0.60:
-            return match, feedback_score, 0.0
-        # Readiness provides context so an unprepared learner's low score
-        # does not overstate the resource's actual difficulty.
-        low_score_signal = (0.60 - feedback_score) * 0.20
-        readiness_signal = max(0.0, match.gap) * 0.25
-        adjustment = round(min(0.20, max(low_score_signal, readiness_signal)), 6)
-        score = min(1.0, round(match.score + adjustment, 6))
-        gap = round(score - (match.score - match.gap), 6)
-        if gap < -0.15:
-            status = "too_easy"
-        elif gap <= 0.10:
-            status = "matched"
-        elif gap <= 0.25:
-            status = "challenging"
-        else:
-            status = "too_hard"
-        return match.__class__(
-            score, "calibrated_history", gap, status,
-            ("DIFFICULTY_CALIBRATED_FROM_LOW_FEEDBACK",),
-        ), feedback_score, adjustment
+    def audit_reference(resource, credibility):
+        evidence = credibility or {}
+        review = evidence.get("publication_review") or {}
+        claim = evidence.get("claim_support") or {}
+        enabled = (claim_enabled_by_run or {}).get(resource.run_id)
+        if review.get("status") == "failed":
+            return None, None, "review_failed"
+        rate = claim.get("unsupported_rate")
+        if enabled is not False and claim.get("metric_status") == "complete" and isinstance(rate, (int, float)) and 0 <= rate <= 1:
+            return round(100 * (1 - rate), 2), "claim", None
+        if enabled is False:
+            if review.get("status") == "passed":
+                return 95.0, "ordinary_review", None
+            return None, None, "review_unverified"
+        if claim.get("metric_status") == "not_applicable":
+            return None, None, "claim_not_applicable"
+        if enabled is True or claim.get("metric_status") == "incomplete":
+            return None, None, "claim_unmeasured"
+        return None, None, "claim_configuration_unknown"
 
     resource_points = []
     for resource in resources:
@@ -467,41 +451,77 @@ def _build_resource_difficulty_curve(
         # target; the first linked node is a deterministic legacy fallback.
         node_id = target_ids[0] if target_ids else None
         node = nodes.get(node_id) if node_id else None
-        readiness = (
-            node.mastery.mastery_score
-            if node and node.mastery.objective_evidence_count > 0 else None
-        )
-        match = match_difficulty(learner_readiness=readiness, declared_difficulty=resource.difficulty)
-        feedback_scores = feedback_by_resource.get((resource.resource_id, resource.version), [])
-        adjusted_match, feedback_score, difficulty_adjustment = calibrated_match(match, feedback_scores)
+        score, score_source, score_unavailable_reason = audit_reference(resource, credibility)
         resource_points.append({
             "resource_id": resource.resource_id,
             "skill_node_id": node_id or "unassigned",
             "skill_name": node.name if node else "未关联能力节点",
             "point_type": "resource",
             "batch_id": resource.batch_id or resource.run_id,
-            "_batch_key": resource.batch_id or resource.run_id or "__legacy__",
+            "_batch_key": resource.batch_id or resource.run_id or f"resource:{resource.resource_id}",
+            "_resource_version": resource.version,
             "resource_name": resource.topic or resource.resource_type,
             "resource_count": 1,
-            "default_resource_difficulty_score": match.score,
-            "learner_readiness_score": readiness,
-            "resource_difficulty_score": adjusted_match.score,
-            "difficulty_gap": adjusted_match.gap,
-            "match_status": adjusted_match.status,
+            "default_resource_difficulty_score": None,
+            "learner_readiness_score": None,
+            "resource_difficulty_score": None,
+            "difficulty_gap": None,
+            "match_status": "not_measured",
             "confidence": node.mastery.confidence.value if node else "none",
-            "difficulty_source": adjusted_match.source,
+            "difficulty_source": "unavailable",
             "resource_type": resource.resource_type,
             "resource_ids": [resource.resource_id],
-            "reason_codes": list(adjusted_match.reason_codes),
-            "feedback_score": feedback_score,
-            "feedback_count": len(feedback_scores),
-            "difficulty_adjustment": difficulty_adjustment,
-            "credibility_score": credibility.get("credibility_score") if credibility else None,
+            "reason_codes": [],
+            "feedback_score": None,
+            "feedback_count": 0,
+            "subjective_feedback_count": 0,
+            "difficulty_fit_score": None,
+            "experience_score": None,
+            "credibility_score": score,
+            "credibility_score_source": score_source,
+            "credibility_unavailable_reason": score_unavailable_reason,
+            "ordinary_review_score": score if score_source == "ordinary_review" else None,
+            "claim_review_score": score if score_source == "claim" else None,
             "credibility_level": credibility.get("credibility_level") if credibility else None,
             "credibility_grade": credibility.get("grade") if credibility else None,
             "credibility_score_breakdown": credibility.get("score_breakdown") if credibility else None,
             "_published_at": resource.published_at or resource.created_at,
         })
+
+    points_by_version = {
+        (point["resource_id"], point["_resource_version"]): point for point in resource_points
+    }
+    attempts_by_batch = {}
+    seen_attempts = set()
+    experience_scores = {"too_easy": 50.0, "fit": 100.0, "too_hard": 50.0}
+    for attempt in attempts or []:
+        resource_id = getattr(attempt, "source_resource_id", None)
+        point = points_by_version.get((resource_id, getattr(attempt, "source_resource_version", 1)))
+        if point is None:
+            continue
+        metadata = getattr(attempt, "metadata", None) or {}
+        context = metadata.get("round_context") or {}
+        roles = context.get("roles") or {}
+        score = getattr(attempt, "overall_score", None)
+        if roles:
+            role = roles.get(point["skill_node_id"])
+            if role == "primary" and len(roles) > 1:
+                score = next((result.score for result in attempt.knowledge_point_results
+                              if result.knowledge_point_id == point["skill_node_id"]), None)
+            elif role != "primary" and len(roles) > 1:
+                # A mixed attempt cannot provide a score for an ambiguous anchor.
+                continue
+        if not isinstance(score, (int, float)) or not 0 <= score <= 1:
+            continue
+        attempt_id = getattr(attempt, "attempt_id", None)
+        if attempt_id and attempt_id in seen_attempts:
+            continue
+        if attempt_id:
+            seen_attempts.add(attempt_id)
+        reflection = metadata.get("learning_reflection")
+        feeling = reflection.get("difficulty_feeling") if isinstance(reflection, dict) else None
+        experience = experience_scores.get(feeling) if isinstance(feeling, str) else None
+        attempts_by_batch.setdefault(point["_batch_key"], []).append((score, experience))
 
     batches = {}
     for point in resource_points:
@@ -518,53 +538,47 @@ def _build_resource_difficulty_curve(
         values = [item[key] for item in items if isinstance(item.get(key), (int, float))]
         return round(sum(values) / len(values), 6) if values else None
 
-    def aggregate_batch(batch_id, items):
-        readiness = average(items, "learner_readiness_score")
-        difficulty = average(items, "resource_difficulty_score")
-        gap = average(items, "difficulty_gap")
-        calibrated = any(item["difficulty_source"] == "calibrated_history" for item in items)
-        if readiness is None or difficulty is None or gap is None:
-            status = "not_measured"
-            source = "unavailable" if difficulty is None else "calibrated_history" if calibrated else "declared_band"
-        elif gap < -0.15:
-            status = "too_easy"
-            source = "calibrated_history" if calibrated else "declared_band"
-        elif gap <= 0.10:
-            status = "matched"
-            source = "calibrated_history" if calibrated else "declared_band"
-        elif gap <= 0.25:
-            status = "challenging"
-            source = "calibrated_history" if calibrated else "declared_band"
-        else:
-            status = "too_hard"
-            source = "calibrated_history" if calibrated else "declared_band"
-        reason_codes = ["BATCH_AVERAGE"]
-        if calibrated:
-            reason_codes.append("BATCH_INCLUDES_FEEDBACK_CALIBRATION")
-        scores = [item["credibility_score"] for item in items if isinstance(item.get("credibility_score"), (int, float))]
+    def aggregate_batch(batch_id, items, *, latest=False):
+        observations = attempts_by_batch.get(batch_id, [])
+        feedback_score = sum(score for score, _ in observations) / len(observations) if observations else None
+        feelings = [feeling for _, feeling in observations if feeling is not None]
+        experience_score = sum(feelings) / len(feelings) if feelings else None
+        fit_score = None
+        if feedback_score is not None:
+            fit_score = feedback_score * 100
+            if experience_score is not None:
+                fit_score = 0.8 * fit_score + 0.2 * experience_score
+        ordinary_score = average(items, "ordinary_review_score")
+        claim_score = average(items, "claim_review_score")
+        mixed = ordinary_score is not None and claim_score is not None
         return {
             "resource_id": f"batch:{batch_id}",
             "skill_node_id": f"batch:{batch_id}",
-            "skill_name": "历史批次平均",
-            "point_type": "batch_average",
-            "batch_id": None if batch_id == "__legacy__" else batch_id,
+            "skill_name": "本批次匹配度" if latest else "历史批次平均",
+            "point_type": "batch_fit" if latest else "batch_average",
+            "batch_id": items[0]["batch_id"],
             "resource_name": "历史资源批次",
             "resource_count": len({resource_id for item in items for resource_id in item["resource_ids"]}),
-            "default_resource_difficulty_score": average(items, "default_resource_difficulty_score"),
-            "learner_readiness_score": readiness,
-            "resource_difficulty_score": difficulty,
-            "difficulty_gap": gap,
-            "match_status": status,
+            "default_resource_difficulty_score": None,
+            "learner_readiness_score": None,
+            "resource_difficulty_score": None,
+            "difficulty_gap": None,
+            "match_status": "not_measured",
             "confidence": "batch_average",
-            "difficulty_source": source,
+            "difficulty_source": "unavailable",
             "resource_type": "批次平均",
             "resource_ids": list(dict.fromkeys(resource_id for item in items for resource_id in item["resource_ids"])),
-            "reason_codes": reason_codes,
-            "feedback_score": average(items, "feedback_score"),
-            "feedback_count": sum(item.get("feedback_count", 0) for item in items),
-            "difficulty_adjustment": average(items, "difficulty_adjustment"),
-            "credibility_score": average(items, "credibility_score"),
-            "credibility_level": "batch_average" if scores else None,
+            "reason_codes": ["BATCH_AVERAGE"],
+            "feedback_score": feedback_score,
+            "feedback_count": len(observations),
+            "subjective_feedback_count": len(feelings),
+            "difficulty_fit_score": round(fit_score, 2) if fit_score is not None else None,
+            "experience_score": round(experience_score, 2) if experience_score is not None else None,
+            "ordinary_review_score": ordinary_score,
+            "claim_review_score": claim_score,
+            "credibility_score": None if mixed else ordinary_score if ordinary_score is not None else claim_score,
+            "credibility_score_source": None if mixed else "ordinary_review" if ordinary_score is not None else "claim" if claim_score is not None else None,
+            "credibility_level": None,
             "credibility_grade": None,
             "credibility_score_breakdown": None,
         }
@@ -572,6 +586,7 @@ def _build_resource_difficulty_curve(
     points = []
     for batch_key, items in ordered_batches:
         if batch_key == latest_batch_id:
+            points.append(aggregate_batch(batch_key, items, latest=True))
             points.extend(sorted(
                 items,
                 key=lambda item: (node_order.get(item["skill_node_id"], len(node_order)), item["resource_id"]),
@@ -581,14 +596,12 @@ def _build_resource_difficulty_curve(
     for point in points:
         point.pop("_published_at", None)
         point.pop("_batch_key", None)
-    counts = {key: 0 for key in ("too_easy", "matched", "challenging", "too_hard", "not_measured")}
-    for point in points:
-        counts[point["match_status"]] += 1
-    measured = len(points) - counts["not_measured"]
+        point.pop("_resource_version", None)
+    measured = sum(item["difficulty_fit_score"] is not None for item in points)
     resource_count = len(resource_points)
     return {
         "schema_version": "1.0",
-        "strategy_version": STRATEGY_VERSION,
+        "strategy_version": "batch-assessment-experience/v4",
         "points": points,
         "summary": {
             "total_point_count": len(points),
@@ -597,13 +610,20 @@ def _build_resource_difficulty_curve(
             "expanded_resource_count": sum(len(items) for batch_id, items in ordered_batches if batch_id == latest_batch_id),
             "aggregated_batch_count": max(0, len(ordered_batches) - 1),
             "measured_point_count": measured,
-            "measurement_coverage": measured / len(points) if points else None,
-            "credibility_strategy_version": (credibility_summary or {}).get("scoring_strategy_version"),
-            "credibility_scored_count": (credibility_summary or {}).get("scored_count", 0),
-            "average_credibility_score": (credibility_summary or {}).get("average_credibility_score"),
-            "claim_review_passed_count": (credibility_summary or {}).get("claim_review_passed_count", 0),
-            "claim_ceiling_applied_count": (credibility_summary or {}).get("claim_ceiling_applied_count", 0),
-            **{f"{key}_count": value for key, value in counts.items()},
+            "measurement_coverage": measured / len(ordered_batches) if ordered_batches else None,
+            "credibility_strategy_version": "ordinary-95/claim-support/v3",
+            "credibility_scored_count": sum(item["credibility_score"] is not None for item in resource_points),
+            "average_credibility_score": (
+                average(resource_points, "credibility_score")
+                if len({item["credibility_score_source"] for item in resource_points if item["credibility_score_source"]}) <= 1
+                else None
+            ),
+            "ordinary_review_count": sum(item["ordinary_review_score"] is not None for item in resource_points),
+            "claim_review_scored_count": sum(item["claim_review_score"] is not None for item in resource_points),
+            "average_ordinary_review_score": average(resource_points, "ordinary_review_score"),
+            "average_claim_review_score": average(resource_points, "claim_review_score"),
+            "subjective_feedback_count": sum(item["subjective_feedback_count"] for item in points),
+            "not_measured_count": len(ordered_batches) - measured,
         },
     }
 
@@ -629,8 +649,14 @@ def _build_learning_path_graph(
     remedial_ids = {
         item.skill_node_id for item in (generation_options.reinforce_weakness if generation_options else [])
     }
-    new_ids = {
-        item.skill_node_id for item in (generation_options.learn_new_knowledge if generation_options else [])
+    # Same eligibility as the feedback page's new-node picker.
+    new_candidates = {
+        item.skill_node_id: item
+        for item in (generation_options.learn_new_knowledge if generation_options else [])
+    }
+    selectable_new_ids = {
+        node_id for node_id, item in new_candidates.items()
+        if not item.blocked_by_node_ids and item.eligibility_status != "blocked"
     }
     # Only the newest effective generation batch defines "current
     # learning".  If that batch projection is unavailable, do not infer
@@ -648,6 +674,9 @@ def _build_learning_path_graph(
             prerequisite for prerequisite in node.prerequisites
             if prerequisite in known_ids and (curriculum.get(prerequisite) is None or curriculum[prerequisite].published_resource_count <= 0)
         ]
+        candidate = new_candidates.get(node.skill_node_id)
+        if candidate is not None:
+            missing = list(candidate.blocked_by_node_ids)
         tier_locked = bool(
             highest_unlocked_tier is not None
             and node.tier is not None
@@ -667,9 +696,11 @@ def _build_learning_path_graph(
         # returns to a prerequisite tier. It is historical progress, not
         # a newly blocked future node.
         blocked = (
-            not placement_exempt
+            node.skill_node_id not in selectable_new_ids
+            and not placement_exempt
             and not learning_history
-            and (bool(missing) or tier_locked or bool(path_node and path_node.status.value == "locked"))
+            and (bool(missing) or tier_locked or (candidate is not None and candidate.eligibility_status == "blocked")
+                 or bool(path_node and path_node.status.value == "locked"))
         )
         if node.skill_node_id in current_ids:
             role = "current"
@@ -678,12 +709,10 @@ def _build_learning_path_graph(
             # actionable remediation. A weak diagnosis alone does not mean
             # the learner has first received this node's learning resource.
             role = "remedial"
-        elif path_node and path_node.node_type.value == "challenge":
-            role = "challenge"
+        elif node.skill_node_id in selectable_new_ids:
+            role = "next"
         elif path_node and path_node.node_type.value == "remedial":
             role = "remedial"
-        elif node.skill_node_id in recommended_ids or node.skill_node_id in new_ids:
-            role = "next"
         elif node.mastery.status.value == "weak" and generation_options is None:
             # Retain the legacy read-only projection for report callers
             # that do not have the generation-option service wired.
@@ -698,8 +727,8 @@ def _build_learning_path_graph(
         if node.mastery.status.value == "self_reported":
             reason_codes.append("LOW_CONFIDENCE_SELF_REPORT")
         if missing:
-            reason_codes.append("PREREQUISITES_NOT_YET_EXPOSED")
-        if tier_locked:
+            reason_codes.append("PREREQUISITES_NOT_MET" if candidate is not None else "PREREQUISITES_NOT_YET_EXPOSED")
+        if tier_locked and node.skill_node_id not in selectable_new_ids:
             reason_codes.append("TIER_NOT_UNLOCKED")
         if placement_exempt:
             reason_codes.append("PLACEMENT_EXEMPT")
@@ -708,7 +737,6 @@ def _build_learning_path_graph(
         resource_types = (
             ["讲义", "实操指南", "分阶测试题"] if role == "remedial"
             else ["复习清单", "实操指南", "分阶测试题"] if role == "current"
-            else ["案例分析", "分阶测试题"] if role == "challenge"
             else ["分阶测试题"] if role == "verification"
             else ["讲义", "复习清单"]
         )

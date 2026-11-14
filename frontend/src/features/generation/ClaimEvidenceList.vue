@@ -16,13 +16,23 @@
         <svg class="claim-expand" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
       </summary>
       <div class="claim-detail-body">
-        <div class="claim-statement-panel"><span class="evidence-section-label"><span>CLAIM</span> 陈述与判定</span>
-        <p><strong>判定理由：</strong>{{ row.reason }}</p>
-        <p v-if="row.source_text"><strong>生成原句：</strong>{{ row.source_text }}</p>
-        <p v-if="row.resource_version" class="claim-resource-version">资源版本 v{{ row.resource_version }}</p>
+        <div class="claim-statement-panel">
+        <div class="claim-statement-heading">
+          <span class="evidence-section-label"><span>CLAIM</span> 陈述与判定</span>
+          <span v-if="row.resource_version" class="claim-resource-version">资源版本 v{{ row.resource_version }}</span>
+        </div>
+        <p class="claim-verdict-reason">
+          <strong>判定理由：</strong>{{ row.reason }}
+        </p>
+        <p v-if="row.source_text?.trim() && row.source_text.trim() !== row.claim_text.trim()"><strong>生成原句：</strong>{{ row.source_text }}</p>
         <p v-if="row.provenanceUnavailable" class="empty-note">历史记录缺少版本或审核关联字段，无法完整追溯。</p>
         </div>
-        <div class="claim-evidence-panel"><span class="evidence-section-label"><span>EVIDENCE</span> 冻结来源依据</span>
+        <component :is="foldEvidence ? 'details' : 'div'" class="claim-evidence-panel">
+        <summary v-if="foldEvidence" class="claim-evidence-toggle">
+          <span>冻结来源依据 <small>· {{ row.evidence.length }} 条</small></span>
+          <svg class="claim-evidence-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+        </summary>
+        <span v-else class="evidence-section-label"><span>EVIDENCE</span> 冻结来源依据</span>
         <p v-if="!row.evidence.length" class="empty-note">未关联冻结证据。当前证据未支持，不等于现实中的陈述一定错误。</p>
         <article v-for="source in row.evidence" :key="source.evidence_id" class="evidence-card">
           <p v-if="source.missing" class="empty-note">冻结证据缺失：{{ source.evidence_id }}。未使用其他来源替代。</p>
@@ -38,7 +48,7 @@
             <details class="source-identity"><summary>来源标识</summary><p>Evidence ID：{{ source.evidence_id }}</p><p>摘录 hash：{{ source.excerpt_hash || '未记录' }}</p></details>
           </template>
         </article>
-        </div>
+        </component>
       </div>
     </details>
   </section>
@@ -47,7 +57,11 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { verdictLabels } from './generationAudit.js'
-const props = defineProps({ rows: { type: Array, default: () => [] }, focusFirst: { type: Boolean, default: false } })
+const props = defineProps({
+  rows: { type: Array, default: () => [] },
+  focusFirst: Boolean,
+  foldEvidence: Boolean,
+})
 const filter = ref('all')
 const filteredRows = computed(() => props.rows.filter(row => filter.value === 'all' || row.verdict === filter.value))
 const focusClaimId = computed(() => (filteredRows.value.find(row => ['contradicted', 'not_in_evidence', 'incomplete'].includes(row.verdict)) || filteredRows.value[0])?.claim_id)
@@ -76,11 +90,101 @@ summary::-webkit-details-marker { display:none; }
 .claim-detail-body { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:20px; margin:0 0 18px 40px; padding:16px 0; border-top:1px solid #edf1f5; font-size:14px; line-height:1.85; overflow-wrap:anywhere; }
 .claim-statement-panel,.claim-evidence-panel { min-width:0; }.claim-statement-panel p { margin:12px 0; }.claim-statement-panel .claim-resource-version { color:#536577; font-size:12px; }
 .evidence-section-label { display:flex; align-items:center; gap:8px; color:#536577; font-size:12px; margin-bottom:12px; }.evidence-section-label > span { font:10px/1.5 Consolas,monospace; letter-spacing:.06em; color:#176b70; }
+.claim-statement-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px 12px; }
+.claim-statement-heading .evidence-section-label { margin:0; }
 .claim-evidence-panel { padding-left:20px; border-left:1px solid #dce4eb; }.evidence-card { margin:0 0 16px; }.evidence-card > strong { font-size:13px; }
 .evidence-excerpt { margin:12px 0 4px; padding:10px 14px; border-left:2px solid #3d8a86; background:#f2f8f8; color:#24394e; white-space:pre-wrap; overflow-wrap:anywhere; }
 .source-locator { margin:4px 0; }.source-identity { color:#536577; font-size:12px; }.source-identity p { margin:4px 0; font-family:Consolas,monospace; }
 .source-identity summary { min-height:44px; padding:10px 0; font-size:12px; color:#536577; list-style:revert; display:list-item; }
 summary:focus-visible { outline:2px solid #176b70; outline-offset:2px; }
+.claim-evidence-glass select {
+  border-color:var(--claim-glass-edge);
+  border-radius:10px;
+  box-shadow:var(--claim-glass-shadow);
+}
+.claim-evidence-glass .claim-detail {
+  margin-top:10px;
+  border:1px solid var(--claim-glass-edge);
+  border-radius:15px;
+  background:var(--claim-glass);
+  box-shadow:var(--claim-glass-shadow);
+}
+.claim-evidence-glass .claim-detail[open],
+.claim-evidence-glass .claim-detail:hover {
+  border-color:#94bacf;
+}
+.claim-evidence-glass .claim-detail > summary {
+  padding:14px;
+  border-radius:14px;
+}
+.claim-evidence-glass .claim-number,
+.claim-evidence-glass .claim-expand {
+  box-sizing:border-box;
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  margin:0;
+  padding:0;
+  border:1px solid var(--claim-glass-edge);
+  border-radius:9px;
+  background:var(--claim-glass);
+  box-shadow:var(--claim-glass-shadow);
+}
+.claim-evidence-glass .claim-expand { padding:6px; }
+.claim-evidence-glass .verdict {
+  padding:2px 9px;
+  border:1px solid rgb(28 89 116 / 16%);
+  border-radius:999px;
+  background:rgb(255 255 255 / 80%);
+  box-shadow:inset 0 1px 0 #fff;
+}
+.claim-evidence-glass .claim-detail-body {
+  grid-template-columns:minmax(0,1fr);
+  gap:14px;
+  margin:0;
+  padding:16px;
+  border-top:1px solid var(--claim-glass-edge);
+}
+.claim-evidence-glass .claim-evidence-panel {
+  padding:16px 0 0;
+  border:0;
+  border-top:1px solid var(--claim-glass-edge);
+}
+.claim-evidence-glass .claim-verdict-reason {
+  padding:12px 16px;
+  border:1px solid var(--claim-glass-edge);
+  border-radius:14px;
+  background:radial-gradient(ellipse at top left,#e2f0fa,transparent 75%),linear-gradient(145deg,#fff,#edf6fc);
+  box-shadow:var(--claim-glass-shadow);
+  color:#1d3950;
+  font-weight:500;
+}
+.claim-evidence-glass .claim-verdict-reason strong {
+  display:block;
+  margin-bottom:4px;
+  color:#174d68;
+  font-size:15px;
+}
+.claim-evidence-toggle {
+  box-sizing:border-box;
+  align-items:center;
+  justify-content:space-between;
+  padding:8px 12px;
+  border:1px solid var(--claim-glass-edge);
+  border-radius:10px;
+  background:var(--claim-glass);
+  color:#245b76;
+  font-weight:600;
+}
+.claim-evidence-toggle small { color:#536577; font-size:12px; font-weight:400; }
+.claim-evidence-chevron { width:16px; height:16px; flex:none; }
+.claim-evidence-panel[open] > .claim-evidence-toggle { margin-bottom:12px; }
+.claim-evidence-panel[open] .claim-evidence-chevron { transform:rotate(180deg); }
+.claim-evidence-glass .evidence-excerpt {
+  border-radius:0 10px 10px 0;
+  background:rgb(255 255 255 / 70%);
+}
 @media (max-width:760px) { .claim-detail-body { grid-template-columns:1fr; gap:16px; margin-left:0; padding:14px 0; }.claim-evidence-panel { border-left:0; border-top:1px solid #dce4eb; padding:16px 0 0; }.claim-detail > summary { gap:8px; padding:12px 0; }.claim-number { width:20px; }.claim-statement { font-size:14px; } }
 @media (prefers-reduced-motion:reduce) { .claim-expand { transition:none; } }
 </style>

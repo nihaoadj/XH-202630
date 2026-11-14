@@ -3,6 +3,7 @@ const NODE_META = Object.freeze({
   retrieve: { title: '知识检索', description: '匹配学习所需知识' },
   evidence_gate: { title: '证据门禁', description: '核对来源与证据条件' },
   plan: { title: '学习规划', description: '安排学习内容与资源' },
+  reuse_context: { title: '沿用准备结果', description: '沿用任务冻结的准备上下文' },
   generate: { title: '资源生成', description: '生成学习资源正文' },
   review: { title: '审核纠偏', description: '审核问题与定向修订' },
   claim_extract: { title: '事实抽取', description: '提取需要核验的陈述' },

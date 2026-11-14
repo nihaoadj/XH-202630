@@ -2,11 +2,12 @@
 
 import json
 from types import SimpleNamespace
+import pytest
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.learners import diagnosis
+from app.api.learners import diagnosis, profiles
 from app.api.onboarding import onboarding
 from app.db.diagnosis.memory import MemoryDiagnosisRepository
 from app.db.learners.memory import MemoryLearnerRepository
@@ -57,7 +58,10 @@ def _client():
     app.container = SimpleNamespace(
         onboarding_service=lambda: onboarding_service,
         diagnosis_service=lambda: diagnosis_service,
+        profile_service=lambda: learner_repo,
+        mastery_service=lambda: mastery_service,
     )
+    app.include_router(profiles.router, prefix="/api/profiles")
     app.include_router(onboarding.router, prefix="/api/onboarding")
     app.include_router(diagnosis.router, prefix="/api/diagnosis")
     return TestClient(app), learner_repo, knowledge_service
@@ -163,6 +167,13 @@ def test_diagnosis_keeps_unassessed_nodes_out_of_confirmed_weaknesses():
     assert response.json()["initial_diagnostic_status"] == "final"
     assert response.json()["initial_recommended_node_id"] in {"rag_basics", "document_parsing", "embedding"}
     assert "Embedding" in profile.strong_points
+    candidates = client.get(f"/api/profiles/{learner_id}/initial-node-candidates")
+    assert candidates.status_code == 200
+    assert candidates.json()[0]["node_id"] == response.json()["initial_recommended_node_id"]
+    assert all(node["tier"] == 1 for node in candidates.json())
+    assert {node["node_id"] for node in candidates.json()} == {"rag_basics", "document_parsing", "embedding"}
+    assert all(node["metadata"]["initial_diagnostic_passed"] for node in candidates.json())
+    assert client.get("/api/profiles/missing/initial-node-candidates").status_code == 404
 
 
 def test_onboarding_all_unknown_still_uses_stage_scoped_diagnostic_questions():
@@ -176,6 +187,37 @@ def test_onboarding_all_unknown_still_uses_stage_scoped_diagnostic_questions():
     assert response.status_code == 200
     assert response.json()["diagnostic_node_ids"] == ["rag_basics", "document_parsing", "embedding"]
     assert len(response.json()["diagnostic_questions"]) == 9
+
+
+@pytest.mark.parametrize("passed_roots", [True, False])
+def test_initial_full_coverage_pass_unlocks_successors_without_course_completion(passed_roots):
+    client, repository, knowledge = _client()
+    initial = client.post("/api/onboarding/initial-profile", json=_questionnaire_payload()).json()
+    questions = {item.question_id: item for item in knowledge.load_diagnostic_questions("rag_engineering_training")}
+    answers = [
+        {"question_id": item["question_id"],
+         "answer": questions[item["question_id"]].answer
+         if passed_roots and questions[item["question_id"]].skill_node_id == "rag_basics" else "__wrong__"}
+        for item in initial["diagnostic_questions"]
+    ]
+    result = client.post("/api/diagnosis/submit", json={
+        "learner_id": initial["learner_id"], "learning_direction_id": "rag_engineering_training",
+        "answers": answers,
+    })
+    assert result.status_code == 200
+    flow = repository.get(initial["learner_id"]).learning_preferences.metadata["initial_diagnostic_flow"]
+    candidates = client.get(f"/api/profiles/{initial['learner_id']}/initial-node-candidates").json()
+    ids = {node["node_id"] for node in candidates}
+    if passed_roots:
+        assert set(flow["node_passes"]) == {"rag_basics"}
+        assert flow["node_passes"]["rag_basics"]["diagnostic_result_id"] == result.json()["diagnostic_result_id"]
+        assert ids == {"rag_basics", "document_parsing", "embedding"}
+        assert result.json()["initial_recommended_node_id"] in {"document_parsing", "embedding"}
+        root = next(node for node in candidates if node["node_id"] == "rag_basics")
+        assert root["metadata"]["initial_diagnostic_passed"] is True
+    else:
+        assert flow["node_passes"] == {}
+        assert ids == {"rag_basics"}
 
 
 def test_intermediate_initial_diagnosis_retests_lower_tier_before_finalizing():
@@ -201,6 +243,7 @@ def test_intermediate_initial_diagnosis_retests_lower_tier_before_finalizing():
     retest_body = retest.json()
     assert retest_body["initial_diagnostic_status"] == "retest"
     assert retest_body["assessed_tier"] == 2
+    assert not repository.get(body["learner_id"]).learning_preferences.metadata["initial_diagnostic_flow"].get("node_passes")
     assert len(retest_body["next_diagnostic_questions"]) == 9
     assert all(
         state.objective_evidence_count == 0

@@ -2,7 +2,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { roundFeedbackApi } from '../feedback/roundApi.js'
 import { primaryRoundRun, resolveRoundSelection } from './roundWorkspace.js'
 
-export function useLearningRoundWorkspace({ learnerId, selectedJob, selectedRunId, jobs, route, router, activateRun, api = roundFeedbackApi }) {
+export function useLearningRoundWorkspace({ learnerId, selectedJob, selectedRunId, jobs, route, router, activateRun, enabled = { value: true }, api = roundFeedbackApi }) {
   const detail = ref(null)
   const selection = ref({ memberId: '', stageId: '', runId: '' })
   const error = ref('')
@@ -12,12 +12,13 @@ export function useLearningRoundWorkspace({ learnerId, selectedJob, selectedRunI
   const primaryJob = computed(() => jobs.value.find(job => job.run_id === primaryRoundRun(detail.value)) || null)
   function stop() { clearTimeout(timer); timer = null }
   async function load(roundId, preserve = true) {
+    if (!enabled.value) return
     stop()
     const captured = ++version
     const owner = learnerId.value
     try {
       const response = await api.detail(roundId)
-      if (disposed || captured !== version || owner !== learnerId.value) return
+      if (disposed || !enabled.value || captured !== version || owner !== learnerId.value) return
       if (response.data.learner_id !== owner) throw new Error('学习轮次不属于当前画像')
       detail.value = response.data
       error.value = ''
@@ -36,19 +37,22 @@ export function useLearningRoundWorkspace({ learnerId, selectedJob, selectedRunI
   }
   function scheduleVisible(roundId) { timer = setTimeout(() => { if (!document.hidden) load(roundId); else scheduleVisible(roundId) }, 5000) }
   async function select(changes) {
-    if (!detail.value) return
-    ++version
+    if (!enabled.value || !detail.value) return
+    const captured = ++version
+    const roundId = detail.value.round_id
     selection.value = resolveRoundSelection(detail.value, {
       ...selection.value, ...changes,
       ...(changes.memberId ? { runId: '', stageId: selection.value.stageId } : changes.stageId ? { runId: '' } : {}),
     })
     const picked = selection.value
-    await router.replace({ query: { ...route.query, roundId: detail.value.round_id, memberId: picked.memberId, stageId: picked.stageId, runId: picked.runId } })
-    if (!disposed && picked === selection.value && picked.runId) await activateRun(picked.runId)
-    if (!disposed) load(detail.value.round_id)
+    await router.replace({ query: { ...route.query, roundId, memberId: picked.memberId, stageId: picked.stageId, runId: picked.runId } })
+    if (disposed || !enabled.value || captured !== version || picked !== selection.value) return
+    if (picked.runId) await activateRun(picked.runId)
+    if (!disposed && enabled.value && detail.value?.round_id === roundId) load(roundId)
   }
-  watch(() => [learnerId.value, selectedJob.value?.round_binding?.round_id, selectedRunId.value], () => {
+  watch(() => [enabled.value, learnerId.value, selectedJob.value?.round_binding?.round_id, selectedRunId.value], () => {
     ++version; stop()
+    if (!enabled.value) { detail.value = null; selection.value = { memberId: '', stageId: '', runId: '' }; error.value = ''; return }
     const binding = selectedJob.value?.round_binding
     const id = binding?.round_id || (!selectedJob.value && route.query.roundId)
     if (!id) { detail.value = null; selection.value = { memberId: '', stageId: '', runId: '' }; return }

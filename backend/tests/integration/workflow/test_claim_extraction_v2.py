@@ -26,6 +26,64 @@ def judge(state, repo, gateway, counter):
     return claim_judge_node(state, llm_gateway=gateway, claim_extraction_repository=repo, claim_extraction_counter=counter)
 
 
+@pytest.mark.parametrize("defect", ["no_evidence", "unknown_evidence", "duplicate", "missing"])
+@pytest.mark.parametrize("recovery", ["success", "invalid", "unavailable"])
+def test_judge_keeps_valid_items_and_recovers_only_failed_subset(defect, recovery, monkeypatch):
+    import json
+    from app.core.llm.gateway import LLMGatewayError
+    from app.models.shared.agent_contracts import make_error_info
+    from app.agents.resource_workflows.learning_documents.workflow import decide_node
+    import app.agents.resource_workflows.learning_documents.workflow as workflow
+
+    # Even a development partial-publication switch cannot release failed audit.
+    monkeypatch.setattr(workflow, "get_settings", lambda: SimpleNamespace(claim_partial_publish=True))
+    state, _, repo, gateway, counter = state_for_extraction("Fact one.\n\nFact two.")
+    gateway.outcomes = [extract_every_unit]
+    def initial(call):
+        output = judge_all(call)
+        item = output["judgements"][-1]
+        if defect == "no_evidence":
+            item["evidence_ids"] = []
+        elif defect == "unknown_evidence":
+            item["evidence_ids"] = ["forged"]
+        elif defect == "duplicate":
+            output["judgements"].append(dict(item))
+        else:
+            output["judgements"].pop()
+        return output
+    def repair(call):
+        if recovery == "unavailable":
+            raise LLMGatewayError(error=make_error_info("LLM_TIMEOUT", source="claim_judge"),
+                                  call_id="repair", retry_count=0, latency_ms=1, attempts=[])
+        output = judge_all(call)
+        if recovery == "invalid":
+            output["judgements"][0]["evidence_ids"] = []
+        return output
+    with execution_session(state["run_id"], "owner"):
+        state.update(extract(state, repo, gateway, counter))
+        gateway.outcomes = [initial, repair]
+        result = judge(state, repo, gateway, counter)
+    calls = [c for c in gateway.calls if c["context"].node_name == "claim_judge"]
+    assert len(calls) == 2
+    assert len(json.loads(calls[0]["messages"][-1].content)["claims"]) == 2
+    subset = json.loads(calls[1]["messages"][-1].content)["claims"]
+    assert [c["claim_id"] for c in subset] == [state["extracted_claims"][-1]["claim_id"]]
+    assert calls[1]["options"].max_attempts == 1
+    assert not calls[1]["options"].allow_schema_repair
+    assert not calls[1]["options"].allow_text_fallback
+    metric = result["claim_metrics"]["r"]
+    assert metric["supported_claim_total"] == (2 if recovery == "success" else 1)
+    assert metric["incomplete_claim_total"] == (0 if recovery == "success" else 1)
+    assert metric["metric_status"] == ("complete" if recovery == "success" else "incomplete")
+    assert result["claim_failed_resource_ids"] == ([] if recovery == "success" else ["r"])
+    assert len(result["claim_judgements"]) == (2 if recovery == "success" else 1)
+    if recovery != "success":
+        state.update(result)
+        state.update(claim_decide_node(state))
+        final = decide_node(state)
+        assert final["generated_resources"][0].publication_status == "unpublished"
+
+
 def test_asset_free_factory_and_retired_snapshot_rejection():
     from app.core.llm.counting import CharacterEstimator
     from tests.fakes.claim_extraction import policy
@@ -388,6 +446,10 @@ def test_single_resource_retry_freezes_new_policy_and_uses_child_evidence(monkey
 @pytest.mark.parametrize("structured",[True,False])
 def test_assessment_runtime_payload_controls_bypass_not_submission_mode(structured):
     state,_,repo,gateway,counter=state_for_extraction()
+    # Historical frozen policies keep the former assessment bypass.
+    policy = repo.get(state["run_id"]).policy.model_copy(update={"structured_sources": None})
+    _, repo = prepare_ledger(p=policy)
+    state.update(snapshot_for(policy))
     resource=state["generated_resources"][0]
     resource.resource_type="分阶测试题"
     resource.assessment_payload={"schema_version":"2.0"} if structured else None

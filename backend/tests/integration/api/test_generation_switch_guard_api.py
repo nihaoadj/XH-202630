@@ -233,6 +233,15 @@ def test_invalid_switch_combination_is_422_without_any_side_effect(monkeypatch, 
     assert after["accesses"] == []
 
 
+def test_practice_claim_request_is_rejected_before_job_creation(monkeypatch):
+    client, probe = _app(monkeypatch)
+    response = client.post("/api/generate/jobs", json=_jobs_payload(resource_types=["实操指南"]))
+    assert response.status_code == 422
+    assert response.json()["code"] == ErrorCode.REQUEST_VALIDATION_ERROR.value
+    assert probe.jobs.list_by_learner(LEARNER_ID) == []
+    assert probe.calls == {"workflow": 0, "llm": 0, "retrieval": 0}
+
+
 @pytest.mark.parametrize("case", ["retrieval_with_review_off", "retrieval_with_two_types"])
 def test_round_creation_rejects_the_same_switch_on_the_public_contract(monkeypatch, case):
     client, probe = _app(monkeypatch)

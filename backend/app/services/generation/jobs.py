@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from app.models.generation.correction_dispatch import wrap_correction_dispatch, unwrap_correction_dispatch
 from app.services.generation.lecture_policy import freeze_lecture_policy, resolve_lecture_dispatch
 from app.agents.resource_workflows.learning_documents.reviewing.lecture_authority import lecture_workflow_version
 from app.services.generation.resource_review_policy import (
@@ -97,7 +99,7 @@ class GenerationJobService:
         if run_id and submission_hash:
             found = self._existing_submission(run_id, submission_hash)
             if found:
-                return found, GenerateRequest.model_validate(self.job_repo.get(run_id).request_payload)
+                return found, GenerateRequest.from_frozen_payload(self.job_repo.get(run_id).request_payload)
         # Preserve lightweight stubs with custom mutation methods only when
         # they have no standard persistence graph. Such a path retains legacy
         # behavior and makes no transactional-atomicity claim.
@@ -187,9 +189,8 @@ class GenerationJobService:
     def _initial_generation_target(self, learner: LearnerProfile) -> list[str] | None:
         """Return the frozen initial-diagnosis target for the first batch.
 
-        The initial placement decision is authoritative until the learner has
-        a published resource.  Later batches intentionally fall back to the
-        normal mastery/exposure recommendation policy.
+        This is the default when the request omits a target. Later batches use
+        the normal mastery and exposure recommendation policy.
         """
         if self.mastery_service is None:
             return None
@@ -307,6 +308,8 @@ class GenerationJobService:
         submission_hash: str | None = None,
         resource_retry_context: dict | None = None,
     ) -> GenerationJobCreateResponse:
+        if "实操指南" in req.resource_types and req.include_claim_check:
+            raise ApplicationError(ErrorCode.GENERATION_TARGET_INVALID, status_code=422)
         round_binding = self._round_binding(learner, req, run_id)
         feedback_only = set(req.resource_types) & set(FEEDBACK_ONLY_RESOURCE_TYPES)
         correction_followup = (
@@ -496,11 +499,16 @@ class GenerationJobService:
         )
 
     def _dispatch_snapshot(self, learner, request, resource_retry_context=None):
+        from app.agents.resource_workflows.learning_documents.claim_extraction.budget import for_correction_contract
+        freeze_correction = getattr(self.generation_service, "freeze_correction_package", None)
+        contract = (ResourceRetryContext.from_snapshot(resource_retry_context).correction_package_snapshot
+                    if resource_retry_context is not None else
+                    freeze_correction(request) if freeze_correction is not None else None)
         snapshot = {"workflow_version": TEXT_WORKFLOW_VERSION, "learner": learner.model_dump(mode="json"),
                     "request_hash": canonical_hash(request.model_dump(mode="json"))}
         freeze = getattr(self.generation_service, "freeze_claim_extraction", None)
         if freeze is not None:
-            snapshot.update(freeze(request))
+            snapshot.update(for_correction_contract(freeze(request), contract))
         elif request.include_claim_check and get_settings().claim_extraction_strategy != "legacy_v3":
             raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
         freeze_supplement = getattr(
@@ -538,6 +546,8 @@ class GenerationJobService:
             snapshot["base_workflow_version"] = snapshot["workflow_version"]
             snapshot["workflow_version"] = resource_workflow_version(resource["resource_review_contract_version"])
             snapshot["resource_dispatch_hash"] = canonical_hash(snapshot)
+        if contract:
+            snapshot = wrap_correction_dispatch(snapshot, contract)
         return snapshot
 
     def _generate_with_budget(self, learner, request, **kwargs):
@@ -551,8 +561,13 @@ class GenerationJobService:
             if binding:
                 member = self.round_repository.one("learning_round_stage_nodes", stage_node_id=binding["stage_node_id"])
                 stage = self.round_repository.one("learning_round_stages", stage_id=member["stage_id"])
+                input_cap = stage["budget_snapshot"]["input_capacity"]
+                retry_snapshot = kwargs.get("resource_retry_context")
+                if binding["relation_kind"] == "retry" and retry_snapshot is not None:
+                    retry_context = ResourceRetryContext.from_snapshot(retry_snapshot)
+                    input_cap = retry_context.input_capacity or input_cap
                 scope = round_call_scope(LLMBudgetScope(scope_id=member["stage_node_id"], stage_id=stage["stage_id"], kind="production"),
-                                         input_cap=stage["budget_snapshot"]["input_capacity"],
+                                         input_cap=input_cap,
                                          guard=RoundBudgetGuard(self.round_repository))
         with scope:
             return self.generation_service.generate_with_run_id(learner, request, **kwargs)
@@ -564,32 +579,33 @@ class GenerationJobService:
         learner = None
         preflight_failed = True
         try:
-            req = GenerateRequest.model_validate(claim.request_payload)
-            frozen_learner = LearnerProfile.model_validate(claim.snapshot["learner"])
+            snapshot, correction_contract = unwrap_correction_dispatch(claim.snapshot)
+            req = GenerateRequest.from_frozen_payload(claim.request_payload)
+            frozen_learner = LearnerProfile.model_validate(snapshot["learner"])
             if (req.learner_id != claim.learner_id or frozen_learner.learner_id != claim.learner_id
-                    or canonical_hash(req.model_dump(mode="json")) != claim.snapshot.get("request_hash")):
+                    or canonical_hash(claim.request_payload) != snapshot.get("request_hash")):
                 raise ValueError("frozen generation input mismatch")
             learner = frozen_learner
             resource = {}
-            if claim.snapshot.get("workflow_version") == "learning_documents.resource_issue.v1":
-                version, resource = resolve_resource_review_dispatch(claim.snapshot)
+            if snapshot.get("workflow_version") == "learning_documents.resource_issue.v1":
+                version, resource = resolve_resource_review_dispatch(snapshot)
                 lecture = {}
             else:
-                version, lecture = resolve_lecture_dispatch(claim.snapshot)
+                version, lecture = resolve_lecture_dispatch(snapshot)
             if version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}:
                 raise ValueError("unsupported frozen workflow")
-            if (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (claim.snapshot.get("resource_retry_context") is not None):
+            if (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (snapshot.get("resource_retry_context") is not None):
                 raise ValueError("retry dispatch version mismatch")
-            private = snapshot_fields(claim.snapshot)
+            private = snapshot_fields(snapshot)
             from app.agents.resource_workflows.learning_documents.claim_evidence_retrieval.policy import (
                 PRIVATE_FIELDS as SUPPLEMENT_FIELDS,
                 policy_from_state,
             )
 
             supplement_private = {
-                key: claim.snapshot[key]
+                key: snapshot[key]
                 for key in SUPPLEMENT_FIELDS
-                if key in claim.snapshot
+                if key in snapshot
             }
             policy = policy_from_input({"include_claim_check": req.include_claim_check, **private})
             if (version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None):
@@ -599,15 +615,16 @@ class GenerationJobService:
             if supplement_private:
                 policy_from_state(supplement_private)
             with execution_fence(ExecutionFence(claim.run_id, claim.owner, claim.epoch)):
-                retry_context = claim.snapshot.get("resource_retry_context")
+                retry_context = snapshot.get("resource_retry_context")
                 preflight_failed = False
                 response = self._generate_with_budget(
                     learner, req, run_id=claim.run_id, batch_id=claim.batch_id,
+                    **({"correction_package_snapshot": correction_contract or {}} if hasattr(self.generation_service, "freeze_correction_package") else {}),
                     **({"claim_extraction_snapshot": private} if hasattr(self.generation_service, "freeze_claim_extraction") else {}),
                     **({"claim_evidence_retrieval_snapshot": supplement_private} if hasattr(self.generation_service, "freeze_claim_evidence_retrieval") else {}),
                     **({"resource_retry_context": retry_context} if retry_context is not None else {}),
-                    **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": claim.snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
-                    **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": claim.snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}))
+                    **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
+                    **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}))
                 resource_ids = [item.resource_id for item in response.resources]
                 if getattr(response, "workflow_status", None) == "failed":
                     error_code = "GENERATION_EXECUTION_FAILED"
@@ -728,8 +745,10 @@ class GenerationJobService:
             self.job_repo.mark_running(run_id)
         try:
             job = self.job_repo.get(run_id)
+            if job and "claim_workflow_version" not in job.request_payload:
+                req = GenerateRequest.from_frozen_payload(job.request_payload)
             effective_batch_id = batch_id or (job.batch_id if job else run_id)
-            snapshot = metadata.get("dispatch_snapshot") or {}
+            snapshot, correction_contract = unwrap_correction_dispatch(metadata.get("dispatch_snapshot") or {})
             retry_context = snapshot.get("resource_retry_context")
             lecture = {}
             resource = {}
@@ -741,9 +760,10 @@ class GenerationJobService:
                 if (version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}
                         or (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (retry_context is not None)):
                     raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
-            if retry_context is not None:
+            if snapshot:
                 learner = LearnerProfile.model_validate(snapshot["learner"])
-                if canonical_hash(req.model_dump(mode="json")) != snapshot.get("request_hash"):
+                req = GenerateRequest.from_frozen_payload(job.request_payload)
+                if canonical_hash(job.request_payload) != snapshot.get("request_hash"):
                     raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
             private = snapshot_fields(snapshot)
             supplement_private = {key: snapshot[key] for key in (
@@ -762,6 +782,7 @@ class GenerationJobService:
                 **({"claim_evidence_retrieval_snapshot": supplement_private}
                    if hasattr(self.generation_service, "freeze_claim_evidence_retrieval") else {}),
                 **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
+                **({"correction_package_snapshot": correction_contract or {}} if hasattr(self.generation_service, "freeze_correction_package") else {}),
                 **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}),
             )
             self.job_repo.mark_completed(

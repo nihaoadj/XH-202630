@@ -69,7 +69,7 @@ class MemoryRoundRepository(BaseRoundRepository):
             "learning_round_nodes": [("round_id", "skill_node_id")],
             "learning_round_stages": [("round_id", "ordinal"), ("round_id", "selection_key")],
             "learning_round_stage_nodes": [("stage_id", "round_node_id"), ("batch_id",), ("round_node_id", "source_attempt_id")],
-            "learning_round_evaluation_sessions": [("stage_id",), ("attempt_id",)],
+            "learning_round_evaluation_sessions": [("stage_id", "ordinal"), ("attempt_id",)],
             "feedback_node_decisions": [("attempt_id", "round_node_id")],
             "learner_remediation_needs": [("learner_id", "knowledge_base_id", "skill_node_id")],
             "learning_round_budget_reservations": [("scope_id", "call_id", "gateway_attempt")],

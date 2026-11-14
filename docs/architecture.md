@@ -1,10 +1,22 @@
+T56：新请求冻结 `contradiction_first_v3`；同一资源当前版本/review已完成事实Claim缺证数严格超过冻结阈值 `claim_gap_revision_threshold`（默认8）时，即使没有矛盾也先定向修订。与矛盾修订共享补检前额度，额度耗尽且无矛盾可继续补检；修订仍重做普通审核/Claim并尽量保持非目标正文。v1/v2历史行为保留。补检检索批次仅关联本批查询的Claim，关联超过16时稳定拆分，保留共享查询全部映射与旧有效批次hash；证据上限8/16不变。详见[T56](update_plan/T56.md)。
+
 # 总体架构文档
+
+T81：新建通用普通审核任务冻结 `single_representation_v4`。模型提供语义判断、问题、证据与修订要求。模型输入和输出省略 `binding`，模型问题省略 `blocking_rule`、`origin`、`criteria_version`。问题按 `dimension` 区分，只有覆盖问题提供 `affected_target_ids`，服务端继续校验目标确实缺失。引擎验证调用身份后补齐内部 V1 记录，保留 T80 行范围定位、审核账本、返工及发布门。无效审核结果的摘要使用技术错误描述，实际证据不足仍按证据问题处理。历史策略继续按其冻结契约执行。见 [T81](update_plan/T81.md)。
+
+T80：新文本文档任务冻结 `single_representation_v3` 普通审核输入。讲义与案例分析的模型输出位置 schema 只含 `kind`、`paragraph_id`、可选 `end_paragraph_id` 和 `quote`，不暴露 `heading_path`；服务端按起始行补标题并验证行范围与引文。全局问题仍用 `root`。复审的父版与新版位置分开绑定，发送模型的旧问题位置也省略标题字段；普通返工只向模型发送一份带旧版行号的正文，编号不进入新版产物。结构化资源定位不变；旧 `single_representation_v1/v2` 任务继续按原版本输入和校验，旧位置序列化不增加结束行字段。详见 [T80](update_plan/T80.md) 与 [T79](update_plan/T79.md)。
+
+T59：`learning_documents/claim_extraction/resource_sources.py` 为结构化复习清单与测试题提供私有原文适配。适配冻结在可选policy扩展，旧快照省略新键以保持hash；结构化包/公开正文/审核文本及字段角色绑定同一资源版本。通用抽取执行器仅接收适配后的原文和角色信息，仍执行既有分批、预算、精确定位、持久化校验；Judge继续使用既有claims+allowed_evidence。测试题的参考答案及评分事实在私有原文抽取，原始公开Markdown不附答案。定向修订通过Claim来源标记重建同版审核原文，保留结构包而不修改历史测评。公开API使用`services/reviews/assessment_privacy.py`投影隐藏私有Claim/判定详情，内部发布仍读取完整指标。
+
+T55：文本Claim冻结版本新增`contradiction_first_v2`，`claim_routing.select_revision_bad`按当前资源/版本/review绑定的已完成事实判定去重后，只有矛盾资源自身缺证>8才合并缺证修订目标。无矛盾直接补检，v1保留原矛盾筛选。服务端generator context按新版冻结策略注入最小修改标记；resource_agents/revision_prompts由已验证Claim原句span和previous_text生成目标/保留区间与hash，不自动拼接输出、不新增模型调用、表字段或发布豁免。现有Prompt契约及后续普通审核/Claim保持，旧版本提示不变。
+
+T54 文本 Claim 路由：`learning_documents/claim_routing.py` 集中冻结版本与两阶段预算判定；首次判断后矛盾优先进入既有 `claim_decide → prepare_claim_revision → generate → review → claim_extract/claim_judge` 环。无矛盾才进入补检与重判，后阶段默认不再改正文，显式配置才消耗独立额度。总Claim计数包含两阶段，后阶段计数和稳定spec阶段标记进入checkpoint，避免新版本/恢复重领额度。补检结果合并按当前资源/版本/review过滤，旧会话不覆盖子版本指标。任务冻结请求哈希按原保存payload核对，缺少路由版本的旧任务与快照保持legacy顺序；新任务冻结contradiction_first_v1。遍历上限随有限的两阶段/普通返工额度计算，技术遍历上限不替代业务次数与时间/Token限制。
 
 T42 修复：定位算法按冻结的 locator_algorithm_version 区分 v1/v2，共用同一定位入口。旧策略缺省 v1，原序列化/hash 和诊断重算保持；仅新冻结策略使用 v2，执行比例与计算限制并保证删除重复字后仍保留原文字。contracts.select_contract 在需要构建新抽取请求前比较 Prompt/schema hash；已完成结果继续只读幂等复用。拒绝定位通过私有领域异常携带最多8条失败诊断，executor 在已有预算路径保存，不增加模型调用、节点或 Judge 职责。
 
 T41 LLM 调用旁路计量：新增 `models/shared/llm_accounting.py`（纯 DTO/聚合/hash，不依赖 DB/Service/Agent）、`core/llm/accounting.py`（ContextVar 作用域 + 采集 + 可注入 publisher 协议，不导入业务层）与 `agents/shared/llm_accounting.py`（作用域适配）。真实统一入口只在 `core/llm/gateway.py` 的 `invoke_structured`/`invoke_plain_text` 及 `_invoke_transport_with_hard_timeout` 外层用 `functools.wraps` 装饰，原函数体、签名、参数/返回对象、异常身份不变。独立计量库 `db/audit/llm_accounting/`（独立 Metadata/Engine，不注册业务 Base、不迁移业务库），运行时 `services/runs/llm_accounting_runtime.py`（每宿主进程一个可选 spawn writer 子进程 + 有界非阻塞队列），只读查询 `services/runs/llm_accounting.py`。core 不反向依赖具体工作流；Agent 侧只绑定身份/阶段作用域，不持 SQL/进程/队列。
 
-T30讲义教学加工：`resource_agents/lecture_contract.py`拥有`lecture-pedagogy-v1`的受众、篇幅、自包含示例、去重复、通用/项目边界准则及节点显示名投影。TextResourceAgent升级`text-resource-v6-teaching-contract`，只投影Prompt展示文本，不改ResourceSpec、知识点真实ID或冻结Evidence。显示名仅取单一已分配KB的manifest已知目标节点，未知/混合KB不猜。讲义审核通过`reviewing/prompts/resources/text.py`的`resource.text` 2.1片段复用同一rubric，版本和规则正文纳入Prompt fingerprint；`reviewing/payloads.py`只在该次讲义审核的HumanMessage中附加展示名及教学控制信息，其他资源不接收讲义规则，调用次数、Claim/发布节点不变。这是生成/审核指导，不是新语义硬门，不能由单元测试声称真实模型已消除重复或悬空引用。
+T30、T82 讲义教学加工：`resource_agents/lecture_contract.py` 持有 `lecture-pedagogy-v2` 规则和节点显示名投影。Planner 在选中讲义时追加讲义字段专用指导。`TextResourceAgent` 使用 `text-resource-v8-concept-explanation`，以目标概念组织正文，并沿用 ResourceSpec 和冻结 Evidence。显示名取单一已分配知识库的 manifest。讲义普通审核使用 `resource.text` 2.2 或 `resource_issue.lecture` 1.1，提示词指纹记录各自版本及规则。讲解示例与可选自检采用各自的材料要求，复审核对新版内容。其他资源沿用各自提示，审核账本、Claim、补检与发布契约保持原有行为。
 
 T29学习检索：`agents/shared/learning_queries.py`确定性构造任务问题，不调用LLM；retrieve节点仅在legacy学习路径且新开关开启时选择新版本。`vector_store.search_many_evidence_candidates`提供来源预校验后的完整有界20候选，不按owner提前截断；`EvidenceRetriever`继续负责SQL版本/hash、原分门槛、去重，再调用纯`source_balance.py`按节点覆盖及来源软规则选材。来源由可信SQL路径与manifest的id/file/type匹配，分类清单hash纳入config hash。旧接口、Tutor与E1路径不变；新policy候选query_rank允许到min(20, rerank_candidate_k)，其余仍受原TopK约束。没有新表或跨层业务依赖。
 
@@ -365,7 +377,7 @@ GenerationJob/AgentRun 的 queued 竞态保持现有 ownership：Job 可先存�
 
 `features/generation/resourceStatusPresentation.js` 统一请求占位、spec 分组和同产物发布投影，仅派生显示数据，不写入 execution ledger。卡片、计数、重试入口与 Claim 发布报告共用这一口径。事件 reducer 使用有限的真实回放水位与持久项时间，稀疏同次事件保留未提供字段，新 attempt 清除旧产物/错误/核验信息；人工发布的资源投影独立于执行记录时间戳。
 
-T15 建立完整 trace 图形链路并移除重复的生命周期日志UI；T17 将唯一资源状态区域置于轨迹上方常显，从真实请求类型占位过渡到执行记录。AgentVisualization仅展示图形链路、资源交付与按真实childRuns显示的独立后续生成导航，reducer事件保存不变；交付列表采用浅灰底面的独立白色资源article，以细边界和间距明确每份产物归属；状态横排，操作按内容宽度横排/按需折行，使用短可见文案并保留完整aria-label与原发射事件。校验、发布、生成次数及 Agent 记录在卡片主体常显，技术审计保留原过程详情入口。ResourceExecutionProgressList保留spec分组/text优先/状态优先级和原按钮条件，阶段审核、publication与Claim状态分别显示；不把审核通过或Claim完成当作已发布，汇总既有多表示口径未变。待决定提示与发布结果按同resource_id读取当前资源本体和报告中的显式决定，再补执行字段；已确认发布清除过期待决定，不改变发布规则。历史执行项缺少时间时，状态刷新按需读取现有timeline查询取得有限水位。`workflowPresentation.js` 集中维护真实关键节点与明确历史 agent 别名的展示/详情白名单，图与详情 hook 共用；已有未知 node_name 不借 agent 别名提升为可交互节点。`associatedStepResources` 仅使用同 Run 的显式 resource_ids 或 review_ids 关联资源；没有关联的诊断/规划等节点不自动选择其他产物。详情分开执行状态、普通审核和事实判定。`WorkflowDetailDialog.vue`管理通用外壳、加载/刷新、显式资源选择和唯一body滚动；无tablist/tab/tabpanel或模块切换。`workflowDetailPresentation.js`管理六项职责与唯一contentKind、受控公开摘要投影/未知全文回退；`workflow-detail/`的结果、普通审核、冻结证据、版本叶子按职责渲染单页，CSS仅作用于详情。诊断展示难度/盲区/建议，检索展示明确引用的冻结来源，规划仅投影最多四项保存摘要，生成展示显式关联版本正文，审核展示真实Review及已保存摘要/decision_reason，Claim核验展示真实判定与来源对照。evidence_gate/claim_extract被动，仅图内状态，不再重复检索/核验正文；不同调用/版本的同角色不按名称去重。资源入口只展示普通审核和默认折叠的显式版本对比，旧独立Claim发布报告保持。已删除不再使用的导航/抽取详情实现，不保留转发。`workflowNodeIcons.js`共用14个既有图形与未知图形。底部执行上下文/输入/标识默认折叠；多资源节点选择放在主体前，单资源选择折叠。接口未保存完整诊断/规划或逐资源模型suggestion时不补造；审核聚合说明不称原始模型回复，执行成功不等于审核通过。ClaimEvidenceList可选focusFirst仅详情启用，按记录顺序优先contradicted/not_in_evidence/incomplete，无问题时首条，non_factual不抢占问题，旧发布报告默认折叠。冻结来源、版本身份、请求隔离和发布边界不变，呈现不改变判定或发布。
+T15 建立完整 trace 图形链路，T17 曾在轨迹上方使用资源交付卡。T51 R2 已移除交付卡组件和局部发布汇总：AgentVisualization 只保留资源切换、真实链路、批次回看及真实 childRuns 的后续导航，阅读/审核报告/单资源重试/过程详情移入所选资源的紧凑操作菜单。当前状态、普通审核与发布继续分开取证，不改变 Claim 判定或发布规则。`workflowPresentation.js` 集中维护真实关键节点与明确历史 agent 别名的展示/详情白名单，图与详情 hook 共用；已有未知 node_name 不借 agent 别名提升为可交互节点。`associatedStepResources` 仅使用同 Run 的显式 resource_ids 或 review_ids 关联资源；没有关联的诊断/规划等节点不自动选择其他产物。详情分开执行状态、普通审核和事实判定。`WorkflowDetailDialog.vue`管理通用外壳、加载/刷新、显式资源选择和唯一body滚动；无tablist/tab/tabpanel或模块切换。`workflowDetailPresentation.js`管理六项职责与唯一contentKind、受控公开摘要投影/未知全文回退；`workflow-detail/`的结果、普通审核、冻结证据、版本叶子按职责渲染单页，CSS仅作用于详情。诊断展示难度/盲区/建议，检索展示明确引用的冻结来源，规划仅投影最多四项保存摘要，生成展示显式关联版本正文，审核展示真实Review及已保存摘要/decision_reason，Claim核验展示真实判定与来源对照。evidence_gate/claim_extract被动，仅图内状态，不再重复检索/核验正文；不同调用/版本的同角色不按名称去重。资源入口只展示普通审核和默认折叠的显式版本对比，旧独立Claim发布报告保持。已删除不再使用的导航/抽取详情实现，不保留转发。`workflowNodeIcons.js`共用14个既有图形与未知图形。底部执行上下文/输入/标识默认折叠；多资源节点选择放在主体前，单资源选择折叠。接口未保存完整诊断/规划或逐资源模型suggestion时不补造；审核聚合说明不称原始模型回复，执行成功不等于审核通过。ClaimEvidenceList可选focusFirst仅详情启用，按记录顺序优先contradicted/not_in_evidence/incomplete，无问题时首条，non_factual不抢占问题，旧发布报告默认折叠。冻结来源、版本身份、请求隔离和发布边界不变，呈现不改变判定或发布。
 
 P0-06 的 Claim 抽取器与 Generator 相互独立。默认 `legacy_v3` 模型从资源、目标技能节点和当前
 Run 的冻结 Evidence ID 白名单中选择；代码负责生成稳定 Claim ID，并校验原文跨度、
@@ -379,6 +391,12 @@ T42 在抽取后追加程序化来源定位：新版中立模型只输出 `claim
 新策略在服务/Worker 提交时冻结，并计入 run request hash；新 dispatch 版本使旧 Worker 受控拒绝。`agent_runs.claim_extraction_mode` 与 input policy/私有账本交叉验证。一次 `GenerationService` 图调用持有同一 execution session，普通和 Claim 返工沿用 run 剩余额度；SQL 写入同时验证 run/job fence 与租约，未知在途票据禁止继续。同 run 完成结果只供原活跃 session 幂等读取；现有 runner 不建设检查点续跑，中断按原语义失败、新 run 独立重试。默认仍为 legacy，真实计数/质量/容量门另行验证。
 
 `max_iterations` 是普通审核最大返工次数，不包含初次生成；Claim 使用独立的 `claim_max_iterations`。`generation_attempt = revision_count + claim_revision_count + 1`，技术重试不复用该计数。每次运行、节点执行、资源版本和资源审核分别使用 `run_id`、`step_id`、`resource_id`、`review_id`，ID 在动作开始或结果产生时生成，持久化层不重新生成已有 ID。
+
+### T51 资源链路展示投影
+
+`resourceWorkflowPresentation.js` 以当前 Run 的真实步骤、轻量资源/审核身份和资源事件构建所选逻辑资源的只读链路；公共阶段在各资源内复用，其他步骤须有明确关联。`workflowEventReducer.js` 附加保存资源身份、审核身份及用于关联的受控事件字段，不保留新增正文或私有模型数据，不改变当前资源快照的合并规则。批次步骤执行状态/耗时与资源级审核、Claim 和发布事实分别表达；不能用当前状态重写历史结果。返工准备的全批次引用须由后续实际生成范围确认目标。历史缺关联回退到原批次图，不推断分支或补造父任务的准备步骤。
+
+`AgentVisualization.vue` 在 T49 成员/阶段/任务上下文内维护资源选择，默认直接显示资源切换与完整可追溯链路；原交付卡移除，精确资源操作移入资源按钮同行菜单，批次入口保留原图。图几何仍由 `WorkflowExecutionGraph.vue` 按既有步骤编号测量，展示共享/资源范围、版本及耗时口径。投影步骤携带仅前端使用的 `resource_scope`；`useGenerationAudit.js` 在精确步骤刷新后继续保留该范围，`associatedStepResources` 对资源 ID、规格、表示和 Run 再过滤，避免详情自动落到首个兄弟资源。切换资源关闭旧详情；切换外层任务立即清空旧轨迹，并同步任务自身 run/round/member/stage query（无绑定清旧轮次）；路由 await 后再次检查任务版本，既有 HTTP/SSE 守卫继续隔离迟到结果。没有后端或协议变动。
 
 ### 多 KB collection 与健康检查边界
 
@@ -698,7 +716,7 @@ SQLite 的正式反馈仓储在一个事务中提交 Attempt、决策、规范�
 
 课件的 `agents/resource_workflows/interactive_courseware/stages.py` 承担 design 的实操 JSON/冻结块绑定检查与设计准备，以及 scene 的槽位检查、稳定顺序增强和 warning/硬门结果收集。结果显式区分产物与失败，只有现有场景组成和 trace 的窄回调；阶段模块不访问 job/checkpoint/release 仓储。`InteractiveCoursewareWorkflow` 继续拥有阶段顺序、恢复、控制检查、预算入口、状态/事件/检查点、审核降级和发布。失败结果由原入口落成同样的拒绝/隔离状态，来源/未知组件等硬门不下放给阶段自行绕过。
 
-生成页通过 `features/generation/generationCommands.js` 准备并发送 continuation 请求，`useGenerationCommands.js` 负责四个命令的上下文、异步步骤与按钮状态归属；页面通过窄回调执行选择、localStorage、资源清空、订阅及通知。协调器复用 `createRequestGuard`，同步观察 learner/run，切换（包括 A→B→A）或卸载立即失效；retry、append、resource 三个忙碌通道各有当前所有者，两种批量重试共用 retry。自身合法选中新 Run 时保留该命令并重新捕获预期上下文，其他旧命令失效。命令刷新将有效性谓词传入 `loadJobs`，列表回写和错误也检查命令归属；false 不启动订阅或宣告成功，列表 loading 仍由其独立请求版本收尾。忽略过期 UI 响应不取消或重发服务端任务，后续可从原列表重新发现。
+生成页通过 `features/generation/generationCommands.js` 准备并发送 continuation 请求，`useGenerationCommands.js` 负责整任务重试、追加及单资源重试命令的上下文、异步步骤与按钮状态归属；页面通过窄回调执行选择、localStorage、资源清空、订阅及通知。协调器复用 `createRequestGuard`，同步观察 learner/run，切换（包括 A→B→A）或卸载立即失效；retry、append、resource 三个忙碌通道各有当前所有者，整任务重试使用 retry，页面不再提供批量失败重生成入口。自身合法选中新 Run 时保留该命令并重新捕获预期上下文，其他旧命令失效。命令刷新将有效性谓词传入 `loadJobs`，列表回写和错误也检查命令归属；false 不启动订阅或宣告成功，列表 loading 仍由其独立请求版本收尾。忽略过期 UI 响应不取消或重发服务端任务，后续可从原列表重新发现。
 
 `useGenerationResources.js` 只拥有所选任务资源和节点阶级读取及各自版本号，文本读取按 Run，课件来源按 batch；页面提供明确的 learner/run/textRun/knowledge base/batch 上下文并在切换/卸载时失效请求。jobs/status/claims/profile/task 的计数以及 Progress/Claims/Audit 的订阅清理继续独立，未合并成一个全局计数器，也未改变页面模板、样式和路由。命令协调器纳入严格 JSDoc/checkJs；纯请求计划和公共请求 guard 的契约保持。
 
@@ -772,3 +790,57 @@ T48 验收修复：`services/reviews/quality_evaluation.py` 校验冻结 manifes
 - 生产侧 `services/generation/round_context.py` 用持久绑定重新校验学习者/知识库/节点/难度/资源范围，`services/generation/round_continuations.py` 只允许主节点常规追加与合法失败恢复，并复用同一 UOW；`core/llm/budget.py` 的 `round_call_scope` 由 `_generate_with_budget` 在真实工作流外建立，资源 Agent 的 `copy_context().run` 让我方线程继承该作用域。
 - 前端 `features/generation/{useLearningRoundWorkspace,LearningRoundNodeSwitcher}.js|vue` 与 `features/feedback/{useRoundEvaluation,RoundEvaluationGroups,RoundFeedbackWorkspace}` 按 `memberId + stageId + real runId` 导航；`features/learners/LearningRoundHistory.vue` 与 `features/reports/LearningRoundReportSummary.vue` 消费同一轮次投影。Job 查询返回服务端解析的 `round_binding`，旧 Run 不按角色字符串猜测。
 - 报告侧 `report-read/3` 把九表纳入失效闭包并排除评分租约/预算心跳列；历史服务把新轮次与未绑定旧批次合并分页，`total_rounds` 以产品轮次计数。
+
+T52 手动单资源重试策略在既有 `ResourceRetryContext.request.constraints` 内冻结 `resource_retry_action` 与 `resource_retry_single_pass`，不能由API客户端覆盖。历史无标记快照保留原策略。服务端按精确产物/审核/证据记录决定 generate/revise/recheck；新请求直接生成或修订的额外返工预算为0，recheck先复制相同正文到可审计新版本，清空旧结论后重新审核，普通/Claim合计最多一次后续正文修订。结构化正文仅保存在私有重试快照，公开资源序列化仍排除内部payload；来源映射到新Run证据。不得将保留正文误记为模型重写或旧审核通过。手动发布沿用现有持久阻断与幂等门禁，阈值改为严格通过。回滚前须排空/取消带新策略的Run，旧Worker不得接管；无数据库迁移。
+
+
+### T60 纠错包分层与版本
+
+- `models/learning_documents/correction_package.py` 定义模型 content、服务端规范包与冻结生成契约；`core/learning_documents/correction_package.py` 只做确定性渲染、包/正文一致性校验和 content 叶子原文/角色/位置映射。
+- GenerationService 冻结新格式并从受控私有参数注入工作流；`models/generation/correction_dispatch.py` 使用新外层版本包住原 dispatch，先验外层再验内层。creation snapshot/checkpoint 保存私有格式身份，资源以可靠 ID 回读完整私有包。旧任务缺字段时保持旧格式；单资源 retry 从已验证的父任务身份和规范包恢复，不按当前默认策略转换格式。
+- `resource_issue_v1` 的 CorrectionPackageAdapter 同时保留完整 artifact hash 和 content-only 模型投影；新 `correction-content-audit-v1` profile 仅用于规范包，旧 registry/profile 不原地覆盖。compat 也选择该新内容片段，模型看不到学习状态或原始 focus。
+- Claim 的 `correction_sources.py` 持有独立 `correction-content-sources-v1`、角色规则 hash 与 `structured-correction-v1` marker。EstimatePolicy 的可选 correction_sources 只对新纠错任务冻结，缺省序列化省略；T59 structured_sources 版本、规则、旧 hash 保持。现有 executor、GuardedJudgeGateway、补检与 revision_inputs 通过统一来源分派重建同版原文，不复制 Judge 或增加平行工作流。
+- 生成修订和 retry 的私有父包保留完整服务端绑定，发送前只投影父 content 和问题；改动后复用普通审核→Claim→发布门槛。core/models 不访问数据库或模型；API 不编排上述逻辑。
+
+
+### T61 审核输入投影与兼容
+
+`models/reviews/resource_review_policy.py` 新增可选冻结输入契约 `single_representation_v1`，缺省序列化省略，保留旧policy hash。GenerationService冻结入口只为新任务启用，authority同时严格接受原字段集合和包含新契约的集合，拒绝未知字段或hash漂移。
+
+`reviewing/resource_issues/inputs.py` 负责单一新版内容表示、问题级父版片段、字段/段落变化摘要及新版Prompt片段；engine仍在服务端验证完整父版身份和artifact hash，账本核销、未变化判断、证据范围、发布校验继续共用原实现。`previous_location`须对应此次提供的问题上下文，false_positive须有可用父版片段。JSON纠错包保留content-only适配，不向审核模型暴露learning_status。
+
+`ReviewInputBudgetError` 携带输入估算、输出预留、冻结窗口与超出量；reviewer区分输入预算、输入契约及模型输出错误，使用既有ErrorInfo/trace字段记录安全诊断，finalize对预算超限保留准确停止原因。无数据库迁移、无新增外部配置、无Claim抽取并发改动。
+
+
+### T62 纠错包Claim来源版本
+
+`claim_extraction/filtered_correction_sources.py`持有v2来源、筛选规则hash和独立Prompt；从core已有字段原文映射挑选目标，并为新文本重新计算位置。私有source_snapshot绑定规范包hash、公开内容hash、目标文本hash、排除字段路径和只读上下文关系。`correction_sources.py`按冻结扩展选择v1/v2，v1资产保持；新neutral冻结入口选择v2。
+
+`source_for_claims`按持久化Claim marker精确重建，拒绝混合/未知来源；ledger校验marker与来源版本的对应关系。通用executor、Judge、补检、revision_inputs复用原调用链，Judge输入/输出契约不变。旧legacy路径保持v1，不将无新身份的历史请求静默转换。完整规范包、普通审核材料、Markdown渲染和存储不改变，版本迁移不回填数据库。
+
+
+### T63 纠错包双格式兼容
+
+models中的CorrectionPackageContentV2/CorrectionUnitV2/CorrectionExercisesV2定义双练习且拒绝worked_example/similar；CorrectionPackageV2与CorrectionProvenanceV2绑定correction-markdown-v2。parse_correction_package/parse_correction_generation_contract显式分派受支持版本，不对V1原schema增删字段。生成Agent根据冻结version选择原V1或新V2 Prompt/schema，校验父包格式一致，服务端装配学习状态及hash；修订不能跨格式或改变父绑定。
+
+core渲染与普通审核材料使用版本解析，V1原阅读顺序与hash不变，V2仅移除指定两部分。普通审核V2使用独立correction-content-audit-v2提示检查展示字段，Claim排除不等于教学质量免审。生成dispatcher封套复用现有版本并严格解析内部契约版本，恢复/retry按各自冻结版本校验，不与当前默认版本硬比较。Durable runner拒绝包renderer与冻结契约不一致。
+
+compact_correction_sources.py拥有v3排除路径及独立hash/marker，复用现有字段映射和只读关联组装；旧v1/v2来源保持，ledger/source_for_claims按marker精确重建。neutral新任务冻结v3；legacy新V2包选择匹配v3，旧V1 legacy仍原v1。没有新增数据库/业务目录、模型Judge、批次并发或预算上调。
+
+### T64 纠错包语境来源 V4
+
+`claim_extraction/contextual_correction_sources.py` 拥有新 neutral 任务的 V4 目标选择、显式字段角色、教学语境提示和路径关联；通过既有 resource_sources/correction_sources 公开入口使用。冻结版本为 correction-content-sources-v4，Claim marker 为 structured-correction-v4，输入策略 correction-context-input-v1。旧 v1/v2/v3 来源与 legacy 自动选择保持，不覆写旧资产。V4 只接受 V2 包；历史 V1 恢复必须使用其历史冻结来源。
+
+builder 仅在 V4 分支组织紧凑 unit_fields（unit_id、路径、角色、本单元区间、context_paths），不重复字段 text；只读关联按路径共享，通用邻接上下文扣除已发送目标、关联字段和重叠区间。全部输入仍通过既有真实请求计数与预算检查，通用分批、输出 schema、逐字定位不变。服务端拒绝非目标引用和跨字段 Claim；ledger、source_for_claims 按独立 marker 绑定来源，恢复不读取最新默认值。Judge 和补检只接收既有 Claim/证据，不新增答案证据池或语义识别调用。复习清单/测评题和非结构化正文不进入 V4 分支。
+
+新任务冻结阶段由 `for_correction_contract` 将V1生成/重试契约与兼容v3来源绑定，重算新任务policy hash；jobs在dispatch hash生成前选择，直接GenerationService入口仅在新创建的policy上选择。传入或恢复的冻结快照不改写。
+
+T65：复习清单上下文修复由 `claim_extraction/resource_sources.py` 的冻结 `checklist_context` 子扩展选择；`structured-checklist-v2` 与历史v1并存，来源重建按持久化Claim marker选择。消息builder把必需题目背景绑定到批内目标，原文只出现于target_units或只读关联背景，完整序列化请求复用执行器window/budget检查；模型输出格式与通用Judge保持。新marker纳入账本源身份校验，未知/漂移、跨字段引用和不确定结果保守拒绝；结构化答案选择只代表作者立场，不代替Evidence。
+
+### T66 统一Claim输入契约与可恢复的大批次载体
+
+`claim_extraction/input_context.py`维护通用语义与有界前文策略；`unified_sources.py`负责四类JSON资源的字段选择和依赖，再经既有resource_sources入口供executor、Judge前来源校验及修订定位使用。目标字段原文组成确定性审核文本，模型仅在target_units中收到目标；路径/角色以unit_fields绑定，不重复发送完整JSON或公开Markdown。关联字段按路径共享，已完整位于本批目标的内容不重复作为背景，字段内部拆分携带有界前文。Markdown沿用无损分段，补最近两个完整非空段/拆段前提，并保留必需表头和代码围栏。
+
+新EstimatePolicy可选input_contract缺省时序列化省略，旧policy/hash/Prompt不变；新来源marker分别为structured-assessment-context-v2、structured-checklist-context-v3、structured-correction-context-v5、structured-practice-context-v1。来源快照绑定包/公开内容/审核文本hash、路径和关联；未知或混合marker拒绝重建。历史无JSON的Markdown资源及纠错V1兼容分支保留，测评缺私有包仍拒绝。测评新marker沿用公开查询隐藏答案的投影。
+
+配置默认6144/30仅用于新建冻结策略。大于20阈值选择LargeBatchOutput/ LargeBatchOutputV2；原载体schema与hash保持。账本按规范序列化数据比较不可变结果，允许同内容经兼容union成员恢复，拒绝篡改已完成输出。新旧版本使用同一执行器、完整请求估算/CAS预算、原文校验和Judge，不新增模型节点、数据库或公开DTO；来源语义规则版本独立冻结。

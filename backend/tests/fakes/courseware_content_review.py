@@ -8,7 +8,7 @@ import json
 from app.config import Settings
 from app.models.courseware.content_review import json_hash
 from app.models.learning_documents.schemas import LearningResource, SourceRef
-from app.models.shared.agent_contracts import PracticeGuidePackageV3, ReviewPracticePackageV2
+from app.models.shared.agent_contracts import PracticeGuidePackageV3, ReviewPracticePackageV2, validate_practice_guide_package
 from app.models.shared.llm import LLMCallOptions, LLMCallResult, LLMUsage, StructuredOutputMode
 
 
@@ -46,8 +46,18 @@ def source_package(group="review"):
     return {**raw, "payload_hash": json_hash(raw)}
 
 
-def resource(group="review", *, resource_id=None, version=1, document_version="legacy-doc-v1"):
+def resource(group="review", *, resource_id=None, version=1, document_version="legacy-doc-v1", practice_version="3.0"):
     package = source_package(group)
+    if group != "review" and practice_version != "3.0":
+        raw = {k: v for k, v in package.items() if k != "payload_hash"}
+        raw["schema_version"] = practice_version
+        if practice_version == "5.0":
+            raw["preparation"]["materials"] = [
+                {"name": "输入记录", "content": "输入版本：1；预期结果：1。"},
+                {"name": "核对记录", "content": "记录输入、实际结果以及差异。"},
+            ]
+        raw = validate_practice_guide_package(raw).model_dump(mode="json")
+        package = {**raw, "payload_hash": json_hash(raw)}
     key = "review_practice_payload" if group == "review" else "practice_guide_payload"
     return LearningResource(resource_id=resource_id or f"fixture-{group}", learner_id="content-learner", resource_type="复习清单" if group == "review" else "实操指南",
         topic="冻结来源核对", difficulty="初级", knowledge_points=["冻结来源核对"], version=version, publication_status="published", content_text="冻结来源：核对输入、条件和结果，保留证据以便复盘。",

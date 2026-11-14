@@ -37,6 +37,18 @@ from app.models.reviews.resource_review_policy import ResourceReviewPolicyV1, po
 
 from .adapters.base import ResourceMaterial, text_hash
 from .decisions import project_public_summary, public_code
+from .inputs import (
+    INPUT_CONTRACT,
+    INPUT_CONTRACT_V3,
+    INPUT_CONTRACT_V4,
+    MARKDOWN_RANGE_TYPES,
+    NUMBERED_CONTRACTS,
+    canonicalize_current_paragraph_locations,
+    materialize_model_output,
+    single_input_payload,
+    validate_issue_context_resolutions,
+    validate_range_contract,
+)
 from .ledger import (
     append_model_observation_v1,
     append_program_gate_observation_v1,
@@ -130,8 +142,13 @@ def _evidence_hash(frozen_evidence: list[dict]) -> str:
 
 
 def _profile(resource_type: str, phase: str, policy: ResourceReviewPolicyV1) -> ReviewProfile:
-    schema = output_schema(resource_type, recheck=phase == "resource_issue_recheck_v1")
-    return ReviewProfile(resource_type, phase, "1.0", profile_fragments(resource_type),
+    schema = output_schema(resource_type, recheck=phase == "resource_issue_recheck_v1",
+                           input_contract=policy.input_contract)
+    fragments = profile_fragments(resource_type)
+    if policy.input_contract:
+        from .inputs import input_rules
+        fragments = (*fragments[:-1], input_rules(fragments[-1], policy.input_contract))
+    return ReviewProfile(resource_type, phase, policy.input_contract or "1.0", fragments,
                          (), schema, "reviewer", policy.max_output_tokens)
 
 
@@ -231,7 +248,13 @@ def _gate_summary(*, gate: ResourceProgramGateResultV1, material: ResourceMateri
 
 def _payload(*, material: ResourceMaterial, binding: ResourceReviewBindingV1, targets,
              frozen_evidence, previous: ResourceLedgerV1 | None, parent_text: str | None,
-             parent_material=None) -> dict:
+             parent_material=None, input_contract=None) -> dict:
+    if input_contract:
+        if input_contract not in {INPUT_CONTRACT, *NUMBERED_CONTRACTS}:
+            raise ValueError("unknown resource review input contract")
+        return single_input_payload(material=material, binding=binding, targets=targets,
+                                    frozen_evidence=frozen_evidence, previous=previous,
+                                    parent_material=parent_material, input_contract=input_contract)
     payload = {
         "binding": binding.model_dump(mode="json"),
         "resource_type": material.resource_type,
@@ -255,7 +278,36 @@ def _payload(*, material: ResourceMaterial, binding: ResourceReviewBindingV1, ta
                                               "unit_ids": sorted(parent_material.index.unit_ids)}
         payload["old_issues"] = [item.model_dump(mode="json") for item in previous.issues]
         payload["previous_binding"] = previous.binding.model_dump(mode="json")
+    if material.resource_type == "个性化纠错训练包" and material.structured_payload:
+        from app.models.learning_documents.correction_package import parse_correction_package
+        from app.core.learning_documents.correction_package import correction_model_projection, correction_audit_source
+        package = parse_correction_package(material.structured_payload)
+        payload["text"] = correction_audit_source(package).text
+        payload["structured_payload"] = correction_model_projection(package)
+        payload["location_index"]["unit_fields"] = {k: sorted(v) for k,v in material.index.unit_fields.items()}
+        if parent_material is not None:
+            parent = parse_correction_package(parent_material.structured_payload)
+            payload["previous_content"] = correction_audit_source(parent).text
+            payload["previous_structured_payload"] = correction_model_projection(parent)
     return payload
+
+
+def _validated_model_output(*, result, context, profile, policy, binding, material, previous, parent_material):
+    contract = policy.input_contract
+    if contract == INPUT_CONTRACT_V4 and result.call_id != context.call_id:
+        raise ValidationError("BINDING_MISMATCH", "call_id", "result does not belong to the current review call")
+    output = profile.output_schema.model_validate(result.output.model_dump(mode="json"))
+    if contract == INPUT_CONTRACT_V4:
+        output = materialize_model_output(output, material, previous, binding=binding,
+                                          markdown=material.structured_payload is None)
+    elif contract == INPUT_CONTRACT_V3 and material.structured_payload is None:
+        output = materialize_model_output(output, material, previous, markdown=True)
+    elif contract in NUMBERED_CONTRACTS:
+        output = canonicalize_current_paragraph_locations(output, material)
+    validate_range_contract(output, input_contract=contract, resource_type=material.resource_type)
+    if contract:
+        validate_issue_context_resolutions(output, previous, parent_material)
+    return output
 
 
 def _plan_correction(*, error: ValidationError, remaining_attempts: int,
@@ -282,9 +334,15 @@ def _build_correction_request(*, request: ReviewRequest, first_output: dict,
     payload["review_consistency_errors"] = [
         {"code": item.code, "field": item.path, "relationship": item.hint} for item in errors]
     body = json.dumps(payload, ensure_ascii=False)
+    correction_rules = CORRECTION_RULES.text
+    if payload.get("input_contract") == INPUT_CONTRACT_V4:
+        correction_rules = (
+            "根据 review_consistency_errors 核对列出的字段及其关联判断，保留其余已有效的内容。"
+            "不得为使结果通过而虚构或删去真实问题。只返回同一 schema 的完整 JSON 对象。"
+        )
     return ReviewRequest(
         request.profile, request.prompt_bundle,
-        (SystemMessage(content=system.content + "\n\n" + CORRECTION_RULES.text),
+        (SystemMessage(content=system.content + "\n\n" + correction_rules),
          HumanMessage(content=body)),
         request.resource_id, request.max_output_tokens, request.context_tokens)
 
@@ -305,12 +363,14 @@ def _record(*, resource, attempted: bool, stop_reason: str | None, errors, first
 
 
 def _blocked(*, reason: str, error: ValidationError, result, repair: CorrectionRecord,
-             resource) -> ResourceReviewOutcome:
+             resource, input_contract: str | None) -> ResourceReviewOutcome:
+    new_contract = input_contract == INPUT_CONTRACT_V4
     raw = {"decision": "human_review", "hallucination_score": 1.0, "coverage_rate": 0.0,
            "difficulty_match": False,
-           "issues": [{"code": "evidence_gap", "severity": "critical",
+           "issues": [{"code": "other" if new_contract else "evidence_gap", "severity": "critical",
                        "resource_type": resource.resource_type, "knowledge_point": None,
-                       "description": "审核结果内部不一致且未能在允许范围内纠正，保持未发布。"}],
+                       "description": ("普通审核结果校验失败，保持未发布。" if new_contract else
+                                       "审核结果内部不一致且未能在允许范围内纠正，保持未发布。")}],
            "suggestion": f"停止原因：{reason}；错误代码：{error.code}。",
            "revision_instructions": []}
     return ResourceReviewOutcome(raw=raw, ledger=None, last_llm_result=result,
@@ -341,11 +401,13 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
             raise ValueError("resource revision requires verified parent text")
         fields = {"content_text": parent_text}
         payload_field = {"实操指南": "practice_guide_payload", "分阶测试题": "assessment_payload",
-                         "复习清单": "review_practice_payload"}.get(resource.resource_type)
+                         "复习清单": "review_practice_payload", "个性化纠错训练包": "correction_package_payload"}.get(resource.resource_type)
         if payload_field:
             if "previous_structured_payload" not in revision:
                 raise ValueError("resource revision requires the complete parent package")
             fields[payload_field] = revision["previous_structured_payload"]
+            if resource.resource_type == "个性化纠错训练包" and fields[payload_field] is not None:
+                fields[payload_field + "_hash"] = fields[payload_field]["payload_hash"]
         parent_resource = resource.model_copy(update=fields)
         parent_material = adapter.build_material(resource=parent_resource, evidence=evidence, spec=None, targets=targets)
         if parent_material.artifact_exact_hash != previous.binding.artifact_exact_hash:
@@ -366,22 +428,34 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
 
     phase = "resource_issue_recheck_v1" if previous else "resource_issue_initial_v1"
     profile = _profile(resource.resource_type, phase, policy)
+    if (policy.input_contract == INPUT_CONTRACT_V4
+            or (policy.input_contract == INPUT_CONTRACT_V3 and material.structured_payload is None)):
+        context = context.model_copy(update={"schema_name": profile.output_schema.__name__})
+    if resource.correction_package_payload is not None:
+        from ..profiles import correction_content_profile
+        profile = correction_content_profile(profile, compact=resource.correction_package_payload.get("schema_version") == "correction-package-v2")
     bundle = build_review_prompt(profile=profile)
     request = ReviewRequest(profile, bundle,
                             (SystemMessage(content=bundle.system_text),
                              HumanMessage(content=json.dumps(
                                  _payload(material=material, binding=binding, targets=targets,
                                           frozen_evidence=frozen_evidence, previous=previous,
-                                          parent_text=parent_text, parent_material=parent_material), ensure_ascii=False))),
+                                          parent_text=parent_text, parent_material=parent_material,
+                                          input_contract=policy.input_contract), ensure_ascii=False))),
                             resource.resource_id, policy.max_output_tokens, policy.context_tokens)
-    if estimate_review_input(request=request) + policy.max_output_tokens > policy.context_tokens:
-        from ..executor import ReviewInputBudgetError
-        raise ReviewInputBudgetError("resource review context window exceeded")
+    estimated_input = estimate_review_input(request=request)
+    if estimated_input + policy.max_output_tokens > policy.context_tokens:
+        raise ReviewInputBudgetError("resource review context window exceeded",
+                                   estimated_input_tokens=estimated_input,
+                                   reserved_output_tokens=policy.max_output_tokens,
+                                   context_limit=policy.context_tokens)
 
     guard = step_guard or state.get("resource_review_entry_guard")
     if not callable(guard):
         raise ValidationError("DURABLE_GUARD_MISSING", "guard",
                               "resource review requires a durable step guard before any request")
+    if policy.input_contract == INPUT_CONTRACT_V4 and (context.run_id, context.step_id) != (binding.run_id, step_id):
+        raise ValidationError("BINDING_MISMATCH", "call_context", "review call does not match the frozen step")
     validate_execution_identity(state=state, gateway=gateway)
     guard(step_id=step_id, generation_attempt=context.generation_attempt)
 
@@ -396,12 +470,13 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
                          errors=(attempt_error,), first_attempts=0, correction_attempts=0,
                          first=result, correction=None, corrected=False, final_hash=None)
         return _blocked(reason=f"attempt_unknown:{attempt_error.code}", error=attempt_error,
-                        result=result, repair=repair, resource=resource)
+                        result=result, repair=repair, resource=resource, input_contract=policy.input_contract)
     used = first_attempts
     repair: CorrectionRecord | None = None
     try:
-        schema = profile.output_schema
-        output = schema.model_validate(result.output.model_dump(mode="json"))
+        output = _validated_model_output(result=result, context=context, profile=profile, policy=policy,
+                                         binding=binding, material=material, previous=previous,
+                                         parent_material=parent_material)
         ledger = append_model_observation_v1(
             previous=previous, binding=binding, step_id=step_id, output=output,
             material=material, adapter=adapter, parent_text=parent_text, parent_material=parent_material,
@@ -427,7 +502,7 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
                              errors=(error,), first_attempts=first_attempts, correction_attempts=0,
                              first=result, correction=None, corrected=False, final_hash=None)
             return _blocked(reason=plan.stop_reason or error.code, error=error, result=result,
-                            repair=repair, resource=resource)
+                            repair=repair, resource=resource, input_contract=policy.input_contract)
         validate_execution_identity(state=state, gateway=gateway)
         guard(step_id=step_id, generation_attempt=context.generation_attempt)
         correction_context = context.model_copy(update={"call_id": str(uuid4()),
@@ -444,9 +519,11 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
                              correction_attempts=0, first=result, correction=None,
                              corrected=False, final_hash=None)
             return _blocked(reason=repair.stop_reason, error=error, result=result,
-                            repair=repair, resource=resource)
+                            repair=repair, resource=resource, input_contract=policy.input_contract)
         try:
-            output = schema.model_validate(second.output.model_dump(mode="json"))
+            output = _validated_model_output(result=second, context=correction_context, profile=profile,
+                                             policy=policy, binding=binding, material=material,
+                                             previous=previous, parent_material=parent_material)
             ledger = append_model_observation_v1(
                 previous=previous, binding=binding, step_id=step_id, output=output,
                 material=material, adapter=adapter, parent_text=parent_text, parent_material=parent_material,
@@ -462,7 +539,7 @@ def review_resource_v1(*, state, resource, evidence, step_id, context, gateway, 
                              correction_attempts=len(second.attempts), first=result,
                              correction=second, corrected=False, final_hash=None)
             return _blocked(reason=f"correction_failed:{second_error.code}", error=second_error,
-                            result=second, repair=repair, resource=resource)
+                            result=second, repair=repair, resource=resource, input_contract=policy.input_contract)
         repair = _record(resource=resource, attempted=True, stop_reason=None, errors=(error,),
                          first_attempts=first_attempts, correction_attempts=len(second.attempts),
                          first=result, correction=second, corrected=True,

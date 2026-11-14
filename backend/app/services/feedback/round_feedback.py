@@ -15,10 +15,11 @@ from app.models.feedback.rounds import RoundAttemptProcessingV1, RoundFeedbackRe
 from app.models.shared.llm import LLMBudgetScope
 from app.models.shared.persistence import canonical_hash
 from app.services.feedback.learning_path_policy import mutate_learning_path
-from app.services.feedback.round_assessment import RoundAssessment, resource_fingerprint
+from app.services.feedback.round_assessment import RoundAssessment, latest_session, resource_fingerprint
 from app.services.feedback.round_budget import RoundBudgetGuard
 from app.services.feedback.round_learning import invalid
 from app.services.feedback.round_plans import round_identity
+from app.services.feedback.round_remediation import original_node_id
 from app.services.feedback.round_uow import RoundUnitOfWork
 from app.services.learners.remediation import update_need
 
@@ -31,13 +32,18 @@ class RoundFeedback:
     def __init__(self, service):
         self.service = service
 
-    def result(self, profile, round_id, stage_id):
+    def result(self, profile, round_id, stage_id, session_id=None):
         service = self.service
         service._round(profile.learner_id, round_id)
         stage = service.repository.one("learning_round_stages", stage_id=stage_id)
         if stage is None or stage["round_id"] != round_id:
             raise invalid(ErrorCode.ROUND_ASSESSMENT_INVALID, 404)
-        session = service.repository.one("learning_round_evaluation_sessions", stage_id=stage_id)
+        if session_id:
+            session = service.repository.one("learning_round_evaluation_sessions", session_id=session_id)
+            if not session or session["stage_id"] != stage_id:
+                raise invalid(ErrorCode.ROUND_ASSESSMENT_INVALID, 404)
+        else:
+            session = latest_session(service.repository, stage_id)
         if not session or not session["attempt_id"]:
             # An abandoned owner cannot finish after its lease expires. Keep
             # the frozen submission intact so its caller can resume with the
@@ -94,7 +100,7 @@ class RoundFeedback:
                     "grading_lease_expires_at": datetime.now(timezone.utc) + timedelta(seconds=30),
                 })
         if replay:
-            return self.result(profile, round_id, stage_id)
+            return self.result(profile, round_id, stage_id, session["session_id"])
         stop = Event()
 
         def heartbeat():
@@ -114,9 +120,10 @@ class RoundFeedback:
             with round_call_scope(LLMBudgetScope(scope_id=session["session_id"], stage_id=stage_id, kind="assessment"),
                                   input_cap=budget["input_capacity"], guard=RoundBudgetGuard(service.repository)):
                 prepared, anchor = RoundAssessment(service).prepare(profile, session, payload)
+                analysis = service.feedback._analyze_feedback(profile, prepared, None, [])
             stop.set()
             thread.join()
-            self._commit(profile, round_id, stage_id, session, prepared, anchor, owner, submission_hash)
+            self._commit(profile, round_id, stage_id, session, prepared, anchor, owner, submission_hash, analysis)
         except BaseException:
             stop.set()
             thread.join()
@@ -127,9 +134,9 @@ class RoundFeedback:
                         "grading_state": "idle", "grading_owner": None, "grading_lease_expires_at": None,
                     })
             raise
-        return self.result(profile, round_id, stage_id)
+        return self.result(profile, round_id, stage_id, session["session_id"])
 
-    def _commit(self, profile, round_id, stage_id, session, prepared, anchor, owner, submission_hash):
+    def _commit(self, profile, round_id, stage_id, session, prepared, anchor, owner, submission_hash, analysis):
         service = self.service
         with RoundUnitOfWork(service.repository, service.feedback, service.learners) as uow:
             current = uow.learners.get(profile.learner_id)
@@ -177,7 +184,10 @@ class RoundFeedback:
                     path.nodes.append(selected)
                 selected_path_id = selected.node_id
                 context = context.model_copy(update={"learning_path": path})
-            attempt = attempt.model_copy(update={"path_node_id": selected_path_id})
+            attempt = attempt.model_copy(update={
+                "path_node_id": selected_path_id,
+                "metadata": {**attempt.metadata, "llm_analysis": analysis.model_dump(mode="json")},
+            })
             policy = policies[primary] if primary and active else FeedbackPolicyDecision(
                 FeedbackAction.HOLD, ("round_review_or_historical",), (), "仅更新本次节点证据，保持当前主路径。", False,
             )
@@ -191,10 +201,10 @@ class RoundFeedback:
             mutations = build_mastery_mutations(attempt, context, evidence_eligibility=eligibility, dimension_ready=dimensions)
             path_attempt = attempt.model_copy(update={"knowledge_point_results": [point for point in attempt.knowledge_point_results
                                                                                     if point.knowledge_point_id == primary]}) if primary else attempt
-            path, path_mutation = mutate_learning_path(attempt=path_attempt, decision_id=decision_id, policy=policy,
-                                                       existing=context.learning_path,
-                                                       advance_knowledge_point_id=uow.feedback._next_path_node_id(current, [primary], context.learning_path)
-                                                       if primary and policy.action == FeedbackAction.ADVANCE else None)
+            path, path_mutation = mutate_learning_path(
+                attempt=path_attempt, decision_id=decision_id, policy=policy,
+                existing=context.learning_path,
+            )
             version = context.profile_version + 1
             patch = uow.feedback._profile_patch(current, attempt, decision, mutations)
             version_record = ProfileVersionRecord(learner_id=current.learner_id, profile_version=version,
@@ -223,7 +233,7 @@ class RoundFeedback:
                 point.knowledge_point_id: point.score for point in attempt.knowledge_point_results
                 if point.knowledge_point_id != primary or not active
             })
-            if primary and active:
+            if primary and active and not original_node_id(uow.rounds, round_id):
                 uow.feedback.mastery_service.apply_tier_feedback(current, point_scores={primary: next(p.score for p in attempt.knowledge_point_results if p.knowledge_point_id == primary)})
             # Re-read after bound repository commits/flushes, preserving budget
             # and heartbeat changes to the session row version.

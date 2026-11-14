@@ -29,7 +29,8 @@ def test_review_endpoint_returns_claim_evidence_and_handles_missing_resource():
         run_id=None,
     )
     app = FastAPI()
-    app.container = SimpleNamespace(review_service=lambda: ReviewService(repository))
+    app.container = SimpleNamespace(review_service=lambda: ReviewService(repository),
+                                    resource_service=lambda: SimpleNamespace(get=lambda _: SimpleNamespace(resource_type="讲义")))
     app.include_router(reviews.router, prefix="/api/reviews")
     client = TestClient(app)
 

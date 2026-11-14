@@ -11,6 +11,7 @@ from app.models.courseware.contracts import (
     CoursewareJobState,
     CoursewareResourceDetail,
     CoursewareSceneStatus,
+    CoursewareSourceSummary,
 )
 from app.models.courseware.provenance import ProvenanceEdge, ProvenanceGraph, ProvenanceNode
 from app.models.courseware.design import CoursewareDesign, LayoutSpec, MotionSpec, ThemeSpec
@@ -27,6 +28,7 @@ __all__ = [
     "CoursewareJobState",
     "CoursewareResourceDetail",
     "CoursewareSceneStatus",
+    "CoursewareSourceSummary",
     "ProvenanceEdge",
     "ProvenanceGraph",
     "ProvenanceNode",

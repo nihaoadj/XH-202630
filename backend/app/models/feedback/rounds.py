@@ -122,10 +122,12 @@ class RoundNextSelectionV1(RoundModel):
     source_attempt_id: str = Field(min_length=1, max_length=128)
     primary_node_id: str = Field(min_length=1, max_length=128)
     primary_learning_intent: LearningIntent
+    follow_remediation: bool = False
     primary_resource_types: list[str] = Field(min_length=1, max_length=5)
     review_node_id: str | None = Field(default=None, min_length=1, max_length=128)
     include_claim_check: bool = False
     include_claim_evidence_retrieval: bool = False
+    claim_post_retrieval_max_iterations: int = Field(default=0, ge=0, le=3)
     selection_key: str = Field(min_length=8, max_length=128)
 
     @field_validator("primary_resource_types")
@@ -164,6 +166,7 @@ class RoundCorrectionSelectionV1(RoundModel):
     selection_key: str = Field(min_length=8, max_length=128)
     include_claim_check: bool = False
     include_claim_evidence_retrieval: bool = False
+    claim_post_retrieval_max_iterations: int = Field(default=0, ge=0, le=3)
 
     @model_validator(mode="after")
     def validate_targets(self) -> RoundCorrectionSelectionV1:
@@ -313,6 +316,7 @@ class RoundAttemptProcessingV1(RoundModel):
 
 class RoundEvaluationRequestV1(RoundModel):
     learner_id: str = Field(min_length=1, max_length=64)
+    retake_from_session_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class RoundStageSummaryV1(RoundModel):
@@ -402,9 +406,18 @@ class RoundResultNotSubmittedV1(RoundModel):
     stage_id: str = Field(min_length=1, max_length=128)
 
 
+class RoundRemediationRecommendationV1(RoundModel):
+    kind: Literal["prerequisite", "downgrade", "practice_prerequisite", "return_to_original"]
+    node: NextGenerationCandidateV1
+    original_node_name: str
+    original_node_id: str
+
+
 class RoundCandidatesV1(RoundModel):
     schema_version: Literal["1.0"] = "1.0"
     generation_options: NextGenerationOptionsV1
     eligible_review_nodes: list[NextGenerationCandidateV1]
     correction_targets: list[RoundCorrectionTargetV1]
     profile_version: int = Field(ge=1)
+    remediation_recommendation: RoundRemediationRecommendationV1 | None = None
+    confirmed_selection: dict[str, Any] | None = None

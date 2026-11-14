@@ -460,10 +460,42 @@ class DurableWorkflowRunner:
             raise ValueError("resource runtime ledger differs from durable audit")
         state["resource_ledgers"] = ledgers
 
+    def _validate_correction_resources(self, state):
+        if not state.get("correction_package_snapshot"):
+            return
+        from app.core.learning_documents.correction_package import validated_correction_package
+        for resource in state.get("generated_resources", []):
+            if resource.resource_type != "个性化纠错训练包":
+                continue
+            failed = any(e.get("resource_id") == resource.resource_id and e.get("validation_status") == "failed"
+                         for e in state.get("resource_executions", []))
+            if failed and resource.publication_status != "published":
+                continue
+            package = validated_correction_package(resource, targets=state.get("target_skill_nodes"))
+            from app.models.learning_documents.correction_package import parse_correction_generation_contract
+            contract = parse_correction_generation_contract(state["correction_package_snapshot"])
+            if contract.renderer_version != package.provenance.renderer_version:
+                raise ValueError("correction package differs from frozen format")
+
     def invoke(self, initial_state: dict[str, Any]) -> dict[str, Any]:
         from app.db.claim.extraction import extraction_repository
         from app.agents.resource_workflows.learning_documents.claim_extraction.budget import validate_entry
         private_repository = extraction_repository(self.repository)
+        creation = self.repository.get_run_creation_snapshot(initial_state["run_id"])
+        frozen = creation.get("correction_package_snapshot")
+        if initial_state.get("correction_package_snapshot") != frozen:
+            raise ValueError("correction runtime differs from creation snapshot")
+        for checkpoint in self.repository.list_checkpoints(initial_state["run_id"]):
+            if (checkpoint.state_hash != canonical_hash(checkpoint.state_projection)
+                    or checkpoint.state_projection.get("correction_package_snapshot") != frozen):
+                raise ValueError("correction checkpoint identity mismatch")
+        if frozen:
+            if creation.get("correction_focus_snapshot") != initial_state.get("constraints", {}).get("correction_focus_snapshot"):
+                raise ValueError("correction frozen focus mismatch")
+            from app.agents.resource_agents.correction_package import validate_generation_contract
+            validate_generation_contract(frozen)
+            initial_state["constraints"]["_correction_package_contract"] = frozen
+        self._validate_correction_resources(initial_state)
         self._restore_evidence_context(initial_state)
         self._validate_lecture_entry(initial_state)
         self._assert_no_unfinished_lecture_review(initial_state)
@@ -477,6 +509,7 @@ class DurableWorkflowRunner:
         if not hasattr(self.workflow, "stream"):
             raw_result = self.workflow.invoke(initial_state)
             result = {**initial_state, **raw_result}
+            self._validate_correction_resources(result)
             self._validate_lecture_entry(result)
             self._validate_resource_entry(result)
             validate_entry(result, private_repository)
@@ -487,10 +520,23 @@ class DurableWorkflowRunner:
 
         latest: dict[str, Any] = initial_state
         checkpointed: set[str] = set()
-        for value in self.workflow.stream(initial_state, stream_mode="values"):
+        from langgraph.graph.state import CompiledStateGraph
+        options = {}
+        if isinstance(self.workflow, CompiledStateGraph):
+            # Each configured revision must have room for ordinary review,
+            # extraction, judgement and the optional supplement round. Counts
+            # remain the business gate; this only bounds graph traversal.
+            revisions = sum(min(3, max(0, int(initial_state.get(key, default))))
+                            for key, default in (("max_iterations", 2), ("claim_max_iterations", 1),
+                                                 ("claim_post_retrieval_max_iterations", 0)))
+            options["config"] = {"recursion_limit": 12 * (revisions + 1) + 12}
+        for value in self.workflow.stream(initial_state, stream_mode="values", **options):
             if not isinstance(value, dict):
                 continue
             latest = value
+            if latest.get("correction_package_snapshot") != frozen:
+                raise ValueError("correction workflow dropped frozen identity")
+            self._validate_correction_resources(latest)
             self._validate_lecture_entry(latest)
             self._validate_resource_entry(latest)
             validate_entry(latest, private_repository)

@@ -1,152 +1,134 @@
 <template>
   <div class="report-page">
-    <section class="report-hero" aria-labelledby="report-overview-title">
-      <header class="report-overview-head">
-        <div class="report-hero-copy">
-          <span class="report-kicker">01 / LEARNING REPORT</span>
-          <h2 id="report-overview-title">学习报告</h2>
+    <div class="report-overview report-snap-section">
+      <section class="report-hero workspace-filter-surface" aria-label="学习报告概览与筛选">
+        <div class="task-selector">
+          <div class="selector-field report-profile-field">
+            <label>学习画像 <span>PROFILE</span></label>
+            <el-select v-model="selectedLearnerId" placeholder="选择学习画像" class="task-select" aria-label="学习画像" popper-class="report-control-dropdown" filterable @change="handleProfileChange">
+              <el-option v-for="item in profileOptions" :key="item.learner_id" :label="item.label" :value="item.learner_id" />
+            </el-select>
+          </div>
+          <div class="selector-field report-window-field">
+            <label>时间范围 <span>PERIOD</span></label>
+            <el-select v-model="windowDays" class="task-select" aria-label="报告时间窗口" popper-class="report-control-dropdown" @change="restartStream">
+              <el-option :value="7" label="近 7 天" />
+              <el-option :value="30" label="近 30 天" />
+              <el-option :value="90" label="近 90 天" />
+            </el-select>
+          </div>
+          <el-button class="report-refresh-button" :icon="Refresh" :loading="reportLoading" @click="() => loadReport(true)" :disabled="!selectedLearnerId">更新报告</el-button>
         </div>
-        <div class="report-focus">
-          <span><i aria-hidden="true" />当前学习方向<small>LEARNING FOCUS</small></span>
-          <strong>{{ directionName }}</strong>
-          <b>画像能力等级 {{ report.skill_level || activeProfile?.skill_level || '待诊断' }}</b>
+
+        <el-alert
+          v-if="report.report_availability?.status === 'calibration_pending'"
+          type="warning"
+          :closable="false"
+          :title="report.report_availability.message || '初始诊断尚未完成，暂不生成正式学习结论'"
+        />
+
+        <div v-if="reportError" class="report-state report-state-error" role="alert">
+          <span>{{ reportError }}</span><el-button @click="retryReport">重新加载</el-button>
         </div>
-      </header>
+        <p v-else-if="reportLoading" class="report-state" role="status">正在读取当前画像的报告，请稍候。</p>
 
-      <el-alert
-        v-if="report.report_availability?.status === 'calibration_pending'"
-        type="warning"
-        :closable="false"
-        :title="report.report_availability.message || '初始诊断尚未完成，暂不生成正式学习结论'"
-      />
-      <el-alert
-        v-if="report.initial_diagnostic?.final_tier"
-        type="success"
-        :closable="false"
-        :title="`初始校准：问卷预判第 ${report.initial_diagnostic.questionnaire_tier} 阶，最终第 ${report.initial_diagnostic.final_tier} 阶${report.initial_diagnostic.downgraded ? '（已降阶校准）' : ''}`"
-      />
-
-      <div class="profile-selector report-selector-row">
-        <div class="report-field report-profile-field">
-          <label>学习画像<span>PROFILE</span></label>
-          <el-select v-model="selectedLearnerId" placeholder="选择学习画像" class="report-input" aria-label="学习画像" popper-class="report-control-dropdown" filterable @change="handleProfileChange">
-            <el-option v-for="item in profileOptions" :key="item.learner_id" :label="item.label" :value="item.learner_id" />
-          </el-select>
+        <div class="job-summary report-summary-metrics" aria-label="学习数据摘要" v-module-motion="{ key: selectedLearnerId + ':' + windowDays, ready: !reportLoading }">
+          <div class="summary-item"><span>学习资源</span><strong class="summary-count">{{ metricSummary.resource_count || 0 }}</strong><small>已生成资源批次</small></div>
+          <div class="summary-item"><span>练习反馈</span><strong class="summary-count">{{ metricSummary.feedback_count || 0 }}</strong><small>已记录练习结果</small></div>
+          <div class="summary-item"><span>客观正确率</span><strong class="summary-count">{{ averageCorrectRate }}</strong><small>{{ streamStatusLabel }}</small></div>
+          <div class="summary-item"><span>待巩固知识点</span><strong class="summary-count">{{ metricSummary.weak_point_count || 0 }}</strong><small>优先进入下一轮学习</small></div>
         </div>
-        <div class="report-field report-window-field">
-          <label>时间范围<span>PERIOD</span></label>
-          <el-select v-model="windowDays" class="window-select" aria-label="报告时间窗口" popper-class="report-control-dropdown" @change="restartStream">
-            <el-option :value="7" label="近 7 天" />
-            <el-option :value="30" label="近 30 天" />
-            <el-option :value="90" label="近 90 天" />
-          </el-select>
-        </div>
-        <el-button class="report-refresh-button" type="primary" :icon="Refresh" :loading="reportLoading" @click="() => loadReport(true)" :disabled="!selectedLearnerId">更新报告</el-button>
-      </div>
+      </section>
 
-      <div v-if="reportError" class="report-state report-state-error" role="alert">
-        <span>{{ reportError }}</span><el-button @click="retryReport">重新加载</el-button>
-      </div>
-      <p v-else-if="reportLoading" class="report-state" role="status">正在读取当前画像的报告，请稍候。</p>
 
-      <div class="summary-metrics report-summary-metrics" aria-label="学习数据摘要" v-module-motion="{ key: selectedLearnerId + ':' + windowDays, ready: !reportLoading }">
-        <article class="summary-metric mint"><span>学习资源</span><strong>{{ metricSummary.resource_count || 0 }}</strong><small>已生成资源批次</small></article>
-        <article class="summary-metric blue"><span>练习反馈</span><strong>{{ metricSummary.feedback_count || 0 }}</strong><small>已记录练习结果</small></article>
-        <article class="summary-metric amber"><span>客观正确率</span><strong>{{ averageCorrectRate }}</strong><small>{{ streamStatusLabel }}</small></article>
-        <article class="summary-metric slate"><span>待巩固知识点</span><strong>{{ metricSummary.weak_point_count || 0 }}</strong><small>优先进入下一轮学习</small></article>
-      </div>
-    </section>
+      <section class="report-chart-section report-mastery-section" aria-label="学习节点掌握概览">
+        <LearningNodeMasteryChart :key="`mastery-${report.report_revision || 'initial'}`" :data="report.learning_node_mastery_map" />
+      </section>
 
-    <LearningRoundReportSummary :round="report.learning_round_summary || null" :needs="report.remediation_needs || []" />
-
-    <section class="report-chart-section report-mastery-section" aria-label="学习节点掌握概览">
-      <LearningNodeMasteryChart :key="`mastery-${report.report_revision || 'initial'}`" :data="report.learning_node_mastery_map" />
-    </section>
+    </div>
 
     <section class="report-visual-grid" aria-label="学情与资源匹配可视化">
-      <div class="report-chart-slot report-radar-slot"><ReportChart :data="report" /></div>
+      <div class="report-chart-slot report-radar-slot report-snap-section"><ReportChart :data="report" /></div>
       <div class="report-chart-slot report-fit-slot"><ResourceDifficultyCurve :data="report.resource_difficulty_curve" /></div>
-      <div class="report-chart-slot report-path-slot"><LearningPathGraph :data="report.learning_path_graph" /></div>
+      <div class="report-chart-slot report-path-slot report-snap-section"><LearningPathGraph :data="report.learning_path_graph" /></div>
     </section>
 
-    <section v-if="qualitySummary || recentQualityItems.length" class="report-quality-section" aria-label="生成资源质量摘要">
-      <header class="report-quality-head">
-        <div>
-          <span class="report-kicker">RESOURCE QUALITY</span>
-          <h3>生成资源质量摘要</h3>
+    <div class="report-ending report-snap-section">
+      <section v-if="qualitySummary || recentQualityItems.length" class="report-quality-section" aria-label="生成资源质量摘要">
+        <header class="report-quality-head">
+          <div>
+            <span class="report-kicker">RESOURCE QUALITY</span>
+            <h3>生成资源质量摘要</h3>
+          </div>
+          <div v-if="qualityBatches.length" class="report-quality-filter">
+            <label for="report-quality-batch">资源批次 <span>BATCH</span></label>
+            <el-select id="report-quality-batch" v-model="qualityBatchKey" aria-label="资源批次"
+              popper-class="report-control-dropdown" filterable>
+              <el-option label="全部批次" :value="allQualityBatches" />
+              <el-option v-for="batch in qualityBatches" :key="batch.key"
+                :label="qualityBatchLabel(batch)" :value="batch.key" />
+            </el-select>
+          </div>
+        </header>
+        <p v-if="!activeQualityBatch && recentQualityItems.length" class="report-quality-scope">
+          汇总最近 {{ recentQualityItems.length }} 份已发布资源，最多 10 份。可选择单个批次查看完整明细。
+        </p>
+        <div v-if="qualitySummary" class="report-quality-grid">
+          <article class="report-quality-metric">
+            <span>知识覆盖</span>
+            <strong :class="`is-${qualityTone(qualitySummary.coverage)}`">{{ qualityValueText(qualitySummary.coverage) }}</strong>
+            <small>{{ qualityMetricText(qualitySummary.coverage) }}</small>
+          </article>
+          <article class="report-quality-metric">
+            <span>普通审核参考幻觉率</span>
+            <strong :class="qualitySummary.resource_total > 0 ? 'is-attention' : 'is-muted'">{{ qualitySummary.resource_total > 0 ? '<5%' : '—' }}</strong>
+            <small v-if="qualitySummary.resource_total > 0">平台参考线，实测值见 Claim 核验统计。</small>
+            <small v-else>当前范围没有已发布资源。</small>
+          </article>
+          <article class="report-quality-metric">
+            <span>幻觉率（已核验事实子集）</span>
+            <strong :class="`is-${qualityTone(qualitySummary.claim_unverified_subset_rate || null)}`">{{ claimAggregateText }}</strong>
+            <small>
+              <span class="claim-calculation-formula">（矛盾数＋未获支持数）÷ 已核验事实数 × 100%</span>
+              <span class="claim-calculation-detail">{{ claimAggregateNote }}</span>
+            </small>
+          </article>
         </div>
-        <p>以下数值来自平台版本化质量投影，绑定具体 Run 与资源版本；未测量的项显示“—”及原因，不按 0% 处理。</p>
-      </header>
-      <div v-if="qualitySummary" class="report-quality-grid">
-        <article class="report-quality-metric">
-          <span>知识覆盖（当前可见资源聚合）</span>
-          <strong :class="`is-${qualityTone(qualitySummary.coverage)}`">{{ qualityValueText(qualitySummary.coverage) }}</strong>
-          <small>{{ qualityMetricText(qualitySummary.coverage) }}</small>
-        </article>
-        <article class="report-quality-metric">
-          <span>幻觉率（已核验事实子集）</span>
-          <strong :class="`is-${qualityTone(qualitySummary.claim_unverified_subset_rate || null)}`">{{ claimAggregateText }}</strong>
-          <small>{{ claimAggregateNote }}</small>
-        </article>
-        <article class="report-quality-metric">
-          <span>核验完成资源</span>
-          <strong>{{ qualitySummary.claim_verified_resource_total }} / {{ qualitySummary.resource_total }}</strong>
-          <small>其余资源按各自状态分别计数，未完成不并入该比例。</small>
-        </article>
-        <article v-if="qualitySummary.reference_resource_total" class="report-quality-metric is-reference">
-          <span>普通审核参考幻觉率</span>
-          <strong class="is-attention">5%</strong>
-          <small>普通审核参考／待核验：未开启 Claim 的资源按平台规则给出的未校准参考值，不是测量结果。</small>
-        </article>
-      </div>
-      <ul v-if="recentQualityItems.length" class="report-quality-list">
-        <li v-for="item in recentQualityItems" :key="`${item.resource_id}-${item.resource_version}`">
-          <strong>{{ item.resource_type || '资源' }}</strong>
-          <span>覆盖 {{ qualityValueText(item.coverage) }}（{{ sourceLabel(item.coverage) }} · {{ statusLabel(item.coverage) }}）</span>
-          <span>幻觉 {{ hallucinationMetricText(item.hallucination) }}</span>
-        </li>
-      </ul>
-    </section>
+        <ul v-if="recentQualityItems.length" class="report-quality-list">
+          <li v-for="item in recentQualityItems" :key="`${item.resource_id}-${item.resource_version}`">
+            <strong>{{ qualityResourceLabel(item) }}</strong>
+            <span>覆盖 {{ qualityValueText(item.coverage) }}（{{ sourceLabel(item.coverage) }} · {{ statusLabel(item.coverage) }}）</span>
+            <span v-if="isReferenceMetric(item.hallucination)">普通审核参考线 {{ formatReferenceLimit(item.hallucination.value) }}</span>
+            <span v-else>幻觉 {{ hallucinationMetricText(item.hallucination) }}</span>
+          </li>
+        </ul>
+      </section>
 
-    <section class="report-quality-section" aria-label="项目评测结果">
-      <header class="report-quality-head"><div><span class="report-kicker">PROJECT EVALUATION</span><h3>项目评测结果</h3></div><p>独立于个人学情与单资源审核；离线金标只验证计算链路，真实模型结果也需注明证据范围。</p></header>
-      <p>达标标准：核心知识点覆盖率 ≥90% · 幻觉率 &lt;5% · 难度适配准确率 ≥85%。</p>
-      <p v-if="evaluationInvalidRows" role="status">有 {{ evaluationInvalidRows }} 条评测记录无效，已隔离；相关结果不能判定达标。</p>
-      <p v-if="evaluationLoading" role="status">正在读取项目评测结果…</p>
-      <p v-else-if="evaluationError" role="alert">{{ evaluationError }} <el-button text @click="loadEvaluation">重试</el-button></p>
-      <p v-else-if="!evaluations.length">暂无有效的版本化评测记录，三项指标均未测量；旧版平均分不作为评测依据。</p>
-      <article v-for="group in evaluations" :key="group.manifest_hash" class="report-quality-metric">
-        <h4>{{ group.manifest.evidence_mode === 'offline_gold' ? '离线计算验证' : '真实模型评测（生产自审）' }} · {{ group.manifest.suite_id }} / {{ group.manifest.suite_version }}</h4>
-        <p>{{ group.manifest.experiment_name }} · 已接收 {{ group.received_case_total }}/{{ group.planned_case_total }} 案例 · 生成失败 {{ group.failed_case_total }} · {{ ({ complete: '记录齐全', incomplete: '缺少案例', invalid: '记录冲突，结果无效' })[group.status] }}</p>
-        <p v-for="field in evaluationFields" :key="field.key"><span>{{ field.label }}：</span><strong :class="`is-${qualityTone(group[field.key])}`">{{ qualityValueText(group[field.key]) }}</strong> <small>{{ qualityMetricText(group[field.key]) }}</small></p>
-        <small>覆盖：{{ group.coverage.numerator ?? '—' }}/{{ group.coverage.denominator ?? '—' }} 个案例目标；幻觉：{{ group.hallucination.numerator ?? '—' }}/{{ group.hallucination.denominator ?? '—' }} 条事实；难度：{{ group.difficulty.numerator ?? '—' }}/{{ group.difficulty.denominator ?? '—' }} 个标注案例。</small>
-        <small>定义 {{ group.manifest.metric_definition_version }} · fixture {{ group.manifest.fixture_version }} · 覆盖 fixture {{ group.manifest.coverage_fixture_version }}；不代表正式比赛整体门已通过。</small>
-      </article>
-    </section>
 
-    <section class="next-round-panel">
-      <div><span class="report-kicker">NEXT LEARNING CYCLE</span><h3>下一轮学习重点</h3><p>建议优先围绕以下知识点进行练习与资源生成，持续缩小当前学习盲区。</p></div>
-      <div class="suggestion-list"><span v-for="item in nextSuggestions" :key="item">{{ item }}</span><em v-if="!nextSuggestions.length">完成一次能力诊断后，将在这里展示个性化学习重点。</em></div>
-    </section>
+      <section class="next-round-panel">
+        <div><span class="report-kicker">NEXT LEARNING CYCLE</span><h3>下一轮学习重点</h3><p>建议优先围绕以下知识点进行练习与资源生成，持续缩小当前学习盲区。</p></div>
+        <div class="suggestion-list"><span v-for="item in nextSuggestions" :key="item">{{ item }}</span><em v-if="!nextSuggestions.length">完成一次能力诊断后，将在这里展示个性化学习重点。</em></div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { currentProfileRating } from '../../utils/profileRating.js'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { knowledgeApi } from '../knowledge/api.js'
 import { profileApi } from '../learners/api.js'
 import { useAppStore } from '../../stores/app'
-import LearningRoundReportSummary from './LearningRoundReportSummary.vue'
 import ReportChart from './ReportChart.vue'
 import LearningNodeMasteryChart from './LearningNodeMasteryChart.vue'
 import ResourceDifficultyCurve from './ResourceDifficultyCurve.vue'
 import LearningPathGraph from './LearningPathGraph.vue'
-import { evaluationApi, learningReportApi, fetchReportSnapshot } from './api'
+import { learningReportApi, fetchReportSnapshot } from './api'
 import { ReportStreamClient } from './reportStreamClient'
 import {
-  hallucinationMetricText, qualityMetricText, qualityTone, qualityValueText,
+  hallucinationMetricText, isReferenceMetric, qualityMetricText, qualityTone, qualityValueText,
   sourceLabel, statusLabel,
 } from '../../utils/qualityMetricsPresentation.js'
 
@@ -159,17 +141,37 @@ const windowDays = ref(30)
 const streamStatus = ref('closed')
 const reportLoading = ref(false)
 const reportError = ref('')
-const evaluations = ref([])
-const evaluationLoading = ref(false)
-const evaluationInvalidRows = ref(0)
-const evaluationError = ref('')
-const evaluationFields = [{ key: 'coverage', label: '核心知识点覆盖率' }, { key: 'hallucination', label: '幻觉率' }, { key: 'difficulty', label: '难度适配准确率' }]
-let evaluationRequestVersion = 0
 let reportRequestVersion = 0
 let reportMounted = true
 const metricSummary = computed(() => report.metric_summary || {})
-const qualitySummary = computed(() => report.resource_quality_summary || null)
-const recentQualityItems = computed(() => Array.isArray(report.recent_resource_quality) ? report.recent_resource_quality : [])
+const allQualityBatches = 'all'
+const qualityBatchKey = ref(allQualityBatches)
+const qualityBatches = computed(() => report.resource_quality_batches || [])
+const activeQualityBatch = computed(() => qualityBatches.value.find(batch => batch.key === qualityBatchKey.value))
+const qualitySummary = computed(() => activeQualityBatch.value?.summary || report.resource_quality_summary || null)
+const recentQualityItems = computed(() => activeQualityBatch.value?.items || (report.recent_resource_quality || []).slice(0, 10))
+const qualityResourceKey = item => JSON.stringify([item.resource_id, item.resource_version])
+const qualityTopicByResource = computed(() => new Map(qualityBatches.value.flatMap(batch =>
+  (batch.items || []).map(item => [qualityResourceKey(item), batch.topic]),
+)))
+function qualityResourceLabel(item) {
+  const resourceName = item.resource_type || '资源'
+  if (activeQualityBatch.value) return resourceName
+  const nodeName = item.learning_node_name || qualityTopicByResource.value.get(qualityResourceKey(item)) || item.topic || item.learning_node_id
+  if (!nodeName) return resourceName
+  return `${nodeName}—${resourceName}`
+}
+watch(selectedLearnerId, () => { qualityBatchKey.value = allQualityBatches }, { flush: 'sync' })
+watch(qualityBatches, batches => {
+  if (batches.length && !batches.some(batch => batch.key === qualityBatchKey.value)) {
+    qualityBatchKey.value = allQualityBatches
+  }
+})
+const batchDate = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
+function qualityBatchLabel(batch) {
+  const date = batch.created_at ? batchDate.format(new Date(batch.created_at)) : ''
+  return [batch.topic, date, `${batch.summary.resource_total} 份资源`].filter(Boolean).join(' · ')
+}
 const claimAggregateText = computed(() => {
   const rate = qualitySummary.value?.claim_unverified_subset_rate
   return rate ? qualityValueText(rate) : '—'
@@ -177,18 +179,17 @@ const claimAggregateText = computed(() => {
 const claimAggregateNote = computed(() => {
   const summary = qualitySummary.value
   if (!summary || !summary.claim_unverified_subset_rate) {
-    return '可见资源中没有完整的 Claim 核验结果；未完成的资源不并入该比例，也不回退为 5% 参考值。'
+    return '当前范围暂无可用的完整 Claim 核验结果。'
   }
   const risk = summary.claim_risk_fact_total ?? 0
   const factual = summary.claim_factual_total ?? 0
-  return `已核验资源子集：${risk}/${factual} 条事实与证据矛盾或未获支持；其余资源保持各自状态。`
+  return `当前范围共核验 ${factual} 条事实，其中 ${risk} 条与证据矛盾或未获支持。`
 })
 const nextSuggestions = computed(() => report.next_suggestions || report.weak_points || [])
 const activeProfile = computed(() => profiles.value.find((item) => item.learner_id === selectedLearnerId.value) || null)
-const directionName = computed(() => resolveTrackName(activeProfile.value?.knowledge_base_id))
 const averageCorrectRate = computed(() => formatPercent(report.learning_activity?.verified_accuracy ?? metricSummary.value.average_correct_rate))
 const streamStatusLabel = computed(() => ({ connecting: '正在连接自动更新', live: '自动更新已开启', reconnecting: '正在重连自动更新', polling: '已降级为定时刷新', offline: '当前离线', closed: '自动更新已停止' })[streamStatus.value] || '自动更新')
-const profileOptions = computed(() => profiles.value.map((profile) => ({ ...profile, label: `${profileDisplayName(profile)} / ${resolveTrackName(profile.knowledge_base_id)} / ${profile.skill_level || '未分级'}` })))
+const profileOptions = computed(() => profiles.value.map((profile) => ({ ...profile, label: `${profileDisplayName(profile)} / ${resolveTrackName(profile.knowledge_base_id)} / ${currentProfileRating(profile) || '未分级'}` })))
 
 function resolveTrackName(trackId) {
   return tracks.value.find((item) => item.track_id === trackId || item.knowledge_base_id === trackId)?.name || trackId || '未选择学习方向'
@@ -197,7 +198,10 @@ function profileDisplayName(profile) {
   const snapshot = profile?.learning_preferences?.metadata?.user_profile_snapshot
   return snapshot?.display_name || snapshot?.name || profile?.learner_type || '未命名画像'
 }
-function formatPercent(value) { return typeof value === 'number' ? `${Math.round(value * 100)}%` : '--' }
+function formatPercent(value, fallback = '--') { return typeof value === 'number' ? `${Math.round(value * 100)}%` : fallback }
+function formatReferenceLimit(value) {
+  return typeof value === 'number' ? `<${formatPercent(value)}` : '—'
+}
 
 async function loadProfiles() {
   const [profileRes, domainRes] = await Promise.all([profileApi.list({ page: 1, page_size: 50 }), knowledgeApi.listDomains()])
@@ -223,26 +227,6 @@ const stream = new ReportStreamClient({
   },
   fetchReport: fetchReportSnapshot,
 })
-
-async function loadEvaluation() {
-  const version = ++evaluationRequestVersion
-  evaluations.value = []
-  evaluationInvalidRows.value = 0
-  evaluationLoading.value = true
-  evaluationError.value = ''
-  const isCurrent = () => reportMounted && version === evaluationRequestVersion
-  try {
-    const response = await evaluationApi.summary()
-    if (isCurrent()) {
-      evaluations.value = response.data.resource_quality_evaluations
-      evaluationInvalidRows.value = response.data.resource_quality_invalid_row_total || 0
-    }
-  } catch (error) {
-    if (isCurrent()) evaluationError.value = '项目评测读取失败，不能据此判断达标。'
-  } finally {
-    if (isCurrent()) evaluationLoading.value = false
-  }
-}
 
 async function loadReport(force = false) {
   if (!selectedLearnerId.value || !reportMounted) return
@@ -272,7 +256,6 @@ async function loadReport(force = false) {
   }
 }
 async function handleProfileChange() {
-  void loadEvaluation()
   replaceReport({})
   await loadReport(true)
 }
@@ -291,7 +274,6 @@ function handleVisibility() {
   else if (streamStatus.value === 'polling') stream.stop()
 }
 onMounted(async () => {
-  void loadEvaluation()
   window.addEventListener('online', restartStream); window.addEventListener('offline', handleOffline)
   document.addEventListener('visibilitychange', handleVisibility)
   try {
@@ -303,7 +285,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   reportMounted = false
   ++reportRequestVersion
-  ++evaluationRequestVersion
   stream.stop(); window.removeEventListener('online', restartStream); window.removeEventListener('offline', handleOffline)
   document.removeEventListener('visibilitychange', handleVisibility)
 })
@@ -344,75 +325,83 @@ onBeforeUnmount(() => {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
-  border: 1px solid var(--report-line) !important;
-  border-top: 2px solid #132c40 !important;
-  border-radius: 0 !important;
-  background: #fff !important;
-  box-shadow: none !important;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 18px !important;
+  box-shadow: inset 0 -1px 1px rgb(111 142 167 / 15%),0 3px 5px -4px rgb(33 64 86 / 24%),0 12px 24px -17px rgb(33 64 86 / 30%) !important;
 }
-.report-overview-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); align-items: center; gap: 24px; }
-.report-hero-copy { min-width: 0; }
 .report-page .report-kicker { display: block; color: var(--report-muted) !important; font: 10px/1.5 Consolas, "SFMono-Regular", monospace; letter-spacing: .025em; }
 .report-hero h2 { margin: 7px 0 0; color: var(--report-ink); font-size: 26px; font-weight: 650; line-height: 1.3; }
-.report-focus { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px 12px; padding-left: 20px; border-left: 1px solid var(--report-line); }
-.report-focus > span { display: flex; grid-column: 1 / -1; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--report-muted); font-size: 12px; line-height: 1.6; }
-.report-focus > span small { margin-left: auto; color: var(--report-muted); font: 10px/1.5 Consolas, monospace; }
-.report-focus i { flex: 0 0 auto; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; background: #438ff0; box-shadow: 0 0 0 5px rgba(67, 143, 240, .12); }
-.report-focus strong { color: var(--report-ink); font-size: 16px; font-weight: 600; line-height: 1.65; overflow-wrap: anywhere; }
-.report-focus b { color: var(--report-muted); font-size: 12px; font-weight: 500; line-height: 1.65; overflow-wrap: anywhere; }
-.report-hero > .el-alert { min-width: 0; min-height: 38px; padding: 9px 12px; border: 0; border-left: 3px solid #6a9b79; border-radius: 0; background: #f0f7f1; }
+.report-hero > .el-alert { min-width: 0; min-height: 38px; margin: 0 20px 10px; padding: 9px 12px; border: 0; border-left: 3px solid #6a9b79; border-radius: 0; background: #f0f7f1; }
 .report-hero > .el-alert :deep(.el-alert__title) { color: #39644a; font-size: 12px; font-weight: 500; line-height: 1.75; overflow-wrap: anywhere; }
 .report-hero > .el-alert--warning { border-left-color: #ba8a35; background: #fff8eb; }
 .report-hero > .el-alert--warning :deep(.el-alert__title) { color: #7c5a21; }
-.report-page .report-selector-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 160px auto;
-  align-items: end;
-  gap: 16px !important;
-  padding: 16px 0 0;
-  border: 0;
-  border-top: 1px solid var(--report-line);
-  border-radius: 0;
-  background: transparent !important;
+/* 复用生成页 control-panel 的任务选择与摘要样式（高级感 / 玻璃质感）。 */
+.report-hero .task-selector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; gap: 20px; align-items: end; padding: 14px 20px 12px; }
+.report-hero .selector-field { min-width: 0; }
+.report-hero .selector-field label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 8px; color: #59697b; font-size: 12px; }
+.report-hero .selector-field label span { font: 9px Consolas, monospace; }
+.report-hero .task-select { width: 100%; min-width: 0; }
+.report-page .report-refresh-button {
+  justify-self: end;
+  min-width: 116px;
+  min-height: 44px;
+  height: auto;
+  margin: 0;
+  padding: 10px 16px;
+  border: 1px solid #a9c6d7;
+  border-radius: 10px;
+  background: #edf7fa linear-gradient(155deg, #ffffffed, #d8edf3b3);
+  color: #165765;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: inset 0 1px #fff, 0 3px 8px #254a6426;
 }
-.report-field { min-width: 0; }
-.report-field label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: var(--report-muted); font-size: 12px; line-height: 1.5; }
-.report-field label span { font: 10px/1.5 Consolas, monospace; }
-.report-input, .window-select { width: 100%; min-width: 0; }
-.report-page .report-refresh-button { min-width: 116px; min-height: 44px; height: auto; margin: 0; padding: 10px 16px; border: 1px solid #11283c !important; border-radius: 5px !important; background: #11283c !important; color: #fff !important; font-size: 12px; font-weight: 600; box-shadow: none; }
-.report-page .report-refresh-button:hover { border-color: #1d4055 !important; background: #1d4055 !important; }
-.report-page .report-refresh-button :deep(.el-icon) { width: 14px; height: 14px; font-size: 14px; color: #fff; }
-.report-page .report-refresh-button.is-disabled, .report-page .report-refresh-button.is-disabled:hover { border-color: #d2dee5 !important; background: #e8eef2 !important; color: #536b7d !important; box-shadow: none; }
+.report-page .report-refresh-button:not(.is-disabled, .is-loading):hover {
+  border-color: #76aab9;
+  background-color: #d7eef3;
+  color: #104653;
+}
+.report-page .report-refresh-button:not(.is-disabled, .is-loading):active {
+  box-shadow: inset 0 1px 3px #254a6426;
+}
+.report-page .report-refresh-button :deep(.el-icon) { width: 14px; height: 14px; font-size: 14px; color: inherit; }
+.report-page .report-refresh-button.is-disabled { border-color: #d2dee5; background: #e8eef2; color: #536b7d; box-shadow: none; }
 .report-page .report-refresh-button.is-disabled :deep(.el-icon) { color: #8ca1ae; }
 .report-page .report-refresh-button:focus-visible { outline: 2px solid #167587; outline-offset: 3px; }
-.report-summary-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: 17px; border-top: 1px solid var(--report-line); }
-.report-page .summary-metric { position: relative; display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 7px; padding: 0 22px; border: 0; border-right: 1px solid var(--report-line); border-radius: 0; background: transparent !important; box-shadow: none; }
-.report-page .summary-metric:first-child { padding-left: 14px; }
-.report-page .summary-metric:last-child { border-right: 0; }
-.summary-metric::before { position: absolute; top: 2px; left: 9px; width: 3px; height: 12px; background: #4d91df; content: ""; }
-.summary-metric:first-child::before { left: 0; }
-.summary-metric.mint::before { background: #39b58d; }
-.summary-metric.blue::before { background: #4d91df; }
-.summary-metric.amber::before { background: #e2a13f; }
-.summary-metric.slate::before { background: #8295aa; }
-.summary-metric > span { color: var(--report-muted); font-size: 12px; line-height: 1.5; }
-.summary-metric strong { color: var(--report-ink); font-size: 27px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.summary-metric small { color: var(--report-muted); font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.report-hero > .report-state { margin: 0 20px 10px; }
+.report-hero .job-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0 20px 14px; padding-top: 12px; border-top: 1px solid #dce4eb; }
+.report-hero .summary-item { min-width: 0; padding: 0 12px; border-left: 1px solid #dce4eb; }
+.report-hero .summary-item:first-child { border: 0; padding-left: 0; }
+.report-hero .summary-item:last-child { padding-right: 0; }
+.report-hero .summary-item > span { display: block; color: #59697b; font-size: 11px; }
+.report-hero .summary-item strong { display: block; margin-top: 6px; min-height: 22px; color: #172c45; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.report-hero .summary-item .summary-count { color: #176b70; font-size: 20px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.report-hero .summary-item small { display: block; margin-top: 4px; color: #59697b; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
 
-/* Only the surrounding panels are restyled; the four chart canvases and options remain intact. */
-.report-page .report-chart-section, .report-chart-slot {
+/* Panel styles are independent of the four charts' drawing surfaces and options. */
+.report-mastery-section, .report-radar-slot, .report-fit-slot {
   min-width: 0;
-  border: 1px solid var(--report-line) !important;
-  border-top: 2px solid #132c40 !important;
-  border-radius: 0 !important;
-  background: #fff;
-  box-shadow: none !important;
+  border: 1px solid var(--report-glass-card-border);
+  border-radius: 20px;
+  background: linear-gradient(150deg, #fff 15%, #f0f7fb);
+  box-shadow: var(--report-glass-card-shadow);
 }
 .report-page .report-visual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; border: 0 !important; border-radius: 0 !important; background: transparent; box-shadow: none !important; }
-.report-path-slot { grid-column: 1 / -1; }
-.report-chart-section :deep(.visual-card), .report-chart-slot :deep(.visual-card), .report-chart-slot :deep(.analysis-panel) { height: 100%; min-width: 0; padding: 20px; border: 0; border-radius: 0; background: #fff; box-shadow: none; }
+.report-overview,.report-ending { display:grid; gap:24px; min-width:0; }
+.report-path-slot {
+  min-width: 0;
+  grid-column: 1 / -1;
+  border:1px solid #bed4e7 !important;
+  border-radius:20px !important;
+  background:linear-gradient(145deg,#fff,#f0f7fd);
+  box-shadow:0 6px 18px #254d7414, inset 0 1px #fff !important;
+}
+.report-page .report-path-slot :deep(.visual-card) { border-radius:inherit; background:transparent; }
+.report-path-slot :deep(.visual-heading) { border-bottom-color:#dbe8f4; }
+.report-chart-section :deep(.visual-card), .report-chart-slot :deep(.visual-card), .report-chart-slot :deep(.analysis-panel) { height: 100%; min-width: 0; padding: 20px; border: 0; border-radius: inherit; background: transparent; box-shadow: none; }
 .report-chart-slot :deep(.visual-card::before) { display: none; }
 .report-chart-section :deep(.visual-heading), .report-chart-slot :deep(.visual-heading), .report-chart-slot :deep(.analysis-heading) { gap: 12px; padding-bottom: 15px; border-bottom: 1px solid var(--report-line); }
 .report-chart-section :deep(.visual-heading span), .report-chart-slot :deep(.visual-heading span), .report-chart-slot :deep(.analysis-kicker) { color: var(--report-muted); font: 10px/1.5 Consolas, "SFMono-Regular", monospace; letter-spacing: .025em; }
@@ -420,93 +409,131 @@ onBeforeUnmount(() => {
 .report-chart-section :deep(.visual-heading small), .report-chart-slot :deep(.visual-heading small), .report-chart-slot :deep(.analysis-note) { max-width: 250px; margin-top: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--report-muted); font-size: 11px; font-weight: 400; line-height: 1.65; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
 .report-radar-slot :deep(.analysis-heading) { margin-bottom: 16px; }
 .report-radar-slot :deep(.chart-card) { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
-.report-radar-slot :deep(.chart-card-head strong) { font-size: 16px; font-weight: 600; }
-.report-radar-slot :deep(.chart-card-head span) { font-weight: 400; }
 
-.report-page .next-round-panel { display: grid; grid-template-columns: minmax(240px, .65fr) minmax(0, 1.35fr); align-items: start; gap: 28px; padding: 22px; border: 1px solid var(--report-line) !important; border-top: 2px solid #132c40 !important; border-radius: 0 !important; background: #fff !important; box-shadow: none !important; }
+.report-page .report-ending .next-round-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, .65fr) minmax(0, 1.35fr);
+  align-items: center;
+  gap: 28px;
+  padding: 22px;
+  border: 1px solid #cbdfe8 !important;
+  border-radius: 22px !important;
+  background: var(--report-glass-panel) !important;
+  box-shadow: var(--report-glass-panel-shadow) !important;
+}
 .next-round-panel h3 { margin: 7px 0 0; color: var(--report-ink); font-size: 20px; font-weight: 650; line-height: 1.4; }
 .next-round-panel p { max-width: 340px; margin: 10px 0 0; color: var(--report-muted); font-size: 12px; line-height: 1.85; }
-.suggestion-list { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.suggestion-list > span { min-width: 0; padding: 12px 14px; border-left: 2px solid #167c7c; background: #edf8f6; color: var(--report-teal); font-size: 13px; font-weight: 500; line-height: 1.75; overflow-wrap: anywhere; }
+.suggestion-list { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 12px; }
+.suggestion-list > span {
+  display: grid;
+  min-width: 0;
+  min-height: 54px;
+  place-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--report-glass-card-border);
+  border-radius: 14px;
+  background: var(--report-glass-card);
+  box-shadow: var(--report-glass-card-shadow);
+  color: var(--report-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
 .suggestion-list em { grid-column: 1 / -1; color: var(--report-muted); font-size: 12px; font-style: normal; line-height: 1.85; }
 
 /* Matches the neighboring pages without changing the shared application shell. */
 :global(.app-shell:has(.report-page)) { background: #f5f7fa; }
-:global(.app-shell:has(.report-page) .topbar) { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 16px; min-height: 60px; padding: 8px 28px; background: #fff; border-bottom: 1px solid #d9e4eb; box-shadow: none; }
-:global(.app-shell:has(.report-page) .topbar-copy) { display: flex; flex-direction: row-reverse; justify-content: flex-end; align-items: center; gap: 14px; min-width: 0; }
-:global(.app-shell:has(.report-page) .topbar-copy h1) { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.5; color: #132c40; white-space: nowrap; }
-:global(.app-shell:has(.report-page) .topbar-kicker) { margin: 0; padding-left: 14px; border-left: 1px solid #d9e4eb; color: #536b7d; font: 10px/1.5 Consolas, monospace; letter-spacing: 0; }
-:global(.app-shell:has(.report-page) .topbar-copy p) { display: none; }
-:global(.app-shell:has(.report-page) .topbar-actions) { position: static; display: flex; width: auto; flex-wrap: nowrap; justify-content: flex-end; align-items: center; gap: 8px; margin: 0; transform: none; }
-:global(.app-shell:has(.report-page) .topbar-action) { min-height: 44px; margin: 0 !important; padding: 10px 9px; border: 0 !important; border-radius: 5px !important; background: transparent !important; color: #536b7d !important; font-size: 12px; font-weight: 400; box-shadow: none !important; }
-:global(.app-shell:has(.report-page) .topbar-action .el-icon) { width: 14px; height: 14px; font-size: 14px; color: #17447e; }
-:global(.app-shell:has(.report-page) .topbar-action:hover) { background: #edf8f6 !important; color: #086575 !important; }
-:global(.app-shell:has(.report-page) .topbar-action:focus-visible) { outline: 2px solid #167587; outline-offset: 2px; }
-:global(.app-shell:has(.report-page) .topbar-meta) { display: flex; align-items: center; min-width: 0; width: auto; gap: 0; padding-left: 14px; border-left: 1px solid #d9e4eb; }
-:global(.app-shell:has(.report-page) .topbar-meta > div) { min-width: 58px; padding: 0 6px; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
-:global(.app-shell:has(.report-page) .topbar-meta > div:last-child) { display: none; }
-:global(.app-shell:has(.report-page) .topbar-meta span) { font-size: 10px; line-height: 1.5; color: #536b7d; }
-:global(.app-shell:has(.report-page) .topbar-meta strong) { max-width: 160px; margin-top: 3px; color: #132c40; white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
-:global(.app-shell:has(.report-page) .content-area) { padding: 22px 28px 28px; background: #f5f7fa; overflow-y: auto; }
+:global(.app-shell:has(.report-page) .content-area) { padding: 22px 28px 28px; overflow-y: auto; }
 
+@media (min-width: 821px) and (min-height: 680px) {
+  :global(.app-shell:has(.report-page) .content-area) {
+    scroll-snap-type:y mandatory;
+    scroll-padding-block:22px 28px;
+  }
+  .report-snap-section { scroll-snap-align:start; scroll-snap-stop:always; }
+  .report-ending { scroll-snap-align:end; }
+}
+@media (max-width: 1080px) and (min-width: 821px) and (min-height: 680px) {
+  .report-fit-slot { scroll-snap-align:start; scroll-snap-stop:always; }
+}
 @media (max-width: 1300px) {
-  :global(.app-shell:has(.report-page) .topbar-kicker) { display: none; }
-  .report-overview-head { grid-template-columns: minmax(0, 1fr) minmax(280px, 1.1fr); }
   .report-page, .report-page .report-visual-grid { gap: 20px !important; }
 }
 @media (max-width: 1080px) {
   .report-page .report-visual-grid { grid-template-columns: minmax(0, 1fr); }
   .report-path-slot { grid-column: auto; }
-  :global(.app-shell:has(.report-page) .topbar) { gap: 10px; }
 }
 @media (max-width: 760px) {
-  :global(.app-shell:has(.report-page) .topbar) { padding: 8px 18px; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
-  :global(.app-shell:has(.report-page) .topbar-actions) { grid-row: 2; grid-column: 1 / -1; justify-content: flex-start; }
-  :global(.app-shell:has(.report-page) .topbar-action) { padding: 10px 8px; }
-  :global(.app-shell:has(.report-page) .topbar-meta) { grid-row: 1; grid-column: 2; }
   :global(.app-shell:has(.report-page) .content-area) { padding: 18px 18px 24px; }
-  .report-overview-head { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .report-focus { padding: 14px 0 0; border-left: 0; border-top: 1px solid var(--report-line); }
-  .report-page .report-selector-row { grid-template-columns: minmax(0, 1fr) auto; gap: 14px !important; }
-  .report-profile-field { grid-column: 1 / -1; }
-  .report-summary-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 0; }
-  .report-page .summary-metric { padding-left: 16px; padding-right: 12px; }
-  .report-page .summary-metric:nth-child(odd) { padding-left: 14px; }
-  .summary-metric:nth-child(odd)::before { left: 0; }
-  .report-page .summary-metric:nth-child(2) { border-right: 0; }
-  .summary-metric:nth-child(even)::before { left: 3px; }
-  .report-page .next-round-panel { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .report-hero .task-selector { grid-template-columns: 1fr; gap: 14px; padding: 16px 18px 12px; }
+  .report-hero .report-refresh-button { justify-self: stretch; }
+  .report-hero .job-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 0; margin-inline: 18px; }
+  .report-hero .summary-item:nth-child(odd) { border: 0; padding-left: 0; }
+  .report-hero .summary-item:nth-child(even) { padding-left: 14px; }
+  .report-page .report-ending .next-round-panel { grid-template-columns: minmax(0, 1fr); gap: 18px; }
 }
 @media (max-width: 560px) {
-  .report-page .report-hero { padding: 16px; }
-  .report-hero h2 { font-size: 23px; }
-  .report-focus { grid-template-columns: minmax(0, 1fr); }
-  .report-focus b { font-size: 12px; }
   .report-page .report-refresh-button { min-width: 112px; padding: 10px 14px; }
   .report-chart-section :deep(.visual-card), .report-chart-slot :deep(.visual-card), .report-chart-slot :deep(.analysis-panel) { padding: 16px; }
   .report-chart-section :deep(.visual-heading), .report-chart-slot :deep(.visual-heading), .report-chart-slot :deep(.analysis-heading) { flex-direction: column; gap: 5px; }
   .report-chart-section :deep(.visual-heading h3), .report-chart-slot :deep(.visual-heading h3), .report-chart-slot :deep(.analysis-heading h3) { font-size: 18px; }
-  .report-page .next-round-panel { padding: 18px 16px; }
+  .report-page .report-ending .next-round-panel { padding: 18px 16px; }
   .suggestion-list { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .report-page .report-refresh-button { transition: none; }
-  :global(.app-shell:has(.report-page) .topbar-action) { transition: none; }
 }
-.report-quality-section { margin-top:24px; padding:20px; border:1px solid #e1eaee; border-radius:12px; background:#f8fbfd; }
-.report-quality-head { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:flex-end; justify-content:space-between; margin-bottom:14px; }
-.report-quality-head h3 { margin:4px 0 0; font-size:16px; color:#172c45; }
-.report-quality-head p { margin:0; max-width:560px; color:#59697b; font-size:12px; line-height:1.7; }
-.report-quality-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; }
-.report-quality-metric { display:flex; flex-direction:column; gap:6px; padding:12px; border:1px solid #dbe6ee; border-radius:8px; background:#fff; }
-.report-quality-metric span { color:#59697b; font-size:12px; }
-.report-quality-metric strong { color:#172c45; font-size:20px; font-weight:600; }
+.report-page {
+  --report-glass-panel: linear-gradient(150deg, #f4f9fc 0%, #e1eff3 62%, #edf5f9 100%);
+  --report-glass-panel-shadow: 0 8px 20px #254a6414, inset 0 1px #fff;
+  --report-glass-card: linear-gradient(155deg, #ffffffec, #f4f9fbe0 58%, #e9f2f8c9);
+  --report-glass-card-border: #a9c6d7;
+  --report-glass-card-shadow: 0 2px 3px #244b641a, 0 6px 12px #2c59762b, inset 0 1px #fff;
+}
+.report-quality-section {
+  padding:20px;
+  border:1px solid #cbdfe8;
+  border-radius:22px;
+  background:var(--report-glass-panel);
+  box-shadow:var(--report-glass-panel-shadow);
+}
+.report-quality-head { display:flex; flex-wrap:wrap; gap:14px 24px; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.report-quality-head h3 { margin:4px 0 0; font-size:18px; color:#172c45; }
+.report-quality-filter { flex:0 1 410px; min-width:0; }
+.report-quality-filter label { display:flex; justify-content:space-between; gap:8px; margin-bottom:6px; color:#39596d; font-size:12px; }
+.report-quality-filter label span { font:10px Consolas,monospace; }
+.report-quality-filter :deep(.el-select) { width:100%; }
+.report-quality-filter :deep(.el-select__wrapper) { min-height:44px; }
+.report-quality-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.report-quality-metric {
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  gap:8px;
+  padding:15px;
+  border:1px solid var(--report-glass-card-border);
+  border-radius:14px;
+  background:var(--report-glass-card);
+  box-shadow:var(--report-glass-card-shadow);
+}
+.report-quality-metric span { color:#415a70; font-size:12px; }
+.report-quality-metric strong { color:#172c45; font-size:24px; font-weight:600; font-variant-numeric:tabular-nums; }
 .report-quality-metric strong.is-success { color:#176b70; }
 .report-quality-metric strong.is-attention { color:#935719; }
 .report-quality-metric strong.is-muted { color:#59697b; }
-.report-quality-metric small { color:#59697b; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
-.report-quality-metric.is-reference { border-color:#f0dcb8; background:#fff9ef; }
+.report-quality-metric small { color:#4f6476; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+.report-quality-metric .claim-calculation-formula,
+.report-quality-metric .claim-calculation-detail { color:inherit; }
+.report-quality-metric .claim-calculation-detail { display:block; margin-top:3px; }
 .report-quality-list { display:grid; gap:6px; margin:14px 0 0; padding:0; list-style:none; }
-.report-quality-list li { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; padding:8px 10px; border-radius:6px; background:#fff; color:#59697b; font-size:12px; }
-.report-quality-list li strong { color:#172c45; }
+.report-quality-list li { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; padding:8px 10px; border-radius:8px; background:#ffffffb8; color:#4f6476; font-size:12px; }
+.report-quality-list li strong { color:#172c45; overflow-wrap:anywhere; }
+.report-quality-scope { margin:0 0 12px; color:#4f6476; font-size:12px; line-height:1.6; }
+@media(max-width:740px) {
+  .report-quality-section { padding:16px; }
+  .report-quality-filter { flex-basis:100%; }
+  .report-quality-grid { grid-template-columns:1fr; }
+}
 </style>

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_serializer, model_validator
 
 from .resource_review import ResourceContract
 
@@ -50,6 +50,15 @@ class ResourceReviewPolicyV1(ResourceContract):
     business_correction_limit: Literal[1] = 1
     context_tokens: int = Field(gt=0)
     max_output_tokens: int = Field(gt=0)
+    input_contract: Literal["single_representation_v1", "single_representation_v2",
+                            "single_representation_v3", "single_representation_v4"] | None = None
+
+    @model_serializer(mode="wrap")
+    def legacy_compatible_dump(self, handler):
+        data = handler(self)
+        if self.input_contract is None:
+            data.pop("input_contract", None)
+        return data
 
     @model_validator(mode="after")
     def window_has_input_space(self) -> "ResourceReviewPolicyV1":

@@ -6,6 +6,7 @@ from app.core.llm.budget import LLMBudgetUnavailable
 from app.db.feedback.round_base import BaseRoundRepository
 from app.models.shared.llm import LLMCallContext, LLMUsage
 from app.models.shared.persistence import canonical_hash
+from app.services.feedback.round_plans import round_identity
 
 
 class RoundBudgetGuard:
@@ -29,7 +30,10 @@ class RoundBudgetGuard:
                 raise LLMBudgetUnavailable("ROUND_BUDGET_SCOPE_NOT_FOUND")
             stage = tx.one("learning_round_stages", stage_id=scope.stage_id)
             limits = stage["budget_snapshot"].get("scopes", {})
-            cap = limits.get(scope.scope_id)
+            # All attempts at the same frozen assessment have the same
+            # ceiling, with usage tracked by their own session identity.
+            budget_key = round_identity("session", scope.stage_id) if scope.kind == "assessment" and owner["ordinal"] > 1 else scope.scope_id
+            cap = limits.get(budget_key)
             if not isinstance(cap, int) or cap <= 0:
                 raise LLMBudgetUnavailable("ROUND_BUDGET_NOT_CONFIGURED")
             if scope.kind == "production":
@@ -41,7 +45,7 @@ class RoundBudgetGuard:
                 raise LLMBudgetUnavailable("ROUND_BUDGET_OVERRUN")
             used = sum(row["known_tokens"] if row["state"] == "settled" else row["reserved_tokens"]
                        for row in reservations)
-            seconds_cap = stage["budget_snapshot"].get("runtime_scopes", {}).get(scope.scope_id)
+            seconds_cap = stage["budget_snapshot"].get("runtime_scopes", {}).get(budget_key)
             used_seconds = sum(row["known_seconds"] if row["known_seconds"] is not None else row["reserved_seconds"]
                                for row in reservations)
             if runtime_seconds < 0 or (runtime_seconds > 0 and (seconds_cap is None or used_seconds + runtime_seconds > seconds_cap)):

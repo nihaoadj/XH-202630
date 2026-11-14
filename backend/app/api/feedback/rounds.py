@@ -50,10 +50,18 @@ def detail(round_id: str, request: Request):
     return service.detail(profile.learner_id, round_id)
 
 
+@router.get("/rounds/next/candidates", response_model=RoundCandidatesV1)
+def next_candidates(request: Request, learner_id: str, source_attempt_id: str):
+    profile = profile_for(request, learner_id)
+    return request.app.container.round_learning_service().next_candidates(profile, source_attempt_id)
+
+
 @router.get("/rounds/{round_id}/candidates", response_model=RoundCandidatesV1)
-def candidates(round_id: str, request: Request):
+def candidates(round_id: str, request: Request, source_attempt_id: str | None = None):
     service, profile = owned_round(request, round_id)
-    return service.candidates(profile, round_id)
+    if source_attempt_id is None:
+        return service.candidates(profile, round_id)
+    return service.candidates(profile, round_id, source_attempt_id=source_attempt_id)
 
 
 @router.post("/rounds/next/select", response_model=RoundCreationResponseV1, status_code=202)
@@ -70,7 +78,7 @@ def evaluation(round_id: str, stage_id: str, payload: RoundEvaluationRequestV1, 
     service, profile = owned_round(request, round_id)
     if payload.learner_id != profile.learner_id:
         raise ApplicationError(ErrorCode.ROUND_ASSESSMENT_INVALID, status_code=404)
-    return RoundAssessment(service).session(profile, round_id, stage_id)
+    return RoundAssessment(service).session(profile, round_id, stage_id, payload.retake_from_session_id)
 
 
 @router.post("/rounds/{round_id}/stages/{stage_id}/attempts", response_model=RoundFeedbackResultV1 | RoundAttemptProcessingV1)
@@ -85,9 +93,10 @@ def submit(round_id: str, stage_id: str, payload: RoundAttemptSubmitV1, request:
 
 
 @router.get("/rounds/{round_id}/stages/{stage_id}/result", response_model=RoundFeedbackResultV1 | RoundAttemptProcessingV1 | RoundResultNotSubmittedV1)
-def result(round_id: str, stage_id: str, request: Request, response: Response):
+def result(round_id: str, stage_id: str, request: Request, response: Response,
+           session_id: str | None = Query(None, min_length=1, max_length=128)):
     service, profile = owned_round(request, round_id)
-    result = RoundFeedback(service).result(profile, round_id, stage_id)
+    result = RoundFeedback(service).result(profile, round_id, stage_id, session_id)
     if isinstance(result, RoundAttemptProcessingV1):
         response.status_code = 202
     return result

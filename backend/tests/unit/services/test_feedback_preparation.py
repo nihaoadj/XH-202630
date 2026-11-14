@@ -6,16 +6,45 @@ import pytest
 
 from app.db.feedback.memory import MemoryFeedbackRepository
 from app.models.feedback.feedback_loop import FeedbackFollowupSelection, FeedbackResourceOption
+from app.models.learners.mastery import NextGenerationCandidateV1, NextGenerationOptionsV1
 from app.models.learning_documents.schemas import (
-    LearnerProfile, LearningResource, ResourceEvaluationQuestion, RunAttemptSubmitRequest,
+    LearnerProfile, LearningResource, ResourceEvaluationQuestion, RunAttemptSubmitRequest, SkillNode,
 )
 from app.services.feedback.attempt_evidence import prepare_attempt_evidence
 from app.services.feedback.feedback import FeedbackService
 from app.services.feedback.followup_plan import build_followup_plan
+from app.services.feedback.recommendations import cross_tier_review_pairs
 
 
 def _profile():
     return LearnerProfile(learner_id="learner", learner_type="test", education="本科", major="软件", knowledge_base_id="kb", learning_goal="合成验收")
+
+
+def test_cross_tier_review_pairs_only_include_each_new_nodes_adjacent_ancestors():
+    def candidate(node_id, tier, group):
+        return NextGenerationCandidateV1(
+            skill_node_id=node_id, name=node_id, tier=tier, tier_label=str(tier),
+            priority_group=group, rank=1, reason_codes=["TEST"], confidence="none",
+        )
+
+    options = NextGenerationOptionsV1(
+        learner_id="learner", knowledge_base_id="kb", profile_version=1, snapshot_hash="a" * 64,
+        cross_tier_new_knowledge=[candidate("new-a", 3, "unlearned"), candidate("new-b", 3, "unlearned")],
+        cross_tier_prerequisite_review=[
+            candidate("review-a", 2, "learned"), candidate("review-b", 2, "learned"),
+            candidate("review-old", 1, "learned"),
+        ],
+    )
+    nodes = [
+        SkillNode(node_id=node_id, knowledge_base_id="kb", name=node_id, tier=tier, prerequisites=prerequisites)
+        for node_id, tier, prerequisites in [
+            ("new-a", 3, ["intermediate"]), ("intermediate", 3, ["review-a"]),
+            ("new-b", 3, ["review-b"]), ("review-a", 2, ["review-old"]),
+            ("review-b", 2, []), ("review-old", 1, []),
+        ]
+    ]
+
+    assert cross_tier_review_pairs(options, nodes) == {"new-a": ["review-a"], "new-b": ["review-b"]}
 
 
 @pytest.mark.parametrize("claim", [False, True])
@@ -36,6 +65,7 @@ def test_followup_plan_preserves_claim_partition_and_starts_a_new_batch(claim):
     requests = plan.requests(include_claim_check=claim)
     assert [request.resource_types for request in requests] == ([["复习清单"], ["讲义"]] if claim else [["复习清单", "讲义"]])
     assert all(request.include_claim_check == claim for request in requests)
+    assert all((request.max_iterations, request.claim_max_iterations) == (3,2) for request in requests)
     assert all(request.constraints["feedback_attempt_id"] == "attempt" for request in requests)
     assert all(request.target_skill_nodes == ["node"] for request in requests)
     assert plan.source_batch_id is None

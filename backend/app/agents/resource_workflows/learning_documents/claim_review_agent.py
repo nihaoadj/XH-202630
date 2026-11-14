@@ -104,6 +104,29 @@ def _normalize_judgement_candidates(
     return normalized
 
 
+def _accept_judgement_items(claims, candidates, evidence, model_name):
+    """Validate each expected identity independently; duplicates are ambiguous."""
+    by_id = defaultdict(list)
+    for candidate in candidates:
+        by_id[candidate.claim_id].append(candidate)
+    accepted, pending = [], []
+    allowed = {item.evidence_id for item in evidence}
+    for claim in claims:
+        items = by_id.get(claim.claim_id, [])
+        if len(items) != 1:
+            pending.append(claim)
+            continue
+        try:
+            accepted.extend(materialize_judgements(
+                claims=[claim], candidates=_normalize_judgement_candidates([claim], items),
+                allowed_evidence_ids=allowed, judge_prompt_version=JUDGE_PROMPT_VERSION,
+                judge_model=model_name,
+            ))
+        except (ValueError, KeyError):
+            pending.append(claim)
+    return accepted, pending, bool(set(by_id) - {claim.claim_id for claim in claims})
+
+
 def _claim_audit_content(resource) -> str:
     """Return canonical text so model spans and server validation share one source.
 
@@ -112,6 +135,9 @@ def _claim_audit_content(resource) -> str:
     extractor prompt now classifies checklist questions as non-factual or
     instructional instead.
     """
+    if resource.correction_package_payload is not None:
+        from .claim_extraction.correction_sources import build_source
+        return build_source(resource, force=True).text
     return resource.content_text or ""
 
 
@@ -402,11 +428,21 @@ def _legacy_claim_extract_node(
                     "content_text": _claim_audit_content(resource),
                 }],
             }
+            correction_source = None
+            correction_guidance = ""
+            if resource.correction_package_payload is not None:
+                from .claim_extraction.correction_sources import build_source, GUIDANCE
+                correction_source = build_source(resource, force=True)
+                from .claim_extraction.compact_correction_sources import PROMPT_VERSION as compact_marker, GUIDANCE as compact_guidance
+                if correction_source.prompt_version == compact_marker:
+                    GUIDANCE = compact_guidance
+                correction_guidance = "\n" + GUIDANCE
+                payload["structured_context"] = {"fields": correction_source.fields}
             # Bypass LLM-call accounting (T41): legacy per-resource extraction.
             with stage_labeled_scope("claim_extract", labels=[resource.resource_id]):
                 result = llm_gateway.invoke_structured(
                     messages=[
-                        SystemMessage(content=extractor_prompt(max_claims_per_resource)),
+                        SystemMessage(content=extractor_prompt(max_claims_per_resource) + correction_guidance),
                         HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
                     ],
                     output_schema=ClaimExtractionLLMOutput,
@@ -455,16 +491,30 @@ def _legacy_claim_extract_node(
                     if index in repaired else candidate
                     for index, candidate in enumerate(candidates)
                 ]
+            if correction_source:
+                # Resolve exact offsets before applying the field-role checks.
+                located = []
+                for candidate in candidates:
+                    if audit_content[candidate.source_start:candidate.source_end] != candidate.source_text:
+                        positions = [f["start"] + audit_content[f["start"]:f["end"]].find(candidate.source_text)
+                                     for f in correction_source.fields
+                                     if candidate.source_text in audit_content[f["start"]:f["end"]]]
+                        if len(positions) != 1:
+                            raise ValueError("ambiguous correction Claim source")
+                        start = positions[0]
+                        candidate = candidate.model_copy(update={"source_start": start, "source_end": start + len(candidate.source_text)})
+                    located.append(candidate)
+                candidates = correction_source.classify(located)
             claims.extend(materialize_claims(
                 candidates=candidates,
-                resource_content=resource.content_text or "",
+                resource_content=audit_content,
                 resource_id=resource.resource_id,
                 resource_version=resource.version,
                 review_id=review_ids[resource.resource_id],
                 run_id=state.get("run_id", "direct-node-call"),
                 allowed_evidence_ids=allowed_evidence,
                 allowed_knowledge_point_ids=allowed_nodes,
-                extractor_prompt_version=EXTRACTOR_PROMPT_VERSION,
+                extractor_prompt_version=correction_source.prompt_version if correction_source else EXTRACTOR_PROMPT_VERSION,
                 extractor_model=result.model_name,
             ))
             last_result = result
@@ -562,7 +612,12 @@ def _neutral_claim_extract_node(state, *, llm_gateway, repository, counter):
     for index, resource in enumerate(resources):
         evidence = resolve_review_evidence_context(state, resource)
         validate_payload_evidence(resource, evidence)
-        if resource.resource_type == "分阶测试题" and resource.assessment_payload is not None:
+        from .claim_extraction.resource_sources import enabled
+        policy = state.get("claim_extraction_policy") or {}
+        from types import SimpleNamespace
+        structured = (resource.resource_type == "分阶测试题"
+                      and enabled(SimpleNamespace(structured_sources=policy.get("structured_sources"))))
+        if resource.resource_type == "分阶测试题" and resource.assessment_payload is not None and not structured:
             assessments.append(resource.resource_id)
             continue
         # Give this resource its fair share of what is left; the extraction
@@ -682,18 +737,37 @@ def _judge_claims_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
                     ),
                     options=llm_gateway.options_for("claim_judge", temperature=0.0),
                 )
-            normalized_candidates = _normalize_judgement_candidates(
-                resource_claims,
-                result.output.judgements,
-            )
-            judgements.extend(materialize_judgements(
-                claims=resource_claims,
-                candidates=normalized_candidates,
-                allowed_evidence_ids={item.evidence_id for item in evidence},
-                judge_prompt_version=JUDGE_PROMPT_VERSION,
-                judge_model=result.model_name,
-            ))
             last_result = result
+            accepted, pending, unexpected = _accept_judgement_items(
+                resource_claims, result.output.judgements, evidence, result.model_name,
+            )
+            # Commit valid items before attempting recovery. A malformed sibling
+            # or failed recovery must never erase an already validated verdict.
+            judgements.extend(accepted)
+            if pending:
+                from .claim_extraction.budget import judge_messages, judge_repair_options
+                repair_call = getattr(llm_gateway, "repair_judgements", llm_gateway.invoke_structured)
+                with stage_labeled_scope("claim_judge", labels=[resource_id, "item_repair"]):
+                    repaired = repair_call(
+                        messages=judge_messages(pending, evidence),
+                        output_schema=ClaimJudgementLLMOutput,
+                        context=LLMCallContext(
+                            run_id=state.get("run_id", "direct-node-call"),
+                            step_id=step_context["step_id"], node_name="claim_judge",
+                            schema_name=ClaimJudgementLLMOutput.__name__,
+                            generation_attempt=state.get("generation_attempt", 1),
+                            workflow_deadline_at=judge_deadline,
+                        ),
+                        options=judge_repair_options(llm_gateway.options_for("claim_judge", temperature=0.0)),
+                    )
+                recovered, pending, repair_unexpected = _accept_judgement_items(
+                    pending, repaired.output.judgements, evidence, repaired.model_name,
+                )
+                judgements.extend(recovered)
+                unexpected = unexpected or repair_unexpected
+                last_result = repaired
+            if pending or unexpected:
+                raise ValueError(f"unresolved Claim judgements: {len(pending)}; unexpected IDs: {unexpected}")
         except LLMGatewayError as exc:
             failed_resource_ids.add(resource_id)
             errors.append(_with_resource_context(
@@ -784,6 +858,7 @@ def _judge_claims_node(state: AgentState, *, llm_gateway: LLMGateway) -> dict[st
 def claim_decide_node(state: AgentState) -> dict[str, Any]:
     step_context = start_step(state)
     review = dict(state.get("review_result", {}))
+    revision_phase = "legacy_v1"
     ordinary_decision = ReviewDecision(
         review.get("decision", review.get("status", ReviewDecision.HUMAN_REVIEW.value))
     )
@@ -805,6 +880,8 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
             item for item in state.get("claim_judgements", [])
             if item.get("verdict") in {ClaimVerdict.CONTRADICTED.value, ClaimVerdict.NOT_IN_EVIDENCE.value}
         ]
+        from .claim_routing import select_revision_bad
+        bad, revision_phase = select_revision_bad(state, bad)
         metrics = state.get("claim_metrics", {})
         incomplete = bool(failed_resource_ids) or any(
             item.get("metric_status") == ClaimMetricStatus.INCOMPLETE.value
@@ -945,6 +1022,7 @@ def claim_decide_node(state: AgentState) -> dict[str, Any]:
             "claim_check_status", state.get("claim_check_status")
         ),
         "current_node": "claim_supervisor",
+        "claim_revision_phase": revision_phase,
         "trace": [trace],
         "errors": [],
     }

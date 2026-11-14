@@ -709,7 +709,7 @@ async function contractCheck(page) {
   assert.ok(await page.locator('.report-chart-slot').count() >= 1)
   const wrapped = await page.evaluate(() => {
     const content = [...document.querySelectorAll('.report-chart-slot')].map((slot) => slot.innerText).join('\n')
-    return ['能力雷达图', '资源难度匹配曲线', '学习路径规划图'].every((name) => content.includes(name))
+    return ['能力雷达图', '资源适配与审核', '学习路径规划图'].every((name) => content.includes(name))
   })
   assert.ok(wrapped, '.report-chart-slot 必须包含雷达/曲线/路径图')
   assert.equal(await page.getByRole('combobox', { name: '学习画像' }).count(), 1, '画像控件缺 aria-label')

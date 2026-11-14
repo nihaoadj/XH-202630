@@ -64,7 +64,7 @@ export function useGenerationClaims({
           ...metric,
           claim_factual_pass_rate: metric.metric_status === 'complete' && factual ? supported / factual : null,
           rows,
-          sourceError: sourceAvailable ? '' : '冻结来源加载失败，可刷新报告重试。',
+          sourceError: sourceAvailable ? '' : '冻结来源加载失败，可关闭报告后重新打开。',
           publication_status: publication?.publication_status,
           claim_publish_decision: publication?.claim_publish_decision,
           claim_warning_publish: Boolean(publication?.claim_warning_publish),

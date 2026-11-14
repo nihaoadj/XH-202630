@@ -452,17 +452,22 @@ class LLMGateway:
         raw_value: Any,
         failure: _MappedFailure,
     ) -> list[BaseMessage]:
-        schema = json.dumps(output_schema.model_json_schema(), ensure_ascii=False)
+        # The transport preparation already supplies the schema. Repeating it
+        # and the invalid answer can exceed a round's input capacity even when
+        # the original request fits. Regenerate from the unchanged source task.
         repair = (
-            "上一次输出未通过结构校验。请仅返回修复后的 JSON 对象，不要解释。\n"
-            f"错误：{failure.code.value}:{(failure.safe_detail or 'invalid_output')[:12000]}\n"
-            f"JSON Schema：{schema}"
+            "上一次输出未通过结构校验。请重新完整生成符合既定 Schema 的 JSON 对象。"
+            "保留原任务的全部审核要求，修正以下字段错误，不要解释：\n"
+            f"{failure.code.value}:{(failure.safe_detail or 'invalid_output')[:512]}"
         )
-        return [
-            *messages,
-            AIMessage(content=_serialize_repair_value(raw_value)),
-            SystemMessage(content=repair),
-        ]
+        if "issue_support_missing" in (failure.safe_detail or ""):
+            repair += (
+                "\n每个 issues 项的 evidence_refs、teaching_rule_id、finding_keys 至少一项非空。"
+                "教学缺陷请在 teaching_rule_id 填写原输入 teaching_rule_ids 中对应的真实规则ID；"
+                "自包含性问题可用白名单中的 self_contained。技术补充仍必须引用冻结证据，"
+                "不要虚构证据、不要为满足格式删除真实缺陷。"
+            )
+        return [*messages, SystemMessage(content=repair)]
 
     @staticmethod
     def _empty_output_recovery_messages(
@@ -770,6 +775,13 @@ class LLMGateway:
                 failure = exc
             except Exception as exc:
                 failure = _map_exception(exc)
+                if (failure.safe_detail or "").startswith("unexpected:"):
+                    # Keep the local traceback for unclassified adapter failures;
+                    # the API/error payload still exposes only the class name.
+                    logger.error(
+                        "LLM call unclassified failure run_id=%s node=%s type=%s",
+                        context.run_id, context.node_name, type(exc).__name__, exc_info=True,
+                    )
 
             attempt_latency = max(0, int((self.monotonic() - attempt_started) * 1000))
             attempt_usage = raw.usage if raw else LLMUsage()
@@ -783,6 +795,12 @@ class LLMGateway:
                 structured_output_mode=mode,
                 usage=attempt_usage,
             ))
+            if failure.code == ErrorCode.LLM_OUTPUT_SCHEMA_INVALID:
+                logger.warning(
+                    "LLM schema validation failed run_id=%s step_id=%s call_id=%s node=%s detail=%s attempt=%s",
+                    context.run_id, context.step_id, context.call_id,
+                    context.node_name, failure.safe_detail, attempt,
+                )
 
             can_text_fallback = (
                 auto_mode
@@ -1012,6 +1030,13 @@ class LLMGateway:
                 failure = exc
             except Exception as exc:
                 failure = _map_exception(exc)
+                if (failure.safe_detail or "").startswith("unexpected:"):
+                    # Keep the local traceback for unclassified adapter failures;
+                    # the API/error payload still exposes only the class name.
+                    logger.error(
+                        "LLM call unclassified failure run_id=%s node=%s type=%s",
+                        context.run_id, context.node_name, type(exc).__name__, exc_info=True,
+                    )
 
             latency_ms = max(0, int((self.monotonic() - attempt_started) * 1000))
             if raw:

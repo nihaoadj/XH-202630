@@ -15,18 +15,21 @@ from .budget import ExtractionBudget, check_window, check_judge_capacity
 from .contracts import select_contract
 from .merge import validate_output_with_diagnostics, materialize_result, SourceLocatingRejected
 from .prompts.builder import build_messages
+from .resource_sources import build_source
 
 
 def execute_extraction(state, resource, *, review_id, evidence, llm_gateway, repository, counter, step_id):
     budget = ExtractionBudget(state, repository, llm_gateway, counter)
     policy = budget.policy
-    text = resource.content_text or ""
+    source = build_source(resource, policy)
+    text = source.text
     if not text:
         raise ValueError("neutral extraction content unavailable")
     allowed_nodes = set(state.get("target_skill_nodes", []))
     new_result = ExtractionResult(resource_id=resource.resource_id, resource_version=resource.version, review_id=review_id,
         content_hash=content_digest(text), evidence_hash=digest([e.model_dump(mode="json") for e in evidence]),
-        generation_attempt=state.get("generation_attempt", 1), created_at=datetime.now(timezone.utc))
+        generation_attempt=state.get("generation_attempt", 1), created_at=datetime.now(timezone.utc),
+        source_snapshot=source.snapshot)
     result_key = result_identity_key(new_result, budget.current.policy_hash)
 
     def messages(batch):
@@ -41,6 +44,8 @@ def execute_extraction(state, resource, *, review_id, evidence, llm_gateway, rep
 
     ledger = budget.current.state
     result = ledger.results.get(result_key)
+    if result is not None and result.source_snapshot != source.snapshot:
+        raise ValueError("structured extraction source snapshot drift")
     if result is not None and result.status == "completed":
         check_judge_capacity(policy, llm_gateway, counter, result.final_claims, evidence)
         return list(result.final_claims), dict(result_key=result_key, final_result_hash=result.final_result_hash), None
@@ -137,9 +142,11 @@ def execute_extraction(state, resource, *, review_id, evidence, llm_gateway, rep
                 stored = (result.location_diagnostics or {}).get(batch.batch_id)
                 if stored is None or [d.model_dump(mode="json") for d in diagnostics] != [d.model_dump(mode="json") for d in stored]:
                     raise ValueError("extraction locating diagnostics drift")
-            candidates.extend(batch_candidates)
+            candidates.extend(source.classify(batch_candidates) if source.snapshot else batch_candidates)
         claims = materialize_result(candidates, text=text, resource=resource, review_id=review_id, run_id=state["run_id"],
                                     policy=policy, created_at=result.created_at)
+        if source.prompt_version:
+            claims = [c.model_copy(update={"extractor_prompt_version": source.prompt_version}) for c in claims]
         check_judge_capacity(policy, llm_gateway, counter, claims, evidence)
         result = result.model_copy(update=dict(status="completed", final_claims=claims, final_result_hash=digest(claims)))
         replace_result(result)

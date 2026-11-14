@@ -4,8 +4,31 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from app.models.feedback.feedback_loop import FeedbackLoopResult, CorrectionPackageOptionV1
-from app.models.learners.mastery import LearningIntent
-from app.models.learning_documents.schemas import LearnerProfile
+from app.models.learners.mastery import LearningIntent, NextGenerationOptionsV1
+from app.models.learning_documents.schemas import LearnerProfile, SkillNode
+
+
+def cross_tier_review_pairs(
+    options: NextGenerationOptionsV1, nodes: list[SkillNode],
+) -> dict[str, list[str]]:
+    """Keep each higher-tier choice paired with its own learned prerequisites."""
+    prerequisites = {node.node_id: node.prerequisites for node in nodes}
+    pairs = {}
+    for candidate in options.cross_tier_new_knowledge:
+        ancestors: set[str] = set()
+        pending = list(prerequisites.get(candidate.skill_node_id, ()))
+        while pending:
+            node_id = pending.pop()
+            if node_id not in ancestors:
+                ancestors.add(node_id)
+                pending.extend(prerequisites.get(node_id, ()))
+        reviews = [
+            review.skill_node_id for review in options.cross_tier_prerequisite_review
+            if review.tier == candidate.tier - 1 and review.skill_node_id in ancestors
+        ]
+        if reviews:
+            pairs[candidate.skill_node_id] = reviews
+    return pairs
 
 
 def _correction_target_ids(result: FeedbackLoopResult) -> list[str]:

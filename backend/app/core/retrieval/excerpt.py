@@ -137,7 +137,12 @@ def build_excerpt_windows(
         if key in seen:
             continue
         seen.add(key)
-        excerpt = text[start:end]
+        excerpt = normalize_text(text[start:end])
+        if not excerpt:
+            continue
+        exact_start = text.find(excerpt, start, end)
+        if exact_start >= 0:
+            start, end = exact_start, exact_start + len(excerpt)
         windows.append(ExcerptWindow(
             start=start,
             end=end,

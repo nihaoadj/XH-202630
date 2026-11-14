@@ -6,7 +6,7 @@ import hashlib
 import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.reviews.lecture_review import LectureLedgerV1, LectureReviewPolicyV1
 from app.models.reviews.lecture_review_v2 import LectureLedgerV2, LectureReviewPolicyV2
@@ -27,7 +27,8 @@ PRIVATE_REVIEW_FIELDS = frozenset({"specialized_reviews", "review_audit", "revie
                                    "review_audit_v4", "resource_review_policy", "resource_review_policy_hash",
                                    "resource_review_contract_version", "resource_ledgers", "resource_revision",
                                    "resource_stop_reasons", "resource_dispatch_snapshot",
-                                   "resource_review_identity", "resource_review_identity_hash"})
+                                   "resource_review_identity", "resource_review_identity_hash",
+                                   "correction_package_payload", "correction_package_payload_hash", "correction_package_snapshot"})
 PROFILE_VERSIONS = {
     "content_v2": "2.0", "practice_semantic_v2": "2.0",
     "assessment_scope_v1": "1.0", "assessment_package_v1": "2.0",
@@ -67,7 +68,13 @@ class ReviewFindingV1(PrivateReviewModel):
     skill_node_id: str = Field(min_length=1, max_length=128)
     codes: list[str] = Field(default_factory=list, max_length=4)
     scope_decision: Literal["in_scope", "out_of_scope", "insufficient_evidence"]
-    supported_evidence_ids: list[str] = Field(default_factory=list, max_length=1)
+    supported_evidence_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("supported_evidence_ids")
+    @classmethod
+    def deduplicate_evidence(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
+
     answer_check: Literal["pass", "fail", "insufficient_evidence"] | None = None
     clarity_check: Literal["pass", "fail"] | None = None
     rubric_check: Literal["pass", "fail", "insufficient_evidence", "not_applicable"] | None = None

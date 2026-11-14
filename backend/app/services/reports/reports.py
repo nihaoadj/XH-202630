@@ -7,6 +7,8 @@ from app.services.learners.mastery import MasteryService
 from app.models.learning_documents.schemas import ResourceRepresentation
 from app.models.learning_documents.types import SUPPORTED_RESOURCE_TYPES
 from app.models.learners.mastery import MASTERY_CONFIRMATION_THRESHOLD
+from app.models.reports.contracts import ReportRecentResourceQualityV1
+from app.models.reviews.claim_resolution import ClaimResolutionConflict, resolve_effective_claim_judgements
 from app.models.reviews.claims import ClaimMetricStatus, compute_claim_metric
 from app.models.shared.workflow import normalize_review_status, review_status_is_approved
 from datetime import datetime, timedelta, timezone
@@ -23,7 +25,8 @@ from app.services.reports.snapshots import ReportSnapshot, SnapshotCache, canoni
 # ETag/revision so a browser cannot retain a structurally stale report after a
 # deployment (for example, the radar changing from measured nodes to the full
 # knowledge graph).
-REPORT_PROJECTION_VERSION = "4.5-learning-round-v1"
+REPORT_PROJECTION_VERSION = "4.10-ordinary-review-95-v1"
+RECENT_RESOURCE_QUALITY_LIMIT = 10
 
 
 class ReportSnapshotUnstable(RuntimeError):
@@ -55,6 +58,7 @@ class ReportService:
         clock=None,
         quality_service=None,
         round_service=None,
+        supplement_repo=None,
     ):
         self.round_service = round_service
         self.resource_repo = resource_repo
@@ -63,6 +67,7 @@ class ReportService:
         self.generation_job_repo = generation_job_repo
         self.mastery_service = mastery_service
         self.claim_repo = claim_repo
+        self.supplement_repo = supplement_repo
         self.audit_repo = audit_repo
         self.diagnosis_repo = diagnosis_repo
         self.read_repo = read_repo
@@ -76,7 +81,7 @@ class ReportService:
             return None
         repositories = [self.resource_repo, self.feedback_repo, self.feedback_loop_repo,
                         self.generation_job_repo, self.claim_repo, self.audit_repo,
-                        self.diagnosis_repo, self.profile_repo]
+                        self.diagnosis_repo, self.profile_repo, self.supplement_repo]
         if self.round_service is not None:
             repositories.append(self.round_service.repository)
         if self.mastery_service:
@@ -376,11 +381,16 @@ class ReportService:
         }
 
         credibility = self._resource_credibility(resources, knowledge_base_id=profile.knowledge_base_id)
-        resource_quality = self._resource_quality(resources, order=credibility["items"])
+        resource_quality = self._resource_quality(resources, order=credibility["items"], ability_names=ability_names)
         blind_spot_map = self._build_blind_spot_map(ability_projection, attempts, visible_diagnostic_runs)
+        claim_enabled_by_run = {
+            job.run_id: job.request_payload.get("include_claim_check")
+            for job in self.generation_job_repo.list_by_learner(profile.learner_id)
+            if isinstance(job.request_payload.get("include_claim_check"), bool)
+        } if self.generation_job_repo else {}
         resource_difficulty_curve = self._build_resource_difficulty_curve(
             ability_projection, resources, credibility_items=credibility["items"],
-            credibility_summary=credibility["summary"], attempts=attempts,
+            claim_enabled_by_run=claim_enabled_by_run, attempts=attempts,
         )
         current_batch_node_ids = self._latest_active_batch_target_ids(profile)
         learning_path_graph = self._build_learning_path_graph(
@@ -408,7 +418,8 @@ class ReportService:
             "resource_credibility_summary": credibility["summary"],
             "recent_resource_credibility": credibility["items"][:10],
             "resource_quality_summary": resource_quality["summary"],
-            "recent_resource_quality": resource_quality["items"][:10],
+            "recent_resource_quality": resource_quality["items"],
+            "resource_quality_batches": resource_quality["batches"],
             "as_of_profile_version": profile.profile_version,
             "generated_at": generated_at,
             "learner_id": profile.learner_id,
@@ -791,13 +802,13 @@ class ReportService:
         return result
 
     def _build_resource_difficulty_curve(
-        self, ability_projection, resources, *, credibility_items=None, credibility_summary=None, attempts=None,
+        self, ability_projection, resources, *, credibility_items=None, claim_enabled_by_run=None, attempts=None,
     ) -> dict:
         return projections._build_resource_difficulty_curve(
             ability_projection,
             resources,
             credibility_items=credibility_items,
-            credibility_summary=credibility_summary,
+            claim_enabled_by_run=claim_enabled_by_run,
             attempts=attempts,
             ordered_ability_nodes=self._ordered_ability_nodes,
             utc=self._utc,
@@ -882,11 +893,19 @@ class ReportService:
             reviews = batch(resource_ids) if batch else {rid: self.audit_repo.get_review_by_resource(rid) for rid in dict.fromkeys(resource_ids)}
         runs = list(dict.fromkeys(item.run_id for item in resources if item.run_id and item.review_id))
         claim_groups, judgement_groups = {}, {}
+        session_groups, supplement_groups = {}, {}
         if self.claim_repo:
             for method, single, target in (("list_claims_by_runs", "list_claims_by_run", claim_groups),
                                            ("list_judgements_by_runs", "list_judgements_by_run", judgement_groups)):
                 batch = getattr(self.claim_repo, method, None)
                 values = batch(runs) if batch else [item for run in runs for item in getattr(self.claim_repo, single)(run)]
+                for item in values:
+                    target.setdefault((item.run_id, item.resource_id, item.resource_version, item.review_id), []).append(item)
+        if self.supplement_repo is not None and runs:
+            for values, target in (
+                (self.supplement_repo.list_sessions(runs), session_groups),
+                (self.supplement_repo.list_supplements(runs), supplement_groups),
+            ):
                 for item in values:
                     target.setdefault((item.run_id, item.resource_id, item.resource_version, item.review_id), []).append(item)
         for resource in resources:
@@ -902,7 +921,15 @@ class ReportService:
             review_status = "failed" if blocking else "passed" if review_passed else "not_measured"
             claims, judgements = self._claims_for_resource(resource, claim_groups, judgement_groups)
             if claims:
-                computed = compute_claim_metric(claims, judgements)
+                binding = (resource.run_id, resource.resource_id, resource.version, resource.review_id)
+                try:
+                    resolution = resolve_effective_claim_judgements(
+                        judgements, session_groups.get(binding, ()), supplement_groups.get(binding, ()),
+                    )
+                    effective_judgements = resolution.judgements.values()
+                except ClaimResolutionConflict:
+                    effective_judgements = ()
+                computed = compute_claim_metric(claims, effective_judgements)
                 metric = computed.metric_status.value
                 unsupported_rate = computed.claim_hallucination_rate
                 claim_status = "failed" if metric == ClaimMetricStatus.COMPLETE.value and (computed.contradicted_claim_total or computed.not_in_evidence_claim_total) else "passed" if metric == ClaimMetricStatus.COMPLETE.value else "not_applicable" if metric == ClaimMetricStatus.NOT_APPLICABLE.value else "not_measured"
@@ -993,14 +1020,10 @@ class ReportService:
                 **{f"credibility_{level}_count": count for level, count in level_counts.items()},
                 "notice": "可信等级表示平台可验证的生成质量证据，不等价于来源机构权威性或绝对事实正确。"}}
 
-    def _resource_quality(self, resources, *, order=()) -> dict:
-        """Attach the shared versioned quality projection for visible resources.
-
-        The range is the current visible published text resources; this is not a
-        7/30/90-day generation-quality trend and is labelled as such.
-        """
+    def _resource_quality(self, resources, *, order=(), ability_names=None) -> dict:
+        """Summarize recent published resources and keep complete batches selectable."""
         if self.quality_service is None:
-            return {"summary": None, "items": []}
+            return {"summary": None, "items": [], "batches": []}
         eligible = [
             resource for resource in resources
             if resource.publication_status == "published"
@@ -1008,7 +1031,7 @@ class ReportService:
             and resource.resource_type in SUPPORTED_RESOURCE_TYPES
         ]
         if not eligible:
-            return {"summary": None, "items": []}
+            return {"summary": None, "items": [], "batches": []}
         run_ids = sorted({resource.run_id for resource in eligible if resource.run_id})
         wanted = {resource.resource_id for resource in eligible}
         by_id = {
@@ -1023,14 +1046,49 @@ class ReportService:
             by_id.get(resource.resource_id) or self.quality_service.unavailable_item(resource)
             for resource in eligible
         ]
-        summary = self.quality_service.summarize_items(items)
         position = {
             item["resource_id"]: index for index, item in enumerate(order)
         }
         items.sort(key=lambda item: (
             position.get(item.resource_id, len(position)), item.resource_id,
         ))
-        return {"summary": summary, "items": items}
+        resources_by_id = {resource.resource_id: resource for resource in eligible}
+        recent = items[:RECENT_RESOURCE_QUALITY_LIMIT]
+        node_names = ability_names or {}
+        recent_items = []
+        for item in recent:
+            resource = resources_by_id[item.resource_id]
+            node_id = resource.learning_path_node or next(
+                (point for point in resource.knowledge_points if point in node_names), None,
+            )
+            recent_items.append(ReportRecentResourceQualityV1(
+                **item.model_dump(),
+                learning_node_id=node_id,
+                learning_node_name=node_names.get(node_id),
+            ))
+        groups = {}
+        for item in items:
+            resource = resources_by_id[item.resource_id]
+            batch_id = resource.batch_id or resource.run_id
+            key = f"batch:{batch_id}" if batch_id else f"resource:{resource.resource_id}"
+            groups.setdefault(key, []).append(item)
+
+        batches = []
+        for key, members in groups.items():
+            members_resources = [resources_by_id[item.resource_id] for item in members]
+            dates = [self._utc(resource.created_at or resource.published_at)
+                     for resource in members_resources if resource.created_at or resource.published_at]
+            batches.append({
+                "key": key,
+                "topic": next((resource.topic for resource in members_resources if resource.topic), "学习资源"),
+                "created_at": min(dates, default=None),
+                "summary": self.quality_service.summarize_items(members),
+                "items": members,
+            })
+        batches.sort(key=lambda batch: (
+            batch["created_at"] or datetime.min.replace(tzinfo=timezone.utc), batch["key"],
+        ), reverse=True)
+        return {"summary": self.quality_service.summarize_items(recent), "items": recent_items, "batches": batches}
 
     @staticmethod
     def _claims_for_resource(resource, claim_groups, judgement_groups):

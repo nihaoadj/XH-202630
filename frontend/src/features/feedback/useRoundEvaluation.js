@@ -39,7 +39,11 @@ export function useRoundEvaluation({ context, profileVersion, accountId, onResul
     const { learnerId, roundId, stageId } = context()
     const response = await api.session(roundId, stageId, learnerId)
     if (!isCurrent()) return
-    session.value = requireRoundSession(response.data)
+    applySession(requireRoundSession(response.data))
+  }
+  function applySession(value) {
+    const { learnerId } = context()
+    session.value = value
     let saved = draft.value
     if (!saved) {
       try { saved = readRoundDraft(sessionStorage, roundDraftKey(accountId(), learnerId, session.value.session_id), session.value) } catch { /* An in-memory draft remains valid without browser storage. */ }
@@ -50,14 +54,33 @@ export function useRoundEvaluation({ context, profileVersion, accountId, onResul
         ?? (question.question_type === 'multiple_choice' ? [] : '')
     }
   }
-  async function poll(isCurrent) {
+  async function retake() {
+    if (pending.value || !result.value?.session_id) return false
+    const isCurrent = capture()
+    const { learnerId, roundId, stageId } = context()
+    const sourceId = result.value.session_id
+    pending.value = true
+    error.value = ''
+    try {
+      await api.session(roundId, stageId, learnerId, sourceId)
+      if (!isCurrent()) return false
+      await load()
+      return Boolean(session.value && !result.value)
+    } catch (caught) {
+      if (isCurrent()) error.value = caught?.response?.data?.message || '暂时无法再次测评，请重试。'
+      return false
+    } finally {
+      if (isCurrent()) pending.value = false
+    }
+  }
+  async function poll(isCurrent, sessionId = session.value?.session_id) {
     timer = null
     const { roundId, stageId } = context()
     try {
-      const response = await api.result(roundId, stageId)
+      const response = await api.result(roundId, stageId, sessionId)
       if (!isCurrent()) return
       if (response.data?.state === 'grading' || response.status === 202) {
-        timer = setTimeout(() => poll(isCurrent), 2000)
+        timer = setTimeout(() => poll(isCurrent, sessionId), 2000)
       } else if (response.data?.attempt_id) accept(response.data)
       else {
         // Do not reset: the in-memory draft is the authoritative payload when
@@ -94,7 +117,7 @@ export function useRoundEvaluation({ context, profileVersion, accountId, onResul
     pending.value = true; error.value = ''
     try {
       if (draft.value) {
-        const previous = await api.result(roundId, stageId)
+        const previous = await api.result(roundId, stageId, session.value?.session_id)
         if (!isCurrent()) return
         if (previous.data?.attempt_id && previous.status !== 202 && previous.data?.state !== 'grading') { accept(previous.data); return }
         if (previous.status === 202 || previous.data?.state === 'grading') { await poll(isCurrent); return }
@@ -116,5 +139,5 @@ export function useRoundEvaluation({ context, profileVersion, accountId, onResul
   }
   function clearRejectedDraft() { storeDraft(null); draft.value = null; versionConflict.value = false; error.value = '' }
   onBeforeUnmount(() => { disposed = true; reset() })
-  return { session, result, answers, pending, error, draft, versionConflict, answeredCount, canSubmit, load, submit, reset, clearRejectedDraft }
+  return { session, result, answers, pending, error, draft, versionConflict, answeredCount, canSubmit, load, retake, submit, reset, clearRejectedDraft }
 }

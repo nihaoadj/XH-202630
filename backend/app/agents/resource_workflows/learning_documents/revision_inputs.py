@@ -38,7 +38,7 @@ def _sha256(value: str) -> str:
 
 
 def _structured(resource) -> dict | None:
-    for attr in ("practice_guide_payload", "assessment_payload", "review_practice_payload"):
+    for attr in ("practice_guide_payload", "assessment_payload", "review_practice_payload", "correction_package_payload"):
         value = getattr(resource, attr, None)
         if isinstance(value, dict):
             return value
@@ -53,6 +53,7 @@ def build_resource_review_revision_input(
     work_order: dict | None = None,
     lecture_revision: dict | None = None,
     feedback: dict | None = None,
+    input_contract: str | None = None,
 ) -> ResourceReviewRevisionInput:
     """Build the ordinary generation revision input from one frozen source.
 
@@ -104,6 +105,9 @@ def build_resource_review_revision_input(
 
     content_hash = _sha256(previous_text or "")
     return ResourceReviewRevisionInput(
+        input_version=("2.0" if work_order and input_contract in {"single_representation_v3", "single_representation_v4"}
+                       and getattr(resource, "resource_type", None) in {"讲义", "案例分析"}
+                       else "1.0"),
         resource_spec_id=resource_spec_id,
         parent_resource_id=parent_id,
         parent_version=parent_version,
@@ -147,7 +151,9 @@ def build_claim_review_revision_input(
     """
     from app.agents.resource_workflows.learning_documents.claim_extraction.segmentation import scan_units
 
-    content = getattr(resource, "content_text", None) or ""
+    from .claim_extraction.resource_sources import source_for_claims
+    bound_claims = [c for c in claims if c.resource_id == resource.resource_id and c.resource_version == resource.version]
+    content = source_for_claims(resource, bound_claims).text
     parent_id = getattr(resource, "resource_id", "")
     parent_version = getattr(resource, "version", 1)
     judgement_by_claim = {

@@ -7,6 +7,8 @@ from typing import Protocol
 import time
 import json
 
+from pydantic import BaseModel
+
 from app.models.shared.llm import LLMBudgetScope, LLMCallContext, LLMUsage
 
 
@@ -95,7 +97,14 @@ def budgeted_transport_call(invoke, guard: LLMBudgetGuard | None, reservation: s
             messages = [message.model_dump(mode="json") if hasattr(message, "model_dump") else str(message)
                         for message in kwargs.get("messages", [])]
             schema = kwargs.get("output_schema")
-            envelope = {"messages": messages, "schema": schema.model_json_schema() if schema is not None else {}}
+            # Plain-text calls carry ``BaseModel`` itself as a protocol
+            # placeholder because they never read a schema. Pydantic refuses
+            # to build a JSON schema for the base class, so only concrete
+            # models contribute to the byte-level upper bound.
+            schema_payload: dict[str, object] = {}
+            if isinstance(schema, type) and issubclass(schema, BaseModel) and schema is not BaseModel:
+                schema_payload = schema.model_json_schema()
+            envelope = {"messages": messages, "schema": schema_payload}
             if len(json.dumps(envelope, ensure_ascii=False).encode("utf-8")) + 4096 > active.input_cap:
                 raise LLMBudgetUnavailable("ROUND_INPUT_CAPACITY_EXCEEDED")
         if before_send is not None:

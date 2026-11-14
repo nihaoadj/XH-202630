@@ -100,6 +100,42 @@ def test_review_dispatch_reaches_only_its_own_authority(state, monkeypatch, mode
     assert repo.get(job.run_id).job_status == "completed"
 
 
+@pytest.mark.parametrize("historical", [False, True])
+@pytest.mark.parametrize("frozen_version", ["contradiction_first_v1", "contradiction_first_v2", "contradiction_first_v3"])
+def test_queued_claim_routing_uses_frozen_request_shape_without_rehashing_defaults(state, historical, frozen_version):
+    s = state
+    observed = []
+    def generate(learner, request, **kwargs):
+        observed.append(request)
+        return SimpleNamespace(resources=[], workflow_status="completed")
+    s.service.generation_service.generate_with_run_id = generate
+    job = s.service.create_job(s.learner, s.req.model_copy(update={
+        "claim_gap_revision_threshold": 3, "claim_post_retrieval_max_iterations": 2, "claim_workflow_version": frozen_version}))
+    with s.factory() as db:
+        row = db.get(GenerationJobORM, job.run_id)
+        payload, dispatch = dict(row.request_payload), dict(row.dispatch_snapshot)
+        if historical:
+            payload.pop("max_iterations")
+            payload.pop("claim_max_iterations")
+            payload.pop("claim_gap_revision_threshold")
+            payload.pop("claim_workflow_version")
+            payload.pop("claim_post_retrieval_max_iterations")
+            dispatch["request_hash"] = canonical_hash(payload)
+            row.request_payload, row.dispatch_snapshot = payload, dispatch
+            db.commit()
+        original_hash = dispatch["request_hash"]
+    assert s.service.run_claim(s.repo.claim_next("worker", 60))
+    assert s.repo.get(job.run_id).job_status == "completed"
+    assert len(observed) == 1
+    assert observed[0].claim_workflow_version == ("legacy_v1" if historical else frozen_version)
+    assert observed[0].claim_post_retrieval_max_iterations == (0 if historical else 2)
+    assert observed[0].claim_gap_revision_threshold == (8 if historical else 3)
+    assert observed[0].max_iterations == (2 if historical else 3)
+    assert observed[0].claim_max_iterations == (1 if historical else 2)
+    assert s.repo.get(job.run_id).request_payload == payload
+    assert s.repo.get_dispatch(job.run_id)["dispatch_snapshot"]["request_hash"] == original_hash
+
+
 def test_atomic_claim_and_prestart_recovery(state):
     s = state
     job = s.service.create_job(s.learner, s.req)

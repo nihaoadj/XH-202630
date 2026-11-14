@@ -760,7 +760,7 @@ async function fixedLayoutSnapshot(page, label, collapsed) {
       '.workspace-new', '.workspace-switch', '.workbench-primary', '.workbench-history', '.tool-card',
     ]
     const requiredText = [
-      '.workspace-heading h2', '.workspace-heading p', '.hero-copy h2', '.next-action-title', '.hero-copy p',
+      '.workspace-eyebrow', '.hero-eyebrow', '.hero-copy h2', '.next-action-title', '.hero-copy p',
       '.hero-actions .workbench-primary', '.hero-actions .workbench-history', '.workspace-new', '.workspace-switch',
       '.summary-label', '.summary-value strong',
       '.tool-copy strong', '.tool-copy small', '.learning-route-panel .section-heading h3',
@@ -1177,7 +1177,7 @@ async function testProfilePickerSelectionPersistenceAndKeyboard(browser, base) {
   try {
     await waitForDashboard(page)
     const initial = await profileDashboardSnapshot(page)
-    assert.deepEqual(initial.labels, ['当前方向', '当前画像阶段', '已生成资源数量', '最近一次学习时间'])
+    assert.deepEqual(initial.labels, ['当前方向', '当前评级', '已生成资源数量', '最近一次学习时间'])
     assert.deepEqual(initial.values.slice(0, 3), ['儿科影像初阶', '初级', '0 份'])
     assert.equal(initial.recommendation, '生成第一批学习资源')
     assert.equal(initial.currentLearnerId, 'learner-1')
@@ -1542,8 +1542,6 @@ async function sidebarLayoutSnapshot(page) {
     const navList = document.querySelector('.nav-list')
     const navStyle = style(navList)
     const nonActiveStyle = style(nonActiveNav)
-    const context = document.querySelector('.context-panel')
-    const contextStyle = style(context)
     const toggle = document.querySelector('.sidebar-toggle')
     const toggleStyle = style(toggle)
     const logout = document.querySelector('.logout-button')
@@ -1558,7 +1556,7 @@ async function sidebarLayoutSnapshot(page) {
       sidebarRect: outer,
       clipPath,
       visibleClipWidth: clipWidth,
-      sidebarBackground: shellStyle?.backgroundColor || '',
+      sidebarBackgroundImage: shellStyle?.backgroundImage || '',
       innerRect: rect(inner),
       brand: {
         rect: rect(brand),
@@ -1598,13 +1596,7 @@ async function sidebarLayoutSnapshot(page) {
           minHeight: nonActiveStyle?.minHeight || '',
         } : null,
       },
-      context: {
-        rect: rect(context),
-        background: contextStyle?.backgroundColor || '',
-        borderTopColor: contextStyle?.borderTopColor || '',
-        inert: Boolean(context?.inert),
-        ariaHidden: context?.getAttribute('aria-hidden'),
-      },
+      contextPresent: Boolean(sidebar?.querySelector('.context-panel')),
       toggle: {
         rect: rect(toggle),
         color: toggleStyle?.color || '',
@@ -1713,8 +1705,7 @@ function assertSidebarMotion(start, samples, end, expectedCollapsed, label) {
   assert.equal(end.animating, false, label + ': animation marker should clear at rest')
   assert.equal(end.collapsed, expectedCollapsed, label + ': final collapsed state is wrong')
   assert.equal(end.main.transform, 'none', label + ': main-area transform should be cleared at rest')
-  assert.equal(end.context.inert, expectedCollapsed, label + ': collapsed context inert state is wrong')
-  assert.equal(end.context.ariaHidden, String(expectedCollapsed), label + ': collapsed context aria-hidden state is wrong')
+  assert.equal(end.contextPresent, false, label + ': learning context should stay removed after toggling the sidebar')
   assert.ok(Math.abs(end.visibleClipWidth - (expectedCollapsed ? 72 : end.sidebarRect.width)) <= 1,
     label + ': computed sidebar clip should show ' + (expectedCollapsed ? '72px' : 'the full sidebar') + ', got ' + end.visibleClipWidth)
   assert.ok(Math.abs(end.navList.items[0].rect.width - (expectedCollapsed ? 52 : end.sidebarRect.width - 20)) <= 2,
@@ -1770,12 +1761,8 @@ function assertSidebarMotion(start, samples, end, expectedCollapsed, label) {
     const deltas = path.slice(1).map((value, index) => (value - path[index]) * direction)
     return { movement, deltas }
   })
-  assert.ok(navCenterDeltas.some((item) => Math.abs(item.movement) > 1), label + ': navigation rows should animate to the destination grid positions')
-  for (const item of navCenterDeltas.filter((item) => Math.abs(item.movement) > 1)) {
-    assert.ok(item.deltas.every((delta) => delta >= -1), label + ': navigation row positions should not reverse mid-transition')
-    assert.ok(Math.max(...item.deltas) < Math.abs(item.movement) * 0.6,
-      label + ': a navigation row should not jump directly to its final vertical position')
-  }
+  assert.ok(navCenterPaths.every((path) => path.every((center) => Math.abs(center - path[0]) <= 1)),
+    label + ': navigation rows should keep their vertical positions while the sidebar toggles')
   const sizes = [start, ...active.map((sample) => ({ navList: { items: sample.nav.map((item, index) => ({ icon: sample.iconSizes[index] })) } })), end]
     .flatMap((snapshot) => snapshot.navList.items.map((item) => item.icon))
     .filter(Boolean)
@@ -1888,7 +1875,7 @@ async function captureSidebarMidframe(page, label, expectedCollapsed) {
       label + ': screenshot should record a naturally reached middle animation progress: ' + frame.timelineProgress)
     assert.ok(layout.visibleClipWidth > 73 && layout.visibleClipWidth < 223,
       label + ': screenshot should show a nonterminal sidebar clip width: ' + layout.visibleClipWidth)
-    assert.ok(frame.animationCount >= 6, label + ': main/sidebar/navigation WAAPI motions should all be paused for the frame')
+    assert.ok(frame.animationCount >= 2, label + ': main and sidebar WAAPI motions should be paused for the frame')
     assert.equal(frame.logo.loaded, true, label + ': logo image should be loaded in the midpoint screenshot')
     assert.equal(frame.logo.visible, true, label + ': logo should be visibly painted in the midpoint screenshot')
     assert.equal(frame.logoutSvg.visible, true, label + ': logout SVG should be visibly painted in the midpoint screenshot')
@@ -1959,6 +1946,22 @@ async function assertSidebarRest(page, expectedCollapsed, label) {
   assert.equal(motion.sidebarTransform, 'none', label + ': sidebar has a residual transform')
   assert.ok(motion.navTransforms.every((transform) => transform === 'none'), label + ': navigation links have residual transforms')
   assert.deepEqual(motion.running, [], label + ': sidebar motion remains active after cancellation/finish')
+  const decoration = await page.locator('.sidebar-orbits').evaluate((node) => {
+    const graphic = node.getBoundingClientRect()
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+    const pulses = [...node.querySelectorAll('.sidebar-orbit-pulse')]
+    return {
+      center: graphic.left + graphic.width / 2,
+      visible: graphic.width > 0 && graphic.height > 0,
+      reduced,
+      animated: pulses.every((pulse) => pulse.getAnimations().some((animation) => animation.playState === 'running')),
+      still: pulses.every((pulse) => getComputedStyle(pulse).animationName === 'none'),
+    }
+  })
+  assert.ok(!decoration.visible || Math.abs(decoration.center - (snapshot.sidebarRect.left + snapshot.visibleClipWidth / 2)) <= 1,
+    label + ': background artwork should be centered within the visible sidebar')
+  assert.equal(!decoration.visible || (decoration.reduced ? decoration.still : decoration.animated), true,
+    label + ': background pulses should run in both sidebar states and respect reduced motion')
   return { snapshot, motion }
 }
 
@@ -2005,18 +2008,16 @@ async function sidebarStyleSignature(page) {
     const nonActive = [...document.querySelectorAll('.nav-item')].find((item) => !item.classList.contains('is-active'))
       || document.querySelector('.nav-item')
     const navText = nonActive?.querySelector('.nav-text')
-    const context = document.querySelector('.context-panel')
     const toggle = document.querySelector('.sidebar-toggle')
     const logout = document.querySelector('.logout-button')
     return {
-      sidebar: computed(sidebar, ['backgroundColor', 'color', 'width', 'clipPath']),
+      sidebar: computed(sidebar, ['backgroundImage', 'color', 'width', 'clipPath']),
       inner: computed(inner, ['display', 'gridTemplateRows', 'gridTemplateColumns', 'gap', 'padding']),
       brand: computed(brand, ['display', 'gridTemplateColumns', 'gap', 'minHeight']),
       brandName: computed(name, ['color', 'fontSize', 'fontWeight', 'lineHeight']),
       navList: computed(navList, ['display', 'gridTemplateRows', 'gridTemplateColumns', 'alignContent', 'gap']),
       navItem: computed(nonActive, ['display', 'gridTemplateColumns', 'gridTemplateRows', 'color', 'backgroundColor', 'borderRadius', 'fontSize', 'minHeight', 'padding']),
       navText: computed(navText, ['fontSize', 'fontWeight', 'lineHeight', 'color']),
-      context: computed(context, ['display', 'backgroundColor', 'borderTopColor', 'borderTopStyle', 'padding', 'margin']),
       toggle: computed(toggle, ['display', 'height', 'color', 'backgroundColor', 'borderRadius', 'borderColor']),
       logout: computed(logout, ['display', 'height', 'color', 'backgroundColor', 'borderRadius', 'borderColor']),
     }
@@ -2051,7 +2052,7 @@ async function testSharedSidebarRoutesAndKeyboard(browser, base) {
       else assert.deepEqual(signature, referenceStyles, route.path + ': shared sidebar visual styles diverged from dashboard')
 
       const snapshot = await sidebarLayoutSnapshot(page)
-      assert.equal(snapshot.sidebarBackground.toLowerCase(), 'rgb(16, 35, 57)', route.path + ': sidebar background should be #102339')
+      assert.match(snapshot.sidebarBackgroundImage, /radial-gradient.*linear-gradient/, route.path + ': sidebar should use its layered background')
       assert.ok(Math.abs(snapshot.sidebarRect.width - 224) <= 1, route.path + ': expanded sidebar outer width should remain fixed at 224px')
       assert.ok(Math.abs(snapshot.visibleClipWidth - snapshot.sidebarRect.width) <= 1, route.path + ': expanded sidebar should reveal its full width')
       assert.equal(snapshot.navList.items.length, 5, route.path + ': all five navigation entries should remain')
@@ -2060,12 +2061,20 @@ async function testSharedSidebarRoutesAndKeyboard(browser, base) {
       assert.ok(snapshot.navList.items.every((item) => item.rect.width > 160 && item.rect.height > 0), route.path + ': expanded navigation links should use full clickable rows')
       assert.ok(snapshot.navList.items.every((item) => item.label), route.path + ': every navigation entry needs an accessible name')
       assert.ok(sidebarSpacingSpread(snapshot.navList.items) <= 1, route.path + ': five navigation centers should be equally spaced')
+      const rowHeight = snapshot.navList.rect.height / snapshot.navList.items.length
+      snapshot.navList.items.forEach((item, index) => {
+        const expectedCenter = snapshot.navList.rect.top + rowHeight * (index + .5)
+        assert.ok(Math.abs(item.centerY - expectedCenter) <= 1,
+          route.path + ': navigation entries should fill the full available navigation height')
+      })
+      assert.ok(Math.abs(snapshot.toggle.rect.top - snapshot.navList.rect.bottom - 18) <= 1,
+        route.path + ': navigation region should reach the bottom controls without unused space')
       assert.ok(Math.max(...snapshot.navList.items.map((item) => item.rect.height)) - Math.min(...snapshot.navList.items.map((item) => item.rect.height)) <= 1,
         route.path + ': navigation rows should have equal height')
       assert.equal(snapshot.navList.items.filter((item) => item.active).length, route.active ? 1 : 0,
         route.path + ': active navigation state should match the route')
       if (route.active) assert.equal(snapshot.navList.items.find((item) => item.active)?.href, route.active, route.path + ': wrong navigation item is active')
-      assert.equal(snapshot.context.inert, false, route.path + ': expanded learning context should remain interactive')
+      assert.equal(snapshot.contextPresent, false, route.path + ': sidebar should not show the learning context')
       assert.equal(snapshot.toggle.expanded, 'true', route.path + ': expanded state should be announced')
       assert.equal(snapshot.logout.label, '退出登录', route.path + ': logout action should remain accessible')
 

@@ -1,5 +1,7 @@
 # API 文档
 
+T121：`GET /api/profiles/` 列表与 `GET /api/profiles/{learner_id}` 详情新增只读 `initial_skill_level`、`current_skill_level`、`current_skill_node_id`。`skill_level` 保留初始诊断语义；当前评级按同学习者、同知识库最近确认的 `learning-round/v1` 轮次唯一 `primary` 节点冻结 tier 映射为初级/中级/高级，按 `created_at DESC, round_id DESC` 稳定选择。确认新轮次即变化，含降阶；review、legacy、浏览旧轮次及重试不切换主节点。无可用主节点时当前评级回退原诊断值，节点 ID 为 null。PATCH 这些字段返回既有 422 `PROFILE_SYSTEM_FIELD_READ_ONLY`；原 `skill_level` 查询筛选参数继续按诊断评级过滤，前端历史列表按返回的当前评级在本地筛选。无数据库迁移或旧画像覆写，准入、测评、解锁及生成难度规则不变。
+
 T41 修复口径：`known_*` 按字段分别累计，其他字段未知不丢弃已知输入用量；`complete_*` 仅在所有调用的该字段可靠时返回，否则为 null。共享调用仅进入一个以规范资源集合标识的 shared 分区，分区可加总，不再对每个资源标签重复累计。缺失计量库查询不创建目录或文件；异步 writer 正常空闲不会退出，缺少 end 的片段不能封为完整。全链路实施前历史基线仍未证明，不能把局部回归通过当作完整等价验收。
 
 T41 LLM 调用旁路计量：新增两个只读端点，复用既有认证/画像可见性，不改变旧接口行为。`GET /api/runs/{run_id}/llm-accounting`（文本任务，额外经 `run.learner_id` 走画像访问校验）与 `GET /api/resources/courseware/jobs/{run_id}/llm-accounting`（课件任务，沿用 `_authorized_job` 等价校验）；不存在/不可见统一 404，非法参数 422。参数 `include_calls=false`、`stage`（受控枚举）、`cursor`（不透明复合游标）、`limit`（1..100，默认 20）。响应含 `availability`（available/partial/pending/not_recorded/unavailable）、capture/attempt/usage/attribution 完整性、`coverage_complete`/`as_of`、`task_summary`/`stage_summaries`/`resource_partition_summaries`、当前页 `segments`/可选 `calls`、`next_cursor`/`has_more` 与 `incomplete_reasons`。查询零写入，缺库/损坏返回 200+unavailable/partial。旧 `GenerateResponse`/`RunTimeline`/`JobDetail` 与报告字段不变，旧扁平 trace 明确为历史口径，新旧不相加。
@@ -66,7 +68,7 @@ POST /api/auth/register 或 POST /api/auth/login
 - 学习反馈优先按批次聚合测评，纠错包再次验证使用独立 Run；服务端判分后返回下一步候选，确认选择才创建后续资源。
 - 旧聚合分数 `/api/feedback/attempts` 保留路径但返回 422，不再作为正式掌握度写入口。
 - 学习历史以 `journey` 返回轮次与当前学情，`timeline` 保留兼容；报告 4.1 使用 ETag 和独立报告 SSE。
-- 文本追加 / 重试走批次 continuation；互动 HTML 通过独立课件 API 读取，旧文本 `items/{resource_id}/preview` 未挂载。
+- 文本追加及整任务重试走批次 continuation，单资源重试走精确 Run/spec/表示的 retry 接口；互动 HTML 通过独立课件 API 读取，旧文本 `items/{resource_id}/preview` 未挂载。
 
 ### 3.1 前端契约与边界校验
 
@@ -287,6 +289,10 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 
 初始分阶诊断由服务端以 `learner_id` 绑定当前轮次，提交必须恰好包含指定的 9 题。中间复测只保留审计答题记录，不写入客观掌握度、正式报告或资源建议；初级为最低阶段，即使未达 60% 也会完成初诊并给出一个遵循依赖关系的首轮学习节点。
 
+`GET /api/profiles/{learner_id}/initial-node-candidates` 返回当前画像的首批可选能力节点（`SkillNode[]`），诊断推荐排在首位。其他候选须位于当前学习阶，且先修节点已完成或按阶段免修并且无需复核。未完成初诊或已有已发布资源时返回空数组，画像不存在或不可访问时返回 404。首批生成可通过既有 `target_skill_nodes` 提交一个候选节点；省略该字段时沿用诊断推荐。
+
+T87：最终初诊满分且至少三题覆盖概念、场景和误区的节点记录为“初诊通过”，也可满足先修条件。候选 `metadata.initial_diagnostic_passed` 标记此状态。通过依据保存在画像 `initial_diagnostic_flow.node_passes`，带 `pass_policy_version=initial-pass/v1`、诊断 ID 与时间；不计为课程完成。中间复测不写通过记录。反馈前置复习候选可包含已通过、已掌握节点，并分别以 `INITIAL_DIAGNOSTIC_PASSED`、`PREVIOUSLY_MASTERED_REVIEW` 原因码标识，用户显式选择后生成。旧画像缺少版本化通过记录时不自动授予跳过资格。
+
 ## 8. 资源生成接口
 
 ### 8.1 `POST /api/generate/jobs`
@@ -307,8 +313,18 @@ Tutor 与互动课件的完整路由见后文专节。路径登记以 `backend/a
 - `generation_mode`
 - `include_review`
 - `include_claim_check`
-- `max_iterations`（默认 `2`，表示首次生成之外最多进行两次普通审核返工）
-- `claim_max_iterations`（默认 `1`，Claim专用返工最多1次；显式 `0` 禁用。额度为0或用尽后转人工复核、保持未发布，不借用普通返工额度）
+- `max_iterations`（默认 `3`，表示首次生成之外最多进行三次普通审核返工）
+- `claim_max_iterations`（默认 `2`，Claim专用补检前返工最多2次；显式 `0` 禁用。额度为0或用尽后转人工复核、保持未发布，不借用普通返工额度）
+
+T77：新建单资源 `实操指南` 时不得传 `include_claim_check=true`，否则 `/api/generate/jobs` 返回 422；Claim 补检也不能单独开启。学习轮次混选时，实操指南子任务固定关闭 Claim 与补检，其余资源仍按用户选择创建。追加资源的新任务同样受此限制；已有冻结 Run 的恢复和历史报告不改写。普通审核仍执行。
+- `claim_post_retrieval_max_iterations`（默认`0`，范围0–3；新补检流程中，补检后的独立正文修订次数。0表示补检重判后结束并形成最终报告，不自动返工）。
+- `claim_workflow_version`（新请求默认`contradiction_first_v3`；保存为`contradiction_first_v1`的T54任务保持原路由；持久化历史请求缺失该字段时使用`legacy_v1`）。新流程开启补检时，初判有矛盾先消耗`claim_max_iterations`修订；v2在该矛盾资源的当前版本中，若已完成判断的无证据事实Claim严格超过8条，则同时修订该资源全部无证据事实Claim（唯一Claim去重，不合计其他资源/版本/review）。v2恰好8条仅修矛盾；v2没有矛盾直接补检，不因缺证多而新增返工。v3的大量缺证路由见下文T56规则。仍有矛盾且额度耗尽时不补检该资源并阻止发布。后续修订只消耗后阶段预算。关闭补检保留原Claim预算行为。
+
+v2定向修订使用已有冻结证据，传入选中的问题原句、上下文与证据池；同时由已验证原文生成目标/保留区间提示，要求非目标部分尽量原样保留，仅必要的关联内容允许最小同步。区间是模型输入提示，不是逐字锁定或输出保证；修订后仍重新普通审核与全量新版本Claim抽取/判断。
+
+两阶段次数独立；`claim_revision_count`记录Claim正文修改总数，新增`claim_post_retrieval_revision_count`记录其中的后阶段次数，前阶段已用次数为两者差值。每次改正文后仍执行普通审核、Claim重新抽取/判定；新版本有缺证时可再次补检（每版本最多一次且继续受任务总检索/Token/时间预算约束）。普通审核失败、Claim未完成、反证与证据冲突的发布阻断保持不变；单次用户重试仍最多修改一次正文。补检结果按当前资源/版本/review绑定合并，不混入父版本会话。
+
+学习轮次创建/下一轮/纠错及旧反馈后续选择支持`claim_post_retrieval_max_iterations`；追加资源请求该字段可选，省略继承源任务，显式0关闭后阶段修订。新任务冻结版本与预算；旧队列在填充默认值前识别为旧路由，不回写旧请求或改变原请求哈希。
 
 Claim 抽取策略属于服务端私有策略，不增加GenerateRequest、constraints、响应或事件字段。默认legacy_v3，新策略neutral_estimate_v1在提交时冻结2.0私有policy和独立dispatch，旧Worker拒绝未知版本；无需外部tokenizer/profile或校准PASS。无效窗口/估算配置沿WORKFLOW_CONTRACT_INVALID拒绝；抽取零候选、超限或范围不完整沿原Claim失败路径，不裁候选、不拆Judge。旧neutral_batch_v1快照保留读取但受控拒绝执行，重试创建新run并冻结新策略。实际用量超过估算时如实入账、保留有效结果并限制后续请求，不增加公开字段；私有批次/票据/会话不进入detail/timeline/events/SSE。公开Claim沿原span、ID、Judge evidence_ids及指标语义，complete不表示全文事实已召回。T37 的密度装箱子契约（`density_batching`）同样属于私有快照：不进入 GenerateRequest、响应、detail/timeline/events/SSE 或 Markdown，旧 2.0 快照序列化时省略该键以保持原 hash；它只改变批次划分，不改变公开状态码、Claim DTO 或判定语义。
 
@@ -546,7 +562,7 @@ T42 的 `source_locating` 子契约与 `location_diagnostics` 定位诊断同属
 
 ### 9.4 `POST /api/resources/items/{resource_id}/claim-publication-decision`
 
-请求体为 `{ "publish": true|false }`。资源须属于本人且处于待决策状态，Claim 指标完整、通过率达到配置阈值且无矛盾事实；服务端重新校验后返回 `{ "resource": Resource }`。同一已完成决定可幂等返回，不符合当前状态或门禁返回 409，资源不可访问返回 404。它只决定符合条件的文本资源是否分发。
+请求体为 `{ "publish": true|false }`。资源须属于本人且处于待决策状态，Claim 指标完整、通过率严格高于配置阈值且无矛盾事实；服务端重新校验后返回 `{ "resource": Resource }`。同一已完成决定可幂等返回，不符合当前状态或门禁返回 409，资源不可访问返回 404。它只决定符合条件的文本资源是否分发。
 
 同一决定重试会检查并补写缺失审计事件，不重复提交决定，也不重复已有事件。反馈 Attempt 的同幂等键重试同样补齐六个事件，保持原顺序；补写时间只用于缺失事件。
 
@@ -566,11 +582,11 @@ T42 的 `source_locating` 子契约与 `location_diagnostics` 定位诊断同属
 
 ### 9.7 `POST /api/generate/jobs/{run_id}/resource-specs/{resource_spec_id}/representations/{representation}/retry`
 
-源资料已使用的补检证据也可随单份重生成导入：服务端仅选择该版本及其同 Run 祖先 generation scope 授权的证据，核验 scope/hash/KB/检索步骤完成状态，复制为新 Run 的初始冻结证据。新任务重新抽取和审核，不沿用旧通过结论。无新增模型或检索调用；合并后最多20条初始证据，完整冻结上下文受 `workflow_checkpoint_max_bytes`（默认64 KiB）限制，超限或来源不完整返回409。该内部导入合同不接受客户端覆盖。
+源资料已使用的补检证据也可随单份重生成导入：服务端仅选择该版本及其同 Run 祖先 generation scope 授权的证据，核验 scope/hash/KB/检索步骤完成状态，复制为新 Run 的初始冻结证据。新任务重新抽取和审核，不沿用旧通过结论。无新增模型或检索调用；合并后最多20条初始证据，完整重试冻结上下文受 `resource_retry_snapshot_max_bytes`（默认8 MiB）限制，超限或来源不完整返回409。该内部导入合同不接受客户端覆盖。
 
 单份失败文本资源重生成。无需请求体，客户端不能传入或覆盖冻结上下文；`representation` 目前只接受 `text`。可选 `Idempotency-Key`，按当前学习者和源 Run/spec/表示隔离；省略时由服务端冻结上下文 hash 生成稳定幂等键。同一输入重复提交返回同一 child Run，显式 key 与输入冲突返回 409。成功为 `200 + GenerationJobCreateResponse`，新 `run_id`、原 `batch_id`，仍经现有队列/后台调度。
 
-源任务须已 completed/failed，且指定执行项为 failed/human_review/revision_requested；已发布资源不接受该入口。复用原画像、诊断、学习计划、spec、证据和该份审核反馈，只从 `reuse_context -> generate` 开始，随后保留普通审核、Claim 和发布门禁。普通/Claim 自动返工次数重新计数，不修改原失败记录。已有正文作为上一版本，新资源保留 family、version+1 和 parent；无正文的生成失败从 v1 开始。
+源任务须已 completed/failed，且指定执行项为 failed/human_review/revision_requested；若整个任务 failed，也允许 generated/reviewing/claim_checking 的未发布资源从审核中断处恢复。已发布资源不接受该入口。新单资源重试将服务端当前单次输入容量冻结到带 hash 的内部上下文；旧上下文未保存此字段时沿用原阶段容量，阶段总 Token、时长预算保持不变。手动单资源和整任务重试不设次数上限，历史恢复计数仅用于审计，不再与 H 比较；单次工作流内自动修订及测评后的纠错阶段额度仍按各自预算执行。整任务重试的 continuation 必须携带 replace_existing_types=true，避免被解释为追加。复用原画像、诊断、学习计划、spec、证据和该份审核反馈，只从 `reuse_context -> generate` 开始，随后保留普通审核、Claim 和发布门禁。T52 新重试由服务端冻结 generate/revise/recheck 动作：无有效正文重试生成；有内容问题执行一次定向修订；审核不可用或允许补检的证据缺口先保留正文重审。直接生成/修订后不再自动返工；重审后的普通与 Claim 共用一次正文修订额度，不修改原失败记录。重审保留原文与内部结构化材料，创建新审计版本、重映射冻结来源，并清空旧审核/Claim/发布结论。补检仅沿用源任务已启用开关与原有独立限制。已有正文作为上一版本，新资源保留 family、version+1 和 parent；无正文的生成失败从 v1 开始。
 
 不可访问或 spec 不属于该 Run 返回 404；源任务未终止、状态不允许、缺少完整可信冻结记录、hash/范围损坏或不支持跨资源依赖返回 409；非法表示或幂等键返回 422。不会自动降级到完整重新生成；用户可另行明确选择批次完整重生。新版本执行失败后，可针对该 child Run 再发起下一次手动尝试，不能用同一幂等请求制造重复任务。历史记录缺原查询正文时保留 query_hash 并显式标注缺失，不重新检索补造。
 
@@ -748,6 +764,9 @@ Claim 审核阶段按资源推送脱敏进度：`claim_metric_status`、事实 C
 - 服务端分别按节点判分，写一条正式 Attempt、每节点一条 `feedback_node_decisions` 与掌握证据，画像版本只 N→N+1 一次。
 - 根决策只取本次参与的主节点；仅复习纠错或历史轮次迟到结果时根动作为 `hold`，`path_node_id` 为空，复习节点仍更新自身掌握与补救。
 - 评分在写事务外执行，正式提交在 `RoundUnitOfWork` 内 CAS 校验租约、画像版本、manifest 与资源 hash；失败整体回滚。
+- 已完成的最新阶段可通过 `POST .../evaluation-session` 传入 `retake_from_session_id` 开启再次测评。相同来源返回同一新会话，沿用冻结题组，独立判分并保存 Attempt。常规会话和结果请求默认读取本阶段最新会话；`GET .../result?session_id=...` 可读取旧结果。原提交重放返回其自身结果。
+- 新轮次的学习小结在评分租约和 assessment 预算内生成，随正式 Attempt 一起保存，前端通过现有 `GET /api/feedback/results/{learner_id}` 的 `analysis` 读取。模型或可选分析预算不可用时保存 `fallback` 概况。读取或重放已提交结果不触发生成。
+- 新版候选响应可含 `remediation_recommendation`，表示补同阶前置、降阶补前置、巩固所选前置或返回原节点。确认这条推荐时，`POST /api/feedback/rounds/next/select` 可传 `follow_remediation: true`，服务端在创建事务中重新核对来源与目标。返回要求所选前置的最新主节点测评达到 80%，且原节点的其他必需前置已满足。
 - 资源快照被替换后不允许“猜测新版”继续提交，返回 409 并保留原冻结记录。
 - 预算不足返回 409 `ROUND_BUDGET_EXHAUSTED`（纠错额度为 `ROUND_CORRECTION_BUDGET_EXHAUSTED`），未知用量按预留保守记账，不把未判分写成 0。
 
@@ -775,6 +794,8 @@ Claim 审核阶段按资源推送脱敏进度：`claim_metric_status`、事实 C
 | 正式批次测评 | `GET /api/feedback/evaluation/batch/{learner_id}/{batch_id}` -> `POST /api/feedback/attempts/batch/submit` |
 | 纠错包重新验证 | `GET /api/feedback/evaluation/run/{learner_id}/{run_id}` -> `POST /api/feedback/attempts/run/submit` |
 | 反馈报告 / 下一步 | `GET /api/feedback/results/{learner_id}`，通过 `POST /api/feedback/followups/select` 确认 |
+
+旧批次反馈页面使用 `GET /api/feedback/rounds/next/candidates?learner_id=...&source_attempt_id=...` 读取新一轮候选，使用 `POST /api/feedback/rounds/next/select` 确认一个主节点和一个可选复习节点。已绑定轮次可在 `GET /api/feedback/rounds/{round_id}/candidates` 传入 `source_attempt_id`，按本次测评返回可补学的前置节点。两条查询返回 `RoundCandidatesV1`；未知或不属于当前学习者／轮次的来源返回 404。旧确认接口保留兼容。
 | 学习历史 `/learning/history` | `GET /api/learning-history/{learner_id}/journey?offset=0&limit=20`；timeline 是兼容时间线 |
 | 轮次生成 `/generate`（T49） | `GET /api/generate/capabilities` 握手；`GET /api/feedback/rounds/{round_id}` 取成员与阶段；Job 的 `round_binding` 定位真实 Run 与成员 |
 | 轮次反馈 `/feedback`（T49） | `GET .../rounds/{round_id}` -> `POST .../evaluation-session` -> `POST .../attempts` -> 轮询 `GET .../result`；纠错 `POST /api/feedback/rounds/{round_id}/corrections`；下一轮 `POST /api/feedback/rounds/next/select` |
@@ -880,7 +901,7 @@ claim_hallucination_rate =
 
 `non_factual` 与 `instructional` 不进入分母；一条 Claim 即使绑定多条 Evidence 也只计一次。
 
-Claim 指标完整、普通审核通过、无 `contradicted` 且存在 `not_in_evidence` 时，若 `supported_claim_total / factual_claim_total >= CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE`（默认 `0.60`），资源保持未发布并等待用户决定。用户通过 `POST /api/resources/items/{resource_id}/claim-publication-decision` 提交 `{ "publish": true|false }` 后，服务端重新校验权限、Claim 指标和矛盾 Claim。旧 `CLAIM_WARNING_PUBLISH_*` 配置仅为兼容，不再触发自动带警告发布；`incomplete` 审核仍仅受 `CLAIM_PARTIAL_PUBLISH` 控制。
+Claim 完整缺证资源按下述 T58 双阈值规则发布；用户决策入口和认证契约保持。
 
 ### 14.5 健康与错误语义
 
@@ -922,7 +943,8 @@ Invoke-RestMethod -Method Post `
 - 幻觉率：Claim 完整且 `factual_claim_total>0` 时复用现有核验统计；未开启 Claim 且同版普通审核通过证据成立时返回 `status=reference`、`value=0.05`、无分子分母、`assessment=not_assessed`、`evidence_mode=rule_reference`，前端标注“普通审核参考／待核验”，不写入 `claim_hallucination_rate`、不判达标、不参与均值。Claim 已开启但失败/未完成/不适用时返回 null 状态，不回退 5%。
 - 难度：`difficulty_fit` 只表达单资源离散结构（matched/too_easy/challenging/too_hard/not_measured），不折算为“难度适配准确率”。
 - 阈值（后端注册表唯一来源）：覆盖率 `>= 0.90`；幻觉率 `< 0.05`；难度适配准确率 `>= 0.85`（仅标注评测）。真实 5% 不满足严格 `<5%`。
-- 报告新增可选字段：`resource_quality_summary` 与 `recent_resource_quality`，复用同一投影；二者只聚合当前可见已发布文本资源的冻结目标单位，缺任一应测结果时汇总 `status=incomplete`、`value=null`。旧 `resource_credibility_summary/recent_resource_credibility` 保留为历史兼容字段，不是第二套新口径，后续物理删除需独立计划。
+- 报告的 `resource_quality_summary` 与 `recent_resource_quality` 使用同一范围，按发布顺序最多取最近 10 份可见已发布文本资源。明细包含可空的 `learning_node_id` 和 `learning_node_name`。知识覆盖按冻结目标单位聚合，缺任一应测结果时返回 `status=incomplete`、`value=null`。旧 `resource_credibility_summary/recent_resource_credibility` 保留为历史兼容字段。
+- `resource_quality_batches` 使用同一指标投影，每个批次包含 `key`、`topic`、`created_at`、`summary` 和该批全部可见已发布文本资源的 `items`，按批次时间倒序。历史资源缺少批次标识时按 Run 分组，同时缺少 Run 时单独列出。该字段参与 `text_resources` 修订组计算。
 - 评测：`suite_v2.json` 与 `ordinary_coverage_v2.json` 定义 v2；v1 `suite.json` 与旧报告原字节保留，显式加载 v1 会被拒绝并提示使用 v2。离线 PASS 与 `official_gates=NOT_MEASURABLE` 分开输出。
 
 ## 15. P0-09 接口验收口径
@@ -1059,6 +1081,8 @@ POST /api/resources/courseware/jobs/batch
 
 #### 反馈后的用户学习意图
 
+反馈报告可返回 `feedback_report.cross_tier_review_pairs`，键为跨阶新节点 ID，值为可配对的相邻低阶已学前置节点 ID。此字段补充 `generation_options` 的跨阶候选集合。确认时服务端仍重新校验配对。旧响应缺少此字段时，客户端仍可按同阶候选展示一新一旧组合。
+
 服务端判分的 run/batch feedback 响应可追加 `generation_options`。其中的候选由已发布资源的 `knowledge_points` 和规范能力投影共同计算，并携带 `snapshot_hash`：
 
 - `reinforce_weakness`：仅包含已学习、已有客观证据且尚未掌握的节点；
@@ -1067,7 +1091,7 @@ POST /api/resources/courseware/jobs/batch
 
 学习者通过既有 `POST /api/feedback/followups/select` 确认下一批资源时，可附加 `learning_intent`、`selected_skill_node_ids`（1–2 个）、`include_claim_check`（默认 `false`）和兼容字段 `next_generation_snapshot_hash`。反馈页将 Claim 审核作为用户可选项；未勾选时不执行 Claim 审核。未选择的反馈方案不会因页面刷新、重新进入报告或快照变化而失效；服务端仍重新校验候选集合、知识库、先修关系和学习阶。意图与节点不匹配或越过未学习先修节点返回 422，不创建生成任务。确认后的选择与当时的候选投影写入 child generation job 的 `constraints`，重试复用该冻结请求；响应保留兼容字段 `followup_run_id`，并提供 `followup_run_ids` 与 `followup_relations` 追踪多个独立 Run。
 
-正式测评未满分时，反馈结果会返回 `correction_package_option.eligible=true`；满分时不返回该选项。可用固定 `option_id=personalized-correction-package-v1`、`learning_intent=reinforce_weakness` 和该选项 `snapshot_hash` 创建纠错包。纠错包目标固定为本次测评覆盖的待巩固节点，客户端不能改选其他学习节点；请求必须省略 `resource_types` 和 `difficulty`。服务端会在同一 Run、同一原始 `batch_id` 中追加生成一份新的 `分阶测试题`，作为学习完成后的再次验证。新题仅接收本次测评的脱敏题干作为历史参考，题干归一化后不得与历史题相同，但允许知识点、题型和考查角度相似；答案、解析、原始作答、自由文本和 held-out 内容不会进入生成。
+正式测评未满分时，反馈结果会返回 `correction_package_option.eligible=true`；满分时不返回该选项。可用固定 `option_id=personalized-correction-package-v1`、`learning_intent=reinforce_weakness` 和该选项 `snapshot_hash` 创建纠错包。纠错包目标固定为本次测评覆盖的待巩固节点，客户端不能改选其他学习节点；请求必须省略 `resource_types` 和 `difficulty`。服务端按所选节点分别创建单节点纠错包及新的 `分阶测试题`，沿用原始 `batch_id`，作为学习完成后的再次验证；旧反馈入口逐节点拆分 Run，Claim 开启时再按类型拆分。新题仅接收本次测评的脱敏题干作为历史参考，题干归一化后不得与历史题相同，但允许知识点、题型和考查角度相似；答案、解析、原始作答、自由文本和 held-out 内容不会进入生成。
 
 `POST /api/generate/jobs` 新增可选 `profile_focus_mode: "auto" | "off"`，默认 `auto`。显式 `target_skill_nodes` 的优先级最高并形成 `focus_mode="explicit"`；`off` 不采用画像弱项；`auto` 采用稳定排序的前两个 eligible 节点。创建响应、任务状态和列表项新增 `focus_snapshot`，包括 `profile_version`、`mastery_snapshot_hash`、排序依据、`adopted_node_ids` 和带原因码的 `skipped`。任务创建后该快照冻结，重试不按新画像重算。
 
@@ -1087,8 +1111,9 @@ POST /api/resources/courseware/jobs/batch
 
 - `knowledge_blind_spot_map`：兼容旧调用者的维度证据投影；它不再作为学习报告主图，也不用于表达后续学习节点的整体掌握度。
 - `learning_node_mastery_map`：学习报告主图使用的全节点掌握投影。初始诊断节点与后续节点统一按节点展示 `mastery_score`、掌握状态、正式测评结论、独立测评次数、最近一次正式成绩、趋势、可信度和下一步动作；不使用 `concept/scenario/misconception/practice` 维度。未测节点的 `mastery_score` 为 `null`，客户端必须显示“待测”而非 0 分。
-- `resource_difficulty_curve`：最新资源批次按资源返回稳定能力节点的 `learner_readiness_score`、`resource_difficulty_score`、`difficulty_gap` 与 `match_status`；更早批次各返回一个 `point_type="batch_average"` 的汇总点，其数值字段为该批次可用数据的平均值，并通过 `resource_count`、`resource_ids` 保留规模和追溯关系。资源点还会返回 `point_type="resource"`、`batch_id` 和用于展示的 `resource_name`。首版 `strategy_version="declared-band/v1"` 仅标准化初级/中级/高级；未知难度或未测准备度返回 `not_measured`，不伪造分数。正式反馈均分低于 60% 时，系统按低分幅度和准备度差距小幅上调 `resource_difficulty_score`，保留 `default_resource_difficulty_score`、`feedback_score`、`feedback_count` 和 `difficulty_adjustment`，并将来源标为 `calibrated_history`；无低分反馈时默认值不变。每个点还可附加 `credibility_score`（百分制 0–100）、`credibility_level`、保留的 `credibility_grade` 和 `credibility_score_breakdown`。可信度使用 `普通审核 0–40 + 来源验证 0–50 + Claim 审核 0/10`：Claim 完整通过且无矛盾/无依据事实声明时最高 99 分；Claim 未开启、未完成、不适用或失败时最高 80 分。审核硬失败、high/critical 问题或跨知识库来源优先标为 `attention`。`credibility_score=null` 表示该资源尚无可量化可信度投影，客户端不得以 0 分替代。
-- `learning_path_graph`：知识图谱前置边与持久化学习路径/课程进度的只读图投影，节点返回角色、阻塞节点和资源建议；`placement_verification_status` 会明确标示初始豁免、待重新验证或已完成正式重新验证。接入生成任务仓储时，`current_node_ids` 仅取同一知识库中最新、未被替代且状态为 queued/running/completed 的批次冻结目标，节点的 `is_current_batch` 与它一一对应；历史 `scheduled` 节点不会被误标为当前学习。前端仅将 `progress_status=completed` 的非本轮节点渲染为绿色；`exposed`、`verification_pending`、`reinforcement_due` 渲染为“已学未完成”，最新批次黄色优先。`role="remedial"` 可与 `is_current_batch=true` 同时出现，表示本轮正在巩固已学节点。它不修改路径，也不替代正式反馈决策。
+- `resource_difficulty_curve`：策略 `batch-assessment-experience/v4`。正式测评按可核实的来源资源版本归入所属批次，联合测评采用主节点成绩。每批的 `difficulty_fit_score` 由测评均分（80%）和难度体验均分（20%）得出。「刚刚好」计 100，「偏简单／偏难」均计 50。无体验时使用成绩，无成绩时返回空值。历史批次用 `batch_average` 点展示匹配度和审核均分，最新批次用 `batch_fit` 点展示匹配度和审核均分，另保留每份资源的审核点。审核均分只使用已有审核分的资源，不依赖测评。
+- 曲线审核参考策略为 `ordinary-95/claim-support/v3`。冻结任务明确关闭 Claim 且同版本普通审核通过时为 95 分。完整 Claim 核验按 `100 × (1 − 幻觉率)`，使用当前资源版本和审核绑定下的最终生效判定，包含已激活的补检结果。缺少完整核验、没有事实、审核失败或历史开关未知时返回空值与原因。普通审核参考与 Claim 换算分别通过 `ordinary_review_score`、`claim_review_score` 返回，各批次分别聚合，混合来源时 `credibility_score` 和总平均不合并计算。独立资源可信度接口使用同一套生效判定。
+- `learning_path_graph`：知识图谱先修边与持久化学习路径、课程进度的只读投影。当前批次由同一知识库下最新的有效资源批次判定，`placement_verification_status` 标明初始豁免与复验状态。符合生成选项 `learn_new_knowledge` 资格的节点返回 `role="next"`，前端显示「下一步可选」。历史挑战记录仍可读取，报告角色按当前资格及进度重新投影。
 
 响应始终带 `ETag: "rpt_<sha256>"` 和 `Cache-Control: private, no-cache`。匹配的 `If-None-Match` 返回无响应体的 `304`；认证与 learner 访问校验仍先执行。GET 在权限校验后读取共享快照的 metadata；暖 304 不拷贝或序列化正文。revision 按完整客户端语义投影生成，旧来源键保留，新增 `history` 和 `projection` 补集；修订兼容反馈、Attempt metadata、决定/后续任务、画像版本、诊断、图谱与课程进度时，只要实际返回内容变化就会更新 revision。
 
@@ -1110,6 +1135,10 @@ POST /api/resources/courseware/jobs/batch
 ## 统一课件审核的私有边界
 
 `content_v1` 不增加公开 HTTP/DTO/认证/请求选项或事件字段。策略只由服务端在创建时冻结；请求幂等 hash 保持原公开语义，开关切换不拆分同一请求。初始 outbox 的私有 `content_review_binding` 与内部 spec 交叉核验；只有两处均无新策略时按 legacy 解释，任何单边丢失或版本不符均阻断。
+
+T131：课件内容审核注册实操JSON 3.0/4.0/5.0/6.0，复用原practice-guide-v1适配身份并按各自契约、内外payload hash校验。V5准备材料的正文、顺序、JSON路径、依据路径与来源块独立核对，准备项不重复材料；未知版本、歧义schema、固定内容或来源错配仍阻断。旧V3审核记录、复习V2和公开契约不变。本次不启用实际审核开关，也不把离线脚本gateway验收当成真实模型生成验收。
+
+T132：课件任务创建、列表和详情响应新增只读 `source_summary[]`，白名单字段为 `resource_id/resource_type/title/topic/knowledge_points/version`，不含正文、证据、Prompt或内部快照。已冻结时优先显示该源版本的标题与节点；queued尚无快照时仅按精确源ID读取同一学习者的资源，缺失或跨学习者不补造摘要。不改变任务、认证、请求、生成/发布或存储契约。
 
 详细字段结论、批准值、原始依据、Prompt 与私有调用账本只在内部 JSON，detail/reviews/events/artifact 不透传它们。新审核异常使用既有任务隔离/发布阻断状态和受控错误类别；不公开模型自由输出中的原文。已发布资源读取保持只读，场景重试、Worker、刷新、publish 与 release coordinator 均核验相同内容门。
 
@@ -1144,3 +1173,53 @@ Run质量查询按 `display_order/resource_version/resource_id` 排序，布尔 
 
 
 T48 收尾复查修复：同资源普通审核以最新持久step_sequence为准，较晚损坏审核覆盖较早有效记录，同序冲突失败优先；不可从旧Review补5%参考，后续合法审核可恢复。评测Case的`expected_difficulty`和非null的`predicted_difficulty`统一为1..32字符；空值/超长值在逐行校验时隔离，相关组invalid，其他合法组与旧摘要仍正常返回，不截断标签或吞聚合异常。
+
+
+T56请求新增 `claim_gap_revision_threshold`（整数0..128，默认8，随任务冻结）。v3在普通审核通过后的初判中，同资源当前有效缺证事实Claim严格超过该阈值即可触发补检前定向修订，无须存在矛盾；有矛盾时同时处理矛盾和超过阈值的缺证。两种触发共用claim_max_iterations额度；耗尽但无矛盾仍可补检，矛盾仍阻断。v2保留“必须有矛盾才合并>8缺证”原行为。关闭补检不启用本规则。补检后预算与发布条件保持，历史请求缺失阈值使用8且冻结路由版本不变。补检批次按实际查询关联Claim，最大16，不改变每资源8/任务16新增证据预算。
+
+T57：新任务默认普通返工3次、Claim补检前2次；补检后仍默认0。旧冻结请求/快照按已保存额度执行，旧payload缺失额度时恢复历史2/1；人工单资源重试仍最多一次正文改动。
+
+Claim Judge 局部恢复：首次判定可保存通过逐项业务校验的结果，失败项最多额外重判一次。查询契约保持不变：有效结果正常列入 judgements，未完成事实项计入 incomplete_claim_total，metric_status 为 incomplete；不得把缺失结果记成 not_in_evidence。显式抽取/判定失败阻止自动发布，CLAIM_PARTIAL_PUBLISH 不再覆盖此类失败；其他成功资源仍按自身审核结果发布。本次不新增 HTTP 字段或数据库结构，不自动修改历史发布状态。
+
+T59：新 Claim 冻结策略增加仅后端可见的可选 `structured_sources` 版本/提示哈希，抽取结果私有JSON增加 `source_snapshot`（原文/包哈希、字段路径/角色及原文范围）。旧扩展缺失时不参与序列化，保持旧hash。公共Claim DTO不加字段，通用Judge输入/输出不变；适配的 `extractor_prompt_version` 为 `structured-checklist-v1` 或 `structured-assessment-v1`，source_text/source_start/source_end 绑定确定性字段审核原文，不能当作公开 Markdown 偏移。审核原文的字段值来自同版结构化包逐字拷贝，不含外部 Evidence。
+
+新结构化测试题实际执行Claim，不再自动得到not_applicable；旧冻结任务保留历史跳过标记。GET `/api/runs/{run_id}/claims` 对新测试题仅返回完整汇总，隐藏私有Claim与判定正文，其他类型保持原投影。内部发布用例仍读取完整审核数据，85%/95%发布门槛及矛盾/失败/屏障约束不变。公开timeline与资源review隐藏测评答案相关详情，私有字段不进入SSE；已作答试题不原地变更。新请求和响应无需新增字段，无数据库迁移。
+
+
+Claim 发布规则（T58）：普通审核通过、Claim 指标完整、无矛盾、无硬阻断/补检屏障且未解决问题仅为缺证时，事实支持率 `supported_claim_total / factual_claim_total >= CLAIM_GAP_AUTO_PUBLISH_MIN_FACTUAL_PASS_RATE`（默认0.95）自动发布；`>= CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE`（默认0.85）但未达自动门槛时由用户决定；低于用户门槛不发布。两个边界均包含等号。配置在工作流终态读取，自动门槛不得低于用户门槛；已终态任务不批量重放。用户确认接口也使用包含等号的新门槛。
+
+
+### T60 纠错包公开边界
+
+HTTP 请求、认证、错误码和幂等键不变。新纠错任务使用私有 `learning_documents.correction_json.v1` 外层封套，完整保留内层 dispatch 及原请求 hash；客户端 constraints 中的 `_correction_package_contract`、`_correction_parent_package` 不被信任，受控值由服务端注入。没有新身份的历史任务及其资源重试继续旧格式。
+
+`correction_package_payload`、`correction_package_payload_hash`、`correction_package_snapshot` 不成为通用资源响应或 SSE/timeline/review 的公开契约。资源详情与下载仍提供已发布 Markdown，包含服务端允许展示的状态文本；未发布或非 owner 仍按原契约拒绝。纠错包 review/timeline 的审核详情通过摘要投影，私有包与冻结来源不外泄。Claim 仍通过资源/version、精确原文位置及专用来源 marker 绑定；中立抽取私有 source_snapshot 另绑定字段路径和完整包/公开正文/审核原文 hash，通用 Judge 契约不变。
+
+旧反馈返回的 `followup_run_id` / `child_run_id` 沿用仓储代表值，`followup_run_ids` / `child_run_ids` 列出所有节点和资源类型子 Run。稳定子 Run ID 同时区分节点与类型，重复确认不重复创建。
+
+
+### T61 普通复审输入预算错误
+
+普通复审的模型私有输入不属于HTTP DTO。新任务单一新版表示和问题级父版上下文不通过通用资源/审核/timeline/SSE公开；公开Markdown读取及测评答案隐私规则保持。
+
+新增错误码 `REVIEW_INPUT_BUDGET_EXCEEDED` 使用原有 `code/message/category/safe_detail` 错误字段，category为 `input_budget`，message为安全中文预算提示；safe_detail仅含estimated_input_tokens、reserved_output_tokens、context_limit、exceeded_tokens等数值，不含正文或模型响应。节点在发请求前失败时无新增模型调用，Run保持未发布，既有HTTP状态和事件payload字段不变。普通审核本地输入/版本契约校验失败使用 `WORKFLOW_CONTRACT_INVALID`；真实模型结构输出错误仍使用既有码。该变化不增加人工审批工作台。
+
+
+### T62 纠错包事实抽取范围
+
+HTTP DTO、鉴权、状态码和事件字段不变。新neutral纠错任务使用私有 `structured-correction-v2` 来源：专用错误命题不进入Claim抽取目标，解释/答案等继续审核；按实际抽取事实计算指标，不批量改写历史Claim或指标。v1/v2来源及其偏移不能混用。被排除字段、只读关联上下文和source_snapshot属于私有审核输入，不经通用资源/审核/timeline/SSE额外公开。既有Markdown阅读和下载不变；本次没有新增模型调用入口、预算或人工审批界面。
+
+
+### T63 双练习纠错包兼容
+
+公开生成请求DTO、鉴权、状态码、事件字段、Markdown读取/下载接口不变。新任务在服务端私有契约冻结双练习V2（引导、迁移），旧V1三练习资源继续原格式可读和恢复/重试，不通过重试隐式转换。内部correction_package_payload、来源快照、展示字段排除清单及只读上下文仍不经通用资源/审核/timeline/SSE公开。
+
+### T64 纠错包抽取来源兼容
+
+新 neutral 纠错任务冻结私有来源 correction-content-sources-v4 / structured-correction-v4。两组练习只抽取参考答案和答案解释，题设只读；其他章节仍核验资源认可的知识断言。精简请求使用单元原文和角色映射，关联上下文不得成为 Claim 来源或证据。公开 DTO、错误码、事件和阅读接口不变；不增加客户端参数。旧来源 v1/v2/v3 与 legacy 继续原规则，私有上下文和来源映射不通过公开接口泄露，不回写历史 Claim/指标。分批、Judge、补检、发布和修订预算不变。
+
+V4用于新V2包；历史V1包的新neutral重试使用兼容v3来源，不隐式转换生成格式，原任务快照保持。
+
+新Claim来源v3排除展示训练目标/薄弱概览/达标标准/复习动作，但这些仍显示在阅读正文中，普通审核检查其是否放错技术内容。统计只覆盖实际抽取范围，历史Claim指标不重算。删除完整示例和同构练习不改变Claim发布阈值、返工次数、证据/token上限；本更新无DB迁移、外部配置或新人工审批步骤。
+
+T120 历史确认方案：轮次候选响应新增可选 confirmed_selection。服务端按当前学习者和精确 source_attempt_id，从已持久化的纠错阶段/后继轮次及冻结 request_snapshot 投影已选路线、节点、资源类型和审核开关；无记录返回 null。该字段只读，不接受客户端作为授权依据，无存储迁移，不触发生成。

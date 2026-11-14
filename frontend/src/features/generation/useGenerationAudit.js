@@ -36,8 +36,12 @@ export function useGenerationAudit({ selectedRunId, selectedLearnerId }) {
     if (!request.isCurrent()) return
     if (timelineResult.status === 'fulfilled' && (!timelineResult.value.data?.run?.run_id || timelineResult.value.data.run.run_id === runId)) {
       snapshot.value = timelineResult.value.data || {}
-      if (step.value) step.value = (snapshot.value.steps || []).find(item => item.step_id === step.value.step_id
-        && (!item.run_id || item.run_id === runId)) || step.value
+      if (step.value) {
+        const scope = step.value.resource_scope
+        const persisted = (snapshot.value.steps || []).find(item => item.step_id === step.value.step_id
+          && (!item.run_id || item.run_id === runId))
+        if (persisted) step.value = { ...persisted, ...(scope ? { resource_scope: scope } : {}) }
+      }
       if (step.value) {
         const linked = associatedStepResources(snapshot.value, step.value, runId)
         if (!linked.some(item => item.resource_id === resourceId.value)) resourceId.value = linked[0]?.resource_id || ''
@@ -65,7 +69,10 @@ export function useGenerationAudit({ selectedRunId, selectedLearnerId }) {
   }
   function openStep(value) {
     if (!canInspectStep(value) || (value.run_id && value.run_id !== selectedRunId.value)) return
-    step.value = value; resourceId.value = value.resource_ids?.[0] || ''
+    if (value.resource_scope?.runId && value.resource_scope.runId !== selectedRunId.value) return
+    reset()
+    step.value = value
+    resourceId.value = value.resource_scope ? value.resource_scope.resourceIds[0] || '' : value.resource_ids?.[0] || ''
     resourceSpecId = ''
     representation = ''
     visible.value = true; refresh()
@@ -78,6 +85,6 @@ export function useGenerationAudit({ selectedRunId, selectedLearnerId }) {
   }
   return {
     visible, loading, error, claimsError, snapshot, claims, step, resourceId,
-    claimRetrieval, refresh, openStep, openResource,
+    claimRetrieval, refresh, openStep, openResource, close: reset,
   }
 }

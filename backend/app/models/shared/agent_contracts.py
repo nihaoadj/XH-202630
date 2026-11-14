@@ -473,6 +473,84 @@ class PracticeGuidePackageV3(StrictLLMOutput):
         return self
 
 
+class PracticeGuidePackageV4(PracticeGuidePackageV3):
+    """Executable teaching guide; V3 remains readable for historical runs."""
+
+    schema_version: Literal["4.0"] = "4.0"
+
+    @model_validator(mode="after")
+    def validate_executable_task(self) -> "PracticeGuidePackageV4":
+        if not any(step.code_blocks for step in self.practice.steps):
+            raise ValueError("practice guide requires at least one code block")
+        return self
+
+
+class PracticeGuideMaterialV5(StrictLLMOutput):
+    name: str = Field(min_length=1, max_length=80)
+    content: str = Field(min_length=1, max_length=3000)
+
+    @model_validator(mode="after")
+    def validate_visible_content(self) -> "PracticeGuideMaterialV5":
+        if not self.name.strip() or not self.content.strip():
+            raise ValueError("practice material name and content must be visible")
+        return self
+
+
+class PracticeGuidePreparationPhaseV5(PracticeGuidePreparationPhaseV3):
+    materials: List[PracticeGuideMaterialV5] = Field(default_factory=list, max_length=4)
+
+    @model_validator(mode="after")
+    def validate_material_names(self) -> "PracticeGuidePreparationPhaseV5":
+        names = [item.name.strip().casefold() for item in self.materials]
+        if len(names) != len(set(names)):
+            raise ValueError("practice material names must be unique")
+        return self
+
+
+class PracticeGuidePackageV5(PracticeGuidePackageV4):
+    """Practice guide with optional learner-visible preparation materials."""
+
+    schema_version: Literal["5.0"] = "5.0"
+    preparation: PracticeGuidePreparationPhaseV5
+
+
+class PracticeGuideStepV6(PracticeGuideStepV3):
+    code_blocks: List[PracticeGuideCodeBlockV3] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_runnable_code(self) -> "PracticeGuideStepV6":
+        static_formats = {"text", "plaintext", "json", "jsonc", "yaml", "yml", "xml", "markdown", "md", "csv"}
+        if all(block.language.strip().lower() in static_formats for block in self.code_blocks):
+            raise ValueError("each practice step requires runnable code, not only static input")
+        return self
+
+
+class PracticeGuideExecutionPhaseV6(PracticeGuideExecutionPhaseV3):
+    steps: List[PracticeGuideStepV6] = Field(min_length=1, max_length=8)
+
+
+class PracticeGuidePackageV6(PracticeGuidePackageV3):
+    """Step-first guide: every independent step contains executable code."""
+
+    schema_version: Literal["6.0"] = "6.0"
+    practice: PracticeGuideExecutionPhaseV6
+
+
+def validate_practice_guide_package(value: dict) -> PracticeGuidePackageV3 | PracticeGuidePackageV4 | PracticeGuidePackageV5 | PracticeGuidePackageV6:
+    """Dispatch by the frozen private package version without upgrading V3."""
+
+    version = value.get("schema_version") if isinstance(value, dict) else None
+    if version == "3.0":
+        return PracticeGuidePackageV3.model_validate(value)
+    if version == "4.0":
+        return PracticeGuidePackageV4.model_validate(value)
+    if version == "5.0":
+        return PracticeGuidePackageV5.model_validate(value)
+    if version == "6.0":
+        return PracticeGuidePackageV6.model_validate(value)
+    raise ValueError("unsupported practice guide package version")
+
+
 class AssessmentOption(StrictLLMOutput):
     option_id: str = Field(pattern=r"^[A-Z][A-Z0-9]{0,3}$")
     text: str = Field(min_length=1, max_length=400)
@@ -619,9 +697,13 @@ class AssessmentScopeFindingV1(StrictLLMOutput):
     question_id: str = Field(pattern=r"^q-[0-9]{3}$")
     decision: Literal["in_scope", "out_of_scope", "insufficient_evidence"]
     reason: str = Field(min_length=1, max_length=120)
-    # One directly supporting excerpt is sufficient for an auditable finding;
-    # bounding this prevents a scope audit from expanding into a long essay.
-    supported_evidence_ids: List[str] = Field(default_factory=list, max_length=1)
+    supported_evidence_ids: List[str] = Field(default_factory=list)
+
+    @field_validator("supported_evidence_ids")
+    @classmethod
+    def deduplicate_evidence(cls, value: List[str]) -> List[str]:
+        return list(dict.fromkeys(value))
+
 
 
 class AssessmentScopeReviewV1(StrictLLMOutput):
@@ -832,7 +914,13 @@ class ReviewLLMOutput(StrictLLMOutput):
 class AssessmentQuestionReviewV2(StrictLLMOutput):
     question_id: str = Field(min_length=1, max_length=128)
     scope_decision: Literal["in_scope", "out_of_scope", "insufficient_evidence"]
-    supported_evidence_ids: List[str] = Field(default_factory=list, max_length=1)
+    supported_evidence_ids: List[str] = Field(default_factory=list)
+
+    @field_validator("supported_evidence_ids")
+    @classmethod
+    def deduplicate_evidence(cls, value: List[str]) -> List[str]:
+        return list(dict.fromkeys(value))
+
     answer_check: Literal["pass", "fail", "insufficient_evidence"]
     clarity_check: Literal["pass", "fail"]
     rubric_check: Literal["pass", "fail", "insufficient_evidence", "not_applicable"]

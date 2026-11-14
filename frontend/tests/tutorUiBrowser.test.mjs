@@ -317,7 +317,8 @@ async function saveComposerScreenshot(page, name) {
 
 async function waitForResource(page) {
   await page.locator('.resource-content').getByText(quoteText, { exact: true }).waitFor()
-  await page.locator('.tutor-trigger').getByText('向 Tutor 提问', { exact: true }).waitFor()
+  const focusMode = new URL(page.url()).searchParams.get('focus') === '1'
+  await page.locator('.tutor-trigger').getByText(focusMode ? 'Tutor' : '向 Tutor 提问', { exact: true }).waitFor()
 }
 
 async function createResourceTutor(page, { quote = false } = {}) {
@@ -598,7 +599,7 @@ async function checkResourceConversation() {
     await page.locator('.tutor-panel').getByText('第 5 页', { exact: false }).waitFor()
     await firstSources.locator('summary').click()
     assert.equal(await firstSources.evaluate(details => details.open), false, 'click collapses sources')
-    assert.ok(await page.locator('.user-bubble p').innerText().then(text => text.includes(quoteText)))
+    assert.equal(await page.locator('.user-message blockquote p').innerText(), quoteText)
     await saveScreenshot(page, 'resource-grounded-reply-1301x871.png')
     await inspectTutor(page, 'resource-grounded-reply-1301x871')
 
@@ -662,44 +663,9 @@ async function checkQuestionTutorEntry() {
     await page.locator('.feedback-page').waitFor()
     await page.getByRole('button', { name: '开始测评' }).click()
     await page.getByText('提交操作后应记录哪些信息？', { exact: true }).waitFor()
-    await page.getByRole('button', { name: '需要提示' }).click()
-    await page.locator('.tutor-panel').waitFor({ state: 'visible' })
-    await page.waitForFunction(() => {
-      const textarea = document.querySelector('.tutor-panel textarea')
-      return textarea && !textarea.disabled
-    })
-    const sessionId = await checkSessionScope(page, 'question_help', fixtureIdentity.questionId)
-    assert.equal(await page.locator('.quoted-context').count(), 0, 'question Tutor entry should not invent quoted resource text')
-    const textarea = page.locator('.tutor-panel textarea')
-    await saveComposerScreenshot(page, 'feedback-question-composer-empty.png')
-    await textarea.fill('请先给我一个方向')
-    await textarea.focus()
-    await page.keyboard.press('Tab')
-    await page.keyboard.press('Shift+Tab')
-    await page.waitForFunction(() => {
-      const field = document.querySelector('.tutor-panel textarea')
-      return document.activeElement === field && field.matches(':focus-visible')
-    })
-    await saveComposerScreenshot(page, 'feedback-question-composer-focused.png')
-    const turnRequestPromise = page.waitForRequest(request => request.url().includes(`/api/tutor/sessions/${sessionId}/turns`))
-    await page.getByRole('button', { name: '发送' }).click()
-    await page.locator('.thinking-bubble').waitFor({ state: 'visible' })
-    await turnRequestPromise
-    await saveComposerScreenshot(page, 'feedback-question-composer-pending.png')
-    await page.getByText('先对照冻结来源确认记录字段，再核对提交结果是否可复查。', { exact: true }).waitFor()
-    const turn = apiAudit.writes.filter(item => item.path.endsWith('/turns')).at(-1)
-    assert.equal(turn.path, `/api/tutor/sessions/${sessionId}/turns`)
-    assert.deepEqual(turn.body.message, '请先给我一个方向')
-    await saveScreenshot(page, 'feedback-question-tutor-reply-1301x871.png')
-    await inspectTutor(page, 'feedback-question-reply-1301x871')
-    await page.getByRole('button', { name: '关闭 Tutor' }).click()
-    await page.locator('.tutor-panel').waitFor({ state: 'hidden' })
-    const before = apiAudit.requests.filter(item => item.method === 'GET' && item.path === `/api/tutor/sessions/${sessionId}`).length
-    await page.getByRole('button', { name: '需要提示' }).click()
-    await page.getByText('请先给我一个方向', { exact: true }).waitFor()
-    const after = apiAudit.requests.filter(item => item.method === 'GET' && item.path === `/api/tutor/sessions/${sessionId}`).length
-    assert.equal(after, before + 1, 'question Tutor should restore the existing session when reopened')
-    summary.checks.push({ name: 'question-session-restore', sessionId, before, after })
+    assert.equal(await page.getByRole('button', { name: '需要提示' }).count(), 0)
+    assert.equal(await page.locator('.tutor-panel').count(), 0)
+    summary.checks.push({ name: 'assessment-has-no-tutor-entry', passed: true })
   } finally {
     await page.close()
   }

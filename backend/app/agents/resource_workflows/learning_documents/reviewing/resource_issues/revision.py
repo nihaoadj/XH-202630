@@ -119,7 +119,7 @@ def build_revision_work_order(
 
 
 def _structured(resource) -> dict | None:
-    for attr in ("practice_guide_payload", "assessment_payload", "review_practice_payload"):
+    for attr in ("practice_guide_payload", "assessment_payload", "review_practice_payload", "correction_package_payload"):
         value = getattr(resource, attr, None)
         if isinstance(value, dict):
             return value

@@ -11,6 +11,7 @@ from app.models.feedback.rounds import (
 from app.models.learners.mastery import NextGenerationCandidateV1
 from app.models.shared.persistence import canonical_hash
 from app.services.feedback.round_plans import plan_member, round_identity
+from app.services.feedback.round_remediation import original_node_id, recommendation
 from app.services.feedback.round_uow import RoundUnitOfWork
 from app.services.learners.remediation import advance_wait, ranked_needs
 from app.services.learners.review_eligibility import eligible_review_ids
@@ -52,10 +53,14 @@ class RoundLearningService:
             ids = self.feedback.mastery_service.next_generation_options(profile).recommended_node_ids[:1]
         if len(ids or []) != 1:
             raise invalid(ErrorCode.GENERATION_TARGET_INVALID)
-        self.feedback.mastery_service.validate_generation_targets(profile, ids)
+        try:
+            self.feedback.mastery_service.validate_generation_targets(profile, ids)
+        except ValueError as error:
+            raise invalid(ErrorCode.GENERATION_TARGET_INVALID) from error
         return self._create_round(profile, payload.selection_key, payload.model_dump(mode="json"),
                                   ids[0], payload.resource_types, payload.include_claim_check,
-                                  include_claim_evidence_retrieval=payload.include_claim_evidence_retrieval)
+                                  include_claim_evidence_retrieval=payload.include_claim_evidence_retrieval,
+                                  claim_post_retrieval_max_iterations=payload.claim_post_retrieval_max_iterations)
 
     def next(self, profile, payload):
         if not self.settings.learning_round_creation_enabled:
@@ -66,27 +71,20 @@ class RoundLearningService:
         intent = payload.primary_learning_intent
         if intent.value == "learn_new_and_reinforce":
             raise invalid()
-        try:
-            self.feedback.mastery_service.confirm_next_generation_intent(
-                profile, intent=intent, selected_node_ids=[payload.primary_node_id],
-                downgrade_source_node_ids=[point.knowledge_point_id for point in source.knowledge_point_results],
-            )
-        except ValueError as error:
-            raise invalid() from error
-        qualified = eligible_review_ids(profile, self.feedback.resource_repo,
-                                        self.feedback.feedback_loop_repo, self.feedback.generation_job_service.job_repo)
-        if payload.review_node_id and payload.review_node_id not in qualified:
-            raise invalid()
         context = source.metadata.get("round_context", {})
-        return self._create_round(profile, payload.selection_key, payload.model_dump(mode="json"),
+        selection = payload.model_dump(mode="json")
+        if not payload.follow_remediation:
+            selection.pop("follow_remediation")
+        return self._create_round(profile, payload.selection_key, selection,
                                   payload.primary_node_id, payload.primary_resource_types, payload.include_claim_check,
                                   review_node_id=payload.review_node_id, source_attempt_id=source.attempt_id,
                                   parent_round_id=context.get("round_id"), intent=intent,
-                                  include_claim_evidence_retrieval=payload.include_claim_evidence_retrieval)
+                                  include_claim_evidence_retrieval=payload.include_claim_evidence_retrieval,
+                                  claim_post_retrieval_max_iterations=payload.claim_post_retrieval_max_iterations)
 
     def _create_round(self, profile, key, selection, primary_node_id, resource_types, claim,
                       review_node_id=None, source_attempt_id=None, parent_round_id=None, intent=None,
-                      include_claim_evidence_retrieval=False):
+                      include_claim_evidence_retrieval=False, claim_post_retrieval_max_iterations=0):
         request_hash = canonical_hash(selection)
         round_id = round_identity("round", profile.learner_id, key)
         stage_id = round_identity("stage", round_id, "initial")
@@ -94,7 +92,11 @@ class RoundLearningService:
             with RoundUnitOfWork(self.repository, self.feedback, self.learners) as uow:
                 existing = uow.rounds.one("learning_rounds", learner_id=profile.learner_id, selection_key=key)
                 if existing:
-                    if existing["selection_hash"] != request_hash:
+                    legacy_selection = {k: v for k, v in selection.items()
+                                        if k not in {"claim_workflow_version", "claim_post_retrieval_max_iterations"}}
+                    legacy_match = (not selection.get("claim_post_retrieval_max_iterations")
+                                    and existing["selection_hash"] == canonical_hash(legacy_selection))
+                    if existing["selection_hash"] != request_hash and not legacy_match:
                         raise invalid(ErrorCode.ROUND_SELECTION_CONFLICT, 409)
                     return self.creation_response(profile.learner_id, existing["round_id"], stage_id, uow.rounds)
                 current = uow.learners.get(profile.learner_id)
@@ -105,14 +107,34 @@ class RoundLearningService:
                     current, uow.feedback.resource_repo, uow.feedback.feedback_loop_repo, uow.jobs.job_repo,
                 ):
                     raise invalid()
+                repair = None
                 if intent is None:
-                    uow.feedback.mastery_service.validate_generation_targets(current, [primary_node_id])
+                    try:
+                        uow.feedback.mastery_service.validate_generation_targets(current, [primary_node_id])
+                    except ValueError as error:
+                        raise invalid(ErrorCode.GENERATION_TARGET_INVALID) from error
                 else:
-                    uow.feedback.mastery_service.confirm_next_generation_intent(
-                        current, intent=intent, selected_node_ids=[primary_node_id],
-                        downgrade_source_node_ids=[point.knowledge_point_id for point in uow.feedback.feedback_loop_repo.get_attempt(
-                            current.learner_id, source_attempt_id).knowledge_point_results],
-                    )
+                    source = uow.feedback.feedback_loop_repo.get_attempt(current.learner_id, source_attempt_id)
+                    mastery = uow.feedback.mastery_service
+                    returning = primary_node_id == original_node_id(uow.rounds, parent_round_id)
+                    suggested = (recommendation(current, source, uow.rounds, mastery, nodes)
+                                 if returning or selection.get("follow_remediation") or intent.value == "downgrade_learning" else None)
+                    if returning and (not suggested or suggested.kind != "return_to_original"):
+                        raise invalid()
+                    if returning or selection.get("follow_remediation"):
+                        if not suggested or suggested.node.skill_node_id != primary_node_id:
+                            raise invalid()
+                        repair = suggested
+                    else:
+                        try:
+                            mastery.confirm_next_generation_intent(
+                                current, intent=intent, selected_node_ids=[primary_node_id],
+                                downgrade_source_node_ids=[point.knowledge_point_id for point in source.knowledge_point_results],
+                            )
+                        except ValueError as error:
+                            raise invalid() from error
+                        if intent.value == "downgrade_learning" and suggested and suggested.kind in {"prerequisite", "downgrade"}:
+                            repair = suggested
                 budget = self.budget_snapshot()
                 now = datetime.now(timezone.utc)
                 uow.rounds.insert("learning_rounds", dict(
@@ -124,24 +146,32 @@ class RoundLearningService:
                 plans = [plan_member(round_id=round_id, stage_id=stage_id, learner_id=current.learner_id,
                                      knowledge_base_id=current.knowledge_base_id, node=nodes[primary_node_id], role="primary",
                                      primary_resource_types=resource_types, include_claim_check=claim,
-                                     include_claim_evidence_retrieval=include_claim_evidence_retrieval)]
+                                     include_claim_evidence_retrieval=include_claim_evidence_retrieval,
+                                     claim_post_retrieval_max_iterations=claim_post_retrieval_max_iterations)]
                 if review_node_id:
                     plans.append(plan_member(round_id=round_id, stage_id=stage_id, learner_id=current.learner_id,
                                              knowledge_base_id=current.knowledge_base_id, node=nodes[review_node_id], role="review",
                                              primary_resource_types=[], include_claim_check=claim,
-                                             include_claim_evidence_retrieval=include_claim_evidence_retrieval))
+                                             include_claim_evidence_retrieval=include_claim_evidence_retrieval,
+                                             claim_post_retrieval_max_iterations=claim_post_retrieval_max_iterations))
                 for plan in plans:
                     uow.rounds.insert("learning_round_nodes", dict(
                         round_node_id=plan.member_id, round_id=round_id, skill_node_id=plan.node_id,
                         role=plan.role, tier=plan.tier, name=plan.name,
                     ))
-                self.persist_stage(uow, current, stage_id, round_id, plans, key, request_hash, budget, now)
+                repair_origin = repair.original_node_id if repair and repair.kind != "return_to_original" else None
+                self.persist_stage(uow, current, stage_id, round_id, plans, key, request_hash, budget, now,
+                                   remediation_original_node_id=repair_origin)
                 advance_wait(uow.rounds, current.learner_id, current.knowledge_base_id, primary_node_id)
                 # Curriculum scheduling happens once for the primary, never once
                 # per Claim-split task or per review node.
                 first_run = round_identity("run", plans[0].stage_node_id, 0)
                 if uow.feedback.mastery_service.curriculum_repo is not None:
-                    selection_type = ("lower_tier_selection" if intent and intent.value == "downgrade_learning" else "same_tier")
+                    selection_type = "same_tier"
+                    if repair and (selection.get("follow_remediation") or repair.kind == "return_to_original"):
+                        selection_type = "remediation_return"
+                    elif intent and intent.value == "downgrade_learning":
+                        selection_type = "lower_tier_selection"
                     uow.feedback.mastery_service.schedule_generation(
                         current, run_id=first_run, selected_node_ids=[primary_node_id], selection_type=selection_type,
                     )
@@ -157,7 +187,7 @@ class RoundLearningService:
                 "input_capacity": self.settings.llm_resource_generator_max_input_tokens}
 
     def persist_stage(self, uow, profile, stage_id, round_id, plans, key, request_hash, budget, now,
-                      ordinal=0, sources=None):
+                      ordinal=0, sources=None, remediation_original_node_id=None):
         session_id = round_identity("session", stage_id)
         scopes = {plan.stage_node_id: len(plan.resource_types) * budget["resource_tokens"] for plan in plans}
         scopes[session_id] = len(plans) * 262144
@@ -170,10 +200,13 @@ class RoundLearningService:
             state="producing", budget_snapshot=stage_budget, created_at=now,
         ))
         for plan in plans:
+            snapshot = {"requests": [request.model_dump(mode="json") for request in plan.requests]}
+            if remediation_original_node_id and plan.role == "primary":
+                snapshot["remediation_original_node_id"] = remediation_original_node_id
             uow.rounds.insert("learning_round_stage_nodes", dict(
                 stage_node_id=plan.stage_node_id, stage_id=stage_id, round_node_id=plan.member_id,
                 source_attempt_id=(sources or {}).get(plan.node_id), batch_id=plan.batch_id,
-                request_snapshot={"requests": [request.model_dump(mode="json") for request in plan.requests]},
+                request_snapshot=snapshot,
                 resource_types=list(plan.resource_types), difficulty=plan.difficulty, config_hash=canonical_hash(stage_budget),
             ))
             for index, request in enumerate(plan.requests):
@@ -279,15 +312,21 @@ class RoundLearningService:
                                       if key in LearningRoundSummaryV1.model_fields}) for row in rows
         ])
 
-    def candidates(self, profile, round_id):
-        self._round(profile.learner_id, round_id)
-        nodes = self._nodes(profile)
-        eligible = eligible_review_ids(profile, self.feedback.resource_repo, self.feedback.feedback_loop_repo,
-                                       self.feedback.generation_job_service.job_repo)
-        review = [NextGenerationCandidateV1(skill_node_id=node.node_id, name=node.name, priority_group="learned",
-                                             rank=index+1, reason_codes=["FORMAL_LEARNING_ASSESSED"], confidence="none",
-                                             tier=node.tier, tier_label=str(node.tier), prerequisite_ids=node.prerequisites)
-                  for index, node in enumerate(sorted((nodes[key] for key in eligible if key in nodes), key=lambda n: n.node_id))]
+    def next_candidates(self, profile, source_attempt_id):
+        source = self.feedback.feedback_loop_repo.get_attempt(profile.learner_id, source_attempt_id)
+        if source is None:
+            raise invalid(ErrorCode.ROUND_SELECTION_INVALID, 404)
+        return self._candidate_projection(profile, [], source)
+
+    def candidates(self, profile, round_id, *, source_attempt_id=None):
+        round_row = self._round(profile.learner_id, round_id)
+        source = None
+        if source_attempt_id is not None:
+            source = self.feedback.feedback_loop_repo.get_attempt(profile.learner_id, source_attempt_id)
+            legacy_source = (round_row["protocol_version"] == "legacy-correction/v1"
+                             and round_row["source_attempt_id"] == source_attempt_id)
+            if source is None or (not legacy_source and source.metadata.get("round_context", {}).get("round_id") != round_id):
+                raise invalid(ErrorCode.ROUND_SELECTION_INVALID, 404)
         targets = []
         for member in self.repository.find("learning_round_nodes", round_id=round_id):
             decisions = self.repository.find("feedback_node_decisions", round_node_id=member["round_node_id"])
@@ -296,7 +335,23 @@ class RoundLearningService:
                 "learning_round_stage_nodes", round_node_id=member["round_node_id"], source_attempt_id=decisions[-1]["attempt_id"],
             ):
                 targets.append({"node_id": member["skill_node_id"], "source_attempt_id": decisions[-1]["attempt_id"]})
+        return self._candidate_projection(profile, targets, source)
+
+    def _candidate_projection(self, profile, targets, source):
+        from app.services.feedback.confirmed_route import confirmed_route
+        nodes = self._nodes(profile)
+        eligible = eligible_review_ids(profile, self.feedback.resource_repo, self.feedback.feedback_loop_repo,
+                                       self.feedback.generation_job_service.job_repo)
+        review = [NextGenerationCandidateV1(skill_node_id=node.node_id, name=node.name, priority_group="learned",
+                                             rank=index+1, reason_codes=["FORMAL_LEARNING_ASSESSED"], confidence="none",
+                                             tier=node.tier, tier_label=str(node.tier), prerequisite_ids=node.prerequisites)
+                  for index, node in enumerate(sorted((nodes[key] for key in eligible if key in nodes), key=lambda n: n.node_id))]
         options = self.feedback.mastery_service.next_generation_options(profile)
+        if source is not None and options.learning_candidates:
+            foundations = self.feedback.mastery_service.feedback_downgrade_candidates(
+                profile, source_node_ids=[point.knowledge_point_id for point in source.knowledge_point_results],
+            )
+            options = options.model_copy(update={"learning_candidates": foundations})
         needs = ranked_needs(self.repository.find("learner_remediation_needs", learner_id=profile.learner_id,
                                                   knowledge_base_id=profile.knowledge_base_id))
         priority = {need["skill_node_id"]: index for index, need in enumerate(needs)}
@@ -308,4 +363,7 @@ class RoundLearningService:
         options = options.model_copy(update={"reinforce_weakness": reinforced,
                                               **({"recommended_node_ids": preferred[:1]} if preferred else {})})
         return RoundCandidatesV1(generation_options=options,
-                                  eligible_review_nodes=review, correction_targets=targets, profile_version=profile.profile_version)
+                                  confirmed_selection=confirmed_route(self.repository, profile.learner_id, source),
+                                  eligible_review_nodes=review, correction_targets=targets, profile_version=profile.profile_version,
+                                  remediation_recommendation=recommendation(profile, source, self.repository,
+                                                                            self.feedback.mastery_service, nodes, options))

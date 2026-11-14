@@ -60,6 +60,7 @@ def build_workflow_state(
     lecture_review_snapshot: dict | None = None,
     resource_review_snapshot: dict | None = None,
     claim_evidence_retrieval_snapshot: dict | None = None,
+    correction_package_snapshot: dict | None = None,
 ) -> WorkflowState:
     """Validate and map every public request control into workflow channels."""
     if learner.learner_id != req.learner_id:
@@ -94,8 +95,17 @@ def build_workflow_state(
         # writes them back through the private channels only.
         for reserved_key in RESERVED_REVISION_INPUT_KEYS:
             constraints.pop(reserved_key, None)
+        constraints.pop("_correction_parent_package", None)
+        constraints.pop("_correction_package_contract", None)
+        if correction_package_snapshot:
+            from app.agents.resource_agents.correction_package import validate_generation_contract
+            validate_generation_contract(correction_package_snapshot)
+            if "个性化纠错训练包" not in req.resource_types or len(req.target_skill_nodes) != 1:
+                raise ValueError("structured correction requires one target")
+            constraints["_correction_package_contract"] = correction_package_snapshot
         effective_run_id = run_id or str(uuid.uuid4())
         snapshot = WorkflowStateSnapshot(
+            correction_package_snapshot=correction_package_snapshot or None,
             **claim_extraction_snapshot,
             **claim_evidence_retrieval_snapshot,
             **lecture_fields(lecture_review_snapshot or {}),
@@ -127,6 +137,9 @@ def build_workflow_state(
             include_claim_evidence_retrieval=req.include_claim_evidence_retrieval,
             max_iterations=req.max_iterations,
             claim_max_iterations=req.claim_max_iterations,
+            claim_post_retrieval_max_iterations=req.claim_post_retrieval_max_iterations,
+            claim_workflow_version=req.claim_workflow_version,
+            claim_gap_revision_threshold=req.claim_gap_revision_threshold,
             constraints=constraints,
             workflow_status=WorkflowStatus.RUNNING,
             current_node="pending",
@@ -312,6 +325,9 @@ def _request_snapshot(req: GenerateRequest, state: WorkflowState) -> dict:
     }
     return {
         "learner_id": req.learner_id,
+        **({"correction_package_snapshot": state["correction_package_snapshot"],
+            "correction_focus_snapshot": constraints["correction_focus_snapshot"]}
+           if state.get("correction_package_snapshot") else {}),
         **snapshot_fields(state),
         "topic": req.topic,
         "knowledge_base_id": state.get("knowledge_base_id"),
@@ -337,6 +353,9 @@ def _request_snapshot(req: GenerateRequest, state: WorkflowState) -> dict:
         },
         "max_iterations": req.max_iterations,
         "claim_max_iterations": req.claim_max_iterations,
+        "claim_post_retrieval_max_iterations": req.claim_post_retrieval_max_iterations,
+        "claim_workflow_version": req.claim_workflow_version,
+        "claim_gap_revision_threshold": req.claim_gap_revision_threshold,
         "constraints": {
             key: constraints[key]
             for key in allowed_constraint_keys
@@ -439,6 +458,16 @@ class GenerationService:
         except ValueError as exc:
             raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422) from exc
 
+    def freeze_correction_package(self, req):
+        if "个性化纠错训练包" not in req.resource_types:
+            return {}
+        from app.agents.resource_agents.correction_package import structured_generation_contract
+        focus = req.constraints.get("correction_focus_snapshot") or {}
+        targets = focus.get("ordered_target_nodes") or []
+        if len(targets) != 1 or req.target_skill_nodes != [targets[0].get("skill_node_id")]:
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+        return structured_generation_contract()
+
     def freeze_lecture_review(self, req):
         return freeze_lecture_policy(req, get_settings())
 
@@ -448,8 +477,9 @@ class GenerationService:
     def generate(self, learner: LearnerProfile, req: GenerateRequest) -> GenerateResponse:
         return self.generate_with_run_id(learner, req)
 
-    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None, *, resource_retry_context=None, claim_extraction_snapshot=None, claim_evidence_retrieval_snapshot=None, lecture_review_snapshot=None, lecture_dispatch_snapshot=None, resource_review_snapshot=None, resource_dispatch_snapshot=None):
+    def generate_with_run_id(self, learner, req, run_id=None, batch_id=None, *, resource_retry_context=None, claim_extraction_snapshot=None, claim_evidence_retrieval_snapshot=None, lecture_review_snapshot=None, lecture_dispatch_snapshot=None, resource_review_snapshot=None, resource_dispatch_snapshot=None, correction_package_snapshot=None):
         kwargs = dict(
+            correction_package_snapshot=correction_package_snapshot,
             resource_retry_context=resource_retry_context,
             claim_extraction_snapshot=claim_extraction_snapshot,
             claim_evidence_retrieval_snapshot=claim_evidence_retrieval_snapshot,
@@ -478,6 +508,7 @@ class GenerationService:
         lecture_dispatch_snapshot: dict | None = None,
         resource_review_snapshot: dict | None = None,
         resource_dispatch_snapshot: dict | None = None,
+        correction_package_snapshot: dict | None = None,
     ) -> GenerateResponse:
         """Generate with a caller-owned Run ID while preserving durable lifecycle semantics."""
         readiness = (
@@ -487,6 +518,7 @@ class GenerationService:
             if self.knowledge_catalog is not None
             else ensure_generation_ready()
         )
+        claim_snapshot_created = False
         if claim_extraction_snapshot is None:
             existing = self.audit_repo.get_run(run_id) if run_id else None
             if existing is not None and self.claim_extraction_repository is not None:
@@ -495,9 +527,18 @@ class GenerationService:
                     claim_extraction_policy=saved.policy.model_dump(mode="json"), claim_extraction_policy_hash=saved.policy_hash) if saved else {})
             else:
                 claim_extraction_snapshot = self.freeze_claim_extraction(req)
+                claim_snapshot_created = True
         existing_run = self.audit_repo.get_run(run_id) if run_id else None
         if existing_run is not None:
             saved_snapshot = self.audit_repo.get_run_creation_snapshot(run_id)
+            saved_correction = saved_snapshot.get("correction_package_snapshot", {})
+            if correction_package_snapshot is not None and correction_package_snapshot != saved_correction:
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            correction_package_snapshot = saved_correction
+            if saved_correction:
+                if (not isinstance(saved_snapshot.get("correction_focus_snapshot"), dict)
+                        or req.constraints.get("correction_focus_snapshot") != saved_snapshot["correction_focus_snapshot"]):
+                    raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
             saved_fields = lecture_fields(saved_snapshot)
             if lecture_review_snapshot is not None and saved_fields != lecture_fields(lecture_review_snapshot):
                 raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
@@ -507,19 +548,32 @@ class GenerationService:
                 raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
             resource_review_snapshot = saved_resource_fields
         else:
+            if correction_package_snapshot is None:
+                if resource_retry_context is not None:
+                    correction_package_snapshot = ResourceRetryContext.from_snapshot(resource_retry_context).correction_package_snapshot or {}
+                else:
+                    correction_package_snapshot = self.freeze_correction_package(req)
             if lecture_review_snapshot is None:
                 lecture_review_snapshot = freeze_lecture_policy(req, get_settings())
             if resource_review_snapshot is None:
                 resource_review_snapshot = freeze_resource_review_policy(req, get_settings())
             if claim_evidence_retrieval_snapshot is None:
                 claim_evidence_retrieval_snapshot = self.freeze_claim_evidence_retrieval(req)
+        if claim_snapshot_created and existing_run is None:
+            from app.agents.resource_workflows.learning_documents.claim_extraction.budget import for_correction_contract
+            claim_extraction_snapshot = for_correction_contract(claim_extraction_snapshot, correction_package_snapshot)
         initial_state = build_workflow_state(learner, req, run_id=run_id, batch_id=batch_id,
+            correction_package_snapshot=correction_package_snapshot,
             claim_extraction_snapshot=claim_extraction_snapshot,
             claim_evidence_retrieval_snapshot=claim_evidence_retrieval_snapshot,
             lecture_review_snapshot=lecture_review_snapshot,
             resource_review_snapshot=resource_review_snapshot)
         if lecture_dispatch_snapshot is not None:
             initial_state["lecture_dispatch_snapshot"] = lecture_dispatch_snapshot
+        if existing_run is not None:
+            initial_state["claim_gap_revision_threshold"] = saved_snapshot.get("claim_gap_revision_threshold", 8)
+            initial_state["claim_workflow_version"] = saved_snapshot.get("claim_workflow_version", "legacy_v1")
+            initial_state["claim_post_retrieval_max_iterations"] = saved_snapshot.get("claim_post_retrieval_max_iterations", 0)
         if resource_dispatch_snapshot is not None:
             initial_state["resource_dispatch_snapshot"] = resource_dispatch_snapshot
         if resource_retry_context is not None:
@@ -536,7 +590,7 @@ class GenerationService:
         lease_expires_at = started_at + timedelta(
             seconds=get_settings().workflow_run_lease_seconds
         )
-        request_snapshot = _request_snapshot(req, initial_state)
+        request_snapshot = saved_snapshot if existing_run is not None else _request_snapshot(req, initial_state)
         if resource_retry_context is not None:
             request_snapshot["resource_retry_lineage"] = {
                 key: resource_retry_context[key]

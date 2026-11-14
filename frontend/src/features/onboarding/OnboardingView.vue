@@ -1,12 +1,9 @@
 <template>
-  <div ref="setupRoot" class="onboarding-page" :class="{ 'is-fit-layout': fitLayout, 'is-contained-layout': containedLayout, 'is-track-stage': stepStage === 'track' }">
-    <header class="setup-intro">
-      <div><span class="setup-eyebrow">BUILD YOUR LEARNING PATH</span><h2>让目标，成为你的学习路径。</h2></div>
-      <p>选定方向，了解起点，开启专属于你的技能学习。</p>
-    </header>
+  <div ref="setupRoot" class="onboarding-page" :class="{ 'is-fit-layout': fitLayout, 'is-contained-layout': containedLayout, 'is-domain-stage': stepStage === 'domain', 'is-track-stage': stepStage === 'track' }">
     <el-alert v-if="recoveryError" :title="recoveryError" type="error" :closable="false"><el-button @click="initializeFlow">重试恢复</el-button></el-alert>
     <section class="wizard-layout" aria-label="新建学习方向">
       <aside class="progress-panel" aria-label="学习方向创建步骤">
+        <ProgressPanelAtmosphere />
         <div class="progress-heading"><el-icon aria-hidden="true"><Connection /></el-icon><div><span>LEARNING SETUP</span><strong>构建学习方向</strong></div></div>
         <nav class="progress-list" aria-label="五步创建流程">
           <button v-for="step in steps" :key="step.stage" type="button" class="progress-card"
@@ -15,47 +12,60 @@
             :aria-label="step.title + '：' + step.description()" @click="goStep(step.stage)">
             <span class="progress-index" aria-hidden="true"><el-icon v-if="completedStepCount >= step.index && stepStage !== step.stage"><Check /></el-icon><span v-else>{{ String(step.index).padStart(2, '0') }}</span></span>
             <span class="progress-copy"><span class="progress-title">{{ step.title }}</span><span class="progress-desc">{{ step.description() }}</span></span>
-            <span v-if="stepStage === step.stage" class="progress-current" aria-hidden="true"></span>
           </button>
         </nav>
         <div class="progress-footer"><span class="progress-footer-mark" aria-hidden="true"><el-icon><Aim /></el-icon></span><p>以目标定义方向<br />以诊断找到起点</p><span>KNOWLEDGE → SKILL</span></div>
       </aside>
       <div class="step-panel" v-module-motion="{ key: stepStage, order: steps.findIndex(step => step.stage === stepStage), slideTarget: '.card-head' }">
         <el-card v-if="stepStage === 'domain'" class="work-card domain-stage-card" shadow="never">
-          <template #header><div class="card-head"><div><span class="card-kicker">01 / EXPLORE</span><h3 class="card-title" tabindex="-1">你想探索哪个领域？</h3><p class="card-subtitle">从最想应用的领域出发，下一步选择具体的训练方向。</p></div><span class="step-coordinate" aria-hidden="true">01<span>/ 05</span></span></div></template>
+          <template #header>
+            <div class="card-head">
+              <div><span class="card-kicker">01 / EXPLORE</span><h3 class="card-title" tabindex="-1"><el-icon class="stage-heading-icon" aria-hidden="true"><MagicStick /></el-icon><span>你想探索哪个领域？</span></h3><p class="card-subtitle">从最想应用的领域出发，下一步选择具体的训练方向。</p></div>
+              <span class="step-coordinate" aria-hidden="true">01<span>/ 05</span></span>
+            </div>
+          </template>
           <div class="overview-strip">
             <div class="overview-chip"><span>培训领域</span><strong>{{ domains.length }}<small> 个</small></strong></div>
             <div class="overview-chip"><span>学习方向</span><strong>{{ totalTrackCount }}<small> 个</small></strong></div>
-            <div class="overview-chip overview-person"><span>为你创建</span><strong>{{ currentUser?.display_name || currentUser?.username || '未设置' }}</strong></div>
           </div>
           <div class="card-grid domain-grid" role="group" aria-label="选择培训领域">
             <button v-for="(item, index) in domains" :key="item.domain_id" type="button" class="choice-card" :class="{ selected: selectedDomainId === item.domain_id, unavailable: !isDomainAvailable(item) }" :disabled="!isDomainAvailable(item) || busy" :aria-pressed="selectedDomainId === item.domain_id" @click="selectDomain(item)">
               <span class="choice-topline"><el-icon class="choice-icon" aria-hidden="true"><component :is="domainIcons[index % domainIcons.length]" /></el-icon><span class="choice-code" aria-hidden="true">FIELD / {{ String(index + 1).padStart(2, '0') }}</span><span class="choice-selector" aria-hidden="true"><el-icon v-if="selectedDomainId === item.domain_id"><Check /></el-icon></span></span>
               <span class="choice-title">{{ item.name }}</span><span class="choice-description">{{ item.description || '暂无描述' }}</span>
               <span class="choice-bottom"><span class="choice-meta">{{ isDomainAvailable(item) ? (item.tracks?.length || 0) + ' 个学习方向' : '暂不可用' }}</span><el-icon aria-hidden="true"><ArrowRight /></el-icon></span>
+              <el-icon class="domain-emblem" aria-hidden="true"><component :is="domainIcons[index % domainIcons.length]" /></el-icon>
             </button>
           </div>
-          <section class="insight-card" aria-label="选择提示"><el-icon aria-hidden="true"><MagicStick /></el-icon><div><strong>从你想解决的问题开始</strong><p>优先选择接下来想落地实践的业务领域。已有具体目标？你可以在后续补充个性化要求。</p></div></section>
           <div class="action-row"><span class="action-hint">{{ selectedDomain ? '已选择：' + selectedDomain.name : '选择一个领域，继续探索' }}</span><el-button type="primary" :disabled="!isDomainAvailable(selectedDomain) || busy" @click="goStep('track')">下一步<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
         </el-card>
 
         <el-card v-else-if="stepStage === 'track'" class="work-card track-stage-card" shadow="never">
-          <template #header><div class="card-head"><div><span class="card-kicker">02 / FOCUS</span><h3 class="card-title" tabindex="-1">找到你的训练方向</h3><p class="card-subtitle">围绕具体目标，让知识、诊断与练习形成一条清晰的路径。</p></div><span class="step-coordinate" aria-hidden="true">02<span>/ 05</span></span></div></template>
+          <template #header>
+            <div class="card-head">
+              <div><span class="card-kicker">02 / FOCUS</span><h3 class="card-title" tabindex="-1"><el-icon class="stage-heading-icon" aria-hidden="true"><Aim /></el-icon><span>找到你的训练方向</span></h3><p class="card-subtitle">围绕具体目标，让知识、诊断与练习形成一条清晰的路径。</p></div>
+              <span class="step-coordinate" aria-hidden="true">02<span>/ 05</span></span>
+            </div>
+          </template>
           <div class="overview-strip"><div class="overview-chip overview-person"><span>当前领域</span><strong>{{ selectedDomain?.name || '-' }}</strong></div><div class="overview-chip"><span>可选方向</span><strong>{{ tracks.length }}<small> 个</small></strong></div><div class="overview-chip"><span>资料总量</span><strong>{{ selectedDomainDocumentCount }}<small> 份</small></strong></div></div>
           <div class="card-grid track-grid" role="group" aria-label="选择学习方向">
-            <button v-for="(item, index) in tracks" :key="item.track_id" type="button" class="choice-card" :class="{ selected: selectedDirectionId === item.track_id, unavailable: !isTrackAvailable(item) }" :disabled="!isTrackAvailable(item) || busy" :aria-pressed="selectedDirectionId === item.track_id" @click="selectDirection(item)">
-              <span class="choice-topline"><span class="track-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><span class="choice-code">{{ isTrackAvailable(item) ? 'TRAINING TRACK' : '暂不可用' }}</span><span class="choice-selector" aria-hidden="true"><el-icon v-if="selectedDirectionId === item.track_id"><Check /></el-icon></span></span>
+            <button v-for="(item, index) in tracks" :key="item.track_id" type="button" class="choice-card" :class="[{ selected: selectedDirectionId === item.track_id, unavailable: !isTrackAvailable(item) }, trackArtworkKind(item) ? 'track-' + trackArtworkKind(item) : '']" :disabled="!isTrackAvailable(item) || busy" :aria-pressed="selectedDirectionId === item.track_id" @click="selectDirection(item)">
+              <span class="choice-topline"><el-icon class="choice-icon" aria-hidden="true"><TrackArtwork v-if="trackArtworkKind(item)" :kind="trackArtworkKind(item)" /><component v-else :is="trackIcons[index % trackIcons.length]" /></el-icon><span class="choice-code">{{ String(index + 1).padStart(2, '0') }} / {{ isTrackAvailable(item) ? 'TRAINING TRACK' : '暂不可用' }}</span><span class="choice-selector" aria-hidden="true"><el-icon v-if="selectedDirectionId === item.track_id"><Check /></el-icon></span></span>
               <span class="choice-title">{{ item.name }}</span><span class="choice-description">{{ item.description || '暂无描述' }}</span>
               <span class="choice-bottom"><span class="choice-meta">{{ item.metadata?.document_count || 0 }} 份资料<span class="meta-divider">/</span>{{ item.metadata?.skill_node_count || 0 }} 个能力节点</span><el-icon aria-hidden="true"><ArrowRight /></el-icon></span>
+              <TrackArtwork v-if="trackArtworkKind(item)" class="track-artwork" :kind="trackArtworkKind(item)" detail aria-hidden="true" />
+              <el-icon v-else class="domain-emblem" aria-hidden="true"><component :is="trackIcons[index % trackIcons.length]" /></el-icon>
             </button>
           </div>
-          <section class="insight-card" aria-label="选择建议"><el-icon aria-hidden="true"><Aim /></el-icon><div><strong>聚焦一个具体的学习目标</strong><p>选择接下来最想训练的方向。系统会围绕该方向建立独立画像，持续记录你的学习与进步。</p><el-button v-if="currentProfile" link type="primary" :disabled="busy" @click="prepareQuestionnaire({ force: true })">管理已有进度 / 重新开始</el-button></div></section>
-          <div class="action-row"><el-button class="back-button" :icon="ArrowLeft" @click="goStep('domain')">上一步</el-button><span class="action-hint">{{ selectedDirection ? '已选择：' + selectedDirection.name : '选择一个方向，开始建立画像' }}</span><el-button type="primary" :disabled="!selectedDirectionId || busy" :loading="preparingQuestionnaire" @click="prepareQuestionnaire">下一步<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
+          <div class="action-row"><el-button class="back-button" :icon="ArrowLeft" @click="goStep('domain')">上一步</el-button><span class="action-hint">{{ selectedDirection ? '已选择：' + selectedDirection.name : '选择一个方向，开始建立画像' }}</span><el-button v-if="currentProfile" class="manage-progress-button" link :disabled="busy" @click="prepareQuestionnaire({ force: true })">管理已有进度 / 重新开始</el-button><el-button type="primary" :disabled="!selectedDirectionId || busy" :loading="preparingQuestionnaire" @click="prepareQuestionnaire">下一步<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
         </el-card>
 
         <el-card v-else-if="stepStage === 'questionnaire'" class="work-card questionnaire-stage-card" shadow="never" :aria-busy="submittingProfile">
-          <template #header><div class="card-head"><div><span class="card-kicker">03 / PROFILE</span><h3 class="card-title" tabindex="-1">让学习更了解你</h3><p class="card-subtitle">告诉我们你的目标与学习偏好，为当前方向建立初始画像。</p></div><span class="step-coordinate" aria-hidden="true">03<span>/ 05</span></span></div></template>
-          <div class="form-context"><el-icon aria-hidden="true"><Aim /></el-icon><div><span>正在为此方向建立画像</span><strong>{{ selectedDirection?.name }}</strong></div><span class="form-context-count">{{ visibleQuestions.length }} 个问题</span></div>
+          <template #header>
+            <div class="card-head">
+              <div><div class="stage-heading-meta"><span class="card-kicker">03 / PROFILE</span><span v-if="selectedDirection" class="stage-context">{{ selectedDirection.name }} · {{ visibleQuestions.length }} 个问题</span></div><h3 class="card-title" tabindex="-1"><el-icon class="stage-heading-icon" aria-hidden="true"><Aim /></el-icon><span>让学习更了解你</span></h3><p class="card-subtitle">告诉我们你的目标与学习偏好，为当前方向建立初始画像。</p></div>
+              <span class="step-coordinate" aria-hidden="true">03<span>/ 05</span></span>
+            </div>
+          </template>
           <el-form label-position="top" class="questionnaire-form" :disabled="busy">
             <el-form-item v-for="question in questions" :key="question.question_id" v-show="shouldShow(question)" class="question-block" :data-question-id="question.question_id" :label="question.title" :required="question.required">
               <template #label><span class="question-number" aria-hidden="true">{{ questionNumber(question) }}</span><span>{{ question.title }}</span><span class="question-kind">{{ questionTypeLabel(question.type) }}</span></template>
@@ -73,8 +83,12 @@
         </el-card>
 
         <el-card v-else-if="stepStage === 'diagnosis'" class="work-card diagnosis-stage-card" shadow="never" :aria-busy="submittingDiagnosis">
-          <template #header><div class="card-head"><div><span class="card-kicker">04 / ASSESS</span><h3 class="card-title" tabindex="-1">找到你的能力起点</h3><p class="card-subtitle">通过实际问题了解掌握情况，让后续资源与你的能力相匹配。</p></div><span class="step-coordinate" aria-hidden="true">04<span>/ 05</span></span></div></template>
-          <div class="form-context"><el-icon aria-hidden="true"><DataAnalysis /></el-icon><div><span>当前诊断方向</span><strong>{{ selectedDirection?.name }}</strong></div><span class="form-context-count">{{ diagnosticQuestions.length }} 道诊断题</span></div>
+          <template #header>
+            <div class="card-head">
+              <div><div class="stage-heading-meta"><span class="card-kicker">04 / ASSESS</span><span v-if="selectedDirection" class="stage-context">{{ selectedDirection.name }} · {{ diagnosticQuestions.length }} 道诊断题</span></div><h3 class="card-title" tabindex="-1"><el-icon class="stage-heading-icon" aria-hidden="true"><DataAnalysis /></el-icon><span>找到你的能力起点</span></h3><p class="card-subtitle">通过实际问题了解掌握情况，让后续资源与你的能力相匹配。</p></div>
+              <span class="step-coordinate" aria-hidden="true">04<span>/ 05</span></span>
+            </div>
+          </template>
           <template v-if="diagnosticQuestions.length">
             <div v-for="(question, index) in diagnosticQuestions" :key="question.question_id" class="diagnostic-item" :data-question-id="question.question_id">
               <div class="diagnostic-heading"><span class="question-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><h4 class="question-title" :id="'diagnosis-' + question.question_id">{{ question.question }}</h4><span class="question-kind">{{ questionTypeLabel(question.question_type) }}</span></div>
@@ -88,29 +102,56 @@
         </el-card>
 
         <el-card v-else class="work-card review-stage-card" shadow="never" :aria-busy="submittingGeneration">
-          <template #header><div class="card-head"><div><span class="card-kicker">05 / CREATE</span><h3 class="card-title" tabindex="-1">准备好，开启你的学习</h3><p class="card-subtitle">确认能力画像，选择资源，把你的目标转化为下一步行动。</p></div><span class="step-coordinate" aria-hidden="true">05<span>/ 05</span></span></div></template>
-          <section v-if="diagnosisResult" class="result-card diagnosis-result-card" aria-label="诊断结果">
-            <div class="result-heading"><div><span class="card-kicker">YOUR LEARNING PROFILE</span><h4>{{ selectedDirection?.name }}</h4><p>{{ currentUser?.display_name || currentUser?.username || '-' }} · 初始能力画像</p></div><div class="ability-stage"><span>能力阶段</span><strong>{{ diagnosisResult.ability_level || '-' }}</strong></div></div>
-            <div class="diagnosis-result-body">
-              <div class="diagnosis-point-grid"><section class="diagnosis-point-card"><span><el-icon aria-hidden="true"><Aim /></el-icon>优先加强</span><p>{{ (diagnosisResult.weak_points || []).join('、') || '暂无明显薄弱点' }}</p></section><section class="diagnosis-point-card"><span><el-icon aria-hidden="true"><Check /></el-icon>已有优势</span><p>{{ (diagnosisResult.strong_points || []).join('、') || '暂无明确优势点' }}</p></section></div>
-              <div v-if="initialRecommendedNodeId" class="initial-node-recommendation"><el-icon aria-hidden="true"><Connection /></el-icon><div><span class="initial-node-recommendation__kicker">首次学习建议 · {{ initialRecommendedNodeTier }}</span><strong class="initial-node-recommendation__node">{{ initialRecommendedNodeLoading ? '正在读取节点名称…' : initialRecommendedNodeLabel }}</strong><p>首批资源将围绕该节点生成。完成学习与后续测评后，系统会继续更新你的学习路径。</p></div></div>
+          <template #header>
+            <div class="card-head">
+              <div><span class="card-kicker">05 / CREATE</span><h3 class="card-title" tabindex="-1"><el-icon class="stage-heading-icon" aria-hidden="true"><Collection /></el-icon><span>准备好，开启你的学习</span></h3><p class="card-subtitle">确认能力画像，选择资源，把你的目标转化为下一步行动。</p></div>
+              <span class="step-coordinate" aria-hidden="true">05<span>/ 05</span></span>
             </div>
-          </section>
-          <el-form label-position="top" class="questionnaire-form resource-selection-form">
-            <el-form-item label="本次要生成的资源类型" required class="resource-type-field"><div class="field-hint resource-hint">按你的学习习惯自由组合，可选择多种。</div><el-checkbox-group class="resource-type-grid" v-model="selectedResourceTypes" aria-label="本次要生成的资源类型"><el-checkbox v-for="item in resourceTypeOptions" :key="item" :label="item" :value="item"><span class="resource-option"><el-icon aria-hidden="true"><component :is="resourceVisuals[item].icon" /></el-icon><strong>{{ item }}</strong><span>{{ resourceVisuals[item].description }}</span></span></el-checkbox></el-checkbox-group></el-form-item>
-            <el-form-item label="Claim 强化审查"><div class="claim-review-control"><el-icon class="claim-icon" aria-hidden="true"><Lock /></el-icon><div><strong>对关键事实逐条核对来源证据</strong><p>开启后增加事实审查与必要修订，生成耗时会相应增加。</p></div><el-switch v-model="includeClaimCheck" active-text="开启" inactive-text="关闭" aria-label="Claim 强化审查" /></div></el-form-item>
-            <el-form-item label="证据不足时补检知识库"><div class="claim-review-control"><el-icon class="claim-icon" aria-hidden="true"><Search /></el-icon><div><strong>缺证事实再检索一次并复核</strong><p>仅对首次缺少证据的事实陈述追加知识库检索并重新核对，会增加审核耗时。</p></div><el-switch v-model="includeClaimEvidenceRetrieval" :disabled="!includeClaimCheck" active-text="开启" inactive-text="关闭" aria-label="证据不足时补检知识库" /></div></el-form-item>
-            <el-form-item label="补充要求" class="supplemental-field"><el-input v-model="supplementalRequirements" type="textarea" :rows="3" aria-label="补充要求" placeholder="可选。例如：更想看案例拆解、增加练习题，或优先覆盖 Embedding 和 Rerank。" /><div class="field-hint">系统会结合方向、诊断结果与资源类型安排生成任务，你可以在此补充具体目标。</div></el-form-item>
-            <div class="action-row"><el-button class="back-button" :icon="ArrowLeft" @click="goStep('diagnosis')">上一步</el-button><span class="action-hint">已选择 {{ selectedResourceTypes.length }} 种资源</span><el-button type="primary" :loading="submittingGeneration" @click="submitGeneration">生成并进入状态页<el-icon v-if="!submittingGeneration" aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
-          </el-form>
+          </template>
+          <div class="review-stage-layout">
+            <section v-if="diagnosisResult" class="result-card diagnosis-result-card workspace-filter-surface" aria-label="诊断结果">
+              <div class="diagnosis-identity-row"><div class="diagnosis-identity"><span class="card-kicker">学习方向 <em>DIRECTION</em></span><strong>{{ selectedDirection?.name }}</strong></div><div class="ability-stage"><span>能力阶段 <em>STAGE</em></span><strong>{{ diagnosisResult.ability_level || '-' }}</strong></div></div>
+              <div class="diagnosis-point-grid"><section v-if="initialRecommendedNodeId" class="diagnosis-point-card diagnosis-point-recommend"><span><el-icon aria-hidden="true"><Connection /></el-icon>首次学习建议<em v-if="initialRecommendedNodeTier">{{ initialRecommendedNodeTier }}</em></span><p><strong>{{ initialRecommendedNodeLoading ? '正在读取节点名称…' : initialRecommendedNodeLabel }}</strong><small>系统根据初诊结果推荐这个学习起点。</small></p></section><section class="diagnosis-point-card"><span><el-icon aria-hidden="true"><Aim /></el-icon>优先加强</span><p>{{ (diagnosisResult.weak_points || []).join('、') || '暂无明显薄弱点' }}</p></section><section class="diagnosis-point-card"><span><el-icon aria-hidden="true"><Check /></el-icon>已有优势</span><p>{{ (diagnosisResult.strong_points || []).join('、') || '暂无明确优势点' }}</p></section></div>
+            </section>
+            <el-form label-position="top" class="questionnaire-form resource-selection-form">
+              <el-form-item
+                v-if="initialRecommendedNodeId && (initialNodeCandidates.length || initialRecommendedNodeLoading || initialNodeCandidatesError)"
+                label="首批学习节点"
+              >
+                <el-select
+                  v-if="initialNodeCandidates.length || initialRecommendedNodeLoading"
+                  v-model="selectedInitialNodeId"
+                  aria-label="首批学习节点"
+                  :loading="initialRecommendedNodeLoading"
+                  :disabled="busy || initialRecommendedNodeLoading"
+                  class="full-control"
+                >
+                  <el-option
+                    v-for="node in initialNodeCandidates"
+                    :key="node.node_id"
+                    :value="node.node_id"
+                    :label="initialNodeOptionLabel(node)"
+                  />
+                </el-select>
+                <small v-if="initialNodeCandidates.some(node => node.metadata?.initial_diagnostic_passed)" class="initial-node-fallback">初诊通过的节点也可选择学习。</small>
+                <small v-if="initialNodeCandidates.length === 1" class="initial-node-fallback">当前阶段只有一个符合首批学习条件的节点。</small>
+                <div v-else-if="initialNodeCandidatesError" class="initial-node-fallback">
+                  <span>暂时无法读取可选节点，生成时将使用诊断推荐。</span>
+                  <el-button link type="primary" :disabled="busy" @click="loadInitialNodeCandidates()">重试</el-button>
+                </div>
+              </el-form-item>
+              <el-form-item label="本次要生成的资源类型" required class="resource-type-field"><el-checkbox-group class="resource-type-grid" v-model="selectedResourceTypes" aria-label="本次要生成的资源类型"><el-checkbox v-for="item in resourceTypeOptions" :key="item" :label="item" :value="item"><span class="resource-option"><el-icon aria-hidden="true"><component :is="resourceVisuals[item].icon" /></el-icon><strong>{{ item }}</strong><span>{{ resourceVisuals[item].description }}</span></span></el-checkbox></el-checkbox-group></el-form-item>
+              <el-form-item v-if="selectedResourceTypes.some(type => type !== '实操指南')" label="审查选项"><div class="claim-review-row"><div class="claim-review-control"><el-icon class="claim-icon" aria-hidden="true"><Lock /></el-icon><div><strong>Claim 强化审查</strong><p>对关键事实逐条核对来源证据</p></div><el-switch v-model="includeClaimCheck" aria-label="Claim 强化审查" /></div><div class="claim-review-control"><el-icon class="claim-icon" aria-hidden="true"><Search /></el-icon><div><strong>缺证补检知识库</strong><p>证据不足时补检来源并复核</p></div><el-switch v-model="includeClaimEvidenceRetrieval" :disabled="!includeClaimCheck" aria-label="证据不足时补检知识库" /></div></div></el-form-item>
+            </el-form>
+            <div class="action-row review-actions"><el-button class="back-button" :icon="ArrowLeft" @click="goStep('diagnosis')">上一步</el-button><span class="action-hint">已选择 {{ selectedResourceTypes.length }} 种资源</span><el-button type="primary" :loading="submittingGeneration" :disabled="initialRecommendedNodeLoading" @click="submitGeneration">生成并进入状态页<el-icon v-if="!submittingGeneration" aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
+          </div>
         </el-card>
       </div>
     </section>
-    <footer class="setup-footer"><span>让知识有依据，让成长有路径。</span><span>智域匠学 / LEARNING WORKSPACE</span></footer>
     <el-dialog v-model="existingProgressVisible" title="此方向已有学习记录" width="min(620px, calc(100vw - 24px))" :close-on-click-modal="false" :close-on-press-escape="!deletingProgress" :show-close="!deletingProgress" :before-close="closeExistingProgress">
       <p>“{{ selectedDirection?.name }}”已有 {{ existingProfiles.length }} 份学习记录。请选择一份继续学习，或删除所选记录后重新开始；其他记录不会删除。</p>
       <el-radio-group v-model="selectedExistingId" class="existing-progress-list" :disabled="deletingProgress" aria-label="选择已有学习记录">
-        <el-radio v-for="profile in existingProfiles" :key="profile.learner_id" :value="profile.learner_id" :label="profile.learner_id"><span>{{ profile.skill_level || '未诊断' }} · {{ profile.updated_at || profile.created_at || '时间未记录' }}</span><small>{{ profile.learner_id }}</small></el-radio>
+        <el-radio v-for="profile in existingProfiles" :key="profile.learner_id" :value="profile.learner_id" :label="profile.learner_id"><span>{{ currentProfileRating(profile) || '未诊断' }} · {{ profile.updated_at || profile.created_at || '时间未记录' }}</span><small>{{ profile.learner_id }}</small></el-radio>
       </el-radio-group>
       <el-alert v-if="existingProgressError" :title="existingProgressError" type="error" :closable="false" />
       <template #footer><div class="existing-progress-actions"><el-button :disabled="deletingProgress" @click="existingProgressVisible = false">取消</el-button><el-button :disabled="!selectedExistingId || deletingProgress" @click="continueExistingProgress">保留进度并继续</el-button><el-button type="danger" :disabled="!selectedExistingId" :loading="deletingProgress" @click="restartSelectedProgress">删除所选记录并重新开始</el-button></div></template>
@@ -120,9 +161,15 @@
 
 
 <script setup>
+import { currentProfileRating } from '../../utils/profileRating.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import ProgressPanelAtmosphere from './ProgressPanelAtmosphere.vue'
+import AiDomainIcon from './AiDomainIcon.vue'
+import TrackArtwork from './TrackArtwork.vue'
+import SoftwareDomainIcon from './SoftwareDomainIcon.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Aim, ArrowLeft, ArrowRight, Check, Collection, Connection, DataAnalysis, Document, EditPen, List, Lock, MagicStick, Monitor, Reading, Search } from '@element-plus/icons-vue'
+import { Aim, ArrowLeft, ArrowRight, Check, Collection, Connection, DataAnalysis, EditPen, Lock, MagicStick, Search } from '@element-plus/icons-vue'
+import { resourceTypeVisuals as resourceVisuals } from '../../components/resourceTypeVisuals.js'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { diagnosisApi, profileApi } from '../learners/api.js'
 import { coursewareApi } from '../courseware/api.js'
@@ -166,6 +213,15 @@ let draftOwner = ''
 const restartAcknowledged = ref(false)
 const initialRecommendedNodeName = ref('')
 const initialRecommendedNodeLoading = ref(false)
+const initialNodeCandidates = ref([])
+const selectedInitialNodeId = ref('')
+const initialNodeCandidatesError = ref(false)
+function initialNodeOptionLabel(node) {
+  const labels = []
+  if (node.node_id === initialRecommendedNodeId.value) labels.push('诊断推荐')
+  if (node.metadata?.initial_diagnostic_passed) labels.push('可选择')
+  return labels.length ? `${node.name}（${labels.join(' · ')}）` : node.name
+}
 
 const form = reactive({})
 const diagnosticAnswers = reactive({})
@@ -222,7 +278,8 @@ const generatedTopic = computed(() => {
     .filter(Boolean)
     .slice(0, 3)
   const resourceSummary = selectedResourceTypes.value.filter(Boolean).join('、')
-  const focusSummary = weakPoints.length ? `，重点覆盖 ${weakPoints.join('、')}` : ''
+  const target = initialNodeCandidates.value.find(node => node.node_id === selectedInitialNodeId.value)
+  const focusSummary = target ? `，学习节点 ${target.name}` : weakPoints.length ? `，重点覆盖 ${weakPoints.join('、')}` : ''
   const levelSummary = abilityLevel ? `${abilityLevel}阶段` : '当前阶段'
   const typeSummary = resourceSummary ? `，输出 ${resourceSummary}` : ''
   return `${directionName}${levelSummary}学习资源${focusSummary}${typeSummary}`
@@ -234,13 +291,15 @@ const resourceTypeOptions = ['讲义', '实操指南', '分阶测试题', '复�
 const setupRoot = ref(null)
 const fitLayout = ref(false)
 const containedLayout = ref(false)
-const domainIcons = [Monitor, DataAnalysis, Connection, Lock]
-const resourceVisuals = {
-  讲义: { icon: Reading, description: '理解概念，建立知识框架' },
-  实操指南: { icon: EditPen, description: '跟随步骤，在实践中掌握' },
-  分阶测试题: { icon: List, description: '分层练习，检验掌握程度' },
-  复习清单: { icon: Collection, description: '回顾重点，巩固学习成果' },
-  案例分析: { icon: Document, description: '拆解场景，连接真实应用' },
+const domainIcons = [AiDomainIcon, DataAnalysis, SoftwareDomainIcon, Lock]
+const trackIcons = [Collection, EditPen, Connection, SoftwareDomainIcon]
+function trackArtworkKind(item) {
+  const name = item.name || ''
+  if (/prompt|提示词/i.test(name)) return ''
+  if (/rag/i.test(name)) return 'rag'
+  if (/agent|智能体/i.test(name)) return 'agent'
+  if (/api/i.test(name)) return 'api'
+  return ''
 }
 const visibleQuestions = computed(() => questions.value.filter(shouldShow))
 function questionNumber(question) {
@@ -277,7 +336,7 @@ function scheduleSetupLayout() {
     area.scrollTop = 0
     const bounds = area.getBoundingClientRect()
     if (containedLayout.value) {
-      const fixedRegions = [root, ...root.querySelectorAll('.setup-intro, .wizard-layout, .progress-panel, .step-panel, .work-card, .el-card__header, .setup-footer')]
+      const fixedRegions = [root, ...root.querySelectorAll('.setup-intro, .wizard-layout, .progress-panel, .step-panel, .work-card, .el-card__header')]
       const invalid = !body || body.clientHeight < 80 || fixedRegions.some((node) => {
         if (!node.getClientRects().length) return false
         const rect = node.getBoundingClientRect()
@@ -291,21 +350,11 @@ function scheduleSetupLayout() {
       }
       return
     }
-    const regions = [root, ...root.querySelectorAll('.wizard-layout, .progress-panel, .progress-list, .step-panel, .work-card, .el-card__body, .card-grid, .choice-card, .overview-strip, .action-row')]
-    const overflow = regions.some((node) => node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1)
-    const clipped = [...root.querySelectorAll('h2, h3, p, strong, .choice-title, .choice-description, .choice-meta, .progress-copy, .action-row button, .setup-footer')].some((node) => {
-      if (!node.getClientRects().length) return false
-      const rect = node.getBoundingClientRect()
-      return rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1
-    })
-    if (overflow || clipped) fitLayout.value = false
   })
 }
 
 watch([stepStage, domains, tracks], scheduleSetupLayout, { flush: 'post' })
 watch(stepStage, async () => {
-  fitLayout.value = false
-  containedLayout.value = false
   await nextTick()
   if (!setupMounted || !setupRoot.value) return
   const root = setupRoot.value
@@ -455,6 +504,9 @@ function resetFlow() {
   Object.keys(diagnosticAnswers).forEach(key => delete diagnosticAnswers[key])
   store.clearLearnerContext()
   initialRecommendedNodeName.value = ''
+  initialNodeCandidates.value = []
+  selectedInitialNodeId.value = ''
+  initialNodeCandidatesError.value = false
   existingProgressVisible.value = false
   existingProfiles.value = []
   selectedExistingId.value = ''
@@ -575,25 +627,38 @@ async function restartSelectedProgress() {
   } finally { if (currentUser.value?.user_id === owner) { deletingProgress.value = false; saveDraft() } }
 }
 
-async function loadInitialRecommendedNodeName(result = diagnosisResult.value) {
+async function loadInitialNodeCandidates(result = diagnosisResult.value) {
   const version = requestVersion
   const nodeId = String(result?.initial_recommended_node_id || '').trim()
+  const profileId = activeLearnerId.value
+  const isCurrent = () => setupMounted && version === requestVersion && profileId === activeLearnerId.value
   initialRecommendedNodeName.value = ''
+  initialNodeCandidates.value = []
+  initialNodeCandidatesError.value = false
   initialRecommendedNodeLoading.value = false
-  if (!nodeId || !selectedDirectionId.value) return
+  if (!nodeId || !profileId) return
 
   initialRecommendedNodeLoading.value = true
   try {
-    const res = await knowledgeApi.listNodes(selectedDirectionId.value)
-    if (!setupMounted || version !== requestVersion) return
-    const nodes = Array.isArray(res.data?.nodes) ? res.data.nodes : []
+    const res = await profileApi.initialNodeCandidates(profileId)
+    if (!isCurrent()) return
+    if (!Array.isArray(res.data)) throw new Error('Invalid initial node candidates')
+    const nodes = res.data
+    initialNodeCandidates.value = nodes
     const matchedNode = nodes.find((node) => String(node.node_id || '').trim() === nodeId)
     initialRecommendedNodeName.value = matchedNode?.name || ''
-  } catch (error) {
-    // 节点名称只是展示增强，接口不可用时仍保留节点 ID 作为可识别的兜底。
-    console.warn('加载初始推荐节点名称失败')
+    if (!nodes.some(node => node.node_id === selectedInitialNodeId.value)) {
+      selectedInitialNodeId.value = matchedNode?.node_id || nodes[0]?.node_id || ''
+    }
+  } catch {
+    if (!isCurrent()) return
+    initialNodeCandidatesError.value = true
+    try {
+      const res = await knowledgeApi.listNodes(selectedDirectionId.value)
+      if (isCurrent()) initialRecommendedNodeName.value = res.data?.nodes?.find(node => node.node_id === nodeId)?.name || ''
+    } catch { /* The recommendation ID remains visible. */ }
   } finally {
-    if (version === requestVersion) initialRecommendedNodeLoading.value = false
+    if (isCurrent()) initialRecommendedNodeLoading.value = false
   }
 }
 
@@ -703,7 +768,8 @@ async function submitDiagnosis() {
 
     setPendingQuestions([])
     stepStage.value = 'review'
-    await loadInitialRecommendedNodeName(res.data)
+    selectedInitialNodeId.value = ''
+    await loadInitialNodeCandidates(res.data)
     ElMessage.success('诊断已完成')
   } catch (error) {
     ElMessage.error(error?.response?.data?.message || '诊断提交失败')
@@ -714,7 +780,7 @@ async function submitDiagnosis() {
 
 let roundSubmissionChoice = null
 async function submitGeneration() {
-  if (busy.value) return
+  if (busy.value || initialRecommendedNodeLoading.value) return
   if (!selectedResourceTypes.value.length) {
     ElMessage.warning('请至少选择一种资源类型')
     return
@@ -732,6 +798,8 @@ async function submitGeneration() {
       knowledge_base_id: selectedDirectionId.value,
       topic: generatedTopic.value,
       diagnostic_result_id: diagnosisResult.value?.diagnostic_result_id,
+      ...(initialNodeCandidates.value.some(node => node.node_id === selectedInitialNodeId.value)
+        ? { target_skill_nodes: [selectedInitialNodeId.value] } : {}),
       resource_types: selectedResourceTypes.value,
       include_claim_check: includeClaimCheck.value,
       include_claim_evidence_retrieval: includeClaimCheck.value && includeClaimEvidenceRetrieval.value,
@@ -789,12 +857,15 @@ function saveDraft() {
   if (!draftReady || draftCompleted || !draftOwner || draftOwner !== currentUser.value?.user_id) return
   writeDraft(draftOwner, { stage: stepStage.value, domainId: selectedDomainId.value, directionId: selectedDirectionId.value, questionnaireLoaded: Boolean(questions.value.length),
     form, diagnosticAnswers, profile: flowProfile.value, diagnosticQuestions: flowQuestions.value, diagnosis: flowDiagnosis.value,
-    resourceTypes: selectedResourceTypes.value, includeClaimCheck: includeClaimCheck.value,
+    resourceTypes: selectedResourceTypes.value, initialNodeId: selectedInitialNodeId.value, includeClaimCheck: includeClaimCheck.value,
     includeClaimEvidenceRetrieval: includeClaimEvidenceRetrieval.value,
     supplementalRequirements: supplementalRequirements.value, restartAcknowledged: restartAcknowledged.value })
 }
-watch([stepStage, selectedDomainId, selectedDirectionId, form, diagnosticAnswers, flowProfile, flowQuestions, flowDiagnosis, selectedResourceTypes, includeClaimCheck, includeClaimEvidenceRetrieval, supplementalRequirements], saveDraft, { deep: true })
+watch([stepStage, selectedDomainId, selectedDirectionId, form, diagnosticAnswers, flowProfile, flowQuestions, flowDiagnosis, selectedResourceTypes, selectedInitialNodeId, includeClaimCheck, includeClaimEvidenceRetrieval, supplementalRequirements], saveDraft, { deep: true })
 watch(includeClaimCheck, (enabled) => { if (!enabled) includeClaimEvidenceRetrieval.value = false })
+watch(selectedResourceTypes, (types) => {
+  if (types.length === 1 && types[0] === '实操指南') includeClaimCheck.value = false
+})
 watch(() => currentUser.value?.user_id, (next, previous) => {
   if (!previous || next === previous) return
   draftReady = false
@@ -811,6 +882,10 @@ watch(() => currentUser.value?.user_id, (next, previous) => {
   existingProfiles.value = []
   selectedExistingId.value = ''
   initialRecommendedNodeName.value = ''
+  initialRecommendedNodeLoading.value = false
+  initialNodeCandidates.value = []
+  selectedInitialNodeId.value = ''
+  initialNodeCandidatesError.value = false
   selectedResourceTypes.value = ['讲义', '实操指南', '分阶测试题']
   includeClaimCheck.value = false
   includeClaimEvidenceRetrieval.value = false
@@ -882,7 +957,8 @@ async function initializeFlow() {
           includeClaimCheck.value = draft.includeClaimCheck === true
           includeClaimEvidenceRetrieval.value = includeClaimCheck.value && draft.includeClaimEvidenceRetrieval === true
           supplementalRequirements.value = typeof draft.supplementalRequirements === 'string' ? draft.supplementalRequirements : ''
-          await loadInitialRecommendedNodeName()
+          selectedInitialNodeId.value = typeof draft.initialNodeId === 'string' ? draft.initialNodeId : ''
+          if (stepStage.value === 'review') await loadInitialNodeCandidates()
         } else stepStage.value = 'track'
       } else clearDraft(owner)
     }
@@ -916,51 +992,56 @@ onBeforeRouteLeave(() => {
   display:flex; flex-direction:column; min-width:0; gap:22px;
   padding-top:24px; color:var(--setup-ink);
 }
-.setup-intro { display:flex; align-items:center; justify-content:space-between; gap:24px; }
-.setup-eyebrow,.card-kicker,.choice-code,.setup-footer,.progress-heading span,.progress-footer > span:last-child { font-family:Consolas,'SFMono-Regular',monospace; font-size:10px; line-height:1.6; }
-.setup-eyebrow { color:var(--setup-muted); }
-.setup-intro h2 { margin:6px 0 0; font-size:24px; font-weight:650; line-height:1.4; }
-.setup-intro > p { margin:0; color:var(--setup-muted); font-size:13px; line-height:1.7; }
-.wizard-layout { display:grid; grid-template-columns:208px minmax(0,1fr); align-items:start; gap:24px; min-width:0; }
-.progress-panel { position:sticky; top:16px; display:flex; flex-direction:column; min-width:0; min-height:590px; padding:26px 18px 23px; border:1px solid #213b51; border-radius:6px; background:#102339; color:#eaf2f9; }
+.card-kicker,.choice-code,.progress-heading span,.progress-footer > span:last-child { font-family:Consolas,'SFMono-Regular',monospace; font-size:10px; line-height:1.6; }
+.wizard-layout { display:grid; grid-template-columns:232px minmax(0,1fr); align-items:stretch; gap:0; min-width:0; }
+.progress-panel { position:sticky; isolation:isolate; top:16px; display:flex; flex-direction:column; min-width:0; min-height:590px; padding:26px 18px 23px; border:1px solid #213b51; border-radius:0; background:linear-gradient(150deg,#112840 0%,#0d2238 58%,#0b1d31 100%); color:#eaf2f9; overflow:hidden; }
 .progress-heading { display:flex; align-items:center; gap:12px; padding:0 5px 24px; border-bottom:1px solid #354b60; }
-.progress-heading > .el-icon { font-size:25px; color:var(--setup-mint); }
+.progress-heading > .el-icon { display:grid; place-items:center; flex:0 0 34px; width:34px; height:34px; border:1px solid #8bded640; border-radius:3px; background:#a2e8df0b; font-size:19px; color:var(--setup-mint); }
 .progress-heading span { display:block; color:#b8cadb; font-size:9px; }
 .progress-heading strong { display:block; margin-top:5px; font-size:15px; font-weight:600; }
-.progress-list { display:flex; flex-direction:column; gap:5px; margin:25px -4px 20px; }
-.progress-card { position:relative; display:grid; grid-template-columns:32px minmax(0,1fr); align-items:start; gap:12px; min-width:0; min-height:76px; padding:12px 8px; border:0; border-radius:4px; background:transparent; color:#d6e1ec; text-align:left; cursor:pointer; transition:background-color 180ms ease; }
-.progress-card:not(:last-child)::after { position:absolute; top:47px; bottom:-13px; left:24px; width:1px; background:#40586e; content:''; }
+.progress-list { display:flex; flex:1; flex-direction:column; justify-content:space-evenly; align-items:stretch; gap:8px; min-height:0; margin:20px -4px 18px; }
+.progress-card { position:relative; display:grid; flex:0 0 auto; grid-template-columns:32px minmax(0,1fr); align-items:center; gap:12px; width:100%; min-width:0; min-height:62px; padding:10px 9px; border:1px solid transparent; border-radius:0; background:transparent; color:#d6e1ec; text-align:left; cursor:pointer; transition:background-color 180ms ease,border-color 180ms ease,box-shadow 180ms ease,transform 180ms ease; }
 .progress-index { position:relative; z-index:1; display:flex; justify-content:center; align-items:center; width:32px; height:32px; border:1px solid #658095; border-radius:50%; background:#102339; color:#d1deea; font:11px/1 Consolas,monospace; }
 .progress-index .el-icon { font-size:16px; }
-.progress-copy { display:flex; flex-direction:column; min-width:0; }
+.progress-copy { position:relative; z-index:1; display:flex; flex-direction:column; min-width:0; }
 .progress-title { display:block; font-size:14px; font-weight:600; line-height:1.65; }
 .progress-desc { display:block; margin-top:4px; color:#b8cadb; font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
-.progress-card.active { background:#203b50; color:#b3f6e9; }
+.progress-card.active { align-self:flex-start; flex:0 0 auto; width:100%; max-width:100%; border-color:#8fe3d633; border-radius:10px; background:#274657; color:#b3f6e9; box-shadow:inset 0 0 0 1px #8fe3d61a,0 4px 12px #06172740; }
 .progress-card.active .progress-index { border-color:var(--setup-mint); background:var(--setup-mint); color:#102339; }
-.progress-card.done:not(.active) .progress-index { border-color:#8ecec6; color:#adf1e4; }
-.progress-card.done::after { background:#689e9b; }
+.progress-card.done:not(.active) .progress-index { border-color:#8ecec6; background:#a1e7df0c; color:#adf1e4; }
 .progress-card:disabled { cursor:not-allowed; }
 .progress-card:disabled .progress-title,.progress-card:disabled .progress-index { color:#adc0d1; }
-.progress-card:hover:not(:disabled) { background:#203b50; }
-.progress-current { position:absolute; right:6px; top:25px; width:4px; height:4px; border-radius:50%; background:var(--setup-mint); }
-.progress-footer { display:grid; grid-template-columns:22px minmax(0,1fr); gap:10px; align-items:start; margin-top:auto; padding:20px 5px 0; border-top:1px solid #354b60; }
+.progress-card:hover:not(.active):not(:disabled) { border-color:#8fe3d622; background-color:#b0ebe20b; transform:translateX(2px); }
+.progress-card.active:hover:not(:disabled) { border-color:#9ce9df70; background:#2c5263; }
+.progress-footer { position:relative; z-index:1; display:grid; grid-template-columns:22px minmax(0,1fr); gap:10px; align-items:start; margin-top:auto; padding:18px 5px 0; border-top:1px solid #8db6c125; }
 .progress-footer-mark { color:#a2e8df; font-size:20px; }
 .progress-footer p { margin:0; color:#c2d2e0; font-size:11px; line-height:1.9; }
 .progress-footer > span:last-child { grid-column:1/-1; color:#b8cadb; font-size:9px; }
-.step-panel { min-width:0; }
+.step-panel { display:flex; flex-direction:column; min-width:0; }
 @media (min-width:1081px) {
+  .onboarding-page:not(.is-fit-layout):not(.is-contained-layout) { padding-top:0; }
   .onboarding-page:not(.is-fit-layout):not(.is-contained-layout) .wizard-layout { align-items:stretch; }
-  .onboarding-page:not(.is-fit-layout):not(.is-contained-layout) .progress-panel { position:static; align-self:stretch; }
+  .onboarding-page:not(.is-fit-layout):not(.is-contained-layout) .progress-panel { position:relative; top:auto; align-self:stretch; }
   .onboarding-page:not(.is-fit-layout):not(.is-contained-layout) .work-card { min-height:100%; }
 }
-.work-card { border:1px solid var(--setup-line); border-radius:6px; background:#fff; box-shadow:none; overflow:visible; }
+.work-card { flex:1; border:1px solid var(--setup-line); border-left:0; border-radius:0; background:#fff; box-shadow:none; overflow:visible; }
 .work-card :deep(.el-card__header) { padding:26px 30px 23px; border-bottom:1px solid var(--setup-line); }
 .work-card :deep(.el-card__body) { min-width:0; padding:22px 30px 0; }
 .card-head { display:flex; justify-content:space-between; align-items:center; gap:20px; }
 .card-head > div { min-width:0; }
+.card-head .card-title { display:flex; align-items:center; gap:9px; }
+.stage-heading-icon.el-icon {
+  flex:0 0 auto;
+  width:20px;
+  color:var(--setup-accent);
+  font-size:20px;
+}
+.stage-heading-meta { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; margin-bottom:6px; }
+.stage-heading-meta .card-kicker { margin-bottom:0; }
+.stage-context { color:var(--setup-muted); font-size:11px; overflow-wrap:anywhere; }
 .card-kicker { display:block; margin-bottom:8px; color:var(--setup-accent); }
 .card-title { margin:0; color:var(--setup-ink); font-size:26px; font-weight:650; line-height:1.4; text-wrap:balance; }
-.card-subtitle { margin:9px 0 0; color:var(--setup-muted); font-size:13px; line-height:1.75; }
+.card-subtitle { margin:9px 0 0; padding-inline-start:29px; color:var(--setup-muted); font-size:13px; line-height:1.75; }
 .step-coordinate { flex:0 0 auto; align-self:flex-start; color:#b6c6ce; font:34px/1.2 Consolas,monospace; }
 .step-coordinate > span { display:block; margin-top:5px; color:var(--setup-muted); font-size:10px; text-align:right; }
 .overview-strip { display:grid; grid-template-columns:1fr 1fr minmax(0,1.5fr); margin-bottom:22px; padding-bottom:18px; border-bottom:1px solid var(--setup-line); }
@@ -971,7 +1052,7 @@ onBeforeRouteLeave(() => {
 .overview-chip strong small { color:var(--setup-muted); font-size:12px; font-weight:400; }
 .overview-person strong { font-family:inherit; font-size:14px; line-height:1.7; }
 .card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-.choice-card { position:relative; display:flex; flex-direction:column; gap:9px; min-width:0; min-height:180px; padding:18px 20px 16px; border:1px solid var(--setup-line); border-radius:4px; background:#fff; color:var(--setup-ink); text-align:left; cursor:pointer; transition:background-color 180ms ease,border-color 180ms ease; }
+.choice-card { position:relative; display:flex; flex-direction:column; gap:9px; min-width:0; min-height:180px; padding:18px 20px 16px; border:1px solid var(--setup-line); border-radius:0; background:#fff; color:var(--setup-ink); text-align:left; cursor:pointer; transition:background-color 180ms ease,border-color 180ms ease; }
 .choice-topline { display:flex; align-items:center; gap:11px; margin-bottom:4px; }
 .choice-icon { width:31px; height:31px; color:var(--setup-accent); font-size:26px; }
 .choice-code { color:var(--setup-muted); font-size:9px; }
@@ -990,10 +1071,6 @@ onBeforeRouteLeave(() => {
 .choice-card.unavailable .choice-topline,.choice-card.unavailable .choice-bottom > .el-icon { color:var(--setup-muted); }
 .track-number { color:var(--setup-accent); font:22px/1.2 Consolas,monospace; }
 .track-grid .choice-card { min-height:187px; }
-.insight-card { display:flex; gap:12px; align-items:flex-start; margin-top:22px; padding:16px 0 0; border-top:1px solid var(--setup-line); color:var(--setup-accent); }
-.insight-card > .el-icon { flex:0 0 auto; margin-top:2px; font-size:19px; }
-.insight-card strong { color:var(--setup-ink); font-size:12px; font-weight:600; }
-.insight-card p { margin:5px 0 0; color:var(--setup-muted); font-size:12px; line-height:1.75; }
 .action-row { display:flex; align-items:center; justify-content:flex-end; gap:14px; margin-top:24px; padding:20px 0; border-top:1px solid var(--setup-line); }
 .action-hint { flex:1; min-width:0; color:var(--setup-muted); font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
 .action-row :deep(.el-button) { flex:0 0 auto; min-width:112px; min-height:44px; height:auto; margin:0; padding:12px 20px; border-radius:4px; color:var(--setup-ink); font-size:13px; font-weight:600; line-height:1.4; }
@@ -1003,15 +1080,12 @@ onBeforeRouteLeave(() => {
 .action-row :deep(.el-button--primary.is-disabled) { border-color:#d5e0e5; background:#eaf0f2; color:#677d89; }
 .action-row :deep(.back-button) { min-width:90px; padding-inline:8px; border-color:transparent; background:transparent; color:var(--setup-muted); }
 .action-row :deep(.back-button:hover) { background:#f1f5f7; color:var(--setup-ink); }
+.action-row :deep(.manage-progress-button.is-link) { color:var(--setup-accent); }
 /* Element Plus input/select wrappers and textareas already provide their focus border. */
-.onboarding-page :deep(button:focus-visible),.onboarding-page :deep(.el-checkbox:focus-within),.onboarding-page :deep(.el-radio:focus-within) { outline:2px solid #176b70; outline-offset:3px; }
+.onboarding-page :deep(button:focus-visible) { outline:2px solid #176b70; outline-offset:3px; }
+/* 选项卡的焦点描边贴合自身边框，避免悬浮空隙。 */
+.onboarding-page :deep(.el-checkbox:focus-within),.onboarding-page :deep(.el-radio:focus-within) { outline:2px solid #176b70; outline-offset:0; }
 .progress-panel button:focus-visible { outline-color:var(--setup-mint); }
-.form-context { display:flex; align-items:center; gap:12px; padding:0 0 21px; border-bottom:1px solid var(--setup-line); }
-.form-context > .el-icon { flex:0 0 auto; color:var(--setup-accent); font-size:23px; }
-.form-context > div { min-width:0; }
-.form-context span { color:var(--setup-muted); font-size:11px; line-height:1.6; }
-.form-context strong { display:block; margin-top:4px; color:var(--setup-ink); font-size:14px; font-weight:600; line-height:1.6; overflow-wrap:anywhere; }
-.form-context .form-context-count { margin-left:auto; flex:0 0 auto; font:11px/1.5 Consolas,'Microsoft YaHei',sans-serif; }
 .questionnaire-form { width:100%; }
 .question-block,.diagnostic-item { min-width:0; padding:25px 0; margin:0; border-bottom:1px solid var(--setup-line); }
 .question-block :deep(.el-form-item__label) { display:flex; align-items:flex-start; gap:12px; width:100%; height:auto; padding:0; margin-bottom:14px; color:var(--setup-ink); font-size:14px; font-weight:600; line-height:1.7; }
@@ -1029,74 +1103,105 @@ onBeforeRouteLeave(() => {
 .questionnaire-form :deep(.el-input__inner::placeholder),.questionnaire-form :deep(.el-textarea__inner::placeholder) { color:#647689; }
 .questionnaire-form :deep(.el-input__wrapper.is-focus),.questionnaire-form :deep(.el-textarea__inner:focus),.diagnostic-item :deep(.el-textarea__inner:focus) { box-shadow:0 0 0 2px var(--setup-accent) inset; }
 .answer-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; width:100%; }
-.answer-options :deep(.el-checkbox),.answer-options :deep(.el-radio) { display:flex; align-items:center; min-width:0; height:auto; min-height:46px; margin:0; padding:12px 14px; border:1px solid #cbd7df; border-radius:4px; background:#f8fafb; color:var(--setup-ink); }
-.answer-options :deep(.el-checkbox__label),.answer-options :deep(.el-radio__label) { min-width:0; padding-left:10px; color:var(--setup-ink); font-size:12px; line-height:1.7; white-space:normal; overflow-wrap:anywhere; }
-.answer-options :deep(.is-checked) { border-color:var(--setup-accent); background:#eef8f6; }
+.answer-options :deep(:is(.el-checkbox,.el-radio)) {
+  display:flex;
+  align-items:center;
+  min-width:0;
+  height:auto;
+  min-height:46px;
+  margin:0;
+  padding:10px 14px;
+  border:1px solid #cddde5;
+  border-radius:9px;
+  background:linear-gradient(155deg,#fff 10%,#f0f6f8);
+  box-shadow:inset 0 1px 0 #fff,0 2px 3px rgb(31 65 85 / 8%),0 7px 15px -11px rgb(31 65 85 / 28%);
+  color:var(--setup-ink);
+  transition:border-color 180ms ease,box-shadow 180ms ease;
+}
+.answer-options :deep(:is(.el-checkbox__input,.el-radio__input)) { flex-shrink:0; }
+.answer-options :deep(:is(.el-checkbox__label,.el-radio__label)) { min-width:0; padding-left:10px; color:var(--setup-ink); font-size:13px; line-height:1.6; white-space:normal; overflow-wrap:anywhere; }
+@media (hover:hover) {
+  .answer-options :deep(:is(.el-checkbox,.el-radio):not(.is-disabled):hover) {
+    border-color:#77aab0;
+    box-shadow:inset 0 1px 0 #fff,0 3px 6px rgb(31 83 93 / 12%),0 8px 16px -10px rgb(31 83 93 / 32%);
+  }
+}
+.answer-options :deep(:is(.el-checkbox,.el-radio).is-checked) {
+  border-color:#6ba5a8;
+  background:linear-gradient(120deg,#f1faf9,#dcefeb);
+  box-shadow:inset 0 1px 0 #fff,0 2px 4px rgb(23 107 112 / 15%),0 8px 16px -12px rgb(23 107 112 / 32%);
+}
+.answer-options :deep(:is(.el-checkbox,.el-radio).is-checked :is(.el-checkbox__label,.el-radio__label)) { font-weight:600; }
+.onboarding-page .answer-options :deep(:is(.el-checkbox,.el-radio):focus-within) { outline:0; }
+.onboarding-page .answer-options :deep(:is(.el-checkbox,.el-radio):has(input:focus-visible)) { outline:2px solid var(--setup-accent); outline-offset:2px; }
 .answer-options :deep(.el-checkbox__input.is-checked .el-checkbox__inner),.answer-options :deep(.el-radio__input.is-checked .el-radio__inner) { background:var(--setup-accent); border-color:var(--setup-accent); }
 .answer-options :deep(.el-checkbox__inner),.answer-options :deep(.el-radio__inner) { border-color:#879eaf; }
 .diagnostic-heading { display:flex; align-items:flex-start; gap:12px; margin-bottom:18px; }
 .question-title { min-width:0; margin:0; font-size:14px; font-weight:600; line-height:1.8; overflow-wrap:anywhere; }
 .questionnaire-form .action-row { margin-top:0; border-top:0; }
-.result-card { overflow:hidden; border:1px solid var(--setup-line); border-radius:4px; box-shadow:none; }
-.result-heading { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:22px; background:#102339; color:#f1f6fb; }
-.result-heading > div:first-child { min-width:0; }
-.result-heading .card-kicker { color:#a5e9df; font-size:9px; }
-.result-heading h4 { margin:0; font-size:19px; font-weight:600; line-height:1.6; overflow-wrap:anywhere; }
-.result-heading p { margin:5px 0 0; color:#c0d1df; font-size:11px; line-height:1.7; }
-.ability-stage { flex:0 0 auto; padding-left:22px; border-left:1px solid #4b667b; }
-.ability-stage span { display:block; color:#c0d1df; font-size:10px; }
-.ability-stage strong { display:block; margin-top:7px; color:var(--setup-mint); font-size:24px; font-weight:600; }
-.diagnosis-result-body { padding:20px 22px; }
-.diagnosis-point-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
-.diagnosis-point-card { min-width:0; }
-.diagnosis-point-card > span { display:flex; align-items:center; gap:7px; color:var(--setup-muted); font-size:11px; }
-.diagnosis-point-card > span > .el-icon { color:var(--setup-accent); font-size:15px; }
-.diagnosis-point-card p { margin:9px 0 0; color:var(--setup-ink); font-size:13px; line-height:1.75; overflow-wrap:anywhere; }
-.initial-node-recommendation { display:flex; align-items:flex-start; gap:11px; margin-top:18px; padding-top:18px; border-top:1px solid var(--setup-line); }
-.initial-node-recommendation > .el-icon { flex:0 0 auto; margin-top:2px; color:var(--setup-accent); font-size:22px; }
-.initial-node-recommendation__kicker { display:block; color:var(--setup-muted); font-size:11px; }
-.initial-node-recommendation__node { display:block; margin-top:7px; color:var(--setup-accent); font-size:15px; font-weight:600; overflow-wrap:anywhere; }
-.initial-node-recommendation p { margin:6px 0 0; color:var(--setup-muted); font-size:12px; line-height:1.8; }
-.resource-selection-form { margin-top:26px; }
-.resource-selection-form :deep(.el-form-item) { margin-bottom:25px; }
-.resource-selection-form :deep(.el-form-item__label) { height:auto; margin-bottom:10px; padding:0; color:var(--setup-ink); font-size:14px; font-weight:600; line-height:1.7; }
+.diagnosis-result-card { flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; gap:14px; overflow:hidden; border:0; border-radius:18px; }
+.diagnosis-identity-row { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:16px 20px 0; }
+.diagnosis-identity { flex:1 1 auto; min-width:0; padding:12px 14px; border:1px solid rgba(255,255,255,.85); border-radius:12px; background:rgba(255,255,255,.72); box-shadow:0 2px 6px -2px rgba(23,107,112,.14); }
+.diagnosis-identity .card-kicker { color:#7d939c; font-size:9px; letter-spacing:.08em; }
+.diagnosis-identity strong { display:block; margin-top:2px; color:#172c45; font-size:15px; font-weight:600; line-height:1.4; overflow-wrap:anywhere; }
+.ability-stage { flex:0 0 auto; padding:10px 14px; border:1px solid rgba(255,255,255,.85); border-radius:12px; background:rgba(255,255,255,.72); box-shadow:0 2px 6px -2px rgba(23,107,112,.14); text-align:right; }
+.ability-stage span { display:block; color:#59697b; font-size:10px; }
+.ability-stage span em { margin-left:2px; color:#8ba2ad; font:9px Consolas,monospace; font-style:normal; }
+.ability-stage strong { display:block; margin-top:2px; color:#176b70; font-size:16px; font-weight:600; }
+.diagnosis-point-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0; margin:0 20px; padding:14px 0 18px; border-top:1px solid #dce4eb; }
+.diagnosis-point-card { min-width:0; padding:0 14px; }
+.diagnosis-point-card:first-child { padding-left:0; }
+.diagnosis-point-card:last-child { padding-right:0; }
+.diagnosis-point-card + .diagnosis-point-card { border-left:1px solid #dce4eb; }
+.diagnosis-point-card > span { display:flex; align-items:center; gap:7px; color:#59697b; font-size:11px; }
+.diagnosis-point-card > span > .el-icon { color:#176b70; font-size:15px; }
+.diagnosis-point-card > span em { margin-left:auto; color:#8ba2ad; font-size:10px; font-style:normal; }
+.diagnosis-point-card p { margin:4px 0 0; color:#172c45; font-size:13px; font-weight:600; line-height:1.5; overflow-wrap:anywhere; }
+.diagnosis-point-card p small { display:block; margin-top:3px; color:#59697b; font-size:10.5px; font-weight:400; line-height:1.55; }
+.review-stage-card :deep(.el-card__body) { display:flex; flex-direction:column; gap:16px; padding-bottom:18px; }
+.resource-selection-form { display:flex; flex:0 0 auto; flex-direction:column; margin-top:0; }
+.resource-selection-form .action-row { margin-top:16px; padding-top:0; }
+.resource-selection-form :deep(.el-form-item) { margin-bottom:14px; }
+.resource-selection-form :deep(.el-form-item__label) { height:auto; margin-bottom:6px; padding:0; color:var(--setup-ink); font-size:13px; font-weight:600; line-height:1.6; }
 .resource-selection-form :deep(.el-form-item__content) { min-width:0; }
 .field-hint { margin-top:9px; color:var(--setup-muted); font-size:12px; line-height:1.75; }
-.resource-hint { width:100%; margin:0 0 13px; }
-.resource-type-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; width:100%; }
-.resource-type-grid :deep(.el-checkbox) { position:relative; min-width:0; min-height:103px; height:auto; margin:0; padding:15px; align-items:flex-start; border:1px solid #cbd7df; border-radius:4px; background:#f8fafb; }
-.resource-type-grid :deep(.el-checkbox__input) { position:absolute; top:17px; right:14px; }
+.resource-type-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; width:100%; }
+.resource-type-grid :deep(.el-checkbox) { position:relative; min-width:0; height:auto; margin:0; padding:10px 10px 9px; align-items:flex-start; border:1px solid rgba(23,107,112,.18); border-radius:9px; background:linear-gradient(165deg, rgba(23,107,112,.045), rgba(255,255,255,.55)); box-shadow:inset 0 1px 0 rgba(255,255,255,.75); transition:background .18s ease, border-color .18s ease, box-shadow .18s ease; cursor:pointer; }
+.resource-type-grid :deep(.el-checkbox:hover) { border-color:rgba(23,107,112,.4); background:linear-gradient(165deg, rgba(23,107,112,.08), rgba(255,255,255,.6)); }
+.resource-type-grid :deep(.el-checkbox__input) { position:absolute; top:8px; right:8px; }
 .resource-type-grid :deep(.el-checkbox__label) { min-width:0; width:100%; padding:0; color:var(--setup-ink); white-space:normal; }
-.resource-type-grid :deep(.el-checkbox.is-checked) { border-color:var(--setup-accent); background:#eef8f6; }
+.resource-type-grid :deep(.el-checkbox.is-checked) { border-color:rgba(23,107,112,.6); background:linear-gradient(165deg, rgba(23,107,112,.12), rgba(156,242,224,.14)); box-shadow:inset 0 1px 0 rgba(255,255,255,.8), 0 6px 14px -8px rgba(23,107,112,.35); }
 .resource-type-grid :deep(.el-checkbox__inner) { border-color:#879eaf; }
 .resource-type-grid :deep(.el-checkbox__input.is-checked .el-checkbox__inner) { border-color:var(--setup-accent); background:var(--setup-accent); }
-.resource-option { display:grid; grid-template-columns:24px minmax(0,1fr); align-items:center; column-gap:9px; row-gap:10px; }
-.resource-option > .el-icon { grid-column:1/-1; font-size:22px; color:var(--setup-accent); }
-.resource-option strong { grid-column:1/-1; font-size:13px; font-weight:600; line-height:1.6; }
-.resource-option > span { grid-column:1/-1; color:var(--setup-muted); font-size:11px; line-height:1.7; }
-.claim-review-control { display:flex; gap:13px; align-items:center; width:100%; padding:15px; border:1px solid var(--setup-line); border-radius:4px; background:#f8fafb; }
-.claim-icon { flex:0 0 auto; color:var(--setup-accent); font-size:23px; }
+.resource-option { display:grid; grid-template-columns:18px minmax(0,1fr); align-items:center; column-gap:7px; padding-right:16px; }
+.resource-option > .el-icon { grid-column:1; grid-row:1; font-size:16px; color:var(--setup-accent); }
+.resource-option strong { grid-column:2; grid-row:1; font-size:12.5px; font-weight:600; line-height:1.3; }
+.resource-option > span { grid-column:1/-1; grid-row:2; margin-top:5px; color:var(--setup-muted); font-size:10px; line-height:1.45; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.claim-review-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; width:100%; }
+.claim-review-control { display:flex; gap:9px; align-items:center; width:100%; padding:9px 12px; border:1px solid rgba(23,107,112,.18); border-radius:9px; background:linear-gradient(165deg, rgba(23,107,112,.045), rgba(255,255,255,.55)); box-shadow:inset 0 1px 0 rgba(255,255,255,.75); }
+.claim-icon { flex:0 0 auto; color:var(--setup-accent); font-size:16px; }
 .claim-review-control > div { flex:1; min-width:0; }
-.claim-review-control strong { color:var(--setup-ink); font-size:12px; font-weight:600; line-height:1.7; }
-.claim-review-control p { margin:4px 0 0; color:var(--setup-muted); font-size:11px; line-height:1.7; }
+.claim-review-control strong { display:block; color:var(--setup-ink); font-size:12px; font-weight:600; line-height:1.4; }
+.claim-review-control p { margin:2px 0 0; color:var(--setup-muted); font-size:10.5px; line-height:1.5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .claim-review-control :deep(.el-switch) { flex:0 0 auto; --el-switch-on-color:#176b70; --el-switch-off-color:#758897; }
 .claim-review-control :deep(.el-switch__label) { color:var(--setup-muted); }
+@media (max-width:1080px) { .resource-type-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:600px) { .resource-type-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .claim-review-row { grid-template-columns:1fr; } }
 .claim-review-control :deep(.el-switch__label.is-active) { color:var(--setup-accent); }
-.setup-footer { display:flex; justify-content:space-between; gap:16px; padding-top:2px; color:var(--setup-muted); font-size:9px; line-height:1.8; }
-.onboarding-page:is(.is-fit-layout,.is-contained-layout) { height:100%; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:clamp(12px,1.6dvh,18px); padding-top:clamp(14px,2.1dvh,22px); }
-:is(.is-fit-layout,.is-contained-layout) .setup-intro { min-width:0; }
-:is(.is-fit-layout,.is-contained-layout) .setup-intro h2 { font-size:clamp(21px,2.7dvh,26px); }
+.onboarding-page:is(.is-fit-layout,.is-contained-layout) { height:100%; min-height:0; display:grid; grid-template-rows:minmax(0,1fr); gap:0; padding-top:0; }
+.onboarding-page.is-fit-layout { padding-top:0; }
+.onboarding-page:is(.is-fit-layout,.is-contained-layout):has(> .el-alert) { grid-template-rows:auto minmax(0,1fr); }
 :is(.is-fit-layout,.is-contained-layout) .wizard-layout { min-height:0; align-items:stretch; }
-:is(.is-fit-layout,.is-contained-layout) .progress-panel { position:static; height:100%; min-height:0; padding-block:clamp(16px,2.7dvh,28px); }
+:is(.is-fit-layout,.is-contained-layout) .progress-panel { position:relative; top:auto; height:100%; min-height:0; padding-block:clamp(16px,2.7dvh,28px); }
 :is(.is-fit-layout,.is-contained-layout) .progress-heading { padding-bottom:clamp(16px,2dvh,24px); }
-:is(.is-fit-layout,.is-contained-layout) .progress-list { flex:1; justify-content:space-evenly; min-height:0; gap:0; margin-block:clamp(14px,2dvh,22px); }
-:is(.is-fit-layout,.is-contained-layout) .progress-card { min-height:0; padding-block:10px; }
-:is(.is-fit-layout,.is-contained-layout) .progress-card:not(:last-child)::after { top:44px; bottom:-20px; }
+:is(.is-fit-layout,.is-contained-layout) .progress-list { flex:1; min-height:0; gap:8px; margin-block:clamp(14px,2dvh,22px); }
+:is(.is-fit-layout,.is-contained-layout) .progress-card { flex:0 0 auto; min-height:62px; padding-block:10px; }
 :is(.is-fit-layout,.is-contained-layout) .progress-footer { flex:0 0 auto; padding-top:16px; }
 :is(.is-fit-layout,.is-contained-layout) .step-panel { height:100%; min-height:0; }
 :is(.is-fit-layout,.is-contained-layout) .work-card { display:flex; flex-direction:column; height:100%; min-height:0; }
 :is(.is-fit-layout,.is-contained-layout) .work-card :deep(.el-card__header) { flex:0 0 auto; padding:clamp(15px,2dvh,22px) 24px; }
 :is(.is-fit-layout,.is-contained-layout) .work-card :deep(.el-card__body) { display:flex; flex:1; flex-direction:column; min-height:0; padding:16px 24px 0; }
+.onboarding-page.is-fit-layout .work-card :deep(.el-card__body) { overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#9db8c2 transparent; }
 :is(.is-fit-layout,.is-contained-layout) .card-kicker { margin-bottom:6px; font-size:10px; line-height:1.4; }
 :is(.is-fit-layout,.is-contained-layout) .card-title { font-size:clamp(22px,2.8dvh,27px); line-height:1.3; }
 :is(.is-fit-layout,.is-contained-layout) .card-subtitle { margin-top:7px; font-size:12px; line-height:1.7; }
@@ -1110,23 +1215,14 @@ onBeforeRouteLeave(() => {
 :is(.is-fit-layout,.is-contained-layout) .choice-title { font-size:16px; line-height:1.4; }
 :is(.is-fit-layout,.is-contained-layout) .choice-description { font-size:12px; line-height:1.65; }
 :is(.is-fit-layout,.is-contained-layout) .choice-bottom { margin-top:0; }
-:is(.is-fit-layout,.is-contained-layout) .insight-card { flex:0 0 auto; margin-top:14px; padding-top:12px; }
-:is(.is-fit-layout,.is-contained-layout) .insight-card p { margin-top:3px; font-size:11px; line-height:1.65; }
 :is(.is-fit-layout,.is-contained-layout) .action-row { flex:0 0 auto; margin-top:16px; padding-block:15px; }
-:is(.is-fit-layout,.is-contained-layout) .setup-footer { padding:0; }
 .card-title:focus-visible { outline:2px solid var(--setup-accent); outline-offset:5px; }
 @media (min-width:1100px) and (max-height:760px) {
-  .onboarding-page:is(.is-fit-layout,.is-contained-layout) { gap:10px; padding-top:12px; }
-  :is(.is-fit-layout,.is-contained-layout) .setup-intro { display:grid; grid-template-columns:minmax(0,1fr) auto; }
-  :is(.is-fit-layout,.is-contained-layout) .setup-intro > div { display:flex; align-items:center; gap:14px; }
-  :is(.is-fit-layout,.is-contained-layout) .setup-eyebrow { font-size:9px; }
-  :is(.is-fit-layout,.is-contained-layout) .setup-intro h2 { margin:0; font-size:20px; }
-  :is(.is-fit-layout,.is-contained-layout) .setup-intro > p { font-size:11px; }
+  .onboarding-page:is(.is-fit-layout,.is-contained-layout) { gap:0; padding-top:0; }
   :is(.is-fit-layout,.is-contained-layout) .progress-panel { padding:16px 12px; }
   :is(.is-fit-layout,.is-contained-layout) .progress-heading { padding-bottom:12px; }
   :is(.is-fit-layout,.is-contained-layout) .progress-list { margin-block:12px; }
-  :is(.is-fit-layout,.is-contained-layout) .progress-card { padding-block:7px; }
-  :is(.is-fit-layout,.is-contained-layout) .progress-card:not(:last-child)::after { top:40px; bottom:-14px; }
+  :is(.is-fit-layout,.is-contained-layout) .progress-card { min-height:58px; padding-block:7px; }
   :is(.is-fit-layout,.is-contained-layout) .progress-title { font-size:13px; }
   :is(.is-fit-layout,.is-contained-layout) .progress-desc { margin-top:2px; font-size:10px; }
   :is(.is-fit-layout,.is-contained-layout) .progress-footer { padding-top:12px; }
@@ -1150,48 +1246,38 @@ onBeforeRouteLeave(() => {
   :is(.is-fit-layout,.is-contained-layout) .choice-title { padding-inline:30px 20px; font-size:14px; line-height:1.6; }
   :is(.is-fit-layout,.is-contained-layout) .choice-description { font-size:11px; line-height:1.6; }
   :is(.is-fit-layout,.is-contained-layout) .choice-meta { font-size:10px; }
-  :is(.is-fit-layout,.is-contained-layout) .insight-card { align-items:center; padding-top:9px; margin-top:9px; gap:9px; }
-  :is(.is-fit-layout,.is-contained-layout) .insight-card > div { display:flex; align-items:baseline; gap:10px; }
-  :is(.is-fit-layout,.is-contained-layout) .insight-card strong { flex:0 0 auto; font-size:11px; }
-  :is(.is-fit-layout,.is-contained-layout) .insight-card p { margin:0; font-size:10px; line-height:1.6; }
   :is(.is-fit-layout,.is-contained-layout) .action-row { margin-top:10px; padding-block:11px; }
 }
 @media (min-width:1600px) {
-  .wizard-layout { grid-template-columns:224px minmax(0,1fr); gap:30px; }
+  .wizard-layout { grid-template-columns:254px minmax(0,1fr); }
   .work-card :deep(.el-card__header),.work-card :deep(.el-card__body) { padding-inline:36px; }
   .choice-card { min-height:192px; padding:22px 24px; }
 }
 @media (max-width:1300px) and (min-width:1081px) {
-  .wizard-layout { grid-template-columns:186px minmax(0,1fr); gap:18px; }
+  .wizard-layout { grid-template-columns:204px minmax(0,1fr); }
   .progress-panel { padding-inline:12px; }
   .work-card :deep(.el-card__header) { padding:22px; }
   .work-card :deep(.el-card__body) { padding-inline:22px; }
-  .setup-intro > p { max-width:210px; }
 }
 @media (max-width:1080px) {
   .onboarding-page { gap:18px; padding-top:20px; }
-  .wizard-layout { grid-template-columns:1fr; gap:18px; }
-  .progress-panel { position:static; min-height:0; padding:13px 16px; }
-  .progress-heading,.progress-footer,.progress-desc,.progress-current { display:none; }
+  .wizard-layout { grid-template-columns:1fr; }
+  .progress-panel { position:relative; top:auto; min-height:0; padding:13px 16px; border-radius:0; }
+  .work-card { border-left:1px solid var(--setup-line); border-top:0; border-radius:0; }
+  .progress-heading,.progress-footer,.progress-desc { display:none; }
   .progress-list { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0; margin:0; }
   .progress-card { display:flex; flex-direction:column; align-items:center; gap:6px; min-height:64px; padding:4px; text-align:center; }
-  .progress-card:not(:last-child)::after { top:19px; bottom:auto; left:calc(50% + 22px); width:calc(100% - 44px); height:1px; }
   .progress-index { width:30px; height:30px; }
   .progress-title { font-size:12px; }
-  .progress-card.active { background:transparent; }
-  .setup-intro > p { max-width:260px; }
+  .progress-card.active { align-self:stretch; width:100%; }
 }
 @media (max-width:720px) {
-  .setup-intro { display:block; }
-  .setup-intro h2 { font-size:22px; }
-  .setup-intro > p { max-width:none; margin-top:8px; font-size:12px; }
   .work-card :deep(.el-card__header) { padding:22px 20px 18px; }
   .work-card :deep(.el-card__body) { padding:20px 20px 0; }
   .card-title { font-size:23px; }
   .step-coordinate { font-size:29px; }
   .card-subtitle { font-size:12px; }
   .resource-type-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .setup-footer > span:last-child { display:none; }
 }
 @media (max-width:600px) {
   .onboarding-page { gap:16px; padding-top:19px; }
@@ -1199,7 +1285,6 @@ onBeforeRouteLeave(() => {
   .progress-title { font-size:11px; }
   .progress-index { width:28px; height:28px; font-size:10px; }
   .progress-card { min-height:58px; }
-  .progress-card:not(:last-child)::after { top:18px; left:calc(50% + 18px); width:calc(100% - 36px); }
   .card-head { gap:10px; }
   .card-title { font-size:21px; }
   .card-subtitle { margin-top:7px; }
@@ -1215,18 +1300,13 @@ onBeforeRouteLeave(() => {
   .action-hint { flex:1 0 100%; order:-1; }
   .action-row :deep(.el-button--primary) { flex:1; min-width:0; }
   .action-row :deep(.el-button > span) { justify-content:center; gap:10px; }
-  .form-context { flex-wrap:wrap; gap:10px; }
-  .form-context > div { flex:1; }
-  .form-context .form-context-count { flex:1 0 100%; padding-left:33px; }
   .question-block,.diagnostic-item { padding-block:22px; }
   .question-block :deep(.el-form-item__label),.diagnostic-heading { gap:9px; }
   .question-kind { font-size:9px; }
-  .result-heading { padding:18px; gap:12px; }
-  .result-heading h4 { font-size:17px; }
-  .ability-stage { padding-left:13px; }
-  .ability-stage strong { font-size:21px; }
-  .diagnosis-result-body { padding:18px; }
-  .diagnosis-point-grid { grid-template-columns:1fr; gap:18px; }
+  .diagnosis-identity-row { flex-direction:column; align-items:stretch; padding:12px 16px 10px; }
+  .ability-stage { text-align:left; }
+  .diagnosis-point-grid { grid-template-columns:1fr; margin:2px 16px 12px; }
+  .diagnosis-point-card + .diagnosis-point-card { margin-top:10px; padding:10px 0 0; border-left:0; border-top:1px solid #dce4eb; }
   .claim-review-control { flex-wrap:wrap; gap:10px; }
   .claim-review-control > div { flex-basis:calc(100% - 36px); }
   .claim-review-control :deep(.el-switch) { margin-left:33px; }
@@ -1234,23 +1314,19 @@ onBeforeRouteLeave(() => {
 @media (max-width:600px) {
   .review-stage-card .action-row { display:grid; grid-template-columns:minmax(0,1fr); }
   .review-stage-card .action-hint { order:0; grid-row:1; }
-  .review-stage-card .back-button { grid-row:2; justify-self:start; }
-  .review-stage-card .action-row :deep(.el-button--primary) { grid-row:3; width:100%; }
+  .review-stage-card .action-row :deep(.el-button--primary) { grid-row:2; width:100%; }
   .claim-review-control :deep(.el-switch) { min-height:44px; }
 }
-.is-contained-layout .work-card :deep(.el-card__body) { display:block; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:#9db8c2 transparent; }
+.is-contained-layout .work-card :deep(.el-card__body) { display:block; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:#9db8c2 transparent; }
 .is-contained-layout .work-card :deep(.el-card__body:focus-visible) { outline:2px solid var(--setup-accent); outline-offset:-2px; }
 @media (max-width:1080px) {
-  .is-contained-layout .wizard-layout { grid-template-rows:auto minmax(0,1fr); gap:14px; }
+  .is-contained-layout .wizard-layout { grid-template-rows:auto minmax(0,1fr); }
   .is-contained-layout .progress-panel { height:auto; padding:10px 12px; }
   .is-contained-layout .progress-list { flex:none; margin:0; }
   .is-contained-layout .progress-card { padding:4px; }
 }
 @media (max-width:600px) and (max-height:760px) {
-  .onboarding-page.is-contained-layout { gap:10px; padding-top:12px; }
-  .is-contained-layout .setup-intro h2 { margin-top:4px; font-size:20px; }
-  .is-contained-layout .setup-intro > p { margin-top:5px; font-size:11px; }
-  .is-contained-layout .wizard-layout { gap:10px; }
+  .onboarding-page.is-contained-layout { gap:0; padding-top:0; }
   .is-contained-layout .progress-panel { padding:8px 10px; }
   .is-contained-layout .progress-card { min-height:52px; gap:4px; }
   .is-contained-layout .work-card :deep(.el-card__header) { padding:12px 16px; }
@@ -1278,11 +1354,347 @@ onBeforeRouteLeave(() => {
   .is-track-stage:not(.is-fit-layout) .track-grid .choice-title { padding:0; font-size:16px; line-height:1.4; }
   .is-track-stage:not(.is-fit-layout) .track-grid .choice-description { font-size:12px; line-height:1.55; }
   .is-track-stage:not(.is-fit-layout) .track-grid .choice-bottom { margin-top:0; }
-  .is-track-stage:not(.is-fit-layout) .track-stage-card .insight-card { margin-top:12px; padding-top:10px; }
-  .is-track-stage:not(.is-fit-layout) .track-stage-card .insight-card p { margin-top:3px; font-size:11px; line-height:1.5; }
   .is-track-stage:not(.is-fit-layout) .track-stage-card .action-row { margin-top:12px; padding-block:10px; }
 }
 @media (prefers-reduced-motion:reduce) {
   .onboarding-page *, .onboarding-page *::before, .onboarding-page *::after { transition:none !important; animation:none !important; }
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .card-kicker { font-size:10px; letter-spacing:.1em; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .card-title { font-size:25px; font-weight:700; line-height:1.3; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .card-subtitle { color:#536b80; font-size:14px; line-height:1.6; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-chip span { font-size:12px; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-chip strong { font-size:21px; line-height:1.35; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-person strong { font-size:14px; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-strip {
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+  padding-bottom:18px;
+  margin-bottom:18px;
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-chip {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 18px;
+  border:0;
+  border-radius:12px;
+  background:
+    linear-gradient(90deg,transparent,#fff 20%,rgb(255 255 255 / 45%) 80%,transparent) 14px 1px / 70% 1px no-repeat,
+    radial-gradient(ellipse at 90% 0%,rgb(214 238 239 / 80%),transparent 70%),
+    linear-gradient(180deg,rgb(249 252 254 / 94%),rgb(232 241 246 / 88%));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 90%),
+    inset 0 -1px 1px rgb(111 142 167 / 20%),
+    0 3px 5px -4px rgb(33 64 86 / 28%),
+    0 10px 20px -14px rgb(33 64 86 / 34%);
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-chip span { color:#506b7e; font-size:14px; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-chip strong { margin:0; font-size:26px; line-height:1.3; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-person strong { font-family:inherit; font-size:20px; font-weight:600; line-height:1.3; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card {
+  --domain-accent:#247d83;
+  --domain-tint:#e9f5f3;
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:24px 26px;
+  overflow:hidden;
+  border-color:#d6e1e8;
+  border-radius:10px;
+  background:radial-gradient(ellipse at 100% 0%,var(--domain-tint),transparent 72%),linear-gradient(145deg,#fff,#f6f9fb);
+  box-shadow:inset 0 1px 0 #fff,0 5px 14px -11px rgb(29 63 86 / 28%);
+  transition:background 180ms ease,border-color 180ms ease,box-shadow 180ms ease;
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card:nth-child(2) { --domain-accent:#466db0; --domain-tint:#edf2fc; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card:nth-child(3) { --domain-accent:#7161a4; --domain-tint:#f1edfa; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card:nth-child(4) { --domain-accent:#416c8c; --domain-tint:#eaf2f7; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card > :not(.domain-emblem) { position:relative; z-index:1; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-topline { position:relative; inset:auto; gap:14px; margin:0; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-icon {
+  width:48px;
+  height:48px;
+  border:1px solid rgb(125 156 181 / 18%);
+  border-radius:12px;
+  background:linear-gradient(150deg,#fff,var(--domain-tint));
+  box-shadow:inset 0 1px 0 #fff,0 4px 9px -7px rgb(35 70 90 / 35%);
+  color:var(--domain-accent);
+  font-size:31px;
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .domain-emblem {
+  position:absolute;
+  right:30px;
+  top:50%;
+  width:104px;
+  height:104px;
+  font-size:104px;
+  color:var(--domain-accent);
+  opacity:.085;
+  transform:translateY(-30%) rotate(-8deg);
+  pointer-events:none;
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-code { color:#61798b; font-size:10px; letter-spacing:.08em; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-title { max-width:85%; padding:0; font-size:26px; font-weight:700; line-height:1.35; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-description { flex:0 0 auto; max-width:82%; color:#526b80; font-size:16px; line-height:1.75; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-bottom { margin:0; padding-top:12px; border-top:1px solid rgb(142 170 189 / 18%); }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-meta { color:#5d7387; font-size:13px; line-height:1.5; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-bottom > .el-icon { font-size:17px; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-selector { border-color:#9eb4c1; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card:hover:not(:disabled) {
+  border-color:#83afb2;
+  background:radial-gradient(ellipse at 100% 0%,var(--domain-tint),transparent 85%),linear-gradient(145deg,#fff,#f4faf9);
+  box-shadow:inset 0 1px 0 #fff,0 8px 18px -15px rgb(25 94 101 / 45%);
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card.selected {
+  border-color:#217e7b;
+  background:radial-gradient(ellipse at 100% 0%,#d6eeea,transparent 72%),linear-gradient(135deg,#eef9f6,#f8fcfb);
+  box-shadow:inset 0 0 0 1px rgb(33 126 123 / 20%),0 9px 20px -16px rgb(18 99 100 / 48%);
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card.selected .choice-selector { border-color:#176b70; background:#176b70; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card.unavailable {
+  border-color:#e0e7eb;
+  background:radial-gradient(ellipse at 100% 0%,var(--domain-tint),transparent 72%),linear-gradient(145deg,#f9fbfc,#f4f7f9);
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / 90%);
+}
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card:focus-visible { outline:2px solid #176b70; outline-offset:3px; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .action-hint { color:#526b80; font-size:13px; }
+.onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .action-row :deep(.el-button) { font-size:14px; }
+@media (max-width:720px) {
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .card-title { font-size:23px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .card-subtitle { font-size:13px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card { padding:18px; gap:10px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-title { font-size:22px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-description { max-width:90%; font-size:14px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .domain-emblem { font-size:80px; right:15px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-strip { gap:8px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-chip { flex-direction:column; align-items:flex-start; gap:8px; padding:12px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-stage-card,.track-stage-card) .overview-person { grid-column:auto; grid-row:auto; border:0; }
+}
+@media (min-width:1081px) and (max-height:760px) {
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-card { padding:16px 20px; gap:8px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-icon { width:36px; height:36px; font-size:25px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-title { font-size:22px; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-description { font-size:14px; line-height:1.6; }
+  .onboarding-page:is(.is-domain-stage,.is-track-stage) :is(.domain-grid,.track-grid) .choice-bottom { padding-top:8px; }
+}
+.onboarding-page.is-track-stage .track-stage-card .overview-strip { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.onboarding-page.is-track-stage .track-grid .choice-card.selected { border-left-width:1px; }
+.onboarding-page.is-track-stage .track-grid .choice-card { gap:8px; padding-block:20px; }
+.onboarding-page.is-track-stage .track-grid .choice-card .choice-bottom { flex:0 0 auto; margin-top:auto; }
+.onboarding-page.is-track-stage .track-grid .choice-card.track-rag {
+  --domain-accent:#277f85;
+  --domain-tint:#e8f5f2;
+  background:linear-gradient(150deg,#fff 25%,#e7f3f2 100%);
+}
+.onboarding-page.is-track-stage .track-grid .choice-card.track-agent {
+  --domain-accent:#7862a3;
+  --domain-tint:#f0ecf8;
+  background:radial-gradient(ellipse at 90% 60%,#e9e2f4,transparent 65%),linear-gradient(135deg,#fff,#f8f6fc);
+}
+.onboarding-page.is-track-stage .track-grid .choice-card.track-api {
+  --domain-accent:#3a71a0;
+  --domain-tint:#eaf2fa;
+  background:linear-gradient(115deg,#fff 30%,#eaf2fa);
+}
+.onboarding-page.is-track-stage .track-grid .choice-card:is(.track-rag,.track-agent,.track-api) .choice-icon {
+  border:0;
+  border-radius:0;
+  background:none;
+  box-shadow:none;
+  width:42px;
+  height:42px;
+  font-size:36px;
+}
+.onboarding-page.is-track-stage .track-grid .choice-card > .track-artwork {
+  position:absolute;
+  z-index:0;
+  right:10px;
+  bottom:36px;
+  width:180px;
+  height:113px;
+  color:var(--domain-accent);
+  opacity:.22;
+  pointer-events:none;
+}
+.onboarding-page.is-track-stage .track-grid .choice-card:is(.track-rag,.track-agent,.track-api) .choice-title { max-width:100%; }
+.onboarding-page.is-track-stage .track-grid .choice-card:is(.track-rag,.track-agent,.track-api) .choice-description { max-width:78%; }
+.onboarding-page.is-track-stage .track-grid .choice-card.track-agent .choice-bottom { border-top-color:rgb(120 98 163 / 18%); }
+.onboarding-page.is-track-stage .track-grid .choice-card.track-api .choice-bottom { border-top-style:dashed; border-top-color:rgb(58 113 160 / 24%); }
+.onboarding-page.is-track-stage .track-grid .choice-card:is(.track-rag,.track-agent,.track-api).selected { border-color:var(--domain-accent); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--domain-accent) 18%,transparent),0 7px 16px -13px var(--domain-accent); }
+@media (max-width:720px), (max-height:760px) {
+  .onboarding-page.is-track-stage .track-grid .choice-card > .track-artwork { width:130px; height:82px; right:0; opacity:.15; }
+  .onboarding-page.is-track-stage .track-grid .choice-card:is(.track-rag,.track-agent,.track-api) .choice-description { max-width:95%; }
+}
+.review-stage-card :deep(.el-card__body) { display:flex; flex:1; flex-direction:column; min-height:0; padding:16px 20px 20px; }
+.review-stage-layout { display:grid; flex:1 1 0%; min-height:0; grid-template-columns:minmax(285px,.82fr) minmax(0,1.45fr); grid-template-rows:minmax(0,1fr) auto; grid-template-areas:"summary resources" "actions actions"; align-content:stretch; align-items:stretch; gap:18px; }
+.review-stage-layout > * { min-height:0; }
+.review-stage-layout > .resource-selection-form:first-child { grid-area:resources; grid-column:1/-1; }
+.review-stage-card .diagnosis-result-card {
+  grid-area:summary;
+  width:100%;
+  height:100%;
+  min-height:0;
+  align-self:stretch;
+  box-sizing:border-box;
+  justify-content:flex-start;
+  gap:0;
+  border-radius:14px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 85%),
+    inset 0 -1px 1px rgb(111 142 167 / 22%),
+    0 4px 8px -4px rgb(33 64 86 / 25%),
+    0 13px 25px -14px rgb(33 64 86 / 32%);
+}
+.review-stage-card .diagnosis-identity-row {
+  align-items:stretch;
+  gap:12px;
+  padding:20px 20px 18px;
+}
+.review-stage-card .diagnosis-identity,
+.review-stage-card .ability-stage {
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  border:0;
+  border-radius:14px;
+  background:
+    linear-gradient(90deg,transparent,#fff 20%,rgb(255 255 255 / 45%) 80%,transparent) 14px 1px / 70% 1px no-repeat,
+    radial-gradient(ellipse at 90% 0%,rgb(214 238 239 / 80%),transparent 70%),
+    linear-gradient(180deg,rgb(249 252 254 / 94%),rgb(232 241 246 / 88%));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 90%),
+    inset 0 -1px 1px rgb(111 142 167 / 20%),
+    0 3px 5px -4px rgb(33 64 86 / 28%),
+    0 10px 20px -14px rgb(33 64 86 / 34%);
+}
+.review-stage-card .diagnosis-identity { padding:16px; }
+.review-stage-card .diagnosis-identity .card-kicker { margin-bottom:8px; color:#526e7e; font-family:inherit; font-size:12px; font-weight:400; line-height:1.5; letter-spacing:normal; white-space:nowrap; }
+.review-stage-card .diagnosis-identity .card-kicker em { display:inline; margin:0 0 0 5px; color:#607f8e; font:normal 12px/1.5 Consolas,monospace; letter-spacing:.02em; }
+.review-stage-card .diagnosis-identity strong { margin:0; font-size:20px; font-weight:650; line-height:1.45; }
+.review-stage-card .ability-stage { min-width:112px; padding:16px 12px; text-align:center; }
+.review-stage-card .ability-stage span { color:#526e7e; font-size:12px; line-height:1.5; white-space:nowrap; }
+.review-stage-card .ability-stage span em { display:inline; margin:0 0 0 5px; color:#607f8e; font:normal 12px/1.5 Consolas,monospace; letter-spacing:.02em; }
+.review-stage-card .ability-stage strong { margin-top:6px; color:#176b70; font-size:20px; font-weight:650; line-height:1.45; }
+.review-stage-card .diagnosis-point-grid {
+  display:grid;
+  flex:1;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:1.15fr .9fr .95fr;
+  min-height:0;
+  align-content:stretch;
+  margin:0 20px;
+  padding:0 0 12px;
+}
+.review-stage-card .diagnosis-point-card { display:flex; flex-direction:column; justify-content:center; gap:9px; min-height:0; padding:20px 0; }
+.review-stage-card .diagnosis-point-card + .diagnosis-point-card { border-top:1px solid rgb(124 157 178 / 20%); border-left:0; }
+.review-stage-card .diagnosis-point-card > span { gap:10px; color:#4b697b; font-size:14px; line-height:1.5; }
+.review-stage-card .diagnosis-point-card > span > .el-icon { flex:0 0 auto; font-size:24px; color:#247e84; }
+.review-stage-card .diagnosis-point-card > span em {
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:center;
+  min-height:28px;
+  padding:4px 11px;
+  border:1px solid rgb(93 158 166 / 25%);
+  border-radius:8px;
+  background:linear-gradient(145deg,rgb(255 255 255 / 92%),rgb(219 240 239 / 80%));
+  box-shadow:inset 0 1px 0 #fff,0 3px 7px -5px rgb(33 95 108 / 32%);
+  color:#286b76;
+  font-size:12px;
+  font-weight:600;
+  line-height:1.4;
+  letter-spacing:.04em;
+  white-space:nowrap;
+}
+.review-stage-card .diagnosis-point-card p { margin:0; padding-inline-start:34px; color:#18364a; font-size:20px; font-weight:650; line-height:1.45; }
+.review-stage-card .diagnosis-point-recommend p > strong { font-size:inherit; font-weight:inherit; line-height:inherit; }
+.review-stage-card .diagnosis-point-card p small { margin-top:8px; color:#587484; font-size:12px; line-height:1.7; }
+.review-stage-card .resource-selection-form { grid-area:resources; display:flex; flex:1; flex-direction:column; min-height:0; margin:0; }
+.review-stage-card .resource-selection-form :deep(.el-form-item) { min-width:0; margin-bottom:12px; }
+.review-stage-card .resource-selection-form > :deep(.el-form-item:last-child) { margin-bottom:0; }
+.review-stage-card .resource-selection-form :deep(.el-form-item__label) { font-size:15px; font-weight:650; line-height:1.6; margin-bottom:8px; }
+.review-stage-card .resource-selection-form :deep(.resource-type-field) { display:flex; flex:1; flex-direction:column; min-height:0; }
+.review-stage-card .resource-selection-form :deep(.resource-type-field .el-form-item__content) { display:flex; flex:1; min-height:0; align-items:stretch; }
+.review-stage-card .resource-selection-form .resource-type-grid { flex:1; min-height:0; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:minmax(72px,1fr); align-content:stretch; gap:10px; }
+.review-stage-card .resource-selection-form .resource-type-grid :deep(.el-checkbox),
+.review-stage-card .resource-selection-form .claim-review-control {
+  border:1px solid rgb(158 184 198 / 26%);
+  border-radius:13px;
+  background:
+    radial-gradient(ellipse at 95% 0%,rgb(218 239 240 / 65%),transparent 64%),
+    linear-gradient(160deg,#fbfdfe,#edf4f8);
+  box-shadow:inset 0 1px 0 #fff,inset 0 -1px 1px rgb(109 143 161 / 12%),
+    0 3px 5px -4px rgb(33 64 86 / 25%),0 10px 20px -17px rgb(33 64 86 / 32%);
+}
+.review-stage-card .resource-selection-form .resource-type-grid :deep(.el-checkbox) { display:flex; align-items:stretch; margin-block:7px; padding:12px 18px; }
+.review-stage-card .resource-selection-form .resource-type-grid :deep(.el-checkbox:hover) {
+  border-color:rgb(49 127 136 / 45%);
+  box-shadow:inset 0 1px 0 #fff,0 5px 16px -10px rgb(29 98 112 / 35%);
+}
+.review-stage-card .resource-selection-form .resource-type-grid :deep(.el-checkbox.is-checked) {
+  border-color:rgb(44 134 137 / 44%);
+  background:radial-gradient(ellipse at 95% 0%,rgb(190 234 227 / 65%),transparent 70%),
+    linear-gradient(150deg,#f6fcfb,#e7f3f2);
+  box-shadow:inset 0 1px 0 #fff,inset 0 -1px 1px rgb(58 127 130 / 18%),
+    0 4px 7px -5px rgb(22 101 107 / 30%),0 12px 20px -18px rgb(22 101 107 / 35%);
+}
+.review-stage-card .resource-selection-form .resource-type-grid :deep(.el-checkbox__input) { top:13px; right:13px; }
+.review-stage-card .resource-selection-form .resource-type-grid :deep(.el-checkbox__label) { display:flex; align-items:stretch; }
+.review-stage-card .resource-selection-form .resource-option { width:100%; height:100%; grid-template-columns:32px minmax(0,1fr); column-gap:12px; align-content:center; padding-right:12px; }
+.review-stage-card .resource-selection-form .resource-option > .el-icon { font-size:29px; color:#237c84; }
+.review-stage-card .resource-selection-form .resource-option strong { font-size:19px; font-weight:650; line-height:1.4; }
+.review-stage-card .resource-selection-form .resource-option > span { margin-top:11px; font-size:13px; line-height:1.65; white-space:normal; overflow:visible; text-overflow:clip; }
+.review-stage-card .resource-selection-form .claim-review-row { gap:10px; }
+.review-stage-card .resource-selection-form .claim-review-control { min-height:78px; padding:15px 16px; gap:12px; }
+.review-stage-card .resource-selection-form .claim-icon { font-size:24px; }
+.review-stage-card .resource-selection-form .claim-review-control strong { font-size:15px; line-height:1.5; }
+.review-stage-card .resource-selection-form .claim-review-control p { margin-top:5px; font-size:12px; line-height:1.6; white-space:normal; }
+.review-stage-layout > .review-actions { grid-area:actions; display:flex; flex:0 0 auto; width:100%; align-items:center; gap:14px; margin:0; padding:14px 0 10px; border-top:1px solid #dce4eb; }
+.review-stage-layout > .review-actions .action-hint { font-size:12px; }
+.initial-node-fallback { display:flex; flex-wrap:wrap; align-items:center; gap:8px; color:var(--setup-muted); }
+@media (min-width:1081px) and (min-height:760px) {
+  .onboarding-page.is-contained-layout .review-stage-card :deep(.el-card__body) {
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    scrollbar-gutter:auto;
+  }
+}
+@media (max-width:1080px) {
+  .review-stage-card :deep(.el-card__body) { display:block; overflow-x:hidden; overflow-y:auto; padding:14px 18px 18px; }
+  .review-stage-layout { display:flex; height:auto; flex-direction:column; gap:14px; min-height:auto; }
+  .review-stage-layout > .resource-selection-form:first-child { width:100%; }
+  .review-stage-card .diagnosis-result-card { height:auto; min-height:0; }
+  .review-stage-card .diagnosis-point-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-rows:auto; gap:0; margin:0 18px; padding:14px 0 16px; }
+  .review-stage-card .diagnosis-point-card { display:block; padding:0 12px; }
+  .review-stage-card .diagnosis-point-card:first-child { padding-left:0; }
+  .review-stage-card .diagnosis-point-card:last-child { padding-right:0; }
+  .review-stage-card .diagnosis-point-card + .diagnosis-point-card { border-top:0; border-left:1px solid #dce4eb; }
+  .review-stage-card .resource-selection-form { height:auto; flex:none; }
+  .review-stage-card .resource-selection-form :deep(.resource-type-field) { flex:none; }
+  .review-stage-card .resource-selection-form :deep(.resource-type-field .el-form-item__content) { flex:none; }
+  .review-stage-card .resource-selection-form .resource-type-grid { grid-template-columns:repeat(3,minmax(0,1fr)); grid-auto-rows:auto; }
+  .review-stage-layout > .review-actions { margin-top:0; }
+}
+@media (max-width:600px) {
+  .review-stage-card :deep(.el-card__body) { padding:12px 14px 16px; }
+  .review-stage-layout { gap:12px; }
+  .review-stage-card .diagnosis-identity-row { align-items:stretch; padding:12px 14px 10px; }
+  .review-stage-card .ability-stage { min-width:82px; padding:8px 10px; }
+  .review-stage-card .diagnosis-point-grid { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto; margin:0 14px; padding:4px 0 12px; }
+  .review-stage-card .diagnosis-point-card { padding:10px 0; }
+  .review-stage-card .diagnosis-point-card + .diagnosis-point-card { border-top:1px solid #dce4eb; border-left:0; }
+  .review-stage-card .resource-selection-form .resource-type-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .review-stage-card .resource-selection-form .resource-type-grid :deep(.el-checkbox) { padding:16px 12px; }
+  .review-stage-card .resource-selection-form .resource-option { grid-template-columns:24px minmax(0,1fr); gap:8px; }
+  .review-stage-card .resource-selection-form .resource-option > .el-icon { font-size:23px; }
+  .review-stage-card .resource-selection-form .resource-option strong { font-size:16px; }
+  .review-stage-card .resource-selection-form .resource-option > span { font-size:12px; }
+  .review-stage-card .resource-selection-form .claim-review-row { grid-template-columns:1fr; }
+  .review-stage-layout > .review-actions { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); grid-template-rows:auto auto; gap:8px; }
+  .review-stage-layout > .review-actions .action-hint { grid-column:1/-1; grid-row:1; order:0; }
+  .review-stage-layout > .review-actions .back-button { grid-column:1; grid-row:2; justify-self:start; }
+  .review-stage-layout > .review-actions :deep(.el-button--primary) { grid-column:2; grid-row:2; width:100%; }
 }
 </style>

@@ -91,7 +91,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         if previous.get("superseded_by_run_id"):
             return previous["superseded_by_run_id"]
         self.create(run_id, learner_id, topic, knowledge_base_id, request_payload,
-                    batch_id, submission_hash=submission_hash)
+                    batch_id, submission_hash=submission_hash, dispatch_snapshot=dispatch_snapshot)
         previous["superseded_by_run_id"] = run_id
         return run_id
 

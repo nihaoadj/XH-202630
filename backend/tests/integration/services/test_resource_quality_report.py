@@ -126,14 +126,49 @@ def test_quality_read_failure_preserves_error_contract():
         _service([resource], _BrokenQualityService()).build_report(_profile())
 
 
+def test_quality_batches_include_all_visible_resources_and_change_snapshot_revision():
+    older = [
+        _resource(f"older-{index}").model_copy(update={
+            "batch_id": "older", "created_at": datetime(2026, 11, 10, tzinfo=timezone.utc),
+        })
+        for index in range(11)
+    ]
+    newer = _resource("newer").model_copy(update={
+        "batch_id": "newer", "created_at": datetime(2026, 11, 11, tzinfo=timezone.utc),
+        "published_at": datetime(2026, 11, 11, tzinfo=timezone.utc), "learning_path_node": "node-primary",
+    })
+    unpublished = _resource("hidden", status="unpublished").model_copy(update={"batch_id": "newer"})
+    resources = [*older, newer, unpublished]
+    quality = _BundleQualityService({
+        RUN_ID: QualitySourceBundle(run_id=RUN_ID, read_mode=NATIVE_MEMORY, resources=tuple(resources)),
+    })
+    report = _service(resources, quality).build_report(_profile())
+    validated = ReportResponse.model_validate(report)
+    batches = validated.resource_quality_batches
+
+    assert validated.resource_quality_summary.resource_total == 10
+    assert len(validated.recent_resource_quality) == 10
+    assert validated.recent_resource_quality[0].resource_id == "newer"
+    assert validated.recent_resource_quality[0].learning_node_id == "node-primary"
+    assert quality.summarized[-1] == tuple(item.resource_id for item in validated.recent_resource_quality)
+    assert [batch.key for batch in batches] == ["batch:newer", "batch:older"]
+    assert [batch.summary.resource_total for batch in batches] == [1, 11]
+    assert [item.resource_id for item in batches[0].items] == ["newer"]
+    assert {item.resource_id for item in batches[1].items} == {resource.resource_id for resource in older}
+    assert revision_parts(report)["text_resources"] != revision_parts({
+        **report, "resource_quality_batches": [],
+    })["text_resources"]
+
+
 def test_missing_bundle_resources_and_legacy_no_run_stay_in_denominator():
     visible = _resource("visible")
     legacy = _resource("legacy").model_copy(update={"run_id": None})
     quality = _BundleQualityService({RUN_ID: QualitySourceBundle(run_id=RUN_ID, read_mode=NATIVE_MEMORY)})
-    result = _service([], quality)._resource_quality([visible, legacy], order=[])
+    result = _service([], quality)._resource_quality([visible, legacy], ability_names={"node-1": "检索基础"})
     assert result["summary"].resource_total == 2
     assert result["summary"].coverage.status.value == "incomplete"
     assert len(result["items"]) == 2
+    assert all(item.learning_node_name == "检索基础" for item in result["items"])
 
 
 

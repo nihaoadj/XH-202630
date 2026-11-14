@@ -165,6 +165,18 @@ def test_ordinary_input_prefers_work_order_then_lecture_then_compat():
     assert model.issues == [{"issue_id": "i1"}] and model.closed_issues == [{"issue_id": "i2"}]
     assert model.unchanged is True
 
+    for contract in ("single_representation_v3", "single_representation_v4"):
+        numbered = build_resource_review_revision_input(
+            resource_spec_id="spec", resource=resource, targets=["node"], work_order=work_order,
+            input_contract=contract,
+        )
+        assert numbered.input_version == "2.0"
+        assert numbered.previous_text == "work正文"
+    assert build_resource_review_revision_input(
+        resource_spec_id="spec", resource=resource, targets=["node"], work_order=work_order,
+        input_contract="single_representation_v2",
+    ).input_version == "1.0"
+
     lecture = {"previous_content": "lec正文", "parent_resource_id": "parent", "open_issues": [{"issue_id": "l1"}], "unchanged": False}
     from_lecture = build_resource_review_revision_input(
         resource_spec_id="spec", resource=resource, targets=["node"], lecture_revision=lecture,

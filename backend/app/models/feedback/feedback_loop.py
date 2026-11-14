@@ -310,6 +310,7 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
     difficulty: Literal["初级", "中级", "高级"] | None = None
     include_claim_check: bool = False
     include_claim_evidence_retrieval: bool = False
+    claim_post_retrieval_max_iterations: int = Field(default=0, ge=0, le=3)
     learning_intent: LearningIntent | None = None
     selected_skill_node_ids: list[str] = Field(default_factory=list, max_length=2)
     next_generation_snapshot_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")

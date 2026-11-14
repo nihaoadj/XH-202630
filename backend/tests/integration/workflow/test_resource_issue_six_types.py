@@ -57,11 +57,12 @@ from tests.unit.agents.test_resource_type_agents import (
 from app.core.retrieval.evidence import source_refs_from_evidence
 
 
+@pytest.mark.parametrize("input_contract", [None, "single_representation_v1", "single_representation_v4"])
 @pytest.mark.parametrize(
     "kind",
     ["讲义", "实操指南", "分阶测试题", "案例分析", "复习清单", "个性化纠错训练包"],
 )
-def test_generic_six_types_revision_claim_publication_markdown(kind, monkeypatch):
+def test_generic_six_types_revision_claim_publication_markdown(kind, input_contract, monkeypatch):
     sample = case("assessment.clean.01") if kind == "分阶测试题" else case()
     state = state_for(sample)
     source = state["generated_resources"][0]
@@ -181,7 +182,8 @@ def test_generic_six_types_revision_claim_publication_markdown(kind, monkeypatch
     )
     monkeypatch.setattr(generator_agent, "get_resource_agent", lambda _: agent)
     policy = ResourceReviewPolicyV1(
-        context_tokens=262144, max_output_tokens=16384, max_physical_attempts=2
+        context_tokens=262144, max_output_tokens=16384, max_physical_attempts=2,
+        input_contract=input_contract,
     ).model_dump(mode="json")
     state.update(
         **execution_identity_fields("fake-model"),
@@ -225,9 +227,11 @@ def test_generic_six_types_revision_claim_publication_markdown(kind, monkeypatch
     )
 
     def answer(call, blocking=False):
+        prompt = call["messages"][0].content
+        assert ("新版若已改成仅依赖正文内足够的摘要或要点" in prompt) == (kind == "讲义")
         payload = json.loads(call["messages"][1].content)
         output = {
-            "binding": payload["binding"],
+            **({"binding": payload["binding"]} if "binding" in payload else {}),
             "dimensions": {
                 "factual_evidence": "pass",
                 "difficulty": "pass",
@@ -262,6 +266,15 @@ def test_generic_six_types_revision_claim_publication_markdown(kind, monkeypatch
                 for q in assessment_questions(payload["structured_payload"])
             ]
         if blocking:
+            issue_location = {"kind": "root"}
+            if input_contract:
+                index = payload["location_index"]
+                issue_location = ({"kind": "structured", "unit_id": index["unit_ids"][0]}
+                                  if index.get("unit_ids") else
+                                  {"kind": "paragraph", "paragraph_id": index["paragraph_ids"][0], "heading_path": []})
+                if issue_location["kind"] == "paragraph":
+                    from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.adapters.base import paragraph_heading_paths
+                    issue_location["heading_path"] = paragraph_heading_paths(state["generated_resources"][0].content_text)[issue_location["paragraph_id"]]
             output["issues"] = [
                 {
                     "issue_id": "temporary",
@@ -270,7 +283,7 @@ def test_generic_six_types_revision_claim_publication_markdown(kind, monkeypatch
                     "blocking": True,
                     "blocking_rule": "self_contained",
                     "dimension": "self_contained",
-                    "location": {"kind": "root"},
+                    "location": issue_location,
                     "impact": "材料需核对",
                     "requirement": "核对材料",
                     "acceptance": "材料已提供",
@@ -281,32 +294,40 @@ def test_generic_six_types_revision_claim_publication_markdown(kind, monkeypatch
                     "rationale": "材料核对",
                 }
             ]
+            if input_contract == "single_representation_v4":
+                assert "binding" not in payload
+                issue = output["issues"][0]
+                issue.pop("blocking_rule")
+                issue.pop("criteria_version")
+                if kind in {"讲义", "案例分析"}:
+                    issue_location.pop("heading_path", None)
         else:
             if kind == "分阶测试题":
-                assert (
-                    payload["previous_structured_payload"] == source.assessment_payload
-                )
                 old_question = assessment_questions(source.assessment_payload)[0][
                     "question_id"
                 ]
-                assert old_question in payload["previous_location_index"]["unit_ids"]
                 assert old_question not in payload["location_index"]["unit_ids"]
-                assert (
-                    payload["previous_binding"]["artifact_exact_hash"]
-                    == state["resource_ledgers"][spec_id]["binding"][
-                        "artifact_exact_hash"
-                    ]
-                )
+                if input_contract:
+                    assert "previous_structured_payload" not in payload and "text" not in payload
+                    assert "previous_location_index" not in payload
+                    assert payload["old_issues"][0]["issue"]["issue_id"] == old_id
+                    assert payload["parent_issue_context"][0]["excerpt"]
+                else:
+                    assert payload["previous_structured_payload"] == source.assessment_payload
+                    assert old_question in payload["previous_location_index"]["unit_ids"]
+                    assert payload["previous_binding"]["artifact_exact_hash"] == state["resource_ledgers"][spec_id]["binding"]["artifact_exact_hash"]
             output["resolutions"] = [
                 {
                     "issue_id": old_id,
                     "result": "false_positive",
                     "reason": "父版已有完整材料",
                     "previous_location": {"kind": "structured", "unit_id": old_question}
-                    if kind == "分阶测试题"
+                    if kind == "分阶测试题" and not input_contract
                     else {"kind": "root"},
                 }
             ]
+            if input_contract:
+                output["resolutions"][0]["previous_location"] = payload["parent_issue_context"][0]["location"]
         return output
 
     review_traces = []
@@ -351,6 +372,11 @@ def test_generic_six_types_revision_claim_publication_markdown(kind, monkeypatch
     review(True)
     assert state["review_result"]["decision"] == "revise"
     spec_id = state["generated_resources"][0].resource_spec_id
+    if input_contract == "single_representation_v4":
+        ledger = state["resource_ledgers"][spec_id]
+        assert ledger["binding"]["evidence_context_id"]
+        assert ledger["binding"]["resource_id"] == generated.resource_id
+        assert ledger["issues"][0]["issue"]["blocking_rule"] == "model_self_contained_v1"
     old_id = state["resource_ledgers"][spec_id]["issues"][0]["issue"]["issue_id"]
     state.update(prepare_revision_node(state))
     state.update(

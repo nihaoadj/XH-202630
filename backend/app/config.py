@@ -112,7 +112,7 @@ class Settings(BaseSettings):
     # as a complete Claim pass.
     claim_partial_publish: bool = False
     # Deprecated compatibility switch. Completed Claim audits with evidence
-    # gaps now wait for an explicit user publication decision.
+    # gaps use the automatic/user-decision thresholds below.
     claim_warning_publish_enabled: bool = False
     claim_warning_publish_min_factual_pass_rate: float = Field(
         default=0.80, ge=0.0, le=1.0,
@@ -121,7 +121,12 @@ class Settings(BaseSettings):
     # once the factual pass rate reaches this threshold.
     claim_user_review_enabled: bool = True
     claim_user_review_min_factual_pass_rate: float = Field(
-        default=0.60, ge=0.0, le=1.0,
+        default=0.85, ge=0.0, le=1.0,
+    )
+    # Complete Claim audits with evidence gaps auto-publish at or above this
+    # factual pass rate, provided the remaining issues are evidence gaps only.
+    claim_gap_auto_publish_min_factual_pass_rate: float = Field(
+        default=0.95, ge=0.0, le=1.0,
     )
     # Per-resource Claim extraction target.  The model prompt and the
     # workflow's deterministic envelope check both consume this value.
@@ -137,9 +142,10 @@ class Settings(BaseSettings):
     claim_estimate_request_overhead: int = Field(default=128, gt=0, le=65536)
     claim_extraction_profile_path: str = ""
     claim_extraction_profile_id: str = Field(default="", max_length=128)
-    claim_extraction_target_tokens: int = Field(default=4096, gt=0, le=8192)
+    claim_extraction_target_tokens: int = Field(default=6144, gt=0, le=8192)
     claim_extraction_context_tokens: int = Field(default=512, gt=0, le=1024)
-    claim_extraction_batch_claims: int = Field(default=16, gt=0, le=20)
+    claim_extraction_batch_claims: int = Field(default=30, gt=0, le=30)
+    claim_extraction_input_version: Literal["legacy_context_v1", "unified_context_v1", "unified_context_v2", "unified_context_v3", "unified_context_v4", "unified_context_v5"] = "unified_context_v5"
     claim_extraction_resource_claims: int = Field(default=48, gt=0, le=128)
     claim_extraction_output_tokens: int = Field(default=32768, gt=0, le=32768)
     claim_extraction_max_calls: int = Field(default=8, gt=0, le=64)
@@ -163,6 +169,7 @@ class Settings(BaseSettings):
     # T50 optional Claim evidence retrieval.  Engineering limits only: they are
     # frozen into each Run and are not a measured latency, cost or recall claim.
     claim_evidence_retrieval_query_batch_claims: int = Field(default=16, ge=1, le=16)
+    claim_post_retrieval_default_max_iterations: int = Field(default=0, ge=0, le=3)
     claim_evidence_retrieval_rejudge_batch_claims: int = Field(default=16, ge=1, le=16)
     claim_evidence_retrieval_queries_per_claim: int = Field(default=2, ge=1, le=3)
     claim_evidence_retrieval_max_queries_per_claim: int = Field(default=3, ge=1, le=3)
@@ -211,6 +218,14 @@ class Settings(BaseSettings):
             raise ValueError("ASSESSMENT_REVIEW_CONTEXT_TOKENS is required for combined_v2")
         if self.resource_review_strategy == "resource_issue_v1" and self.resource_review_context_tokens is None:
             raise ValueError("RESOURCE_REVIEW_CONTEXT_TOKENS is required for resource_issue_v1")
+        if (
+            self.claim_gap_auto_publish_min_factual_pass_rate
+            < self.claim_user_review_min_factual_pass_rate
+        ):
+            raise ValueError(
+                "CLAIM_GAP_AUTO_PUBLISH_MIN_FACTUAL_PASS_RATE must be greater than or equal to "
+                "CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE"
+            )
         return self
     # Claim extraction/judgement starts with a larger budget because the
     # audited resource text and evidence envelope can be substantial.
@@ -222,7 +237,7 @@ class Settings(BaseSettings):
     # use the explicit per-resource settings below.
     llm_generator_max_output_tokens: int = Field(default=16384, ge=256, le=65536)
     llm_resource_generator_max_input_tokens: int = Field(
-        default=65536,
+        default=262144,
         ge=1024,
         le=262144,
     )
@@ -293,6 +308,8 @@ class Settings(BaseSettings):
         ge=100,
         le=4000,
     )
+    # Frozen retries carry immutable bodies/evidence; checkpoint projections do not.
+    resource_retry_snapshot_max_bytes: int = Field(default=8388608, ge=65536, le=67108864)
     workflow_checkpoint_max_bytes: int = Field(default=65536, ge=4096, le=1048576)
     workflow_timeline_default_limit: int = Field(default=100, ge=1, le=500)
     workflow_timeline_max_limit: int = Field(default=500, ge=1, le=1000)
