@@ -34,11 +34,11 @@
 ./.venv/python.exe -m ruff check backend/tests/integration/workflow/test_llm_accounting_equivalence.py
 ```
 
-首轮 [related summary](../../output/test-runs/t41-closeout-related/summary.json)：原计量专项 93 passed / 0 skipped；architecture、frontend-contracts、backend-lint exit 0；当时受控对照 30 passed。之后仅补测试，未修改生产实现，因此只复跑最终对照与新增测试静态检查。
+首轮 related summary（本地记录 `../../output/test-runs/t41-closeout-related/summary.json`）：原计量专项 93 passed / 0 skipped；architecture、frontend-contracts、backend-lint exit 0；当时受控对照 30 passed。之后仅补测试，未修改生产实现，因此只复跑最终对照与新增测试静态检查。
 
 补充测试调试中发现预期 schema 名猜测错误、实际终态为 release_blocked，以及预算模块直接导入的 uuid4 未冻结；修正测试前置条件及精确断言，保留完整事件字段，没有删除差异字段或修改业务实现。早期失败日志保留诊断，不计为最终验收结果。
 
-最终独立复验 [final summary](../../output/test-runs/t41-closeout-final/summary.json)：**33 passed / 0 failed / 0 skipped**（31项正向配对、2项比较器负例），runner exit 0；[Ruff 日志](../../output/test-runs/t41-closeout-final/ruff.log) exit 0。与前述93项计量专项合计126项测试通过。独立代理只读复核了新增断言，主代理核对报告/JUnit后作出本次范围验收通过判断。
+最终独立复验 final summary（本地记录 `../../output/test-runs/t41-closeout-final/summary.json`）：**33 passed / 0 failed / 0 skipped**（31项正向配对、2项比较器负例），runner exit 0；Ruff 日志（本地记录 `../../output/test-runs/t41-closeout-final/ruff.log`） exit 0。与前述93项计量专项合计126项测试通过。独立代理只读复核了新增断言，主代理核对报告/JUnit后作出本次范围验收通过判断。
 
 ## 交付边界
 
@@ -50,4 +50,4 @@
 
 ## 后续真实验证与修复
 
-本文件是此前离线验收快照。后续[真实测试](live-acceptance-20261106.md)发现B1/B2，已完成[对应修复和183项相关验证](live-fix-20261106.md)，修复后真实复验待执行；不得将此前离线PASS当作真实链路通过。
+本文件是此前离线验收快照。后续[真实测试](live-acceptance-20261106.md)发现B1/B2，已完成[对应修复和183项相关验证](live-fix-20261106.md)，修复后已完成一次单资源真实复验，结论和覆盖边界见同一份真实测试记录。旁边的 `callsite-inventory.json` 是 2026-11-06 静态扫描快照。

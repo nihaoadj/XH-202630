@@ -85,6 +85,7 @@ backend/logs/local-dev-processes.json
 # Local update plans, extension ideas and skills
 /docs/update_plan/
 /docs/extension_ideas/
+/docs/assets/backup/
 /skills/
 /.skills/
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1000" viewBox="0 0 1800 1000" role="img" aria-labelledby="title desc">
   <title id="title">节点优先混合检索与全库回退</title>
-  <desc id="desc">按任务输入、证据检索器、工作流证据门禁和工作流去向四个模块展示检索逻辑：优先在目标节点对应的内容分块中检索；无目标节点、映射缺失或证据不足时仅执行一次全库检索；检索异常不触发全库回退；最终结果统一经过证据门禁。</desc>
+  <desc id="desc">节点有有效映射时缩小召回范围。无节点或无有效映射时直接搜索请求知识库。节点范围无命中或证据不足时回退一次，检索异常保留原状态。可用结果通过工作流证据门才进入规划。</desc>
   <defs>
     <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#fbfdff"/><stop offset="1" stop-color="#f3f8fc"/></linearGradient>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#294966" flood-opacity=".10"/></filter>
@@ -14,7 +14,7 @@
 
   <rect width="1800" height="1000" fill="url(#bg)"/>
   <text x="900" y="54" text-anchor="middle" class="title">节点优先混合检索与全库回退</text>
-  <text x="900" y="86" text-anchor="middle" class="sub">先在目标节点范围内检索；无目标节点、映射缺失或证据不足时，仅回退一次全库检索</text>
+  <text x="900" y="86" text-anchor="middle" class="sub">节点范围优先 · 无有效映射直接搜当前知识库 · 节点范围未命中或证据不足时回退一次</text>
 
   <!-- 四个职责模块 -->
   <rect x="35" y="115" width="285" height="780" rx="18" fill="#f2f8fd" stroke="#bfd9ea"/>
@@ -33,14 +33,14 @@
   <!-- 任务输入 -->
   <g transform="translate(60,300)">
     <rect class="box blue" width="235" height="135" rx="16" filter="url(#shadow)"/>
-    <text x="117" y="36" text-anchor="middle" class="h">冻结检索输入</text>
-    <text x="117" y="66" text-anchor="middle" class="p">主题 + 知识库标识</text>
-    <text x="117" y="94" text-anchor="middle" class="small">目标节点来自确认后的学习目标</text>
-    <text x="117" y="117" text-anchor="middle" class="small">或诊断结果，最多取前三项并去重</text>
+    <text x="117" y="36" text-anchor="middle" class="h">检索任务输入</text>
+    <text x="117" y="66" text-anchor="middle" class="p">主题、知识库与学习目标</text>
+    <text x="117" y="94" text-anchor="middle" class="small">新学习轮次确认一个主节点</text>
+    <text x="117" y="117" text-anchor="middle" class="small">检索读取本任务的目标节点</text>
   </g>
   <path class="line" d="M177 435V520"/>
   <polygon points="177,520 267,600 177,680 87,600" fill="#fff" stroke="#90c7e9" stroke-width="2"/>
-  <text x="177" y="579" text-anchor="middle" class="h">是否有已确认的</text>
+  <text x="177" y="579" text-anchor="middle" class="h">任务是否包含</text>
   <text x="177" y="607" text-anchor="middle" class="h">目标节点？</text>
   <path class="branchStem" d="M267 600H315"/>
 
@@ -52,8 +52,8 @@
     <rect class="box green" width="270" height="145" rx="16" filter="url(#shadow)"/>
     <text x="135" y="35" text-anchor="middle" class="h">查询有效“分块—节点”映射</text>
     <text x="135" y="67" text-anchor="middle" class="p">按目标节点读取有效内容分块</text>
-    <text x="135" y="95" text-anchor="middle" class="small">多个目标节点的映射结果取并集</text>
-    <text x="135" y="120" text-anchor="middle" class="small">只缩小候选范围，不直接生成证据</text>
+    <text x="135" y="95" text-anchor="middle" class="small">使用当前有效分块 ID</text>
+    <text x="135" y="120" text-anchor="middle" class="small">将映射用于限定召回范围</text>
   </g>
   <path class="line" d="M650 322H675"/>
   <polygon points="755,247 835,322 755,397 675,322" fill="#fff" stroke="#8fd1a2" stroke-width="2"/>
@@ -66,15 +66,15 @@
     <text x="157" y="35" text-anchor="middle" class="h">节点范围混合检索</text>
     <text x="157" y="65" text-anchor="middle" class="p">仅在映射到的内容分块内召回</text>
     <text x="157" y="92" text-anchor="middle" class="small">向量 + BM25 + RRF + 可选 CrossEncoder</text>
-    <text x="157" y="118" text-anchor="middle" class="small">校验知识库、分块版本和内容指纹</text>
+    <text x="157" y="118" text-anchor="middle" class="small">SQL 校验知识库、版本与内容指纹</text>
     <text x="157" y="144" text-anchor="middle" class="small">结果：可用 / 未命中 / 证据不足 / 检索异常</text>
   </g>
   <!-- 全库回退 -->
-  <text x="568" y="685" class="tag" fill="#d98524">全库回退路径（最多执行一次）</text>
+  <text x="568" y="685" class="tag" fill="#d98524">同库检索（直接进入或回退一次）</text>
   <path class="fallback" d="M315 600Q330 600 330 615V767Q330 782 345 782H568"/>
-  <text x="350" y="767" class="tag" fill="#d98524">无目标节点：直接检索全库</text>
+  <text x="350" y="767" class="tag" fill="#d98524">无目标节点</text>
   <path class="fallbackJoin" d="M755 397V430"/>
-  <text x="650" y="420" class="tag" fill="#d98524">未找到映射</text>
+  <text x="650" y="420" class="tag" fill="#d98524">无有效映射</text>
   <path class="fallbackJoin" d="M900 405V430H755"/>
   <text x="855" y="422" class="tag" fill="#d98524">未命中或证据不足</text>
   <circle cx="755" cy="430" r="5" fill="#d98524"/>
@@ -82,10 +82,10 @@
   <g transform="translate(568,700)">
     <rect class="box orange" width="395" height="165" rx="16" filter="url(#shadow)"/>
     <text x="197" y="36" text-anchor="middle" class="h">全库混合检索</text>
-    <text x="197" y="67" text-anchor="middle" class="p">取消节点范围限制</text>
-    <text x="197" y="94" text-anchor="middle" class="small">复用同一查询条件与排序策略</text>
+    <text x="197" y="67" text-anchor="middle" class="p">在请求知识库内取消节点限制</text>
+    <text x="197" y="94" text-anchor="middle" class="small">复用原查询，沿用剩余检索预算</text>
     <text x="197" y="120" text-anchor="middle" class="small">向量 + BM25 + RRF + 可选 CrossEncoder</text>
-    <text x="197" y="146" text-anchor="middle" class="small">重新校验知识库、版本和内容指纹</text>
+    <text x="197" y="146" text-anchor="middle" class="small">SQL 校验知识库、版本与内容指纹</text>
   </g>
 
   <!-- 汇总检索结果 -->
@@ -96,30 +96,30 @@
   <path class="line" d="M963 782H1000V620"/>
   <g transform="translate(835,455)">
     <rect class="box blue" width="330" height="165" rx="16" filter="url(#shadow)"/>
-    <text x="165" y="35" text-anchor="middle" class="h">汇总最终证据结果</text>
-    <text x="165" y="65" text-anchor="middle" class="p">证据列表 + 节点证据映射</text>
-    <text x="165" y="92" text-anchor="middle" class="small">记录查询与配置指纹、候选数量</text>
-    <text x="165" y="118" text-anchor="middle" class="small">记录最终检索来源：</text>
-    <text x="165" y="144" text-anchor="middle" class="small">节点范围 / 全库回退 / 直接全库 / 证据不足</text>
+    <text x="165" y="35" text-anchor="middle" class="h">保留最终检索结果</text>
+    <text x="165" y="65" text-anchor="middle" class="p">状态、证据列表与节点映射</text>
+    <text x="165" y="92" text-anchor="middle" class="small">记录查询指纹、配置与候选数量</text>
+    <text x="165" y="118" text-anchor="middle" class="small">有效证据保留来源与版本快照</text>
+    <text x="165" y="144" text-anchor="middle" class="small">区分节点范围、同库回退与直接同库</text>
   </g>
 
   <!-- 工作流证据门禁 -->
   <path class="line" d="M1165 537H1230"/>
   <polygon points="1345,432 1460,537 1345,642 1230,537" fill="#fff" stroke="#8fd1a2" stroke-width="2"/>
-  <text x="1345" y="479" text-anchor="middle" class="h">最终证据门禁</text>
-  <text x="1345" y="509" text-anchor="middle" class="small">检索结果可用</text>
-  <text x="1345" y="533" text-anchor="middle" class="small">数量和分数达到要求</text>
-  <text x="1345" y="557" text-anchor="middle" class="small">来自同一知识库</text>
-  <text x="1345" y="581" text-anchor="middle" class="small">证据、分块、排序位次均唯一</text>
+  <text x="1345" y="497" text-anchor="middle" class="h">证据门禁</text>
+  <text x="1345" y="519" text-anchor="middle" class="small">检索结果可用</text>
+  <text x="1345" y="539" text-anchor="middle" class="small">数量与相关性分数达标</text>
+  <text x="1345" y="559" text-anchor="middle" class="small">同库且分块唯一</text>
+  <text x="1345" y="581" text-anchor="middle" class="small">证据与排名唯一</text>
 
   <!-- 工作流去向 -->
   <g transform="translate(1520,220)">
     <rect class="box red" width="225" height="150" rx="16"/>
     <text x="112" y="34" text-anchor="middle" class="h">检索基础设施异常</text>
-    <text x="112" y="65" text-anchor="middle" class="small">节点范围异常不触发全库回退</text>
-    <text x="112" y="90" text-anchor="middle" class="small">生产模式立即停止</text>
-    <text x="112" y="114" text-anchor="middle" class="small">即使允许降级，也不能绕过</text>
-    <text x="112" y="136" text-anchor="middle" class="small">证据门禁进入生成环节</text>
+    <text x="112" y="65" text-anchor="middle" class="small">保留检索失败状态与原因</text>
+    <text x="112" y="90" text-anchor="middle" class="small">节点范围异常不触发回退</text>
+    <text x="112" y="114" text-anchor="middle" class="small">失败结果无法通过证据门</text>
+    <text x="112" y="136" text-anchor="middle" class="small">停止事实型内容生成</text>
   </g>
   <path class="error" d="M1345 432V295H1520"/>
   <text x="1360" y="328" class="tag" fill="#c65f58">检索异常</text>
@@ -127,17 +127,17 @@
   <g transform="translate(1520,455)">
     <rect class="box green" width="225" height="165" rx="16" filter="url(#shadow)"/>
     <text x="112" y="34" text-anchor="middle" class="h">门禁通过</text>
-    <text x="112" y="65" text-anchor="middle" class="p">冻结一份证据快照</text>
-    <text x="112" y="92" text-anchor="middle" class="small">进入规划与生成环节</text>
-    <text x="112" y="117" text-anchor="middle" class="small">继续执行普通资源审核</text>
-    <text x="112" y="141" text-anchor="middle" class="small">按配置决定是否审核事实声明</text>
+    <text x="112" y="65" text-anchor="middle" class="p">使用冻结的证据快照</text>
+    <text x="112" y="92" text-anchor="middle" class="small">进入 Planner 并冻结资源规格</text>
+    <text x="112" y="117" text-anchor="middle" class="small">生成后按设置执行普通审核</text>
+    <text x="112" y="141" text-anchor="middle" class="small">按任务设置执行 Claim</text>
   </g>
   <path class="line" d="M1460 537H1520"/>
   <text x="1470" y="522" class="tag">通过</text>
 
   <g transform="translate(1520,715)">
     <rect class="box orange" width="225" height="140" rx="16"/>
-    <text x="112" y="34" text-anchor="middle" class="h">证据不足</text>
+    <text x="112" y="34" text-anchor="middle" class="h">证据门未通过</text>
     <text x="112" y="65" text-anchor="middle" class="small">不进入规划或生成环节</text>
     <text x="112" y="91" text-anchor="middle" class="small">停止事实型内容生成</text>
     <text x="112" y="117" text-anchor="middle" class="small">资源保持未发布</text>
@@ -146,5 +146,5 @@
   <text x="1362" y="675" class="tag" fill="#d98524">未通过</text>
 
   <rect x="70" y="920" width="1660" height="52" rx="12" fill="#edf5fb" stroke="#b8d7eb"/>
-  <text x="900" y="952" text-anchor="middle" class="p">逻辑边界：节点映射只缩小候选范围；全库回退只处理映射缺失或证据不足；检索异常不回退，最终结果统一经过工作流证据门禁。</text>
+  <text x="900" y="952" text-anchor="middle" class="p">全库指本次请求的知识库。节点范围与回退共享检索时限，检索异常保留原有错误语义。</text>
 </svg>

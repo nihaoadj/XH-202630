@@ -1,203 +1,38 @@
-# P0-09 比赛 Demo Runbook
+# 比赛演示手册
 
-工程验收先按 [统一测试方案](testing/README.md) 执行 `python scripts/run_tests.py --profile acceptance`。三背景/54用例、冻结专业来源、三指标定义与正式质量证据见 [比赛评测方案](testing/competition.md)。后端工作流回放输出54组固定输入/协同/输出示例，离线金标与回放均不计作真实模型完成样本；缺实际生成或独立质量复核时正式质量门保留 `NOT_MEASURABLE`。
+部署操作见 [部署指南](deployment.md)，金标与正式质量口径见 [比赛评测](testing/competition.md)。
 
-> 文档核对日期：2026-10-10（T14 整改与命令复核）；固定 fixture 为 `p0-09-demo-suite/v1`。运行时以当前 checkout 和配置为准，分别记录确定性离线验收与真实运行时演示。
+## 演示前检查
 
-## 1. 放行原则
-
-正式演示前必须同时满足：
-
-- `python scripts/p0_09_preflight.py` 返回 `READY`（退出码 0）。
-- offline acceptance 的 Scenario A～J 全部 `PASS`。
-- 目标运行环境的数据库、Web、Worker 与真实业务闭环均有有效验收证据；P0-09 runtime 模式须在目标环境实际运行并获得有效 `PASS`。
-- 浏览器人工 E2E checklist 全部确认。
-- live provider smoke 如被列入本次演示范围，必须显式启用并单独记录结果。
-
-`DEGRADED` 只能用于排障或受控预演；`NOT_READY` 与任一 required Gate 的 `FAIL` 都是 No-Go。正式 demo 数据仍须完成迁移演练。当前前端已实现五步方向引导、Claim 审核报告、参考来源与动态学情图表；runtime 源码探针已适配 `features/<domain>/`，实际页面行为由统一 acceptance 的浏览器专项验证。
-
-`scripts/run_p0_09_acceptance.py --runtime` 的前端部分仅核对当前 feature、hook、API、组件和 SSE 的源码连线，不证明实际交互或请求成功。该模式会启动 TestClient lifespan，执行正常数据库初始化与启动对账，不能当成全程只读检查；须在独立 demo 环境启用。
-
-## 2. 启动前准备
-
-### 2.1 环境与数据保护
-
-1. 从 `backend/.env.example` 创建个人 `backend/.env`，不要将真实 Key 写入 Git。
-2. 确认 `APP_MODE`、`DB_TYPE`、默认 KB、Embedding、LLM Provider 和 structured output 配置；检查命令不得输出 secret。
-3. 正式演示使用独立 demo 数据库和 Chroma 目录。若复用已有开发数据，先在仓库外做可恢复备份。
-4. 不执行删除数据库、清空 Chroma、`git clean` 或覆盖团队数据的命令。
-
-### 2.2 安装、初始化与构建
-
-在仓库根目录执行：
+1. 使用独立演示数据，完成数据库迁移演练。确认 Web、文本 Worker 和课件 Worker 就绪，默认知识库可检索。
+2. 启用新轮次创建，确认 `GET /api/generate/capabilities` 返回 `round_creation_enabled=true`。准备有权限读取的画像、发布资源和冻结测评题组。
+3. 检查 P0-09 preflight 为 `READY`、离线 Scenario A–J 均为 `PASS`，并在目标环境完成实际浏览器闭环。可预先准备固定资源供断网或供应商异常时回放。
+4. 正式放行还需有效的 P0-09 runtime 证据。当前源码探针的 `formal_attempt_api` 与 `claim_evidence_details_used` 仍匹配旧前端标记，无法据此放行现行轮次。运行时检查使用隔离演示库，它会执行正常应用初始化和对账。
 
 ```powershell
-python -m pip install --require-hashes -r backend/requirements.lock.txt -r backend/requirements-dev.lock.txt
-python scripts/init_db.py
-python scripts/ingest_knowledge.py
-Set-Location frontend
-npm ci
-npm run build
-Set-Location ..
+npm --prefix frontend run build
+python scripts/p0_09_preflight.py --output output/test-runs/demo/preflight.json
+python scripts/run_p0_09_acceptance.py --offline --output output/test-runs/demo/offline.json
 ```
 
-`init_db.py` 和 `ingest_knowledge.py` 会改变配置指向的数据；只允许对明确的 demo 路径执行。固定离线 fixture 位于 `backend/tests/fixtures/p0_09/`，其测试不需要公网，也不写正式 demo 数据库。
+离线模式总状态可能是 `PARTIAL`，逐项核对 A–J。`DEGRADED` 仅用于排障或受控预演。按 [测试指南](testing/README.md) 选相关专项，真实 Provider 演示须获得明确授权并单独留档。
 
-脚本内部导入已迁至当前领域包，原 CLI 参数保留。P0-09 offline 使用 `services/reports/p0_09_acceptance.py`；runtime 的前端源码探针已适配当前 feature、hook、API、组件和 SSE 连线。
+## 演示顺序
 
-### 2.3 Preflight 与验收
+| 操作 | 核对事实 |
+|---|---|
+| 创建学习方向并完成诊断 | 推荐的学习阶、主节点和画像归属 |
+| 创建资源轮次 | 轮次、阶段、成员、实际 Run ID，以及轨迹中的冻结来源 |
+| 展示普通审核与 Claim | 版本化的问题和证据，必要时展示补检与定向返工 |
+| 阅读已发布版本，开启 Tutor 或课件 | 查看来源、课程运行效果与实际发布版本 |
+| 提交阶段测评，确认下一步 | 持久化节点成绩、反馈建议及用户确认后创建的新任务 |
+| 查看学习历史和学情报告 | 轮次、掌握度、路径及资源质量来源，未测数据正确标示 |
 
-```powershell
-python scripts/p0_09_preflight.py --output wzx/out/p0-09-preflight.json
-python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-manifest.json
-python scripts/run_tests.py --profile acceptance
-```
+## 故障演示
 
-P0-09 退出码：`0=PASS/READY`、`1=FAIL/NOT_READY`、`2=PARTIAL/DEGRADED`；单独离线运行不包含 runtime / live，顶层可能为 `PARTIAL`，应核对 A～J 的实际状态。统一测试入口全部已选工程套件通过才返回 0，见 [测试方案](testing/README.md)。`--runtime` 仅在配置隔离 demo 数据库后单独运行；其前端检查仅验证源码连线。acceptance 使用隔离 fixture，不能代替下面的真实环境演示。
+- **断开 SSE 或刷新页面**。保留 Run ID，用 timeline 与事件游标恢复已持久化记录。
+- **证据不足或审核失败**。用失败 fixture 展示阻断原因，核对当前版本的发布状态。
+- **课件 Worker 中断**。在隔离环境重启 Worker，核对 checkpoint、候选及 release，验证同一任务未重复发布。
+- **文本任务中断**。检查最终状态与失败原因，在生成页按任务或资源显式重试，验证新 Run 与已发布资源版本。
 
-如需收费 Provider 冒烟，另开一次并保存单独证据：
-
-```powershell
-$env:RUN_LIVE_LLM='1'
-python scripts/run_p0_09_acceptance.py --live --output wzx/out/p0-09-live-manifest.json
-Remove-Item Env:RUN_LIVE_LLM
-```
-
-### 2.4 启动服务
-
-推荐在仓库根目录一键启动 Web、课件 Worker 和前端：
-
-```powershell
-.\.venv\python.exe scripts\start_local.py
-```
-
-标准 Windows venv 请将 `.venv\python.exe` 替换为 `.venv\Scripts\python.exe`。互动课件演示必须确认 Worker 已就绪；仅启动 Web 与前端会让课件任务一直留在队列。
-
-检查：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/health
-Invoke-RestMethod http://127.0.0.1:8000/health/ready
-Invoke-RestMethod http://127.0.0.1:8081/health/ready
-```
-
-需要分终端观察日志时，使用 [部署说明](deployment.md) 的三进程命令。`/health/ready` 是 Web 就绪，`8081/health/ready` 才是课件 Worker 完成首次持久 outbox 轮询后的就绪状态。
-
-管理员全 KB health 需要有效管理员 Token；不得在投屏、日志或截图中显示 Token。
-
-## 3. 十步主 Demo
-
-1. 打开固定 learner/profile，说明 beginner/intermediate/advanced 中本次使用的层级、目标知识点和画像版本。
-2. 创建异步 Generation Job，记录 `run_id`；解释 Job 与 AgentRun 共用稳定 ID，但职责不同。
-3. 展示 SSE Agent timeline：queued、Diagnosis、Retriever/Evidence Gate、Planner、Generator、Reviewer、Claim Audit、terminal。
-4. 通过当前登录会话读取 `/api/runs/{run_id}/evidence`，展示安全 locator、DocumentVersion、Chunk ID 与冻结 snapshot；该专用接口不等于已有完整前端 Evidence 审计页面。
-5. 展示 Reviewer 决策、结构化 issue/revision instruction 与 Claim verdict，强调 Reviewer 自评分不是正式幻觉指标。
-6. 在 `/resources` 打开最终已发布资源和参考来源；版本链通过 Run timeline 核对。可演示 `focus=1` 专注阅读；课件分支单独创建单来源任务并确认 Worker、release 和预览。
-7. 提交 Formal LearningAttempt，展示后端重算的逐知识点得分与幂等键。
-8. 展示 mastery、ProfileVersion N→N+1 和 LearningPath mutation；说明低/中/高分及 critical blocker 规则。
-9. 在反馈报告中确认补基础、纠错包或进阶方案，再打开真实 child Run / SSE。中分也可确认纠错包与新测评；仅提交测评不自动生成，未确认时应显示下一步候选。
-10. 打开 Report，核对 Attempt、掌握度、画像版本、路径和 child relation 都来自持久化事实。
-
-## 4. 可信性分支
-
-### Evidence 不足
-
-使用固定 `no_hit/evidence_insufficient` 场景。应看到 Evidence Gate fail closed、Generator 不执行、资源为空、无 published 资源，timeline 明确记录安全阻断。
-
-### Reviewer 定向返工
-
-展示 tutorial v1 + exercise v1，Reviewer 只返工 tutorial，随后出现 tutorial v2；exercise 继续沿用 v1。最终只有批准的叶子版本发布，v1 与指令保留用于回放。
-
-### Claim 驱动返工
-
-展示 Reviewer approve 后 Claim Judge 判为 `contradicted/not_in_evidence`，系统生成带 `target_claim_ids` 的返工指令；v2 重新抽取、重新判定，旧 judgement 不覆盖，最终指标只取 published leaf。
-
-## 5. 故障与恢复
-
-| 情况 | 演示动作 | 期望结果 |
-|---|---|---|
-| SSE 断线 | 记录最后 sequence，断开后重连 | `Last-Event-ID` 后续传，无重复 Step，Job 不受影响 |
-| 页面刷新 | 保留 run_id 后刷新 | REST timeline 恢复持久化事实，再续订 SSE |
-| KB not ready | 查看 `/health/ready` 与管理员 KB health | 默认 KB 故障阻断生成；非默认 KB 故障只在管理员明细中 degraded |
-| LLM auth/bad request | 使用受控 failure fixture | 不做不安全重试，不发布伪成功结果 |
-| Reviewer/Claim Judge 失败 | 使用 failure fixture | Reviewer 硬失败保持未发布；Claim 不完整仅在显式 partial 策略允许时降级发布，指标仍为 `incomplete` |
-| Retriever 基础设施失败 | 使用 failure fixture | fail closed，不生成虚构资源 |
-| Persistence conflict | 使用 failure fixture | 返回稳定冲突语义，无 false success/重复 mutation |
-
-P0-04 的 Replay 是“重建后查询历史事实”，不是服务重启后自动从中断点 Resume。
-
-### 5.1 互动课件 Worker 故障演示
-
-互动课件使用独立 Durable Worker；SQLite 演示环境只启动一个 Worker。可在 checkpoint 前后停止进程，
-再重新启动 Worker，核对同一 `run_id` 的 checkpoint、scene `content_hash/attempt`、candidate
-`release_id` 和发布事件没有重复。重复投递只会完成已处理 outbox，不会产生第二个 released release。
-若候选包或 release commit 失败，应看到 `release_blocked`，而旧 release 仍可预览和下载。
-
-本地复现实验：
-
-```powershell
-python -m pytest backend/tests/integration/courseware/test_executor_recovery.py `
-  backend/tests/integration/courseware/test_durable_repository.py -q
-```
-
-这组测试证明 SQLite 文件锁、独立进程 claim、租约接管和 checkpoint 后恢复；它不等同于生产部署的
-kill/restart、备份恢复或 CI artifact 证据。
-
-## 6. 浏览器人工 E2E Checklist
-
-- [ ] health ready
-- [ ] courseware Worker ready（包含课件演示时）
-- [ ] 首页 / 登录 / 本人资料正常；公开四项展示标为本地机制示意
-- [ ] 五步新建方向及第五步资源确认正常
-- [ ] learner fixture visible
-- [ ] generation job created
-- [ ] SSE queued
-- [ ] Diagnosis visible
-- [ ] Retriever/Evidence visible
-- [ ] Planner visible
-- [ ] Generator visible
-- [ ] Reviewer visible
-- [ ] Claim visible
-- [ ] Publication visible
-- [ ] Resource visible
-- [ ] SourceRef visible；完整 Evidence 来源通过专用接口核对
-- [ ] Claim metric visible
-- [ ] Attempt submit
-- [ ] Profile version update
-- [ ] Mastery update
-- [ ] Path mutation
-- [ ] 下一步确认后才出现 child Run
-- [ ] child SSE（未确认时不要求创建）
-- [ ] Report reflects state
-- [ ] Refresh replay
-- [ ] SSE reconnect
-- [ ] 画像切换、历史分页和报告时间窗口不显示旧上下文数据
-- [ ] 专注模式、窄屏、键盘焦点与减少动态效果可用
-
-前端自动专项共 13 项，以 `tests/suites.json` 的 browser 组为准。它们使用本地 HTTP fixture，不写真实账号、反馈或课件；截图 / JSON 是浏览器 fixture 证据，现场真实 Web / Worker / 模型结果需另存。
-
-## 7. 演示证据与收尾
-
-保留 acceptance manifest、preflight JSON、浏览器 checklist 和必要截图。真实 Golden Run 可调用 `build_safe_evidence_bundle()` 导出 allowlist 摘要，只包含稳定 ID、计数、状态和安全 locator；不得导出 prompt、raw provider response、Chain-of-Thought、API Key、绝对路径或完整学习者画像。
-
-## 8. Tutor 1~2 分钟演示脚本
-
-1. 在资源书架打开一个已发布资源，点击“向 Tutor 提问”。
-2. 第一次询问具体卡点，展示服务端给出的“提示 1/3”和 Evidence 来源。
-3. 明确表示仍未理解，展示“提示 2/3”的结构化拆解。
-4. 第三次继续追问，展示“提示 3/3”的 grounded explanation 与理解检查问题。
-5. 刷新页面并重新打开抽屉，确认会话与三轮内容恢复。
-6. 进入反馈页，在某道题旁点击“需要提示”，说明题目上下文由后端按 `question_id` 解析，答案未暴露给客户端或 Tutor context。
-7. 完成批次测评并提交，展示 Attempt 的 `hint_count` 由服务端按 `batch_id` 汇总持久化 Tutor 轮次，同时 Feedback Decision、Mastery 与路径仍沿用原确定性策略。
-8. 可选安全分支：使用无 Frozen Evidence、无 SourceRef 且检索不可用的 fixture，展示 HTTP 200 `evidence_insufficient`，并说明该轮不会调用模型自由知识回答。
-
-演示结束后记录 Git SHA、suite/fixture 版本、APP_MODE、DB_TYPE、默认 KB、offline/runtime/live 结果以及所有 FAIL/NOT_MEASURABLE。不要因为现场演示成功而把未执行的统计评测标成 PASS。
-
-## 9. 资源质量三项指标演示（T48）
-
-1. 在生成页打开一个已发布资源卡，指出“知识覆盖”与“幻觉率”旁的来源与测量状态：覆盖只来自普通审核逐知识点结果，幻觉率来自 Claim 核验。
-2. 打开普通审核详情，展示逐知识点 covered/missing 与问题统计；说明 5% 参考仅在未开启 Claim 且同版普通审核通过时出现，标签是“普通审核参考／待核验”，不是达标绿勾。
-3. 打开一个未开启 Claim 的资源，展示幻觉率为 `—` 与“未开启 Claim 核验”，而不是 0%。
-4. 打开 Claim 报告，若 Claim 完整则展示核验分子/分母；若失败或未完成，展示对应状态并说明不回退 5%。
-5. 打开学情报告的“生成资源质量摘要”，说明这是当前可见已发布文本资源的资源目标覆盖汇总（非课程全图节点覆盖率），缺任一应测结果时汇总显示未完成。
-6. 演示离线评测时明确：`suite_v2` 的 `M-COVERAGE` 只读普通审核，离线 PASS 与 `official_gates=NOT_MEASURABLE` 同时存在，不能把 fixture 结果当作正式模型质量。
+保存本次放行清单、实际运行 ID 和脱敏日志。复用离线回放时在演示中说明数据来源。真实测试按 [评测记录约定](evaluations/README.md) 归档。
