@@ -9,7 +9,7 @@
 - `main` 分支由项目负责人维护，普通开发成员不直接向 `main` 提交或合并代码。
 - 普通开发成员的功能、修复和文档修改，默认先合并到 `dev`。
 - 每个功能、修复或文档调整使用独立分支。
-- 提交前先检查 `git status`，确认没有误提交运行时数据、缓存、密钥和依赖目录。
+- 按任务显式暂存文件。提交前用 `git diff --cached --name-status` 检查范围，再用 `git ls-files -ci --exclude-standard` 检查索引中是否有应忽略的路径。
 - 涉及 API、架构、功能范围变化时，代码和文档需要同步更新。
 - 当前项目处于设计阶段，分支和提交规则用于协作清晰，不限制后续重构。
 
@@ -64,7 +64,7 @@ type(scope): summary
 
 ```bash
 git init
-git add .
+git add <files>
 git commit -m "chore: initialize project architecture"
 ```
 
@@ -110,7 +110,10 @@ git push origin feature/<name>
 | 依赖目录 | `node_modules/`, `venv/`, `.venv/` |
 | 缓存 | `__pycache__/`, `.pytest_cache/` |
 | 本地更新计划、方向拓展和 skills | `docs/update_plan/`, `docs/extension_ideas/`, `.agents/`, `.codex/`, `skills/`, `.skills/` |
-| 评测与预览产物 | `output/test-runs/`, `frontend/tests/test-results/`, 课件评测报告与 CI/live 产物、`deliverables/` 内的生成预览 |
+| 评测与预览产物 | `output/`、前端各层级的 `test-results/` 和 `playwright-report/`、课件评测报告与 CI/live 产物、`deliverables/` 内的生成预览 |
+| 本地辅助文件与独立实验 | `.workbuddy/`、本地启动和测试脚本、仓库根目录中的独立动画与实验素材 |
+
+可复用的项目源码、测试夹具和正式文档应放在对应的源码、测试或文档目录。推送和拉取请求会触发 Git 路径检查，发现已跟踪且匹配忽略规则的文件时失败。
 
 允许提交的占位文件：
 
