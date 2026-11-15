@@ -126,21 +126,37 @@ def main():
     container = init_container()
     learners = container.profile_service().repo.list_all()
     if not learners: raise SystemExit("no learner profile found in configured database")
-    learner = next(iter(learners.values()))
+    # Auto focus refuses learners without a current-tier recommendation, so the
+    # acceptance run must be able to name a learner whose tier data is usable.
+    requested_learner = os.getenv("LIVE_LEARNER_ID", "").strip()
+    if requested_learner:
+        learner = learners.get(requested_learner)
+        if learner is None:
+            raise SystemExit(f"learner profile not found: {requested_learner}")
+    else:
+        learner = next(iter(learners.values()))
     out=[]
     selected_types = tuple(item.strip() for item in os.getenv("LIVE_RESOURCE_TYPES", "").split(",") if item.strip()) or RESOURCE_TYPES
     unknown = [item for item in selected_types if item not in RESOURCE_TYPES]
     if unknown:
         raise SystemExit(f"unknown resource type(s): {unknown}")
     workers = max(1, min(3, int(os.getenv("LIVE_BATCH_WORKERS", "3")), len(selected_types)))
-    with ProcessPoolExecutor(max_workers=workers) as pool:
-        # Each child process owns its container, SQLite session factory,
-        # Chroma client, embedding model, and LLM gateway. Six jobs are queued
-        # while only a bounded number of Durable-style workers execute.
-        fs={pool.submit(run_process, t, learner.learner_id): t for t in selected_types}
-        for f in as_completed(fs):
-            try: out.append(f.result())
-            except Exception as e: out.append({"resource_type":fs[f],"error_type":type(e).__name__,"error":str(e)[:1000]})
+    if len(selected_types) == 1:
+        # A single acceptance batch needs no child process; running inline also
+        # keeps one container for the whole job on Windows spawn semantics.
+        try:
+            out.append(run_process(selected_types[0], learner.learner_id))
+        except Exception as e:
+            out.append({"resource_type":selected_types[0],"error_type":type(e).__name__,"error":str(e)[:1000]})
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            # Each child process owns its container, SQLite session factory,
+            # Chroma client, embedding model, and LLM gateway. Six jobs are queued
+            # while only a bounded number of Durable-style workers execute.
+            fs={pool.submit(run_process, t, learner.learner_id): t for t in selected_types}
+            for f in as_completed(fs):
+                try: out.append(f.result())
+                except Exception as e: out.append({"resource_type":fs[f],"error_type":type(e).__name__,"error":str(e)[:1000]})
     out.sort(key=lambda x: RESOURCE_TYPES.index(x["resource_type"]))
     passed=sum(x.get("run_status") in {"completed","success"} for x in out)
     report = {"created_at":datetime.now(timezone.utc).isoformat(),"learner_id":learner.learner_id,

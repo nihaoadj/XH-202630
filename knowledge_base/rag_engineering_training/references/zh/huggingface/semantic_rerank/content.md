@@ -1,0 +1,234 @@
+# 使用 Elasticsearch 和 Hugging Face 进行语义重排序
+
+_作者：[Liam Thompson](https://github.com/leemthompo)_
+
+在本 Notebook 中，我们将学习如何通过将 Hugging Face 中的模型上传到 Elasticsearch 集群来实现语义重排序。我们将使用 `retriever` 抽象，它是一个简化的 Elasticsearch 查询语法，便于构建查询并结合不同的搜索操作。
+
+你将会：
+
+- 从 Hugging Face 选择一个跨编码器模型来执行语义重排序
+- 使用 [Eland](https://www.elastic.co/guide/en/elasticsearch/client/eland/current/machine-learning.html) —— 一个用于与 Elasticsearch 进行机器学习的 Python 客户端，将模型上传到你的 Elasticsearch 部署
+- 创建一个推理端点来管理你的 `rerank` 任务
+- 使用 `text_similarity_rerank` 检索器查询你的数据
+
+## 🧰 必备条件
+
+为了运行此示例，你需要：
+
+- 一个版本为 8.15.0 或更高版本的 Elastic 部署（对于非无服务器部署）
+
+    - 我们将在本示例中使用 Elastic Cloud（可通过 [免费试用](https://cloud.elastic.co/registration) 进行访问）。
+    - 查看其他 [部署选项](https://www.elastic.co/guide/en/elasticsearch/reference/current/elasticsearch-intro.html#elasticsearch-intro-deploy)
+- 你需要找到你的部署的 Cloud ID 并创建一个 API 密钥。 [了解更多](https://www.elastic.co/search-labs/tutorials/install-elasticsearch/elastic-cloud#finding-your-cloud-id)。
+
+## 安装并导入包
+
+ℹ️ `eland` 的安装可能需要几分钟时间。
+
+```python
+!pip install -qU elasticsearch
+!pip install eland[pytorch]
+from elasticsearch import Elasticsearch, helpers
+```
+
+## 初始化 Elasticsearch Python 客户端
+
+首先，你需要连接到你的 Elasticsearch 实例。
+
+```python
+from getpass import getpass
+
+# https://www.elastic.co/search-labs/tutorials/install-elasticsearch/elastic-cloud#finding-your-cloud-id
+ELASTIC_CLOUD_ID = getpass("Elastic Cloud ID: ")
+
+# https://www.elastic.co/search-labs/tutorials/install-elasticsearch/elastic-cloud#creating-an-api-key
+ELASTIC_API_KEY = getpass("Elastic Api Key: ")
+
+# Create the client instance
+client = Elasticsearch(
+    # For local development
+    # hosts=["http://localhost:9200"]
+    cloud_id=ELASTIC_CLOUD_ID,
+    api_key=ELASTIC_API_KEY,
+)
+```
+
+## 测试连接
+
+通过以下测试确认 Python 客户端是否已成功连接到你的 Elasticsearch 实例。
+
+```python
+print(client.info())
+```
+
+这个示例使用了一个小型的电影数据集。
+
+```python
+from urllib.request import urlopen
+import json
+import time
+
+url = "https://huggingface.co/datasets/leemthompo/small-movies/raw/main/small-movies.json"
+response = urlopen(url)
+
+# Load the response data into a JSON object
+data_json = json.loads(response.read())
+
+# Prepare the documents to be indexed
+documents = []
+for doc in data_json:
+    documents.append(
+        {
+            "_index": "movies",
+            "_source": doc,
+        }
+    )
+
+# Use helpers.bulk to index
+helpers.bulk(client, documents)
+
+print("Done indexing documents into `movies` index!")
+time.sleep(3)
+```
+
+## 使用 Eland 上传 Hugging Face 模型
+
+现在，我们将使用 Eland 的 `eland_import_hub_model` 命令将模型上传到 Elasticsearch。在这个示例中，我们选择了 `cross-encoder/ms-marco-MiniLM-L-6-v2` 文本相似度模型。
+
+```python
+!eland_import_hub_model \
+  --cloud-id $ELASTIC_CLOUD_ID \
+  --es-api-key $ELASTIC_API_KEY \
+  --hub-model-id cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --task-type text_similarity \
+  --clear-previous \
+  --start
+```
+
+## 创建推理端点
+
+接下来，我们将为 `rerank` 任务创建一个推理端点，以部署和管理我们的模型，并在需要时启动必要的机器学习资源。
+
+```python
+client.inference.put(
+    task_type="rerank",
+    inference_id="my-msmarco-minilm-model",
+    inference_config={
+        "service": "elasticsearch",
+        "service_settings": {
+            "model_id": "cross-encoder__ms-marco-minilm-l-6-v2",
+            "num_allocations": 1,
+            "num_threads": 1,
+        },
+    },
+)
+```
+
+运行以下命令以确认你的推理端点已成功部署。
+
+```python
+client.inference.get()
+```
+
+⚠️ 当你部署模型时，可能需要在 Kibana（或无服务器）UI 中同步你的机器学习保存对象。  
+请前往 **训练模型** 并选择 **同步保存对象**。
+
+## 词汇查询
+
+首先，让我们使用一个 `standard` 检索器来测试一些词汇（或全文）搜索，然后我们将比较在加入语义重排序后所带来的改进。
+
+### 使用 `query_string` 查询进行词汇匹配
+
+假设我们模糊记得有一部关于吃人肉的杀手的著名电影。为了论证，假设我们暂时忘记了“食人者”这个词。
+
+让我们执行一个 [`query_string` 查询](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html)，在 Elasticsearch 文档的 `plot` 字段中查找短语 “flesh-eating bad guy”。
+
+```python
+resp = client.search(
+    index="movies",
+    retriever={
+        "standard": {
+            "query": {
+                "query_string": {
+                    "query": "flesh-eating bad guy",
+                    "default_field": "plot",
+                }
+            }
+        }
+    },
+)
+
+if resp["hits"]["hits"]:
+    for hit in resp["hits"]["hits"]:
+        title = hit["_source"]["title"]
+        plot = hit["_source"]["plot"]
+        print(f"Title: {title}\nPlot: {plot}\n")
+else:
+    print("No search results found")
+```
+
+没有结果！不幸的是，我们没有找到与 “flesh-eating bad guy” 精确匹配的结果。由于我们没有关于 Elasticsearch 数据中确切措辞的更多信息，我们需要扩大搜索范围。
+
+### 简单的 `multi_match` 查询
+
+这个词汇查询在我们的 Elasticsearch 文档的 `plot` 和 `genre` 字段中执行了一个标准的关键词搜索，查找术语 “crime”。
+
+```python
+resp = client.search(
+    index="movies",
+    retriever={
+        "standard": {
+            "query": {"multi_match": {"query": "crime", "fields": ["plot", "genre"]}}
+        }
+    },
+)
+
+for hit in resp["hits"]["hits"]:
+    title = hit["_source"]["title"]
+    plot = hit["_source"]["plot"]
+    print(f"Title: {title}\nPlot: {plot}\n")
+```
+
+好多了！至少现在我们有了一些结果。我们扩大了搜索标准，以提高找到相关结果的机会。
+
+不过，这些结果在我们原始查询 "flesh-eating bad guy" 的语境下并不是很精确。我们可以看到，“沉默的羔羊”出现在结果列表的中间，这是一个使用了通用 `match` 查询的结果。让我们看看是否可以使用我们的语义重排序模型，来更接近搜索者的原始意图。
+
+## 语义重排序
+
+在以下的 `retriever` 语法中，我们将标准查询检索器包装在一个 `text_similarity_reranker` 中。这样，我们就可以利用我们部署到 Elasticsearch 的 NLP 模型，根据短语 "flesh-eating bad guy" 对结果进行重排序。
+
+```python
+resp = client.search(
+    index="movies",
+    retriever={
+        "text_similarity_reranker": {
+            "retriever": {
+                "standard": {
+                    "query": {
+                        "multi_match": {"query": "crime", "fields": ["plot", "genre"]}
+                    }
+                }
+            },
+            "field": "plot",
+            "inference_id": "my-msmarco-minilm-model",
+            "inference_text": "flesh-eating bad guy",
+        }
+    },
+)
+
+for hit in resp["hits"]["hits"]:
+    title = hit["_source"]["title"]
+    plot = hit["_source"]["plot"]
+    print(f"Title: {title}\nPlot: {plot}\n")
+```
+
+成功了！“沉默的羔羊”是我们的首个结果。语义重排序通过解析自然语言查询，帮助我们找到最相关的结果，克服了依赖精确匹配的词汇搜索的局限性。
+
+语义重排序通过几个步骤实现了语义搜索，而无需生成和存储嵌入。能够在 Elasticsearch 集群中本地使用托管在 Hugging Face 上的开源模型，非常适合原型开发、测试和构建搜索体验。
+
+## 了解更多
+
+- 在本示例中，我们选择了 [`cross-encoder/ms-marco-MiniLM-L-6-v2`](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) 文本相似度模型。请参考 [Elastic NLP 模型参考](https://www.elastic.co/guide/en/machine-learning/8.15/ml-nlp-model-ref.html#ml-nlp-model-ref-text-similarity) 获取 Elasticsearch 支持的第三方文本相似度模型列表。
+- 了解更多关于 [将 Hugging Face 与 Elasticsearch 集成](https://www.elastic.co/search-labs/integrations/hugging-face) 的信息。
+- 查看 Elastic 的 Python 笔记本目录，访问 [`elasticsearch-labs` 仓库](https://github.com/elastic/elasticsearch-labs/tree/main/notebooks)。
+- 了解更多关于 [Elasticsearch 中的检索器和重排序](https://www.elastic.co/guide/en/elasticsearch/reference/current/retrievers-reranking-overview.html)。

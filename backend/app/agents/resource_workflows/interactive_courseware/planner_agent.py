@@ -7,7 +7,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.resource_workflows.interactive_courseware.contracts import (
+from app.models.courseware.content import (
     CoursewarePlanEnrichmentV2,
     ReviewPracticeCoursewarePlanEnrichment,
     CoursewareScenePlan,
@@ -19,6 +19,8 @@ from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.llm import LLMCallContext
 from app.models.shared.llm import LLMCallOptions
 from app.models.courseware.learning_design import CoursewareLearningDesign
+from app.models.courseware.content_review import CoursewarePlanEnrichmentCandidateV1, ReviewPracticeEnrichmentCandidateV1
+from app.core.courseware.content_review.evidence import COURSE_RULE
 
 
 def _platform_spec(
@@ -122,6 +124,7 @@ def build_courseware_spec(
     *, allowance: LLMCallOptions | None = None,
     learning_design: CoursewareLearningDesign | None = None,
     request_options: dict[str, Any] | None = None,
+    content_review: bool = False,
 ) -> tuple[CoursewareSpec | None, dict[str, Any] | None]:
     if not courseware_ai_available(llm_gateway):
         return None, None
@@ -153,6 +156,7 @@ def build_courseware_spec(
                     )),
                     HumanMessage(content=json.dumps({
                         "topic": review_source.get("topic"), "title": package.get("title"),
+                        **({"frozen_source_payload": package, "frozen_readable_evidence": review_source.get("content_review_evidence") or [], "course_rules": COURSE_RULE} if content_review else {}),
                         "node_ids": node_ids,
                         "page_design": {
                             "recall": "闭卷回忆：2页，每页2题",
@@ -171,7 +175,7 @@ def build_courseware_spec(
                             + (1 if not item.get("example_recognition_questions") and item.get("example_recognition") else 0),
                         } for item in package.get("node_blocks") or []],
                     }, ensure_ascii=False)),
-                ], output_schema=ReviewPracticeCoursewarePlanEnrichment,
+                ], output_schema=ReviewPracticeEnrichmentCandidateV1 if content_review else ReviewPracticeCoursewarePlanEnrichment,
                 context=LLMCallContext(run_id=run_id, step_id=f"{run_id}:review-practice-enrichment", node_name="courseware_review_practice_enricher", schema_name="ReviewPracticeCoursewarePlanEnrichment"),
                 options=allowance or llm_gateway.options_for("generator", temperature=0.0),
             )
@@ -184,6 +188,8 @@ def build_courseware_spec(
             trace = trace_method() if callable(trace_method) else {}
             return spec, ({"code": "LLM_TRACE", "node_name": "courseware_review_practice_enricher", "trace": trace} if trace else None)
         provider_schema = CoursewarePlanEnrichmentV2 if learning_design is not None else CoursewareSpec
+        if content_review and learning_design is not None:
+            provider_schema = CoursewarePlanEnrichmentCandidateV1
         enrichment_contract = None
         if learning_design is not None:
             enrichable_scenes = [
@@ -204,7 +210,7 @@ def build_courseware_spec(
                     "补充标题、教学意图和已注册组件偏好；不得重新生成、删除、重排或改写来源槽位。"
                     "只能使用 plan_enrichment_contract 中列出的 ID 与对应场景允许的组件；"
                     "recap 不接受 enrichment。数组顺序不重要，未知 ID 和未知组件会被拒绝。"
-                    "如果输入包含 schema_version=3.0 的实操指南，必须额外填写 practice_cover："
+                    "如果输入包含 schema_version=3.0、4.0、5.0 或 6.0 的实操指南，必须额外填写 practice_cover："
                     "cover_title 生成简洁、适合大标题展示的实操课件标题，不要带‘互动课件’、页码或长段落；"
                     "cover_lead 用一句话说明这份实操指南解决的实际任务；"
                     "learning_goal 用一句话说明完成这份实操指南后应具备的可观察能力；"
@@ -231,9 +237,10 @@ def build_courseware_spec(
                         for item in snapshots
                         if item.get("role") == "practice"
                         and isinstance(item.get("practice_guide_payload"), dict)
-                        and item["practice_guide_payload"].get("schema_version") == "3.0"
+                        and item["practice_guide_payload"].get("schema_version") in {"3.0", "4.0", "5.0", "6.0"}
                     ],
                     "learner_request": request_options or {},
+                    **({"frozen_readable_evidence": [ref for source in snapshots for ref in source.get("content_review_evidence", [])], "course_rules": COURSE_RULE} if content_review else {}),
                 }, ensure_ascii=False)),
             ],
             output_schema=provider_schema,
@@ -247,7 +254,7 @@ def build_courseware_spec(
             has_structured_practice = any(
                 item.get("role") == "practice"
                 and isinstance(item.get("practice_guide_payload"), dict)
-                and item["practice_guide_payload"].get("schema_version") == "3.0"
+                and item["practice_guide_payload"].get("schema_version") in {"3.0", "4.0", "5.0", "6.0"}
                 for item in snapshots
             )
             if has_structured_practice and result.output.practice_cover is None:
@@ -323,3 +330,21 @@ def build_courseware_spec(
             "failure_code": getattr(exc, "code", None),
             "failure_detail": str(exc)[:160] if isinstance(exc, ValueError) else None,
         }
+
+
+# ---------------------------------------------------------------------------
+# Bypass LLM-call accounting (T41): bind the stage scope around this agent
+# entry point so every caller (workflow, lifecycle, retry, Worker) observes
+# the same run segment.  The original function body is unchanged.
+# ---------------------------------------------------------------------------
+import functools as _functools
+
+from app.agents.shared.llm_accounting import stage_labeled_scope as _stage_labeled_scope
+
+_build_courseware_spec = build_courseware_spec
+
+
+@_functools.wraps(_build_courseware_spec)
+def build_courseware_spec(*args, **kwargs):
+    with _stage_labeled_scope("planning"):
+        return _build_courseware_spec(*args, **kwargs)

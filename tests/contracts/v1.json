@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "models": {
+    "CoursewareLearningEventAck": {"acknowledged_event_ids": ["occ_fixture"]},
+    "GenerationJobCreateResponse": {"run_id": "run_fixture", "batch_id": "batch_fixture", "learner_id": "learner_fixture", "topic": "Synthetic contract", "job_status": "queued"},
+    "GenerationJobStatusResponse": {"run_id": "run_fixture", "learner_id": "learner_fixture", "topic": "Synthetic contract", "job_status": "running", "resource_ids": []},
+    "PublicRunEvent": {"run_id": "run_fixture", "event_id": "event_fixture", "sequence": 1, "event_type": "resource_publication_decided", "occurred_at": "2026-10-23T00:00:00Z", "payload": {"resource_id": "resource_fixture", "claim_publish_decision": "publish"}},
+    "PublicRunSnapshot": {"run_id": "run_fixture", "job_status": "queued", "is_terminal": false, "last_event_sequence": 0},
+    "CurrentReportResponse": {
+      "learner_id": "learner_fixture", "generated_at": "2026-10-23T00:00:00Z", "data_as_of": null,
+      "report_revision": "rpt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "window": {"window_days": 30, "start": "2026-09-23T00:00:00Z", "end": "2026-10-23T00:00:00Z"},
+      "radar": {"dimensions": [], "values": []}, "weak_points": [], "strong_points": [], "skill_level": "初级", "learning_goal": "Synthetic contract", "difficulty_curve": [],
+      "knowledge_blind_spot_map": {"dimensions": ["concept"], "nodes": [], "cells": [{"skill_node_id": "node_fixture", "dimension": "concept", "score": null, "status": "unassessed", "confidence": "none", "objective_evidence_count": 0}]}
+    },
+    "ReportInvalidation": {"learner_id": "learner_fixture", "window_days": 30, "report_revision": "rpt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+  }
+}

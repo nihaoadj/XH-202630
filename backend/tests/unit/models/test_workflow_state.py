@@ -4,10 +4,20 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
+from app.config import Settings
 from app.agents.resource_workflows.learning_documents.workflow import build_workflow
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
 from app.models.shared.workflow import WorkflowStateSnapshot
 from app.services.generation.generation import build_workflow_state
+
+
+@pytest.fixture(autouse=True)
+def _freeze_legacy_claim_strategy(monkeypatch):
+    # This historical contract test was written for the legacy Claim policy.
+    # Freeze it so the T45 ``neutral_estimate_v1`` default (which requires a
+    # submission preflight) does not leak into the field-mapping assertions.
+    legacy = Settings(claim_extraction_strategy="legacy_v3", resource_review_strategy="compat")
+    monkeypatch.setattr("app.services.generation.generation.get_settings", lambda: legacy)
 
 
 def _learner() -> LearnerProfile:
@@ -105,9 +115,20 @@ def test_claim_check_defaults_to_disabled_and_remains_disabled_for_explicit_draf
     draft = GenerateRequest(learner_id="contract_001", topic="工业视觉", include_review=False)
 
     assert reviewed.include_claim_check is False
-    assert reviewed.max_iterations == 2
-    assert reviewed.claim_max_iterations == 0
+    assert reviewed.max_iterations == 3
+    assert reviewed.claim_max_iterations == 2
     assert draft.include_claim_check is False
+
+
+@pytest.mark.parametrize("explicit", [None, 0, 1, 3])
+def test_claim_revision_default_and_explicit_budget_are_frozen(explicit):
+    args = {} if explicit is None else {"claim_max_iterations": explicit}
+    request = GenerateRequest(learner_id="contract_001", topic="工业视觉", **args)
+    expected = 2 if explicit is None else explicit
+    assert GenerateRequest.model_validate_json(request.model_dump_json()).claim_max_iterations == expected
+    state = build_workflow_state(_learner(), request)
+    assert state["claim_max_iterations"] == expected
+    assert WorkflowStateSnapshot.model_validate(state).claim_max_iterations == expected
 
 
 def test_workflow_state_json_round_trip_preserves_schema_version_and_ids():
@@ -126,6 +147,34 @@ def test_workflow_state_json_round_trip_preserves_schema_version_and_ids():
     assert json.loads(restored.model_dump_json())["generation_attempt"] == 1
 
 
+@pytest.mark.parametrize("budget", [0, 1, 2, 3])
+def test_post_retrieval_budget_round_trip_and_staged_counts(budget):
+    request = GenerateRequest(learner_id="contract_001", topic="test",
+                              claim_post_retrieval_max_iterations=budget)
+    state = build_workflow_state(_learner(), request)
+    assert state["claim_post_retrieval_max_iterations"] == budget
+    assert state["claim_workflow_version"] == "contradiction_first_v3"
+    state.update(include_claim_evidence_retrieval=True, claim_revision_count=1+budget,
+                 claim_post_retrieval_revision_count=budget, generation_attempt=2+budget,
+                 claim_post_retrieval_resource_keys=["spec"], claim_revision_phase="post_retrieval")
+    restored = WorkflowStateSnapshot.model_validate_json(WorkflowStateSnapshot.model_validate(state).model_dump_json())
+    from app.models.shared.persistence import build_checkpoint_projection
+    projection = build_checkpoint_projection(restored.as_state())
+    assert projection["claim_post_retrieval_revision_count"] == budget
+    assert projection["claim_post_retrieval_resource_keys"] == ["spec"]
+    assert projection["claim_revision_count"] == budget+1
+    with pytest.raises(ValidationError):
+        WorkflowStateSnapshot.model_validate({**state, "claim_post_retrieval_revision_count": budget+1})
+
+
+def test_frozen_requests_and_snapshots_without_staged_fields_keep_legacy_routing():
+    request = GenerateRequest.from_frozen_payload({"learner_id": "contract_001", "topic": "old"})
+    assert request.claim_workflow_version == "legacy_v1"
+    state = build_workflow_state(_learner(), request)
+    state.pop("claim_workflow_version")
+    assert WorkflowStateSnapshot.model_validate(state).claim_workflow_version == "legacy_v1"
+
+
 def test_workflow_state_rejects_unknown_contract_version():
     state = build_workflow_state(
         _learner(),
@@ -135,3 +184,32 @@ def test_workflow_state_rejects_unknown_contract_version():
 
     with pytest.raises(ValidationError):
         WorkflowStateSnapshot.model_validate(state)
+
+
+@pytest.mark.parametrize("threshold", [0,3,8,128])
+def test_gap_threshold_is_frozen_in_state_and_checkpoint(threshold):
+    from app.models.shared.persistence import build_checkpoint_projection
+    request = GenerateRequest(learner_id="contract_001", topic="test", claim_gap_revision_threshold=threshold)
+    state = build_workflow_state(_learner(), request)
+    restored = WorkflowStateSnapshot.model_validate_json(WorkflowStateSnapshot.model_validate(state).model_dump_json())
+    assert restored.claim_gap_revision_threshold == threshold
+    assert build_checkpoint_projection(restored.as_state())["claim_gap_revision_threshold"] == threshold
+
+
+@pytest.mark.parametrize("threshold", [-1,129])
+def test_gap_threshold_rejects_out_of_range_request_values(threshold):
+    with pytest.raises(ValidationError):
+        GenerateRequest(learner_id="contract_001", topic="test", claim_gap_revision_threshold=threshold)
+
+
+def test_new_revision_defaults_and_historical_missing_fields_are_distinct():
+    payload = {"learner_id":"contract_001", "topic":"test"}
+    new = GenerateRequest.model_validate(payload)
+    old = GenerateRequest.from_frozen_payload(payload)
+    assert (new.max_iterations, new.claim_max_iterations, new.claim_post_retrieval_max_iterations) == (3,2,0)
+    assert (old.max_iterations, old.claim_max_iterations) == (2,1)
+    state = build_workflow_state(_learner(), new)
+    restored = WorkflowStateSnapshot.model_validate(state)
+    assert (restored.max_iterations, restored.claim_max_iterations) == (3,2)
+    explicit = GenerateRequest.from_frozen_payload({**payload,"max_iterations":0,"claim_max_iterations":3})
+    assert (explicit.max_iterations, explicit.claim_max_iterations) == (0,3)

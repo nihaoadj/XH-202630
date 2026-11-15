@@ -1,4 +1,4 @@
-import { api } from '../../api/client'
+import { api } from '../../api/client.js'
 
 export const knowledgeApi = {
   listDomains: () => api.get('/knowledge/domains'),

@@ -9,12 +9,11 @@ from app.agents.resource_agents import AssessmentAgent, CaseStudyAgent, Correcti
 from app.agents.resource_agents.practice import PRACTICE_GUIDE_PROMPT
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
 from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
-from app.agents.resource_workflows.learning_documents.reviewer_agent import (
-    _deterministic_practice_guide_review,
-    _deterministic_resource_structure_review,
-    _normalize_node_tier_review,
-    review_node,
+from app.agents.resource_workflows.learning_documents.reviewer_agent import review_node
+from app.agents.resource_workflows.learning_documents.reviewing.checks import (
+    check_practice_structure, check_markdown_structure,
 )
+from app.agents.resource_workflows.learning_documents.reviewing.results import normalize_node_tier_review
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.models.shared.agent_contracts import ResourceGenerationContext
 from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
@@ -170,7 +169,7 @@ def test_checklist_node_tier_difficulty_ignores_surface_complexity_only_for_chec
         "revision_instructions": [{"issue_codes": ["difficulty_mismatch"]}],
     }
 
-    normalized = _normalize_node_tier_review(
+    normalized = normalize_node_tier_review(
         raw,
         SimpleNamespace(
             resource_type="复习清单",
@@ -183,7 +182,7 @@ def test_checklist_node_tier_difficulty_ignores_surface_complexity_only_for_chec
     assert normalized["difficulty_match"] is True
     assert normalized["issues"] == []
 
-    untouched = _normalize_node_tier_review(
+    untouched = normalize_node_tier_review(
         raw,
         SimpleNamespace(
             resource_type="案例分析",
@@ -197,7 +196,8 @@ def test_checklist_node_tier_difficulty_ignores_surface_complexity_only_for_chec
 
 def test_text_resource_uses_bounded_long_form_timeout_and_output_budget(monkeypatch):
     spec, context, _ = _inputs("讲义")
-    gateway = ScriptedLLMGateway(["# 受控检索讲义\n\n## 学习目标\n\n掌握证据范围。"])
+    markdown = "# 受控检索讲义\n\n## 证据能支持什么\n\n找到相关资料后，仍要判断它能支持哪些结论。"
+    gateway = ScriptedLLMGateway([markdown])
     monkeypatch.setattr(
         "app.agents.resource_agents.text.get_settings",
         lambda: SimpleNamespace(
@@ -208,7 +208,7 @@ def test_text_resource_uses_bounded_long_form_timeout_and_output_budget(monkeypa
 
     artifact = TextResourceAgent().generate(spec, context, llm_gateway=gateway)
 
-    assert artifact.content_text.startswith("# 受控检索讲义")
+    assert artifact.content_text == markdown
     assert gateway.calls[0]["options"].request_timeout_seconds == 240.0
     assert gateway.calls[0]["options"].max_output_tokens == 32768
 
@@ -317,7 +317,7 @@ def test_correction_package_structure_review_is_advisory():
         content_text="# 标题\n\n只有正文，没有固定章节。",
     )
 
-    assert _deterministic_resource_structure_review(resource) is None
+    assert check_markdown_structure(resource) is None
 
 
 def test_correction_package_structure_review_still_blocks_script_markup():
@@ -326,7 +326,7 @@ def test_correction_package_structure_review_still_blocks_script_markup():
         content_text="# 标题\n\n<script>alert(1)</script>",
     )
 
-    result = _deterministic_resource_structure_review(resource)
+    result = check_markdown_structure(resource)
 
     assert result is not None
     assert result["decision"] == "revise"
@@ -367,8 +367,8 @@ def test_practice_guide_review_does_not_block_generated_secret_like_examples():
         practice_guide_payload=package,
     )
 
-    assert _deterministic_practice_guide_review(placeholder)["decision"] == "approve"
-    assert _deterministic_practice_guide_review(real_secret)["decision"] == "approve"
+    assert check_practice_structure(placeholder) is None
+    assert check_practice_structure(real_secret) is None
 
 
 def test_assessment_agent_retries_node_json_structure_before_failing():
@@ -403,7 +403,7 @@ def test_new_resource_types_have_a_deterministic_review_structure_gate():
         content_text="# 不完整案例\n\n## 案例背景\n\n缺少其余章节。",
     )
 
-    result = _deterministic_resource_structure_review(malformed)
+    result = check_markdown_structure(malformed)
 
     assert result is not None
     assert result["decision"] == "revise"

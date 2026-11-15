@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import uuid
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Protocol
 
 from app.agents.shared.policies import target_resource_types
+from app.agents.shared.evidence_scope import (
+    allocation_for_state,
+    contract_error,
+    resolve_generation_evidence_context,
+    validate_payload_evidence,
+    validate_spec,
+)
 from app.agents.resource_agents.registry import get_resource_agent, normalize_resource_type
 from app.agents.resource_workflows.learning_documents.spec_builder import build_resource_specs
 from app.agents.resource_workflows.learning_documents.state import AgentState
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.core.retrieval.evidence import source_refs_from_evidence
+from app.models.knowledge.knowledge import RESOURCE_AWARE_STRATEGY
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.config import get_settings
 from app.models.shared.agent_contracts import (
@@ -26,6 +35,8 @@ from app.models.shared.agent_contracts import (
 )
 from app.models.learning_documents.schemas import LearningResource
 from app.models.shared.workflow import ResourceStatus, StepStatus
+from app.models.reviews.revision_inputs import ClaimReviewRevisionInput, ResourceReviewRevisionInput
+from app.agents.resource_workflows.learning_documents.revision_inputs import unpack_revision_input
 from app.db.learning_documents.models import ResourceSpecRecord
 
 
@@ -42,9 +53,15 @@ GENERATION_PROMPT = "Resource routing is deterministic; specialized prompts own 
 
 
 def _specs_for_state(state: AgentState, node_input: GeneratorInput) -> list[ResourceSpec]:
+    allocation = allocation_for_state(state)
     stored = state.get("resource_specs") or []
+    if allocation and not stored and (node_input.generation_attempt > 1 or node_input.generated_resources):
+        raise contract_error()
     if stored:
-        specs = [ResourceSpec.model_validate(item) for item in stored]
+        try:
+            specs = [ResourceSpec.model_validate(item) for item in stored]
+        except (ValueError, TypeError) as exc:
+            raise contract_error() from exc
     else:
         specs = build_resource_specs(
             run_id=node_input.run_id,
@@ -61,10 +78,13 @@ def _specs_for_state(state: AgentState, node_input: GeneratorInput) -> list[Reso
             evidence=node_input.retrieved_evidence,
             target_skill_nodes=node_input.target_skill_nodes,
             node_evidence_map=node_input.node_evidence_map,
+            evidence_allocation=allocation,
         )
     expected = [normalize_resource_type(item) for item in node_input.resource_types]
     if [item.resource_type for item in specs] != expected:
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+    for spec in specs:
+        validate_spec(state, spec)
     return specs
 
 
@@ -73,14 +93,83 @@ def _context(
     state: AgentState,
     step_id: str,
     previous: LearningResource | None = None,
+    spec: ResourceSpec | None = None,
 ) -> ResourceGenerationContext:
     learner = node_input.learner
     constraints = dict(node_input.constraints)
-    # A revision must be able to preserve text that the reviewer did not ask
-    # to change.  Keep the previous artifact scoped to the resource worker and
-    # inject it only when a prior version exists (never on first generation).
-    if previous is not None and node_input.generation_attempt > 1:
-        constraints["previous_version_content"] = previous.content_text or ""
+    constraints.pop("_correction_parent_package", None)
+    if previous is not None and previous.correction_package_payload is not None:
+        from app.core.learning_documents.correction_package import validated_correction_package
+        constraints["_correction_parent_package"] = validated_correction_package(previous).model_dump(mode="json")
+    # This marker is derived from the frozen run, never from public constraints.
+    constraints.pop("_claim_revision_edit_policy", None)
+    claim_revision = None
+    resource_review_revision = None
+    # The private spec→envelope map is server-built and never forwarded whole
+    # to a single worker. Pick only this spec's entry; a fresh first generation
+    # and any spec without an entry keep both revision inputs empty.
+    generation_revision_inputs = constraints.get("generation_revision_inputs")
+    if spec is not None and isinstance(generation_revision_inputs, dict):
+        entry = generation_revision_inputs.get(spec.resource_spec_id)
+        if entry is not None:
+            revision_input = unpack_revision_input(entry)
+            if isinstance(revision_input, ClaimReviewRevisionInput):
+                claim_revision = revision_input
+            elif isinstance(revision_input, ResourceReviewRevisionInput):
+                resource_review_revision = revision_input
+        constraints.pop("generation_revision_inputs", None)
+
+    if claim_revision is not None or resource_review_revision is not None:
+        # A worker receiving a typed generation revision input must not also
+        # receive the legacy mixed fields; the parent text and structured
+        # payload already travel inside the input itself.
+        constraints.pop("revision_feedback", None)
+        constraints.pop("previous_version_content", None)
+        constraints.pop("lecture_revision", None)
+        constraints.pop("resource_revision", None)
+        if claim_revision is not None:
+            from .claim_routing import include_large_gaps
+            if include_large_gaps(state):
+                constraints["_claim_revision_edit_policy"] = "minimal_change_v1"
+    else:
+        # Legacy / historical revision inputs (no new projection for this spec).
+        if spec is not None and isinstance(constraints.get("revision_feedback"), dict):
+            feedback = dict(constraints["revision_feedback"])
+            feedback["assessment_findings"] = [
+                dict(item) for item in feedback.get("assessment_findings", [])
+                if spec.resource_type == "分阶测试题"
+                and item.get("resource_spec_id") == spec.resource_spec_id
+                and (previous is None or item.get("resource_id") == previous.resource_id)
+            ]
+            constraints["revision_feedback"] = feedback
+        # A revision must be able to preserve text that the reviewer did not ask
+        # to change.  Keep the previous artifact scoped to the resource worker
+        # and inject it only when a prior version exists (never on first
+        # generation).
+        if previous is not None and (node_input.generation_attempt > 1 or state.get("resource_retry_context")):
+            constraints["previous_version_content"] = previous.content_text or ""
+        if spec is not None and spec.resource_type == "讲义" and state.get("lecture_review_policy"):
+            revision = (state.get("lecture_revision") or {}).get(spec.resource_spec_id)
+            if not (revision or {}).get("claim_only"):
+                constraints.pop("revision_feedback", None)
+                constraints.pop("previous_version_content", None)
+                if revision:
+                    if previous is None or revision["parent_resource_id"] != previous.resource_id:
+                        raise contract_error()
+                    constraints["lecture_revision"] = revision
+        if spec is not None and state.get("resource_review_policy"):
+            revision = (state.get("resource_revision") or {}).get(spec.resource_spec_id)
+            if not (revision or {}).get("claim_only"):
+                constraints.pop("revision_feedback", None)
+                constraints.pop("previous_version_content", None)
+                if revision:
+                    if previous is None or revision.get("parent_resource_id") != previous.resource_id:
+                        raise contract_error()
+                    constraints["resource_revision"] = revision
+    generation_evidence, supplement_ids = (
+        resolve_generation_evidence_context(state, spec, previous)
+        if spec is not None else (node_input.retrieved_evidence, [])
+    )
     return ResourceGenerationContext(
         run_id=node_input.run_id,
         batch_id=node_input.batch_id,
@@ -93,12 +182,15 @@ def _context(
             "learning_goal": learner.learning_goal,
         },
         learning_path=list(node_input.learning_plan.get("learning_path", []))[:50],
-        evidence=node_input.retrieved_evidence,
-        node_evidence_map=node_input.node_evidence_map,
+        evidence=generation_evidence,
+        supplement_evidence_ids=supplement_ids,
+        node_evidence_map=spec.node_evidence_map if spec else node_input.node_evidence_map,
         continuation_context=list(node_input.constraints.get("continuation_context", []))[:12],
         constraints=constraints,
         generation_attempt=node_input.generation_attempt,
         workflow_deadline_at=state.get("workflow_deadline_at"),
+        resource_review_revision=resource_review_revision,
+        claim_review_revision=claim_revision,
     )
 
 
@@ -121,10 +213,22 @@ def _materialize(
     node_input: GeneratorInput,
     previous: LearningResource | None,
     spec: ResourceSpec,
+    context: ResourceGenerationContext | None = None,
 ) -> LearningResource:
     metadata = artifact.metadata
     data = artifact.artifact_data
-    return LearningResource(
+    allowed_ids = list(spec.evidence_ids)
+    if context is not None:
+        allowed_ids.extend(
+            item for item in context.supplement_evidence_ids
+            if item not in allowed_ids
+        )
+    pool = [
+        item for item in (context.evidence if context is not None else node_input.retrieved_evidence)
+        if item.evidence_id in allowed_ids
+    ]
+    base_pool = [item for item in pool if item.evidence_id in spec.evidence_ids]
+    resource = LearningResource(
         resource_id=str(uuid.uuid4()), learner_id=node_input.learner.learner_id,
         topic=node_input.topic, run_id=node_input.run_id, batch_id=node_input.batch_id,
         resource_spec_id=metadata.resource_spec_id,
@@ -136,7 +240,14 @@ def _materialize(
         # agent-added subpoints, but never allow an artifact to drop a selected
         # target node before publication and curriculum accounting.
         knowledge_points=list(dict.fromkeys([*spec.knowledge_points, *artifact.knowledge_points])),
-        source_refs=source_refs_from_evidence(node_input.retrieved_evidence),
+        # Keep every frozen excerpt for the resource-aware path. The historical
+        # five-reference projection can otherwise hide a type-specific source
+        # from courseware even though generation and review used that source.
+        source_refs=source_refs_from_evidence(
+            base_pool,
+            limit=len(base_pool) if node_input.retrieval_strategy_version == RESOURCE_AWARE_STRATEGY
+            or (data.get("practice_guide_package") or {}).get("schema_version") in {"4.0", "5.0", "6.0"} else 5,
+        ),
         review_status=(ResourceStatus.PENDING_REVIEW.value if node_input.include_review
                        else ResourceStatus.UNREVIEWED_DRAFT.value),
         version=(previous.version + 1) if previous else 1,
@@ -146,9 +257,16 @@ def _materialize(
         assessment_payload_hash=(data.get("assessment_package") or {}).get("payload_hash"),
         review_practice_payload=data.get("review_practice_package"),
         review_practice_payload_hash=(data.get("review_practice_package") or {}).get("payload_hash"),
+        correction_package_payload=data.get("correction_package"),
+        correction_package_payload_hash=(data.get("correction_package") or {}).get("payload_hash"),
         practice_guide_payload=data.get("practice_guide_package"),
         practice_guide_payload_hash=(data.get("practice_guide_package") or {}).get("payload_hash"),
     )
+    validate_payload_evidence(resource, pool)
+    if not set(metadata.source_evidence_ids) <= set(allowed_ids):
+        raise contract_error()
+    return resource
+
 
 
 def _validate_artifact_scope(artifact: GeneratedArtifact, spec: ResourceSpec,
@@ -177,7 +295,7 @@ def _fallback(spec: ResourceSpec, node_input: GeneratorInput, previous: Learning
         content_text=(f"# {node_input.topic} - {spec.resource_type}\n\n## 学习目标\n"
                       f"{spec.learning_objective}\n\n## 资源状态\n模型调用未完成，等待人工复核。\n"),
         knowledge_points=spec.knowledge_points,
-        source_refs=source_refs_from_evidence(node_input.retrieved_evidence),
+        source_refs=source_refs_from_evidence([item for item in node_input.retrieved_evidence if item.evidence_id in spec.evidence_ids]),
         review_status=ResourceStatus.HUMAN_REVIEW.value,
         version=(previous.version + 1) if previous else 1,
         parent_resource_id=previous.resource_id if previous else None,
@@ -225,6 +343,85 @@ def _error_code_value(value: Any) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
+def _recheck_body(state, node_input, spec, recorder):
+    """Adopt the frozen body as a new auditable version; never copy verdicts."""
+    from app.models.shared.persistence import canonical_hash
+
+    parent = state.get("regeneration_source")
+    if not isinstance(parent, LearningResource) or not (parent.content_text or "").strip():
+        raise contract_error()
+    context = state["resource_retry_context"]
+    snapshots = [*context["evidence"], *(context.get("supplement_context") or {}).get("evidence", [])]
+    pool = {(item.chunk_id, item.query_hash, item.excerpt_hash): item.evidence_id
+            for item in node_input.retrieved_evidence}
+    mapping = {item["evidence_id"]: pool.get((item["chunk_id"], item["query_hash"], item["excerpt_hash"]))
+               for item in snapshots}
+    refs = []
+    for ref in parent.source_refs:
+        if ref.evidence_id and not mapping.get(ref.evidence_id):
+            raise contract_error()
+        refs.append(ref.model_copy(update={"evidence_id": mapping.get(ref.evidence_id)}))
+    resource = parent.model_copy(deep=True, update={
+        "resource_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{node_input.run_id}:recheck:{parent.resource_id}")),
+        "run_id": node_input.run_id, "batch_id": node_input.batch_id,
+        "resource_spec_id": spec.resource_spec_id, "resource_family_id": spec.resource_family_id,
+        "parent_resource_id": parent.resource_id, "version": parent.version + 1,
+        "source_refs": refs, "review_id": None, "review_status": "pending_review",
+        "publication_status": "unpublished", "published_at": None, "created_at": state.get("workflow_started_at") or parent.created_at,
+        "claim_count": None, "claim_hallucination_rate": None, "claim_metric_status": None,
+        "claim_factual_pass_rate": None, "claim_degraded_publish": False,
+        "claim_warning_publish": False, "claim_publish_decision_pending": False,
+        "claim_publish_decision": None, "hallucination_rate": None, "difficulty_match": None,
+        "legacy_reviewer_score": None,
+    })
+    # Only provenance identifiers change; learner-facing text and answers stay
+    # byte-for-byte unchanged. Re-hash the private package after rebinding.
+    def rebind(value):
+        if isinstance(value, list):
+            return [rebind(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        result = {}
+        for key, item in value.items():
+            if key.endswith("evidence_ids"):
+                if not isinstance(item, list) or any(ident not in mapping for ident in item):
+                    raise contract_error()
+                result[key] = [mapping[ident] for ident in item]
+            elif key.endswith("evidence_id") and item is not None:
+                if item not in mapping:
+                    raise contract_error()
+                result[key] = mapping[item]
+            elif key != "payload_hash":
+                result[key] = rebind(item)
+        if "payload_hash" in value:
+            result["payload_hash"] = canonical_hash(result)
+        return result
+    for field in ("assessment_payload", "review_practice_payload", "practice_guide_payload"):
+        payload = getattr(resource, field, None)
+        if payload is not None:
+            updated = rebind(payload)
+            resource = resource.model_copy(update={field: updated, field + "_hash": updated.get("payload_hash")})
+    agent = get_resource_agent(spec.resource_type)
+    if resource.correction_package_payload is not None and state.get("correction_package_snapshot"):
+        agent.prompt_version = state["correction_package_snapshot"]["version"]
+        agent.artifact_format = "json"
+    step = start_step(state, attempt=1)
+    execution = _execution(spec, resource, agent, attempt=1, worker_step_id=step["step_id"],
+                           state="generated", validation_status="passed")
+    trace = build_trace_item(state, agent_name="generator", action="保留正文，重新审核", status=StepStatus.SUCCESS,
+        input_summary="导入所选版本的正文与冻结来源，不调用生成模型",
+        output_summary=f"正文保持一致：{canonical_hash(parent.content_text)}",
+        decision_reason="重新执行审核与已启用的事实核验，旧审核与发布结论不沿用。",
+        evidence_refs=[item.evidence_id for item in node_input.retrieved_evidence],
+        resource_ids=[resource.resource_id], step_context=step, attempt=1)
+    trace["node_name"] = "generate"
+    if recorder is not None:
+        recorder.record_resource_generated(state, resource=resource, execution=execution, trace_item=trace)
+    return {"resource_specs": [spec.model_dump(mode="json")], "generated_resources": [resource],
+            "resource_executions": [execution], "resource_progress_summary": progress_summary([execution]),
+            "current_node": "generator", "trace": [trace], "errors": [], "generation_attempt": 1, "iteration": 1}
+
+
 def generate_node(
     state: AgentState,
     *,
@@ -236,6 +433,11 @@ def generate_node(
     if not node_input.retrieved_evidence:
         raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
     specs = _specs_for_state(state, node_input)
+    retry = (state.get("resource_retry_context") or {}).get("request", {}).get("constraints", {})
+    if retry.get("resource_retry_single_pass") and retry.get("resource_retry_action") == "recheck" and node_input.generation_attempt == 1:
+        if len(specs) != 1:
+            raise contract_error()
+        return _recheck_body(state, node_input, specs[0], resource_progress_recorder)
     revision_targets = target_resource_types(node_input.review_result.get("revision_instructions", []))
     revision_targets.update(
         item.get("resource_type")
@@ -248,13 +450,24 @@ def generate_node(
                     else {item.resource_type for item in specs})
     if not active_types:
         raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+    active_spec_ids = {spec.resource_spec_id for spec in specs if spec.resource_type in active_types
+        and (not state.get("lecture_review_policy") or spec.resource_type != "讲义" or not (node_input.revision_count or node_input.claim_revision_count)
+             or spec.resource_spec_id in (state.get("lecture_revision") or {}))
+        and (not state.get("resource_review_policy") or not (node_input.revision_count or node_input.claim_revision_count)
+             or spec.resource_spec_id in (state.get("resource_revision") or {}))}
     step_context = start_step(state, attempt=node_input.generation_attempt)
     previous = _previous(node_input.generated_resources)
+    source = state.get("regeneration_source")
+    if source is not None:
+        source = LearningResource.model_validate(source)
+        for spec in specs:
+            if spec.resource_type == source.resource_type:
+                previous.setdefault((spec.resource_spec_id, "text"), source)
     resources = [item for item in node_input.generated_resources
-                 if item.resource_type not in active_types]
+                 if item.resource_spec_id not in active_spec_ids]
     generated_now: list[LearningResource] = []
     executions = [item for item in state.get("resource_executions", [])
-                  if item.get("resource_type") not in active_types]
+                  if item.get("resource_spec_id") not in active_spec_ids]
     errors: list[dict[str, Any]] = []
     llm_metadata = None
     work_items = [
@@ -267,10 +480,11 @@ def generate_node(
                 state,
                 _worker_step_id(node_input, spec, "text"),
                 previous.get((spec.resource_spec_id, "text")),
+                spec=spec,
             ),
         )
         for spec in specs
-        if spec.resource_type in active_types
+        if spec.resource_spec_id in active_spec_ids
     ]
     progress_trace = {
         "run_id": node_input.run_id,
@@ -280,6 +494,10 @@ def generate_node(
         "agent_name": "generator",
         "node_name": "generate",
     }
+    for spec, agent, _, context in work_items:
+        if spec.resource_type == "个性化纠错训练包" and context.constraints.get("_correction_package_contract"):
+            agent.prompt_version = context.constraints["_correction_package_contract"]["version"]
+            agent.artifact_format = "json"
     if resource_progress_recorder is not None:
         for spec, agent, _, context in work_items:
             queued_execution = {
@@ -309,7 +527,7 @@ def generate_node(
         executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="resource-worker")
         futures = {
             spec.resource_spec_id: executor.submit(
-                agent.generate,
+                copy_context().run, agent.generate,
                 spec,
                 context,
                 llm_gateway=llm_gateway,
@@ -324,7 +542,7 @@ def generate_node(
             if artifact is None:
                 artifact = agent.generate(spec, context, llm_gateway=llm_gateway)
             _validate_artifact_scope(artifact, spec, node_input.target_skill_nodes)
-            resource = _materialize(artifact, node_input, old, spec)
+            resource = _materialize(artifact, node_input, old, spec, context)
             llm_metadata = artifact.llm_metadata
             execution = _execution(spec, resource, agent, attempt=node_input.generation_attempt,
                                    worker_step_id=context.step_id,
@@ -350,6 +568,9 @@ def generate_node(
                                    worker_step_id=context.step_id, state="human_review",
                                    validation_status="failed",
                                    error_code=_error_code_value(error.code))
+        from app.agents.shared.llm_accounting import bind_generated_resource
+
+        bind_generated_resource(spec.resource_spec_id, resource.resource_id)
         if resource_progress_recorder is not None:
             resource_progress_recorder.record_resource_generated(
                 state, resource=resource, execution=execution, trace_item=progress_trace
@@ -397,7 +618,15 @@ def generate_node(
         evidence_refs=[item.evidence_id for item in node_input.retrieved_evidence],
         resource_ids=[item.resource_id for item in generated_now], attempt=node_input.generation_attempt,
         step_context=step_context, llm_metadata=llm_metadata)
-    return {"resource_specs": [item.model_dump(mode="json") for item in specs],
+    lineage = dict(state.get("claim_evidence_lineage") or {})
+    if state.get("include_claim_evidence_retrieval") or state.get("claim_evidence_scopes"):
+        for item in [*node_input.generated_resources, *resources, *([source] if source is not None else [])]:
+            lineage[item.resource_id] = {key: getattr(item, key) for key in (
+                "resource_id", "run_id", "resource_spec_id", "resource_family_id",
+                "version", "parent_resource_id",
+            )}
+    return {"claim_evidence_lineage": lineage,
+            "resource_specs": [item.model_dump(mode="json") for item in specs],
             "resource_executions": executions, "resource_progress_summary": progress_summary(executions),
             "generated_resources": resources, "current_node": "generator", "trace": [trace_item],
             "errors": errors, "generation_attempt": node_input.generation_attempt,

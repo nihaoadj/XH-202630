@@ -1,0 +1,405 @@
+# 构建一个基于 Gemma、Elasticsearch 和 Hugging Face 模型的 RAG 系统
+
+作者: [lloydmeta](https://huggingface.co/lloydmeta)
+
+这个 notebook 将引导你构建一个由 Elasticsearch（ES）和 Hugging Face 模型支持的检索增强生成（RAG）系统，允许你在 ES 向量化（你的 ES 集群在摄取和查询时为你向量化）与自向量化（你在将数据发送到 ES 之前对所有数据进行向量化）之间切换。
+
+你的用例应该使用哪种方式？*这取决于* 🤷‍♂️。ES 向量化意味着你的客户端不需要实现这一点，所以这里默认使用；但是，如果你没有机器学习节点，或者你自己的嵌入设置更好/更快，可以在下面的“选择数据和查询向量化选项”部分将 `USE_ELASTICSEARCH_VECTORISATION` 设置为 `False`！
+
+> [!提示]
+> 这个 notebook 已经使用 ES 8.13.x 和 8.14.x 进行了测试。
+
+## 步骤 1：安装相关库
+
+```python
+!pip install elasticsearch sentence_transformers transformers eland==8.12.1 # accelerate # uncomment if using GPU
+!pip install datasets==2.19.2 # Remove version lock if https://github.com/huggingface/datasets/pull/6978 has been released
+```
+
+## 步骤 2：设置
+
+### Hugging Face
+
+这允许你通过 Hugging Face 进行身份验证，以便下载模型和数据集。
+
+```python
+from huggingface_hub import notebook_login
+
+notebook_login()
+```
+
+#### Elasticsearch 部署
+
+让我们确保你可以访问你的 Elasticsearch 部署。如果你还没有，可以在 [Elastic Cloud](https://www.elastic.co/search-labs/tutorials/install-elasticsearch/elastic-cloud#creating-a-cloud-deployment)上创建一个。
+
+确保你已经将 `CLOUD_ID` 和 `ELASTIC_DEPL_API_KEY` 保存为 Colab secrets。
+
+```python
+from google.colab import userdata
+
+# https://www.elastic.co/search-labs/tutorials/install-elasticsearch/elastic-cloud#finding-your-cloud-id
+CLOUD_ID = userdata.get("CLOUD_ID") # or "<YOUR CLOUD_ID>"
+
+# https://www.elastic.co/search-labs/tutorials/install-elasticsearch/elastic-cloud#creating-an-api-key
+ELASTIC_API_KEY = userdata.get("ELASTIC_DEPL_API_KEY")  # or "<YOUR API KEY>"
+```
+
+设置客户端并确保凭据有效。
+
+```python
+from elasticsearch import Elasticsearch, helpers
+
+# Create the client instance
+client = Elasticsearch(cloud_id=CLOUD_ID, api_key=ELASTIC_API_KEY)
+
+# Successful response!
+client.info()
+```
+
+## 步骤 3：数据获取和准备
+
+本教程中使用的数据来源于 Hugging Face 数据集，特别是来自 [MongoDB/embedded_movies 数据集](https://huggingface.co/datasets/MongoDB/embedded_movies)。
+
+```python
+# Load Dataset
+from datasets import load_dataset
+
+# https://huggingface.co/datasets/MongoDB/embedded_movies
+dataset = load_dataset("MongoDB/embedded_movies")
+
+dataset
+```
+
+以下代码片段中的操作专注于强制数据完整性和质量。
+1. 第一个过程确保每个数据点的 `fullplot` 属性不为空，因为这是我们在嵌入过程中主要使用的数据。
+2. 第二步还确保我们移除所有数据点的 `plot_embedding` 属性，因为这将被一个使用不同的嵌入模型 `gte-large` 创建的新嵌入所替换。
+
+```python
+# Data Preparation
+
+# Remove data point where plot coloumn is missing
+dataset = dataset.filter(lambda x: x["fullplot"] is not None)
+
+if "plot_embedding" in sum(dataset.column_names.values(), []):
+    # Remove the plot_embedding from each data point in the dataset as we are going to create new embeddings with an open source embedding model from Hugging Face
+    dataset = dataset.remove_columns("plot_embedding")
+
+dataset["train"]
+```
+
+## 步骤 4：使用向量化数据加载 Elasticsearch
+
+### 选择数据和查询向量化选项
+
+在这里，你需要做出一个决定：你希望 Elasticsearch 对你的数据和查询进行向量化，还是希望你自己来做？
+
+将 `USE_ELASTICSEARCH_VECTORISATION` 设置为 `True` 将使本 notebook 的其余部分为你数据和查询设置并使用 ES 托管的向量化，但**请注意**，这要求你的 ES 部署至少有 1 个 ML 节点（我建议在你的云部署上设置自动缩放为 true，以防你选择的模型过大）。
+
+如果 `USE_ELASTICSEARCH_VECTORISATION` 是 `False`，这个 notebook 将为你数据和查询向量化设置并使用提供的模型“本地”。
+
+在这里，我选择了 [thenlper/gte-small](https://huggingface.co/thenlper/gte-small) 模型，没有其他原因，只是因为它在另一个指南中使用过，而且对我来说效果足够好。如果你愿意，请随时尝试其他模型——唯一重要的是你根据模型更新 `EMBEDDING_DIMENSIONS`。
+
+**注意**：如果你更改这些值，你可能需要从这一步重新运行 notebook。
+
+```python
+USE_ELASTICSEARCH_VECTORISATION = True
+
+EMBEDDING_MODEL_ID = "thenlper/gte-small"
+# https://huggingface.co/thenlper/gte-small's page shows the dimensions of the model
+# If you use the `gte-base` or `gte-large` embedding models, the numDimension
+# value in the vector search index must be set to 768 and 1024, respectively.
+EMBEDDING_DIMENSIONS = 384
+```
+
+### 如有必要，将 Hugging Face 模型加载到 Elasticsearch 中
+
+如果 `USE_ELASTICSEARCH_VECTORISATION` 设置为 `True`，这一步将使用 [Eland](https://eland.readthedocs.io/en/v8.12.1/)将 Hugging Face 模型加载并部署到 Elasticsearch 中。这允许 Elasticsearch 在后续步骤中对你的查询和数据进行向量化。
+
+```python
+import locale
+locale.getpreferredencoding = lambda: "UTF-8"
+!(if [ "True" == $USE_ELASTICSEARCH_VECTORISATION ]; then \
+  eland_import_hub_model --cloud-id $CLOUD_ID --hub-model-id $EMBEDDING_MODEL_ID --task-type text_embedding --es-api-key $ELASTIC_API_KEY --start --clear-previous; \
+fi)
+```
+
+这一步添加了在本地为文本创建嵌入的函数，并通过嵌入丰富了数据集，这样数据就可以作为向量被摄取到 Elasticsearch 中。如果 `USE_ELASTICSEARCH_VECTORISATION` 为 True，则不会运行。
+
+```python
+from sentence_transformers import SentenceTransformer
+
+if not USE_ELASTICSEARCH_VECTORISATION:
+    embedding_model = SentenceTransformer(EMBEDDING_MODEL_ID)
+
+
+def get_embedding(text: str) -> list[float]:
+    if USE_ELASTICSEARCH_VECTORISATION:
+        raise Exception(
+            f"Disabled when USE_ELASTICSEARCH_VECTORISATION is [{USE_ELASTICSEARCH_VECTORISATION}]"
+        )
+    else:
+        if not text.strip():
+            print("Attempted to get embedding for empty text.")
+            return []
+
+        embedding = embedding_model.encode(text)
+        return embedding.tolist()
+
+
+def add_fullplot_embedding(x):
+    if USE_ELASTICSEARCH_VECTORISATION:
+        raise Exception(
+            f"Disabled when USE_ELASTICSEARCH_VECTORISATION is [{USE_ELASTICSEARCH_VECTORISATION}]"
+        )
+    else:
+        full_plots = x["fullplot"]
+        return {"embedding": [get_embedding(full_plot) for full_plot in full_plots]}
+
+
+if not USE_ELASTICSEARCH_VECTORISATION:
+    dataset = dataset.map(add_fullplot_embedding, batched=True)
+    dataset["train"]
+```
+
+## 步骤 5：创建一个带有向量搜索映射的搜索索引。
+
+在这一点上，我们将在 Elasticsearch 中创建一个索引，并设置正确的索引映射来处理向量搜索。
+
+请点击这里了解更多关于 [Elasticsearch 向量搜索能力](https://www.elastic.co/what-is/vector-search)的信息。
+
+```python
+# Needs to match the id returned from Eland
+# in general for Hugging Face models, you just replace the forward slash with
+# double underscore
+model_id = EMBEDDING_MODEL_ID.replace("/", "__")
+
+index_name = "movies"
+
+index_mapping = {
+    "properties": {
+        "fullplot": {"type": "text"},
+        "plot": {"type": "text"},
+        "title": {"type": "text"},
+    }
+}
+# define index mapping
+if USE_ELASTICSEARCH_VECTORISATION:
+    index_mapping["properties"]["embedding"] = {
+        "properties": {
+            "is_truncated": {"type": "boolean"},
+            "model_id": {
+                "type": "text",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "predicted_value": {
+                "type": "dense_vector",
+                "dims": EMBEDDING_DIMENSIONS,
+                "index": True,
+                "similarity": "cosine",
+            },
+        }
+    }
+else:
+    index_mapping["properties"]["embedding"] = {
+        "type": "dense_vector",
+        "dims": EMBEDDING_DIMENSIONS,
+        "index": "true",
+        "similarity": "cosine",
+    }
+
+# flag to check if index has to be deleted before creating
+should_delete_index = True
+
+# check if we want to delete index before creating the index
+if should_delete_index:
+    if client.indices.exists(index=index_name):
+        print("Deleting existing %s" % index_name)
+        client.indices.delete(index=index_name, ignore=[400, 404])
+
+print("Creating index %s" % index_name)
+
+
+# ingest pipeline definition
+if USE_ELASTICSEARCH_VECTORISATION:
+    pipeline_id = "vectorize_fullplots"
+
+    client.ingest.put_pipeline(
+        id=pipeline_id,
+        processors=[
+            {
+                "inference": {
+                    "model_id": model_id,
+                    "target_field": "embedding",
+                    "field_map": {"fullplot": "text_field"},
+                }
+            }
+        ],
+    )
+
+    index_settings = {
+        "index": {
+            "default_pipeline": pipeline_id,
+        }
+    }
+else:
+    index_settings = {}
+
+client.options(ignore_status=[400, 404]).indices.create(
+    index=index_name, mappings=index_mapping, settings=index_settings
+)
+```
+
+将数据摄取到 Elasticsearch 中最好是批量进行。幸运的是，`helpers` 提供了一个简单的方法来执行这个操作。
+
+```python
+from elasticsearch.helpers import BulkIndexError
+
+def batch_to_bulk_actions(batch):
+    for record in batch:
+        action = {
+            "_index": "movies",
+            "_source": {
+                "title": record["title"],
+                "fullplot": record["fullplot"],
+                "plot": record["plot"],
+            },
+        }
+        if not USE_ELASTICSEARCH_VECTORISATION:
+            action["_source"]["embedding"] = record["embedding"]
+        yield action
+
+
+def bulk_index(ds):
+    start = 0
+    end = len(ds)
+    batch_size = 100
+    if USE_ELASTICSEARCH_VECTORISATION:
+        # If using auto-embedding, bulk requests can take a lot longer,
+        # so pass a longer request_timeout here (defaults to 10s), otherwise
+        # we could get Connection timeouts
+        batch_client = client.options(request_timeout=600)
+    else:
+        batch_client = client
+    for batch_start in range(start, end, batch_size):
+        batch_end = min(batch_start + batch_size, end)
+        print(f"batch: start [{batch_start}], end [{batch_end}]")
+        batch = ds.select(range(batch_start, batch_end))
+        actions = batch_to_bulk_actions(batch)
+        helpers.bulk(batch_client, actions)
+
+
+try:
+    bulk_index(dataset["train"])
+except BulkIndexError as e:
+    print(f"{e.errors}")
+
+print("Data ingestion into Elasticsearch complete!")
+```
+
+## 步骤 6：对用户查询执行向量搜索
+
+以下步骤实现了一个函数，该函数返回一个向量搜索结果。
+
+如果 `USE_ELASTICSEARCH_VECTORISATION` 为 true，文本查询将直接发送到 ES，在那里将首先使用上传的模型对其进行向量化，然后执行向量搜索。如果 `USE_ELASTICSEARCH_VECTORISATION` 为 false，那么我们在发送查询之前先在本地进行向量化，然后发送查询的向量化形式。
+
+```python
+def vector_search(plot_query):
+    if USE_ELASTICSEARCH_VECTORISATION:
+        knn = {
+            "field": "embedding.predicted_value",
+            "k": 10,
+            "query_vector_builder": {
+                "text_embedding": {
+                    "model_id": model_id,
+                    "model_text": plot_query,
+                }
+            },
+            "num_candidates": 150,
+        }
+    else:
+        question_embedding = get_embedding(plot_query)
+        knn = {
+            "field": "embedding",
+            "query_vector": question_embedding,
+            "k": 10,
+            "num_candidates": 150,
+        }
+
+    response = client.search(index="movies", knn=knn, size=5)
+    results = []
+    for hit in response["hits"]["hits"]:
+        id = hit["_id"]
+        score = hit["_score"]
+        title = hit["_source"]["title"]
+        plot = hit["_source"]["plot"]
+        fullplot = hit["_source"]["fullplot"]
+        result = {
+            "id": id,
+            "_score": score,
+            "title": title,
+            "plot": plot,
+            "fullplot": fullplot,
+        }
+        results.append(result)
+    return results
+
+def pretty_search(query):
+
+    get_knowledge = vector_search(query)
+
+    search_result = ""
+    for result in get_knowledge:
+        search_result += f"Title: {result.get('title', 'N/A')}, Plot: {result.get('fullplot', 'N/A')}\n"
+
+    return search_result
+```
+
+## 步骤 7：处理用户查询并加载 Gemma
+
+```python
+# Conduct query with retrival of sources, combining results into something that
+# we can feed to Gemma
+def combined_query(query):
+    source_information = pretty_search(query)
+    return f"Query: {query}\nContinue to answer the query by using these Search Results:\n{source_information}."
+
+
+query = "What is the best romantic movie to watch and why?"
+combined_results = combined_query(query)
+
+print(combined_results)
+```
+
+加载我们的 LLM (这里我们用 [google/gemma-2b-lt](https://huggingface.co/google/gemma-2b-it))
+
+```python
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+tokenizer = AutoTokenizer.from_pretrained("google/gemma-2b-it")
+# CPU Enabled uncomment below 👇🏽
+model = AutoModelForCausalLM.from_pretrained("google/gemma-2b-it")
+# GPU Enabled use below 👇🏽
+# model = AutoModelForCausalLM.from_pretrained("google/gemma-2b-it", device_map="auto")
+```
+
+定义一个方法，从 ES 中的向量搜索获取格式化的结果，然后将这些结果传递给 LLM（大型语言模型）以获取我们的结果。
+
+```python
+def rag_query(query):
+    combined_information = combined_query(query)
+
+    # Moving tensors to GPU
+    input_ids = tokenizer(combined_information, return_tensors="pt") # .to("cuda") # Add if using GPU
+    response = model.generate(**input_ids, max_new_tokens=700)
+
+    return tokenizer.decode(response[0], skip_special_tokens=True)
+
+
+print(rag_query("What's a romantic movie that I can watch with my wife?"))
+```
+
+## 致谢
+
+这个 notebook 改编自
+* OpenAI 的 [ES RAG 指南](https://github.com/openai/openai-cookbook/blob/main/examples/vector_databases/elasticsearch/elasticsearch-retrieval-augmented-generation.ipynb)
+* Elasticsearch-labs 的 [从-Hugging-Face-加载模型-cookbook](https://github.com/elastic/elasticsearch-labs/blob/main/notebooks/integrations/hugging-face/loading-model-from-hugging-face.ipynb)

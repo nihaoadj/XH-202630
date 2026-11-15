@@ -274,7 +274,7 @@ def test_gateway_stops_after_max_attempts_for_5xx():
     assert len(transport.calls) == 2
 
 
-def test_gateway_schema_repair_uses_same_global_attempt_budget():
+def test_gateway_schema_repair_uses_same_global_attempt_budget(caplog):
     transport = ScriptedLLMTransport([
         raw('{"wrong":"field"}'),
         raw('{"value":"repaired"}'),
@@ -291,6 +291,8 @@ def test_gateway_schema_repair_uses_same_global_attempt_budget():
     assert result.output.value == "repaired"
     assert result.retry_count == 1
     assert result.attempts[0].error_code == ErrorCode.LLM_OUTPUT_SCHEMA_INVALID.value
+    assert "LLM schema validation failed" in caplog.text
+    assert "value:missing" in caplog.text
     assert len(transport.calls) == 2
     assert len(transport.calls[1]["messages"]) > len(transport.calls[0]["messages"])
 
@@ -597,3 +599,130 @@ def test_plain_text_retries_a_length_stop_with_compact_markdown_instruction():
     assert result.retry_count == 1
     assert result.output.startswith("# 完整讲义")
     assert transport.calls[1]["messages"][0].content.startswith("上一轮 Markdown")
+
+
+def test_min_attempt_floor_blocks_a_doomed_call_without_touching_transport():
+    transport = ScriptedLLMTransport([raw('{"value":"unused"}')])
+    now = datetime(2026, 7, 29, tzinfo=timezone.utc)
+    gateway = LLMGateway(transport, min_attempt_seconds=45.0, wall_clock=lambda: now)
+
+    with pytest.raises(LLMGatewayError) as caught:
+        gateway.invoke_structured(
+            messages=[HumanMessage(content="test")],
+            output_schema=Payload,
+            context=context(workflow_deadline_at=now + timedelta(seconds=3)),
+            options=options(request_timeout_seconds=240),
+        )
+
+    assert caught.value.error.code == ErrorCode.LLM_TIMEOUT.value
+    assert caught.value.error.safe_detail == "deadline_budget_insufficient"
+    assert transport.calls == []
+
+
+def test_min_attempt_floor_does_not_block_a_usable_retry():
+    transport = ScriptedLLMTransport([TimeoutError("secret"), raw('{"value":"ok"}')])
+    gateway = LLMGateway(
+        transport,
+        min_attempt_seconds=45.0,
+        sleep=lambda _seconds: None,
+        jitter=lambda: 0.0,
+    )
+
+    result = gateway.invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(),
+        options=options(request_timeout_seconds=240),
+    )
+
+    assert result.output.value == "ok"
+    assert len(transport.calls) == 2
+
+
+def test_min_attempt_floor_scales_down_for_short_interactive_calls():
+    transport = ScriptedLLMTransport([raw('{"value":"ok"}')])
+    now = datetime(2026, 7, 29, tzinfo=timezone.utc)
+    gateway = LLMGateway(transport, min_attempt_seconds=45.0, wall_clock=lambda: now)
+
+    result = gateway.invoke_structured(
+        messages=[HumanMessage(content="test")],
+        output_schema=Payload,
+        context=context(workflow_deadline_at=now + timedelta(seconds=25)),
+        options=options(request_timeout_seconds=40),
+    )
+
+    assert result.output.value == "ok"
+    assert len(transport.calls) == 1
+
+
+def test_plain_text_min_attempt_floor_blocks_a_doomed_call():
+    transport = ScriptedLLMTransport([raw("# unused")])
+    now = datetime(2026, 7, 29, tzinfo=timezone.utc)
+    gateway = LLMGateway(transport, min_attempt_seconds=45.0, wall_clock=lambda: now)
+
+    with pytest.raises(LLMGatewayError) as caught:
+        gateway.invoke_plain_text(
+            messages=[HumanMessage(content="write markdown")],
+            context=context(
+                node_name="TextResourceAgent",
+                schema_name="plain_markdown",
+                workflow_deadline_at=now + timedelta(seconds=3),
+            ),
+            options=options(request_timeout_seconds=240),
+        )
+
+    assert caught.value.error.code == ErrorCode.LLM_TIMEOUT.value
+    assert caught.value.error.safe_detail == "deadline_budget_insufficient"
+    assert transport.calls == []
+
+
+def test_round_schema_repair_does_not_replay_large_invalid_answer():
+    from app.core.llm.budget import round_call_scope
+    from app.models.shared.llm import LLMBudgetScope
+    from tests.unit.core.test_round_budget_guard import budget_fixture
+
+    rounds, guard = budget_fixture(cap=100000)
+    with rounds.transaction() as tx:
+        stage = tx.one("learning_round_stages", stage_id="s")
+        tx.compare_and_set("learning_round_stages", "s", stage["row_version"], {
+            "budget_snapshot": {"scopes": {"sa": 100000}, "runtime_scopes": {"sa": 1000}},
+        })
+    usage = LLMUsage(input_tokens=10, output_tokens=10)
+    transport = ScriptedLLMTransport([
+        raw('{"wrong":"' + 'x' * 20000 + '"}', usage=usage),
+        raw('{"value":"ok"}', usage=usage),
+    ])
+    gateway = LLMGateway(transport, sleep=lambda _: None)
+    with round_call_scope(LLMBudgetScope(scope_id="sa", stage_id="s", kind="production"),
+                          input_cap=10000, guard=guard):
+        result = gateway.invoke_structured(
+            messages=[HumanMessage(content="source task")], output_schema=Payload,
+            context=context(run_id="run"), options=options(),
+        )
+    assert result.output.value == "ok"
+    assert len(transport.calls) == 2
+    assert 'x' * 1000 not in str(transport.calls[1]["messages"])
+
+
+def test_issue_support_repair_explains_fields_without_weakening_evidence_gate():
+    from types import SimpleNamespace
+    from app.models.reviews.resource_review_model_output import ModelReviewV4
+    from app.core.llm.structured_output import parse_structured_output, StructuredOutputError
+    from tests.unit.agents.test_resource_review_input import _v3_issue
+
+    # Exercise the real schema failure that previously survived two attempts.
+    out = dict(dimensions={"factual_evidence":"pass", "difficulty":"pass", "self_contained":"fail"},
+               targets=[dict(target="rag_basics", status="covered", reason="covered", location=dict(kind="structured", unit_id="step-1"))], hallucination_score=0.05, issues=[], omitted_blocking_issues=False)
+    issue = _v3_issue({"kind":"structured", "unit_id":"step-1"})
+    for key in ("origin", "criteria_version", "blocking_rule", "affected_target_ids"):
+        issue.pop(key, None)
+    issue.update(evidence_refs=[], teaching_rule_id=None, finding_keys=[])
+    out["issues"] = [issue]
+    import json
+    with pytest.raises(StructuredOutputError) as caught:
+        parse_structured_output(json.dumps(out), ModelReviewV4)
+    assert "issue_support_missing" in caught.value.safe_detail
+    failure = SimpleNamespace(code=ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, safe_detail=caught.value.safe_detail)
+    msgs = LLMGateway._repair_messages([HumanMessage(content="teaching_rule_ids: self_contained")], ModelReviewV4, out, failure)
+    assert "teaching_rule_id" in msgs[-1].content
+    assert "技术补充仍必须引用冻结证据" in msgs[-1].content

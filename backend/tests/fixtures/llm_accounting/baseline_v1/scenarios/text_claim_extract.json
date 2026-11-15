@@ -1,0 +1,118 @@
+{
+  "observations": [
+    {
+      "attempt_complete": true,
+      "attempts": [
+        {
+          "error_category": null,
+          "error_code": null,
+          "gateway_status": "success",
+          "helper_error_class": null,
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": true,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 1,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        }
+      ],
+      "attribution": "resource",
+      "attribution_complete": true,
+      "capture_complete": true,
+      "domain": "learning_documents",
+      "error_class": null,
+      "error_code": null,
+      "gateway_attempt_count": 1,
+      "gateway_retry_count": 0,
+      "known_input_tokens": 0,
+      "known_llm_duration_ms": 0,
+      "known_output_tokens": 0,
+      "known_total_tokens": 0,
+      "model_name": "fake-model",
+      "node_name": "claim_extractor",
+      "observation_id": 1,
+      "observed_attempt_count": 1,
+      "outcome": "success",
+      "resource_labels": [
+        "res-baseline"
+      ],
+      "run_id": "run-baseline",
+      "schema_name": "ClaimExtractionLLMOutput",
+      "schema_version": "llm-accounting-v1",
+      "segment_id": "segment",
+      "source_call_id": "<call-1>",
+      "stage": "claim_extract",
+      "stage_sequence": null,
+      "step_id": "<step-1>",
+      "structured_output_mode": "function_calling",
+      "usage_complete": false,
+      "usage_input_tokens": null,
+      "usage_mismatch": false,
+      "usage_output_tokens": null,
+      "usage_total_tokens": null
+    }
+  ],
+  "projection": {
+    "claim_check_status": "pending",
+    "claims": [
+      {
+        "claim_hash": "708e60cc884cfcfad273be7653d3585d9d0f4e3718a344149f8162a506ea9a80",
+        "claim_index": 0,
+        "claim_text": "Python 使用缩进定义代码块",
+        "claim_type": "factual",
+        "extraction_method": "llm",
+        "extractor_model": "fake-model",
+        "knowledge_point_id": "skill-python",
+        "resource_id": "res-baseline",
+        "resource_version": 1,
+        "review_id": "review-baseline",
+        "run_id": "run-baseline",
+        "schema_version": "2.0",
+        "source_end": 17,
+        "source_evidence_ids": [
+          "ev-baseline"
+        ],
+        "source_start": 0,
+        "source_text": "Python 使用缩进定义代码块。",
+        "source_text_hash": "00880e16d12f38c9e2a11b208b8b7074a91d65daa5cb1d3105de5b67763834fe"
+      }
+    ]
+  },
+  "requests": [
+    {
+      "max_output_tokens": 4096,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是独立 Claim 抽取器。仅从给定资源原文抽取可单独判断的陈述。\nresource_id 必须从输入中原样选择；source_text 必须是资源原文的连续精确子串。\nsource_start/source_end 请按 Python 字符下标填写且 end 为开区间；服务端会以精确 source_text\n重新校验并确定最终位置。复习清单中的题干、选项和提示语不是 factual Claim；如需保留，\n请标 instructional 或 non_factual。事实陈述标 factual，\n教学动作标 instructional，主观/过渡表达标 non_factual。evidence_id 和 knowledge_point_id\n只能从输入白名单选择，不能创造 ID。严格输出限制：每个非空资源输出 1–10 条 Claim；\nclaim_text 必须是单条简洁陈述；每条 source_text 必须是足以支持 Claim 的最短连续原文片段，且不得超过 200 字符。\n关键约束：source_text 必须是资源原文的逐字连续片段。复制前先在原文中定位完整原句，再原样粘贴；\n标点、空格、连词、代词、括号和引号都必须与原文完全一致，禁止改写、概括、合并、截断、补全或替换同义词。\n反例（禁止）——原文“不能擅自扩写为‘事实为假’”，不得输出“不等于已证伪”；原文“之前，因为……”，不得输出“之前。”。\n优先保留可由冻结 Evidence 独立验证的核心事实。只输出一个满足 schema 的 JSON 对象；禁止输出思考过程、解释、标题、Markdown、重复 Claim、重复 source_text 或任何 schema 外字段。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"allowed_evidence\": [{\"evidence_id\": \"ev-baseline\", \"excerpt\": \"可信知识片段\"}], \"allowed_knowledge_point_ids\": [\"skill-python\"], \"resources\": [{\"resource_id\": \"res-baseline\", \"resource_version\": 1, \"resource_type\": \"讲义\", \"content_text\": \"Python 使用缩进定义代码块。\"}]}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.models.reviews.claims.ClaimExtractionLLMOutput>",
+      "temperature": 0.0,
+      "timeout_seconds": 5.0
+    }
+  ]
+}

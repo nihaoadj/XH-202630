@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.db.audit.base import BaseAuditRepository
+from app.db.generation.base import BaseGenerationJobRepository
 from app.db.learning_documents.base import BaseResourceRepository
 from app.db.claim.base import BaseClaimRepository
 from app.db.feedback.feedback_loop_base import BaseFeedbackLoopRepository
+from app.models.learning_documents.schemas import LearningResource
 from app.models.reviews.claims import (
     ClaimMetricStatus,
     ClaimMetricSummary,
@@ -20,6 +22,7 @@ from app.models.shared.persistence import (
     RunSummary,
     WorkflowCheckpointSummary,
 )
+from app.services.learning_documents.publication_summary import load_publication_summary
 
 
 class RunQueryService:
@@ -29,11 +32,16 @@ class RunQueryService:
         resource_repository: BaseResourceRepository | None = None,
         claim_repository: BaseClaimRepository | None = None,
         feedback_loop_repository: BaseFeedbackLoopRepository | None = None,
+        *,
+        generation_job_repository: BaseGenerationJobRepository | None = None,
+        supplement_repository=None,
     ):
         self.repository = repository
         self.resource_repository = resource_repository
         self.claim_repository = claim_repository
         self.feedback_loop_repository = feedback_loop_repository
+        self.generation_job_repository = generation_job_repository
+        self.supplement_repository = supplement_repository
 
     def get_run(self, run_id: str) -> AgentRunRecord:
         run = self.repository.get_run(run_id)
@@ -41,8 +49,32 @@ class RunQueryService:
             raise ApplicationError(ErrorCode.WORKFLOW_RUN_NOT_FOUND, status_code=404)
         return run
 
+    def _publication_request_payload(self, run_id: str) -> dict | None:
+        """Use the run's own frozen job request; never guess a missing scope."""
+
+        if self.generation_job_repository is None:
+            return None
+        job = self.generation_job_repository.get(run_id)
+        return job.request_payload if job is not None else None
+
+    def _with_publication_summary(
+        self,
+        run: RunSummary,
+        *,
+        resources: list[LearningResource] | None = None,
+    ) -> RunSummary:
+        """Attach the shared read-only publication facts to one run summary."""
+
+        summary = load_publication_summary(
+            run_id=run.run_id,
+            request_payload=self._publication_request_payload(run.run_id),
+            resource_repository=self.resource_repository,
+            resources=resources,
+        )
+        return run.model_copy(update={"publish_summary": summary})
+
     def get_summary(self, run_id: str) -> RunSummary:
-        return RunSummary.from_record(self.get_run(run_id))
+        return self._with_publication_summary(RunSummary.from_record(self.get_run(run_id)))
 
     def get_timeline(
         self,
@@ -70,8 +102,15 @@ class RunQueryService:
                 ErrorCode.WORKFLOW_EVIDENCE_SNAPSHOT_CONFLICT,
                 status_code=409,
             ) from exc
+        run_resources = (
+            self.resource_repository.list_by_run(run_id)
+            if self.resource_repository is not None
+            else None
+        )
         return RunTimeline(
-            run=RunSummary.from_record(run),
+            run=self._with_publication_summary(
+                RunSummary.from_record(run), resources=run_resources
+            ),
             steps=self.repository.list_steps(run_id),
             events=page,
             checkpoints=[
@@ -88,8 +127,8 @@ class RunQueryService:
             ],
             evidence=evidence,
             resource_versions=(
-                [resource.model_dump(mode="json") for resource in self.resource_repository.list_by_run(run_id)]
-                if self.resource_repository is not None
+                [resource.model_dump(mode="json") for resource in run_resources]
+                if run_resources is not None
                 else []
             ),
             reviews=self.repository.list_reviews_by_run(run_id),
@@ -181,6 +220,20 @@ class RunQueryService:
                     resource_metrics=metrics,
                 )
             return RunClaimsResponse(run_id=run_id)
+        # The public contract exposes exactly one effective judgement per Claim.
+        # Full history stays on the dedicated read API.
+        from app.models.reviews.claim_resolution import resolve_effective_claim_judgements
+
+        sessions = (
+            self.supplement_repository.list_sessions([run_id])
+            if self.supplement_repository is not None else []
+        )
+        supplements = (
+            self.supplement_repository.list_supplements([run_id])
+            if self.supplement_repository is not None else []
+        )
+        resolution = resolve_effective_claim_judgements(judgements, sessions, supplements)
+        judgements = resolution.ordered()
         resource_ids = sorted({item.resource_id for item in claims})
         metrics = {
             resource_id: compute_claim_metric(

@@ -319,17 +319,17 @@ def render_courseware(document: dict[str, Any], design: CoursewareDesign | dict[
             # screen.
             component_blocks = component_blocks[:2]
         is_structured_practice_step = (
-            scene.get("practice_json_schema_version") == "3.0"
+            scene.get("practice_json_schema_version") in {"3.0", "4.0", "5.0", "6.0"}
             and str(scene.get("practice_json_subject") or "").startswith("practice.steps.")
         )
         structured_practice_phase = (
             str(scene.get("practice_variant") or "")
-            if scene.get("practice_json_schema_version") == "3.0"
+            if scene.get("practice_json_schema_version") in {"3.0", "4.0", "5.0", "6.0"}
             and str(scene.get("practice_variant") or "") in {"prepare", "verify"}
             else ""
         )
         is_structured_practice_reflection = (
-            scene.get("practice_json_schema_version") == "3.0"
+            scene.get("practice_json_schema_version") in {"3.0", "4.0", "5.0", "6.0"}
             and str(scene.get("practice_variant") or "") == "reflect"
         )
         if is_structured_practice_step:

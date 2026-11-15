@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 from types import SimpleNamespace
 
 from app.agents.resource_workflows.learning_documents.claim_review_agent import claim_decide_node, claim_extract_node, claim_judge_node
@@ -352,9 +353,8 @@ def test_claim_extractor_and_judge_invoke_once_per_resource():
 
 
 def test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes(monkeypatch):
-    # This scenario verifies the explicit opt-in policy for publishing a
-    # resource whose Claim audit is incomplete.  Do not inherit a developer's
-    # local .env value: CI intentionally uses the fail-closed default.
+    # A failed audit remains unpublished even when partial publication is on;
+    # the independent successful sibling may still publish.
     monkeypatch.setattr(workflow_module, "get_settings", lambda: SimpleNamespace(
         claim_partial_publish=True,
         claim_user_review_enabled=True,
@@ -423,9 +423,9 @@ def test_claim_failure_is_isolated_to_one_resource_and_other_resource_publishes(
     assert state["review_result"]["decision"] == "human_review"
     assert by_id["res-claim"].publication_status == "published"
     assert by_id["res-claim"].review_status == "approved"
-    assert by_id["res-claim-second"].publication_status == "published"
-    assert by_id["res-claim-second"].claim_degraded_publish is True
-    assert by_id["res-claim-second"].review_status == "approved"
+    assert by_id["res-claim-second"].publication_status == "unpublished"
+    assert by_id["res-claim-second"].claim_degraded_publish is False
+    assert by_id["res-claim-second"].review_status == "human_review"
 
 
 def test_requested_claim_audit_skips_terminal_non_approved_resource():
@@ -487,7 +487,8 @@ def test_claim_enabled_publication_fails_closed_without_resource_metric():
     assert resource.publication_status == "unpublished"
 
 
-def test_completed_claim_audit_waits_for_user_decision_at_eighty_percent(monkeypatch):
+@pytest.mark.parametrize('supported,published', [(17,False),(19,True)])
+def test_completed_claim_audit_publication_boundaries(monkeypatch, supported, published):
     state = _state()
     state.update({
         "resource_review_results": {"res-claim": {"decision": "approve"}},
@@ -495,9 +496,9 @@ def test_completed_claim_audit_waits_for_user_decision_at_eighty_percent(monkeyp
         "claim_check_status": "completed",
         "claim_metrics": {
             "res-claim": {
-                "metric_status": "complete", "claim_total": 5,
-                "factual_claim_total": 5, "supported_claim_total": 4,
-                "contradicted_claim_total": 0, "not_in_evidence_claim_total": 1,
+                "metric_status": "complete", "claim_total": 20,
+                "factual_claim_total": 20, "supported_claim_total": supported,
+                "contradicted_claim_total": 0, "not_in_evidence_claim_total": 20-supported,
                 "non_factual_claim_total": 0, "incomplete_claim_total": 0,
             },
         },
@@ -515,12 +516,11 @@ def test_completed_claim_audit_waits_for_user_decision_at_eighty_percent(monkeyp
     finalized = decide_node(state)
 
     resource = finalized["generated_resources"][0]
-    assert resource.publication_status == "unpublished"
-    assert resource.claim_publish_decision_pending is True
+    assert resource.publication_status == ("published" if published else "unpublished")
+    assert resource.claim_publish_decision_pending is (not published)
     assert resource.claim_warning_publish is False
-    assert resource.claim_factual_pass_rate == 0.80
-    assert finalized["workflow_status"] == "human_review"
-    assert finalized["final_decision"] == "Claim 审核报告待用户决定是否发布"
+    assert resource.claim_factual_pass_rate == supported/20
+    assert finalized["workflow_status"] == ("completed" if published else "human_review")
 
 
 def test_completed_claim_audit_never_warning_publishes_contradicted_fact(monkeypatch):
@@ -583,3 +583,42 @@ def test_claim_revision_uses_its_own_budget_and_preserves_ordinary_budget():
     assert prepared["constraints"]["revision_feedback"]["revision_instructions"] == [
         state["review_result"]["revision_instructions"][0]
     ]
+
+
+@pytest.mark.parametrize("cap,count", [(0, 0), (1, 1), (2, 2)])
+@pytest.mark.parametrize("verdict", ["contradicted", "not_in_evidence"])
+def test_exhausted_claim_budget_finalizes_without_borrowing_ordinary(cap, count, verdict):
+    state = _state()
+    state.update(claim_max_iterations=cap, claim_revision_count=count,
+                 revision_count=0, max_iterations=3, claim_check_status="completed",
+                 claim_eligible_resource_ids=["res-claim"],
+                 resource_review_results={"res-claim": {"decision": "approve"}},
+                 claim_metrics={"res-claim": {"metric_status": "complete", "factual_claim_total": 1,
+                     "supported_claim_total": 0, "contradicted_claim_total": int(verdict == "contradicted"),
+                     "not_in_evidence_claim_total": int(verdict == "not_in_evidence")}})
+    state["review_result"].update(decision="revise", status="revise", issues=[{
+        "resource_id": "res-claim", "resource_type": "讲义", "claim_ids": ["claim-1"]}],
+        revision_instructions=[{"target_resource_type": "讲义", "target_claim_ids": ["claim-1"],
+                                "issue_codes": ["factual_risk"], "action": "修正事实", "priority": 1}])
+    assert route_after_claim_decide(state) == "finalize"
+    finalized = decide_node(state)
+    assert finalized["workflow_status"] == "human_review"
+    assert finalized["generated_resources"][0].publication_status == "unpublished"
+    assert state["revision_count"] == 0
+    assert state["claim_revision_count"] == count
+
+
+def test_real_ordinary_revision_keeps_its_own_route():
+    state = _state()
+    state.update(claim_max_iterations=0, max_iterations=2, revision_count=0)
+    state["review_result"].update(decision="revise", revision_instructions=[{
+        "target_resource_type": "讲义", "action": "补全练习材料", "issue_codes": ["structure_quality"]}])
+    assert route_after_claim_decide(state) == "prepare_revision"
+
+
+@pytest.mark.parametrize("decision", ["approve", "reject", "human_review"])
+def test_non_revision_never_uses_stale_claim_instructions(decision):
+    state = _state()
+    state["review_result"].update(decision=decision, revision_instructions=[{
+        "target_resource_type": "讲义", "target_claim_ids": ["claim-1"]}])
+    assert route_after_claim_decide(state) == "finalize"

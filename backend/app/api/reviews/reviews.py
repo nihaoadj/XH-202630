@@ -21,4 +21,8 @@ def get_resource_review(resource_id: str, request: Request):
     review = service.get_by_resource(resource_id)
     if review is None:
         raise HTTPException(status_code=404, detail="资源审核记录不存在")
+    resource = request.app.container.resource_service().get(resource_id)
+    if resource is not None and resource.resource_type in {"分阶测试题", "个性化纠错训练包"}:
+        from app.services.reviews.assessment_privacy import public_review
+        review = public_review(review)
     return review

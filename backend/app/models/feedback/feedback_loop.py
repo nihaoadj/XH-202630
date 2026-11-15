@@ -114,6 +114,7 @@ class LearningAttemptSubmit(StrictFeedbackModel):
     @classmethod
     def validate_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
         allowed = {
+            "round_context",
             "source",
             "client_version",
             "session_id",
@@ -308,6 +309,8 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
     )
     difficulty: Literal["初级", "中级", "高级"] | None = None
     include_claim_check: bool = False
+    include_claim_evidence_retrieval: bool = False
+    claim_post_retrieval_max_iterations: int = Field(default=0, ge=0, le=3)
     learning_intent: LearningIntent | None = None
     selected_skill_node_ids: list[str] = Field(default_factory=list, max_length=2)
     next_generation_snapshot_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -321,6 +324,8 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
 
     @model_validator(mode="after")
     def validate_learning_intent_selection(self) -> "FeedbackFollowupSelection":
+        from app.models.reviews.claim_evidence_retrieval import validate_feature_switch
+
         if self.learning_intent is not None or self.selected_skill_node_ids:
             if self.learning_intent is None:
                 raise ValueError("selected skill nodes require a learning intent")
@@ -328,6 +333,11 @@ class FeedbackFollowupSelection(StrictFeedbackModel):
                 raise ValueError("learning intent requires selected skill nodes")
         if len(self.selected_skill_node_ids) != len(set(self.selected_skill_node_ids)):
             raise ValueError("selected_skill_node_ids must be unique")
+        validate_feature_switch(
+            include_claim_evidence_retrieval=self.include_claim_evidence_retrieval,
+            include_claim_check=self.include_claim_check,
+            include_review=True,
+        )
         return self
 
 
@@ -351,6 +361,7 @@ class FeedbackLoopResult(StrictFeedbackModel):
     generation_options: NextGenerationOptionsV1 | None = None
     feedback_report: dict[str, Any] = Field(default_factory=dict)
     idempotent_replay: bool = False
+    round_summary: dict[str, Any] | None = None
 
 
 class FeedbackContext(StrictFeedbackModel):

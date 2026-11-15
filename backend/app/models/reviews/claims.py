@@ -13,6 +13,25 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 CLAIM_SCHEMA_VERSION = "2.0"
+STRUCTURED_ASSESSMENT_SOURCE = "structured-assessment-v1"
+STRUCTURED_CHECKLIST_SOURCE = "structured-checklist-v1"
+CONTEXTUAL_CHECKLIST_SOURCE = "structured-checklist-v2"
+UNIFIED_ASSESSMENT_SOURCE = "structured-assessment-context-v2"
+UNIFIED_CHECKLIST_SOURCE = "structured-checklist-context-v3"
+UNIFIED_CORRECTION_SOURCE = "structured-correction-context-v5"
+UNIFIED_PRACTICE_SOURCE = "structured-practice-context-v1"
+UNIFIED_PRACTICE_SOURCE_V2 = "structured-practice-context-v2"
+UNIFIED_PRACTICE_SOURCE_V3 = "structured-practice-context-v3"
+UNIFIED_PRACTICE_SOURCE_V4 = "structured-practice-context-v4"
+UNIFIED_PRACTICE_SOURCE_V5 = "structured-practice-context-v5"
+UNIFIED_SOURCE_MARKERS = frozenset({UNIFIED_ASSESSMENT_SOURCE, UNIFIED_CHECKLIST_SOURCE,
+                                   UNIFIED_CORRECTION_SOURCE, UNIFIED_PRACTICE_SOURCE,
+                                   UNIFIED_PRACTICE_SOURCE_V2, UNIFIED_PRACTICE_SOURCE_V3,
+                                   UNIFIED_PRACTICE_SOURCE_V4, UNIFIED_PRACTICE_SOURCE_V5})
+STRUCTURED_CORRECTION_SOURCE = "structured-correction-v1"
+FILTERED_CORRECTION_SOURCE = "structured-correction-v2"
+COMPACT_CORRECTION_SOURCE = "structured-correction-v3"
+CONTEXTUAL_CORRECTION_SOURCE = "structured-correction-v4"
 # Bound the audit envelope per resource so extraction remains reviewable and
 # cannot consume the entire workflow budget on an unusually verbose response.
 MAX_CLAIMS_PER_RESOURCE = 20
@@ -58,14 +77,21 @@ class ClaimCandidate(StrictClaimModel):
     claim_text: str = Field(min_length=1, max_length=4000)
     claim_type: ClaimType
     source_text: str = Field(min_length=1, max_length=2000)
+    # Offsets stay advisory: materialize_claims() re-locates the span from the
+    # exact source_text and overwrites both values.  A provider that omits the
+    # whole pair (0/0) is accepted and rebased; a partially filled or inverted
+    # pair is still rejected, and ClaimRecord keeps requiring a positive span.
     source_start: int = Field(ge=0)
-    source_end: int = Field(gt=0)
+    source_end: int = Field(ge=0)
     knowledge_point_id: Optional[str] = Field(default=None, max_length=256)
     source_evidence_ids: list[str] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def validate_span(self) -> "ClaimCandidate":
-        if self.source_end <= self.source_start:
+        if self.source_end == 0:
+            if self.source_start > 0:
+                raise ValueError("source offset pair is incomplete")
+        elif self.source_end <= self.source_start:
             raise ValueError("source_end must be greater than source_start")
         if len(self.source_evidence_ids) != len(set(self.source_evidence_ids)):
             raise ValueError("source_evidence_ids must be unique")
@@ -82,6 +108,20 @@ class ResourceClaimCandidates(StrictClaimModel):
 
 class ClaimExtractionLLMOutput(StrictClaimModel):
     resources: list[ResourceClaimCandidates] = Field(min_length=1, max_length=20)
+
+
+class ClaimSourceRepairItem(StrictClaimModel):
+    claim_index: int = Field(ge=0)
+    source_text: str = Field(min_length=1, max_length=200)
+
+
+class ClaimSourceRepairLLMOutput(StrictClaimModel):
+    """Bounded envelope for re-copying only the spans that failed the substring gate."""
+
+    claims: list[ClaimSourceRepairItem] = Field(
+        min_length=1,
+        max_length=MAX_CLAIMS_PER_RESOURCE,
+    )
 
 
 class ClaimRecord(StrictClaimModel):

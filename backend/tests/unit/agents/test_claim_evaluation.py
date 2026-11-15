@@ -72,11 +72,12 @@ def test_competition_metric_only_counts_final_published_leaf():
         resources=[_resource("old", 1, "unpublished"), _resource("final", 2, "published", "old")],
         claims=old_claims + final_claims,
         judgements=old_judgements + final_judgements,
-        target_skill_node_ids=["skill-a", "skill-b"],
     )
     assert metrics.factual_claim_total == 1
     assert metrics.claim_hallucination_rate == 0.0
-    assert metrics.knowledge_coverage_rate == 0.5
+    assert metrics.supported_claim_total == 1
+    # 覆盖口径已从 Claim 聚合移除，任何目标节点集合都不再参与计算。
+    assert not hasattr(metrics, "knowledge_coverage_rate")
 
 
 def test_difficulty_evaluation_uses_fixed_fixture_version_and_confusion_matrix():

@@ -1,0 +1,1 @@
+analysis_id,variant_id,metric_id,metric_version,stratum,aggregation,unit,value,numerator,denominator,n_planned,n_attempted,n_valid,n_failed,n_missing,ci_low,ci_high,missing_reason

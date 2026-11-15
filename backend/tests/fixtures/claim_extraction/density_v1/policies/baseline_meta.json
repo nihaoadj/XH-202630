@@ -1,0 +1,15 @@
+{
+  "estimate_2_0": {
+    "digest": "e499df86554f09118e4e3da821cb5f3a8f092ea92e6722979a8b92eecdd00632",
+    "field_count": 28,
+    "has_density_batching": false,
+    "schema_version": "2.0",
+    "strategy": "neutral_estimate_v1"
+  },
+  "extraction_1_0": {
+    "digest": "d99bdb74312adf78cb9fc4f51bb2112d372c082ecfc9a220f6f97325ad82140e",
+    "field_count": 23,
+    "schema_version": "1.0",
+    "strategy": "neutral_batch_v1"
+  }
+}

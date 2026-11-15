@@ -1,0 +1,490 @@
+{
+  "observations": [
+    {
+      "attempt_complete": false,
+      "attempts": [
+        {
+          "error_category": null,
+          "error_code": "LLM_OUTPUT_PARSE_FAILED",
+          "gateway_status": "retryable_error",
+          "helper_error_class": null,
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": true,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 1,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        },
+        {
+          "error_category": null,
+          "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+          "gateway_status": "retryable_error",
+          "helper_error_class": "AssertionError",
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": false,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 2,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        },
+        {
+          "error_category": null,
+          "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+          "gateway_status": "retryable_error",
+          "helper_error_class": "AssertionError",
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": false,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 3,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        }
+      ],
+      "attribution": "task",
+      "attribution_complete": true,
+      "capture_complete": true,
+      "domain": "courseware",
+      "error_class": null,
+      "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+      "gateway_attempt_count": 3,
+      "gateway_retry_count": 2,
+      "known_input_tokens": 0,
+      "known_llm_duration_ms": 0,
+      "known_output_tokens": 0,
+      "known_total_tokens": 0,
+      "model_name": "fake-model",
+      "node_name": "courseware_spec_builder",
+      "observation_id": 1,
+      "observed_attempt_count": 3,
+      "outcome": "gateway_error",
+      "resource_labels": [],
+      "run_id": "<run-1>",
+      "schema_name": "CoursewarePlanEnrichmentV2",
+      "schema_version": "llm-accounting-v1",
+      "segment_id": "segment",
+      "source_call_id": "<call-1>",
+      "stage": "planning",
+      "stage_sequence": null,
+      "step_id": "cw_<step-1>:courseware-spec",
+      "structured_output_mode": "function_calling",
+      "usage_complete": false,
+      "usage_input_tokens": null,
+      "usage_mismatch": false,
+      "usage_output_tokens": null,
+      "usage_total_tokens": null
+    },
+    {
+      "attempt_complete": false,
+      "attempts": [
+        {
+          "error_category": null,
+          "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+          "gateway_status": "retryable_error",
+          "helper_error_class": "AssertionError",
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": false,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 1,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        },
+        {
+          "error_category": null,
+          "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+          "gateway_status": "retryable_error",
+          "helper_error_class": "AssertionError",
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": false,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 2,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        }
+      ],
+      "attribution": "task",
+      "attribution_complete": true,
+      "capture_complete": true,
+      "domain": "courseware",
+      "error_class": null,
+      "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+      "gateway_attempt_count": 2,
+      "gateway_retry_count": 1,
+      "known_input_tokens": 0,
+      "known_llm_duration_ms": 0,
+      "known_output_tokens": 0,
+      "known_total_tokens": 0,
+      "model_name": "fake-model",
+      "node_name": "courseware_quality_reviewer",
+      "observation_id": 2,
+      "observed_attempt_count": 2,
+      "outcome": "gateway_error",
+      "resource_labels": [],
+      "run_id": "<run-1>",
+      "schema_name": "CoursewareReviewDecisionV2Draft",
+      "schema_version": "llm-accounting-v1",
+      "segment_id": "segment",
+      "source_call_id": "<call-2>",
+      "stage": "quality_review",
+      "stage_sequence": null,
+      "step_id": "cw_<step-1>:quality-review",
+      "structured_output_mode": "function_calling",
+      "usage_complete": false,
+      "usage_input_tokens": null,
+      "usage_mismatch": false,
+      "usage_output_tokens": null,
+      "usage_total_tokens": null
+    },
+    {
+      "attempt_complete": false,
+      "attempts": [
+        {
+          "error_category": null,
+          "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+          "gateway_status": "retryable_error",
+          "helper_error_class": "AssertionError",
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": false,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 1,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        },
+        {
+          "error_category": null,
+          "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+          "gateway_status": "retryable_error",
+          "helper_error_class": "AssertionError",
+          "helper_finish_reason": null,
+          "helper_observed": true,
+          "helper_provider_request_id": null,
+          "helper_raw_success": false,
+          "helper_usage_input_tokens": null,
+          "helper_usage_output_tokens": null,
+          "helper_usage_total_tokens": null,
+          "latency_ms": 0,
+          "ordinal": 2,
+          "provider_request_id": null,
+          "structured_output_mode": "function_calling",
+          "usage_input_tokens": null,
+          "usage_output_tokens": null,
+          "usage_source": "none",
+          "usage_total_tokens": null
+        }
+      ],
+      "attribution": "task",
+      "attribution_complete": true,
+      "capture_complete": true,
+      "domain": "courseware",
+      "error_class": null,
+      "error_code": "LLM_UPSTREAM_UNAVAILABLE",
+      "gateway_attempt_count": 2,
+      "gateway_retry_count": 1,
+      "known_input_tokens": 0,
+      "known_llm_duration_ms": 0,
+      "known_output_tokens": 0,
+      "known_total_tokens": 0,
+      "model_name": "fake-model",
+      "node_name": "courseware_quality_reviewer",
+      "observation_id": 3,
+      "observed_attempt_count": 2,
+      "outcome": "gateway_error",
+      "resource_labels": [],
+      "run_id": "<run-1>",
+      "schema_name": "CoursewareReviewDecisionV2Draft",
+      "schema_version": "llm-accounting-v1",
+      "segment_id": "segment",
+      "source_call_id": "<call-3>",
+      "stage": "quality_review",
+      "stage_sequence": null,
+      "step_id": "cw_<step-1>:quality-review",
+      "structured_output_mode": "function_calling",
+      "usage_complete": false,
+      "usage_input_tokens": null,
+      "usage_mismatch": false,
+      "usage_output_tokens": null,
+      "usage_total_tokens": null
+    }
+  ],
+  "projection": {
+    "error_code": "COURSEWARE_PAGE_QUALITY_GATE_FAILED",
+    "status": "release_blocked"
+  },
+  "requests": [
+    {
+      "max_output_tokens": 8192,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是课程设计器。不得写学习者正文、不得新增事实、不得输出 HTML、CSS、JavaScript 或 URL。当输入含 Storyboard 时，只输出 CoursewarePlanEnrichmentV2：按给定 objective_id 和 scene_id补充标题、教学意图和已注册组件偏好；不得重新生成、删除、重排或改写来源槽位。只能使用 plan_enrichment_contract 中列出的 ID 与对应场景允许的组件；recap 不接受 enrichment。数组顺序不重要，未知 ID 和未知组件会被拒绝。如果输入包含 schema_version=3.0 的实操指南，必须额外填写 practice_cover：cover_title 生成简洁、适合大标题展示的实操课件标题，不要带‘互动课件’、页码或长段落；cover_lead 用一句话说明这份实操指南解决的实际任务；learning_goal 用一句话说明完成这份实操指南后应具备的可观察能力；learning_method 用一段简短说明介绍本指南的使用方法，例如先阅读每页的操作说明、再实际执行并用完成验证核对结果；不要输出编号步骤、清单或路径；completion_standard 说明什么结果才算完成。这些内容只能概括输入的实操 JSON，不得虚构工具、步骤、指标或学习结果。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"sources\": [{\"resource_id\": \"res-cw-baseline\", \"role\": \"practice\", \"topic\": \"主题\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\", \"practice_31242745e508e19b\", \"practice_verify_13cc825832c5d9b2\", \"practice_reflect_77b3f7d33965cd86\", \"q5_9f01fa4e46\"]}], \"storyboard\": {\"schema_version\": \"2.0\", \"scenes\": [{\"scene_id\": \"scene:intro\", \"kind\": \"intro\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\", \"practice_31242745e508e19b\", \"practice_verify_13cc825832c5d9b2\", \"practice_reflect_77b3f7d33965cd86\", \"q5_9f01fa4e46\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"orient\", \"allowed_components\": [\"callout\", \"key_point\"], \"allowed_component_ids\": [\"callout\", \"key_point\"], \"page_role\": \"cover\", \"layout_recipe_id\": \"editorial_cover\", \"key_question\": \"这门课程能帮助我解决什么问题？\", \"required_zones\": [\"course_value\", \"knowledge_scope\", \"duration_route\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 80, \"max_chars\": 360}, \"practice_variant\": null}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:prepare\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-prepare\", \"allowed_components\": [\"key_point\", \"steps\"], \"allowed_component_ids\": [\"key_point\", \"steps\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"准备阶段需要确认哪些前置条件？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 800}, \"practice_variant\": \"prepare\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:step:1\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_31242745e508e19b\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"apply-step-1-part-1\", \"allowed_components\": [\"key_point\", \"code_block\", \"callout\"], \"allowed_component_ids\": [\"key_point\", \"code_block\", \"callout\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"步骤 1：完成验证 应如何完成并验收？\", \"required_zones\": [\"step_goal\", \"operation_detail\", \"completion_check\", \"next_step\"], \"content_budget\": {\"min_zones\": 4, \"max_zones\": 4, \"min_chars\": 180, \"max_chars\": 1100}, \"practice_variant\": \"guided\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:verify\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-verify\", \"allowed_components\": [\"key_point\", \"steps\"], \"allowed_component_ids\": [\"key_point\", \"steps\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"验证阶段需要如何完成？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 900}, \"practice_variant\": \"verify\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:reflect\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-reflect\", \"allowed_components\": [\"key_point\", \"callout\"], \"allowed_component_ids\": [\"key_point\", \"callout\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"复盘阶段需要如何完成？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 900}, \"practice_variant\": \"reflect\"}], \"objective_graph_hash\": \"44bbe4993567f40e01cd858f998a0fc5ae0be0070750624b4fef049165b2b08b\"}, \"plan_enrichment_contract\": {\"objective_ids\": [\"objective:res-cw-baseline\"], \"scene_ids\": [\"scene:intro\", \"scene:practice:res-cw-baseline:phase:prepare\", \"scene:practice:res-cw-baseline:step:1\", \"scene:practice:res-cw-baseline:phase:verify\", \"scene:practice:res-cw-baseline:phase:reflect\"], \"allowed_component_ids_by_scene\": {\"scene:intro\": [\"callout\", \"key_point\"], \"scene:practice:res-cw-baseline:phase:prepare\": [\"key_point\", \"steps\"], \"scene:practice:res-cw-baseline:step:1\": [\"key_point\", \"code_block\", \"callout\"], \"scene:practice:res-cw-baseline:phase:verify\": [\"key_point\", \"steps\"], \"scene:practice:res-cw-baseline:phase:reflect\": [\"key_point\", \"callout\"]}}, \"practice_guides\": [{\"resource_id\": \"res-cw-baseline\", \"topic\": \"主题\", \"practice_guide_payload\": {\"schema_version\": \"3.0\", \"title\": \"基线实操指南\", \"preparation\": {\"phase_id\": \"prepare\", \"goal\": \"准备\", \"items\": [\"确认输入\"], \"evidence_ids\": [\"ev-1\"]}, \"practice\": {\"phase_id\": \"practice\", \"goal\": \"执行\", \"steps\": [{\"step_id\": \"step-1\", \"title\": \"完成验证\", \"instruction_text\": \"按来源完成检索并记录结果。\", \"code_blocks\": [], \"verification\": \"结果可复现。\", \"evidence_ids\": [\"ev-1\"]}]}, \"verification\": {\"phase_id\": \"verify\", \"goal\": \"确认\", \"checklist\": [\"结果可复现\"], \"evidence_ids\": [\"ev-1\"]}, \"reflection\": {\"phase_id\": \"reflect\", \"goal\": \"复盘\", \"summary\": \"记录验证链路。\", \"evidence_ids\": [\"ev-1\"]}, \"payload_hash\": \"b1662e54d0a8bcd7cb468ce3c796510f42de5ebba05b604a649ac7ca1be15456\"}}], \"learner_request\": {\"interaction_intensity\": \"medium\"}}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.models.courseware.content.CoursewarePlanEnrichmentV2>",
+      "temperature": 0.0,
+      "timeout_seconds": 30.0
+    },
+    {
+      "max_output_tokens": 8192,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是课程设计器。不得写学习者正文、不得新增事实、不得输出 HTML、CSS、JavaScript 或 URL。当输入含 Storyboard 时，只输出 CoursewarePlanEnrichmentV2：按给定 objective_id 和 scene_id补充标题、教学意图和已注册组件偏好；不得重新生成、删除、重排或改写来源槽位。只能使用 plan_enrichment_contract 中列出的 ID 与对应场景允许的组件；recap 不接受 enrichment。数组顺序不重要，未知 ID 和未知组件会被拒绝。如果输入包含 schema_version=3.0 的实操指南，必须额外填写 practice_cover：cover_title 生成简洁、适合大标题展示的实操课件标题，不要带‘互动课件’、页码或长段落；cover_lead 用一句话说明这份实操指南解决的实际任务；learning_goal 用一句话说明完成这份实操指南后应具备的可观察能力；learning_method 用一段简短说明介绍本指南的使用方法，例如先阅读每页的操作说明、再实际执行并用完成验证核对结果；不要输出编号步骤、清单或路径；completion_standard 说明什么结果才算完成。这些内容只能概括输入的实操 JSON，不得虚构工具、步骤、指标或学习结果。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"sources\": [{\"resource_id\": \"res-cw-baseline\", \"role\": \"practice\", \"topic\": \"主题\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\", \"practice_31242745e508e19b\", \"practice_verify_13cc825832c5d9b2\", \"practice_reflect_77b3f7d33965cd86\", \"q5_9f01fa4e46\"]}], \"storyboard\": {\"schema_version\": \"2.0\", \"scenes\": [{\"scene_id\": \"scene:intro\", \"kind\": \"intro\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\", \"practice_31242745e508e19b\", \"practice_verify_13cc825832c5d9b2\", \"practice_reflect_77b3f7d33965cd86\", \"q5_9f01fa4e46\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"orient\", \"allowed_components\": [\"callout\", \"key_point\"], \"allowed_component_ids\": [\"callout\", \"key_point\"], \"page_role\": \"cover\", \"layout_recipe_id\": \"editorial_cover\", \"key_question\": \"这门课程能帮助我解决什么问题？\", \"required_zones\": [\"course_value\", \"knowledge_scope\", \"duration_route\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 80, \"max_chars\": 360}, \"practice_variant\": null}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:prepare\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-prepare\", \"allowed_components\": [\"key_point\", \"steps\"], \"allowed_component_ids\": [\"key_point\", \"steps\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"准备阶段需要确认哪些前置条件？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 800}, \"practice_variant\": \"prepare\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:step:1\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_31242745e508e19b\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"apply-step-1-part-1\", \"allowed_components\": [\"key_point\", \"code_block\", \"callout\"], \"allowed_component_ids\": [\"key_point\", \"code_block\", \"callout\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"步骤 1：完成验证 应如何完成并验收？\", \"required_zones\": [\"step_goal\", \"operation_detail\", \"completion_check\", \"next_step\"], \"content_budget\": {\"min_zones\": 4, \"max_zones\": 4, \"min_chars\": 180, \"max_chars\": 1100}, \"practice_variant\": \"guided\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:verify\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-verify\", \"allowed_components\": [\"key_point\", \"steps\"], \"allowed_component_ids\": [\"key_point\", \"steps\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"验证阶段需要如何完成？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 900}, \"practice_variant\": \"verify\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:reflect\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-reflect\", \"allowed_components\": [\"key_point\", \"callout\"], \"allowed_component_ids\": [\"key_point\", \"callout\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"复盘阶段需要如何完成？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 900}, \"practice_variant\": \"reflect\"}], \"objective_graph_hash\": \"44bbe4993567f40e01cd858f998a0fc5ae0be0070750624b4fef049165b2b08b\"}, \"plan_enrichment_contract\": {\"objective_ids\": [\"objective:res-cw-baseline\"], \"scene_ids\": [\"scene:intro\", \"scene:practice:res-cw-baseline:phase:prepare\", \"scene:practice:res-cw-baseline:step:1\", \"scene:practice:res-cw-baseline:phase:verify\", \"scene:practice:res-cw-baseline:phase:reflect\"], \"allowed_component_ids_by_scene\": {\"scene:intro\": [\"callout\", \"key_point\"], \"scene:practice:res-cw-baseline:phase:prepare\": [\"key_point\", \"steps\"], \"scene:practice:res-cw-baseline:step:1\": [\"key_point\", \"code_block\", \"callout\"], \"scene:practice:res-cw-baseline:phase:verify\": [\"key_point\", \"steps\"], \"scene:practice:res-cw-baseline:phase:reflect\": [\"key_point\", \"callout\"]}}, \"practice_guides\": [{\"resource_id\": \"res-cw-baseline\", \"topic\": \"主题\", \"practice_guide_payload\": {\"schema_version\": \"3.0\", \"title\": \"基线实操指南\", \"preparation\": {\"phase_id\": \"prepare\", \"goal\": \"准备\", \"items\": [\"确认输入\"], \"evidence_ids\": [\"ev-1\"]}, \"practice\": {\"phase_id\": \"practice\", \"goal\": \"执行\", \"steps\": [{\"step_id\": \"step-1\", \"title\": \"完成验证\", \"instruction_text\": \"按来源完成检索并记录结果。\", \"code_blocks\": [], \"verification\": \"结果可复现。\", \"evidence_ids\": [\"ev-1\"]}]}, \"verification\": {\"phase_id\": \"verify\", \"goal\": \"确认\", \"checklist\": [\"结果可复现\"], \"evidence_ids\": [\"ev-1\"]}, \"reflection\": {\"phase_id\": \"reflect\", \"goal\": \"复盘\", \"summary\": \"记录验证链路。\", \"evidence_ids\": [\"ev-1\"]}, \"payload_hash\": \"b1662e54d0a8bcd7cb468ce3c796510f42de5ebba05b604a649ac7ca1be15456\"}}], \"learner_request\": {\"interaction_intensity\": \"medium\"}}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "definitely-not-json",
+          "example": false,
+          "id": null,
+          "invalid_tool_calls": [],
+          "name": null,
+          "response_metadata": {},
+          "tool_calls": [],
+          "type": "ai",
+          "usage_metadata": null
+        },
+        {
+          "additional_kwargs": {},
+          "content": "上一次输出未通过结构校验。请仅返回修复后的 JSON 对象，不要解释。\n错误：LLM_OUTPUT_PARSE_FAILED:invalid_output\nJSON Schema：{\"$defs\": {\"CoursewareObjectiveEnrichment\": {\"properties\": {\"objective_id\": {\"maxLength\": 96, \"minLength\": 1, \"title\": \"Objective Id\", \"type\": \"string\"}, \"title\": {\"maxLength\": 160, \"minLength\": 1, \"title\": \"Title\", \"type\": \"string\"}, \"teaching_intent\": {\"maxLength\": 240, \"minLength\": 1, \"title\": \"Teaching Intent\", \"type\": \"string\"}}, \"required\": [\"objective_id\", \"title\", \"teaching_intent\"], \"title\": \"CoursewareObjectiveEnrichment\", \"type\": \"object\"}, \"CoursewareSceneEnrichment\": {\"properties\": {\"scene_id\": {\"maxLength\": 96, \"minLength\": 1, \"title\": \"Scene Id\", \"type\": \"string\"}, \"title\": {\"maxLength\": 160, \"minLength\": 1, \"title\": \"Title\", \"type\": \"string\"}, \"teaching_intent\": {\"maxLength\": 240, \"minLength\": 1, \"title\": \"Teaching Intent\", \"type\": \"string\"}, \"preferred_component_ids\": {\"items\": {\"type\": \"string\"}, \"maxItems\": 8, \"title\": \"Preferred Component Ids\", \"type\": \"array\"}}, \"required\": [\"scene_id\", \"title\", \"teaching_intent\"], \"title\": \"CoursewareSceneEnrichment\", \"type\": \"object\"}, \"PracticeGuideCoverEnrichment\": {\"description\": \"Planner-owned prose for the practice guide entry page only.\\n\\nThe guide body remains a direct projection of the audited V3 JSON.  These\\nfields only explain the purpose and route into that fixed sequence.\", \"properties\": {\"cover_title\": {\"maxLength\": 120, \"minLength\": 1, \"title\": \"Cover Title\", \"type\": \"string\"}, \"cover_lead\": {\"maxLength\": 360, \"minLength\": 1, \"title\": \"Cover Lead\", \"type\": \"string\"}, \"learning_goal\": {\"maxLength\": 360, \"minLength\": 1, \"title\": \"Learning Goal\", \"type\": \"string\"}, \"learning_method\": {\"maxLength\": 360, \"minLength\": 1, \"title\": \"Learning Method\", \"type\": \"string\"}, \"completion_standard\": {\"maxLength\": 360, \"minLength\": 1, \"title\": \"Completion Standard\", \"type\": \"string\"}}, \"required\": [\"cover_title\", \"cover_lead\", \"learning_goal\", \"learning_method\", \"completion_standard\"], \"title\": \"PracticeGuideCoverEnrichment\", \"type\": \"object\"}}, \"properties\": {\"schema_version\": {\"const\": \"2.0\", \"default\": \"2.0\", \"enum\": [\"2.0\"], \"title\": \"Schema Version\", \"type\": \"string\"}, \"course_title\": {\"maxLength\": 160, \"minLength\": 1, \"title\": \"Course Title\", \"type\": \"string\"}, \"course_summary\": {\"maxLength\": 500, \"minLength\": 1, \"title\": \"Course Summary\", \"type\": \"string\"}, \"objectives\": {\"items\": {\"$ref\": \"#/$defs/CoursewareObjectiveEnrichment\"}, \"maxItems\": 8, \"title\": \"Objectives\", \"type\": \"array\"}, \"scenes\": {\"items\": {\"$ref\": \"#/$defs/CoursewareSceneEnrichment\"}, \"maxItems\": 24, \"title\": \"Scenes\", \"type\": \"array\"}, \"practice_cover\": {\"anyOf\": [{\"$ref\": \"#/$defs/PracticeGuideCoverEnrichment\"}, {\"type\": \"null\"}], \"default\": null}}, \"required\": [\"course_title\", \"course_summary\"], \"title\": \"CoursewarePlanEnrichmentV2\", \"type\": \"object\"}",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.models.courseware.content.CoursewarePlanEnrichmentV2>",
+      "temperature": 0.0,
+      "timeout_seconds": 30.0
+    },
+    {
+      "max_output_tokens": 8192,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是课程设计器。不得写学习者正文、不得新增事实、不得输出 HTML、CSS、JavaScript 或 URL。当输入含 Storyboard 时，只输出 CoursewarePlanEnrichmentV2：按给定 objective_id 和 scene_id补充标题、教学意图和已注册组件偏好；不得重新生成、删除、重排或改写来源槽位。只能使用 plan_enrichment_contract 中列出的 ID 与对应场景允许的组件；recap 不接受 enrichment。数组顺序不重要，未知 ID 和未知组件会被拒绝。如果输入包含 schema_version=3.0 的实操指南，必须额外填写 practice_cover：cover_title 生成简洁、适合大标题展示的实操课件标题，不要带‘互动课件’、页码或长段落；cover_lead 用一句话说明这份实操指南解决的实际任务；learning_goal 用一句话说明完成这份实操指南后应具备的可观察能力；learning_method 用一段简短说明介绍本指南的使用方法，例如先阅读每页的操作说明、再实际执行并用完成验证核对结果；不要输出编号步骤、清单或路径；completion_standard 说明什么结果才算完成。这些内容只能概括输入的实操 JSON，不得虚构工具、步骤、指标或学习结果。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"sources\": [{\"resource_id\": \"res-cw-baseline\", \"role\": \"practice\", \"topic\": \"主题\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\", \"practice_31242745e508e19b\", \"practice_verify_13cc825832c5d9b2\", \"practice_reflect_77b3f7d33965cd86\", \"q5_9f01fa4e46\"]}], \"storyboard\": {\"schema_version\": \"2.0\", \"scenes\": [{\"scene_id\": \"scene:intro\", \"kind\": \"intro\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\", \"practice_31242745e508e19b\", \"practice_verify_13cc825832c5d9b2\", \"practice_reflect_77b3f7d33965cd86\", \"q5_9f01fa4e46\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"orient\", \"allowed_components\": [\"callout\", \"key_point\"], \"allowed_component_ids\": [\"callout\", \"key_point\"], \"page_role\": \"cover\", \"layout_recipe_id\": \"editorial_cover\", \"key_question\": \"这门课程能帮助我解决什么问题？\", \"required_zones\": [\"course_value\", \"knowledge_scope\", \"duration_route\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 80, \"max_chars\": 360}, \"practice_variant\": null}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:prepare\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-prepare\", \"allowed_components\": [\"key_point\", \"steps\"], \"allowed_component_ids\": [\"key_point\", \"steps\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"准备阶段需要确认哪些前置条件？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 800}, \"practice_variant\": \"prepare\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:step:1\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_31242745e508e19b\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"apply-step-1-part-1\", \"allowed_components\": [\"key_point\", \"code_block\", \"callout\"], \"allowed_component_ids\": [\"key_point\", \"code_block\", \"callout\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"步骤 1：完成验证 应如何完成并验收？\", \"required_zones\": [\"step_goal\", \"operation_detail\", \"completion_check\", \"next_step\"], \"content_budget\": {\"min_zones\": 4, \"max_zones\": 4, \"min_chars\": 180, \"max_chars\": 1100}, \"practice_variant\": \"guided\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:verify\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-verify\", \"allowed_components\": [\"key_point\", \"steps\"], \"allowed_component_ids\": [\"key_point\", \"steps\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"验证阶段需要如何完成？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 900}, \"practice_variant\": \"verify\"}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:reflect\", \"kind\": \"practice\", \"required\": true, \"objective_ids\": [\"objective:res-cw-baseline\"], \"source_resource_ids\": [\"res-cw-baseline\"], \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"], \"difficulty\": \"neutral\", \"information_density\": \"medium\", \"interaction_purpose\": \"practice-reflect\", \"allowed_components\": [\"key_point\", \"callout\"], \"allowed_component_ids\": [\"key_point\", \"callout\"], \"page_role\": \"practice_workspace\", \"layout_recipe_id\": \"practice_workspace\", \"key_question\": \"复盘阶段需要如何完成？\", \"required_zones\": [\"phase_goal\", \"phase_items\", \"completion_check\"], \"content_budget\": {\"min_zones\": 3, \"max_zones\": 4, \"min_chars\": 120, \"max_chars\": 900}, \"practice_variant\": \"reflect\"}], \"objective_graph_hash\": \"44bbe4993567f40e01cd858f998a0fc5ae0be0070750624b4fef049165b2b08b\"}, \"plan_enrichment_contract\": {\"objective_ids\": [\"objective:res-cw-baseline\"], \"scene_ids\": [\"scene:intro\", \"scene:practice:res-cw-baseline:phase:prepare\", \"scene:practice:res-cw-baseline:step:1\", \"scene:practice:res-cw-baseline:phase:verify\", \"scene:practice:res-cw-baseline:phase:reflect\"], \"allowed_component_ids_by_scene\": {\"scene:intro\": [\"callout\", \"key_point\"], \"scene:practice:res-cw-baseline:phase:prepare\": [\"key_point\", \"steps\"], \"scene:practice:res-cw-baseline:step:1\": [\"key_point\", \"code_block\", \"callout\"], \"scene:practice:res-cw-baseline:phase:verify\": [\"key_point\", \"steps\"], \"scene:practice:res-cw-baseline:phase:reflect\": [\"key_point\", \"callout\"]}}, \"practice_guides\": [{\"resource_id\": \"res-cw-baseline\", \"topic\": \"主题\", \"practice_guide_payload\": {\"schema_version\": \"3.0\", \"title\": \"基线实操指南\", \"preparation\": {\"phase_id\": \"prepare\", \"goal\": \"准备\", \"items\": [\"确认输入\"], \"evidence_ids\": [\"ev-1\"]}, \"practice\": {\"phase_id\": \"practice\", \"goal\": \"执行\", \"steps\": [{\"step_id\": \"step-1\", \"title\": \"完成验证\", \"instruction_text\": \"按来源完成检索并记录结果。\", \"code_blocks\": [], \"verification\": \"结果可复现。\", \"evidence_ids\": [\"ev-1\"]}]}, \"verification\": {\"phase_id\": \"verify\", \"goal\": \"确认\", \"checklist\": [\"结果可复现\"], \"evidence_ids\": [\"ev-1\"]}, \"reflection\": {\"phase_id\": \"reflect\", \"goal\": \"复盘\", \"summary\": \"记录验证链路。\", \"evidence_ids\": [\"ev-1\"]}, \"payload_hash\": \"b1662e54d0a8bcd7cb468ce3c796510f42de5ebba05b604a649ac7ca1be15456\"}}], \"learner_request\": {\"interaction_intensity\": \"medium\"}}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "definitely-not-json",
+          "example": false,
+          "id": null,
+          "invalid_tool_calls": [],
+          "name": null,
+          "response_metadata": {},
+          "tool_calls": [],
+          "type": "ai",
+          "usage_metadata": null
+        },
+        {
+          "additional_kwargs": {},
+          "content": "上一次输出未通过结构校验。请仅返回修复后的 JSON 对象，不要解释。\n错误：LLM_OUTPUT_PARSE_FAILED:invalid_output\nJSON Schema：{\"$defs\": {\"CoursewareObjectiveEnrichment\": {\"properties\": {\"objective_id\": {\"maxLength\": 96, \"minLength\": 1, \"title\": \"Objective Id\", \"type\": \"string\"}, \"title\": {\"maxLength\": 160, \"minLength\": 1, \"title\": \"Title\", \"type\": \"string\"}, \"teaching_intent\": {\"maxLength\": 240, \"minLength\": 1, \"title\": \"Teaching Intent\", \"type\": \"string\"}}, \"required\": [\"objective_id\", \"title\", \"teaching_intent\"], \"title\": \"CoursewareObjectiveEnrichment\", \"type\": \"object\"}, \"CoursewareSceneEnrichment\": {\"properties\": {\"scene_id\": {\"maxLength\": 96, \"minLength\": 1, \"title\": \"Scene Id\", \"type\": \"string\"}, \"title\": {\"maxLength\": 160, \"minLength\": 1, \"title\": \"Title\", \"type\": \"string\"}, \"teaching_intent\": {\"maxLength\": 240, \"minLength\": 1, \"title\": \"Teaching Intent\", \"type\": \"string\"}, \"preferred_component_ids\": {\"items\": {\"type\": \"string\"}, \"maxItems\": 8, \"title\": \"Preferred Component Ids\", \"type\": \"array\"}}, \"required\": [\"scene_id\", \"title\", \"teaching_intent\"], \"title\": \"CoursewareSceneEnrichment\", \"type\": \"object\"}, \"PracticeGuideCoverEnrichment\": {\"description\": \"Planner-owned prose for the practice guide entry page only.\\n\\nThe guide body remains a direct projection of the audited V3 JSON.  These\\nfields only explain the purpose and route into that fixed sequence.\", \"properties\": {\"cover_title\": {\"maxLength\": 120, \"minLength\": 1, \"title\": \"Cover Title\", \"type\": \"string\"}, \"cover_lead\": {\"maxLength\": 360, \"minLength\": 1, \"title\": \"Cover Lead\", \"type\": \"string\"}, \"learning_goal\": {\"maxLength\": 360, \"minLength\": 1, \"title\": \"Learning Goal\", \"type\": \"string\"}, \"learning_method\": {\"maxLength\": 360, \"minLength\": 1, \"title\": \"Learning Method\", \"type\": \"string\"}, \"completion_standard\": {\"maxLength\": 360, \"minLength\": 1, \"title\": \"Completion Standard\", \"type\": \"string\"}}, \"required\": [\"cover_title\", \"cover_lead\", \"learning_goal\", \"learning_method\", \"completion_standard\"], \"title\": \"PracticeGuideCoverEnrichment\", \"type\": \"object\"}}, \"properties\": {\"schema_version\": {\"const\": \"2.0\", \"default\": \"2.0\", \"enum\": [\"2.0\"], \"title\": \"Schema Version\", \"type\": \"string\"}, \"course_title\": {\"maxLength\": 160, \"minLength\": 1, \"title\": \"Course Title\", \"type\": \"string\"}, \"course_summary\": {\"maxLength\": 500, \"minLength\": 1, \"title\": \"Course Summary\", \"type\": \"string\"}, \"objectives\": {\"items\": {\"$ref\": \"#/$defs/CoursewareObjectiveEnrichment\"}, \"maxItems\": 8, \"title\": \"Objectives\", \"type\": \"array\"}, \"scenes\": {\"items\": {\"$ref\": \"#/$defs/CoursewareSceneEnrichment\"}, \"maxItems\": 24, \"title\": \"Scenes\", \"type\": \"array\"}, \"practice_cover\": {\"anyOf\": [{\"$ref\": \"#/$defs/PracticeGuideCoverEnrichment\"}, {\"type\": \"null\"}], \"default\": null}}, \"required\": [\"course_title\", \"course_summary\"], \"title\": \"CoursewarePlanEnrichmentV2\", \"type\": \"object\"}",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.models.courseware.content.CoursewarePlanEnrichmentV2>",
+      "temperature": 0.0,
+      "timeout_seconds": 30.0
+    },
+    {
+      "max_output_tokens": 8192,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是课件教学质量审核器。只输出 CoursewareReviewDecision v2 JSON；使用九个 rubric 维度，rubric_scores 必须恰好包含 objective_alignment、coherence、explanation_depth、example_usefulness、misconception_handling、practice_gradient、feedback_quality、interaction_purpose、cognitive_load 九项，每项是 1 到 5 的数字。每个问题必须给出 dimension、severity、scope、scene_id 或 block_id 以及可执行 instruction。severity 只能是 info、warning 或 error；scope 只能是 course、scenes、scene 或 block。依据可见内容评分：不因简洁、没有额外案例或未展示的上下文臆测缺陷；仅在明确违反 rubric 时提出问题。status=revise 只能用于有明确、可验证、会影响学习者完成任务的 severity=error 缺陷，且每个 error 必须定位到真实 scene_id 或 block_id。不要将改善建议、措辞偏好、或无法由当前 JSON 验证的推断写入 issues；这些不构成自动重写理由。MISSING_ANSWER 只能用于实际 kind=quiz 且 answer 为空的场景；MISSING_ANSWER_KEY 也同样如此。所有关键维度至少为 3、平均至少为 3 且没有明确可修复 error 时返回 status=pass 和空 issues；拒绝才返回 status=reject。先使用这个最小合法模板，再只替换实际字段：{\"schema_version\":\"2.0\",\"status\":\"pass\",\"issues\":[],\"rubric_scores\":{\"objective_alignment\":4,\"coherence\":4,\"explanation_depth\":3,\"example_usefulness\":3,\"misconception_handling\":3,\"practice_gradient\":3,\"feedback_quality\":4,\"interaction_purpose\":4,\"cognitive_load\":3},\"confidence\":0.9}。若发现问题，优先给出有效 scene_id 的 scope=scene；只有能同时提供 scene_id 和 block_id 时才使用 scope=block。无法定位但确实影响整体的课程级问题使用 scope=course；它会触发一次有界的全场景修订，因此不能用泛泛的改进建议填充 issues。不要补写事实，不要输出 HTML、链接或代码。只报告需要修改的问题。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"title\": \"实操指南｜基线课件\", \"scenes\": [{\"scene_id\": \"scene:intro\", \"kind\": \"intro\", \"title\": \"实操指南 | 主题\", \"blocks\": [\"学习目标：围绕主题完成从准备、操作到验证的完整闭环。\", \"学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。\", \"完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-1\", \"component\": \"callout\", \"text\": \"学习目标：围绕主题完成从准备、操作到验证的完整闭环。\", \"pedagogical_role\": \"explain\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-2\", \"component\": \"key_point\", \"text\": \"学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。\", \"pedagogical_role\": \"explain\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-3\", \"component\": \"key_point\", \"text\": \"完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。\", \"pedagogical_role\": \"example\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}], \"steps\": [], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:prepare\", \"kind\": \"practice\", \"title\": \"准备阶段\", \"blocks\": [\"确认输入\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:prepare:goal\", \"component\": \"key_point\", \"label\": \"阶段目标\", \"presentation_role\": \"practice_phase_goal\", \"text\": \"准备\", \"source_json_path\": \"preparation.goal\", \"evidence_json_path\": \"preparation.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:prepare:items\", \"component\": \"steps\", \"text\": \"准备项目\", \"presentation_role\": \"practice_phase_items\", \"steps\": [\"确认输入\"], \"source_json_path\": \"preparation.items\", \"evidence_json_path\": \"preparation.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}], \"steps\": [\"确认输入\"], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:step:1\", \"kind\": \"practice\", \"title\": \"步骤 1｜完成验证\", \"blocks\": [\"按来源完成检索并记录结果。\", \"完成验证：结果可复现。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:step:1:instruction\", \"component\": \"key_point\", \"text\": \"按来源完成检索并记录结果。\", \"source_json_path\": \"practice.steps.step-1.instruction_text\", \"evidence_json_path\": \"practice.steps.step-1.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:step:1:verification\", \"component\": \"callout\", \"label\": \"完成验证\", \"text\": \"结果可复现。\", \"presentation_role\": \"practice_verification\", \"source_json_path\": \"practice.steps.step-1.verification\", \"evidence_json_path\": \"practice.steps.step-1.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}], \"steps\": [], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:verify\", \"kind\": \"practice\", \"title\": \"验证阶段\", \"blocks\": [\"结果可复现\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:verify:goal\", \"component\": \"key_point\", \"label\": \"验证目标\", \"presentation_role\": \"practice_phase_completion\", \"text\": \"确认\", \"source_json_path\": \"verification.goal\", \"evidence_json_path\": \"verification.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:verify:items\", \"component\": \"steps\", \"text\": \"最终检查项\", \"presentation_role\": \"practice_phase_items\", \"steps\": [\"结果可复现\"], \"source_json_path\": \"verification.checklist\", \"evidence_json_path\": \"verification.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}], \"steps\": [\"结果可复现\"], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:reflect\", \"kind\": \"practice\", \"title\": \"复盘与小结\", \"blocks\": [\"记录验证链路。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:reflect:goal\", \"component\": \"key_point\", \"label\": \"复盘目标\", \"presentation_role\": \"practice_reflection_goal\", \"text\": \"复盘\", \"source_json_path\": \"reflection.goal\", \"evidence_json_path\": \"reflection.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:reflect:summary\", \"component\": \"callout\", \"label\": \"复盘小结\", \"presentation_role\": \"practice_reflection_summary\", \"text\": \"记录验证链路。\", \"source_json_path\": \"reflection.summary\", \"evidence_json_path\": \"reflection.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"]}]}], \"steps\": [], \"options\": []}]}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent.CoursewareReviewDecisionV2Draft>",
+      "temperature": 0.0,
+      "timeout_seconds": 30.0
+    },
+    {
+      "max_output_tokens": 8192,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是课件教学质量审核器。只输出 CoursewareReviewDecision v2 JSON；使用九个 rubric 维度，rubric_scores 必须恰好包含 objective_alignment、coherence、explanation_depth、example_usefulness、misconception_handling、practice_gradient、feedback_quality、interaction_purpose、cognitive_load 九项，每项是 1 到 5 的数字。每个问题必须给出 dimension、severity、scope、scene_id 或 block_id 以及可执行 instruction。severity 只能是 info、warning 或 error；scope 只能是 course、scenes、scene 或 block。依据可见内容评分：不因简洁、没有额外案例或未展示的上下文臆测缺陷；仅在明确违反 rubric 时提出问题。status=revise 只能用于有明确、可验证、会影响学习者完成任务的 severity=error 缺陷，且每个 error 必须定位到真实 scene_id 或 block_id。不要将改善建议、措辞偏好、或无法由当前 JSON 验证的推断写入 issues；这些不构成自动重写理由。MISSING_ANSWER 只能用于实际 kind=quiz 且 answer 为空的场景；MISSING_ANSWER_KEY 也同样如此。所有关键维度至少为 3、平均至少为 3 且没有明确可修复 error 时返回 status=pass 和空 issues；拒绝才返回 status=reject。先使用这个最小合法模板，再只替换实际字段：{\"schema_version\":\"2.0\",\"status\":\"pass\",\"issues\":[],\"rubric_scores\":{\"objective_alignment\":4,\"coherence\":4,\"explanation_depth\":3,\"example_usefulness\":3,\"misconception_handling\":3,\"practice_gradient\":3,\"feedback_quality\":4,\"interaction_purpose\":4,\"cognitive_load\":3},\"confidence\":0.9}。若发现问题，优先给出有效 scene_id 的 scope=scene；只有能同时提供 scene_id 和 block_id 时才使用 scope=block。无法定位但确实影响整体的课程级问题使用 scope=course；它会触发一次有界的全场景修订，因此不能用泛泛的改进建议填充 issues。不要补写事实，不要输出 HTML、链接或代码。只报告需要修改的问题。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"title\": \"实操指南｜基线课件\", \"scenes\": [{\"scene_id\": \"scene:intro\", \"kind\": \"intro\", \"title\": \"实操指南 | 主题\", \"blocks\": [\"学习目标：围绕主题完成从准备、操作到验证的完整闭环。\", \"学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。\", \"完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-1\", \"component\": \"callout\", \"text\": \"学习目标：围绕主题完成从准备、操作到验证的完整闭环。\", \"pedagogical_role\": \"explain\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-2\", \"component\": \"key_point\", \"text\": \"学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。\", \"pedagogical_role\": \"explain\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-3\", \"component\": \"key_point\", \"text\": \"完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。\", \"pedagogical_role\": \"example\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}], \"steps\": [], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:prepare\", \"kind\": \"practice\", \"title\": \"准备阶段\", \"blocks\": [\"确认输入\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:prepare:goal\", \"component\": \"key_point\", \"label\": \"阶段目标\", \"presentation_role\": \"practice_phase_goal\", \"text\": \"准备\", \"source_json_path\": \"preparation.goal\", \"evidence_json_path\": \"preparation.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:prepare:items\", \"component\": \"steps\", \"text\": \"准备项目\", \"presentation_role\": \"practice_phase_items\", \"steps\": [\"确认输入\"], \"source_json_path\": \"preparation.items\", \"evidence_json_path\": \"preparation.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}], \"steps\": [\"确认输入\"], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:step:1\", \"kind\": \"practice\", \"title\": \"步骤 1｜完成验证\", \"blocks\": [\"按来源完成检索并记录结果。\", \"完成验证：结果可复现。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:step:1:instruction\", \"component\": \"key_point\", \"text\": \"按来源完成检索并记录结果。\", \"source_json_path\": \"practice.steps.step-1.instruction_text\", \"evidence_json_path\": \"practice.steps.step-1.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:step:1:verification\", \"component\": \"callout\", \"label\": \"完成验证\", \"text\": \"结果可复现。\", \"presentation_role\": \"practice_verification\", \"source_json_path\": \"practice.steps.step-1.verification\", \"evidence_json_path\": \"practice.steps.step-1.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}], \"steps\": [], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:verify\", \"kind\": \"practice\", \"title\": \"验证阶段\", \"blocks\": [\"结果可复现\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:verify:goal\", \"component\": \"key_point\", \"label\": \"验证目标\", \"presentation_role\": \"practice_phase_completion\", \"text\": \"确认\", \"source_json_path\": \"verification.goal\", \"evidence_json_path\": \"verification.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:verify:items\", \"component\": \"steps\", \"text\": \"最终检查项\", \"presentation_role\": \"practice_phase_items\", \"steps\": [\"结果可复现\"], \"source_json_path\": \"verification.checklist\", \"evidence_json_path\": \"verification.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}], \"steps\": [\"结果可复现\"], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:reflect\", \"kind\": \"practice\", \"title\": \"复盘与小结\", \"blocks\": [\"记录验证链路。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:reflect:goal\", \"component\": \"key_point\", \"label\": \"复盘目标\", \"presentation_role\": \"practice_reflection_goal\", \"text\": \"复盘\", \"source_json_path\": \"reflection.goal\", \"evidence_json_path\": \"reflection.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:reflect:summary\", \"component\": \"callout\", \"label\": \"复盘小结\", \"presentation_role\": \"practice_reflection_summary\", \"text\": \"记录验证链路。\", \"source_json_path\": \"reflection.summary\", \"evidence_json_path\": \"reflection.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"]}]}], \"steps\": [], \"options\": []}]}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent.CoursewareReviewDecisionV2Draft>",
+      "temperature": 0.0,
+      "timeout_seconds": 30.0
+    },
+    {
+      "max_output_tokens": 8192,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是课件教学质量审核器。只输出 CoursewareReviewDecision v2 JSON；使用九个 rubric 维度，rubric_scores 必须恰好包含 objective_alignment、coherence、explanation_depth、example_usefulness、misconception_handling、practice_gradient、feedback_quality、interaction_purpose、cognitive_load 九项，每项是 1 到 5 的数字。每个问题必须给出 dimension、severity、scope、scene_id 或 block_id 以及可执行 instruction。severity 只能是 info、warning 或 error；scope 只能是 course、scenes、scene 或 block。依据可见内容评分：不因简洁、没有额外案例或未展示的上下文臆测缺陷；仅在明确违反 rubric 时提出问题。status=revise 只能用于有明确、可验证、会影响学习者完成任务的 severity=error 缺陷，且每个 error 必须定位到真实 scene_id 或 block_id。不要将改善建议、措辞偏好、或无法由当前 JSON 验证的推断写入 issues；这些不构成自动重写理由。MISSING_ANSWER 只能用于实际 kind=quiz 且 answer 为空的场景；MISSING_ANSWER_KEY 也同样如此。所有关键维度至少为 3、平均至少为 3 且没有明确可修复 error 时返回 status=pass 和空 issues；拒绝才返回 status=reject。先使用这个最小合法模板，再只替换实际字段：{\"schema_version\":\"2.0\",\"status\":\"pass\",\"issues\":[],\"rubric_scores\":{\"objective_alignment\":4,\"coherence\":4,\"explanation_depth\":3,\"example_usefulness\":3,\"misconception_handling\":3,\"practice_gradient\":3,\"feedback_quality\":4,\"interaction_purpose\":4,\"cognitive_load\":3},\"confidence\":0.9}。若发现问题，优先给出有效 scene_id 的 scope=scene；只有能同时提供 scene_id 和 block_id 时才使用 scope=block。无法定位但确实影响整体的课程级问题使用 scope=course；它会触发一次有界的全场景修订，因此不能用泛泛的改进建议填充 issues。不要补写事实，不要输出 HTML、链接或代码。只报告需要修改的问题。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"title\": \"实操指南｜基线课件\", \"scenes\": [{\"scene_id\": \"scene:intro\", \"kind\": \"intro\", \"title\": \"实操指南 | 主题\", \"blocks\": [\"学习目标：围绕主题完成从准备、操作到验证的完整闭环。\", \"学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。\", \"完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-1\", \"component\": \"callout\", \"text\": \"学习目标：围绕主题完成从准备、操作到验证的完整闭环。\", \"pedagogical_role\": \"explain\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-2\", \"component\": \"key_point\", \"text\": \"学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。\", \"pedagogical_role\": \"explain\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-3\", \"component\": \"key_point\", \"text\": \"完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。\", \"pedagogical_role\": \"example\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}], \"steps\": [], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:prepare\", \"kind\": \"practice\", \"title\": \"准备阶段\", \"blocks\": [\"确认输入\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:prepare:goal\", \"component\": \"key_point\", \"label\": \"阶段目标\", \"presentation_role\": \"practice_phase_goal\", \"text\": \"准备\", \"source_json_path\": \"preparation.goal\", \"evidence_json_path\": \"preparation.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:prepare:items\", \"component\": \"steps\", \"text\": \"准备项目\", \"presentation_role\": \"practice_phase_items\", \"steps\": [\"确认输入\"], \"source_json_path\": \"preparation.items\", \"evidence_json_path\": \"preparation.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}], \"steps\": [\"确认输入\"], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:step:1\", \"kind\": \"practice\", \"title\": \"步骤 1｜完成验证\", \"blocks\": [\"按来源完成检索并记录结果。\", \"完成验证：结果可复现。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:step:1:instruction\", \"component\": \"key_point\", \"text\": \"按来源完成检索并记录结果。\", \"source_json_path\": \"practice.steps.step-1.instruction_text\", \"evidence_json_path\": \"practice.steps.step-1.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:step:1:verification\", \"component\": \"callout\", \"label\": \"完成验证\", \"text\": \"结果可复现。\", \"presentation_role\": \"practice_verification\", \"source_json_path\": \"practice.steps.step-1.verification\", \"evidence_json_path\": \"practice.steps.step-1.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}], \"steps\": [], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:verify\", \"kind\": \"practice\", \"title\": \"验证阶段\", \"blocks\": [\"结果可复现\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:verify:goal\", \"component\": \"key_point\", \"label\": \"验证目标\", \"presentation_role\": \"practice_phase_completion\", \"text\": \"确认\", \"source_json_path\": \"verification.goal\", \"evidence_json_path\": \"verification.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:verify:items\", \"component\": \"steps\", \"text\": \"最终检查项\", \"presentation_role\": \"practice_phase_items\", \"steps\": [\"结果可复现\"], \"source_json_path\": \"verification.checklist\", \"evidence_json_path\": \"verification.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}], \"steps\": [\"结果可复现\"], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:reflect\", \"kind\": \"practice\", \"title\": \"复盘与小结\", \"blocks\": [\"记录验证链路。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:reflect:goal\", \"component\": \"key_point\", \"label\": \"复盘目标\", \"presentation_role\": \"practice_reflection_goal\", \"text\": \"复盘\", \"source_json_path\": \"reflection.goal\", \"evidence_json_path\": \"reflection.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:reflect:summary\", \"component\": \"callout\", \"label\": \"复盘小结\", \"presentation_role\": \"practice_reflection_summary\", \"text\": \"记录验证链路。\", \"source_json_path\": \"reflection.summary\", \"evidence_json_path\": \"reflection.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"]}]}], \"steps\": [], \"options\": []}]}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent.CoursewareReviewDecisionV2Draft>",
+      "temperature": 0.0,
+      "timeout_seconds": 30.0
+    },
+    {
+      "max_output_tokens": 8192,
+      "messages": [
+        {
+          "additional_kwargs": {},
+          "content": "你是课件教学质量审核器。只输出 CoursewareReviewDecision v2 JSON；使用九个 rubric 维度，rubric_scores 必须恰好包含 objective_alignment、coherence、explanation_depth、example_usefulness、misconception_handling、practice_gradient、feedback_quality、interaction_purpose、cognitive_load 九项，每项是 1 到 5 的数字。每个问题必须给出 dimension、severity、scope、scene_id 或 block_id 以及可执行 instruction。severity 只能是 info、warning 或 error；scope 只能是 course、scenes、scene 或 block。依据可见内容评分：不因简洁、没有额外案例或未展示的上下文臆测缺陷；仅在明确违反 rubric 时提出问题。status=revise 只能用于有明确、可验证、会影响学习者完成任务的 severity=error 缺陷，且每个 error 必须定位到真实 scene_id 或 block_id。不要将改善建议、措辞偏好、或无法由当前 JSON 验证的推断写入 issues；这些不构成自动重写理由。MISSING_ANSWER 只能用于实际 kind=quiz 且 answer 为空的场景；MISSING_ANSWER_KEY 也同样如此。所有关键维度至少为 3、平均至少为 3 且没有明确可修复 error 时返回 status=pass 和空 issues；拒绝才返回 status=reject。先使用这个最小合法模板，再只替换实际字段：{\"schema_version\":\"2.0\",\"status\":\"pass\",\"issues\":[],\"rubric_scores\":{\"objective_alignment\":4,\"coherence\":4,\"explanation_depth\":3,\"example_usefulness\":3,\"misconception_handling\":3,\"practice_gradient\":3,\"feedback_quality\":4,\"interaction_purpose\":4,\"cognitive_load\":3},\"confidence\":0.9}。若发现问题，优先给出有效 scene_id 的 scope=scene；只有能同时提供 scene_id 和 block_id 时才使用 scope=block。无法定位但确实影响整体的课程级问题使用 scope=course；它会触发一次有界的全场景修订，因此不能用泛泛的改进建议填充 issues。不要补写事实，不要输出 HTML、链接或代码。只报告需要修改的问题。",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "system"
+        },
+        {
+          "additional_kwargs": {},
+          "content": "{\"title\": \"实操指南｜基线课件\", \"scenes\": [{\"scene_id\": \"scene:intro\", \"kind\": \"intro\", \"title\": \"实操指南 | 主题\", \"blocks\": [\"学习目标：围绕主题完成从准备、操作到验证的完整闭环。\", \"学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。\", \"完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-1\", \"component\": \"callout\", \"text\": \"学习目标：围绕主题完成从准备、操作到验证的完整闭环。\", \"pedagogical_role\": \"explain\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-2\", \"component\": \"key_point\", \"text\": \"学习方法：先确认环境与前置条件，再按来源页面逐步执行操作，并在每一步核对验证结果。\", \"pedagogical_role\": \"explain\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:intro:zone-3\", \"component\": \"key_point\", \"text\": \"完成标准：能够依据来源完成关键步骤，解释结果，并定位仍需复习的环节。\", \"pedagogical_role\": \"example\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}], \"steps\": [], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:prepare\", \"kind\": \"practice\", \"title\": \"准备阶段\", \"blocks\": [\"确认输入\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:prepare:goal\", \"component\": \"key_point\", \"label\": \"阶段目标\", \"presentation_role\": \"practice_phase_goal\", \"text\": \"准备\", \"source_json_path\": \"preparation.goal\", \"evidence_json_path\": \"preparation.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:prepare:items\", \"component\": \"steps\", \"text\": \"准备项目\", \"presentation_role\": \"practice_phase_items\", \"steps\": [\"确认输入\"], \"source_json_path\": \"preparation.items\", \"evidence_json_path\": \"preparation.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_prepare_70bc18dd1bc2dded\"]}]}], \"steps\": [\"确认输入\"], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:step:1\", \"kind\": \"practice\", \"title\": \"步骤 1｜完成验证\", \"blocks\": [\"按来源完成检索并记录结果。\", \"完成验证：结果可复现。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:step:1:instruction\", \"component\": \"key_point\", \"text\": \"按来源完成检索并记录结果。\", \"source_json_path\": \"practice.steps.step-1.instruction_text\", \"evidence_json_path\": \"practice.steps.step-1.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:step:1:verification\", \"component\": \"callout\", \"label\": \"完成验证\", \"text\": \"结果可复现。\", \"presentation_role\": \"practice_verification\", \"source_json_path\": \"practice.steps.step-1.verification\", \"evidence_json_path\": \"practice.steps.step-1.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_31242745e508e19b\"]}]}], \"steps\": [], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:verify\", \"kind\": \"practice\", \"title\": \"验证阶段\", \"blocks\": [\"结果可复现\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:verify:goal\", \"component\": \"key_point\", \"label\": \"验证目标\", \"presentation_role\": \"practice_phase_completion\", \"text\": \"确认\", \"source_json_path\": \"verification.goal\", \"evidence_json_path\": \"verification.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:verify:items\", \"component\": \"steps\", \"text\": \"最终检查项\", \"presentation_role\": \"practice_phase_items\", \"steps\": [\"结果可复现\"], \"source_json_path\": \"verification.checklist\", \"evidence_json_path\": \"verification.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_verify_13cc825832c5d9b2\"]}]}], \"steps\": [\"结果可复现\"], \"options\": []}, {\"scene_id\": \"scene:practice:res-cw-baseline:phase:reflect\", \"kind\": \"practice\", \"title\": \"复盘与小结\", \"blocks\": [\"记录验证链路。\"], \"component_blocks\": [{\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:reflect:goal\", \"component\": \"key_point\", \"label\": \"复盘目标\", \"presentation_role\": \"practice_reflection_goal\", \"text\": \"复盘\", \"source_json_path\": \"reflection.goal\", \"evidence_json_path\": \"reflection.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"]}]}, {\"schema_version\": \"1.0\", \"block_id\": \"scene:practice:res-cw-baseline:phase:reflect:summary\", \"component\": \"callout\", \"label\": \"复盘小结\", \"presentation_role\": \"practice_reflection_summary\", \"text\": \"记录验证链路。\", \"source_json_path\": \"reflection.summary\", \"evidence_json_path\": \"reflection.evidence_ids\", \"source_refs\": [{\"source_resource_id\": \"res-cw-baseline\", \"source_block_ids\": [\"practice_reflect_77b3f7d33965cd86\"]}]}], \"steps\": [], \"options\": []}]}",
+          "example": false,
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+        }
+      ],
+      "mode": "function_calling",
+      "output_schema": "<class app.agents.resource_workflows.interactive_courseware.quality_reviewer_agent.CoursewareReviewDecisionV2Draft>",
+      "temperature": 0.0,
+      "timeout_seconds": 30.0
+    }
+  ]
+}

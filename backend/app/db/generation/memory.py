@@ -1,16 +1,29 @@
 """异步生成任务仓储的内存实现。"""
 from __future__ import annotations
 
+from functools import wraps
 from datetime import datetime, timezone
+from threading import RLock
 from typing import Any, Optional
 
 from app.db.generation.base import BaseGenerationJobRepository
 from app.models.learning_documents.schemas import GenerationJobStatusResponse
 
 
+def _locked(method):
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return guarded
+
+
 class MemoryGenerationJobRepository(BaseGenerationJobRepository):
     def __init__(self):
         self._store: dict[str, dict[str, Any]] = {}
+        self._lock = RLock()
+        self._dispatch_metadata = {}
 
     @staticmethod
     def _utcnow() -> datetime:
@@ -38,6 +51,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         )
         return GenerationJobStatusResponse(**record, focus_snapshot=snapshot)
 
+    @_locked
     def create(
         self,
         run_id: str,
@@ -46,7 +60,10 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         knowledge_base_id: Optional[str],
         request_payload: dict[str, Any],
         batch_id: str | None = None,
+        *, submission_hash: str | None = None, dispatch_snapshot: dict | None = None,
     ) -> None:
+        self._dispatch_metadata[run_id] = {"submission_hash": submission_hash, "dispatch_mode": "legacy",
+                                         "dispatch_snapshot": dispatch_snapshot}
         self._store[run_id] = {
             "run_id": run_id,
             "batch_id": batch_id or run_id,
@@ -63,10 +80,66 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
             "request_payload": request_payload,
         }
 
+    @_locked
+    def get_dispatch(self, run_id):
+        return dict(self._dispatch_metadata.get(run_id, {}))
+
+    @_locked
+    def create_retry(self, previous_run_id, *, run_id, learner_id, topic, knowledge_base_id,
+                     request_payload, batch_id, dispatch_snapshot=None, submission_hash=None):
+        previous = self._store[previous_run_id]
+        if previous.get("superseded_by_run_id"):
+            return previous["superseded_by_run_id"]
+        self.create(run_id, learner_id, topic, knowledge_base_id, request_payload,
+                    batch_id, submission_hash=submission_hash, dispatch_snapshot=dispatch_snapshot)
+        previous["superseded_by_run_id"] = run_id
+        return run_id
+
+    @_locked
+    def create_failed(
+        self,
+        run_id: str,
+        learner_id: str,
+        topic: str,
+        knowledge_base_id: Optional[str],
+        request_payload: dict[str, Any],
+        error_message: str,
+        batch_id: str | None = None,
+    ) -> Optional[GenerationJobStatusResponse]:
+        now = self._utcnow()
+        record = {
+            "run_id": run_id,
+            "batch_id": batch_id or run_id,
+            "learner_id": learner_id,
+            "topic": topic,
+            "knowledge_base_id": knowledge_base_id,
+            "job_status": "failed",
+            "resource_ids": [],
+            "error_message": error_message,
+            "superseded_by_run_id": None,
+            "created_at": now,
+            "started_at": None,
+            "finished_at": now,
+            "request_payload": request_payload,
+        }
+        self._store[run_id] = record
+        return self._schema(record)
+
+    @_locked
     def get(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
         record = self._store.get(run_id)
         return self._schema(record) if record else None
 
+    @_locked
+    def try_start_background(self, run_id: str) -> bool:
+        """Duplicate in-process submissions share one execution, without durability."""
+        record = self._store.get(run_id)
+        if record is None or record["job_status"] != "queued":
+            return False
+        self.mark_running(run_id)
+        return True
+
+    @_locked
     def mark_running(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
         record = self._store.get(run_id)
         if record is None:
@@ -75,6 +148,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         record["started_at"] = self._utcnow()
         return GenerationJobStatusResponse(**record)
 
+    @_locked
     def mark_completed(self, run_id: str, resource_ids: list[str]) -> Optional[GenerationJobStatusResponse]:
         record = self._store.get(run_id)
         if record is None:
@@ -85,6 +159,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         record["error_message"] = None
         return GenerationJobStatusResponse(**record)
 
+    @_locked
     def mark_failed(self, run_id: str, error_message: str) -> Optional[GenerationJobStatusResponse]:
         record = self._store.get(run_id)
         if record is None:
@@ -94,6 +169,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         record["finished_at"] = self._utcnow()
         return GenerationJobStatusResponse(**record)
 
+    @_locked
     def mark_queued(self, run_id: str) -> Optional[GenerationJobStatusResponse]:
         record = self._store.get(run_id)
         if record is None:
@@ -104,6 +180,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         record["finished_at"] = None
         return GenerationJobStatusResponse(**record)
 
+    @_locked
     def mark_superseded(
         self,
         run_id: str,
@@ -115,6 +192,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
         record["superseded_by_run_id"] = replacement_run_id
         return GenerationJobStatusResponse(**record)
 
+    @_locked
     def fail_incomplete_before(self, before: datetime, error_message: str) -> list[str]:
         cutoff = self._as_utc(before)
         affected = []
@@ -131,6 +209,7 @@ class MemoryGenerationJobRepository(BaseGenerationJobRepository):
                 affected.append(run_id)
         return affected
 
+    @_locked
     def list_by_learner(self, learner_id: str) -> list[GenerationJobStatusResponse]:
         records = [
             self._schema(record)

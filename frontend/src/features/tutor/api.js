@@ -1,4 +1,4 @@
-import { api } from '../../api/client'
+import { api } from '../../api/client.js'
 
 export const tutorApi = {
   createSession: (data) => api.post('/tutor/sessions', data),

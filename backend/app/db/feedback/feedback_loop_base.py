@@ -40,6 +40,12 @@ class BaseFeedbackLoopRepository(ABC):
     ) -> FeedbackLoopResult | None:
         pass
 
+    def get_attempt(self, learner_id: str, attempt_id: str) -> LearningAttempt | None:
+        return next((item for item in self.list_attempts(learner_id, None) if item.attempt_id == attempt_id), None)
+
+    def get_result(self, learner_id: str, attempt_id: str) -> FeedbackLoopResult | None:
+        return next((item for item in self.list_results(learner_id, None) if item.attempt.attempt_id == attempt_id), None)
+
     @abstractmethod
     def apply_feedback(
         self,
@@ -72,7 +78,7 @@ class BaseFeedbackLoopRepository(ABC):
         pass
 
     @abstractmethod
-    def list_attempts(self, learner_id: str, limit: int = 20) -> list[LearningAttempt]:
+    def list_attempts(self, learner_id: str, limit: int | None = 20) -> list[LearningAttempt]:
         pass
 
     @abstractmethod

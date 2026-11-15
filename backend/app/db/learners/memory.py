@@ -1,30 +1,51 @@
+from functools import wraps
+from threading import RLock
 from typing import Dict, Optional
 
 from app.db.learners.base import BaseLearnerRepository
 from app.models.learning_documents.schemas import LearnerProfile
 
 
+def _locked(method):
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return guarded
+
+
 class MemoryLearnerRepository(BaseLearnerRepository):
     """内存实现的学习者画像仓库，用于开发与演示阶段"""
 
-    def __init__(self):
+    def __init__(self, round_repository=None):
+        self._round_repository = round_repository
         self._store: Dict[str, LearnerProfile] = {}
+        self._lock = RLock()
 
+    @_locked
     def get(self, learner_id: str) -> Optional[LearnerProfile]:
         return self._store.get(learner_id)
 
+    @_locked
     def save(self, profile: LearnerProfile) -> None:
         self._store[profile.learner_id] = profile
 
+    @_locked
     def delete(self, learner_id: str) -> bool:
         if learner_id in self._store:
+            if self._round_repository is not None:
+                with self._round_repository.transaction() as rounds:
+                    rounds.delete_learner(learner_id)
             del self._store[learner_id]
             return True
         return False
 
+    @_locked
     def list_all(self) -> Dict[str, LearnerProfile]:
         return self._store.copy()
 
+    @_locked
     def update_partial(self, learner_id: str, updates: dict) -> Optional[LearnerProfile]:
         profile = self.get(learner_id)
         if profile is None:
@@ -33,6 +54,7 @@ class MemoryLearnerRepository(BaseLearnerRepository):
         self.save(updated)
         return updated
 
+    @_locked
     def list_with_pagination(
         self,
         page: int,

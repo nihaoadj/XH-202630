@@ -30,6 +30,7 @@ from app.api.dependencies import get_current_user
 from app.config import get_settings
 from app.containers import init_container
 from app.core.security.errors import ApplicationError, ErrorCode
+from app.core.security.cors import cors_options
 from app.core.health import build_health_report
 from app.db.shared.database import init_database
 
@@ -81,30 +82,14 @@ async def lifespan(app: FastAPI):
                     interrupted,
                 )
             if settings.db_type == "sqlite":
-                stale_job_ids = (
-                    container.generation_job_repository().fail_incomplete_before(
-                        # A development reload starts a new web process while a
-                        # request's persisted workflow may still own a valid
-                        # lease.  Do not turn every in-flight job into a
-                        # terminal failure merely because this process started.
-                        # The audit repository above owns the authoritative
-                        # interruption decision once the lease actually expires.
-                        now - timedelta(seconds=settings.workflow_run_lease_seconds),
-                        ErrorCode.GENERATION_JOB_INTERRUPTED.value,
-                    )
-                )
-                reconciled_followups = (
-                    container.feedback_loop_repository().reconcile_incomplete_followups(
-                        stale_child_run_ids=stale_job_ids,
-                        error_code=ErrorCode.GENERATION_JOB_INTERRUPTED.value,
-                    )
-                )
-                if stale_job_ids or reconciled_followups:
-                    logger.warning(
-                        "Reconciled restart state stale_generation_jobs=%s feedback_followups=%s",
-                        len(stale_job_ids),
-                        reconciled_followups,
-                    )
+                from app.services.generation.reconciliation import GenerationReconciler
+                result = GenerationReconciler(container.generation_job_repository(),
+                    container.feedback_loop_repository(), settings.generation_queue_timeout_seconds,
+                    curriculum=container.curriculum_repository(),
+                    supplement_repository=container.supplement_repository()).run_once()
+                if result["failed_run_ids"] or result["feedback"]:
+                    logger.warning("Reconciled generation jobs failed=%s followups=%s",
+                                   len(result["failed_run_ids"]), result["feedback"])
             logger.info("Database tables initialized.")
         except Exception:
             logger.error(
@@ -138,7 +123,21 @@ async def lifespan(app: FastAPI):
     # Courseware execution is deliberately owned by the standalone
     # ``backend/scripts/courseware_worker.py`` process. The Web process only
     # serves APIs/SSE and must not run long tasks in its lifespan.
-    yield
+    # Bypass LLM-call accounting (T41): start the optional writer child at an
+    # explicit lifecycle point; failures only disable persistence.
+    from app.services.runs.llm_accounting_runtime import (
+        start_llm_accounting_runtime,
+        stop_llm_accounting_runtime,
+    )
+
+    try:
+        start_llm_accounting_runtime()
+    except Exception:
+        logger.warning("llm-accounting runtime startup failed type=runtime_start")
+    try:
+        yield
+    finally:
+        stop_llm_accounting_runtime()
 
 
 app = FastAPI(
@@ -150,10 +149,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **cors_options(get_settings()),
 )
 
 

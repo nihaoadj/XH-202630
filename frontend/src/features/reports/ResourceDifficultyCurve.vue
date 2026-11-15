@@ -1,15 +1,13 @@
 <template>
   <article class="visual-card" aria-labelledby="difficulty-heading">
     <div class="visual-heading">
-      <div><span>RESOURCE DIFFICULTY FIT</span><h3 id="difficulty-heading">资源难度匹配曲线</h3></div>
-      <small>{{ data?.strategy_version || '未配置策略' }}</small>
+      <div><span>RESOURCE FIT &amp; REVIEW</span><h3 id="difficulty-heading">资源适配与审核</h3></div>
     </div>
     <el-empty v-if="!points.length" description="暂无已发布且可关联能力节点的资源" :image-size="56" />
     <template v-else>
-      <v-chart class="chart" :option="option" autoresize aria-label="学习者准备度、资源难度与资源可信度对比曲线" />
-      <p class="summary">已测匹配 {{ summary.measured_point_count || 0 }} / {{ summary.total_point_count || points.length }} 个点 · 共 {{ summary.total_resource_count || points.length }} 个资源；历史批次按平均值汇总。</p>
-      <p v-if="hasCredibility" class="summary credibility-summary">平均可信度 {{ formatScore(summary.average_credibility_score) }} · 已量化 {{ summary.credibility_scored_count || 0 }} · Claim 通过 {{ summary.claim_review_passed_count || 0 }} · 受 80 分上限约束 {{ summary.claim_ceiling_applied_count || 0 }}</p>
-      <p v-else class="summary credibility-summary">暂无可量化可信度证据。</p>
+      <v-chart :init-options="initOptions" class="chart" :option="option" autoresize aria-label="难度匹配与审核参考分" />
+      <p class="summary">批次均分与单份资源审核分分段绘制。每批的难度匹配度按测评成绩 80%、难度感受 20% 计算。未填写感受时使用测评成绩。</p>
+      <p class="summary credibility-summary">普通审核参考 {{ summary.ordinary_review_count || 0 }} 份 · Claim 核验换算 {{ summary.claim_review_scored_count || 0 }} 份<span v-if="summary.claim_review_scored_count"> · Claim 平均 {{ formatScore(summary.average_claim_review_score) }}</span></p>
     </template>
   </article>
 </template>
@@ -17,84 +15,129 @@
 <script setup>
 import { computed } from 'vue'
 import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
+import { SVGRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
+import VChart from './ReportEChart.vue'
 
-use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
+use([SVGRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
+const initOptions = Object.freeze({ renderer: 'svg' })
 const props = defineProps({ data: { type: Object, default: () => ({}) } })
 const points = computed(() => props.data?.points || [])
 const summary = computed(() => props.data?.summary || {})
-const statusLabel = Object.freeze({ too_easy: '偏简单', matched: '适配', challenging: '适度挑战', too_hard: '难度过高', not_measured: '未测量' })
-const credibilityLabels = Object.freeze({ attention: '需关注', high: '高可信', good: '较高可信', moderate: '中等可信', low: '低可信', insufficient_evidence: '证据不足' })
-const hasCredibility = computed(() => points.value.some((point) => typeof point.credibility_score === 'number'))
+const unavailableLabels = {
+  review_failed: '普通审核未通过',
+  review_unverified: '普通审核通过记录未确认',
+  claim_unmeasured: 'Claim 核验未完成或缺少完整证据',
+  claim_not_applicable: '无可核验事实',
+  claim_configuration_unknown: '历史资源缺少 Claim 开关记录',
+}
 const isBatchAverage = (point) => point?.point_type === 'batch_average'
+const isBatchFit = (point) => point?.point_type === 'batch_fit'
+const isBatchPoint = point => isBatchAverage(point) || isBatchFit(point)
 const pointLabel = (point, index) => {
+  if (isBatchFit(point)) return '最新批次'
   if (isBatchAverage(point)) {
     const historyOrdinal = points.value.slice(0, index + 1).filter(isBatchAverage).length
     return `历史批次${String(historyOrdinal).padStart(2, '0')}`
   }
-  const name = point.resource_name || point.resource_type || '资源'
-  const skill = point.skill_name && point.skill_name !== '未关联能力节点' ? point.skill_name : ''
-  return skill ? `${name} · ${skill}` : name
+  const name = point.resource_name?.trim()
+  const skill = point.skill_name?.trim()
+  const labels = [name, skill === '未关联能力节点' ? '' : skill].filter(Boolean)
+  return [...new Set(labels)].join(' · ') || point.resource_type || '资源'
 }
-// Keep the server's complete audit score intact, but avoid presenting absolute
-// certainty in the learner-facing report.
-const displayCredibilityScore = (value) => typeof value === 'number' ? Math.min(99, Math.round(value)) : null
-const formatScore = (value) => {
-  const score = displayCredibilityScore(value)
-  return score == null ? '—' : `${score} / 100`
+const formatScore = value => typeof value === 'number' ? `${value} / 100` : '—'
+const scale = value => typeof value === 'number' ? Math.round(value * 100) : null
+
+// Share a legend entry per review source while keeping the two levels of detail separate.
+function reviewSeries(name, field, color) {
+  return [true, false].map(batch => ({
+    id: `${field}-${batch ? 'batch' : 'resource'}`,
+    name,
+    yAxisIndex: 1,
+    type: 'line',
+    data: points.value.map(point => isBatchPoint(point) === batch ? point[field] ?? null : null),
+    symbolSize: 7,
+    itemStyle: { color },
+    lineStyle: { color },
+  }))
 }
-const feedbackScoreText = (value) => value == null ? '—' : `${Math.round(value * 100)}%`
+
+function crossSourceSeries(reviewPoints) {
+  const source = point => {
+    const ordinary = typeof point.ordinary_review_score === 'number'
+    const claim = typeof point.claim_review_score === 'number'
+    if (ordinary === claim) return null
+    return ordinary ? 'ordinary_review_score' : 'claim_review_score'
+  }
+  return reviewPoints.flatMap((left, index) => {
+    const right = reviewPoints[index + 1]
+    if (!right || isBatchPoint(left) !== isBatchPoint(right)) return []
+    const leftSource = source(left)
+    const rightSource = source(right)
+    if (!leftSource || !rightSource || leftSource === rightSource) return []
+    const data = Array(reviewPoints.length).fill(null)
+    data[index] = left[leftSource]
+    data[index + 1] = right[rightSource]
+    return [{
+      id: `review-bridge-${index}`, name: '跨来源连线', yAxisIndex: 1, type: 'line',
+      data, symbol: 'none', silent: true,
+      itemStyle: { color: '#637990' },
+      lineStyle: { color: '#637990', type: 'dashed' },
+    }]
+  })
+}
 
 const option = computed(() => {
-  const categories = points.value.map(pointLabel)
-  const readiness = points.value.map((point) => point.learner_readiness_score == null ? null : Math.round(point.learner_readiness_score * 100))
-  const difficulty = points.value.map((point) => point.resource_difficulty_score == null ? null : Math.round(point.resource_difficulty_score * 100))
-  const credibility = points.value.map((point) => displayCredibilityScore(point.credibility_score))
+  const categories = points.value.map((point, index) =>
+    isBatchPoint(point) ? pointLabel(point, index) : point.resource_type || point.resource_name || '资源',
+  )
   return {
     tooltip: {
+      renderMode: 'richText',
       trigger: 'axis',
-      formatter: (items) => {
+      formatter: items => {
         const index = items?.[0]?.dataIndex
         const point = points.value[index]
         if (!point) return ''
-        const readinessText = point.learner_readiness_score == null ? '未测量' : `${Math.round(point.learner_readiness_score * 100)}%`
-        const difficultyText = point.resource_difficulty_score == null ? '未测量' : `${Math.round(point.resource_difficulty_score * 100)}%`
-        const gap = point.difficulty_gap == null ? '—' : `${Math.round(point.difficulty_gap * 100)}%`
-        const breakdown = point.credibility_score_breakdown
-        const credibilityText = formatScore(point.credibility_score) === '—' ? '证据不足' : formatScore(point.credibility_score)
-        if (isBatchAverage(point)) {
-          const label = pointLabel(point, index)
-          const calibration = point.difficulty_source === 'calibrated_history'
-            ? `<br/>反馈均分：${feedbackScoreText(point.feedback_score)}<br/>反馈校准：+${Math.round((point.difficulty_adjustment || 0) * 100)}%`
-            : ''
-          return `<b>${label}</b><br/>包含资源：${point.resource_count || point.resource_ids?.length || 0} 个<br/>学习者准备度均值：${readinessText}<br/>资源难度均值：${difficultyText}<br/>差值均值：${gap}${calibration}<br/>结论：${statusLabel[point.match_status] || point.match_status}<br/>资源可信度均值：${credibilityText}`
+        const lines = [
+          pointLabel(point, index),
+          isBatchPoint(point) ? `批次资源：${point.resource_count} 份` : `资源类型：${point.resource_type || '未分类'}`,
+        ]
+        if (isBatchPoint(point)) {
+          lines.push(`批次难度匹配度：${formatScore(point.difficulty_fit_score)}`)
+          if (typeof point.feedback_score === 'number') lines.push(`正式测评均分：${scale(point.feedback_score)}%`)
+          else lines.push('暂无本批次的正式测评成绩')
+          if (typeof point.experience_score === 'number') {
+            lines.push(`体验分：${formatScore(point.experience_score)} · ${point.subjective_feedback_count} 次`)
+          }
         }
-        const calibration = point.difficulty_source === 'calibrated_history'
-          ? `<br/>默认难度：${point.default_resource_difficulty_score == null ? '—' : `${Math.round(point.default_resource_difficulty_score * 100)}%`}<br/>反馈均分：${feedbackScoreText(point.feedback_score)}<br/>反馈校准：+${Math.round((point.difficulty_adjustment || 0) * 100)}%`
-          : ''
-        const credibilityLines = breakdown
-          ? `<br/>资源可信度：${credibilityText}<br/>可信等级：${credibilityLabels[point.credibility_level] || point.credibility_level || '—'}<br/>普通审核：${breakdown.publication_review_score} / 40<br/>来源验证：${breakdown.source_traceability_score} / 50<br/>Claim 审核：${breakdown.claim_review_score} / 10${breakdown.claim_review_passed ? '' : '<br/>Claim 未完全通过：最高 80 分'}<br/>原始审核等级：${point.credibility_grade || '—'}`
-          : `<br/>资源可信度：${credibilityText}`
-        return `<b>${point.skill_name}</b><br/>资源：${point.resource_type}<br/>学习者准备度：${readinessText}<br/>资源难度：${difficultyText}${calibration}<br/>差值：${gap}<br/>结论：${statusLabel[point.match_status] || point.match_status}${credibilityLines}`
+        if (typeof point.ordinary_review_score === 'number') lines.push(`普通审核参考：${formatScore(point.ordinary_review_score)}`)
+        if (typeof point.claim_review_score === 'number') lines.push(`Claim 核验换算：${formatScore(point.claim_review_score)}`)
+        if (!isBatchFit(point) && point.ordinary_review_score == null && point.claim_review_score == null) {
+          lines.push(`审核参考：${unavailableLabels[point.credibility_unavailable_reason] || '暂无可用审核分'}`)
+        }
+        return lines.join('\n')
       },
     },
     legend: { bottom: 4, type: 'scroll', padding: [0, 8], itemGap: 12, textStyle: { color: '#637990', fontSize: 11 } },
-    grid: { top: 30, right: 18, bottom: categories.length > 4 ? 88 : 68, left: 42, containLabel: true },
-    xAxis: { type: 'category', data: categories, axisLabel: { interval: 0, rotate: categories.length > 3 ? 28 : 0, margin: 13, color: '#61758c', fontSize: 10, overflow: 'truncate', width: 86, formatter: (value) => value.length > 14 ? `${value.slice(0, 13)}…` : value }, axisTick: { show: false }, axisLine: { lineStyle: { color: '#d8e4ee' } } },
-    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#61758c', fontSize: 10 }, splitLine: { lineStyle: { color: '#e8eef4' } } },
+    grid: { top: 38, right: 10, bottom: categories.length > 5 ? 58 : 40, left: 12, containLabel: true },
+    xAxis: { type: 'category', data: categories, axisLabel: { interval: 'auto', rotate: categories.length > 5 ? 24 : 0, margin: 10, color: '#61758c', fontSize: 11, overflow: 'truncate', width: 86, hideOverlap: true }, axisTick: { show: false } },
+    yAxis: [
+      { type: 'value', name: '难度匹配度', min: 0, max: 100 },
+      { type: 'value', name: '审核参考分', min: 0, max: 100, splitLine: { show: false } },
+    ],
     series: [
-      { name: '学习者准备度', type: 'line', data: readiness, connectNulls: false, symbolSize: 7, lineStyle: { color: '#2f78dc', width: 3 }, itemStyle: { color: '#2f78dc' } },
-      { name: '资源难度', type: 'line', data: difficulty, connectNulls: false, symbolSize: 7, lineStyle: { color: '#e58b39', width: 3 }, itemStyle: { color: '#e58b39' } },
-      { name: '资源可信度', type: 'line', data: credibility, connectNulls: false, symbolSize: 7, lineStyle: { color: '#7a5cc7', width: 3 }, itemStyle: { color: '#7a5cc7' } },
+      { name: '难度匹配度', type: 'line', data: points.value.map(point => point.difficulty_fit_score ?? null), symbolSize: 7, itemStyle: { color: '#2f78dc' } },
+      ...reviewSeries('普通审核参考', 'ordinary_review_score', '#99703f'),
+      ...reviewSeries('Claim 核验换算', 'claim_review_score', '#7a5cc7'),
+      ...crossSourceSeries(points.value),
     ],
   }
 })
 </script>
 
 <style scoped>
-.visual-card { min-width:0; padding:20px; border:1px solid #dbe6f2; border-radius:16px; background:#fff; box-shadow:0 10px 24px rgba(24,60,96,.05); }.visual-heading { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }.visual-heading span { display:block; color:#2058a7; font-size:11px; font-weight:800; letter-spacing:.09em; }.visual-heading h3 { margin:7px 0 0; color:#193754; font-size:20px; }.visual-heading small { max-width:140px; overflow:hidden; padding:6px 8px; border-radius:999px; background:#edf8f4; color:#237d64; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }.chart { height:330px; margin-top:10px; }.summary { margin:10px 0 0; color:#73869a; font-size:12px; line-height:1.55; }.credibility-summary { color:#6d559f; } @media (max-width:560px) { .visual-heading { flex-direction:column; }.chart { height:320px; } }
+.visual-card { min-width:0; padding:20px; border:1px solid #dbe6f2; border-radius:16px; background:#fff; box-shadow:0 10px 24px rgba(24,60,96,.05); }.visual-heading { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }.visual-heading span { display:block; color:#2058a7; font-size:11px; font-weight:800; letter-spacing:.09em; }.visual-heading h3 { margin:7px 0 0; color:#193754; font-size:20px; }.chart { height:360px; margin-top:20px; }.summary { margin:10px 0 0; color:#73869a; font-size:12px; line-height:1.55; }.credibility-summary { color:#6d559f; } @media (max-width:560px) { .visual-heading { flex-direction:column; }.chart { height:330px; margin-top:16px; } }
 </style>

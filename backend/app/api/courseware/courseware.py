@@ -2,8 +2,9 @@
 
 import asyncio
 import json
+from enum import Enum
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
 from app.api.dependencies import ensure_profile_access
@@ -11,10 +12,28 @@ from app.core.courseware.security import security_policy_for_artifact
 from app.models.courseware import (
     CoursewareBatchCreateRequest, CoursewareBatchJobResponse, CoursewareJobCreateRequest, CoursewareJobDetail, CoursewareJobListResponse, CoursewareJobResponse, CoursewareResourceDetail,
 )
-from app.models.courseware.events import CoursewareLearningEventBatch
+from app.models.courseware.events import CoursewareLearningEventAck, CoursewareLearningEventBatch
+from app.models.shared.llm_accounting import TaskLLMAccountingResponseV1
+from app.services.runs.llm_accounting import LLMAccountingQueryService
 
 
 router = APIRouter()
+
+_COURSEWARE_TERMINAL_STATUSES = {
+    "approved_pending_publish", "published", "published_with_warnings",
+    "rejected_admission", "failed", "quarantined", "release_blocked",
+    "cancelled", "timed_out",
+}
+
+
+class CoursewareAccountingStage(str, Enum):
+    """Controlled stage filter for the courseware accounting endpoint."""
+
+    planning = "planning"
+    composing = "composing"
+    quality_review = "quality_review"
+    content_review = "content_review"
+    scene_retry = "scene_retry"
 
 
 def _service(request: Request):
@@ -71,6 +90,39 @@ def get_courseware_job(run_id: str, request: Request):
     return _authorized_job(run_id, request)
 
 
+@router.get("/courseware/jobs/{run_id}/llm-accounting", response_model=TaskLLMAccountingResponseV1)
+def get_courseware_llm_accounting(
+    run_id: str,
+    request: Request,
+    include_calls: bool = Query(default=False),
+    stage: CoursewareAccountingStage | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """Read-only full-chain LLM-call accounting for one courseware job.
+
+    Authorization reuses the existing ``_authorized_job`` visibility check so
+    missing or invisible jobs keep the original 404 semantics.
+    """
+
+    job = _authorized_job(run_id, request)
+    accounting_service: LLMAccountingQueryService = (
+        request.app.container.llm_accounting_query_service()
+    )
+    # A job rejected at admission provably never entered a model stage.
+    expected_llm_stages: set[str] | None = set() if job.status == "rejected_admission" else None
+    return accounting_service.query_task(
+        domain="courseware",
+        run_id=run_id,
+        include_calls=include_calls,
+        stage=stage.value if stage is not None else None,
+        cursor=cursor,
+        limit=limit,
+        task_terminal=job.status in _COURSEWARE_TERMINAL_STATUSES,
+        expected_llm_stages=expected_llm_stages,
+    )
+
+
 @router.get("/courseware/jobs/{run_id}/detail", response_model=CoursewareJobDetail)
 def get_courseware_job_detail(run_id: str, request: Request):
     _authorized_job(run_id, request)
@@ -92,12 +144,11 @@ def stream_courseware_events(run_id: str, request: Request, after_sequence: int 
         while True:
             if await request.is_disconnected():
                 return
-            events = _service(request).events(run_id, sequence)
+            events, job = await asyncio.to_thread(_progress_snapshot, request, run_id, sequence)
             for event in events:
                 sequence = event["event_sequence"]
                 payload = json.dumps(event, ensure_ascii=False, default=str, separators=(",", ":"))
                 yield f"id: {sequence}\nevent: courseware_progress\ndata: {payload}\n\n"
-            job = _service(request).get_job(run_id)
             if job is None or (job.status in terminal and not events):
                 return
             idle_ticks += 1
@@ -106,6 +157,12 @@ def stream_courseware_events(run_id: str, request: Request, after_sequence: int 
             await asyncio.sleep(0.25)
 
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
+
+
+def _progress_snapshot(request, run_id, sequence):
+    """Read progress and job state without blocking the SSE event loop."""
+    service = _service(request)
+    return service.events(run_id, sequence), service.get_job(run_id)
 
 
 @router.post("/courseware/jobs/{run_id}/retry", response_model=CoursewareJobResponse)
@@ -138,25 +195,10 @@ def retry_courseware_scene(run_id: str, scene_id: str, request: Request):
 def get_courseware_scene_review(run_id: str, scene_id: str, request: Request):
     """Return review-safe scene diagnostics without exposing prompts or raw model output."""
     _authorized_job(run_id, request)
-    detail = _service(request).get_job_detail(run_id)
-    if detail is None or all(scene.scene_id != scene_id for scene in detail.scenes):
+    review = _service(request).get_scene_review(run_id, scene_id)
+    if review is None:
         raise HTTPException(status_code=404, detail="课件场景不存在")
-    service = _service(request)
-    spec = service.repo.get_spec_by_run(run_id)
-    stored = service.repo.get_scene(scene_id)
-    if spec is None or stored is None:
-        raise HTTPException(status_code=404, detail="课件场景不存在")
-    return {
-        "scene_id": scene_id,
-        "scene": stored["scene_json"],
-        "status": stored["status"],
-        "attempt": stored["attempt"],
-        "input_snapshot_hash": stored.get("input_snapshot_hash"),
-        "agent_version": stored.get("agent_version"),
-        "prompt_version": stored.get("prompt_version"),
-        "reviews": [review for review in detail.reviews if review.get("scene_id") in {None, scene_id}],
-        "revisions": service.repo.list_scene_revisions(scene_id),
-    }
+    return review
 
 
 @router.post("/courseware/jobs/{run_id}/publish", response_model=CoursewareJobResponse)
@@ -172,7 +214,7 @@ def get_courseware_resource(resource_id: str, request: Request):
     return _authorized_resource(resource_id, request)
 
 
-@router.post("/courseware/items/{resource_id}/learning-events")
+@router.post("/courseware/items/{resource_id}/learning-events", response_model=CoursewareLearningEventAck)
 def ingest_courseware_learning_events(resource_id: str, payload: CoursewareLearningEventBatch, request: Request):
     resource = _authorized_resource(resource_id, request)
     current_release = resource.released_release_id

@@ -123,8 +123,11 @@ def build_provenance_graph(document: dict[str, Any], snapshots: list[dict[str, A
             visible += 1
             field_path = f"scenes[{scene_index}].component_blocks[{block_index}].component"
             node_id = f"property:{field_path}"
-            nodes.append(ProvenanceNode(node_id=node_id, kind="component_property", snapshot_hash=scene_hash, field_path=field_path,
-                                        metadata={"component": component.get("component")}))
+            property_node = ProvenanceNode(
+                node_id=node_id, kind="component_property", snapshot_hash=scene_hash,
+                field_path=field_path, metadata={"component": component.get("component")},
+            )
+            nodes.append(property_node)
             refs = component.get("source_refs") or []
             block_ids: list[str] = []
             for ref in refs:
@@ -142,7 +145,7 @@ def build_provenance_graph(document: dict[str, Any], snapshots: list[dict[str, A
                     ))
                     property_covered = True
             if not block_ids:
-                node.metadata["source_mapping_missing"] = True
+                property_node.metadata["source_mapping_missing"] = True
             if property_covered:
                 covered += 1
                 # Component properties must be downstream of a generated field,

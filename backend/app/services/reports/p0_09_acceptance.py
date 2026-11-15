@@ -140,13 +140,10 @@ def evaluate_official_metrics(payload: dict[str, Any]) -> list[MetricGate]:
         if item["verdict"] in {"contradicted", "not_in_evidence"}
     ]
     hallucination = len(unsupported) / len(factual) if factual else None
-    target_points = set(payload["knowledge"]["knowledge_point_ids"])
-    supported_points = {
-        item["knowledge_point_id"]
-        for item in factual
-        if item["verdict"] == "supported" and item.get("knowledge_point_id")
-    }
-    coverage = len(target_points & supported_points) / len(target_points) if target_points else None
+    # Coverage is no longer derivable from Claim knowledge-point relations: the
+    # v2 definition counts ordinary-review per-target results, which this P0-09
+    # fixture does not contain.  Keep the gate with an explicit unmeasured
+    # state instead of publishing a second, retired formula.
     learners = payload["learners"]
     difficulty = (
         sum(item["expected_difficulty"] == item["predicted_difficulty"] for item in learners)
@@ -185,11 +182,11 @@ def evaluate_official_metrics(payload: dict[str, Any]) -> list[MetricGate]:
             metric_id="M-COVERAGE",
             official_definition="核心知识点覆盖率",
             official_threshold=">= 90%",
-            formula="target knowledge_point_ids covered by supported factual claims on final published leaves",
-            sample_count=sample_count,
-            actual_value=coverage,
-            status=("PASS" if measurable and coverage is not None and coverage >= 0.90 else "FAIL" if measurable else "NOT_MEASURABLE"),
-            evidence=suffix,
+            formula="covered frozen (case_id, target_id) units from ordinary review / planned units",
+            sample_count=0,
+            actual_value=None,
+            status="NOT_MEASURABLE",
+            evidence="P0-09 fixture has no ordinary-review per-target ledger; coverage requires the v2 ordinary-coverage fixture",
         ),
         MetricGate(
             metric_id="M-FEEDBACK-UPLIFT",

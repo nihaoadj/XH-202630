@@ -17,7 +17,7 @@
         </template>
         <el-descriptions :column="2" border>
           <el-descriptions-item label="用户">{{ currentDisplayName }}</el-descriptions-item>
-          <el-descriptions-item label="当前层级">{{ profile.skill_level }}</el-descriptions-item>
+          <el-descriptions-item label="初始诊断评级">{{ profile.skill_level }}</el-descriptions-item>
           <el-descriptions-item label="当前方向">{{ store.currentLearningDirectionName || store.currentLearningDirectionId }}</el-descriptions-item>
           <el-descriptions-item label="学习目标">{{ profile.learning_goal }}</el-descriptions-item>
         </el-descriptions>
@@ -95,7 +95,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { diagnosisApi } from '../../api'
+import { diagnosisApi } from './api.js'
 import { useAppStore } from '../../stores/app'
 
 const store = useAppStore()

@@ -1,0 +1,7 @@
+# Local real-test records; specifications/templates remain versioned.
+/E[0-9]*/
+/index.jsonl
+# Frozen datasets and legacy comparison archives.
+/datasets/
+/experiments/
+/registry.jsonl

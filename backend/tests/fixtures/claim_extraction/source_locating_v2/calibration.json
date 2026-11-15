@@ -1,0 +1,2402 @@
+[
+  {
+    "id": "calibration-exact-000",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 56,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-001",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-002",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 52,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-003",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-004",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 53,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 53,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-005",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 52,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-006",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 56,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-007",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-008",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 52,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-009",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-010",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 53,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 53,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-011",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 52,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-012",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 56,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-013",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-014",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 52,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-015",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-016",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 53,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 53,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-017",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 52,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-018",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 56,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-exact-019",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "exact",
+    "error_class": "exact",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-000",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 62,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "操作说明：\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 62,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-001",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "观察  记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-002",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 58,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "操作说明：\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 58,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-003",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "观察  记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-004",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 59,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "操作说明：\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 59,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-005",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 59,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "观察  记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 59,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-006",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 62,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "操作说明：\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 62,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-007",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "观察  记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-008",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 58,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "操作说明：\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 58,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-009",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "观察  记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-010",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 59,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "操作说明：\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 59,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-011",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 59,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "观察  记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 59,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-012",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 62,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "操作说明：\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 62,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-013",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "观察  记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-014",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 58,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "操作说明：\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 58,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-015",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "观察  记录：排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-016",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 59,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "操作说明：\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 59,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-017",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 59,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "观察  记录：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 59,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-018",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "format",
+    "error_class": "format",
+    "text": "操作说明：\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 62,
+    "unit_kind": "paragraph",
+    "ref": "操作说明：\r\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "操作说明：\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 62,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-format-019",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "format",
+    "error_class": "format",
+    "text": "观察  记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "观察 记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "观察  记录：陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-000",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 56,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-001",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-002",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "他检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-003",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "排练成员把编号7乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-004",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 53,
+    "unit_kind": "paragraph",
+    "ref": "摄摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 53,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-005",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "他检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-006",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 56,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-007",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-008",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "他检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-009",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "排练成员把编号7乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-010",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 53,
+    "unit_kind": "paragraph",
+    "ref": "摄摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 53,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-011",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "他检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-012",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 56,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-013",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-014",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": "他检查记录后说明：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-015",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "排练成员把编号7乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-016",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 53,
+    "unit_kind": "paragraph",
+    "ref": "摄摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 53,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-017",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "他检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 61,
+    "unit_kind": "paragraph",
+    "ref": "她检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": "他检查记录后说明：织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 61,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-018",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 56,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-edit-019",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "edit",
+    "error_class": "edit",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": true,
+      "start": 0,
+      "end": 54,
+      "code": "accepted"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-000",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号8的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-001",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "龘艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-002",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 105,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-003",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "calibration短句",
+    "unit_start": 0,
+    "unit_end": 13,
+    "unit_kind": "paragraph",
+    "ref": "calibration短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-004",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-005",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-006",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "图图书整理员把借阅卡片放进标有编号号7的抽屉，随后按书名核对归还记录并整理纸质索引，",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-007",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-008",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。\n叙述   开头：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 120,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-009",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "排练成员把不编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-010",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 53,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号8的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-011",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "龘布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-012",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 113,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-013",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "calibration短句",
+    "unit_start": 0,
+    "unit_end": 13,
+    "unit_kind": "paragraph",
+    "ref": "calibration短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-014",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-015",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-016",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "摄摄影学员把编号7的镜头安装到机身身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-017",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-018",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。\n叙述   开头：图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 128,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-019",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶艺学员把湿润的泥坯放在不编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-020",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号8花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-021",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "龘练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-022",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 107,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-023",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "calibration短句",
+    "unit_start": 0,
+    "unit_end": 13,
+    "unit_kind": "paragraph",
+    "ref": "calibration短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-024",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-025",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-026",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "园园艺助手记录编号7花盆的土壤湿度度，接着轻轻拨开表层落叶观察根部状态，再把本次养护",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-027",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-028",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。\n叙述   开头：摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 122,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-029",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "织布学徒把不编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-030",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 56,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号8的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-031",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "龘艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-032",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。\n园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 105,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-033",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "calibration短句",
+    "unit_start": 0,
+    "unit_end": 13,
+    "unit_kind": "paragraph",
+    "ref": "calibration短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-034",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-035",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-036",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "图图书整理员把借阅卡片放进标有编号号7的抽屉，随后按书名核对归还记录并整理纸质索引，",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-037",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-038",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。\n叙述   开头：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 120,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-039",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "排练成员把不编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-040",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 53,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号8的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-041",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "龘布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-042",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。\n图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 113,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-043",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "calibration短句",
+    "unit_start": 0,
+    "unit_end": 13,
+    "unit_kind": "paragraph",
+    "ref": "calibration短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-044",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-045",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-046",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "摄摄影学员把编号7的镜头安装到机身身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-047",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-048",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。\n叙述   开头：图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 128,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-049",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "陶艺学员把湿润的泥坯放在编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "陶艺学员把湿润的泥坯放在不编号7的木板上，接着用海绵擦去边缘水迹并轻轻修整底座，完成后将作品移到通风架上晾干。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-050",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_0",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "园艺助手记录编号8花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护的过程写进纸质观察手册。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-051",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_1",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "龘练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-052",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_2",
+    "text": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。\n摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 107,
+    "unit_kind": "paragraph",
+    "ref": "摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-053",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_3",
+    "text": "calibration短句",
+    "unit_start": 0,
+    "unit_end": 13,
+    "unit_kind": "paragraph",
+    "ref": "calibration短短句",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-054",
+    "source_group": "calibration-source-0",
+    "source_template": "calibration-template-0",
+    "category": "reject",
+    "error_class": "boundary_4",
+    "text": "前段。图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "unit_start": 0,
+    "unit_end": 3,
+    "unit_kind": "paragraph",
+    "ref": "图书整理员把借阅卡片放进标有编号7的抽屉，随后按书名核对归还记录并整理纸质索引，最后把已经检查的材料收进档案袋。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-055",
+    "source_group": "calibration-source-1",
+    "source_template": "calibration-template-1",
+    "category": "reject",
+    "error_class": "boundary_5",
+    "text": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "unit_start": 0,
+    "unit_end": 2001,
+    "unit_kind": "paragraph",
+    "ref": "甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲甲",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-056",
+    "source_group": "calibration-source-2",
+    "source_template": "calibration-template-2",
+    "category": "reject",
+    "error_class": "boundary_6",
+    "text": "园艺助手记录编号7花盆的土壤湿度，接着轻轻拨开表层落叶观察根部状态，再把本次养护",
+    "unit_start": 0,
+    "unit_end": 40,
+    "unit_kind": "paragraph",
+    "ref": "园园艺助手记录编号7花盆的土壤湿度度，接着轻轻拨开表层落叶观察根部状态，再把本次养护",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-057",
+    "source_group": "calibration-source-3",
+    "source_template": "calibration-template-3",
+    "category": "reject",
+    "error_class": "boundary_7",
+    "text": "排练成员把编号7的乐谱摊开放在琴架旁边，接着依照指挥提示练习开头旋律并标注停顿位置，最后整理本次排练的笔记。",
+    "unit_start": 0,
+    "unit_end": 54,
+    "unit_kind": "paragraph",
+    "ref": "丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙丙",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-058",
+    "source_group": "calibration-source-4",
+    "source_template": "calibration-template-4",
+    "category": "reject",
+    "error_class": "boundary_8",
+    "text": "叙述  开头：摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。\n叙述   开头：摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "unit_start": 0,
+    "unit_end": 122,
+    "unit_kind": "paragraph",
+    "ref": "叙述 开头：摄影学员把编号7的镜头安装到机身上，随后检查对焦环位置并拍摄窗边静物，完成后将拍摄的文件复制到课程资料夹。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  },
+  {
+    "id": "calibration-reject-059",
+    "source_group": "calibration-source-5",
+    "source_template": "calibration-template-5",
+    "category": "reject",
+    "error_class": "boundary_9",
+    "text": "织布学徒把编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "unit_start": 0,
+    "unit_end": 52,
+    "unit_kind": "paragraph",
+    "ref": "织布学徒把不编号7的线轴放进木盒，随后沿着织机边缘穿好引线并逐段检查纹理，结束时收起剩余的棉线与练习样布。",
+    "source_text_gold": null,
+    "claim_text": "记录人员按材料中描述的步骤完成操作。",
+    "expect": {
+      "accept": false,
+      "code": "must_reject"
+    },
+    "label_basis": "独立指定原文切片；拒绝用例由位置歧义、冻结边界或未支持编辑构造。"
+  }
+]

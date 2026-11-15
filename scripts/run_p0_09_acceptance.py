@@ -91,7 +91,7 @@ def _offline(
     suite_path: Path | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     sys.path.insert(0, str(BACKEND_DIR))
-    from app.services.p0_09_acceptance import (
+    from app.services.reports.p0_09_acceptance import (
         evaluate_official_metrics,
         load_suite,
         safe_fixture_summary,
@@ -113,6 +113,112 @@ def _offline(
     return scenarios, metrics, safe_fixture_summary(suite)
 
 
+def _frontend_source_checks(project_root: Path = PROJECT_ROOT) -> dict[str, bool]:
+    """Probe current frontend source wiring; this is not full frontend validation."""
+
+    def read_source(relative_path: str) -> str:
+        try:
+            return (project_root / relative_path).read_text(encoding="utf-8")
+        except OSError:
+            return ""
+
+    api_source = read_source("frontend/src/api/index.js")
+    feedback_view = read_source("frontend/src/features/feedback/FeedbackView.vue")
+    feedback_evaluation = read_source("frontend/src/features/feedback/useFeedbackEvaluation.js")
+    report_view = read_source("frontend/src/features/reports/ReportView.vue")
+    report_api = read_source("frontend/src/features/reports/api.js")
+    generation_view = read_source("frontend/src/features/generation/GenerateView.vue")
+    generation_claims = read_source("frontend/src/features/generation/useGenerationClaims.js")
+    resources_view = read_source("frontend/src/features/learning-documents/ResourcesView.vue")
+    source_view = read_source("frontend/src/features/learning-documents/ResourceViewer.vue")
+    source_refs = read_source("frontend/src/features/learning-documents/SourceRefList.vue")
+    resource_library_api = read_source("frontend/src/features/resource-library/api.js")
+    run_events_api = read_source("frontend/src/features/runs/api.js")
+    generation_progress = read_source("frontend/src/features/generation/useGenerationProgress.js")
+    courseware_api = read_source("frontend/src/features/courseware/api.js")
+    courseware_tracking = read_source("frontend/src/features/courseware/useCoursewareTracking.js")
+
+    return {
+        "formal_attempt_api": all(
+            marker in api_source
+            for marker in (
+                "submitRunAttempt:",
+                "submitBatchAttempt:",
+                "'/feedback/attempts/run/submit'",
+                "'/feedback/attempts/batch/submit'",
+            )
+        ),
+        "formal_attempt_used_by_feedback_view": all(
+            marker in feedback_view
+            for marker in (
+                "useFeedbackEvaluation",
+                "feedbackApi,",
+                "submitEvaluation",
+            )
+        ) and all(
+            marker in feedback_evaluation
+            for marker in ("feedbackApi.submitRunAttempt", "feedbackApi.submitBatchAttempt")
+        ),
+        "profile_mastery_path_visible": all(
+            marker in report_view
+            for marker in (
+                "learningReportApi",
+                "learningReportApi.get(learnerId",
+                "report.learning_node_mastery_map",
+                "report.learning_path_graph",
+                "LearningNodeMasteryChart",
+                "LearningPathGraph",
+            )
+        ) and "`/report/${encodeURIComponent(learnerId)}`" in report_api,
+        "claim_evidence_details_used": all(
+            marker in generation_claims
+            for marker in ("runApi.claims(runId)", "payload.claims", "issue")
+        ) and all(
+            marker in api_source
+            for marker in ("claims: (runId)", "`/runs/${runId}/claims`")
+        ) and all(
+            marker in generation_view
+            for marker in (
+                "useGenerationClaims",
+                ":claim-reports=\"claimReports\"",
+                "selectedClaimReport.issues",
+                "issue.claim_text",
+                "issue.reason",
+            )
+        ) and all(
+            marker in source_view
+            for marker in ("res.source_refs", "SourceRefList")
+        ),
+        "source_ref_v2_visible": all(
+            marker in source_refs
+            for marker in ("ref.evidence_id", "ref.normalized_score", "ref.chunk_id", "ref.page")
+        ) and all(
+            marker in source_view
+            for marker in ("res.source_refs", "SourceRefList")
+        ) and all(
+            marker in resources_view
+            for marker in ("resourceLibraryApi.listByLearner(learnerId)", "<ResourceViewer", "selectedResource")
+        ) and "`/resource-library/${encodeURIComponent(learnerId)}`" in resource_library_api,
+        "workflow_sse_present": all(
+            marker in run_events_api
+            for marker in (
+                "function runEventsUrl",
+                "`/api/runs/${encodeURIComponent(runId)}/events${query}`",
+                "createRunEventClient",
+            )
+        ) and all(
+            marker in generation_progress
+            for marker in ("createRunEventClient", "../runs/api.js")
+        ) and all(
+            marker in courseware_api
+            for marker in ("eventsUrl:", "/resources/courseware/jobs/", "/events?after_sequence=")
+        ) and all(
+            marker in courseware_tracking
+            for marker in ("coursewareApi.eventsUrl(runId)", "courseware_progress")
+        ),
+    }
+
+
 def _runtime() -> dict[str, Any]:
     from p0_09_preflight import build_preflight
 
@@ -131,25 +237,7 @@ def _runtime() -> dict[str, Any]:
             "ready_status": ready_response.json().get("status"),
             "openapi_paths": len(app.openapi().get("paths", {})),
         }
-    api_source = (PROJECT_ROOT / "frontend" / "src" / "api" / "index.js").read_text(encoding="utf-8")
-    feedback_source = (PROJECT_ROOT / "frontend" / "src" / "views" / "FeedbackView.vue").read_text(encoding="utf-8")
-    report_source = (PROJECT_ROOT / "frontend" / "src" / "views" / "ReportView.vue").read_text(encoding="utf-8")
-    source_ref_source = (PROJECT_ROOT / "frontend" / "src" / "components" / "ResourceViewer.vue").read_text(encoding="utf-8")
-    view_sources = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in (PROJECT_ROOT / "frontend" / "src" / "views").glob("*.vue")
-    )
-    frontend_checks = {
-        "formal_attempt_api": "/feedback/attempts" in api_source,
-        "formal_attempt_used_by_feedback_view": "submitAttempt" in feedback_source or "submitLearningAttempt" in feedback_source,
-        "profile_mastery_path_visible": all(
-            field in report_source
-            for field in ("profile_version", "knowledge_mastery", "current_learning_path")
-        ),
-        "claim_evidence_details_used": "runApi.claims" in view_sources and "runApi.evidence" in view_sources,
-        "source_ref_v2_visible": "normalized_score" in source_ref_source and "provenance_status" in source_ref_source,
-        "workflow_sse_present": (PROJECT_ROOT / "frontend" / "src" / "api" / "runEvents.js").is_file(),
-    }
+    frontend_checks = _frontend_source_checks()
     frontend_gate = "PASS" if all(frontend_checks.values()) else "FAIL"
     database_checks = result["checks"]["database"]
     database_gate = (
@@ -174,7 +262,7 @@ def _runtime() -> dict[str, Any]:
         "frontend_gate": frontend_gate,
         "frontend_checks": frontend_checks,
         "checks": result["checks"],
-        "note": "runtime health may be ready while required DB/frontend competition alignment still fails",
+        "note": "runtime health may be ready while DB readiness or frontend source-wiring probes fail; frontend probes are not full frontend validation",
     }
 
 
@@ -195,12 +283,12 @@ def build_manifest(
 ) -> dict[str, Any]:
     sys.path.insert(0, str(BACKEND_DIR))
     from app.config import get_settings
-    from app.services.p0_09_acceptance import FIXTURE_VERSION, SUITE_ID, SUITE_VERSION
+    from app.services.reports.p0_09_acceptance import FIXTURE_VERSION, SUITE_ID, SUITE_VERSION
 
     settings = get_settings()
     scenarios: list[dict[str, Any]] = []
     metrics: list[dict[str, Any]] = []
-    from app.services.p0_09_acceptance import load_suite, safe_fixture_summary
+    from app.services.reports.p0_09_acceptance import load_suite, safe_fixture_summary
     fixture: dict[str, Any] = safe_fixture_summary(load_suite(suite_path))
     if run_offline:
         scenarios, metrics, fixture = _offline(suite_path)

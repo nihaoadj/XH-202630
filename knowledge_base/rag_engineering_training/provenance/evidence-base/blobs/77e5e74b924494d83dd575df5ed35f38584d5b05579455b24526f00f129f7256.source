@@ -1,0 +1,4664 @@
+{
+  "schema_version": 1,
+  "parser_version": "bulk-authoritative-v1",
+  "catalog_path": "provenance/catalogs/bulk.json",
+  "catalog_sha256": "8d90ecd07e212bff0785a8997369a71f12b5aec522757cc04f5b52c2490f72e0",
+  "licenses": [
+    {
+      "id": "ACL-CC-BY-4.0",
+      "path": "licenses/acl/CC-BY-4.0",
+      "url": "https://aclanthology.org/faq/copyright/",
+      "sha256": "57879453e2e4f2eabbe3b8ba0a774443eec1f87076f3b7437c1ebda52c337414",
+      "used_by": [
+        "source_paper_dpr",
+        "source_paper_hyde",
+        "source_paper_ragas",
+        "source_paper_alce",
+        "source_paper_lost_middle",
+        "source_paper_rag_best_practices"
+      ]
+    },
+    {
+      "id": "langchain",
+      "path": "licenses/langchain/LICENSE",
+      "url": "https://opensource.org/license/mit",
+      "sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "used_by": [
+        "source_langchain_retrieval_architectures",
+        "source_langchain_pdf_semantic_search_rag",
+        "source_langchain_html_splitters",
+        "source_langchain_docling_loader",
+        "source_langchain_sentence_transformers_embeddings",
+        "source_langchain_chroma_vectorstore",
+        "source_langchain_elasticsearch_retrieval",
+        "source_langchain_cross_encoder_reranker"
+      ]
+    },
+    {
+      "id": "sentence-transformers",
+      "path": "licenses/sentence-transformers/LICENSE",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "sha256": "624b030fd62b8b989dd502d5bb6322cbc0dbb524ab9c9708f32efe33d7275735",
+      "used_by": [
+        "source_sbert_training_overview",
+        "source_sbert_ms_marco_training",
+        "source_sbert_faiss_semantic_search",
+        "source_sbert_cross_encoder_reranking"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source_paper_dpr",
+      "kind": "pdf",
+      "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+      "url": "https://aclanthology.org/2020.emnlp-main.550.pdf",
+      "original_path": "references/en/papers/dpr/original.pdf",
+      "original_sha256": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "normalized_path": "references/en/papers/dpr/content.md",
+      "normalized_sha256": "1280c4c01cbfb28763905a33fe5430a9b0eb0f86944b1725d22330831051605e",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/",
+      "license_sha256": "57879453e2e4f2eabbe3b8ba0a774443eec1f87076f3b7437c1ebda52c337414",
+      "fetched_at": "2026-10-26T07:57:48Z",
+      "extracted_characters": 56113,
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ]
+      },
+      "normalization_warnings": [],
+      "page_count": 13,
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 75
+        },
+        {
+          "page": 2,
+          "line_start": 76,
+          "line_end": 172
+        },
+        {
+          "page": 3,
+          "line_start": 173,
+          "line_end": 268
+        },
+        {
+          "page": 4,
+          "line_start": 269,
+          "line_end": 356
+        },
+        {
+          "page": 5,
+          "line_start": 357,
+          "line_end": 438
+        },
+        {
+          "page": 6,
+          "line_start": 439,
+          "line_end": 526
+        },
+        {
+          "page": 7,
+          "line_start": 527,
+          "line_end": 622
+        },
+        {
+          "page": 8,
+          "line_start": 623,
+          "line_end": 690
+        },
+        {
+          "page": 9,
+          "line_start": 691,
+          "line_end": 770
+        },
+        {
+          "page": 10,
+          "line_start": 771,
+          "line_end": 850
+        },
+        {
+          "page": 11,
+          "line_start": 851,
+          "line_end": 930
+        },
+        {
+          "page": 12,
+          "line_start": 931,
+          "line_end": 1011
+        },
+        {
+          "page": 13,
+          "line_start": 1012,
+          "line_end": 1060
+        }
+      ],
+      "page_review": [
+        {
+          "page": 1,
+          "title": "Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing, pages 6769–6781,",
+          "review_excerpt": "Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing, pages 6769–6781,\nNovember 16–20, 2020.c⃝2020 Association for Computational Linguistics\n6769\nDense Passage Retrieval for Open-Domain Question Answering\nV",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 2,
+          "title": "6770",
+          "review_excerpt": "6770\nQA datasets, it also suffers from two weaknesses.\nFirst, ICT pretraining is computationally intensive\nand it is not completely clear that regular sentences\nare good surrogates of questions in the objective\nfunction. Second, because the",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 3,
+          "title": "6771",
+          "review_excerpt": "6771\nAt run-time, DPR applies a different encoderEQ(·)\nthat maps the input question to a d-dimensional\nvector, and retrieves kpassages of which vectors\nare the closest to the question vector. We deﬁne\nthe similarity between the question and",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 4,
+          "title": "6772",
+          "review_excerpt": "6772\nnegative passages for each question.\nThe trick of in-batch negatives has been used in\nthe full batch setting (Yih et al., 2011) and more\nrecently for mini-batch (Henderson et al., 2017;\nGillick et al., 2019). It has been shown to be an",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 5,
+          "title": "6773",
+          "review_excerpt": "6773\nTraining Retriever Top-20 Top-100\nNQ TriviaQA WQ TREC SQuAD NQ TriviaQA WQ TREC SQuAD\nNone BM25 59.1 66.9 55.0 70.9 68.8 73.7 76.7 71.1 84.1 80.0\nSingle DPR 78.4 79.4 73.2 79.8 63.2 85.4 85.0 81.4 89.1 77.2\nBM25 + DPR 76.6 79.8 71.0 85",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 6,
+          "title": "6774",
+          "review_excerpt": "6774\nSample efﬁciency We explore how many train-\ning examples are needed to achieve good passage\nretrieval performance. Figure 1 illustrates the top-k\nretrieval accuracy with respect to different num-\nbers of training examples, measured on ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 7,
+          "title": "6775",
+          "review_excerpt": "6775\n5.3 Qualitative Analysis\nAlthough DPR performs better than BM25 in gen-\neral, passages retrieved by these two methods dif-\nfer qualitatively. Term-matching methods like\nBM25 are sensitive to highly selective keywords\nand phrases, while",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 8,
+          "title": "6776",
+          "review_excerpt": "6776\nTraining Model NQ TriviaQA WQ TREC SQuAD\nSingle BM25+BERT (Lee et al., 2019) 26.5 47.1 17.7 21.3 33.2\nSingle ORQA (Lee et al., 2019) 33.3 45.0 36.4 30.1 20.2\nSingle HardEM (Min et al., 2019a) 28.1 50.9 - - -\nSingle GraphRetriever (Min ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 9,
+          "title": "6777",
+          "review_excerpt": "6777\nbeen used as the standard method applied broadly\nto various QA tasks (e.g., Chen et al., 2017; Yang\net al., 2019a,b; Nie et al., 2019; Min et al., 2019a;\nWolfson et al., 2020). Augmenting text-based re-\ntrieval with external structured",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 10,
+          "title": "6778",
+          "review_excerpt": "6778\nquestion-answer pairs. In Empirical Methods in Nat-\nural Language Processing (EMNLP).\nJane Bromley, Isabelle Guyon, Yann LeCun, Eduard\nS¨ackinger, and Roopak Shah. 1994. Signature veriﬁ-\ncation using a “Siamese” time delay neural netwo",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 11,
+          "title": "6779",
+          "review_excerpt": "6779\nYankai Lin, Haozhe Ji, Zhiyuan Liu, and Maosong Sun.\n2018. Denoising distantly supervised open-domain\nquestion answering. In Association for Computa-\ntional Linguistics (ACL), pages 1736–1745.\nSewon Min, Danqi Chen, Hannaneh Hajishirzi",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 12,
+          "title": "6780",
+          "review_excerpt": "6780\nA Distant Supervision\nWhen training our ﬁnal DPR model using Natural\nQuestions, we use the passages in our collection\nthat best match the gold context as the positive\npassages. As some QA datasets contain only the\nquestion and answer p",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 13,
+          "title": "6781",
+          "review_excerpt": "6781\nQuestion Passage received by BM25 Passage retrieved by DPR\nWhat is the body of water\nbetween England and Ireland?\nTitle:British Cycling Title: Irish Sea\n. . .England is not recognised as a region by the UCI, and\nthere is no English cyc",
+          "note": "verbatim excerpt only; no generated summary"
+        }
+      ],
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "fa9f0e633379995d2489393f68d1f9a57eae59a1b742a45f5d0b43811556d293"
+      }
+    },
+    {
+      "id": "source_paper_hyde",
+      "kind": "pdf",
+      "title": "Precise Zero-Shot Dense Retrieval without Relevance Labels",
+      "url": "https://aclanthology.org/2023.acl-long.99.pdf",
+      "original_path": "references/en/papers/hyde/original.pdf",
+      "original_sha256": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "normalized_path": "references/en/papers/hyde/content.md",
+      "normalized_sha256": "ff3bea30139d4b2f2fc60eeccf3ce2ad2e741fb0087b373d2e7471fadc9b2bdc",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/",
+      "license_sha256": "57879453e2e4f2eabbe3b8ba0a774443eec1f87076f3b7437c1ebda52c337414",
+      "fetched_at": "2026-10-26T07:57:48Z",
+      "extracted_characters": 62429,
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "PDF page 5": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "PDF page 15": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "normalization_warnings": [],
+      "page_count": 16,
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 74
+        },
+        {
+          "page": 2,
+          "line_start": 75,
+          "line_end": 168
+        },
+        {
+          "page": 3,
+          "line_start": 169,
+          "line_end": 248
+        },
+        {
+          "page": 4,
+          "line_start": 249,
+          "line_end": 324
+        },
+        {
+          "page": 5,
+          "line_start": 325,
+          "line_end": 416
+        },
+        {
+          "page": 6,
+          "line_start": 417,
+          "line_end": 481
+        },
+        {
+          "page": 7,
+          "line_start": 482,
+          "line_end": 570
+        },
+        {
+          "page": 8,
+          "line_start": 571,
+          "line_end": 635
+        },
+        {
+          "page": 9,
+          "line_start": 636,
+          "line_end": 727
+        },
+        {
+          "page": 10,
+          "line_start": 728,
+          "line_end": 817
+        },
+        {
+          "page": 11,
+          "line_start": 818,
+          "line_end": 915
+        },
+        {
+          "page": 12,
+          "line_start": 916,
+          "line_end": 1012
+        },
+        {
+          "page": 13,
+          "line_start": 1013,
+          "line_end": 1052
+        },
+        {
+          "page": 14,
+          "line_start": 1053,
+          "line_end": 1131
+        },
+        {
+          "page": 15,
+          "line_start": 1132,
+          "line_end": 1175
+        },
+        {
+          "page": 16,
+          "line_start": 1176,
+          "line_end": 1205
+        }
+      ],
+      "page_review": [
+        {
+          "page": 1,
+          "title": "Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics",
+          "review_excerpt": "Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics\nVolume 1: Long Papers, pages 1762–1777\nJuly 9-14, 2023 ©2023 Association for Computational Linguistics\nPrecise Zero-Shot Dense Retrieval without Relevan",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 2,
+          "title": "HyDE",
+          "review_excerpt": "HyDE\nGPT\nContriever\nhow long does it take to remove\nwisdom tooth It usually takes between 30\nminutes and two hours to\nremove a wisdom tooth...\nHow wisdom teeth are removed...\nSome ... a few minutes, whereas\nothers can take 20 minutes or\nlon",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 3,
+          "title": "tively with reinforcement learning from human",
+          "review_excerpt": "tively with reinforcement learning from human\nfeedback (Ouyang et al., 2022).\nConcurrent to us, Asai et al. (2022) and Su et al.\n(2022) studied task-aware retrieval with instruc-\ntions. They fine-tuned dense encoders that can\nalso encode ta",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 4,
+          "title": "Please write a passage to answer the question.",
+          "review_excerpt": "Please write a passage to answer the question.\nQuestion: what is wifi vs bluetooth\nPassage: Wi-Fi and Bluetooth are two different types of wireless technology. Wi-Fi is a local area network technology that\nuses radio waves to provide high-s",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 5,
+          "title": "estimate Equation 5 by sampling N documents",
+          "review_excerpt": "estimate Equation 5 by sampling N documents\nfrom g, [ ˆd1, ˆd2, ...,ˆdN ]:\nˆvqij = 1\nN\n∑\nˆdk∼g(qij ,INST i)\nf( ˆdk) (6)\n= 1\nN\nN∑\nk=1\nf( ˆdk) (7)\nWe also consider the query as a possible hypothesis:\nˆvqij = 1\nN + 1[\nN∑\nk=1\nf( ˆdk) +f(qij)] (",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 6,
+          "title": "DL19 DL20",
+          "review_excerpt": "DL19 DL20\nmAP nDCG@10 Recall@1k mAP nDCG@10 Recall@1k\nUnsupervised\nBM25 30.1 50.6 75.0 28.6 48.0 78.6\nContriever 24.0 44.5 74.6 24.0 42.1 75.4\nHyDE 41.8 61.3 88.0 38.2 57.9 84.4\nSupervised\nDPR 36.5 62.2 76.9 41.8 65.3 81.4\nANCE 37.1 64.5 75",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 7,
+          "title": "sw ko ja bn",
+          "review_excerpt": "sw ko ja bn\nUnsupervised\nBM25 38.9 28.5 21.2 41.8\nmContriever 38.3 22.3 19.5 35.3\nHyDE 41.7 30.6 30.7 41.3\nSupervised\nmDPR 7.3 21.9 18.1 25.8\nmBERT 37.4 28.1 27.1 35.1\nXLM-R 35.1 32.2 24.8 41.7\nmContriever-ft 51.2 34.2 32.4 42.3\nTable 3: Re",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 8,
+          "title": "Scifact FiQA DBPedia",
+          "review_excerpt": "Scifact FiQA DBPedia\nContriever 64.9 24.5 29.2\nHyDE\nw/ InstructGPT 69.1 27.3 36.8\nw/ GPT-3 65.9 27.9 40.5\nTable 5: nDCG@10 comparing InstructGPT vs. 3-shot\nGPT-3 on BEIR. Best results are marked bold.\nModel DL19 DL20\nmAP nDCG@10 mAP nDCG@10",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 9,
+          "title": "6 Conclusion",
+          "review_excerpt": "6 Conclusion\nIn this paper, we introduce HyDE, a new approach\nfor building effective dense retrievers in a com-\npletely unsupervised manner, without the need for\nany relevance labels. We demonstrate that some\naspects of relevance modeling c",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 10,
+          "title": "Babuschkin, S. Arun Balaji, Shantanu Jain, Andrew",
+          "review_excerpt": "Babuschkin, S. Arun Balaji, Shantanu Jain, Andrew\nCarr, Jan Leike, Joshua Achiam, Vedant Misra, Evan\nMorikawa, Alec Radford, Matthew M. Knight, Miles\nBrundage, Mira Murati, Katie Mayer, Peter Welin-\nder, Bob McGrew, Dario Amodei, Sam McCan-",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 11,
+          "title": "Gautier Izacard, Mathilde Caron, Lucas Hosseini, Se-",
+          "review_excerpt": "Gautier Izacard, Mathilde Caron, Lucas Hosseini, Se-\nbastian Riedel, Piotr Bojanowski, Armand Joulin,\nand Edouard Grave. 2021. Unsupervised dense\ninformation retrieval with contrastive learning.\narXiv:2112.09118.\nJeff Johnson, Matthijs Douz",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 12,
+          "title": "Methods in Natural Language Processing , pages",
+          "review_excerpt": "Methods in Natural Language Processing , pages\n9844–9855, Abu Dhabi, United Arab Emirates. As-\nsociation for Computational Linguistics.\nLong Ouyang, Jeff Wu, Xu Jiang, Diogo Almeida, Car-\nroll L. Wainwright, Pamela Mishkin, Chong Zhang,\nSan",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 13,
+          "title": "Henning Wachsmuth, Shahbaz Syed, and Benno Stein.",
+          "review_excerpt": "Henning Wachsmuth, Shahbaz Syed, and Benno Stein.\n2018. Retrieval of the best counterargument without\nprior topic knowledge. In Proceedings of the 56th\nAnnual Meeting of the Association for Computational\nLinguistics (Volume 1: Long Papers),",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 14,
+          "title": "A Appendix",
+          "review_excerpt": "A Appendix\nA.1 Instructions\nWeb Search\nPlease write a passage to answer the question\nQuestion: [QUESTION]\nPassage:\nSciFact\nPlease write a scientific paper passage to support or\nrefute the claim\nClaim: [CLAIM]\nPassage:\nArguana\nPlease write a",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 15,
+          "title": "ACL 2023 Responsible NLP Checklist",
+          "review_excerpt": "ACL 2023 Responsible NLP Checklist\nA For every submission:\n□ A1. Did you describe the limitations of your work?\n7. Limitation\n□ A2. Did you discuss any potential risks of your work?\n7. Limitation\n□ A3. Do the abstract and introduction summa",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 16,
+          "title": "□ C2. Did you discuss the experimental setup, including hyperparameter search and best-found",
+          "review_excerpt": "□ C2. Did you discuss the experimental setup, including hyperparameter search and best-found\nhyperparameter values?\n4.1 Experiment Setup, Appendix\n□ C3. Did you report descriptive statistics about your results (e.g., error bars around resul",
+          "note": "verbatim excerpt only; no generated summary"
+        }
+      ],
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "d36028d9730b227cc37c5783da35d4a5119cff631fa6941fd86d8b4190bdf4ae"
+      }
+    },
+    {
+      "id": "source_paper_ragas",
+      "kind": "pdf",
+      "title": "RAGAs: Automated Evaluation of Retrieval Augmented Generation",
+      "url": "https://aclanthology.org/2024.eacl-demo.16.pdf",
+      "original_path": "references/en/papers/ragas/original.pdf",
+      "original_sha256": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "normalized_path": "references/en/papers/ragas/content.md",
+      "normalized_sha256": "e70656d7e799c47623aade152798666b064916c84f5635a044129983b0f57b73",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/",
+      "license_sha256": "57879453e2e4f2eabbe3b8ba0a774443eec1f87076f3b7437c1ebda52c337414",
+      "fetched_at": "2026-10-26T07:57:49Z",
+      "extracted_characters": 35197,
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 2": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 3": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 4": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 5": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 6": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 7": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 8": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 9": [
+          "RAG 评测",
+          "幻觉控制"
+        ]
+      },
+      "normalization_warnings": [],
+      "page_count": 9,
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 80
+        },
+        {
+          "page": 2,
+          "line_start": 81,
+          "line_end": 159
+        },
+        {
+          "page": 3,
+          "line_start": 160,
+          "line_end": 243
+        },
+        {
+          "page": 4,
+          "line_start": 244,
+          "line_end": 326
+        },
+        {
+          "page": 5,
+          "line_start": 327,
+          "line_end": 412
+        },
+        {
+          "page": 6,
+          "line_start": 413,
+          "line_end": 480
+        },
+        {
+          "page": 7,
+          "line_start": 481,
+          "line_end": 576
+        },
+        {
+          "page": 8,
+          "line_start": 577,
+          "line_end": 673
+        },
+        {
+          "page": 9,
+          "line_start": 674,
+          "line_end": 683
+        }
+      ],
+      "page_review": [
+        {
+          "page": 1,
+          "title": "Proceedings of the 18th Conference of the European Chapter of the Association for Computational Linguistics",
+          "review_excerpt": "Proceedings of the 18th Conference of the European Chapter of the Association for Computational Linguistics\nSystem Demonstrations, pages 150–158\nMarch 17-22, 2024c⃝2024 Association for Computational Linguistics\nRAGA S: Automated Evaluation ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 2,
+          "title": "ment of retrieval augmented generation systems.",
+          "review_excerpt": "ment of retrieval augmented generation systems.\nWe focus on settings where reference answers may\nnot be available, and where we want to estimate\ndifferent proxies for correctness, in addition to the\nusefulness of the retrieved passages. The",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 3,
+          "title": "datasets or reference answers. We therefore fo-",
+          "review_excerpt": "datasets or reference answers. We therefore fo-\ncus on metrics that are fully self-contained and\nreference-free. We focus in particular three quality\naspects, which we argue are of central importance.\nFirst, Faithfulness refers to the idea ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 4,
+          "title": "Context relevance The context c(q) is consid-",
+          "review_excerpt": "Context relevance The context c(q) is consid-\nered relevant to the extent that it exclusively con-\ntains information that is needed to answer the ques-\ntion. In particular, this metric aims to penalise the\ninclusion of redundant information",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 5,
+          "title": "Question Context Answer",
+          "review_excerpt": "Question Context Answer\nWho directed the film Op-\npenheimer and who stars\nas J. Robert Oppenheimer\nin the film?\nOppenheimer is a 2023 biographical thriller film written\nand directed by Christopher Nolan. Based on the 2005\nbiography American",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 6,
+          "title": "Question Context",
+          "review_excerpt": "Question Context\nWhen was the Chimnabai\nClock Tower completed,\nand who was it named af-\nter?\nHigh context relevance: The Chimnabai Clock Tower, also known as the Raopura Tower, is\na clock tower situated in the Raopura area of Vadodara, Guja",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 7,
+          "title": "for evaluation6.",
+          "review_excerpt": "for evaluation6.\n# import required modules\nfrom ragas . metrics import (\nanswer_relevancy ,\nfaithfulness ,\ncontext_relevancy ,\n)\nfrom ragas import evaluate\nfrom datasets import load_dataset\n# loading the eval dataset\namnesty_qa = load_datas",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 8,
+          "title": "language model pre-training. In International confer-",
+          "review_excerpt": "language model pre-training. In International confer-\nence on machine learning, pages 3929–3938. PMLR.\nZiwei Ji, Nayeon Lee, Rita Frieske, Tiezheng Yu, Dan\nSu, Yan Xu, Etsuko Ishii, Ye Jin Bang, Andrea\nMadotto, and Pascale Fung. 2023. Surve",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 9,
+          "title": "Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian Q.",
+          "review_excerpt": "Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian Q.\nWeinberger, and Yoav Artzi. 2020. Bertscore: Evalu-\nating text generation with BERT. In8th International\nConference on Learning Representations, ICLR 2020,\nAddis Ababa, Ethiopia, April 26-30",
+          "note": "verbatim excerpt only; no generated summary"
+        }
+      ],
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "096033e1d17337f884a4ffddcf3cf4dbf34f0f10e4621026b2917c995b1be383"
+      }
+    },
+    {
+      "id": "source_paper_alce",
+      "kind": "pdf",
+      "title": "Enabling Large Language Models to Generate Text with Citations",
+      "url": "https://aclanthology.org/2023.emnlp-main.398.pdf",
+      "original_path": "references/en/papers/alce/original.pdf",
+      "original_sha256": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "normalized_path": "references/en/papers/alce/content.md",
+      "normalized_sha256": "d8a347bc783ce5d0d32af0b6cddc37eed8216ba2602072711e7ac46ce929e581",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/",
+      "license_sha256": "57879453e2e4f2eabbe3b8ba0a774443eec1f87076f3b7437c1ebda52c337414",
+      "fetched_at": "2026-10-26T07:57:49Z",
+      "extracted_characters": 97022,
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 15": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 18": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 19": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 20": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 21": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 22": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 23": [
+          "引用溯源",
+          "幻觉控制"
+        ],
+        "PDF page 24": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ]
+      },
+      "normalization_warnings": [],
+      "page_count": 24,
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 87
+        },
+        {
+          "page": 2,
+          "line_start": 88,
+          "line_end": 160
+        },
+        {
+          "page": 3,
+          "line_start": 161,
+          "line_end": 247
+        },
+        {
+          "page": 4,
+          "line_start": 248,
+          "line_end": 369
+        },
+        {
+          "page": 5,
+          "line_start": 370,
+          "line_end": 458
+        },
+        {
+          "page": 6,
+          "line_start": 459,
+          "line_end": 551
+        },
+        {
+          "page": 7,
+          "line_start": 552,
+          "line_end": 642
+        },
+        {
+          "page": 8,
+          "line_start": 643,
+          "line_end": 752
+        },
+        {
+          "page": 9,
+          "line_start": 753,
+          "line_end": 831
+        },
+        {
+          "page": 10,
+          "line_start": 832,
+          "line_end": 924
+        },
+        {
+          "page": 11,
+          "line_start": 925,
+          "line_end": 1016
+        },
+        {
+          "page": 12,
+          "line_start": 1017,
+          "line_end": 1111
+        },
+        {
+          "page": 13,
+          "line_start": 1112,
+          "line_end": 1138
+        },
+        {
+          "page": 14,
+          "line_start": 1139,
+          "line_end": 1228
+        },
+        {
+          "page": 15,
+          "line_start": 1229,
+          "line_end": 1311
+        },
+        {
+          "page": 16,
+          "line_start": 1312,
+          "line_end": 1385
+        },
+        {
+          "page": 17,
+          "line_start": 1386,
+          "line_end": 1429
+        },
+        {
+          "page": 18,
+          "line_start": 1430,
+          "line_end": 1479
+        },
+        {
+          "page": 19,
+          "line_start": 1480,
+          "line_end": 1529
+        },
+        {
+          "page": 20,
+          "line_start": 1530,
+          "line_end": 1579
+        },
+        {
+          "page": 21,
+          "line_start": 1580,
+          "line_end": 1635
+        },
+        {
+          "page": 22,
+          "line_start": 1636,
+          "line_end": 1690
+        },
+        {
+          "page": 23,
+          "line_start": 1691,
+          "line_end": 1746
+        },
+        {
+          "page": 24,
+          "line_start": 1747,
+          "line_end": 1800
+        }
+      ],
+      "page_review": [
+        {
+          "page": 1,
+          "title": "Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing, pages 6465–6488",
+          "review_excerpt": "Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing, pages 6465–6488\nDecember 6-10, 2023 ©2023 Association for Computational Linguistics\nEnabling Large Language Models to Generate Text with Citations\nTiany",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 2,
+          "title": "Dataset Corpus (#passages) Question type Example",
+          "review_excerpt": "Dataset Corpus (#passages) Question type Example\nASQA Wikipedia (21M) Factoid (ambiguous) Q: When did the US break away from England?\nA: The US declared independence on July 2, 1776 [1][2] ... The\nTreaty of Paris was later signed on Septemb",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 3,
+          "title": "valuable information and require citations, similar",
+          "review_excerpt": "valuable information and require citations, similar\nto findings in Liu et al. (2023). In this work, cita-\ntions are enclosed by box brackets such as [1][2].\nWe divide the corpus Dinto 100-word passages\nfollowing previous works on open-domai",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 4,
+          "title": "ASQA",
+          "review_excerpt": "ASQA\n   Exact Match Recall\nELI5\n   Claim Recall\nWhen did the US break away from England?\nQuestion\nShort answers (from the dataset)\nJuly 2, 1776 September 3, 1783July 4, 1776\n… it declared independence on July 3, 1776 … The Treaty of\nParis w",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 5,
+          "title": "Instruction: Write an accurate, engaging, and",
+          "review_excerpt": "Instruction: Write an accurate, engaging, and\nconcise answer for ...\n<Retrieve for the question>\nDocument [1](Title: American Decolonization)\n...\nDocument [2](Title: Decolonization) ...\nDocument [3](Title: American Revolution) ...\n...\nQuest",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 6,
+          "title": "Instruction: ...",
+          "review_excerpt": "Instruction: ...\n<Retrieve for question “...”>\nQuestion: When did US break away from England?\nSearch: Declaration of Independence\n<Search the query among the top-100 passages>\nDocument [1](Title: ...) ...\nOutput: The United States ... [1].\n",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 7,
+          "title": "Correctness Citation",
+          "review_excerpt": "Correctness Citation\nRec.-5 Prec. Rec. Prec.\nChatGPT\nVANILLA (5-psg) 20.8 20.8 20.5 20.9\nw/ RERANK 22.8 21.4 21.2 21.4\nSUMM (10-psg) 23.6 21.2 23.6 25.7\nSNIPPET (10-psg) 24.5 21.5 22.9 24.9\nw/ INTERACT 21.9 23.0 21.9 23.4\nINLINE SEARCH 17.2",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 8,
+          "title": "5 20 50 100",
+          "review_excerpt": "5 20 50 100\nk\n30\n40\n50\n60\n70\n80Recall@k\n Vanilla (5-psg)\nOracle\nASQA\nDPR\nGTR\n5 20 50 100\nk\n0\n20\n40\n60\nVanilla (5-psg)\nOracle\nQAMPARI\nDPR\nGTR\n5 20 50 100\nk\n10\n20\n30\nVanilla (5-psg)\nOracle\nELI5\nBM25\nFluency Correct. Citation\n(MAUVE) (EM) Rec.",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 9,
+          "title": "Human scores ALCE scores",
+          "review_excerpt": "Human scores ALCE scores\nRec. Prec. Rec. Prec.\nChatGPT VANILLA 74.7 76.6 75.3 74.4\nw/ RERANK 79.3 81.9 83.9 80.8\nVicuna-13B VANILLA 51.6 51.5 50.3 50.1\nTable 8: Human citation quality evaluation vs. ALCE\ncitation quality evaluation on ASQA.",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 10,
+          "title": "Limitations",
+          "review_excerpt": "Limitations\nOur evaluation still has room for improvement: (1)\nMAUVE is found to be sensitive to output length\nand may provide unstable results; (2) for the ELI5’s\ncorrectness evaluation, the automatically generated\nclaims may not cover all",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 11,
+          "title": "consistency evaluation. In North American Chapter",
+          "review_excerpt": "consistency evaluation. In North American Chapter\nof the Association for Computational Linguistics: Hu-\nman Language Technologies (NAACL-HLT), pages\n3905–3920.\nGautier Izacard and Edouard Grave. 2021. Leveraging\npassage retrieval with gener",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 12,
+          "title": "Riedel. 2021. KILT: a benchmark for knowledge",
+          "review_excerpt": "Riedel. 2021. KILT: a benchmark for knowledge\nintensive language tasks. In Proceedings of the 2021\nConference of the North American Chapter of the\nAssociation for Computational Linguistics: Human\nLanguage Technologies, pages 2523–2544, Onli",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 13,
+          "title": "Alex Wang, Kyunghyun Cho, and Mike Lewis. 2020.",
+          "review_excerpt": "Alex Wang, Kyunghyun Cho, and Mike Lewis. 2020.\nAsking and answering questions to evaluate the fac-\ntual consistency of summaries. In Proceedings of the\n58th Annual Meeting of the Association for Compu-\ntational Linguistics, pages 5008–5020",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 14,
+          "title": "A Generating Claims for ELI5",
+          "review_excerpt": "A Generating Claims for ELI5\nWe elect not to use ROUGE-L as our main cor-\nrectness metrics since it does not account for the\ndifferent ways of expressing the same answer and it\ncan be easily gamed (Krishna et al., 2021). We fur-\nther illust",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 15,
+          "title": "cate model output by new lines, as non-instruction-",
+          "review_excerpt": "cate model output by new lines, as non-instruction-\ntuned models may generate more content after new\nlines that are irrelevant.\nINTERACT . Empirically, we found that models\ntend to execute too many consecutive “check” ac-\ntions, so we force",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 16,
+          "title": "R@1 R@3 R@5 R@20 R@100",
+          "review_excerpt": "R@1 R@3 R@5 R@20 R@100\nDPR 29.6 44.5 51.5 64.6 74.1\nGTR 35.1 50.7 56.8 70.3 78.4\nOracle 63.8 72.8 78.4 - -\nTable 12: Retrieval results for ASQA (EM recall).\nR@1 R@3 R@5 R@20 R@100\nDPR 6.7 13.5 17.6 30.4 47.6\nGTR 14.6 24.7 31.6 49.7 65.6\nOra",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 17,
+          "title": "Fluency Correct. Citation",
+          "review_excerpt": "Fluency Correct. Citation\n(MAUVE) (EM) Rec. Prec.\nChatGPT(VANILLA)\n#demo = 0 74.5 41.9 69.3 73.4\n#demo = 1 68.9 39.8 74.6 73.2\n#demo = 2 66.6 40.4 73.6 72.5\nTable 16: Different demonstrations on ASQA.\nFluency Correct. Citation\n(MAUVE) (EM R",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 18,
+          "title": "Fluency Correct. Citation",
+          "review_excerpt": "Fluency Correct. Citation\n(MAUVE) (EM Rec.) Rec. Prec. ROUGE-L Length\nChatGPT\nVANILLA (5-psg) 66.8 (2.0) 40.4 (0.6) 73.6 (1.1) 72.5 (1.8) 37.0 (0.4) 40.0 (3.1)\nw/ RERANK 77.0 (0.0) 40.2 (0.0) 84.8 (0.0) 81.6 (0.0) 36.9 (0.0) 40.8 (0.0)\nSUMM",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 19,
+          "title": "Correctness Citation",
+          "review_excerpt": "Correctness Citation\nRec.-5 Prec. Rec. Prec. Num Pred.\nChatGPT\nVANILLA (5-psg) 20.8 (2.2) 20.8 (0.2) 20.5 (0.7) 20.9 (0.7) 5.0 (0.5)\nw/ RERANK 22.8 (0.0) 21.4 (0.0) 21.2 (0.0) 21.4 (0.0) 5.4 (0.0)\nSUMM (10-psg) 23.6 (0.9) 21.2 (0.5) 23.6 (0",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 20,
+          "title": "Fluency Correct. Citation",
+          "review_excerpt": "Fluency Correct. Citation\n(MAUVE) (Claim) Rec. Prec. ROUGE-L Length\nChatGPT\nVANILLA (5-psg) 57.2 (1.6) 12.0 (0.6) 51.1 (4.2) 50.0 (4.8) 20.6 (0.2) 91.5 (6.5)\nw/ RERANK 56.1 (0.0) 11.4 (0.0) 69.3 (0.0) 67.8 (0.0) 20.3 (0.0) 103.4 (0.0)\nSUMM ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 21,
+          "title": "Read the original question and passage, and generate 3 additional claims that are supported by the",
+          "review_excerpt": "Read the original question and passage, and generate 3 additional claims that are supported by the\npassage and answer the question.\nOriginal question: What’s the difference between Shia vs. Sunni Islam?\nPassage: The main difference between ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 22,
+          "title": "Summarize the following document within 50 words with the question of interest \"{QUESTION}\"",
+          "review_excerpt": "Summarize the following document within 50 words with the question of interest \"{QUESTION}\"\nReturn \"irrelevant\" if the document is irrelevant to the question. Try to keep all the important\ndates, numbers, and names.\nTitle: {TITLE}\nText: {TE",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 23,
+          "title": "Instruction: Write an accurate, engaging, and concise answer for ...",
+          "review_excerpt": "Instruction: Write an accurate, engaging, and concise answer for ...\nDocument [1](Title: How to Treat and Prevent Food Poisoning - MsPrepper) just a typical gastro\nupset. Salmonella is most commonly caused by eating undercooked or raw foods",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 24,
+          "title": "Instruction: Write an accurate, engaging, and concise answer for ...",
+          "review_excerpt": "Instruction: Write an accurate, engaging, and concise answer for ...\nDocument [1](Title: Is Snapchat really worth $19 billion? - CSMonitor.com) reporting that the Los\nAngeles-based company is aiming to raise $500 million at a valuation of $",
+          "note": "verbatim excerpt only; no generated summary"
+        }
+      ],
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "5d77b861d8d9dc8e025a3010f33b552dbddf8b9917d7be4d7dfe503e957ce2f2"
+      }
+    },
+    {
+      "id": "source_paper_lost_middle",
+      "kind": "pdf",
+      "title": "Lost in the Middle: How Language Models Use Long Contexts",
+      "url": "https://aclanthology.org/2024.tacl-1.9.pdf",
+      "original_path": "references/en/papers/lost_middle/original.pdf",
+      "original_sha256": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "normalized_path": "references/en/papers/lost_middle/content.md",
+      "normalized_sha256": "668099be7f1e0520f66e8c89484708bfea15f46a6f238deb06d59f5c5df7e162",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/",
+      "license_sha256": "57879453e2e4f2eabbe3b8ba0a774443eec1f87076f3b7437c1ebda52c337414",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 57142,
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "Prompt 组装",
+          "RAG 调优"
+        ],
+        "PDF page 15": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "normalization_warnings": [],
+      "page_count": 17,
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 76
+        },
+        {
+          "page": 2,
+          "line_start": 77,
+          "line_end": 145
+        },
+        {
+          "page": 3,
+          "line_start": 146,
+          "line_end": 233
+        },
+        {
+          "page": 4,
+          "line_start": 234,
+          "line_end": 277
+        },
+        {
+          "page": 5,
+          "line_start": 278,
+          "line_end": 345
+        },
+        {
+          "page": 6,
+          "line_start": 346,
+          "line_end": 409
+        },
+        {
+          "page": 7,
+          "line_start": 410,
+          "line_end": 480
+        },
+        {
+          "page": 8,
+          "line_start": 481,
+          "line_end": 546
+        },
+        {
+          "page": 9,
+          "line_start": 547,
+          "line_end": 605
+        },
+        {
+          "page": 10,
+          "line_start": 606,
+          "line_end": 684
+        },
+        {
+          "page": 11,
+          "line_start": 685,
+          "line_end": 769
+        },
+        {
+          "page": 12,
+          "line_start": 770,
+          "line_end": 862
+        },
+        {
+          "page": 13,
+          "line_start": 863,
+          "line_end": 950
+        },
+        {
+          "page": 14,
+          "line_start": 951,
+          "line_end": 1048
+        },
+        {
+          "page": 15,
+          "line_start": 1049,
+          "line_end": 1108
+        },
+        {
+          "page": 16,
+          "line_start": 1109,
+          "line_end": 1152
+        },
+        {
+          "page": 17,
+          "line_start": 1153,
+          "line_end": 1174
+        }
+      ],
+      "page_review": [
+        {
+          "page": 1,
+          "title": "Lost in the Middle: How Language Models Use Long Contexts",
+          "review_excerpt": "Lost in the Middle: How Language Models Use Long Contexts\nNelson F. Liu1∗ Kevin Lin2 John Hewitt1 Ashwin Paranjape3,4\nMichele Bevilacqua3 Fabio Petroni3 Percy Liang1\n1Stanford University, USA 2University of California, Berkeley, USA\n3Samaya",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 2,
+          "title": "Figure 1: Changing the location of relevant information",
+          "review_excerpt": "Figure 1: Changing the location of relevant information\n(in this case, the position of the passage that answers\nan input question) within the language model’s input\ncontext results in a U-shaped performance curve—\nmodels are better at using",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 3,
+          "title": "key-value pairs) enables near-perfect perfor-",
+          "review_excerpt": "key-value pairs) enables near-perfect perfor-\nmance on the synthetic key-value task, but\nminimally changes trends in multi-document\nQA (§4.2).\n• Even base language models (i.e., without\ninstruction fine-tuning) show a U-shaped per-\nformance",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 4,
+          "title": "Figure 2: Example of the multi-document question answering task, with an input context and the desired model",
+          "review_excerpt": "Figure 2: Example of the multi-document question answering task, with an input context and the desired model\nanswer. The document containing the answer is bolded within the input context here for clarity.\nFigure 3: Modulating the position o",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 5,
+          "title": "Figure 5: The effect of changing the position of relevant information (document containing the answer) on",
+          "review_excerpt": "Figure 5: The effect of changing the position of relevant information (document containing the answer) on\nmulti-document question answering performance. Lower positions are closer to the start of the input context.\nPerformance is highest wh",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 6,
+          "title": "Figure 6: Example of the key-value retrieval task, with an input context and the desired model output. Given a",
+          "review_excerpt": "Figure 6: Example of the key-value retrieval task, with an input context and the desired model output. Given a\nkey, the goal is to return the associated value. All keys and values are 128-bit UUIDs. The relevant key-value pair\nfor answering",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 7,
+          "title": "Figure 7: The effect of changing the input context length and the position of relevant information on key-value",
+          "review_excerpt": "Figure 7: The effect of changing the input context length and the position of relevant information on key-value\nretrieval performance. Lower positions are closer to the start of the input context. Although some models show\nperfect accuracy ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 8,
+          "title": "Figure 8: When encoder-decoder models (Flan-UL2 and Flan-T5-XXL) evaluated on sequences that areshorter",
+          "review_excerpt": "Figure 8: When encoder-decoder models (Flan-UL2 and Flan-T5-XXL) evaluated on sequences that areshorter\nthan their encoder’s training-time maximum sequence length (2048 and 512 tokens, respectively), they are\nrelatively robust to changes in",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 9,
+          "title": "Figure 9: Query-aware contextualization (placing the",
+          "review_excerpt": "Figure 9: Query-aware contextualization (placing the\nquery before and after the documents) does not\nsubstantially improve robustness of language mod-\nels to changing the position of relevant information\nin multi-document QA; performance sli",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 10,
+          "title": "additional fine-tuning)—the 7B Llama-2 models",
+          "review_excerpt": "additional fine-tuning)—the 7B Llama-2 models\nare solely recency-biased, while the 13B and 70B\nmodels exhibit a U-shaped performance curve.\nIn addition, we see that the Llama-2 supervised\nfine-tuning and reinforcement learning from hu-\nman ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 11,
+          "title": "RNNs, e.g., in RWKV (Peng, 2023), S4 (Gu et al.,",
+          "review_excerpt": "RNNs, e.g., in RWKV (Peng, 2023), S4 (Gu et al.,\n2022), or Hyena (Poli et al., 2023). Many prior ef-\nforts evaluate perplexity on a diverse web corpus\nas a proxy for the ability to process long contexts;\nthis work shows that precise knowled",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 12,
+          "title": "Iz Beltagy, Matthew E. Peters, and Arman",
+          "review_excerpt": "Iz Beltagy, Matthew E. Peters, and Arman\nCohan. 2020. Longformer: The long-document\ntransformer. ArXiv:2004.05150.\nHyung Won Chung, Le Hou, Shayne Longpre,\nBarret Zoph, Yi Tay, William Fedus, Yunxuan\nLi, Xuezhi Wang, Mostafa Dehghani,\nSiddh",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 13,
+          "title": "Hajishirzi. 2023. When not to trust lan-",
+          "review_excerpt": "Hajishirzi. 2023. When not to trust lan-\nguage models: Investigating effectiveness of\nparametric and non-parametric memories. In\nProceedings of ACL . https://doi.org\n/10.18653/v1/2023.acl-long.546\nSewon Min, Julian Michael, Hannaneh Hajishi",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 14,
+          "title": "Kurt Shuster, Jing Xu, Mojtaba Komeili, Da Ju,",
+          "review_excerpt": "Kurt Shuster, Jing Xu, Mojtaba Komeili, Da Ju,\nEric Michael Smith, Stephen Roller, Megan\nUng, Moya Chen, Kushal Arora, Joshua Lane,\nMorteza Behrooz, William Ngan, Spencer Poff,\nNaman Goyal, Arthur Szlam, Y-Lan Boureau,\nMelanie Kambadur, and",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 15,
+          "title": "Figure 12: Language model performance on a",
+          "review_excerpt": "Figure 12: Language model performance on a\nunambiguous subset of questions.\nA Ambiguity in Multi-Document QA\nDistractor Documents\nFollowing past work on NaturalQuestions-Open\n(Izacard et al., 2021; Izacard and Grave, 2021,in-\nter alia), we ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 16,
+          "title": "Figure 14: Language model performance when ran-",
+          "review_excerpt": "Figure 14: Language model performance when ran-\ndomizing the order of the distractors (rather than\npresenting them in order of decreasing relevance) and\nmentioning as such in the prompt.\nmentioning such in the prompt, we see that ran-\ndomiz",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 17,
+          "title": "Llama-2 models (7B) are solely recency-biased.",
+          "review_excerpt": "Llama-2 models (7B) are solely recency-biased.\nGiven these results, we hypothesize that prior\nwork (e.g., Khandelwal et al., 2018; Sun et al.,\n2021) did not previously observe any primacy\nbias in language models because the models they\nstud",
+          "note": "verbatim excerpt only; no generated summary"
+        }
+      ],
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "9a94d0a2d3b4d993a3767b05cb8b14657e60a4f50e2f3e801bbe050f71f16e73"
+      }
+    },
+    {
+      "id": "source_paper_rag_best_practices",
+      "kind": "pdf",
+      "title": "Searching for Best Practices in Retrieval-Augmented Generation",
+      "url": "https://aclanthology.org/2024.emnlp-main.981.pdf",
+      "original_path": "references/en/papers/rag_best_practices/original.pdf",
+      "original_sha256": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "normalized_path": "references/en/papers/rag_best_practices/content.md",
+      "normalized_sha256": "c72d41ffa4b9b7f29fc6482ce89274b330502b755231986e35755e34064566a3",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license_path": "licenses/acl/CC-BY-4.0",
+      "license_url": "https://aclanthology.org/faq/copyright/",
+      "license_sha256": "57879453e2e4f2eabbe3b8ba0a774443eec1f87076f3b7437c1ebda52c337414",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 87056,
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "PDF page 2": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "PDF page 14": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 15": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 18": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 19": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 20": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 21": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "normalization_warnings": [],
+      "page_count": 21,
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 65
+        },
+        {
+          "page": 2,
+          "line_start": 66,
+          "line_end": 140
+        },
+        {
+          "page": 3,
+          "line_start": 141,
+          "line_end": 297
+        },
+        {
+          "page": 4,
+          "line_start": 298,
+          "line_end": 377
+        },
+        {
+          "page": 5,
+          "line_start": 378,
+          "line_end": 463
+        },
+        {
+          "page": 6,
+          "line_start": 464,
+          "line_end": 544
+        },
+        {
+          "page": 7,
+          "line_start": 545,
+          "line_end": 620
+        },
+        {
+          "page": 8,
+          "line_start": 621,
+          "line_end": 681
+        },
+        {
+          "page": 9,
+          "line_start": 682,
+          "line_end": 767
+        },
+        {
+          "page": 10,
+          "line_start": 768,
+          "line_end": 860
+        },
+        {
+          "page": 11,
+          "line_start": 861,
+          "line_end": 950
+        },
+        {
+          "page": 12,
+          "line_start": 951,
+          "line_end": 1045
+        },
+        {
+          "page": 13,
+          "line_start": 1046,
+          "line_end": 1105
+        },
+        {
+          "page": 14,
+          "line_start": 1106,
+          "line_end": 1186
+        },
+        {
+          "page": 15,
+          "line_start": 1187,
+          "line_end": 1312
+        },
+        {
+          "page": 16,
+          "line_start": 1313,
+          "line_end": 1385
+        },
+        {
+          "page": 17,
+          "line_start": 1386,
+          "line_end": 1454
+        },
+        {
+          "page": 18,
+          "line_start": 1455,
+          "line_end": 1541
+        },
+        {
+          "page": 19,
+          "line_start": 1542,
+          "line_end": 1607
+        },
+        {
+          "page": 20,
+          "line_start": 1608,
+          "line_end": 1663
+        },
+        {
+          "page": 21,
+          "line_start": 1664,
+          "line_end": 1683
+        }
+      ],
+      "page_review": [
+        {
+          "page": 1,
+          "title": "Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing, pages 17716–17736",
+          "review_excerpt": "Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing, pages 17716–17736\nNovember 12-16, 2024 ©2024 Association for Computational Linguistics\nSearching for Best Practices in Retrieval-Augmented Generation\nXi",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 2,
+          "title": "In this study, we aim to identify the best practices",
+          "review_excerpt": "In this study, we aim to identify the best practices\nfor RAG through extensive experimentation. Given\nthe infeasibility of testing all possible combinations\nof these methods, we adopt a three-step approach to\nidentify optimal RAG practices.",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 3,
+          "title": "Large Language Model",
+          "review_excerpt": "Large Language Model\nQuery Classification\nReranking\nDLM-based\nmonoT5\nmonoBERT\nRankLLaMA\nTILDE\n•\n•\n•\n•\n•\nRetrieval\nOriginal Query\nBM25\nContriever\nLLM-Embedder\nQuery Rewriting\nQuery Decomposition\nHyDE\nHybrid Search\nHyDE+Hybrid Search\n•\n•\n•\n•\n",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 4,
+          "title": "To address this issue, we propose classifying",
+          "review_excerpt": "To address this issue, we propose classifying\ntasks by type to determine if a query needs retrieval.\nWe categorize 15 tasks based on whether they pro-\nvide sufficient information, with specific tasks and\nexamples illustrated in Figure 2. Fo",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 5,
+          "title": "methods using the LLM-Embedder recommended",
+          "review_excerpt": "methods using the LLM-Embedder recommended\nin Section 3.2 as the query and document encoder:\n• Query Rewriting : Query rewriting refines\nqueries to better match relevant documents.\nInspired by the Rewrite-Retrieve-Read frame-\nwork (Ma et al",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 6,
+          "title": "and “sides”. “Forward” repacks documents by de-",
+          "review_excerpt": "and “sides”. “Forward” repacks documents by de-\nscending the relevancy scores from the reranking\nphase, whereas “reverse” arranges them in ascend-\ning order. Inspired by (Liu et al., 2024a), which\nconcluded that optimal performance is achie",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 7,
+          "title": "4 Searching for Best RAG Practices",
+          "review_excerpt": "4 Searching for Best RAG Practices\nIn the following section, we investigate the opti-\nmal practices for implementing RAG. To begin\nwith, we used the default practice identified in Sec-\ntion 3 for each module. Following the workflow\ndepicted",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 8,
+          "title": "Method Commonsense Fact Check ODQA Multihop Med RAG Avg.",
+          "review_excerpt": "Method Commonsense Fact Check ODQA Multihop Med RAG Avg.\nAcc Acc EM F1 Score EM F1 Score Acc Score Score F1 Latency\nwithout retrieval\n+ baseline 0.537 0.560 0.373 0.413 0.428 0.167 0.173 0.182 0.360 - 0.351 0.292 1.27\nclassification module ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 9,
+          "title": "module, implement the Hybrid method for retrieval,",
+          "review_excerpt": "module, implement the Hybrid method for retrieval,\nuse TILDEv2 for reranking, opt for Reverse for\nrepacking, and employ Recomp for summarization.\nGiven that the retrieval module accounts for the\nmajority of processing time in the system, tr",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 10,
+          "title": "Limitations",
+          "review_excerpt": "Limitations\nWe have evaluated the impact of various methods\nfor fine-tuning LLM generators. Previous stud-\nies have demonstrated the feasibility of training\nboth the retriever and generator jointly. We would\nlike to explore this possibility",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 11,
+          "title": "Huiqiang Jiang, Qianhui Wu, Chin-Yew Lin, Yuqing",
+          "review_excerpt": "Huiqiang Jiang, Qianhui Wu, Chin-Yew Lin, Yuqing\nYang, and Lili Qiu. 2023a. Llmlingua: Compressing\nprompts for accelerated inference of large language\nmodels. arXiv preprint arXiv:2310.05736.\nHuiqiang Jiang, Qianhui Wu, Xufang Luo, Dongshen",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 12,
+          "title": "Long Ouyang, Jeff Wu, Xu Jiang, Diogo Almeida, Car-",
+          "review_excerpt": "Long Ouyang, Jeff Wu, Xu Jiang, Diogo Almeida, Car-\nroll L. Wainwright, Pamela Mishkin, Chong Zhang,\nSandhini Agarwal, Katarina Slama, Alex Ray, John\nSchulman, Jacob Hilton, Fraser Kelton, Luke Miller,\nMaddie Simens, Amanda Askell, Peter We",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 13,
+          "title": "Fangyuan Xu, Weijia Shi, and Eunsol Choi. 2023. Re-",
+          "review_excerpt": "Fangyuan Xu, Weijia Shi, and Eunsol Choi. 2023. Re-\ncomp: Improving retrieval-augmented lms with com-\npression and selective augmentation. arXiv preprint\narXiv:2310.04408.\nZhilin Yang, Peng Qi, Saizheng Zhang, Yoshua Ben-\ngio, William W Coh",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 14,
+          "title": "A Experimental Details",
+          "review_excerpt": "A Experimental Details\nIn this section, we provide detailed experimental\nsettings for each module, covering dataset specifics,\ntraining parameters, and any additional experimen-\ntal results.\nA.1 Query Classification\nDatasets To develop the ",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 15,
+          "title": "Which city will the next World Cup be held?",
+          "review_excerpt": "Which city will the next World Cup be held?\n             < Search >\n\"French.Washington played a\ncrucial role in the American\nRevolutionary War, leading the\nContinental Army against the\nBritish. \"\nPlease continue writing the\nabove paragraph.",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 16,
+          "title": "Embedding Model namespace-Pt/msmarco",
+          "review_excerpt": "Embedding Model namespace-Pt/msmarco\nMRR@1 MRR@10 MRR@100 R@1 R@10 R@100\nBAAI/LLM-Embedder(Zhang et al., 2023a) 24.79 37.58 38.62 24.07 66.45 90 .75\nBAAI/bge-base-en-v1.5(Xiao et al., 2023) 23.34 35 .80 36 .94 22 .63 64 .12 90 .13\nBAAI/bge-",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 17,
+          "title": "Configuration TREC DL19 TREC DL20",
+          "review_excerpt": "Configuration TREC DL19 TREC DL20\nmAP nDCG@10 R@50 R@1k latency mAP nDCG@10 R@50 R@1k Latency\nHyDE\nw/ 1 pseudo-doc 48.77 72 .49 53 .20 87 .73 8 .08 51 .31 70 .37 63 .28 87 .81 2.09\nw/ 1 pseudo-doc + query 50.87 75.44 54 .93 88.76 7.21 50.94",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 18,
+          "title": "Method MS MARCO Passage ranking",
+          "review_excerpt": "Method MS MARCO Passage ranking\nBase Model # Params MRR@1 MRR@10 MRR@1k Hit Rate@10 Latency\nw/o Reranking\nRandom Ordering - - 0.011 0 .027 0 .068 0 .092 -\nBM25 - - 6.52 11 .65 12 .59 24 .63 -\nDLM Reranking\nmonoT5 T5-base 220M 21.62 31 .78 3",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 19,
+          "title": "Context Model NQ TriviaQA HotpotQA ASQA Avg.",
+          "review_excerpt": "Context Model NQ TriviaQA HotpotQA ASQA Avg.\nD∅\nMb 29.78 60 .44 23 .73 37 .89 37 .96\nMg 26.23 58.26 26 .67 32 .30 35 .87\nMr 31.10 61 .37 28 .40 39 .96 40 .21\nMgr 25.92 57 .62 26 .43 32 .99 35 .70\nMgg 26.69 58 .07 27 .04 33 .75 36 .39\nD g\nMb",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 20,
+          "title": "A dog is sleeping",
+          "review_excerpt": "A dog is sleeping\nRetrieval\nRetrieval\nRetrieval\nA dog is sleeping.\nA dog is drinking water\nA dog is sleeping\nRetrieval\nA dog is sleeping\nImage2text Retrieval\nText2image Retrieval\nHigh Similarity\nLow Similarity\nUser Query\nImage Caption Model",
+          "note": "verbatim excerpt only; no generated summary"
+        },
+        {
+          "page": 21,
+          "title": "Method CLIP Similarity LATENCY",
+          "review_excerpt": "Method CLIP Similarity LATENCY\nPRO2GEN 0.266 6 .64S\nPRO2RET 0.246 0 .08S\nPRO2RET(Need retrieval) 0.258 −\nPRO2RET(Need generation) 0.227 −\nTable 15: The results of text-to-image retrieval: PRO2GEN and PRO2RET represent using generation and r",
+          "note": "verbatim excerpt only; no generated summary"
+        }
+      ],
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "1a92f0a21dc49f319005241a0374044cbb4b8f1bdd31cf9eb2d3102d9dee7719"
+      }
+    },
+    {
+      "id": "source_langchain_retrieval_architectures",
+      "kind": "mdx",
+      "title": "Retrieval architectures",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/deepagents/retrieval.mdx",
+      "original_path": "references/en/langchain/retrieval_architectures/original.mdx",
+      "original_sha256": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+      "normalized_path": "references/en/langchain/retrieval_architectures/content.md",
+      "normalized_sha256": "c80ed007c9f984182483494fbcb3699e4773b15c59a5ea55bb1b625083926f7c",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit",
+      "license_sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 17876,
+      "section_knowledge_points": {
+        "Retrieval": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / Building a knowledge base / From retrieval to RAG": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base / Retrieval pipeline": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base / Building blocks": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / 2-step RAG": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / Agentic RAG": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / Hybrid RAG": [
+          "RAG 基础概念",
+          "混合检索"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_title": "Retrieval",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "1e0ff1af08f97c7984de6aec1fac90dc04acfeb9a9c371bf6df76d09f1c089da"
+      }
+    },
+    {
+      "id": "source_langchain_pdf_semantic_search_rag",
+      "kind": "mdx",
+      "title": "Build a semantic search engine with LangChain",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/langchain/knowledge-base.mdx",
+      "original_path": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
+      "original_sha256": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+      "normalized_path": "references/en/langchain/pdf_semantic_search_rag/content.md",
+      "normalized_sha256": "441176fc81b0247398babb722737e684b952caac5576f65a8e4b2ad8741ecae3",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit",
+      "license_sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 22345,
+      "section_knowledge_points": {
+        "Build a semantic search engine with LangChain": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Overview": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Overview / Concepts": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup / Install dependencies": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup / Configure LangSmith": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Create documents": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Generate embeddings": [
+          "相似度检索",
+          "Embedding"
+        ],
+        "Build a semantic search engine with LangChain / Select a vector store": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Load and split a PDF": [
+          "相似度检索",
+          "Chunk 切分",
+          "文档解析"
+        ],
+        "Build a semantic search engine with LangChain / Index documents": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Search by string": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Return scores": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Search by vector": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Use retrievers": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Next steps": [
+          "相似度检索"
+        ]
+      },
+      "normalization_warnings": [
+        "unexpanded_mdx_imports: /snippets/embeddings-tabs-py.mdx, /snippets/embeddings-tabs-js.mdx, /snippets/vectorstore-tabs-py.mdx, /snippets/vectorstore-tabs-js.mdx"
+      ],
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_title": "Build a semantic search engine with LangChain",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "f21eabd2e7d2b48153826e1875c9c261fbb48093026ebbeb634883b86bb3483a"
+      }
+    },
+    {
+      "id": "source_langchain_html_splitters",
+      "kind": "mdx",
+      "title": "Split HTML",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/splitters/split_html.mdx",
+      "original_path": "references/en/langchain/html_splitters/original.mdx",
+      "original_sha256": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+      "normalized_path": "references/en/langchain/html_splitters/content.md",
+      "normalized_sha256": "206adb061eeb009906821941bfa0572e8362252a692d2c5cac286ce40a393941",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit",
+      "license_sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 34119,
+      "section_knowledge_points": {
+        "Split HTML - text splitter integration": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLHeaderTextSplitter](#using-htmlheadertextsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLSectionSplitter](#using-htmlsectionsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLSemanticPreservingSplitter](#using-htmlsemanticpreservingsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / Choosing the right splitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Example HTML document": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / How to split from a URL or HTML file:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / How to constrain chunk sizes:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / Limitations": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter / How to split HTML strings:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter / How to constrain chunk sizes:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Preserving tables and lists": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Preserving tables and lists / Explanation": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler / Explanation": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler to analyze an image with an LLM": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler to analyze an image with an LLM / Explanation:": [
+          "文档解析",
+          "Chunk 切分"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_title": "Split HTML - text splitter integration",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "cc7e360c4fa4baeb90b7b10f9bbf68fc25839bcc9bf9869275176ec56daecb77"
+      }
+    },
+    {
+      "id": "source_langchain_docling_loader",
+      "kind": "mdx",
+      "title": "Docling document loading",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_loaders/docling.mdx",
+      "original_path": "references/en/langchain/docling_loader/original.mdx",
+      "original_sha256": "664e6248db534402a98f698b5465d72cd14f37da8c006a201af95938c977215d",
+      "normalized_path": "references/en/langchain/docling_loader/content.md",
+      "normalized_sha256": "094d4bc7e6a5e8733abaaa7457bb2bb257f1fb6b6a667ac714c38046494d44a5",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit",
+      "license_sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 13560,
+      "section_knowledge_points": {
+        "Docling integration": [
+          "文档解析"
+        ],
+        "Docling integration / Overview": [
+          "文档解析"
+        ],
+        "Docling integration / Overview / Integration details": [
+          "文档解析"
+        ],
+        "Docling integration / Overview / Loader features": [
+          "文档解析"
+        ],
+        "Docling integration / Setup": [
+          "文档解析"
+        ],
+        "Docling integration / Initialization": [
+          "文档解析"
+        ],
+        "Docling integration / Load": [
+          "文档解析"
+        ],
+        "Docling integration / Lazy load": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example / Ingestion": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example / RAG": [
+          "文档解析"
+        ],
+        "Docling integration / API reference": [
+          "文档解析"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_title": "Docling integration",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "768e318b2e906c1c00e7aabb2be560968258ed1e303d7d7ec8983a488749dd25"
+      }
+    },
+    {
+      "id": "source_langchain_sentence_transformers_embeddings",
+      "kind": "mdx",
+      "title": "Sentence Transformers embeddings integration",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/embeddings/sentence_transformers.mdx",
+      "original_path": "references/en/langchain/sentence_transformers_embeddings/original.mdx",
+      "original_sha256": "92a6838f4acc671ba4f631c8a288c06c44732d0d7150d541f5c7f228e059541c",
+      "normalized_path": "references/en/langchain/sentence_transformers_embeddings/content.md",
+      "normalized_sha256": "98b89d90c918b6e2b2379d3aff385748cc5ec4a059e02fd0b1861b51674be94a",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit",
+      "license_sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 4358,
+      "section_knowledge_points": {
+        "HuggingFaceEmbeddings (Sentence Transformers) integration": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Setup": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Basic usage": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Choosing a model": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Normalize embeddings": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Device and throughput": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Query and document prompts": [
+          "Embedding",
+          "Prompt 组装"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Deploy for production": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Reranking": [
+          "Embedding",
+          "Rerank"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Troubleshooting": [
+          "Embedding"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_title": "HuggingFaceEmbeddings (Sentence Transformers) integration",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "911397c385884a77c787161714b0b020976cfe1fe4138330823b85d23313c9e5"
+      }
+    },
+    {
+      "id": "source_langchain_chroma_vectorstore",
+      "kind": "mdx",
+      "title": "Chroma vector store integration",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/chroma.mdx",
+      "original_path": "references/en/langchain/chroma_vectorstore/original.mdx",
+      "original_sha256": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
+      "normalized_path": "references/en/langchain/chroma_vectorstore/content.md",
+      "normalized_sha256": "63f93ab32c5e7029207668e2f6df5a9ca49f9b31e9bfeaca1d3d82091bf3e320",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit",
+      "license_sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 10834,
+      "section_knowledge_points": {
+        "Chroma integration": [
+          "向量数据库"
+        ],
+        "Chroma integration / Setup": [
+          "向量数据库"
+        ],
+        "Chroma integration / Setup / Credentials": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Running locally (In-Memory)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Running locally (with data persistence)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Connecting to a chroma Server": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Chroma cloud": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Running locally (In-Memory)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Running locally (with data persistence)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Connecting to a chroma Server": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Chroma cloud": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Access your chroma DB": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Create a chroma vectorstore": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Add items to vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Update items in vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Delete items from vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Similarity search": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Similarity search with score": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Search by vector": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Other search methods": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query by turning into retriever": [
+          "向量数据库"
+        ],
+        "Chroma integration / Usage for retrieval-augmented generation": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "Chroma integration / API reference": [
+          "向量数据库"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_title": "Chroma integration",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "4557e7051b3f75e33db3f980555eff495bb59f42b252dccb07fe26000ed1516d"
+      }
+    },
+    {
+      "id": "source_langchain_elasticsearch_retrieval",
+      "kind": "mdx",
+      "title": "Elasticsearch retrieval strategies",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/elasticsearch.mdx",
+      "original_path": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+      "original_sha256": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+      "normalized_path": "references/en/langchain/elasticsearch_retrieval/content.md",
+      "normalized_sha256": "b24c14a08e35cf96d68a5bd4ebef9c474bcf2558ab3cb8b6036121a92d721df4",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit",
+      "license_sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 23056,
+      "section_knowledge_points": {
+        "Elasticsearch integration": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Credentials": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running Elasticsearch locally": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication / How to obtain a password for the default \"elastic\" user?": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication / How to obtain an API key?": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Elastic cloud": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Initialization": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store / Add items to vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store / Delete items from vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly / Similarity search": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly / Similarity search with score": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query by turning into retriever": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Distance similarity algorithm": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy / Example: Hybrid retrieval with dense vector and keyword search": [
+          "向量数据库",
+          "混合检索",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy / Example: Dense vector search with embedding model in Elasticsearch": [
+          "向量数据库",
+          "Embedding"
+        ],
+        "Elasticsearch integration / Retrieval strategies / SparseVectorStrategy (ELSER)": [
+          "向量数据库",
+          "文档解析",
+          "混合检索"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorScriptScoreStrategy": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies / BM25Strategy": [
+          "向量数据库",
+          "混合检索"
+        ],
+        "Elasticsearch integration / Retrieval strategies / BM25RetrievalStrategy": [
+          "向量数据库",
+          "混合检索",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Customise the query": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Customize the document builder": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Usage for retrieval-augmented generation": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "FAQ": [
+          "向量数据库"
+        ],
+        "FAQ / Question: Im getting timeout errors when indexing documents into Elasticsearch. how do I fix this?": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / What's new?": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / I am using ElasticKNNSearch": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / I am using ElasticVectorSearch": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / API reference": [
+          "向量数据库"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_title": "Elasticsearch integration",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "05f8289ebe6ecc265273df877677d4d50a834ccaa48c08179d2ed4574c72d6e0"
+      }
+    },
+    {
+      "id": "source_langchain_cross_encoder_reranker",
+      "kind": "mdx",
+      "title": "Cross-encoder reranker integration",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_transformers/cross_encoder_reranker.mdx",
+      "original_path": "references/en/langchain/cross_encoder_reranker/original.mdx",
+      "original_sha256": "6757aa92dc9972f258179564caa885270cc25d0857219850799dff75c802b0d0",
+      "normalized_path": "references/en/langchain/cross_encoder_reranker/content.md",
+      "normalized_sha256": "ebaef24f64b2c03d47190f1a4e8ce8005d604ec3577646c3a8a5cf8e09072682",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license_path": "licenses/langchain/LICENSE",
+      "license_url": "https://opensource.org/license/mit",
+      "license_sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 5603,
+      "section_knowledge_points": {
+        "Cross encoder reranker integration": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Setup": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Build a base retriever": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Rerank with a cross-encoder": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Picking a cross-encoder": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Deploying to SageMaker": [
+          "Rerank"
+        ]
+      },
+      "normalization_warnings": [
+        "unexpanded_mdx_imports: /snippets/oss/langchain-community-unmaintained.mdx"
+      ],
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_title": "Cross encoder reranker integration",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "9778bc4f5737f7bdf9f1f010861f75169c40bab2c8356b6906aa6eb2050e8302"
+      }
+    },
+    {
+      "id": "source_sbert_training_overview",
+      "kind": "markdown",
+      "title": "Sentence Transformer training overview",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/sentence_transformer/training_overview.md",
+      "original_path": "references/en/sentence_transformers/training_overview/original.md",
+      "original_sha256": "17fe1adab43dcac9f3664c314aea35c0cb21ad2c8ae9ddfbba37768bd659e54c",
+      "normalized_path": "references/en/sentence_transformers/training_overview/content.md",
+      "normalized_sha256": "00c5a2e04b2162e2bc3f4952856498e2e8a956c28efe695a38894b74c6f2b7a8",
+      "parser_version": "passthrough-frontmatter-h1-v1-rst-tabs+corpus-clean-v1",
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "license_sha256": "624b030fd62b8b989dd502d5bb6322cbc0dbb524ab9c9708f32efe33d7275735",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 65200,
+      "section_knowledge_points": {
+        "Training Overview": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Why Finetune?": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Training Components": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Model": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset / Dataset Format": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset / Multimodal Datasets": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Loss Function": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Training Arguments": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Evaluator": [
+          "Embedding",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "Training Overview / Trainer": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Trainer / Callbacks": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Multi-Dataset Training": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Deprecated Training": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Best Base Embedding Models": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Comparisons with CrossEncoder Training": [
+          "Embedding",
+          "RAG 调优",
+          "Rerank"
+        ],
+        "Training Overview / End-to-End Example": [
+          "Embedding",
+          "RAG 调优"
+        ]
+      },
+      "normalization_warnings": [
+        "split_eval_rst_container_at_original_tabs: 5"
+      ],
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_title": "Sentence Transformer training overview",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "b69e2c3a92118e9bbd42953826a89654f544770a557fa7de5a91b132eb0fe097"
+      }
+    },
+    {
+      "id": "source_sbert_ms_marco_training",
+      "kind": "markdown",
+      "title": "MS MARCO dense retrieval training",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/training/ms_marco/README.md",
+      "original_path": "references/en/sentence_transformers/ms_marco_training/original.md",
+      "original_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+      "normalized_path": "references/en/sentence_transformers/ms_marco_training/content.md",
+      "normalized_sha256": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+      "parser_version": "passthrough-frontmatter-h1-v1",
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "license_sha256": "624b030fd62b8b989dd502d5bb6322cbc0dbb524ab9c9708f32efe33d7275735",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 9811,
+      "section_knowledge_points": {
+        "MS MARCO": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MultipleNegativesRankingLoss": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MarginMSE": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MarginMSE + MultipleNegativesRanking": [
+          "Embedding"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_title": "MS MARCO dense retrieval training"
+    },
+    {
+      "id": "source_sbert_faiss_semantic_search",
+      "kind": "python",
+      "title": "FAISS semantic search complete implementation",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/semantic-search/semantic_search_quora_faiss.py",
+      "original_path": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+      "original_sha256": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+      "normalized_path": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+      "normalized_sha256": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71",
+      "parser_version": "passthrough-frontmatter-h1-v1",
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "license_sha256": "624b030fd62b8b989dd502d5bb6322cbc0dbb524ab9c9708f32efe33d7275735",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 6278,
+      "section_knowledge_points": {
+        "FAISS semantic search complete implementation": [
+          "向量数据库",
+          "相似度检索",
+          "RAG 调优"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_title": "FAISS semantic search complete implementation"
+    },
+    {
+      "id": "source_sbert_cross_encoder_reranking",
+      "kind": "python",
+      "title": "Cross-encoder reranking complete implementation",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/cross_encoder/applications/cross_encoder_reranking.py",
+      "original_path": "references/en/sentence_transformers/cross_encoder_reranking/original.py",
+      "original_sha256": "c5efce937ddc0e441ffba2c310aab1fa2643f99179a177ec81f29ca0fcc64b8c",
+      "normalized_path": "references/en/sentence_transformers/cross_encoder_reranking/content.md",
+      "normalized_sha256": "cd85776774c5b27dcead37f338b8b54c8babc5c7633d674dff70a608e10a0ef5",
+      "parser_version": "passthrough-frontmatter-h1-v1",
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "license_sha256": "624b030fd62b8b989dd502d5bb6322cbc0dbb524ab9c9708f32efe33d7275735",
+      "fetched_at": "2026-10-26T07:57:52Z",
+      "extracted_characters": 8697,
+      "section_knowledge_points": {
+        "Cross-encoder reranking complete implementation": [
+          "相似度检索",
+          "Rerank"
+        ]
+      },
+      "normalization_warnings": [],
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_title": "Cross-encoder reranking complete implementation"
+    }
+  ],
+  "manifest_documents": [
+    {
+      "id": "source_paper_dpr",
+      "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+      "file": "references/en/papers/dpr/content.md",
+      "version": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "source_version": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "Embedding",
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2020.emnlp-main.550.pdf"
+      ],
+      "source_snapshot": "references/en/papers/dpr/original.pdf",
+      "source_hash": "2abfc7991519be2b8ce30215905516fdb593218b7bf59e50ece0d8a088a7c4d5",
+      "normalized_hash": "1280c4c01cbfb28763905a33fe5430a9b0eb0f86944b1725d22330831051605e",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "Embedding",
+          "相似度检索",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 75
+        },
+        {
+          "page": 2,
+          "line_start": 76,
+          "line_end": 172
+        },
+        {
+          "page": 3,
+          "line_start": 173,
+          "line_end": 268
+        },
+        {
+          "page": 4,
+          "line_start": 269,
+          "line_end": 356
+        },
+        {
+          "page": 5,
+          "line_start": 357,
+          "line_end": 438
+        },
+        {
+          "page": 6,
+          "line_start": 439,
+          "line_end": 526
+        },
+        {
+          "page": 7,
+          "line_start": 527,
+          "line_end": 622
+        },
+        {
+          "page": 8,
+          "line_start": 623,
+          "line_end": 690
+        },
+        {
+          "page": 9,
+          "line_start": 691,
+          "line_end": 770
+        },
+        {
+          "page": 10,
+          "line_start": 771,
+          "line_end": 850
+        },
+        {
+          "page": 11,
+          "line_start": 851,
+          "line_end": 930
+        },
+        {
+          "page": 12,
+          "line_start": 931,
+          "line_end": 1011
+        },
+        {
+          "page": 13,
+          "line_start": 1012,
+          "line_end": 1060
+        }
+      ]
+    },
+    {
+      "id": "source_paper_hyde",
+      "title": "Precise Zero-Shot Dense Retrieval without Relevance Labels",
+      "file": "references/en/papers/hyde/content.md",
+      "version": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "source_version": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "相似度检索",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2023.acl-long.99.pdf"
+      ],
+      "source_snapshot": "references/en/papers/hyde/original.pdf",
+      "source_hash": "cfc80c2ae284e1a3f36b4cec65122cc06707ac8088f107e43b328906305f609d",
+      "normalized_hash": "ff3bea30139d4b2f2fc60eeccf3ce2ad2e741fb0087b373d2e7471fadc9b2bdc",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "PDF page 5": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "相似度检索",
+          "RAG 调优"
+        ],
+        "PDF page 15": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "相似度检索",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 74
+        },
+        {
+          "page": 2,
+          "line_start": 75,
+          "line_end": 168
+        },
+        {
+          "page": 3,
+          "line_start": 169,
+          "line_end": 248
+        },
+        {
+          "page": 4,
+          "line_start": 249,
+          "line_end": 324
+        },
+        {
+          "page": 5,
+          "line_start": 325,
+          "line_end": 416
+        },
+        {
+          "page": 6,
+          "line_start": 417,
+          "line_end": 481
+        },
+        {
+          "page": 7,
+          "line_start": 482,
+          "line_end": 570
+        },
+        {
+          "page": 8,
+          "line_start": 571,
+          "line_end": 635
+        },
+        {
+          "page": 9,
+          "line_start": 636,
+          "line_end": 727
+        },
+        {
+          "page": 10,
+          "line_start": 728,
+          "line_end": 817
+        },
+        {
+          "page": 11,
+          "line_start": 818,
+          "line_end": 915
+        },
+        {
+          "page": 12,
+          "line_start": 916,
+          "line_end": 1012
+        },
+        {
+          "page": 13,
+          "line_start": 1013,
+          "line_end": 1052
+        },
+        {
+          "page": 14,
+          "line_start": 1053,
+          "line_end": 1131
+        },
+        {
+          "page": 15,
+          "line_start": 1132,
+          "line_end": 1175
+        },
+        {
+          "page": 16,
+          "line_start": 1176,
+          "line_end": 1205
+        }
+      ]
+    },
+    {
+      "id": "source_paper_ragas",
+      "title": "RAGAs: Automated Evaluation of Retrieval Augmented Generation",
+      "file": "references/en/papers/ragas/content.md",
+      "version": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "source_version": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "RAG 评测",
+        "幻觉控制"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2024.eacl-demo.16.pdf"
+      ],
+      "source_snapshot": "references/en/papers/ragas/original.pdf",
+      "source_hash": "e2038b8cff7574bf5302e1ceb6bfbac6d2471c352073b27f21460910936febce",
+      "normalized_hash": "e70656d7e799c47623aade152798666b064916c84f5635a044129983b0f57b73",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 2": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 3": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 4": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 5": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 6": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 7": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 8": [
+          "RAG 评测",
+          "幻觉控制"
+        ],
+        "PDF page 9": [
+          "RAG 评测",
+          "幻觉控制"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 80
+        },
+        {
+          "page": 2,
+          "line_start": 81,
+          "line_end": 159
+        },
+        {
+          "page": 3,
+          "line_start": 160,
+          "line_end": 243
+        },
+        {
+          "page": 4,
+          "line_start": 244,
+          "line_end": 326
+        },
+        {
+          "page": 5,
+          "line_start": 327,
+          "line_end": 412
+        },
+        {
+          "page": 6,
+          "line_start": 413,
+          "line_end": 480
+        },
+        {
+          "page": 7,
+          "line_start": 481,
+          "line_end": 576
+        },
+        {
+          "page": 8,
+          "line_start": 577,
+          "line_end": 673
+        },
+        {
+          "page": 9,
+          "line_start": 674,
+          "line_end": 683
+        }
+      ]
+    },
+    {
+      "id": "source_paper_alce",
+      "title": "Enabling Large Language Models to Generate Text with Citations",
+      "file": "references/en/papers/alce/content.md",
+      "version": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "source_version": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "引用溯源",
+        "幻觉控制"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2023.emnlp-main.398.pdf"
+      ],
+      "source_snapshot": "references/en/papers/alce/original.pdf",
+      "source_hash": "ae9868f07f0f7ffaae5346778f79b7827d9ec6b13b1e6aae4dff6b2ffc37a2e1",
+      "normalized_hash": "d8a347bc783ce5d0d32af0b6cddc37eed8216ba2602072711e7ac46ce929e581",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 15": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 18": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 19": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 20": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 21": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 22": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ],
+        "PDF page 23": [
+          "引用溯源",
+          "幻觉控制"
+        ],
+        "PDF page 24": [
+          "引用溯源",
+          "幻觉控制",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 87
+        },
+        {
+          "page": 2,
+          "line_start": 88,
+          "line_end": 160
+        },
+        {
+          "page": 3,
+          "line_start": 161,
+          "line_end": 247
+        },
+        {
+          "page": 4,
+          "line_start": 248,
+          "line_end": 369
+        },
+        {
+          "page": 5,
+          "line_start": 370,
+          "line_end": 458
+        },
+        {
+          "page": 6,
+          "line_start": 459,
+          "line_end": 551
+        },
+        {
+          "page": 7,
+          "line_start": 552,
+          "line_end": 642
+        },
+        {
+          "page": 8,
+          "line_start": 643,
+          "line_end": 752
+        },
+        {
+          "page": 9,
+          "line_start": 753,
+          "line_end": 831
+        },
+        {
+          "page": 10,
+          "line_start": 832,
+          "line_end": 924
+        },
+        {
+          "page": 11,
+          "line_start": 925,
+          "line_end": 1016
+        },
+        {
+          "page": 12,
+          "line_start": 1017,
+          "line_end": 1111
+        },
+        {
+          "page": 13,
+          "line_start": 1112,
+          "line_end": 1138
+        },
+        {
+          "page": 14,
+          "line_start": 1139,
+          "line_end": 1228
+        },
+        {
+          "page": 15,
+          "line_start": 1229,
+          "line_end": 1311
+        },
+        {
+          "page": 16,
+          "line_start": 1312,
+          "line_end": 1385
+        },
+        {
+          "page": 17,
+          "line_start": 1386,
+          "line_end": 1429
+        },
+        {
+          "page": 18,
+          "line_start": 1430,
+          "line_end": 1479
+        },
+        {
+          "page": 19,
+          "line_start": 1480,
+          "line_end": 1529
+        },
+        {
+          "page": 20,
+          "line_start": 1530,
+          "line_end": 1579
+        },
+        {
+          "page": 21,
+          "line_start": 1580,
+          "line_end": 1635
+        },
+        {
+          "page": 22,
+          "line_start": 1636,
+          "line_end": 1690
+        },
+        {
+          "page": 23,
+          "line_start": 1691,
+          "line_end": 1746
+        },
+        {
+          "page": 24,
+          "line_start": 1747,
+          "line_end": 1800
+        }
+      ]
+    },
+    {
+      "id": "source_paper_lost_middle",
+      "title": "Lost in the Middle: How Language Models Use Long Contexts",
+      "file": "references/en/papers/lost_middle/content.md",
+      "version": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "source_version": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "Prompt 组装",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2024.tacl-1.9.pdf"
+      ],
+      "source_snapshot": "references/en/papers/lost_middle/original.pdf",
+      "source_hash": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "normalized_hash": "668099be7f1e0520f66e8c89484708bfea15f46a6f238deb06d59f5c5df7e162",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 2": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 14": [
+          "Prompt 组装",
+          "RAG 调优"
+        ],
+        "PDF page 15": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "Prompt 组装",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 76
+        },
+        {
+          "page": 2,
+          "line_start": 77,
+          "line_end": 145
+        },
+        {
+          "page": 3,
+          "line_start": 146,
+          "line_end": 233
+        },
+        {
+          "page": 4,
+          "line_start": 234,
+          "line_end": 277
+        },
+        {
+          "page": 5,
+          "line_start": 278,
+          "line_end": 345
+        },
+        {
+          "page": 6,
+          "line_start": 346,
+          "line_end": 409
+        },
+        {
+          "page": 7,
+          "line_start": 410,
+          "line_end": 480
+        },
+        {
+          "page": 8,
+          "line_start": 481,
+          "line_end": 546
+        },
+        {
+          "page": 9,
+          "line_start": 547,
+          "line_end": 605
+        },
+        {
+          "page": 10,
+          "line_start": 606,
+          "line_end": 684
+        },
+        {
+          "page": 11,
+          "line_start": 685,
+          "line_end": 769
+        },
+        {
+          "page": 12,
+          "line_start": 770,
+          "line_end": 862
+        },
+        {
+          "page": 13,
+          "line_start": 863,
+          "line_end": 950
+        },
+        {
+          "page": 14,
+          "line_start": 951,
+          "line_end": 1048
+        },
+        {
+          "page": 15,
+          "line_start": 1049,
+          "line_end": 1108
+        },
+        {
+          "page": 16,
+          "line_start": 1109,
+          "line_end": 1152
+        },
+        {
+          "page": 17,
+          "line_start": 1153,
+          "line_end": 1174
+        }
+      ]
+    },
+    {
+      "id": "source_paper_rag_best_practices",
+      "title": "Searching for Best Practices in Retrieval-Augmented Generation",
+      "file": "references/en/papers/rag_best_practices/content.md",
+      "version": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "source_version": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "source_type": "pdf",
+      "document_type": "authoritative_original",
+      "authority": "ACL Anthology",
+      "knowledge_points": [
+        "RAG 基础概念",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://aclanthology.org/2024.emnlp-main.981.pdf"
+      ],
+      "source_snapshot": "references/en/papers/rag_best_practices/original.pdf",
+      "source_hash": "045d0bf2712448fcadd850760be8eb92c2576b68643a01f52704d15e13e8456e",
+      "normalized_hash": "c72d41ffa4b9b7f29fc6482ce89274b330502b755231986e35755e34064566a3",
+      "parser_version": "pypdf-5.1.0-pages-v1+corpus-clean-v1",
+      "license": "licenses/acl/CC-BY-4.0",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "PDF page 1": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "PDF page 2": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 3": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 4": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 5": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 6": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 7": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 8": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 9": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 10": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 11": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 12": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 13": [
+          "RAG 基础概念",
+          "RAG 调优"
+        ],
+        "PDF page 14": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 15": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 16": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 17": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 18": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 19": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 20": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "PDF page 21": [
+          "RAG 基础概念",
+          "RAG 调优",
+          "RAG 评测"
+        ]
+      },
+      "page_spans": [
+        {
+          "page": 1,
+          "line_start": 1,
+          "line_end": 65
+        },
+        {
+          "page": 2,
+          "line_start": 66,
+          "line_end": 140
+        },
+        {
+          "page": 3,
+          "line_start": 141,
+          "line_end": 297
+        },
+        {
+          "page": 4,
+          "line_start": 298,
+          "line_end": 377
+        },
+        {
+          "page": 5,
+          "line_start": 378,
+          "line_end": 463
+        },
+        {
+          "page": 6,
+          "line_start": 464,
+          "line_end": 544
+        },
+        {
+          "page": 7,
+          "line_start": 545,
+          "line_end": 620
+        },
+        {
+          "page": 8,
+          "line_start": 621,
+          "line_end": 681
+        },
+        {
+          "page": 9,
+          "line_start": 682,
+          "line_end": 767
+        },
+        {
+          "page": 10,
+          "line_start": 768,
+          "line_end": 860
+        },
+        {
+          "page": 11,
+          "line_start": 861,
+          "line_end": 950
+        },
+        {
+          "page": 12,
+          "line_start": 951,
+          "line_end": 1045
+        },
+        {
+          "page": 13,
+          "line_start": 1046,
+          "line_end": 1105
+        },
+        {
+          "page": 14,
+          "line_start": 1106,
+          "line_end": 1186
+        },
+        {
+          "page": 15,
+          "line_start": 1187,
+          "line_end": 1312
+        },
+        {
+          "page": 16,
+          "line_start": 1313,
+          "line_end": 1385
+        },
+        {
+          "page": 17,
+          "line_start": 1386,
+          "line_end": 1454
+        },
+        {
+          "page": 18,
+          "line_start": 1455,
+          "line_end": 1541
+        },
+        {
+          "page": 19,
+          "line_start": 1542,
+          "line_end": 1607
+        },
+        {
+          "page": 20,
+          "line_start": 1608,
+          "line_end": 1663
+        },
+        {
+          "page": 21,
+          "line_start": 1664,
+          "line_end": 1683
+        }
+      ]
+    },
+    {
+      "id": "source_langchain_retrieval_architectures",
+      "title": "Retrieval architectures",
+      "file": "references/en/langchain/retrieval_architectures/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "RAG 基础概念"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/deepagents/retrieval.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/retrieval_architectures/original.mdx",
+      "source_hash": "41a873236179feb7fca1bda17651f382449e41cfe22957e07c2c6f743e8e4a04",
+      "normalized_hash": "c80ed007c9f984182483494fbcb3699e4773b15c59a5ea55bb1b625083926f7c",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Retrieval": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / Building a knowledge base / From retrieval to RAG": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base / Retrieval pipeline": [
+          "RAG 基础概念",
+          "RAG 评测"
+        ],
+        "Retrieval / Building a knowledge base / Building blocks": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / 2-step RAG": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / Agentic RAG": [
+          "RAG 基础概念"
+        ],
+        "Retrieval / RAG architectures / Hybrid RAG": [
+          "RAG 基础概念",
+          "混合检索"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_pdf_semantic_search_rag",
+      "title": "Build a semantic search engine with LangChain",
+      "file": "references/en/langchain/pdf_semantic_search_rag/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "相似度检索"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/langchain/knowledge-base.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/pdf_semantic_search_rag/original.mdx",
+      "source_hash": "56be177b63bce9d07a6e2924dd248611ff0168e053be750b1c3adf6f9c89ec31",
+      "normalized_hash": "441176fc81b0247398babb722737e684b952caac5576f65a8e4b2ad8741ecae3",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Build a semantic search engine with LangChain": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Overview": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Overview / Concepts": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup / Install dependencies": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Setup / Configure LangSmith": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Create documents": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Generate embeddings": [
+          "相似度检索",
+          "Embedding"
+        ],
+        "Build a semantic search engine with LangChain / Select a vector store": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Load and split a PDF": [
+          "相似度检索",
+          "Chunk 切分",
+          "文档解析"
+        ],
+        "Build a semantic search engine with LangChain / Index documents": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Search by string": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Return scores": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Query the vector store / Search by vector": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Use retrievers": [
+          "相似度检索"
+        ],
+        "Build a semantic search engine with LangChain / Next steps": [
+          "相似度检索"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_html_splitters",
+      "title": "Split HTML",
+      "file": "references/en/langchain/html_splitters/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "文档解析",
+        "Chunk 切分"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/splitters/split_html.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/html_splitters/original.mdx",
+      "source_hash": "326f092c63e0b69d90bd93d56161ef6daba17a54287fe0a46580451261414153",
+      "normalized_hash": "206adb061eeb009906821941bfa0572e8362252a692d2c5cac286ce40a393941",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Split HTML - text splitter integration": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLHeaderTextSplitter](#using-htmlheadertextsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLSectionSplitter](#using-htmlsectionsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / [HTMLSemanticPreservingSplitter](#using-htmlsemanticpreservingsplitter)": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Overview of the splitters / Choosing the right splitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Example HTML document": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / How to split from a URL or HTML file:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / How to constrain chunk sizes:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLHeaderTextSplitter / Limitations": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter / How to split HTML strings:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSectionSplitter / How to constrain chunk sizes:": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Preserving tables and lists": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Preserving tables and lists / Explanation": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler / Explanation": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler to analyze an image with an LLM": [
+          "文档解析",
+          "Chunk 切分"
+        ],
+        "Split HTML - text splitter integration / Using HTMLSemanticPreservingSplitter / Using a custom handler to analyze an image with an LLM / Explanation:": [
+          "文档解析",
+          "Chunk 切分"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_docling_loader",
+      "title": "Docling document loading",
+      "file": "references/en/langchain/docling_loader/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "文档解析"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_loaders/docling.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/docling_loader/original.mdx",
+      "source_hash": "664e6248db534402a98f698b5465d72cd14f37da8c006a201af95938c977215d",
+      "normalized_hash": "094d4bc7e6a5e8733abaaa7457bb2bb257f1fb6b6a667ac714c38046494d44a5",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Docling integration": [
+          "文档解析"
+        ],
+        "Docling integration / Overview": [
+          "文档解析"
+        ],
+        "Docling integration / Overview / Integration details": [
+          "文档解析"
+        ],
+        "Docling integration / Overview / Loader features": [
+          "文档解析"
+        ],
+        "Docling integration / Setup": [
+          "文档解析"
+        ],
+        "Docling integration / Initialization": [
+          "文档解析"
+        ],
+        "Docling integration / Load": [
+          "文档解析"
+        ],
+        "Docling integration / Lazy load": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example / Ingestion": [
+          "文档解析"
+        ],
+        "Docling integration / End-to-end example / RAG": [
+          "文档解析"
+        ],
+        "Docling integration / API reference": [
+          "文档解析"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_sentence_transformers_embeddings",
+      "title": "Sentence Transformers embeddings integration",
+      "file": "references/en/langchain/sentence_transformers_embeddings/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "Embedding"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/embeddings/sentence_transformers.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/sentence_transformers_embeddings/original.mdx",
+      "source_hash": "92a6838f4acc671ba4f631c8a288c06c44732d0d7150d541f5c7f228e059541c",
+      "normalized_hash": "98b89d90c918b6e2b2379d3aff385748cc5ec4a059e02fd0b1861b51674be94a",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "HuggingFaceEmbeddings (Sentence Transformers) integration": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Setup": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Basic usage": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Choosing a model": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Normalize embeddings": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Device and throughput": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Query and document prompts": [
+          "Embedding",
+          "Prompt 组装"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Deploy for production": [
+          "Embedding"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Reranking": [
+          "Embedding",
+          "Rerank"
+        ],
+        "HuggingFaceEmbeddings (Sentence Transformers) integration / Troubleshooting": [
+          "Embedding"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_chroma_vectorstore",
+      "title": "Chroma vector store integration",
+      "file": "references/en/langchain/chroma_vectorstore/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/chroma.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/chroma_vectorstore/original.mdx",
+      "source_hash": "c7f000823f871e220445ff41c6218942ec4b0543ead3da4efa02cd2cdc4dc6b0",
+      "normalized_hash": "63f93ab32c5e7029207668e2f6df5a9ca49f9b31e9bfeaca1d3d82091bf3e320",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Chroma integration": [
+          "向量数据库"
+        ],
+        "Chroma integration / Setup": [
+          "向量数据库"
+        ],
+        "Chroma integration / Setup / Credentials": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Running locally (In-Memory)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Running locally (with data persistence)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Connecting to a chroma Server": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Basic initialization / Chroma cloud": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Running locally (In-Memory)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Running locally (with data persistence)": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Connecting to a chroma Server": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Chroma cloud": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Access your chroma DB": [
+          "向量数据库"
+        ],
+        "Chroma integration / Initialization / Initialization from client / Create a chroma vectorstore": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Add items to vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Update items in vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Manage vector store / Delete items from vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Similarity search": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Similarity search with score": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Search by vector": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query directly / Other search methods": [
+          "向量数据库"
+        ],
+        "Chroma integration / Query vector store / Query by turning into retriever": [
+          "向量数据库"
+        ],
+        "Chroma integration / Usage for retrieval-augmented generation": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "Chroma integration / API reference": [
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_elasticsearch_retrieval",
+      "title": "Elasticsearch retrieval strategies",
+      "file": "references/en/langchain/elasticsearch_retrieval/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "向量数据库"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/vectorstores/elasticsearch.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/elasticsearch_retrieval/original.mdx",
+      "source_hash": "ff2eef2e0f57d01a05f00974249865933673f82106cdb8003bd159e916824612",
+      "normalized_hash": "b24c14a08e35cf96d68a5bd4ebef9c474bcf2558ab3cb8b6036121a92d721df4",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Elasticsearch integration": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Credentials": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running Elasticsearch locally": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication / How to obtain a password for the default \"elastic\" user?": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Running with authentication / How to obtain an API key?": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Setup / Elastic cloud": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Initialization": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store / Add items to vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Manage vector store / Delete items from vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly / Similarity search": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query directly / Similarity search with score": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Query vector store / Query by turning into retriever": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Distance similarity algorithm": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy / Example: Hybrid retrieval with dense vector and keyword search": [
+          "向量数据库",
+          "混合检索",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorStrategy / Example: Dense vector search with embedding model in Elasticsearch": [
+          "向量数据库",
+          "Embedding"
+        ],
+        "Elasticsearch integration / Retrieval strategies / SparseVectorStrategy (ELSER)": [
+          "向量数据库",
+          "文档解析",
+          "混合检索"
+        ],
+        "Elasticsearch integration / Retrieval strategies / DenseVectorScriptScoreStrategy": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Retrieval strategies / BM25Strategy": [
+          "向量数据库",
+          "混合检索"
+        ],
+        "Elasticsearch integration / Retrieval strategies / BM25RetrievalStrategy": [
+          "向量数据库",
+          "混合检索",
+          "RAG 评测"
+        ],
+        "Elasticsearch integration / Customise the query": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Customize the document builder": [
+          "向量数据库"
+        ],
+        "Elasticsearch integration / Usage for retrieval-augmented generation": [
+          "向量数据库",
+          "RAG 评测"
+        ],
+        "FAQ": [
+          "向量数据库"
+        ],
+        "FAQ / Question: Im getting timeout errors when indexing documents into Elasticsearch. how do I fix this?": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / What's new?": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / I am using ElasticKNNSearch": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / I am using ElasticVectorSearch": [
+          "向量数据库"
+        ],
+        "Upgrading to ElasticsearchStore / API reference": [
+          "向量数据库"
+        ]
+      }
+    },
+    {
+      "id": "source_langchain_cross_encoder_reranker",
+      "title": "Cross-encoder reranker integration",
+      "file": "references/en/langchain/cross_encoder_reranker/content.md",
+      "version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_version": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "langchain-ai/docs",
+      "knowledge_points": [
+        "Rerank"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/document_transformers/cross_encoder_reranker.mdx"
+      ],
+      "source_snapshot": "references/en/langchain/cross_encoder_reranker/original.mdx",
+      "source_hash": "6757aa92dc9972f258179564caa885270cc25d0857219850799dff75c802b0d0",
+      "normalized_hash": "ebaef24f64b2c03d47190f1a4e8ce8005d604ec3577646c3a8a5cf8e09072682",
+      "parser_version": "passthrough-frontmatter-h1-v1+corpus-clean-v1",
+      "license": "licenses/langchain/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Cross encoder reranker integration": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Setup": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Build a base retriever": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Rerank with a cross-encoder": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Picking a cross-encoder": [
+          "Rerank"
+        ],
+        "Cross encoder reranker integration / Deploying to SageMaker": [
+          "Rerank"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_training_overview",
+      "title": "Sentence Transformer training overview",
+      "file": "references/en/sentence_transformers/training_overview/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [
+        "Embedding",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/docs/sentence_transformer/training_overview.md"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/training_overview/original.md",
+      "source_hash": "17fe1adab43dcac9f3664c314aea35c0cb21ad2c8ae9ddfbba37768bd659e54c",
+      "normalized_hash": "00c5a2e04b2162e2bc3f4952856498e2e8a956c28efe695a38894b74c6f2b7a8",
+      "parser_version": "passthrough-frontmatter-h1-v1-rst-tabs+corpus-clean-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Training Overview": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Why Finetune?": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Training Components": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Model": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset / Dataset Format": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Dataset / Multimodal Datasets": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Loss Function": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Training Arguments": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Evaluator": [
+          "Embedding",
+          "RAG 调优",
+          "RAG 评测"
+        ],
+        "Training Overview / Trainer": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Trainer / Callbacks": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Multi-Dataset Training": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Deprecated Training": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Best Base Embedding Models": [
+          "Embedding",
+          "RAG 调优"
+        ],
+        "Training Overview / Comparisons with CrossEncoder Training": [
+          "Embedding",
+          "RAG 调优",
+          "Rerank"
+        ],
+        "Training Overview / End-to-End Example": [
+          "Embedding",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_ms_marco_training",
+      "title": "MS MARCO dense retrieval training",
+      "file": "references/en/sentence_transformers/ms_marco_training/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [
+        "Embedding"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/training/ms_marco/README.md"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/ms_marco_training/original.md",
+      "source_hash": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+      "normalized_hash": "fcd0dbb8be3d057323429df272c41158e120b97904d3f766ff49eb425d4f39b4",
+      "parser_version": "passthrough-frontmatter-h1-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "MS MARCO": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MultipleNegativesRankingLoss": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MarginMSE": [
+          "Embedding"
+        ],
+        "MS MARCO / Bi-Encoder / MarginMSE + MultipleNegativesRanking": [
+          "Embedding"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_faiss_semantic_search",
+      "title": "FAISS semantic search complete implementation",
+      "file": "references/en/sentence_transformers/faiss_semantic_search/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [
+        "向量数据库",
+        "相似度检索",
+        "RAG 调优"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/semantic-search/semantic_search_quora_faiss.py"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/faiss_semantic_search/original.py",
+      "source_hash": "37523792628562f013cdf982cf81d3cd0dde49eef4ded875163ad8102f229e0b",
+      "normalized_hash": "144e71622812e9f1bbe84a57ac577c5cdbef384ad552e40ef377dd60dd28de71",
+      "parser_version": "passthrough-frontmatter-h1-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "FAISS semantic search complete implementation": [
+          "向量数据库",
+          "相似度检索",
+          "RAG 调优"
+        ]
+      }
+    },
+    {
+      "id": "source_sbert_cross_encoder_reranking",
+      "title": "Cross-encoder reranking complete implementation",
+      "file": "references/en/sentence_transformers/cross_encoder_reranking/content.md",
+      "version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_version": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "source_type": "markdown",
+      "document_type": "authoritative_original",
+      "authority": "huggingface/sentence-transformers",
+      "knowledge_points": [
+        "相似度检索",
+        "Rerank"
+      ],
+      "source_urls": [
+        "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/cross_encoder/applications/cross_encoder_reranking.py"
+      ],
+      "source_snapshot": "references/en/sentence_transformers/cross_encoder_reranking/original.py",
+      "source_hash": "c5efce937ddc0e441ffba2c310aab1fa2643f99179a177ec81f29ca0fcc64b8c",
+      "normalized_hash": "cd85776774c5b27dcead37f338b8b54c8babc5c7633d674dff70a608e10a0ef5",
+      "parser_version": "passthrough-frontmatter-h1-v1",
+      "license": "licenses/sentence-transformers/LICENSE",
+      "chunking_strategy": "markdown_structure_v1",
+      "section_knowledge_points": {
+        "Cross-encoder reranking complete implementation": [
+          "相似度检索",
+          "Rerank"
+        ]
+      }
+    }
+  ],
+  "candidate_cleaning_profile": "corpus-clean-v1"
+}

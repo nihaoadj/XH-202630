@@ -9,7 +9,12 @@ import json
 from app.agents.resource_workflows.interactive_courseware.workflow import (
     InteractiveCoursewareWorkflow,
 )
+from app.agents.resource_workflows.interactive_courseware.ports import (
+    CoursewareRepository,
+    LearnerContextProvider,
+)
 from app.db.audit.base import BaseAuditRepository
+from app.core.llm.gateway import LLMGateway
 from app.core.storage.file_storage import load_resource_file
 from app.models.courseware import (
     CoursewareBatchCreateRequest,
@@ -21,7 +26,7 @@ from app.models.courseware import (
 )
 from app.models.shared.resource_library import ResourceLibraryItem
 from app.services.learning_documents.resources import ResourceService
-from app.services.courseware.source import CoursewareAdmissionError
+from app.agents.resource_workflows.interactive_courseware.source import CoursewareAdmissionError
 from app.agents.resource_workflows.interactive_courseware.scene_composer_agent import (
     compose_courseware_scene,
 )
@@ -37,12 +42,12 @@ class CoursewareService:
 
     def __init__(
         self,
-        repo,
+        repo: CoursewareRepository,
         resource_service: ResourceService,
         audit_repo: BaseAuditRepository,
-        llm_gateway: Any | None = None,
+        llm_gateway: LLMGateway | None = None,
         workflow: InteractiveCoursewareWorkflow | None = None,
-        learner_context_provider: Any | None = None,
+        learner_context_provider: LearnerContextProvider | None = None,
     ):
         self.repo = repo
         self.resource_service = resource_service
@@ -96,6 +101,27 @@ class CoursewareService:
 
     def get_job_detail(self, run_id: str) -> CoursewareJobDetail | None:
         return self.workflow.get_job_detail(run_id)
+
+    def get_scene_review(self, run_id: str, scene_id: str) -> dict[str, Any] | None:
+        """Project the existing review response after checking scene membership."""
+        detail = self.get_job_detail(run_id)
+        if detail is None or all(scene.scene_id != scene_id for scene in detail.scenes):
+            return None
+        spec = self.repo.get_spec_by_run(run_id)
+        stored = self.repo.get_scene(scene_id)
+        if spec is None or stored is None:
+            return None
+        return {
+            "scene_id": scene_id,
+            "scene": stored["scene_json"],
+            "status": stored["status"],
+            "attempt": stored["attempt"],
+            "input_snapshot_hash": stored.get("input_snapshot_hash"),
+            "agent_version": stored.get("agent_version"),
+            "prompt_version": stored.get("prompt_version"),
+            "reviews": [review for review in detail.reviews if review.get("scene_id") in {None, scene_id}],
+            "revisions": self.repo.list_scene_revisions(scene_id),
+        }
 
     def events(self, run_id: str, after_sequence: int = 0) -> list[dict[str, Any]]:
         return self.workflow.events(run_id, after_sequence)

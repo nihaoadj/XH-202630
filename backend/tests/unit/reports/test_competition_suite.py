@@ -225,10 +225,22 @@ def _write_synthetic_domain(root):
         "target_skill_nodes": [node["node_id"] for node in nodes],
         "claims": claims,
     }, ensure_ascii=False), encoding="utf-8")
+    (suite_dir / "coverage.json").write_text(_json.dumps({
+        "fixture_version": "v1",
+        "knowledge_base_id": "synthetic_security_domain",
+        "coverage_fixture_version": "ordinary-coverage/v2",
+        "cases": [{
+            "case_id": case["case_id"],
+            "observed": True,
+            "targets": [{"target_id": node, "covered": True}
+                        for node in case["target_skill_nodes"]],
+        } for case in cases],
+    }, ensure_ascii=False), encoding="utf-8")
     (suite_dir / "suite.json").write_text(_json.dumps({
         "suite_id": "synthetic-security-gold-suite",
-        "suite_version": "v1",
+        "suite_version": "v2",
         "fixture_version": "v1",
+        "coverage_fixture_version": "ordinary-coverage/v2",
         "knowledge_base_id": "synthetic_security_domain",
         "mode": "offline_gold",
         "competition_thresholds": {
@@ -237,7 +249,8 @@ def _write_synthetic_domain(root):
             "knowledge_coverage_min": 0.90,
             "minimum_case_count": 50,
         },
-        "files": {"profiles": "profiles.json", "cases": "cases.json", "claims": "claims.json"},
+        "files": {"profiles": "profiles.json", "cases": "cases.json",
+                  "claims": "claims.json", "coverage": "coverage.json"},
         "evaluation_notes": "synthetic domain",
     }, ensure_ascii=False), encoding="utf-8")
     return suite_dir / "suite.json"
@@ -258,5 +271,6 @@ def test_evaluation_pipeline_transfers_to_new_domain_without_code_changes(tmp_pa
     # 合成套件按同一标注协议构造，三项指标应全部可测量且达标。
     assert {gate.status for gate in report.gates} == {"PASS"}
     assert report.difficulty.accuracy == 1.0
-    assert report.claim_metrics.knowledge_coverage_rate == 1.0
+    assert report.ordinary_coverage.metric.value == 1.0
+    assert report.ordinary_coverage.planned_unit_total == 54
     assert report.claim_metrics.claim_hallucination_rate == 1 / 31

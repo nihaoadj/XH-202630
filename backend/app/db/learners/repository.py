@@ -12,13 +12,14 @@ from app.db.shared.database import get_session_factory
 def create_learner_repository(
     db_type: str,
     session_factory: Callable | None = None,
+    round_repository=None,
 ) -> BaseLearnerRepository:
     """根据存储类型创建学习者画像仓库实例。
 
     该函数是仓储实现选择的唯一入口，供 DI 容器与脚本复用。
     """
     if db_type == "memory":
-        return MemoryLearnerRepository()
+        return MemoryLearnerRepository(round_repository=round_repository)
 
     if db_type not in ("sqlite", "postgresql"):
         raise ValueError(f"Unsupported DB_TYPE for learner repository: {db_type}")

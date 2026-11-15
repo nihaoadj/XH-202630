@@ -1,0 +1,347 @@
+{
+  "anonymity": {
+    "forbidden_tokens": [
+      "fixed",
+      "false_positive",
+      "missing_input",
+      "approve"
+    ],
+    "identifier_policy": "opaque"
+  },
+  "case_count": 24,
+  "cases": [
+    {
+      "case_id": "v2-A01",
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "expected_decision": "approve",
+      "expected_error_code": null,
+      "scenario": "covered_complete",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_a",
+      "topic_name": "数学"
+    },
+    {
+      "case_id": "v2-A02",
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "covered_missing_input",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_a",
+      "topic_name": "数学"
+    },
+    {
+      "case_id": "v2-A03",
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "missing_complete_exercise",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_a",
+      "topic_name": "数学"
+    },
+    {
+      "case_id": "v2-A04",
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "missing_and_missing_input",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_a",
+      "topic_name": "数学"
+    },
+    {
+      "case_id": "v2-A05",
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "expected_decision": "human_review",
+      "expected_error_code": null,
+      "scenario": "evidence_insufficient",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_a",
+      "topic_name": "数学"
+    },
+    {
+      "case_id": "v2-A06",
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "factual_error",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_a",
+      "topic_name": "数学"
+    },
+    {
+      "case_id": "v2-A07",
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "expected_decision": null,
+      "expected_error_code": "RISK_SCORE_CONFLICT",
+      "scenario": "risk_conflict",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_a",
+      "topic_name": "数学"
+    },
+    {
+      "case_id": "v2-A08",
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "expected_decision": null,
+      "expected_error_code": "TARGET_LINK_MISSING",
+      "scenario": "missing_without_issue",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_a",
+      "topic_name": "数学"
+    },
+    {
+      "case_id": "v2-B01",
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "expected_decision": "approve",
+      "expected_error_code": null,
+      "scenario": "covered_complete",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_b",
+      "topic_name": "软件操作"
+    },
+    {
+      "case_id": "v2-B02",
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "covered_missing_input",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_b",
+      "topic_name": "软件操作"
+    },
+    {
+      "case_id": "v2-B03",
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "missing_complete_exercise",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_b",
+      "topic_name": "软件操作"
+    },
+    {
+      "case_id": "v2-B04",
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "missing_and_missing_input",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_b",
+      "topic_name": "软件操作"
+    },
+    {
+      "case_id": "v2-B05",
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "expected_decision": "human_review",
+      "expected_error_code": null,
+      "scenario": "evidence_insufficient",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_b",
+      "topic_name": "软件操作"
+    },
+    {
+      "case_id": "v2-B06",
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "factual_error",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_b",
+      "topic_name": "软件操作"
+    },
+    {
+      "case_id": "v2-B07",
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "expected_decision": null,
+      "expected_error_code": "RISK_SCORE_CONFLICT",
+      "scenario": "risk_conflict",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_b",
+      "topic_name": "软件操作"
+    },
+    {
+      "case_id": "v2-B08",
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "expected_decision": null,
+      "expected_error_code": "TARGET_LINK_MISSING",
+      "scenario": "missing_without_issue",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_b",
+      "topic_name": "软件操作"
+    },
+    {
+      "case_id": "v2-C01",
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "expected_decision": "approve",
+      "expected_error_code": null,
+      "scenario": "covered_complete",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_c",
+      "topic_name": "自然科学"
+    },
+    {
+      "case_id": "v2-C02",
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "covered_missing_input",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_c",
+      "topic_name": "自然科学"
+    },
+    {
+      "case_id": "v2-C03",
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "missing_complete_exercise",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_c",
+      "topic_name": "自然科学"
+    },
+    {
+      "case_id": "v2-C04",
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "missing_and_missing_input",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_c",
+      "topic_name": "自然科学"
+    },
+    {
+      "case_id": "v2-C05",
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "expected_decision": "human_review",
+      "expected_error_code": null,
+      "scenario": "evidence_insufficient",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_c",
+      "topic_name": "自然科学"
+    },
+    {
+      "case_id": "v2-C06",
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "expected_decision": "revise",
+      "expected_error_code": null,
+      "scenario": "factual_error",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_c",
+      "topic_name": "自然科学"
+    },
+    {
+      "case_id": "v2-C07",
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "expected_decision": null,
+      "expected_error_code": "RISK_SCORE_CONFLICT",
+      "scenario": "risk_conflict",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_c",
+      "topic_name": "自然科学"
+    },
+    {
+      "case_id": "v2-C08",
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "expected_decision": null,
+      "expected_error_code": "TARGET_LINK_MISSING",
+      "scenario": "missing_without_issue",
+      "targets": [
+        "目标一",
+        "目标二"
+      ],
+      "topic": "topic_c",
+      "topic_name": "自然科学"
+    }
+  ],
+  "contract_version": "2.0",
+  "dataset_id": "lecture-review-v2-focused",
+  "dataset_version": "1.0.0",
+  "origin": "test_setup_frozen_expectation",
+  "real_model_quality": "NOT_RUN_LIVE",
+  "rubric_version": "lecture-rubric-v2",
+  "schema_version": "1.0",
+  "topics": {
+    "topic_a": {
+      "content_hash": "73ea5be17e2d84dc39e583db1d525e101698899200ccb378cecf3d648e52c46b",
+      "name": "数学"
+    },
+    "topic_b": {
+      "content_hash": "cd010fafe7130abf6cc9dbbc24d95c7b2fb15c9cff30076055ad707f13a5fc2e",
+      "name": "软件操作"
+    },
+    "topic_c": {
+      "content_hash": "b1cbc8e2d13277027514a495c20e0d2fd486709f07f373c75d5fbe6c8ae08150",
+      "name": "自然科学"
+    }
+  }
+}

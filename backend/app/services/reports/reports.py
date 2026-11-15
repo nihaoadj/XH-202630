@@ -4,16 +4,20 @@ from app.db.learning_documents.base import BaseResourceRepository
 from app.models.learning_documents.schemas import LearnerProfile
 from app.db.feedback.feedback_loop_base import BaseFeedbackLoopRepository
 from app.services.learners.mastery import MasteryService
+from app.models.learning_documents.schemas import ResourceRepresentation
 from app.models.learning_documents.types import SUPPORTED_RESOURCE_TYPES
 from app.models.learners.mastery import MASTERY_CONFIRMATION_THRESHOLD
-from app.models.reviews.claims import ClaimMetricStatus, ClaimVerdict, compute_claim_metric
+from app.models.reports.contracts import ReportRecentResourceQualityV1
+from app.models.reviews.claim_resolution import ClaimResolutionConflict, resolve_effective_claim_judgements
+from app.models.reviews.claims import ClaimMetricStatus, compute_claim_metric
 from app.models.shared.workflow import normalize_review_status, review_status_is_approved
-from app.models.reports.contracts import ReportRevisionPartsV1
-from app.services.reports.difficulty_matching import STRATEGY_VERSION, match_difficulty
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
-import hashlib
+import base64
 import json
+import time
+
+from app.services.reports import projections
+from app.services.reports.snapshots import ReportSnapshot, SnapshotCache, canonical_hash, next_boundary, revision_parts
 
 
 # Increment this whenever a report's client-visible projection changes without
@@ -21,11 +25,16 @@ import json
 # ETag/revision so a browser cannot retain a structurally stale report after a
 # deployment (for example, the radar changing from measured nodes to the full
 # knowledge graph).
-REPORT_PROJECTION_VERSION = "4.2-weighted-accuracy"
+REPORT_PROJECTION_VERSION = "4.10-ordinary-review-95-v1"
+RECENT_RESOURCE_QUALITY_LIMIT = 10
 
 
 class ReportSnapshotUnstable(RuntimeError):
     """A report read observed changing durable facts three times."""
+
+
+class ReportCursorInvalid(ValueError):
+    """A report pagination cursor does not identify an available resource."""
 
 
 class ReportService:
@@ -44,21 +53,163 @@ class ReportService:
         claim_repo=None,
         audit_repo=None,
         diagnosis_repo=None,
+        read_repo=None,
+        profile_repo=None,
+        clock=None,
+        quality_service=None,
+        round_service=None,
+        supplement_repo=None,
     ):
+        self.round_service = round_service
         self.resource_repo = resource_repo
         self.feedback_repo = feedback_repo
         self.feedback_loop_repo = feedback_loop_repo
         self.generation_job_repo = generation_job_repo
         self.mastery_service = mastery_service
         self.claim_repo = claim_repo
+        self.supplement_repo = supplement_repo
         self.audit_repo = audit_repo
         self.diagnosis_repo = diagnosis_repo
+        self.read_repo = read_repo
+        self.profile_repo = profile_repo
+        self.quality_service = quality_service
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._cache = SnapshotCache()
+
+    def _reader(self):
+        if self.read_repo is None:
+            return None
+        repositories = [self.resource_repo, self.feedback_repo, self.feedback_loop_repo,
+                        self.generation_job_repo, self.claim_repo, self.audit_repo,
+                        self.diagnosis_repo, self.profile_repo, self.supplement_repo]
+        if self.round_service is not None:
+            repositories.append(self.round_service.repository)
+        if self.mastery_service:
+            repositories.extend([self.mastery_service.repository, self.mastery_service.curriculum_repo,
+                                 self.mastery_service.tier_progress_repo,
+                                 self.mastery_service.resource_repo,
+                                 self.mastery_service.knowledge_service.catalog])
+            if self.mastery_service.knowledge_service.catalog is None:
+                return None
+        return self.read_repo if self.read_repo.supports(repositories) else None
+
+    @staticmethod
+    def _decode_cursor(cursor):
+        if not cursor:
+            return None
+        try:
+            raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode("utf-8")
+            boundary = json.loads(raw)
+            if not isinstance(boundary, dict) or not isinstance(boundary["resource_id"], str) or not boundary["resource_id"]:
+                raise ValueError("missing resource id")
+            if boundary["published_at"] is not None and not isinstance(boundary["published_at"], str):
+                raise ValueError("invalid publication time")
+            return boundary
+        except (ValueError, TypeError, KeyError, UnicodeDecodeError) as exc:
+            raise ReportCursorInvalid("报告分页游标无效") from exc
+
+    def list_resource_credibility(self, learner_id: str, *, limit: int = 20, cursor: str | None = None) -> dict:
+        """Return the existing ordered credibility projection and cursor page."""
+        boundary = self._decode_cursor(cursor)
+        reader = self._reader()
+        start = 0
+        if reader is not None:
+            try:
+                resources = reader.resource_page(learner_id, limit=limit, boundary=boundary,
+                                                 include_jobs=self.generation_job_repo is not None)
+            except ValueError as exc:
+                raise ReportCursorInvalid("报告分页游标无效") from exc
+            items = self._resource_credibility(resources)["items"]
+        else:
+            items = self._resource_credibility(self._visible_resources(learner_id))["items"]
+            if boundary:
+                key = (boundary["published_at"], boundary["resource_id"])
+                try:
+                    start = next(index + 1 for index, item in enumerate(items)
+                                 if ((item["published_at"].isoformat() if item["published_at"] else None), item["resource_id"]) == key)
+                except StopIteration as exc:
+                    raise ReportCursorInvalid("报告分页游标无效") from exc
+        page = items[start:start + limit]
+        next_cursor = None
+        if start + limit < len(items) and page:
+            last = page[-1]
+            raw = json.dumps({"published_at": last["published_at"].isoformat() if last["published_at"] else None, "resource_id": last["resource_id"]}, separators=(",", ":"))
+            next_cursor = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+        return {"items": page, "next_cursor": next_cursor}
 
     def build_report(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> dict:
+        return self.get_snapshot(profile, window_days=window_days, now=now).materialize()
+
+    def get_snapshot(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> ReportSnapshot:
+        if window_days not in {7, 30, 90}:
+            raise ValueError("window_days must be one of 7, 30, 90")
+        reader = self._reader()
+        if reader is None:
+            return self._uncached_snapshot(profile, window_days, now)
+        waited = 0.0
+        # Recheck after waiting: a write/time boundary can occur while another
+        # subscriber builds. All database work uses repository-owned Sessions.
+        while True:
+            stamp = self._utc(now if now is not None else self._clock())
+            token = reader.read_token()
+            if token is None:
+                return self._uncached_snapshot(profile, window_days, now)
+            current = reader.profiles.get(profile.learner_id)
+            if current is None or current.user_id != profile.user_id:
+                self._cache.discard_learner(profile.learner_id)
+                raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+            key = (current.learner_id, current.knowledge_base_id, current.user_id, window_days, REPORT_PROJECTION_VERSION)
+            cached = self._cache.get(key, token, stamp)
+            if cached is not None:
+                return cached
+            try:
+                wait_start = time.monotonic()
+                acquired = self._cache.acquire(key, timeout=self._cache.wait_seconds - waited)
+                if not acquired:
+                    waited += time.monotonic() - wait_start
+            except TimeoutError as exc:
+                raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE") from exc
+            if not acquired:
+                continue
+            try:
+                for _ in range(3):
+                    token = reader.read_token()
+                    if token is None:
+                        return self._uncached_snapshot(profile, window_days, now)
+                    current = reader.profiles.get(profile.learner_id)
+                    if current is None or current.user_id != profile.user_id:
+                        self._cache.discard_learner(profile.learner_id)
+                        raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+                    stamp = self._utc(now if now is not None else self._clock())
+                    context = {}
+                    report = self._build_report_once(current, window_days=window_days, now=stamp, read_context=context)
+                    boundary = context["valid_until"]
+                    finished = self._utc(now if now is not None else self._clock())
+                    if reader.read_token() == token and (boundary is None or finished < boundary) and finished >= stamp:
+                        snapshot = ReportSnapshot(report, valid_until=boundary)
+                        actual_key = (current.learner_id, current.knowledge_base_id, current.user_id, window_days, REPORT_PROJECTION_VERSION)
+                        self._cache.put(actual_key, token, snapshot)
+                        return snapshot
+                raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+            finally:
+                self._cache.release(key)
+
+    def _uncached_snapshot(self, profile, window_days, now):
         for _ in range(3):
-            report = self._build_report_once(profile, window_days=window_days, now=now)
-            if self._snapshot_is_current(profile, report, window_days):
-                return report
+            if self.profile_repo is not None:
+                current = self.profile_repo.get(profile.learner_id)
+                if current is None or current.user_id != profile.user_id:
+                    self._cache.discard_learner(profile.learner_id)
+                    raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
+                profile = current
+            stamp = self._utc(now if now is not None else self._clock())
+            context = {}
+            report = self._build_report_once(profile, window_days=window_days, now=stamp, read_context=context)
+            current = self._snapshot_is_current(profile, report, window_days)
+            finished = self._utc(now if now is not None else self._clock())
+            boundary = context["valid_until"]
+            if current and finished >= stamp and (boundary is None or finished < boundary):
+                return ReportSnapshot(report, valid_until=boundary)
         raise ReportSnapshotUnstable("REPORT_SNAPSHOT_UNSTABLE")
 
     @staticmethod
@@ -89,6 +240,12 @@ class ReportService:
         generation-job record is the durable batch boundary and retains the
         adopted target snapshot for that batch.
         """
+        if self.round_service is not None:
+            rows, _ = self.round_service.repository.list_rounds(profile.learner_id, 0, 100)
+            latest = next((row for row in rows if row["protocol_version"] == "learning-round/v1"), None)
+            if latest:
+                return {row["skill_node_id"] for row in self.round_service.repository.find("learning_round_nodes", round_id=latest["round_id"])
+                        if row["role"] == "primary"}
         if self.generation_job_repo is None:
             return None
         eligible_statuses = {"queued", "running", "completed"}
@@ -127,201 +284,19 @@ class ReportService:
         # retain every target from the newest effective batch.
         return target_ids
 
-    @staticmethod
-    def _assessment_conclusions(events, ability_projection) -> dict[str, dict]:
-        """Expose why each node is, or is not yet, a trusted conclusion."""
-        states = {
-            node.skill_node_id: node.mastery
-            for node in (ability_projection.nodes if ability_projection else [])
-        }
-        grouped: dict[str, list] = {}
-        for event in events or []:
-            if not event.verified or event.source_type.value not in {"diagnosis", "learning_attempt"}:
-                continue
-            if not getattr(event, "evidence_eligible", True):
-                continue
-            grouped.setdefault(event.skill_node_id, []).append(event)
-        conclusions: dict[str, dict] = {}
-        for node_id, state in states.items():
-            node_events = sorted(grouped.get(node_id, []), key=lambda item: (item.occurred_at, item.evidence_id))
-            sessions = {
-                getattr(item, "assessment_session_id", None) or item.source_id
-                for item in node_events
-            }
-            forms = {
-                getattr(item, "assessment_form_id", None) or item.source_id
-                for item in node_events
-            }
-            dimensions = sorted({
-                dimension
-                for item in node_events
-                for dimension in getattr(item, "covered_dimensions", [])
-            })
-            scores = [item.observed_score for item in node_events if item.observed_score is not None]
-            high_sessions = sum(score >= MASTERY_CONFIRMATION_THRESHOLD for score in scores)
-            required_dimensions = {"concept", "scenario", "misconception"}
-            initial_calibrated = any(
-                item.source_type.value == "diagnosis"
-                and required_dimensions.issubset(set(getattr(item, "covered_dimensions", [])))
-                for item in node_events
-            )
-            cumulative_dimension_ready = required_dimensions.issubset(set(dimensions))
-            dimension_ready = initial_calibrated or cumulative_dimension_ready
-            qualified_high_events = [
-                item for item in node_events
-                if item.observed_score is not None and item.observed_score >= MASTERY_CONFIRMATION_THRESHOLD
-            ]
-            qualified_high_sessions = {
-                getattr(item, "assessment_session_id", None) or item.source_id
-                for item in qualified_high_events
-            }
-            if not node_events:
-                conclusion, trust = "unassessed", "none"
-            elif (
-                state.status.value == "mastered"
-                and dimension_ready
-                and (
-                    len(qualified_high_sessions) >= 2
-                    or (
-                        len(qualified_high_sessions) >= 1
-                        and state.self_report_prior is not None
-                        and state.self_report_prior >= 1.0
-                    )
-                )
-            ):
-                conclusion, trust = "confirmed_mastery", "high"
-            elif len(sessions) < 2:
-                conclusion, trust = "baseline_observation", "provisional"
-            elif scores and scores[-1] < MASTERY_CONFIRMATION_THRESHOLD:
-                conclusion, trust = "needs_reinforcement", "medium"
-            else:
-                conclusion, trust = "awaiting_confirmation", "medium"
-            promotion_session_ids = list(dict.fromkeys(
-                getattr(item, "assessment_session_id", None) or item.source_id
-                for item in qualified_high_events
-            ))[:2]
-            promotion_index = max(
-                (index for index, item in enumerate(node_events)
-                 if (getattr(item, "assessment_session_id", None) or item.source_id) in promotion_session_ids),
-                default=-1,
-            )
-            opposing = [
-                {"source_id": item.source_id, "score": item.observed_score, "occurred_at": item.occurred_at}
-                for item in node_events[promotion_index + 1:]
-                if item.observed_score is not None and item.observed_score < MASTERY_CONFIRMATION_THRESHOLD
-            ]
-            conclusions[node_id] = {
-                "conclusion": conclusion,
-                "trust_status": trust,
-                "formal_session_count": len(sessions),
-                "independent_form_count": len(forms),
-                "eligible_evidence_count": len(node_events),
-                "high_score_session_count": high_sessions,
-                "covered_dimensions": dimensions,
-                "required_dimensions": ["concept", "scenario", "misconception"],
-                "dimension_ready": dimension_ready,
-                "initial_calibrated": initial_calibrated,
-                "last_contradictory_evidence": opposing[-1] if opposing else None,
-                "scoring_audit_statuses": list(dict.fromkeys(
-                    getattr(item, "scoring_audit_status", "not_applicable") for item in node_events
-                )),
-            }
-        return conclusions
+    _assessment_conclusions = staticmethod(projections._assessment_conclusions)
 
     @staticmethod
     def _build_learning_node_mastery_map(ability_projection, assessment_conclusions, mastery_events=()) -> dict:
-        """Build the ongoing node-level mastery view.
+        return projections._build_learning_node_mastery_map(
+            ability_projection,
+            assessment_conclusions,
+            mastery_events,
+            ordered_ability_nodes=ReportService._ordered_ability_nodes,
+            utc=ReportService._utc,
+        )
 
-        Initial diagnostic dimensions are intentionally not projected here.
-        This map is the stable report view for every learning node and is
-        driven by the canonical mastery projection plus eligible formal
-        assessment conclusions.
-        """
-        nodes = ReportService._ordered_ability_nodes(ability_projection.nodes if ability_projection else [])
-        priorities = {
-            item.skill_node_id: item
-            for item in (ability_projection.weakness_priorities if ability_projection else [])
-        }
-        events_by_node: dict[str, list] = {}
-        for event in mastery_events or []:
-            source_type = getattr(getattr(event, "source_type", None), "value", getattr(event, "source_type", None))
-            if (
-                getattr(event, "verified", False)
-                and getattr(event, "evidence_eligible", True)
-                and source_type in {"diagnosis", "learning_attempt"}
-            ):
-                events_by_node.setdefault(event.skill_node_id, []).append(event)
-
-        points = []
-        status_counts = {key: 0 for key in ("unassessed", "self_reported", "weak", "learning", "mastered")}
-        conclusion_counts = {key: 0 for key in (
-            "unassessed", "baseline_observation", "awaiting_confirmation", "confirmed_mastery", "needs_reinforcement"
-        )}
-        for node in nodes:
-            state = node.mastery
-            conclusion = (assessment_conclusions or {}).get(node.skill_node_id, {})
-            conclusion_name = conclusion.get("conclusion", "unassessed")
-            trust_status = conclusion.get("trust_status", "none")
-            node_events = sorted(
-                events_by_node.get(node.skill_node_id, []),
-                key=lambda item: (ReportService._utc(item.occurred_at), item.evidence_id),
-            )
-            latest_event = node_events[-1] if node_events else None
-            priority = priorities.get(node.skill_node_id)
-            if conclusion_name in {"baseline_observation", "awaiting_confirmation"}:
-                next_action = "verify"
-            elif conclusion_name == "needs_reinforcement" or state.status.value == "weak":
-                next_action = "remediate"
-            elif conclusion_name == "confirmed_mastery" or state.status.value == "mastered":
-                next_action = "maintain"
-            elif state.status.value == "learning":
-                next_action = "practice"
-            else:
-                next_action = "learn"
-            reasons = list(priority.reason_codes) if priority else []
-            if not reasons:
-                reasons = {
-                    "unassessed": ["NO_OBJECTIVE_EVIDENCE"],
-                    "baseline_observation": ["INITIAL_BASELINE_PENDING_CONFIRMATION"],
-                    "awaiting_confirmation": ["AWAITING_SECOND_FORMAL_ASSESSMENT"],
-                    "confirmed_mastery": ["TWO_INDEPENDENT_FORMAL_ASSESSMENTS"],
-                    "needs_reinforcement": ["LATEST_FORMAL_RESULT_BELOW_0_80"],
-                }.get(conclusion_name, ["MASTERY_PROJECTION"])
-            point = {
-                "skill_node_id": node.skill_node_id,
-                "name": node.name,
-                "tier": node.tier,
-                "tier_label": node.tier_label,
-                "mastery_score": state.mastery_score,
-                "mastery_status": state.status.value,
-                "conclusion": conclusion_name,
-                "trust_status": trust_status,
-                "confidence": state.confidence.value,
-                "objective_evidence_count": state.objective_evidence_count,
-                "independent_session_count": conclusion.get("formal_session_count", 0),
-                "independent_form_count": conclusion.get("independent_form_count", 0),
-                "high_score_session_count": conclusion.get("high_score_session_count", 0),
-                "latest_observed_score": latest_event.observed_score if latest_event else None,
-                "trend_delta": node.trend_delta,
-                "last_evidence_at": latest_event.occurred_at if latest_event else state.last_updated,
-                "next_action": next_action,
-                "reason_codes": reasons,
-            }
-            points.append(point)
-            status_counts[state.status.value] += 1
-            conclusion_counts[conclusion_name] += 1
-        return {
-            "schema_version": "1.0",
-            "nodes": points,
-            "summary": {
-                **{f"status_{key}_count": value for key, value in status_counts.items()},
-                **{f"conclusion_{key}_count": value for key, value in conclusion_counts.items()},
-                "total_node_count": len(points),
-                "actionable_node_count": sum(item["next_action"] != "maintain" for item in points),
-            },
-        }
-
-    def _build_report_once(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None) -> dict:
+    def _build_report_once(self, profile: LearnerProfile, *, window_days: int = 30, now: datetime | None = None, read_context: dict | None = None) -> dict:
         """构建学情报告"""
         if window_days not in {7, 30, 90}:
             raise ValueError("window_days must be one of 7, 30, 90")
@@ -331,6 +306,8 @@ class ReportService:
             self.mastery_service.next_generation_options(profile)
             if self.mastery_service and profile.knowledge_base_id else None
         )
+        if generation_options is not None:
+            generation_options = generation_options.model_copy(update={"created_at": generated_at})
         ordered_nodes = self._ordered_ability_nodes(
             ability_projection.nodes if ability_projection else []
         )
@@ -338,44 +315,14 @@ class ReportService:
             node for node in ordered_nodes
             if node.mastery.objective_evidence_count > 0 and node.mastery.mastery_score is not None
         ]
-        # The radar is always the complete knowledge graph, even when a
-        # legacy/partial ability projection is unavailable.  Questionnaire
-        # theory fields must never replace graph-node axes.
-        projected_by_id = {node.skill_node_id: node for node in ordered_nodes}
         catalog_nodes = (
             self.mastery_service.knowledge_service.list_skill_nodes(profile.knowledge_base_id)
             if self.mastery_service and profile.knowledge_base_id else []
         )
-        radar_nodes = self._ordered_ability_nodes([
-            SimpleNamespace(
-                skill_node_id=node.node_id, name=node.name, tier=node.tier,
-                prerequisites=node.prerequisites,
-            )
-            for node in catalog_nodes
-        ])
-        if not radar_nodes:
-            radar_nodes = ordered_nodes
-        topics = [node.name for node in radar_nodes]
-        scores = []
-        radar_measurement_statuses = []
-        for node in radar_nodes:
-            projected = projected_by_id.get(node.skill_node_id)
-            measured = bool(
-                projected and projected.mastery.objective_evidence_count > 0
-                and projected.mastery.mastery_score is not None
-            )
-            self_reported = bool(
-                projected and projected.mastery.status.value == "self_reported"
-                and projected.mastery.mastery_score is not None
-            )
-            scores.append(
-                round(float(projected.mastery.mastery_score) * 100, 1)
-                if (measured or self_reported) else 0.0
-            )
-            radar_measurement_statuses.append(
-                "measured" if measured else "self_reported" if self_reported else "unassessed"
-            )
-        resources = self._visible_resources(profile.learner_id)
+        radar = projections.ability_radar(
+            ordered_nodes, catalog_nodes, order_nodes=self._ordered_ability_nodes,
+        )
+        resources = sorted(self._visible_resources(profile.learner_id), key=lambda item: (self._utc(item.created_at) if item.created_at else datetime.min.replace(tzinfo=timezone.utc), item.resource_id))
         feedback = self.feedback_repo.list_by_learner(profile.learner_id)
         weak_points = ([node.name for node in measured_nodes if node.mastery.status.value == "weak"]
                        if ability_projection else list(dict.fromkeys(profile.weak_points)))
@@ -384,7 +331,7 @@ class ReportService:
         # Aggregates must not silently become a "latest 10" view.  The UI
         # lists are bounded later; revision and activity consume all durable
         # formal attempts available from the repository.
-        attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10_000) if self.feedback_loop_repo else []
+        attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, None) if self.feedback_loop_repo else []
         diagnostic_runs = self.diagnosis_repo.list_runs_by_learner(profile.learner_id) if self.diagnosis_repo else []
         initial_flow = self._initial_diagnostic_flow(profile)
         loop_results = self.feedback_loop_repo.list_results(profile.learner_id, 10) if self.feedback_loop_repo else []
@@ -434,32 +381,32 @@ class ReportService:
         }
 
         credibility = self._resource_credibility(resources, knowledge_base_id=profile.knowledge_base_id)
+        resource_quality = self._resource_quality(resources, order=credibility["items"], ability_names=ability_names)
         blind_spot_map = self._build_blind_spot_map(ability_projection, attempts, visible_diagnostic_runs)
+        claim_enabled_by_run = {
+            job.run_id: job.request_payload.get("include_claim_check")
+            for job in self.generation_job_repo.list_by_learner(profile.learner_id)
+            if isinstance(job.request_payload.get("include_claim_check"), bool)
+        } if self.generation_job_repo else {}
         resource_difficulty_curve = self._build_resource_difficulty_curve(
             ability_projection, resources, credibility_items=credibility["items"],
-            credibility_summary=credibility["summary"], attempts=attempts,
+            claim_enabled_by_run=claim_enabled_by_run, attempts=attempts,
         )
         current_batch_node_ids = self._latest_active_batch_target_ids(profile)
         learning_path_graph = self._build_learning_path_graph(
             ability_projection, path, generation_options, current_batch_node_ids=current_batch_node_ids,
         )
-        revision_parts = self._revision_parts(
-            profile, ability_projection, attempts, resources, window_days, credibility["items"], diagnostic_runs=visible_diagnostic_runs,
-            resource_difficulty_curve=resource_difficulty_curve,
-            learning_path_graph=learning_path_graph,
-        )
-        report_revision = self._revision(revision_parts, window_days)
         data_as_of = self._data_as_of(profile, attempts, resources, mastery_events)
-        return {
+        report = {
             "report_schema_version": "4.1",
-            "report_revision": report_revision,
+            "report_revision": "",
             "data_as_of": data_as_of,
             "window": {
                 "window_days": window_days,
                 "start": activity["window_start"],
                 "end": activity["window_end"],
             },
-            "freshness": {"source_revisions": revision_parts, "warnings": []},
+            "freshness": {"source_revisions": {}, "warnings": []},
             "report_availability": {
                 "status": "calibration_pending" if calibration_pending else "ready",
                 "message": "初始诊断尚未完成，暂不生成正式学习结论" if calibration_pending else "报告已基于正式测评证据生成",
@@ -470,14 +417,13 @@ class ReportService:
             "weakness_groups": self._weakness_groups(priorities, ability_names),
             "resource_credibility_summary": credibility["summary"],
             "recent_resource_credibility": credibility["items"][:10],
+            "resource_quality_summary": resource_quality["summary"],
+            "recent_resource_quality": resource_quality["items"],
+            "resource_quality_batches": resource_quality["batches"],
             "as_of_profile_version": profile.profile_version,
             "generated_at": generated_at,
             "learner_id": profile.learner_id,
-            "radar": {
-                "dimensions": topics,
-                "values": scores,
-                "measurement_statuses": radar_measurement_statuses,
-            },
+            "radar": radar,
             "weak_points": weak_points,
             "strong_points": strong_points,
             "skill_level": profile.skill_level,
@@ -687,31 +633,34 @@ class ReportService:
             "data_warnings": ability_projection.data_warnings if ability_projection else ["MASTERY_PROJECTION_UNAVAILABLE"],
         }
 
+        if self.round_service is not None:
+            rows, _ = self.round_service.repository.list_rounds(profile.learner_id, 0, 100)
+            latest = next((row for row in rows if row["protocol_version"] == "learning-round/v1"), None)
+            report["learning_round_summary"] = self.round_service.detail(profile.learner_id, latest["round_id"]).model_dump(mode="json") if latest else None
+            report["remediation_needs"] = [
+                {key: row[key] for key in ("skill_node_id", "status", "last_score", "wait_rounds", "last_attempt_id")}
+                for row in self.round_service.repository.find("learner_remediation_needs", learner_id=profile.learner_id,
+                                                              knowledge_base_id=profile.knowledge_base_id)
+                if row["status"] != "resolved"
+            ]
+        parts = revision_parts(report)
+        report["freshness"]["source_revisions"] = parts
+        report["report_revision"] = self._revision(parts, window_days)
+        if read_context is not None:
+            read_context["valid_until"] = next_boundary(
+                (item.submitted_at for item in attempts), (item.occurred_at for item in mastery_events),
+                generated_at, window_days,
+            )
+        return report
+
     def _snapshot_is_current(self, profile, report, window_days):
-        projection = self.mastery_service.ability_nodes(profile) if self.mastery_service else None
-        generation_options = (
-            self.mastery_service.next_generation_options(profile)
-            if self.mastery_service and profile.knowledge_base_id else None
-        )
-        attempts = self.feedback_loop_repo.list_attempts(profile.learner_id, 10_000) if self.feedback_loop_repo else []
-        diagnostic_runs = self.diagnosis_repo.list_runs_by_learner(profile.learner_id) if self.diagnosis_repo else []
-        if self._initial_diagnostic_flow(profile).get("status") in {"pending", "retest"}:
-            diagnostic_runs = []
-        resources = self._visible_resources(profile.learner_id)
-        path = self.feedback_loop_repo.get_current_path(profile.learner_id) if self.feedback_loop_repo else None
-        credibility = self._resource_credibility(resources, knowledge_base_id=profile.knowledge_base_id)
-        current_parts = self._revision_parts(
-            profile, projection, attempts, resources, window_days, credibility["items"], diagnostic_runs=diagnostic_runs,
-            resource_difficulty_curve=self._build_resource_difficulty_curve(
-                projection, resources, credibility_items=credibility["items"],
-                credibility_summary=credibility["summary"], attempts=attempts,
-            ),
-            learning_path_graph=self._build_learning_path_graph(
-                projection, path, generation_options,
-                current_batch_node_ids=self._latest_active_batch_target_ids(profile),
-            ),
-        )
-        return current_parts == report["freshness"]["source_revisions"]
+        if self.profile_repo is not None:
+            current = self.profile_repo.get(profile.learner_id)
+            if current is None or current.user_id != profile.user_id:
+                return False
+            profile = current
+        comparison = self._build_report_once(profile, window_days=window_days, now=report["generated_at"])
+        return comparison["report_revision"] == report["report_revision"]
 
     def _average_hallucination_rate(self, resources) -> float:
         values = [
@@ -727,8 +676,7 @@ class ReportService:
 
     @staticmethod
     def _canonical_hash(value: object) -> str:
-        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return canonical_hash(value)
 
     def _learning_activity(self, attempts, now: datetime, window_days: int) -> dict:
         end = now.astimezone(timezone.utc)
@@ -826,149 +774,14 @@ class ReportService:
         return [by_id[node_id] for node_id in ordered_ids]
 
     def _build_blind_spot_map(self, ability_projection, attempts, diagnostic_runs=()) -> dict:
-        """Project only dimension evidence that can be reconstructed exactly.
-
-        A point-level attempt result can cover several questions.  If its stored
-        trace spans more than one dimension, the aggregate score cannot be
-        honestly split across those dimensions, so the relevant cells stay in
-        an evidence-needed state instead of copying the node score.
-        """
-        dimensions = ["concept", "scenario", "misconception", "practice"]
-        nodes = self._ordered_ability_nodes(ability_projection.nodes if ability_projection else [])
-        node_ids = {item.skill_node_id for item in nodes}
-        exact_scores: dict[tuple[str, str], tuple[datetime, str, float]] = {}
-        pending_diagnostic_cells: set[tuple[str, str]] = set()
-        # Initial direction diagnosis is a formal server-scored source too.
-        # Its trace is deliberately de-identified: no learner answer, answer
-        # key, or explanation is needed to render a blind-spot cell.
-        for run in diagnostic_runs:
-            raw = run.raw_result if isinstance(run.raw_result, dict) else {}
-            submitted_at = self._utc(run.created_at) if run.created_at else datetime.min.replace(tzinfo=timezone.utc)
-            for item in raw.get("blind_spot_trace", []):
-                if not isinstance(item, dict):
-                    continue
-                node_id = item.get("skill_node_id")
-                dimension = item.get("diagnostic_dimension")
-                if node_id not in node_ids or dimension not in dimensions or not isinstance(item.get("correct"), bool):
-                    continue
-                key = (node_id, dimension)
-                if item.get("measurement_status") != "measured":
-                    pending_diagnostic_cells.add(key)
-                    continue
-                candidate = (submitted_at, f"diagnosis:{run.diagnostic_result_id}", 1.0 if item["correct"] else 0.0)
-                if key not in exact_scores or candidate[:2] > exact_scores[key][:2]:
-                    exact_scores[key] = candidate
-        for attempt in attempts:
-            trace = attempt.metadata.get("question_trace", []) if isinstance(attempt.metadata, dict) else []
-            trace_by_question = {
-                str(item.get("question_id")): item for item in trace
-                if isinstance(item, dict) and item.get("question_id")
-            }
-            for result in attempt.knowledge_point_results:
-                entries = [trace_by_question.get(question_id) for question_id in result.question_ids]
-                if not entries or any(entry is None for entry in entries):
-                    continue
-                pairs = {
-                    (str(entry.get("skill_node_id")), str(entry.get("diagnostic_dimension")))
-                    for entry in entries
-                    if entry.get("skill_node_id") in node_ids and entry.get("diagnostic_dimension") in dimensions
-                }
-                if len(pairs) != 1:
-                    continue
-                node_id, dimension = pairs.pop()
-                observed = result.correct_count / result.total_count
-                key = (node_id, dimension)
-                candidate = (self._utc(attempt.submitted_at), attempt.attempt_id, observed)
-                if key not in exact_scores or candidate[:2] > exact_scores[key][:2]:
-                    exact_scores[key] = candidate
-
-        cells = []
-        node_states = {}
-        for node in nodes:
-            state = node.mastery
-            statuses = []
-            has_dimension_score = any(
-                (node.skill_node_id, dimension) in exact_scores for dimension in dimensions
-            )
-            for dimension in dimensions:
-                evidence = exact_scores.get((node.skill_node_id, dimension))
-                if evidence is not None:
-                    score = round(evidence[2], 6)
-                    status = self._score_status(score)
-                    reasons = ["FORMAL_DIMENSION_EVIDENCE"]
-                elif (node.skill_node_id, dimension) in pending_diagnostic_cells:
-                    score = None
-                    status = "needs_evidence"
-                    reasons = ["DIAGNOSTIC_COVERAGE_INCOMPLETE"]
-                elif (
-                    dimension == "concept"
-                    and not has_dimension_score
-                    and state.objective_evidence_count > 0
-                    and state.mastery_score is not None
-                ):
-                    # Older generated-resource assessments recorded a verified
-                    # node score but did not label each question with a
-                    # diagnostic dimension.  Surface that real aggregate in
-                    # one clearly bounded cell rather than reporting the whole
-                    # node as unmeasured; do not copy it into other dimensions.
-                    score = round(float(state.mastery_score), 6)
-                    status = self._score_status(score)
-                    reasons = ["FORMAL_NODE_EVIDENCE_NO_DIMENSION"]
-                elif state.objective_evidence_count > 0:
-                    score = None
-                    status = "needs_evidence"
-                    reasons = ["DIMENSION_EVIDENCE_UNAVAILABLE"]
-                elif state.status.value == "self_reported":
-                    score = None
-                    status = "needs_evidence"
-                    reasons = ["LOW_CONFIDENCE_SELF_REPORT"]
-                else:
-                    score = None
-                    status = "unassessed"
-                    reasons = ["NO_OBJECTIVE_EVIDENCE"]
-                statuses.append(status)
-                cells.append({
-                    "skill_node_id": node.skill_node_id,
-                    "dimension": dimension,
-                    "score": score,
-                    "status": status,
-                    "confidence": state.confidence.value,
-                    "objective_evidence_count": state.objective_evidence_count,
-                    "reason_codes": reasons,
-                })
-            node_states[node.skill_node_id] = statuses
-
-        def node_status(statuses):
-            if "verified_weak" in statuses:
-                return "verified_weak"
-            if "learning" in statuses:
-                return "learning"
-            if "mastered" in statuses:
-                return "mastered"
-            if "needs_evidence" in statuses:
-                return "needs_evidence"
-            return "unassessed"
-
-        counts = {key: 0 for key in ("verified_weak", "learning", "mastered", "needs_evidence", "unassessed")}
-        for statuses in node_states.values():
-            counts[node_status(statuses)] += 1
-        measured = sum(1 for statuses in node_states.values() if any(status in {"verified_weak", "learning", "mastered"} for status in statuses))
-        return {
-            "schema_version": "1.0",
-            "dimensions": dimensions,
-            "nodes": [
-                {"skill_node_id": node.skill_node_id, "name": node.name, "stable_order": index,
-                 "prerequisite_ids": list(node.prerequisites)}
-                for index, node in enumerate(nodes, start=1)
-            ],
-            "cells": cells,
-            "summary": {
-                **{f"{key}_count": value for key, value in counts.items()},
-                "measurement_coverage": measured / len(nodes) if nodes else None,
-                "measured_node_count": measured,
-                "total_node_count": len(nodes),
-            },
-        }
+        return projections._build_blind_spot_map(
+            ability_projection,
+            attempts,
+            diagnostic_runs,
+            ordered_ability_nodes=self._ordered_ability_nodes,
+            score_status=self._score_status,
+            utc=self._utc,
+        )
 
     @staticmethod
     def _diagnostic_measurements(diagnostic_runs, ability_projection) -> dict:
@@ -989,403 +802,28 @@ class ReportService:
         return result
 
     def _build_resource_difficulty_curve(
-        self, ability_projection, resources, *, credibility_items=None, credibility_summary=None, attempts=None,
+        self, ability_projection, resources, *, credibility_items=None, claim_enabled_by_run=None, attempts=None,
     ) -> dict:
-        ordered_nodes = self._ordered_ability_nodes(ability_projection.nodes if ability_projection else [])
-        node_order = {item.skill_node_id: index for index, item in enumerate(ordered_nodes)}
-        nodes = {item.skill_node_id: item for item in ordered_nodes}
-        credibility_by_resource = {
-            (item["resource_id"], item.get("resource_version")): item
-            for item in (credibility_items or [])
-        }
-        feedback_by_resource = {}
-        for attempt in attempts or []:
-            resource_id = getattr(attempt, "source_resource_id", None)
-            score = getattr(attempt, "overall_score", None)
-            if resource_id and isinstance(score, (int, float)) and 0 <= score <= 1:
-                key = (resource_id, getattr(attempt, "source_resource_version", 1))
-                feedback_by_resource.setdefault(key, []).append(float(score))
-
-        def calibrated_match(match, feedback_scores):
-            """Raise difficulty only when formal feedback is below 60%."""
-            if match.score is None or match.gap is None or not feedback_scores:
-                return match, None, 0.0
-            feedback_score = sum(feedback_scores) / len(feedback_scores)
-            if feedback_score >= 0.60:
-                return match, feedback_score, 0.0
-            # Readiness provides context so an unprepared learner's low score
-            # does not overstate the resource's actual difficulty.
-            low_score_signal = (0.60 - feedback_score) * 0.20
-            readiness_signal = max(0.0, match.gap) * 0.25
-            adjustment = round(min(0.20, max(low_score_signal, readiness_signal)), 6)
-            score = min(1.0, round(match.score + adjustment, 6))
-            gap = round(score - (match.score - match.gap), 6)
-            if gap < -0.15:
-                status = "too_easy"
-            elif gap <= 0.10:
-                status = "matched"
-            elif gap <= 0.25:
-                status = "challenging"
-            else:
-                status = "too_hard"
-            return match.__class__(
-                score, "calibrated_history", gap, status,
-                ("DIFFICULTY_CALIBRATED_FROM_LOW_FEEDBACK",),
-            ), feedback_score, adjustment
-
-        resource_points = []
-        for resource in resources:
-            if resource.publication_status != "published":
-                continue
-            target_ids = []
-            if resource.learning_path_node in nodes:
-                target_ids.append(resource.learning_path_node)
-            target_ids.extend(point for point in resource.knowledge_points if point in nodes and point not in target_ids)
-            if not target_ids:
-                continue
-            credibility = credibility_by_resource.get((resource.resource_id, resource.version))
-            # A resource is rendered once.  Prefer its explicit learning-path
-            # target; the first linked node is a deterministic legacy fallback.
-            node_id = target_ids[0] if target_ids else None
-            node = nodes.get(node_id) if node_id else None
-            readiness = (
-                node.mastery.mastery_score
-                if node and node.mastery.objective_evidence_count > 0 else None
-            )
-            match = match_difficulty(learner_readiness=readiness, declared_difficulty=resource.difficulty)
-            feedback_scores = feedback_by_resource.get((resource.resource_id, resource.version), [])
-            adjusted_match, feedback_score, difficulty_adjustment = calibrated_match(match, feedback_scores)
-            resource_points.append({
-                "resource_id": resource.resource_id,
-                "skill_node_id": node_id or "unassigned",
-                "skill_name": node.name if node else "未关联能力节点",
-                "point_type": "resource",
-                "batch_id": resource.batch_id or resource.run_id,
-                "_batch_key": resource.batch_id or resource.run_id or "__legacy__",
-                "resource_name": resource.topic or resource.resource_type,
-                "resource_count": 1,
-                "default_resource_difficulty_score": match.score,
-                "learner_readiness_score": readiness,
-                "resource_difficulty_score": adjusted_match.score,
-                "difficulty_gap": adjusted_match.gap,
-                "match_status": adjusted_match.status,
-                "confidence": node.mastery.confidence.value if node else "none",
-                "difficulty_source": adjusted_match.source,
-                "resource_type": resource.resource_type,
-                "resource_ids": [resource.resource_id],
-                "reason_codes": list(adjusted_match.reason_codes),
-                "feedback_score": feedback_score,
-                "feedback_count": len(feedback_scores),
-                "difficulty_adjustment": difficulty_adjustment,
-                "credibility_score": credibility.get("credibility_score") if credibility else None,
-                "credibility_level": credibility.get("credibility_level") if credibility else None,
-                "credibility_grade": credibility.get("grade") if credibility else None,
-                "credibility_score_breakdown": credibility.get("score_breakdown") if credibility else None,
-                "_published_at": resource.published_at or resource.created_at,
-            })
-
-        batches = {}
-        for point in resource_points:
-            batches.setdefault(point["_batch_key"], []).append(point)
-
-        def batch_time(items):
-            dates = [item["_published_at"] for item in items if item["_published_at"] is not None]
-            return max((self._utc(value) for value in dates), default=datetime.min.replace(tzinfo=timezone.utc))
-
-        ordered_batches = sorted(batches.items(), key=lambda item: (batch_time(item[1]), str(item[0])))
-        latest_batch_id = ordered_batches[-1][0] if ordered_batches else None
-
-        def average(items, key):
-            values = [item[key] for item in items if isinstance(item.get(key), (int, float))]
-            return round(sum(values) / len(values), 6) if values else None
-
-        def aggregate_batch(batch_id, items):
-            readiness = average(items, "learner_readiness_score")
-            difficulty = average(items, "resource_difficulty_score")
-            gap = average(items, "difficulty_gap")
-            calibrated = any(item["difficulty_source"] == "calibrated_history" for item in items)
-            if readiness is None or difficulty is None or gap is None:
-                status = "not_measured"
-                source = "unavailable" if difficulty is None else "calibrated_history" if calibrated else "declared_band"
-            elif gap < -0.15:
-                status = "too_easy"
-                source = "calibrated_history" if calibrated else "declared_band"
-            elif gap <= 0.10:
-                status = "matched"
-                source = "calibrated_history" if calibrated else "declared_band"
-            elif gap <= 0.25:
-                status = "challenging"
-                source = "calibrated_history" if calibrated else "declared_band"
-            else:
-                status = "too_hard"
-                source = "calibrated_history" if calibrated else "declared_band"
-            reason_codes = ["BATCH_AVERAGE"]
-            if calibrated:
-                reason_codes.append("BATCH_INCLUDES_FEEDBACK_CALIBRATION")
-            scores = [item["credibility_score"] for item in items if isinstance(item.get("credibility_score"), (int, float))]
-            return {
-                "resource_id": f"batch:{batch_id}",
-                "skill_node_id": f"batch:{batch_id}",
-                "skill_name": "历史批次平均",
-                "point_type": "batch_average",
-                "batch_id": None if batch_id == "__legacy__" else batch_id,
-                "resource_name": "历史资源批次",
-                "resource_count": len({resource_id for item in items for resource_id in item["resource_ids"]}),
-                "default_resource_difficulty_score": average(items, "default_resource_difficulty_score"),
-                "learner_readiness_score": readiness,
-                "resource_difficulty_score": difficulty,
-                "difficulty_gap": gap,
-                "match_status": status,
-                "confidence": "batch_average",
-                "difficulty_source": source,
-                "resource_type": "批次平均",
-                "resource_ids": list(dict.fromkeys(resource_id for item in items for resource_id in item["resource_ids"])),
-                "reason_codes": reason_codes,
-                "feedback_score": average(items, "feedback_score"),
-                "feedback_count": sum(item.get("feedback_count", 0) for item in items),
-                "difficulty_adjustment": average(items, "difficulty_adjustment"),
-                "credibility_score": average(items, "credibility_score"),
-                "credibility_level": "batch_average" if scores else None,
-                "credibility_grade": None,
-                "credibility_score_breakdown": None,
-            }
-
-        points = []
-        for batch_key, items in ordered_batches:
-            if batch_key == latest_batch_id:
-                points.extend(sorted(
-                    items,
-                    key=lambda item: (node_order.get(item["skill_node_id"], len(node_order)), item["resource_id"]),
-                ))
-            else:
-                points.append(aggregate_batch(batch_key, items))
-        for point in points:
-            point.pop("_published_at", None)
-            point.pop("_batch_key", None)
-        counts = {key: 0 for key in ("too_easy", "matched", "challenging", "too_hard", "not_measured")}
-        for point in points:
-            counts[point["match_status"]] += 1
-        measured = len(points) - counts["not_measured"]
-        resource_count = len(resource_points)
-        return {
-            "schema_version": "1.0",
-            "strategy_version": STRATEGY_VERSION,
-            "points": points,
-            "summary": {
-                "total_point_count": len(points),
-                "total_resource_count": resource_count,
-                "batch_count": len(ordered_batches),
-                "expanded_resource_count": sum(len(items) for batch_id, items in ordered_batches if batch_id == latest_batch_id),
-                "aggregated_batch_count": max(0, len(ordered_batches) - 1),
-                "measured_point_count": measured,
-                "measurement_coverage": measured / len(points) if points else None,
-                "credibility_strategy_version": (credibility_summary or {}).get("scoring_strategy_version"),
-                "credibility_scored_count": (credibility_summary or {}).get("scored_count", 0),
-                "average_credibility_score": (credibility_summary or {}).get("average_credibility_score"),
-                "claim_review_passed_count": (credibility_summary or {}).get("claim_review_passed_count", 0),
-                "claim_ceiling_applied_count": (credibility_summary or {}).get("claim_ceiling_applied_count", 0),
-                **{f"{key}_count": value for key, value in counts.items()},
-            },
-        }
+        return projections._build_resource_difficulty_curve(
+            ability_projection,
+            resources,
+            credibility_items=credibility_items,
+            claim_enabled_by_run=claim_enabled_by_run,
+            attempts=attempts,
+            ordered_ability_nodes=self._ordered_ability_nodes,
+            utc=self._utc,
+        )
 
     def _build_learning_path_graph(
         self, ability_projection, path, generation_options, *, current_batch_node_ids: set[str] | None = None,
     ) -> dict:
-        nodes = self._ordered_ability_nodes(ability_projection.nodes if ability_projection else [])
-        known_ids = {item.skill_node_id for item in nodes}
-        curriculum = {
-            item.skill_node_id: item for item in (ability_projection.curriculum_nodes if ability_projection else [])
-        }
-        path_nodes = {}
-        for item in (path.nodes if path else []):
-            if item.knowledge_point_id in known_ids:
-                path_nodes[item.knowledge_point_id] = item
-        recommended_ids = set(generation_options.recommended_node_ids if generation_options else [])
-        remedial_ids = {
-            item.skill_node_id for item in (generation_options.reinforce_weakness if generation_options else [])
-        }
-        new_ids = {
-            item.skill_node_id for item in (generation_options.learn_new_knowledge if generation_options else [])
-        }
-        # Only the newest effective generation batch defines "current
-        # learning".  If that batch projection is unavailable, do not infer
-        # currentness from mastery or curriculum status: those facts describe
-        # learner progress, not membership in the latest round.
-        current_ids = set(current_batch_node_ids or ())
-        tier_progress = getattr(generation_options, "tier_progress", None) if generation_options else None
-        highest_unlocked_tier = getattr(tier_progress, "highest_unlocked_tier", None)
-
-        graph_nodes = []
-        for index, node in enumerate(nodes, start=1):
-            path_node = path_nodes.get(node.skill_node_id)
-            progress = curriculum.get(node.skill_node_id)
-            missing = [
-                prerequisite for prerequisite in node.prerequisites
-                if prerequisite in known_ids and (curriculum.get(prerequisite) is None or curriculum[prerequisite].published_resource_count <= 0)
-            ]
-            tier_locked = bool(
-                highest_unlocked_tier is not None
-                and node.tier is not None
-                and node.tier > highest_unlocked_tier
-            )
-            placement_exempt = bool(progress and progress.placement_exempt and not progress.placement_verification_required)
-            learning_history = bool(progress and (
-                progress.published_resource_count > 0
-                or progress.verified_attempt_count > 0
-                or progress.progress_status.value in {"exposed", "verification_pending", "reinforcement_due", "completed"}
-            ))
-            # Placement has already covered lower tiers.  These nodes are not
-            # formally completed, but they must not be presented as blocked
-            # just because no learning batch was generated for them.
-            # Likewise, a node that has already been published or assessed
-            # retains its learning outcome when the learner temporarily
-            # returns to a prerequisite tier. It is historical progress, not
-            # a newly blocked future node.
-            blocked = (
-                not placement_exempt
-                and not learning_history
-                and (bool(missing) or tier_locked or bool(path_node and path_node.status.value == "locked"))
-            )
-            if node.skill_node_id in current_ids:
-                role = "current"
-            elif node.skill_node_id in remedial_ids:
-                # Only the server's eligible "learned but not mastered" set is
-                # actionable remediation. A weak diagnosis alone does not mean
-                # the learner has first received this node's learning resource.
-                role = "remedial"
-            elif path_node and path_node.node_type.value == "challenge":
-                role = "challenge"
-            elif path_node and path_node.node_type.value == "remedial":
-                role = "remedial"
-            elif node.skill_node_id in recommended_ids or node.skill_node_id in new_ids:
-                role = "next"
-            elif node.mastery.status.value == "weak" and generation_options is None:
-                # Retain the legacy read-only projection for report callers
-                # that do not have the generation-option service wired.
-                role = "remedial"
-            elif node.mastery.status.value in {"unassessed", "self_reported"}:
-                role = "verification"
-            else:
-                role = "prerequisite"
-            reason_codes = []
-            if node.mastery.status.value == "weak":
-                reason_codes.append("OBJECTIVE_SCORE_BELOW_0_60")
-            if node.mastery.status.value == "self_reported":
-                reason_codes.append("LOW_CONFIDENCE_SELF_REPORT")
-            if missing:
-                reason_codes.append("PREREQUISITES_NOT_YET_EXPOSED")
-            if tier_locked:
-                reason_codes.append("TIER_NOT_UNLOCKED")
-            if placement_exempt:
-                reason_codes.append("PLACEMENT_EXEMPT")
-            if path_node:
-                reason_codes.append(f"PATH_NODE_{path_node.node_type.value.upper()}")
-            resource_types = (
-                ["讲义", "实操指南", "分阶测试题"] if role == "remedial"
-                else ["复习清单", "实操指南", "分阶测试题"] if role == "current"
-                else ["案例分析", "分阶测试题"] if role == "challenge"
-                else ["分阶测试题"] if role == "verification"
-                else ["讲义", "复习清单"]
-            )
-            graph_nodes.append({
-                "skill_node_id": node.skill_node_id,
-                "name": node.name,
-                "progress_status": progress.progress_status.value if progress else (path_node.status.value if path_node else "unplanned"),
-                "placement_verification_status": (
-                    "verification_required" if progress and progress.placement_verification_required
-                    else "placement_exempt" if progress and progress.placement_exempt
-                    else "formally_reverified" if progress and progress.placement_evidence_id
-                    else "not_applicable"
-                ),
-                "placement_exempt": placement_exempt,
-                "mastery_status": node.mastery.status.value,
-                "mastery_score": node.mastery.mastery_score,
-                "confidence": node.mastery.confidence.value,
-                "role": role,
-                "is_current_batch": node.skill_node_id in current_ids,
-                "blocked": blocked,
-                "blocked_by_node_ids": missing,
-                "recommended_resource_types": resource_types,
-                "reason_codes": reason_codes or ["KNOWLEDGE_GRAPH_POSITION"],
-                "stable_order": index,
-                "tier": node.tier,
-                "prerequisite_ids": [item for item in node.prerequisites if item in known_ids],
-            })
-        edges = [
-            {"source_skill_node_id": edge["from"], "target_skill_node_id": edge["to"], "relation": "prerequisite"}
-            for edge in (ability_projection.edges if ability_projection else [])
-            if edge.get("from") in known_ids and edge.get("to") in known_ids and edge.get("from") != edge.get("to")
-        ]
-        order_by_id = {item["skill_node_id"]: item["stable_order"] for item in graph_nodes}
-        edges.sort(key=lambda item: (
-            order_by_id[item["source_skill_node_id"]],
-            order_by_id[item["target_skill_node_id"]],
-        ))
-        # "Focus" is the learner-facing projection of the newest generation
-        # batch.  Do not include merely recommended next nodes here: they are
-        # available choices for a future batch, not part of this round.
-        focus_ids = [
-            item["skill_node_id"]
-            for item in graph_nodes
-            if item["skill_node_id"] in current_ids
-        ]
-        return {
-            "schema_version": "1.0",
-            "path_id": path.path_id if path else None,
-            "path_version": path.version if path else None,
-            "nodes": graph_nodes,
-            "edges": edges,
-            "current_node_ids": sorted(current_ids),
-            "recommended_next_node_ids": sorted(recommended_ids),
-            "focus_node_ids": focus_ids,
-            "summary": {
-                "total_node_count": len(graph_nodes),
-                "blocked_node_count": sum(item["blocked"] for item in graph_nodes),
-                "remedial_node_count": sum(item["role"] == "remedial" for item in graph_nodes),
-                "eligible_remedial_node_count": len(remedial_ids),
-                "verification_node_count": sum(item["role"] == "verification" for item in graph_nodes),
-                "next_node_count": sum(item["role"] == "next" for item in graph_nodes),
-            },
-        }
-
-    def _revision_parts(
-        self, profile, ability_projection, attempts, resources, window_days, credibility_items=None,
-        *, resource_difficulty_curve=None, learning_path_graph=None, diagnostic_runs=(),
-    ):
-        flow = self._initial_diagnostic_flow(profile)
-        calibration_pending = flow.get("status") in {"pending", "retest"}
-        profile_part = {"learner_id": profile.learner_id, "knowledge_base_id": profile.knowledge_base_id,
-                        "profile_version": "initial_calibration_pending" if calibration_pending else profile.profile_version,
-                        "skill_level": profile.skill_level,
-                        "learning_goal": profile.learning_goal}
-        mastery_part = [node.model_dump(mode="json") for node in sorted((ability_projection.nodes if ability_projection else []), key=lambda item: item.skill_node_id)]
-        activity_part = [{"id": item.attempt_id, "submitted_at": item.submitted_at, "results": [x.model_dump(mode="json") for x in item.knowledge_point_results],
-                          "assessment": {key: item.metadata.get(key) for key in ("assessment_kind", "assessment_session_id", "assessment_form_id", "scoring_audit")},
-                          "question_trace": [{key: trace.get(key) for key in ("question_id", "skill_node_id", "diagnostic_dimension")} for trace in item.metadata.get("question_trace", []) if isinstance(trace, dict)]}
-                         for item in sorted(attempts, key=lambda item: (self._utc(item.submitted_at), item.attempt_id))]
-        activity_part.append({"diagnostic_traces": [
-            {"id": run.diagnostic_result_id, "created_at": run.created_at,
-             "trace": (run.raw_result or {}).get("blind_spot_trace", [])}
-            for run in sorted(diagnostic_runs, key=lambda run: (self._utc(run.created_at) if run.created_at else datetime.min.replace(tzinfo=timezone.utc), run.diagnostic_result_id))
-        ]})
-        resource_part = [{"id": item.resource_id, "version": item.version, "publication": item.publication_status,
-                          "review": item.review_status, "review_id": item.review_id, "claim_metric": item.claim_metric_status,
-                          "claim_rate": item.claim_hallucination_rate, "refs": [ref.model_dump(mode="json") for ref in sorted(item.source_refs, key=lambda ref: (ref.evidence_id or "", ref.doc_id, ref.chunk_id or ""))]}
-                         for item in sorted(resources, key=lambda item: (item.resource_id, item.version))]
-        # Review issues and immutable Claim/Judgement verdicts live in their
-        # own repositories.  Projecting only their safe credibility summary
-        # ensures a quality correction changes revision even when the profile
-        # version is deliberately unchanged.
-        if credibility_items is not None:
-            resource_part.append({"credibility": credibility_items})
-        return ReportRevisionPartsV1(
-            profile=self._canonical_hash(profile_part),
-            mastery=self._canonical_hash(mastery_part),
-            activity=self._canonical_hash(activity_part),
-            text_resources=self._canonical_hash(resource_part),
-            resource_match=self._canonical_hash(resource_difficulty_curve or {}),
-            path=self._canonical_hash(learning_path_graph or {}),
-        ).model_dump()
+        return projections._build_learning_path_graph(
+            ability_projection,
+            path,
+            generation_options,
+            current_batch_node_ids=current_batch_node_ids,
+            ordered_ability_nodes=self._ordered_ability_nodes,
+        )
 
     def _revision(self, parts, window_days):
         return "rpt_" + self._canonical_hash({
@@ -1445,10 +883,33 @@ class ReportService:
 
     def _resource_credibility(self, resources, *, knowledge_base_id: str | None = None):
         items = []
+        resources = [resource for resource in resources
+                     if resource.publication_status == "published" and str(resource.representation) in {"text", "ResourceRepresentation.TEXT"}
+                     and resource.resource_type in SUPPORTED_RESOURCE_TYPES]
+        resource_ids = [item.resource_id for item in resources]
+        reviews = {}
+        if self.audit_repo:
+            batch = getattr(self.audit_repo, "get_reviews_by_resources", None)
+            reviews = batch(resource_ids) if batch else {rid: self.audit_repo.get_review_by_resource(rid) for rid in dict.fromkeys(resource_ids)}
+        runs = list(dict.fromkeys(item.run_id for item in resources if item.run_id and item.review_id))
+        claim_groups, judgement_groups = {}, {}
+        session_groups, supplement_groups = {}, {}
+        if self.claim_repo:
+            for method, single, target in (("list_claims_by_runs", "list_claims_by_run", claim_groups),
+                                           ("list_judgements_by_runs", "list_judgements_by_run", judgement_groups)):
+                batch = getattr(self.claim_repo, method, None)
+                values = batch(runs) if batch else [item for run in runs for item in getattr(self.claim_repo, single)(run)]
+                for item in values:
+                    target.setdefault((item.run_id, item.resource_id, item.resource_version, item.review_id), []).append(item)
+        if self.supplement_repo is not None and runs:
+            for values, target in (
+                (self.supplement_repo.list_sessions(runs), session_groups),
+                (self.supplement_repo.list_supplements(runs), supplement_groups),
+            ):
+                for item in values:
+                    target.setdefault((item.run_id, item.resource_id, item.resource_version, item.review_id), []).append(item)
         for resource in resources:
-            if resource.publication_status != "published" or str(resource.representation) not in {"text", "ResourceRepresentation.TEXT"} or resource.resource_type not in SUPPORTED_RESOURCE_TYPES:
-                continue
-            review = self.audit_repo.get_review_by_resource(resource.resource_id) if self.audit_repo else None
+            review = reviews.get(resource.resource_id)
             review_matches = bool(review and review.review_id == resource.review_id)
             review_status_value = normalize_review_status(
                 review.status if review_matches else resource.review_status,
@@ -1458,9 +919,17 @@ class ReportService:
             review_passed = review_matches and review_status_is_approved(review_status_value) and not blocking_count
             blocking = review_status_value in {"rejected", "human_review", "revision_requested"} or bool(blocking_count)
             review_status = "failed" if blocking else "passed" if review_passed else "not_measured"
-            claims, judgements = self._claims_for_resource(resource)
+            claims, judgements = self._claims_for_resource(resource, claim_groups, judgement_groups)
             if claims:
-                computed = compute_claim_metric(claims, judgements)
+                binding = (resource.run_id, resource.resource_id, resource.version, resource.review_id)
+                try:
+                    resolution = resolve_effective_claim_judgements(
+                        judgements, session_groups.get(binding, ()), supplement_groups.get(binding, ()),
+                    )
+                    effective_judgements = resolution.judgements.values()
+                except ClaimResolutionConflict:
+                    effective_judgements = ()
+                computed = compute_claim_metric(claims, effective_judgements)
                 metric = computed.metric_status.value
                 unsupported_rate = computed.claim_hallucination_rate
                 claim_status = "failed" if metric == ClaimMetricStatus.COMPLETE.value and (computed.contradicted_claim_total or computed.not_in_evidence_claim_total) else "passed" if metric == ClaimMetricStatus.COMPLETE.value else "not_applicable" if metric == ClaimMetricStatus.NOT_APPLICABLE.value else "not_measured"
@@ -1551,15 +1020,82 @@ class ReportService:
                 **{f"credibility_{level}_count": count for level, count in level_counts.items()},
                 "notice": "可信等级表示平台可验证的生成质量证据，不等价于来源机构权威性或绝对事实正确。"}}
 
-    def _claims_for_resource(self, resource):
-        if not self.claim_repo or not resource.run_id or not resource.review_id:
-            return [], []
-        claims = [item for item in self.claim_repo.list_claims_by_run(resource.run_id)
-                  if item.resource_id == resource.resource_id and item.resource_version == resource.version and item.review_id == resource.review_id]
+    def _resource_quality(self, resources, *, order=(), ability_names=None) -> dict:
+        """Summarize recent published resources and keep complete batches selectable."""
+        if self.quality_service is None:
+            return {"summary": None, "items": [], "batches": []}
+        eligible = [
+            resource for resource in resources
+            if resource.publication_status == "published"
+            and resource.representation is ResourceRepresentation.TEXT
+            and resource.resource_type in SUPPORTED_RESOURCE_TYPES
+        ]
+        if not eligible:
+            return {"summary": None, "items": [], "batches": []}
+        run_ids = sorted({resource.run_id for resource in eligible if resource.run_id})
+        wanted = {resource.resource_id for resource in eligible}
+        by_id = {
+            item.resource_id: item for item in self.quality_service.items_for_runs(run_ids)
+            if item.resource_id in wanted
+        }
+        by_id = {resource.resource_id: item for resource in eligible
+                 if (item := by_id.get(resource.resource_id)) is not None
+                 and (item.run_id, item.resource_version, item.review_id, item.resource_spec_id)
+                 == (resource.run_id, resource.version, resource.review_id, resource.resource_spec_id)}
+        items = [
+            by_id.get(resource.resource_id) or self.quality_service.unavailable_item(resource)
+            for resource in eligible
+        ]
+        position = {
+            item["resource_id"]: index for index, item in enumerate(order)
+        }
+        items.sort(key=lambda item: (
+            position.get(item.resource_id, len(position)), item.resource_id,
+        ))
+        resources_by_id = {resource.resource_id: resource for resource in eligible}
+        recent = items[:RECENT_RESOURCE_QUALITY_LIMIT]
+        node_names = ability_names or {}
+        recent_items = []
+        for item in recent:
+            resource = resources_by_id[item.resource_id]
+            node_id = resource.learning_path_node or next(
+                (point for point in resource.knowledge_points if point in node_names), None,
+            )
+            recent_items.append(ReportRecentResourceQualityV1(
+                **item.model_dump(),
+                learning_node_id=node_id,
+                learning_node_name=node_names.get(node_id),
+            ))
+        groups = {}
+        for item in items:
+            resource = resources_by_id[item.resource_id]
+            batch_id = resource.batch_id or resource.run_id
+            key = f"batch:{batch_id}" if batch_id else f"resource:{resource.resource_id}"
+            groups.setdefault(key, []).append(item)
+
+        batches = []
+        for key, members in groups.items():
+            members_resources = [resources_by_id[item.resource_id] for item in members]
+            dates = [self._utc(resource.created_at or resource.published_at)
+                     for resource in members_resources if resource.created_at or resource.published_at]
+            batches.append({
+                "key": key,
+                "topic": next((resource.topic for resource in members_resources if resource.topic), "学习资源"),
+                "created_at": min(dates, default=None),
+                "summary": self.quality_service.summarize_items(members),
+                "items": members,
+            })
+        batches.sort(key=lambda batch: (
+            batch["created_at"] or datetime.min.replace(tzinfo=timezone.utc), batch["key"],
+        ), reverse=True)
+        return {"summary": self.quality_service.summarize_items(recent), "items": recent_items, "batches": batches}
+
+    @staticmethod
+    def _claims_for_resource(resource, claim_groups, judgement_groups):
+        binding = (resource.run_id, resource.resource_id, resource.version, resource.review_id)
+        claims = claim_groups.get(binding, [])
         claim_ids = {item.claim_id for item in claims}
-        judgements = [item for item in self.claim_repo.list_judgements_by_run(resource.run_id)
-                      if item.claim_id in claim_ids and item.resource_id == resource.resource_id and item.resource_version == resource.version and item.review_id == resource.review_id]
-        return claims, judgements
+        return claims, [item for item in judgement_groups.get(binding, []) if item.claim_id in claim_ids]
 
     def _visible_resources(self, learner_id: str):
         """Return the learner-facing projection, excluding superseded versions."""

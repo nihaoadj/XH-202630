@@ -10,6 +10,7 @@ from app.core.llm.gateway import LLMGateway
 from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
 
 from .base import BaseResourceGenerationAgent
+from .lecture_contract import lecture_payload
 
 
 TEXT_RESOURCE_PROMPT = """你是 TextResourceAgent，专门生成可直接学习的个性化 Markdown 讲义。优先保证证据可追溯、学习结构清晰和完整收束。
@@ -17,26 +18,33 @@ TEXT_RESOURCE_PROMPT = """你是 TextResourceAgent，专门生成可直接学习
 硬性边界：
 1. 只使用输入中的冻结 evidence，不得借助记忆或外部知识补充事实。
 2. 只生成当前 ResourceSpec 对应的一份讲义，不生成实操指南、测试题或 HTML。
-3. 围绕 learning_objective 和 knowledge_points 组织内容，并匹配指定 difficulty。
-4. Markdown 必须包含唯一一级标题，以及“学习目标、核心概念、逐点讲解、示例、常见误区、练习建议、总结”层级。
+3. 围绕 learning_objective 和 knowledge_points 组织内容，并匹配指定 difficulty 与 teaching_contract。knowledge_points 是内部范围标识，正文按 knowledge_point_display_names 表达其语义，不要抄内部ID。
+4. Markdown 必须有唯一一级标题，并用二级标题组织概念讲解。
 5. 技术事实、参数、结论与示例必须能由 evidence 支持；证据不足时明确指出边界，不得猜测。
 6. knowledge_points 只能使用 ResourceSpec 中声明的知识点，并须完整覆盖。
 7. 直接输出 Markdown 正文；不要输出 JSON、资源 ID、证据引用对象、Markdown 围栏或任何解释。
 
 稳定输出规则：
 1. 第一行必须是唯一的一级标题，且必须严格为输入 display_title，格式为“# <display_title>”；其余内容只包含讲义正文。
-2. 按“学习目标、核心概念、逐点讲解、示例、常见误区、练习建议、总结”的顺序使用二级标题；每个知识点至少在“逐点讲解”中落到一个可学习的小节。
-3. 正文目标为 5,000～8,500 个中文字符，硬性不得超过 12,000 个字符。输出预算仅用于保证完整性，不是扩写配额；证据不足时宁可明确边界，也不要编造或拉长内容。
-4. “学习目标”写 3 条；“核心概念”写 3～6 项；“逐点讲解”按知识点写 3～6 个三级小节；“示例”写 2 个；“常见误区”写 3～5 项；“练习建议”写 3 项；“总结”写 4～6 条。每项只讲一个要点，避免复述 evidence。
-5. 单个三级小节不超过 750 个字符，单个示例不超过 600 个字符，单个误区或练习建议不超过 200 个字符。完成最后一个必填字段后立即停止输出；不要为填满 token 预算重复说明、增加同义段落或扩展无关背景。
-6. 一次性完整输出整篇 Markdown，在“总结”结束后立即停止；不得拆成多段，不得在正文外附加说明。若篇幅接近上限，优先压缩措辞而非省略必填章节或知识点。
+2. 简短交代本篇要理解的问题，按概念之间的关系组织正文。每个目标知识点都要有可独立阅读的讲解，可在相关小节说明其含义、用途及适用边界。标题随内容设置，teaching_contract.explanation_subsections 仅供组织篇幅参考。
+3. 正文目标由 teaching_contract.target_chars 按当前难度确定，初级不要套用长篇工程手册；最大仍不得超过12,000字符。目标不是最低字数，也不是扩写配额；证据不足时宁可明确边界，不编造或拉长内容。
+4. 示例就近放在所解释的概念下。按需加入误区或简短总结，避免重复讲解。正文讲完即可结束；确有帮助时可在末尾附一至两项自检，材料与判断依据随题给出。
+5. 单个三级小节不超过 750 个字符，单个示例不超过 600 个字符，单个误区或自检不超过 200 个字符。不要为填满 token 预算重复说明、增加同义段落或扩展无关背景。
+6. 一次性完整输出整篇 Markdown，正文外不附加说明。若篇幅接近上限，压缩措辞，保证目标知识点完整覆盖。
+
+教学加工规则：
+1. 严格落实teaching_contract.rules：示例自包含、受众匹配、展示名、通用与项目边界、递进和去重复。证据是事实材料，不是要照抄的课程脚本。
+2. 用简短、证据支持的示例直接解释概念；只有同一情境有助于串联多个目标概念且材料齐全时才用贯穿案例。正文应讲清例子说明了什么。保留材料标识时，提供读者理解示例所需的内容；要求读者定位原文或核对原话时，须提供相关原文。
+3. 初级先解释概念和链路直觉，除非目标直接要求，不展开hash、模型revision、数据库迁移、冻结快照或生产治理细节；术语首次集中解释，不在每节附重复术语表、自检和相同警告。高级目标仍按显式难度处理。
+4. 本项目工程约定、实验设置必须明确限定，不能冒充通用规范；不伪造日期、API、参数或性能指标。内部节点/资源/运行/证据ID、存储路径不作教学内容，但保留真正需要学习的API术语。
+5. 输出前在内部完成teaching_contract.self_check；只输出讲义正文，不输出自检报告、证据清单或你掌握的来源数量。
 """
 
 
 class TextResourceAgent(BaseResourceGenerationAgent):
     resource_type = "讲义"
     agent_name = "TextResourceAgent"
-    prompt_version = "text-resource-v5-bounded-markdown"
+    prompt_version = "text-resource-v8-concept-explanation"
     artifact_format = "markdown"
     default_max_output_tokens = 32768
 
@@ -45,7 +53,7 @@ class TextResourceAgent(BaseResourceGenerationAgent):
         spec: ResourceSpec,
         context: ResourceGenerationContext,
     ):
-        payload = self.common_prompt_payload(spec, context)
+        payload = lecture_payload(self.common_prompt_payload(spec, context), spec, context)
         return [
             SystemMessage(content=TEXT_RESOURCE_PROMPT),
             HumanMessage(

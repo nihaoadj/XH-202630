@@ -1,0 +1,404 @@
+"""Validate and freeze one failed resource without re-diagnosing the learner."""
+from __future__ import annotations
+
+from app.models.generation.correction_dispatch import unwrap_correction_dispatch
+
+import json
+
+from app.services.generation.lecture_policy import resolve_lecture_dispatch
+from app.services.generation.resource_review_policy import resolve_resource_review_dispatch
+from app.config import get_settings
+from app.core.retrieval.knowledge_ids import query_hash
+from app.core.security.errors import ApplicationError, ErrorCode
+from app.models.generation.dispatch import (
+    ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION,
+    ESTIMATE_TEXT_WORKFLOW_VERSION,
+    RESOURCE_RETRY_WORKFLOW_VERSION,
+    TEXT_WORKFLOW_VERSION,
+)
+from app.models.generation.resource_retry import ResourceRetryContext, retry_source_snapshot
+from app.models.knowledge.knowledge import EvidenceAllocation, RESOURCE_AWARE_STRATEGY
+from app.models.learning_documents.schemas import GenerateRequest, LearnerProfile
+from app.models.shared.agent_contracts import ResourceSpec
+from app.models.shared.persistence import WorkflowCheckpoint, canonical_hash
+from app.agents.resource_workflows.learning_documents.claim_extraction.budget import snapshot_fields
+from app.models.reviews.claim_extraction import policy_from_input
+from app.agents.resource_workflows.learning_documents.revision_inputs import (
+    build_claim_review_revision_input,
+    build_resource_review_revision_input,
+    pack_revision_input,
+    scope_ordinary_feedback,
+)
+
+
+def retry_conflict(detail="原任务冻结上下文不完整，无法从资源生成处重试；请明确选择批次完整重新生成"):
+    return ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, public_message=detail, status_code=409)
+
+
+def _generation_scopes(generation, run_id, parent, *, boundary_resource_id=None):
+    repository = getattr(generation, "supplement_repository", None)
+    if repository is None:
+        return [], []
+    try:
+        scopes = repository.list_evidence_sets([run_id])
+        if not scopes:
+            return [], []
+        from app.models.reviews.evidence_lineage import resource_lineage
+
+        resources = getattr(generation, "resource_repo", None)
+        if getattr(parent, "run_id", run_id) != run_id:
+            raise ValueError("retry evidence run mismatch")
+        lineage = list(resource_lineage(
+            parent, resources.get if resources else lambda _: None,
+            within_run=True, boundary_resource_id=boundary_resource_id,
+        ))
+    except Exception as exc:  # noqa: BLE001 - never retry with an unproven context
+        raise retry_conflict() from exc
+    selected = [scope for scope in scopes if
+        getattr(scope, "purpose", None) == "generation"
+        and any(getattr(scope, "resource_version", None) == item.version
+                and getattr(scope, "resource_id", None) == item.resource_id for item in lineage)
+    ]
+    return selected, lineage
+
+
+def _has_supplement_scope(generation, run_id: str, parent) -> bool:
+    return bool(_generation_scopes(generation, run_id, parent)[0])
+
+
+def _frozen_review_work_order(audit, projection, *, run_id, resource, spec):
+    """Read the exact parent's private findings, never its lossy public summary."""
+    if resource is None:
+        return None
+    from app.models.reviews.review_audit import review_audit_envelope
+    from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.revision import build_revision_work_order
+
+    for ref in reversed(projection.get("review_audit_refs", [])):
+        if ref.get("schema_version") != "4.0":
+            continue
+        record = audit.get_step_review_audit(run_id, ref["step_id"])
+        if record is None:
+            raise ValueError("retry private review audit missing")
+        envelope = review_audit_envelope(record, run_id=run_id, step_id=ref["step_id"])
+        if envelope["audit_hash"] != ref.get("audit_hash"):
+            raise ValueError("retry private review audit hash mismatch")
+        for ledger in record.resource_ledgers:
+            if ledger.binding.resource_id == resource.resource_id:
+                return build_revision_work_order(
+                    resource_spec_id=spec.resource_spec_id, resource=resource, previous=ledger,
+                    revision_kind="ordinary", targets=tuple(spec.knowledge_points),
+                ).as_dict()
+    return None
+
+
+def _retry_revision_input(*, generation, run_id, resource, spec_id, spec, feedback, evidence, work_order=None):
+    """Build the single typed generation revision input for one retry (T46).
+
+    Ordinary review failure reasons take precedence: they are adapted into a
+    ``ResourceReviewRevisionInput`` and packed into the versioned, kind-tagged
+    envelope that travels inside the legacy ``revision_feedback`` slot. Only
+    when the parent's ordinary review passed do we fall back to the Claim-audit
+    revision, built from the persisted Claims/Judgements and the frozen
+    Evidence. A pure failure rebuild without any review keeps the legacy
+    feedback dictionary, and a missing parent can never forge either input.
+    """
+    if resource is None:
+        return feedback
+    feedback = scope_ordinary_feedback(feedback, spec_id, resource)
+    has_ordinary = bool(feedback.get("issues") or feedback.get("revision_instructions"))
+    if has_ordinary or (work_order and work_order.get("open_issues")):
+        model = build_resource_review_revision_input(
+            resource_spec_id=spec_id,
+            resource=resource,
+            targets=tuple(spec.knowledge_points),
+            feedback=feedback,
+            work_order=work_order,
+        )
+        return pack_revision_input(model)
+    claim_repo = getattr(generation, "claim_repo", None)
+    if claim_repo is None:
+        return feedback
+    try:
+        claims = claim_repo.list_claims_by_run(run_id)
+        judgements = claim_repo.list_judgements_by_run(run_id)
+    except (AttributeError, TypeError):
+        return feedback
+    if not any(c.resource_id == resource.resource_id and c.resource_version == resource.version for c in claims):
+        # Review may fail before Claim extraction; there is no Claim revision
+        # source identity to validate until this resource has actually run it.
+        return feedback
+    model = build_claim_review_revision_input(
+        resource_spec_id=spec_id,
+        resource=resource,
+        targets=tuple(spec.knowledge_points),
+        claims=claims,
+        judgements=judgements,
+        evidence=evidence,
+    )
+    if model.problems:
+        return pack_revision_input(model)
+    return feedback
+
+
+def prepare_resource_retry(service, learner, run_id, spec_id, representation):
+    """Read-only preparation. Only the dedicated authorized use case calls this."""
+    if representation != "text":
+        raise ApplicationError(ErrorCode.REQUEST_VALIDATION_ERROR, status_code=422)
+    source = service.job_repo.get(run_id)
+    if source is None or source.learner_id != learner.learner_id:
+        raise ApplicationError(ErrorCode.WORKFLOW_RUN_NOT_FOUND, status_code=404)
+    if source.job_status not in {"completed", "failed"}:
+        raise retry_conflict("原任务尚未结束，不能单独重新生成资料")
+    generation = service.generation_service
+    repo, audit = generation.resource_repo, generation.audit_repo
+    spec_record = repo.get_spec(spec_id)
+    if spec_record is None or spec_record.run_id != run_id:
+        raise ApplicationError(ErrorCode.WORKFLOW_RUN_NOT_FOUND, status_code=404)
+    execution = repo.get_execution(run_id, spec_id, representation)
+    interrupted = source.job_status == "failed" and execution is not None and execution.state in {
+        "generated", "reviewing", "claim_checking",
+    }
+    if execution is None or (execution.state not in {"failed", "human_review", "revision_requested"} and not interrupted):
+        raise retry_conflict("仅可重新生成已失败或未通过审核的资源")
+    parent = repo.get(execution.resource_id) if execution.resource_id else None
+    if execution.resource_id and parent is None:
+        raise retry_conflict("原资料版本记录缺失，不能安全重建版本关系")
+    if parent is not None and parent.publication_status == "published":
+        raise retry_conflict("该资源已经发布，不能通过失败资源重试入口覆盖")
+    try:
+        dispatch = service.job_repo.get_dispatch(run_id) or {}
+        source_snapshot, correction_contract = unwrap_correction_dispatch(dispatch.get("dispatch_snapshot") or {})
+        previous_retry = source_snapshot.get("resource_retry_context")
+        if previous_retry is not None:
+            previous_retry = ResourceRetryContext.from_snapshot(previous_retry)
+        resource = {}
+        if source_snapshot.get("workflow_version") == "learning_documents.resource_issue.v1":
+            source_version, resource = resolve_resource_review_dispatch(source_snapshot)
+            lecture = {}
+        else:
+            source_version, lecture = resolve_lecture_dispatch(source_snapshot)
+        if source_version not in {
+            TEXT_WORKFLOW_VERSION,
+            RESOURCE_RETRY_WORKFLOW_VERSION,
+            ESTIMATE_TEXT_WORKFLOW_VERSION,
+            ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION,
+        }:
+            raise ValueError("unsupported source dispatch version")
+        frozen_learner = LearnerProfile.model_validate(source_snapshot["learner"])
+        original = GenerateRequest.from_frozen_payload(source.request_payload)
+        policy = policy_from_input({"include_claim_check": original.include_claim_check,
+                                    **snapshot_fields(source_snapshot)})
+        if (source_version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None):
+            raise ValueError("frozen extraction dispatch mismatch")
+        if (source_version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (source_snapshot.get("resource_retry_context") is not None):
+            raise ValueError("retry dispatch version mismatch")
+        if (frozen_learner.learner_id != learner.learner_id
+                or original.learner_id != learner.learner_id
+                or (frozen_learner.user_id and frozen_learner.user_id != learner.user_id)):
+            raise ValueError("source learner mismatch")
+        if source_snapshot.get("request_hash") != canonical_hash(source.request_payload):
+            raise ValueError("source request fingerprint mismatch")
+        checkpoints = audit.list_checkpoints(run_id)
+        if not checkpoints:
+            raise ValueError("source checkpoint missing")
+        checkpoint = max(checkpoints, key=lambda item: (item.step_sequence, item.event_sequence, item.checkpoint_id))
+        checkpoint = WorkflowCheckpoint.model_validate(checkpoint.model_dump(mode="json"))
+        projection = checkpoint.state_projection
+        if correction_contract:
+            from app.agents.resource_agents.correction_package import validate_generation_contract
+            validate_generation_contract(correction_contract)
+            if (projection.get("correction_package_snapshot") != correction_contract
+                    or audit.get_run_creation_snapshot(run_id).get("correction_package_snapshot") != correction_contract):
+                raise ValueError("source correction frozen identity mismatch")
+        elif parent is not None and parent.correction_package_payload is not None:
+            raise ValueError("structured correction source missing dispatch identity")
+        if lecture:
+            from app.agents.resource_workflows.learning_documents.reviewing.lecture_authority import validate_lecture_authority
+            creation = audit.get_run_creation_snapshot(run_id)
+            run_record = audit.get_run(run_id)
+            events = audit.list_events(run_id, after_sequence=0, limit=100)
+            created = [event for event in events if str(getattr(event.event_type, "value", event.event_type)).lower() == "run_created"]
+            if len(created) != 1:
+                raise ValueError("source creation event missing")
+            validate_lecture_authority(request_snapshot=creation, request_hash=run_record.request_hash,
+                created_event_request_hash=created[0].payload.get("request_hash"), dispatch=source_snapshot, checkpoint=projection)
+        if resource:
+            from app.agents.resource_workflows.learning_documents.reviewing.resource_authority import validate_resource_authority
+            creation = audit.get_run_creation_snapshot(run_id)
+            run_record = audit.get_run(run_id)
+            events = audit.list_events(run_id, after_sequence=0, limit=100)
+            created = [event for event in events if str(getattr(event.event_type, "value", event.event_type)).lower() == "run_created"]
+            if len(created) != 1:
+                raise ValueError("source creation event missing")
+            validate_resource_authority(request_snapshot=creation, request_hash=run_record.request_hash,
+                created_event_request_hash=created[0].payload.get("request_hash"), dispatch=source_snapshot, checkpoint=projection)
+        if (projection.get("run_id") != run_id or projection.get("learner_id") != learner.learner_id
+                or projection.get("knowledge_base_id") != source.knowledge_base_id):
+            raise ValueError("checkpoint ownership mismatch")
+        spec = ResourceSpec.model_validate(spec_record.model_dump(mode="json", exclude={"run_id", "created_at"}))
+        frozen_spec = next(item for item in projection["resource_specs"] if item["resource_spec_id"] == spec_id)
+        if ResourceSpec.model_validate(frozen_spec) != spec or spec.dependencies:
+            raise ValueError("spec mismatch or unsupported cross-resource dependencies")
+        if spec.resource_type not in original.resource_types:
+            raise ValueError("resource type outside original request")
+        evidence = audit.list_evidence(run_id)
+        by_id = {item.evidence_id: item for item in evidence}
+        strategy = projection.get("retrieval_strategy_version", "legacy")
+        allocation = None
+        selected_ids = list(spec.evidence_ids)
+        if strategy == RESOURCE_AWARE_STRATEGY:
+            allocation = EvidenceAllocation.model_validate(projection["evidence_allocation"])
+            selected_ids = allocation.available_ids(spec.resource_type)
+            if selected_ids != spec.evidence_ids:
+                raise ValueError("spec differs from frozen allocation")
+        if not selected_ids or set(selected_ids) - set(projection["evidence_ids"]):
+            raise ValueError("missing checkpoint evidence")
+        selected = [by_id[ident] for ident in (allocation.evidence_ids if allocation else selected_ids)]
+        supplement_context = None
+        if parent is not None:
+            if original.include_claim_evidence_retrieval and getattr(generation, "supplement_repository", None) is None:
+                raise ValueError("supplement repository missing")
+            scopes, lineage = _generation_scopes(
+                generation, run_id, parent,
+                boundary_resource_id=(previous_retry.source_resource.resource_id
+                                      if previous_retry and previous_retry.source_resource else None),
+            )
+            added_ids = list(dict.fromkeys(
+                ident for scope in scopes for ident in scope.added_evidence_ids if ident not in selected_ids
+            ))
+            if added_ids:
+                from app.models.generation.resource_retry import RetrySupplementContext
+
+                steps = {item.step_id: item for item in audit.list_steps(run_id)}
+                for ident in added_ids:
+                    snapshot = by_id[ident]
+                    step = steps.get(snapshot.retrieval_step_id)
+                    if step is None or step.run_id != run_id or str(getattr(step.status, "value", step.status)) not in {"success", "degraded"}:
+                        raise ValueError("supplement retrieval step incomplete")
+                supplement_context = RetrySupplementContext.model_validate_json(json.dumps({
+                    "lineage": [{"resource_id": item.resource_id, "resource_version": item.version} for item in lineage],
+                    "scopes": [item.model_dump(mode="json") for item in scopes],
+                    "evidence": [by_id[ident].model_dump(mode="json") for ident in added_ids],
+                }, ensure_ascii=False))
+        source_reviews = [item for item in audit.list_reviews_by_run(run_id)
+                          if parent is not None and str(item.get("resource_id")) == parent.resource_id]
+        source_reviews.sort(key=lambda item: (int(item.get("revision_count") or 0),
+                                              str(item.get("created_at") or ""), str(item.get("review_id") or "")))
+        own_review = source_reviews[-1] if source_reviews else {}
+        aggregate = projection.get("review", {})
+
+        def is_selected(item, field):
+            if not isinstance(item, dict):
+                return len(original.resource_types) == 1
+            resource_type = item.get(field) or item.get("resource_type")
+            resource_id = item.get("resource_id") or item.get("target_resource_id")
+            return ((resource_type is None or resource_type == spec.resource_type)
+                    and (resource_id is None or parent is not None and resource_id == parent.resource_id)
+                    and (resource_type is not None or resource_id is not None or len(original.resource_types) == 1))
+
+        def distinct(items):
+            seen, result = set(), []
+            for item in items:
+                fingerprint = canonical_hash(item)
+                if fingerprint not in seen:
+                    seen.add(fingerprint)
+                    result.append(item)
+            return result
+
+        feedback = {
+            "issues": distinct([*own_review.get("issues", []),
+                                *(item for item in aggregate.get("issues", []) if is_selected(item, "target_resource_type"))]),
+            "revision_instructions": distinct([
+                *(item for item in own_review.get("revision_instructions", [])
+                  if isinstance(item, dict) and item.get("target_resource_type") in {None, spec.resource_type}),
+                *(item for item in aggregate.get("revision_instructions", [])
+                  if isinstance(item, dict) and is_selected(item, "target_resource_type")),
+            ]),
+        }
+        if own_review.get("suggestion"):
+            feedback["suggestion"] = own_review["suggestion"]
+        elif len(original.resource_types) == 1 and aggregate.get("suggestion"):
+            feedback["suggestion"] = aggregate["suggestion"]
+        if execution.error_code:
+            feedback["execution_error_code"] = execution.error_code
+        if parent is not None:
+            feedback = scope_ordinary_feedback(feedback, spec_id, parent)
+        work_order = _frozen_review_work_order(audit, projection, run_id=run_id, resource=parent, spec=spec)
+        revision_feedback = _retry_revision_input(
+            generation=generation,
+            run_id=run_id,
+            resource=parent,
+            spec_id=spec_id,
+            spec=spec,
+            feedback=feedback,
+            work_order=work_order,
+            evidence=[by_id[ident] for ident in [*selected_ids, *(
+                item.evidence_id for item in supplement_context.evidence
+            )]] if supplement_context else [by_id[ident] for ident in selected_ids],
+        )
+        stop_reason = (projection.get("resource_stop_reasons", {}).get(spec_id)
+                       or projection.get("lecture_stop_reasons", {}).get(spec_id))
+        technical_review = bool(stop_reason and stop_reason not in {
+            "revision_budget_exhausted", "revision_no_progress", "evidence_insufficient", "program_gate_failed"})
+        # The action is derived from this exact artifact's durable review, not
+        # from the batch summary or a client-selected mode.
+        if parent is None or not (parent.content_text or "").strip() or execution.validation_status == "failed":
+            retry_action = "generate"
+        elif technical_review or (not feedback.get("revision_instructions") and feedback.get("issues")
+                                  and all(item.get("code") == "evidence_gap" for item in feedback["issues"])):
+            retry_action = "recheck"
+        elif feedback.get("issues") or feedback.get("revision_instructions"):
+            retry_action = "revise"
+        elif (revision_feedback.get("kind") == "claim"
+              or (isinstance(revision_feedback.get("input"), dict)
+                  and revision_feedback["input"].get("problems"))):
+            retry_action = "revise"
+        else:
+            retry_action = "recheck"
+        # Evidence gaps can be rechecked before spending the single revision,
+        # but only when the source already authorised evidence supplements.
+        claim_repo = getattr(generation, "claim_repo", None)
+        if retry_action == "revise" and not (feedback.get("issues") or feedback.get("revision_instructions")) and original.include_claim_evidence_retrieval and claim_repo:
+            claim_ids = {item.claim_id for item in claim_repo.list_claims_by_run(run_id)
+                         if item.resource_id == parent.resource_id}
+            judgements = [item for item in claim_repo.list_judgements_by_run(run_id)
+                          if item.claim_id in claim_ids]
+            if judgements and all(str(getattr(item.verdict, "value", item.verdict)) in {"supported", "not_in_evidence"} for item in judgements):
+                retry_action = "recheck"
+        constraints = {**original.constraints, "resource_retry_action": retry_action,
+                       "resource_retry_single_pass": True,
+                       "replacement_resource_types": [spec.resource_type],
+                       "resource_retry_lineage": {"source_run_id": run_id, "source_spec_id": spec_id,
+                                                  "source_checkpoint_hash": checkpoint.state_hash}}
+        request = GenerateRequest.model_validate({**original.model_dump(mode="python"),
+                                                  "resource_types": [spec.resource_type], "constraints": constraints,
+                                                  "claim_workflow_version": "contradiction_first_v3",
+                                                  "claim_post_retrieval_max_iterations": 1 if retry_action == "recheck" else 0,
+                                                  "max_iterations": 1 if retry_action == "recheck" else 0,
+                                                  "claim_max_iterations": 1 if retry_action == "recheck" else 0})
+        texts = {}
+        for ref in parent.source_refs if parent is not None else []:
+            if ref.evidence_id in selected_ids and ref.retrieval_query and query_hash(ref.retrieval_query) == by_id[ref.evidence_id].query_hash:
+                texts[ref.evidence_id] = ref.retrieval_query
+        payload = {"schema_version": "1.0", "source_run_id": run_id, "source_spec_id": spec_id,
+                   "source_checkpoint_hash": checkpoint.state_hash, "learner": frozen_learner.model_dump(mode="json"),
+                   "request": request.model_dump(mode="json"), "diagnosis": projection["diagnosis"],
+                   "learning_plan": projection["learning_plan"], "spec": spec.model_dump(mode="json"),
+                   "evidence": [item.model_dump(mode="json") for item in selected], "query_texts": texts,
+                   "evidence_allocation": allocation.model_dump(mode="json") if allocation else None,
+                   "retrieval_strategy_version": strategy, "retrieval_config_hash": projection["retrieval_config_hash"],
+                   "source_resource": retry_source_snapshot(parent),
+                   "revision_feedback": revision_feedback,
+                   "input_capacity": get_settings().llm_resource_generator_max_input_tokens}
+        if correction_contract:
+            payload["correction_package_snapshot"] = correction_contract
+        if supplement_context is not None:
+            payload["supplement_context"] = supplement_context.model_dump(mode="json")
+        context = ResourceRetryContext.from_snapshot({**payload, "context_hash": canonical_hash(payload)})
+        if len(json.dumps(context.model_dump(mode="json"), ensure_ascii=False).encode()) > get_settings().resource_retry_snapshot_max_bytes:
+            raise retry_conflict("本次重试的冻结快照超过存储容量上限，请联系维护者检查 RESOURCE_RETRY_SNAPSHOT_MAX_BYTES")
+    except (KeyError, StopIteration) as exc:
+        raise retry_conflict("原任务冻结上下文缺少必要的资料或证据记录，无法安全重试；请重新生成整个批次") from exc
+    except (ValueError, TypeError) as exc:
+        raise retry_conflict("原任务冻结上下文的来源、版本或校验信息不一致，无法安全重试；请重新生成整个批次") from exc
+    return context

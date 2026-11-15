@@ -151,6 +151,15 @@ def test_sql_claim_repository_persists_judgement_and_frozen_evidence_binding():
         db.commit()
     claims, judgements = _audit()
     repository = SQLClaimRepository(factory)
+    # Per-resource Judge failures preserve extraction without fabricating a
+    # verdict or throwing StopIteration at the durable merge boundary.
+    repository.save_audit(claims, [])
+    assert len(repository.list_claims_by_run("run")) == len(claims)
+    assert repository.list_judgements_by_run("run") == []
+    with factory() as db:
+        incomplete = db.get(ResourceReviewORM, "rev")
+        assert incomplete.claim_metric_status == "incomplete"
+        assert incomplete.claim_hallucination_rate is None
     repository.save_audit(claims, judgements)
 
     stored_claims = repository.list_claims_by_run("run")

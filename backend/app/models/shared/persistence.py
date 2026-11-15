@@ -11,6 +11,7 @@ from typing import Any, Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.retrieval.knowledge_ids import normalize_text, sha256_hex
+from app.models.generation.progress import RunPublishSummary
 from app.models.knowledge.knowledge import EvidenceItem, SourceLocator
 
 
@@ -178,6 +179,8 @@ class RunSummary(StrictPersistenceModel):
     updated_at: datetime
     ended_at: datetime | None = None
     replay_completeness: ReplayCompleteness
+    # Derived at query time from persisted facts; never written to a snapshot.
+    publish_summary: RunPublishSummary | None = None
 
     @classmethod
     def from_record(cls, record: AgentRunRecord) -> "RunSummary":
@@ -426,6 +429,7 @@ class BeginStepCommand(StrictPersistenceModel):
 
 
 class CompleteStepCommand(StrictPersistenceModel):
+    review_audit: dict[str, Any] | None = None
     run_id: str
     step_id: str
     trace: dict[str, Any]
@@ -483,6 +487,49 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
     """Build the bounded allow-list projection used for read-only replay."""
 
     projection: dict[str, Any] = {}
+    if state.get("correction_package_snapshot"):
+        projection["correction_package_snapshot"] = _jsonable(state["correction_package_snapshot"])
+    if state.get("claim_extraction_policy") is not None:
+        for key in ("claim_extraction_mode", "claim_extraction_policy", "claim_extraction_policy_hash"):
+            projection[key] = _jsonable(state[key])
+    if state.get("claim_extraction_refs"):
+        projection["claim_extraction_refs"] = _jsonable(state["claim_extraction_refs"])
+    if state.get("claim_evidence_retrieval_policy") is not None:
+        for key in (
+            "claim_evidence_retrieval_policy",
+            "claim_evidence_retrieval_policy_hash",
+        ):
+            if key not in state or state[key] is None:
+                raise ValueError("supplement checkpoint frozen fields missing")
+            projection[key] = _jsonable(state[key])
+        projection["claim_evidence_retrieval_refs"] = _jsonable(
+            list(state.get("claim_evidence_retrieval_refs", []))[:100]
+        )
+        projection["claim_evidence_hard_block_resource_ids"] = list(
+            state.get("claim_evidence_hard_block_resource_ids", [])
+        )[:100]
+    if state.get("lecture_review_contract_version") is not None:
+        for key in ("lecture_review_contract_version", "lecture_review_policy", "lecture_review_policy_hash"):
+            if key not in state or state[key] is None:
+                raise ValueError("lecture checkpoint frozen fields missing")
+            projection[key] = _jsonable(state[key])
+        if state.get("lecture_stop_reasons"):
+            projection["lecture_stop_reasons"] = _jsonable(state["lecture_stop_reasons"])
+    if state.get("resource_review_contract_version") is not None:
+        resource_keys = ("resource_review_contract_version", "resource_review_policy", "resource_review_policy_hash")
+        if state["resource_review_contract_version"] == "1.1":
+            resource_keys += ("resource_review_identity", "resource_review_identity_hash")
+        for key in resource_keys:
+            if key not in state or state[key] is None:
+                raise ValueError("resource checkpoint frozen fields missing")
+            if key in state:
+                projection[key] = _jsonable(state[key])
+        if state.get("resource_stop_reasons"):
+            projection["resource_stop_reasons"] = _jsonable(state["resource_stop_reasons"])
+    if state.get("review_policy") is not None:
+        projection["review_policy"] = _jsonable(state["review_policy"])
+    if state.get("review_audit_refs"):
+        projection["review_audit_refs"] = _jsonable(state["review_audit_refs"])
     scalar_fields = (
         "schema_version",
         "run_id",
@@ -494,8 +541,14 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "generation_mode",
         "include_review",
         "include_claim_check",
+        "include_claim_evidence_retrieval",
         "max_iterations",
         "claim_max_iterations",
+        "claim_post_retrieval_max_iterations",
+        "claim_workflow_version",
+        "claim_gap_revision_threshold",
+        "claim_revision_phase",
+        "claim_post_retrieval_revision_count",
         "workflow_status",
         "current_node",
         "generation_attempt",
@@ -503,6 +556,7 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "claim_revision_count",
         "claim_check_status",
         "retrieval_status",
+        "retrieval_strategy_version",
         "retrieval_config_hash",
         "retrieval_candidate_count",
         "retrieval_dropped_candidate_count",
@@ -511,6 +565,8 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "iteration",
     )
     for key in scalar_fields:
+        if key.startswith("claim_") and key not in state:
+            continue
         value = state.get(key)
         if value is None or isinstance(value, (str, int, float, bool)):
             projection[key] = value
@@ -521,6 +577,7 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "assessment_claim_skipped_resource_ids",
         "claim_failed_resource_ids",
         "claim_eligible_resource_ids",
+        "claim_post_retrieval_resource_keys",
     ):
         projection[key] = list(state.get(key, []))[:100]
     constraints = dict(state.get("constraints", {}))
@@ -532,11 +589,14 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
                 "language",
                 "max_length",
                 "retrieval_top_k",
+                "resource_retry_lineage",
             )
             if key in constraints
         }
     )
     projection["diagnosis"] = _jsonable(dict(state.get("diagnosis", {})))
+    projection["evidence_allocation"] = _jsonable(state.get("evidence_allocation"))
+    projection["node_evidence_map"] = _jsonable(dict(state.get("node_evidence_map", {})))
     projection["learning_plan"] = _jsonable(dict(state.get("learning_plan", {})))
     projection["resource_specs"] = _jsonable(list(state.get("resource_specs", []))[:100])
     projection["resource_executions"] = _jsonable(

@@ -64,7 +64,7 @@ class WorkflowArtifactRecorder:
             for resource in state.get("generated_resources", [])
             if isinstance(resource, LearningResource)
         }
-        if node_name == "generator":
+        if node_name in {"generate", "generator"}:
             immediate_resource_events = {
                 event.event_id
                 for event in self.audit_repository.list_events(run_id, limit=10_000)

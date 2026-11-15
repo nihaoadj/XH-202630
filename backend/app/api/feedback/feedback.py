@@ -1,3 +1,4 @@
+from app.services.generation.dispatch import schedule_generation
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 
 from app.api.dependencies import ensure_profile_access
@@ -41,8 +42,8 @@ def submit_learning_attempt(
     def schedule(learner, generate_request, run_id):
         if service.generation_job_service is None:
             return
-        background_tasks.add_task(
-            service.generation_job_service.run_job,
+        schedule_generation(
+            service.generation_job_service, background_tasks,
             learner,
             generate_request,
             run_id,
@@ -83,8 +84,8 @@ def submit_run_attempt(
     def schedule(learner, generate_request, run_id):
         if feedback_service.generation_job_service is None:
             return
-        background_tasks.add_task(
-            feedback_service.generation_job_service.run_job,
+        schedule_generation(
+            feedback_service.generation_job_service, background_tasks,
             learner,
             generate_request,
             run_id,
@@ -149,8 +150,8 @@ def submit_batch_attempt(
 
     def schedule(learner, generate_request, run_id):
         if feedback_service.generation_job_service is not None:
-            background_tasks.add_task(
-                feedback_service.generation_job_service.run_job,
+            schedule_generation(
+                feedback_service.generation_job_service, background_tasks,
                 learner,
                 generate_request,
                 run_id,
@@ -185,9 +186,16 @@ def select_feedback_followup(
 
     def schedule(learner, generate_request, run_id):
         if service.generation_job_service is not None:
-            background_tasks.add_task(service.generation_job_service.run_job, learner, generate_request, run_id)
+            schedule_generation(service.generation_job_service, background_tasks, learner, generate_request, run_id)
 
     try:
+        if payload.option_id == "personalized-correction-package-v1":
+            from app.api.feedback.rounds import schedule_round
+            from app.services.feedback.legacy_round_adapter import LegacyRoundAdapter
+            round_service = container.round_learning_service()
+            result, created = LegacyRoundAdapter(round_service).choose_correction(profile, payload)
+            schedule_round(round_service, profile, created, background_tasks)
+            return result
         return service.choose_followup(profile, payload, schedule_followup=schedule)
     except ApplicationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code.value) from exc

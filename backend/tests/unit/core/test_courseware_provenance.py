@@ -49,3 +49,12 @@ def test_cross_snapshot_edge_is_rejected():
     edges[index] = edges[index].model_copy(update={"snapshot_hash": "b" * 64})
     graph = graph.model_copy(update={"edges": edges})
     assert any(item["code"] == "PROVENANCE_CROSS_SNAPSHOT" for item in validate_provenance_graph(graph))
+
+
+def test_component_without_own_source_mapping_fails_the_hard_gate():
+    invalid = document()
+    invalid["scenes"][0]["component_blocks"][0]["source_refs"] = []
+    graph = build_provenance_graph(invalid, snapshots())
+    codes = {item["code"] for item in validate_provenance_graph(graph)}
+    assert "PROVENANCE_COMPONENT_PROPERTY_WITHOUT_SOURCE" in codes
+    assert "PROVENANCE_FIELD_COVERAGE_INCOMPLETE" in codes

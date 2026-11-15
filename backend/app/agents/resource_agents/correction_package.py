@@ -9,6 +9,66 @@ from app.core.security.errors import ApplicationError, ErrorCode
 from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec
 
 from .base import BaseResourceGenerationAgent
+from .revision_prompts import attach_revision_fields
+
+from app.models.learning_documents.correction_package import (
+    CorrectionGenerationContractV1, CorrectionPackageContentV1,
+    assemble_correction_package, CorrectionPackageContentV2, CorrectionGenerationContractV2,
+    parse_correction_package, parse_correction_generation_contract, assemble_compact_correction_package,
+)
+from app.models.shared.persistence import canonical_hash
+from app.core.learning_documents.correction_package import render_correction_markdown, correction_audit_source, CORRECTION_AUDIT_GUIDANCE
+
+STRUCTURED_CONTRACT_KEY = "_correction_package_contract"
+STRUCTURED_PROMPT = """你是单节点纠错训练内容生成器，版本 correction-json-generation-v1。
+仅输出符合所给schema的JSON内容对象，不输出完整Markdown文档、额外字段或解释过程。
+只使用输入冻结evidence支持的知识；不得猜测原测评题、学习者原始作答或个人诊断。
+服务端负责标题、目标节点和学习状态，禁止生成这些字段，也不要在正文重复个人状态。
+一份内容只对应一个目标节点，固定一个强化单元和引导、同构、迁移三道练习。
+training_goals是本次目标，focus_overview只简要指出应防范的误区，不宣称用户实际犯过。
+mistaken_view/incorrect_statement只放待纠正的错误命题，正确解释单独放explanation。
+scenario只放明确假设的情境条件；一般技术规律应放解释字段，不伪装成已发生事件。
+示例必须自包含，步骤包含action与explanation；参考答案、依据、提示和自查点与本题绑定。
+分层反馈使用条件表达，不断言用户已经掌握。不得输出HTML、脚本或自行增加跨节点挑战。
+总阅读正文不得超过14000中文字符，避免概览、错误模式与正误对照重复展开。
+如有修订输入，只修正问题指定内容，保留其余正确内容；仍输出完整的content对象。
+"""
+
+
+COMPACT_PROMPT = """你是单节点纠错训练内容生成器，版本correction-json-generation-v2。
+只输出符合schema的完整content JSON。仅使用冻结evidence，不猜测原题、原始作答或个人诊断。
+固定单强化单元，只生成guided引导式和transfer迁移两题；不生成worked_example完整示例或similar同构练习。
+服务端装配标题/节点/学习状态，不允许模型决定这些字段。每题情境、问题、提示、答案、解释与自查点相互对应。
+training_goals只表达学习目标；focus_overview仅概括应关注的误区，不展开技术解释或断言个人状态；
+mastery_criteria只表达可观察的达标行为，next_review_actions只表达复习动作。
+这些展示字段不参加Claim抽取，不得把技术定义、规则、结论、具体算法步骤或知识讲解藏在其中；
+技术讲解必须放在concept_repair、error_patterns.explanation、comparisons.correct_statement/explanation或题目答案解释中。
+mistaken_view/incorrect_statement仅为待纠正命题；正确解释放独立字段。scenario明确为假设，不将假设包装成发生过的事件。
+题干/提示/答案/解析中的技术结论必须符合冻结证据和题设条件；不能以假设之名免审技术事实。
+分层反馈使用条件表达；总结简洁，避免重复整段概念。保留目标/概览/达标/复习动作展示，不删这些字段。
+无HTML、脚本、跨节点挑战。总阅读正文不超过14000字符。
+修订只修改指定问题与必须同步内容，保留其他正确内容，仍返回完整两题content，不跨版本改格式。
+"""
+
+
+def structured_generation_contract(version="correction-json-generation-v2"):
+    if version not in {"correction-json-generation-v1", "correction-json-generation-v2"}:
+        raise ValueError("unknown correction generation version")
+    compact = version == "correction-json-generation-v2"
+    schema = CorrectionPackageContentV2 if compact else CorrectionPackageContentV1
+    contract = CorrectionGenerationContractV2 if compact else CorrectionGenerationContractV1
+    return contract(
+        schema_hash=canonical_hash(schema.model_json_schema()),
+        prompt_hash=canonical_hash({"prompt": COMPACT_PROMPT if compact else STRUCTURED_PROMPT,
+                                    "audit_guidance": CORRECTION_AUDIT_GUIDANCE}),
+    ).model_dump(mode="json")
+
+
+def validate_generation_contract(value):
+    contract = parse_correction_generation_contract(value)
+    if contract.model_dump(mode="json") != structured_generation_contract(contract.version):
+        raise ValueError("correction generation identity drift")
+    return contract
 
 
 CORRECTION_PACKAGE_PROMPT = """你是 CorrectionTrainingPackageAgent。一次性输出一份可直接发布的 Markdown 薄弱点强化包，不要输出写作说明、思考过程、JSON 或代码围栏。
@@ -39,7 +99,7 @@ REPAIR_PROMPT = """你是 Markdown 格式修复器。将草稿重写为一份完
 class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
     resource_type = "个性化纠错训练包"
     agent_name = "CorrectionTrainingPackageAgent"
-    prompt_version = "correction-training-package-v2-controlled-markdown"
+    prompt_version = "correction-training-package-v3-self-contained"
     artifact_format = "markdown"
     # Keep enough headroom for a complete 1–2-node package.  The strict call
     # path below makes this an actual ceiling rather than silently inheriting
@@ -83,7 +143,9 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
             "evidence": [{"evidence_id": item.evidence_id, "source": item.locator.source_path,
                           "section": item.locator.section, "excerpt": item.excerpt} for item in evidence],
         }
-        if context.generation_attempt > 1:
+        if context.claim_review_revision is not None or context.resource_review_revision is not None:
+            attach_revision_fields(payload, context)
+        elif context.generation_attempt > 1:
             payload["revision_feedback"] = context.constraints.get("revision_feedback", {})
             payload["previous_version_content"] = context.constraints.get("previous_version_content", "")
         return payload
@@ -127,6 +189,8 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
 
     def generate(self, spec: ResourceSpec, context: ResourceGenerationContext, *, llm_gateway: LLMGateway, **_: object) -> GeneratedArtifact:
         self._ensure_route(spec)
+        if STRUCTURED_CONTRACT_KEY in context.constraints:
+            return self._generate_structured(spec, context, llm_gateway)
         prompt_payload = self._prompt_payload(spec, context)
         content = self._generate_markdown(
             spec=spec,
@@ -164,6 +228,74 @@ class CorrectionTrainingPackageAgent(BaseResourceGenerationAgent):
             "artifact_data": {**artifact.artifact_data, "format_repair_attempted": True},
         })
         return self.validate(repaired, spec=spec, context=context)
+
+    def _generate_structured(self, spec, context, gateway):
+        try:
+            contract = validate_generation_contract(context.constraints[STRUCTURED_CONTRACT_KEY])
+        except ValueError as exc:
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409) from exc
+        compact = contract.version == "correction-json-generation-v2"
+        focus = self._focus(context)
+        targets = focus["ordered_target_nodes"]
+        if len(targets) != 1 or spec.knowledge_points != [targets[0]["skill_node_id"]]:
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+        target = targets[0]
+        payload = self._prompt_payload(spec, context)
+        payload.pop("correction_focus", None)
+        payload["target_node_name"] = target.get("name") or target["skill_node_id"]
+        # Revision contracts are private server inputs. Send only the editable
+        # content and scoped issues, never the parent's learning state.
+        parent_package = None
+        if context.constraints.get("_correction_parent_package"):
+            parent_package = parse_correction_package(context.constraints["_correction_parent_package"])
+            payload["previous_content"] = parent_package.content.model_dump(mode="json")
+        for key in ("claim_review_revision", "resource_review_revision"):
+            revision = payload.get(key)
+            if revision:
+                parent_package = parse_correction_package(revision["previous_structured_payload"])
+                revision["previous_text"] = correction_audit_source(parent_package).text
+                revision["previous_structured_payload"] = parent_package.content.model_dump(mode="json")
+                revision.pop("groups", None)
+        payload.pop("previous_version_content", None)
+        payload.pop("revision_edit_policy", None)
+        if parent_package is not None and parent_package.provenance.renderer_version != contract.renderer_version:
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+        result = self.invoke(
+            spec=spec, context=context, llm_gateway=gateway,
+            messages=[SystemMessage(content=COMPACT_PROMPT if compact else STRUCTURED_PROMPT), HumanMessage(content=self.json_payload(payload))],
+            output_schema=CorrectionPackageContentV2 if compact else CorrectionPackageContentV1, representation="text",
+            max_output_tokens=contract.max_output_tokens,
+            strict_max_output_tokens=True,
+            request_timeout_seconds=contract.timeout_seconds, max_attempts=contract.max_attempts,
+        )
+        status = target.get("mastery_status")
+        assemble = assemble_compact_correction_package if compact else assemble_correction_package
+        package = assemble(
+            content=result.output, title=payload["display_title"],
+            target={"node_id": target["skill_node_id"], "node_name": payload["target_node_name"],
+                    "mastery_status": status if status in {"weak", "learning"} else "unknown",
+                    "failed_dimensions": list(target.get("failed_dimensions") or [])},
+            run_id=context.run_id, focus_snapshot_hash=canonical_hash(focus),
+        )
+        if parent_package is not None:
+            if (parent_package.learning_status != package.learning_status
+                    or parent_package.provenance.focus_snapshot_hash != package.provenance.focus_snapshot_hash):
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            if parent_package.content == package.content:
+                raise ApplicationError(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, status_code=422)
+            values = package.model_dump(mode="json", exclude={"payload_hash"})
+            values["provenance"] = parent_package.provenance.model_dump(mode="json")
+            values["title"] = parent_package.title
+            package = parse_correction_package({**values, "payload_hash": canonical_hash(values)})
+        artifact = GeneratedArtifact(
+            metadata=self.metadata(spec=spec, representation="text", source_evidence_ids=list(spec.evidence_ids)).model_copy(
+                update={"prompt_version": contract.version, "artifact_format": "json"}),
+            difficulty=spec.difficulty, content_text=render_correction_markdown(package),
+            knowledge_points=list(spec.knowledge_points),
+            artifact_data={"format": package.schema_version, "correction_package": package.model_dump(mode="json")},
+            storage_type="text", mime_type="text/markdown", llm_metadata={},
+        )
+        return self.validate(artifact, spec=spec, context=context)
 
     def validate(self, artifact: GeneratedArtifact, *, spec: ResourceSpec, context: ResourceGenerationContext) -> GeneratedArtifact:
         """Check hard safety/scope invariants, while keeping Markdown layout advisory.

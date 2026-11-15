@@ -5,9 +5,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 T = TypeVar("T")
@@ -21,6 +21,16 @@ class StructuredOutputMode(str, Enum):
     TEXT = "text"
 
 
+class LLMBudgetScope(BaseModel):
+    """Trusted server-created scope for a round production or grading call."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scope_id: str = Field(min_length=1, max_length=128)
+    stage_id: str = Field(min_length=1, max_length=128)
+    kind: Literal["production", "assessment"]
+
+
 class LLMCallContext(BaseModel):
     run_id: str
     step_id: str
@@ -29,6 +39,17 @@ class LLMCallContext(BaseModel):
     generation_attempt: int = Field(default=1, ge=1)
     workflow_deadline_at: Optional[datetime] = None
     call_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    budget_input_token_cap: Optional[int] = Field(default=None, ge=1)
+    budget_scope: Optional[LLMBudgetScope] = None
+    call_purpose: Optional[Literal["production", "assessment"]] = None
+
+    @model_validator(mode="after")
+    def validate_budget_scope(self) -> "LLMCallContext":
+        if (self.budget_scope is None) != (self.call_purpose is None):
+            raise ValueError("round call purpose and budget scope must be supplied together")
+        if self.budget_scope is not None and self.budget_scope.kind != self.call_purpose:
+            raise ValueError("budget scope kind must match call purpose")
+        return self
 
 
 class LLMCallOptions(BaseModel):

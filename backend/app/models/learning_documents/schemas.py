@@ -8,6 +8,8 @@ from app.models.generation.progress import (
     ResourceExecutionProgress,
     ResourceExecutionState,
     ResourceRepresentation,
+    RoundBindingSummaryV1,
+    RunPublishSummary,
     RunResourceProgressSummary,
 )
 from app.models.learners.mastery import LearnerFocusSnapshotV1
@@ -84,7 +86,10 @@ class LearnerProfile(BaseModel):
     knowledge_base_id: Optional[str] = Field(default=None, description="当前知识库 ID")
     theory_scores: Dict[str, float] = Field(default_factory=dict, description="理论测试得分")
     knowledge_states: Dict[str, KnowledgeState] = Field(default_factory=dict, description="知识点掌握状态")
-    skill_level: str = Field(default="初级", description="技能水平")
+    skill_level: str = Field(default="初级", description="初始诊断技能水平，保留历史语义")
+    initial_skill_level: Optional[str] = Field(default=None, description="只读：初始诊断评级")
+    current_skill_level: Optional[str] = Field(default=None, description="只读：最近确认轮次主节点对应的当前评级")
+    current_skill_node_id: Optional[str] = Field(default=None, description="只读：当前评级对应的主节点 ID")
     weak_points: List[str] = Field(default_factory=list, description="知识盲区")
     strong_points: List[str] = Field(default_factory=list, description="优势领域")
     learning_goal: str = Field(..., description="学习目标")
@@ -233,12 +238,27 @@ class GenerateRequest(BaseModel):
     )
     include_review: bool = Field(default=True, description="是否进入审核")
     include_claim_check: bool = Field(default=False, description="是否进行 Claim 级审核；开启后建议每任务只生成一个资源")
-    # Initial generation plus two revisions means at most three visible attempts.
-    max_iterations: int = Field(default=2, ge=0, le=3, description="最大业务返工次数")
-    claim_max_iterations: int = Field(
-        default=0, ge=0, le=3, description="Claim 审核专用最大返工次数；当前默认不返工"
+    include_claim_evidence_retrieval: bool = Field(
+        default=False,
+        description="事实 Claim 首次缺证时补检知识库并重判；需同时开启普通审核与 Claim 审核",
     )
+    # New tasks allow three ordinary revisions after the initial generation.
+    max_iterations: int = Field(default=3, ge=0, le=3, description="最大业务返工次数")
+    claim_max_iterations: int = Field(
+        default=2, ge=0, le=3, description="Claim 专用返工预算；开启补检时用于补检前矛盾或大量缺证修订，默认2次，不借普通审核额度"
+    )
+    claim_post_retrieval_max_iterations: int = Field(
+        default=0, ge=0, le=3, description="补检后正文修订次数；默认0，结束并形成审核报告"
+    )
+    claim_gap_revision_threshold: int = Field(default=8, ge=0, le=128, description="补检前缺证修订阈值；严格超过才触发，与矛盾共享返工额度")
+    claim_workflow_version: Literal["legacy_v1", "contradiction_first_v1", "contradiction_first_v2", "contradiction_first_v3"] = "contradiction_first_v3"
     constraints: Dict[str, Any] = Field(default_factory=dict, description="生成约束")
+
+    @classmethod
+    def from_frozen_payload(cls, payload):
+        """Queued payloads without a routing version retain their old order."""
+        return cls.model_validate({"claim_workflow_version": "legacy_v1",
+                                   "max_iterations": 2, "claim_max_iterations": 1, **payload})
 
     @field_validator("topic")
     @classmethod
@@ -271,6 +291,24 @@ class GenerateRequest(BaseModel):
 
     @model_validator(mode="after")
     def require_resource_review_for_claim_audit(self) -> "GenerateRequest":
+        from app.models.reviews.claim_evidence_retrieval import validate_feature_switch
+
+        if self.include_claim_evidence_retrieval:
+            if "include_claim_check" not in self.model_fields_set:
+                # Legacy/omitted requests are interpreted as closed; asking for
+                # supplements without an explicit Claim audit is invalid.
+                raise ValueError(
+                    "include_claim_evidence_retrieval requires include_claim_check=true"
+                )
+            validate_feature_switch(
+                include_claim_evidence_retrieval=True,
+                include_claim_check=self.include_claim_check,
+                include_review=self.include_review,
+            )
+            if len(self.resource_types) != 1:
+                raise ValueError(
+                    "include_claim_evidence_retrieval requires one resource_type per request"
+                )
         if self.include_claim_check and not self.include_review:
             # Keep the explicit no-review/draft path usable.  A caller that
             # did not send this field receives the effective safe default for
@@ -281,6 +319,34 @@ class GenerateRequest(BaseModel):
             raise ValueError("include_claim_check requires include_review=true")
         if self.include_claim_check and len(self.resource_types) != 1:
             raise ValueError("include_claim_check requires one resource_type per request")
+        return self
+
+
+class GenerateCreateRequest(GenerateRequest):
+    """Public new-job contract; persisted legacy snapshots use GenerateRequest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_post_retrieval_budget(cls, values):
+        if isinstance(values, dict) and values.get("include_claim_evidence_retrieval") is True and "claim_post_retrieval_max_iterations" not in values:
+            from app.config import get_settings
+
+            return {
+                **values,
+                "claim_post_retrieval_max_iterations": get_settings().claim_post_retrieval_default_max_iterations,
+            }
+        return values
+
+    target_skill_nodes: List[str] = Field(
+        default_factory=list, max_length=1, description="目标能力节点（最多一个）"
+    )
+
+    @model_validator(mode="after")
+    def reject_practice_claim_audit(self) -> "GenerateCreateRequest":
+        if self.resource_types == ["实操指南"] and self.include_claim_check:
+            raise ValueError("实操指南不支持 Claim 审核；请关闭 Claim 审核与补检")
         return self
 
 
@@ -309,8 +375,11 @@ class GenerationJobStatusResponse(BaseModel):
     resource_progress_summary: RunResourceProgressSummary = Field(
         default_factory=RunResourceProgressSummary
     )
+    # Derived read-only publication facts; ``None`` keeps legacy responses valid.
+    publish_summary: Optional[RunPublishSummary] = None
     request_payload: Dict[str, Any] = Field(default_factory=dict)
     focus_snapshot: Optional[LearnerFocusSnapshotV1] = None
+    round_binding: Optional[RoundBindingSummaryV1] = None
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -327,11 +396,16 @@ class ContinueResourceBatchRequest(BaseModel):
     """在既有资源批次内追加或替换指定资源。"""
 
     learner_id: str = Field(min_length=1)
+    claim_post_retrieval_max_iterations: Optional[int] = Field(default=None, ge=0, le=3)
     resource_types: List[str] = Field(min_length=1)
     instructions: Optional[str] = Field(default=None, max_length=2000)
     include_claim_check: Optional[bool] = Field(
         default=None,
         description="可选：覆盖源任务的 Claim 审核设置；省略时沿用源任务",
+    )
+    include_claim_evidence_retrieval: Optional[bool] = Field(
+        default=None,
+        description="可选：覆盖源任务的 Claim 补检设置；省略时继承，显式 false 关闭",
     )
     source_run_id: Optional[str] = Field(
         default=None,
@@ -461,6 +535,8 @@ class LearningResource(BaseModel):
     # deterministic projection and this payload feeds the courseware path.
     practice_guide_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
     practice_guide_payload_hash: Optional[str] = Field(default=None, exclude=True)
+    correction_package_payload: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
+    correction_package_payload_hash: Optional[str] = Field(default=None, exclude=True)
 
 
 class ResourceClaim(BaseModel):

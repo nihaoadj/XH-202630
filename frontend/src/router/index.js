@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { nextTick } from 'vue'
 import HomeView from '../features/home/HomeView.vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -6,6 +7,17 @@ const routes = [
 { path: '/', name: 'landing', component: () => import('../features/auth/LandingView.vue'), meta: { publicLayout: true } },
 { path: '/login', name: 'login', component: () => import('../features/auth/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
 { path: '/register', name: 'register', component: () => import('../features/auth/LandingView.vue'), meta: { guestOnly: true, publicLayout: true } },
+  ...[
+    ['multi-agent', 'agents'],
+    ['evidence', 'evidence'],
+    ['learning-path', 'path'],
+    ['feedback-loop', 'feedback'],
+  ].map(([slug]) => ({
+    path: '/features/' + slug,
+    name: 'feature-' + slug,
+    redirect: '/#' + slug,
+    meta: { publicLayout: true },
+  })),
   { path: '/dashboard', name: 'dashboard', component: HomeView, meta: { requiresAuth: true } },
 { path: '/user/profile', name: 'user-profile', component: () => import('../features/learners/UserProfileView.vue'), meta: { requiresAuth: true } },
 { path: '/learning/new', name: 'onboarding', component: () => import('../features/onboarding/OnboardingView.vue'), meta: { requiresAuth: true } },
@@ -19,6 +31,16 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+router.afterEach(async (to, from, failure) => {
+  if (failure || to.path === from.path) return
+  await nextTick()
+  const content = document.querySelector('.content-area')
+  if (content) {
+    content.scrollTop = 0
+    content.scrollLeft = 0
+  }
 })
 
 router.beforeEach(async (to) => {

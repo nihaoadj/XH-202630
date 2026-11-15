@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,8 +20,12 @@ def resolve_backend_path(path: str | Path) -> Path:
 
 
 class Settings(BaseSettings):
-    """应用配置，自动从 .env 文件加载"""
+    """搴旂敤閰嶇疆锛岃嚜鍔ㄤ粠 .env 鏂囦欢鍔犺浇"""
     app_mode: str = "development"
+    learning_round_creation_enabled: bool = False
+    learning_round_correction_stage_limit: int = Field(default=2, ge=1, le=3)
+    learning_round_resource_recovery_limit: int = Field(default=2, ge=0, le=3)
+    learning_round_resource_token_limit: int = Field(default=1048576, ge=262144, le=4194304)
     allow_degraded_generation: bool = False
     # AI is the normal courseware authoring path.  ``courseware_ai_enabled``
     # remains as a deployment-owned emergency switch for older environments;
@@ -33,6 +38,8 @@ class Settings(BaseSettings):
     courseware_scene_lease_seconds: int = Field(default=120, ge=30, le=900)
     courseware_auto_review_max_seconds: int = Field(default=180, ge=10, le=900)
     courseware_total_llm_token_budget: int = Field(default=147456, ge=256, le=262144)
+    courseware_content_review_enabled: bool = False
+    courseware_content_review_context_tokens: int | None = Field(default=None, ge=16384)
     courseware_total_run_timeout_seconds: int = Field(default=1050, ge=30, le=3600)
     courseware_planner_token_budget: int = Field(default=16384, ge=0, le=262144)
     courseware_scene_composition_token_budget: int = Field(default=81920, ge=0, le=262144)
@@ -69,6 +76,10 @@ class Settings(BaseSettings):
     courseware_live_price_version: str = ""
     courseware_live_price_effective_date: str = ""
     llm_api_key: SecretStr = SecretStr("")
+    # Bypass LLM-call accounting (T41): observation + publishing switch and
+    # the independent accounting database path (never a business SQLite file).
+    llm_accounting_enabled: bool = True
+    llm_accounting_db_path: str = "./data/llm_accounting.db"
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     # Deliberately opt in to a proxy only when one is known to be usable.
     # The transport otherwise ignores Windows/system proxy discovery.
@@ -101,7 +112,7 @@ class Settings(BaseSettings):
     # as a complete Claim pass.
     claim_partial_publish: bool = False
     # Deprecated compatibility switch. Completed Claim audits with evidence
-    # gaps now wait for an explicit user publication decision.
+    # gaps use the automatic/user-decision thresholds below.
     claim_warning_publish_enabled: bool = False
     claim_warning_publish_min_factual_pass_rate: float = Field(
         default=0.80, ge=0.0, le=1.0,
@@ -110,11 +121,77 @@ class Settings(BaseSettings):
     # once the factual pass rate reaches this threshold.
     claim_user_review_enabled: bool = True
     claim_user_review_min_factual_pass_rate: float = Field(
-        default=0.60, ge=0.0, le=1.0,
+        default=0.85, ge=0.0, le=1.0,
+    )
+    # Complete Claim audits with evidence gaps auto-publish at or above this
+    # factual pass rate, provided the remaining issues are evidence gaps only.
+    claim_gap_auto_publish_min_factual_pass_rate: float = Field(
+        default=0.95, ge=0.0, le=1.0,
     )
     # Per-resource Claim extraction target.  The model prompt and the
     # workflow's deterministic envelope check both consume this value.
     claim_max_claims_per_resource: int = Field(default=10, ge=1, le=20)
+    claim_extraction_strategy: Literal["legacy_v3", "neutral_batch_v1", "neutral_estimate_v1"] = "neutral_estimate_v1"
+    # Deprecated environment inputs accepted but ignored by the estimate path.
+    claim_extraction_context_limit: int = Field(default=1048576, gt=0, le=2**24)
+    claim_estimate_ascii_weight: float = Field(default=0.3, gt=0, le=16, allow_inf_nan=False)
+    claim_estimate_cjk_weight: float = Field(default=0.6, gt=0, le=16, allow_inf_nan=False)
+    claim_estimate_unicode_weight: float = Field(default=1, gt=0, le=16, allow_inf_nan=False)
+    claim_estimate_margin: float = Field(default=0.15, ge=0, le=1, allow_inf_nan=False)
+    claim_estimate_message_overhead: int = Field(default=8, gt=0, le=1024)
+    claim_estimate_request_overhead: int = Field(default=128, gt=0, le=65536)
+    claim_extraction_profile_path: str = ""
+    claim_extraction_profile_id: str = Field(default="", max_length=128)
+    claim_extraction_target_tokens: int = Field(default=6144, gt=0, le=8192)
+    claim_extraction_context_tokens: int = Field(default=512, gt=0, le=1024)
+    claim_extraction_batch_claims: int = Field(default=30, gt=0, le=30)
+    claim_extraction_input_version: Literal["legacy_context_v1", "unified_context_v1", "unified_context_v2", "unified_context_v3", "unified_context_v4", "unified_context_v5"] = "unified_context_v5"
+    claim_extraction_resource_claims: int = Field(default=48, gt=0, le=128)
+    claim_extraction_output_tokens: int = Field(default=32768, gt=0, le=32768)
+    claim_extraction_max_calls: int = Field(default=8, gt=0, le=64)
+    claim_extraction_max_attempts: int = Field(default=24, gt=0, le=192)
+    claim_extraction_max_tokens: int = Field(default=196608, gt=0, le=16777216)
+    claim_extraction_attempt_timeout_seconds: float = Field(default=180, gt=0, le=180, allow_inf_nan=False)
+    claim_extraction_max_request_seconds: float = Field(default=480, gt=0, le=3600, allow_inf_nan=False)
+    # T37 density-aware packing. Frozen into each new estimate Run; changing
+    # these only affects Runs frozen afterwards. No existing bound
+    # (batch/resource/max_calls) moves when selecting the estimate strategy.
+    claim_extraction_density_enabled: bool = True
+    claim_extraction_density_prior: float = Field(default=35.0, gt=0, allow_inf_nan=False)
+    claim_extraction_risk_share: float = Field(default=0.9, gt=0, le=1, allow_inf_nan=False)
+    # T42 programmatic source locating. Only affects NEW neutral_estimate_v1
+    # requests at freeze time; historical policies are never upgraded in place.
+    # exact_v1 = neutral-v2 prompt but only unique exact locating; tolerant_v1
+    # additionally enables the bounded format (B) and edit (C) layers. None
+    # (explicit, used by test fixtures) keeps the historical v1 prompt with no
+    # source locating sub-contract.
+    claim_extraction_source_locating_mode: Literal["exact_v1", "tolerant_v1"] | None = "tolerant_v1"
+    # T50 optional Claim evidence retrieval.  Engineering limits only: they are
+    # frozen into each Run and are not a measured latency, cost or recall claim.
+    claim_evidence_retrieval_query_batch_claims: int = Field(default=16, ge=1, le=16)
+    claim_post_retrieval_default_max_iterations: int = Field(default=0, ge=0, le=3)
+    claim_evidence_retrieval_rejudge_batch_claims: int = Field(default=16, ge=1, le=16)
+    claim_evidence_retrieval_queries_per_claim: int = Field(default=2, ge=1, le=3)
+    claim_evidence_retrieval_max_queries_per_claim: int = Field(default=3, ge=1, le=3)
+    claim_evidence_retrieval_max_queries: int = Field(default=96, ge=1, le=96)
+    claim_evidence_retrieval_queries_per_request: int = Field(default=6, ge=1, le=6)
+    claim_evidence_retrieval_max_new_excerpts_per_resource: int = Field(default=8, ge=1, le=8)
+    claim_evidence_retrieval_max_new_excerpts: int = Field(default=16, ge=1, le=16)
+    claim_evidence_retrieval_max_logical_calls: int = Field(default=16, ge=1, le=16)
+    claim_evidence_retrieval_max_attempts: int = Field(default=24, ge=1, le=24)
+    claim_evidence_retrieval_attempts_per_call: int = Field(default=3, ge=1, le=3)
+    claim_evidence_retrieval_query_input_cap: int = Field(default=16384, ge=1024, le=65536)
+    claim_evidence_retrieval_query_output_cap: int = Field(default=4096, ge=512, le=8192)
+    claim_evidence_retrieval_rejudge_input_cap: int = Field(default=32768, ge=1024, le=131072)
+    claim_evidence_retrieval_rejudge_output_cap: int = Field(default=8192, ge=512, le=16384)
+    claim_evidence_retrieval_rejudge_truncated_output_cap: int = Field(default=16384, ge=512, le=32768)
+    claim_evidence_retrieval_max_estimated_tokens: int = Field(default=196608, ge=1024)
+    claim_evidence_retrieval_attempt_timeout_seconds: float = Field(default=180.0, gt=0, le=180, allow_inf_nan=False)
+    claim_evidence_retrieval_retrieval_timeout_seconds: float = Field(default=120.0, gt=0, le=120, allow_inf_nan=False)
+    claim_evidence_retrieval_max_wall_seconds: float = Field(default=600.0, gt=0, le=600, allow_inf_nan=False)
+    claim_evidence_retrieval_downstream_reserve_seconds: float = Field(default=300.0, ge=0, le=600, allow_inf_nan=False)
+    claim_evidence_retrieval_excerpt_chars: int = Field(default=2000, ge=100, le=4000)
+    claim_evidence_retrieval_excerpt_structural_cap: int = Field(default=4000, ge=100, le=10000)
     # Resource generation produces the user-facing artifact. It receives one
     # additional bounded recovery attempt for empty provider responses, while
     # supporting nodes (review/diagnosis/claim checks) retain the global limit.
@@ -122,6 +199,34 @@ class Settings(BaseSettings):
     llm_retry_base_delay_seconds: float = Field(default=0.5, ge=0, le=30)
     llm_retry_max_delay_seconds: float = Field(default=3.0, ge=0, le=60)
     llm_max_output_tokens: int = Field(default=16384, ge=256, le=65536)
+    lecture_review_strategy: Literal["legacy_content_v2", "lecture_issue_v1", "lecture_issue_v2"] = "legacy_content_v2"
+    lecture_review_context_tokens: int | None = Field(default=None, gt=0)
+    assessment_review_strategy: Literal["two_stage_v1", "combined_v2"] = "two_stage_v1"
+    assessment_review_context_tokens: int | None = Field(default=None, gt=0)
+    # T44 generic text-document review.  ``compat`` keeps the historical
+    # per-resource reviewers; ``resource_issue_v1`` routes every text resource
+    # through the one shared closed loop by default. Deployments must still
+    # supply the actual reviewer context window explicitly.
+    resource_review_strategy: Literal["compat", "resource_issue_v1"] = "resource_issue_v1"
+    resource_review_context_tokens: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_assessment_review_window(self):
+        if self.lecture_review_strategy in {"lecture_issue_v1", "lecture_issue_v2"} and self.lecture_review_context_tokens is None:
+            raise ValueError("LECTURE_REVIEW_CONTEXT_TOKENS is required for a versioned lecture strategy")
+        if self.assessment_review_strategy == "combined_v2" and self.assessment_review_context_tokens is None:
+            raise ValueError("ASSESSMENT_REVIEW_CONTEXT_TOKENS is required for combined_v2")
+        if self.resource_review_strategy == "resource_issue_v1" and self.resource_review_context_tokens is None:
+            raise ValueError("RESOURCE_REVIEW_CONTEXT_TOKENS is required for resource_issue_v1")
+        if (
+            self.claim_gap_auto_publish_min_factual_pass_rate
+            < self.claim_user_review_min_factual_pass_rate
+        ):
+            raise ValueError(
+                "CLAIM_GAP_AUTO_PUBLISH_MIN_FACTUAL_PASS_RATE must be greater than or equal to "
+                "CLAIM_USER_REVIEW_MIN_FACTUAL_PASS_RATE"
+            )
+        return self
     # Claim extraction/judgement starts with a larger budget because the
     # audited resource text and evidence envelope can be substantial.
     claim_max_output_tokens: int = Field(default=32768, ge=2048, le=65536)
@@ -132,7 +237,7 @@ class Settings(BaseSettings):
     # use the explicit per-resource settings below.
     llm_generator_max_output_tokens: int = Field(default=16384, ge=256, le=65536)
     llm_resource_generator_max_input_tokens: int = Field(
-        default=65536,
+        default=262144,
         ge=1024,
         le=262144,
     )
@@ -153,23 +258,48 @@ class Settings(BaseSettings):
     text_resource_max_output_tokens: int = Field(default=65536, ge=4096, le=65536)
     practice_guide_request_timeout_seconds: float = Field(default=300.0, gt=0, le=600)
     practice_guide_max_output_tokens: int = Field(default=65536, ge=8192, le=65536)
+    # A retry is only worth starting when the remaining deadline can still
+    # cover a useful share of one call.  Without this floor the gateway happily
+    # launches a 24k-token request with 8 seconds left, which can only end as
+    # LLM_TIMEOUT while burning the rest of the run's budget.
+    llm_min_attempt_seconds: float = Field(default=45.0, gt=0, le=300)
     llm_structured_output_mode: str = "auto"
     tutor_llm_timeout_seconds: float = Field(default=25.0, gt=0, le=120)
     tutor_max_output_tokens: int = Field(default=4096, ge=256, le=8192)
     tutor_max_context_turns: int = Field(default=6, ge=1, le=12)
     tutor_max_evidence_items: int = Field(default=4, ge=1, le=8)
     tutor_max_hint_level: int = Field(default=3, ge=0, le=3)
-    embedding_model: str = "BAAI/bge-large-zh-v1.5"
+    embedding_model: str = "BAAI/bge-m3"
     # The embedding model is part of the local runtime contract.  Do not turn
     # a generation request into a Hugging Face network dependency after a
     # restart; model provisioning is an explicit deployment step.
     embedding_local_files_only: bool = True
-    retrieval_top_k_default: int = Field(default=3, ge=1, le=10)
+    embedding_batch_size: int = Field(default=4, ge=1, le=64)
+    retrieval_top_k_default: int = Field(default=6, ge=1, le=10)
     retrieval_max_queries: int = Field(default=6, ge=1, le=10)
+    # Embedding + vector search + optional cross-encoder rerank is the only
+    # phase that never touched a model budget.  Bound it explicitly so a stuck
+    # backend degrades through the existing retrieval fallback instead of
+    # holding the run until the lease expires.
+    retrieval_timeout_seconds: float = Field(default=120.0, gt=0, le=600)
+    resource_aware_retrieval_enabled: bool = False
+    resource_aware_retrieval_max_queries: int = Field(default=10, ge=1, le=10)
+    # Deployment must supply the actual model window before using AI planning.
+    resource_aware_planner_context_tokens: int | None = Field(default=None, ge=256)
+    resource_aware_planner_input_budget_tokens: int = Field(default=32768, ge=256)
     retrieval_max_evidence: int = Field(default=8, ge=1, le=20)
     retrieval_min_evidence: int = Field(default=1, ge=1, le=20)
     retrieval_min_normalized_score: float = Field(default=0.35, ge=0, le=1)
+    retrieval_english_score_bonus: float = Field(default=0.08, ge=0, le=0.25, allow_inf_nan=False)
+    retrieval_balanced_candidates_enabled: bool = True
+    retrieval_dense_reserve: int = Field(default=10, ge=0, le=20)
+    retrieval_redundancy_enabled: bool = True
+    retrieval_redundancy_threshold: float = Field(default=0.90, ge=0.85, le=1, allow_inf_nan=False)
     evidence_max_excerpt_chars: int = Field(default=1200, ge=100, le=10000)
+    generation_dispatch_mode: str = "worker"
+    generation_worker_poll_seconds: float = Field(default=2.0, ge=0.1, le=60)
+    generation_worker_shutdown_seconds: float = Field(default=30.0, ge=0, le=300)
+    generation_queue_timeout_seconds: int = Field(default=1260, ge=30, le=86400)
     workflow_run_lease_seconds: int = Field(default=1260, ge=30, le=3600)
     resource_worker_max_concurrency: int = Field(default=2, ge=1, le=4)
     resource_continuation_max_items: int = Field(default=12, ge=1, le=100)
@@ -178,6 +308,8 @@ class Settings(BaseSettings):
         ge=100,
         le=4000,
     )
+    # Frozen retries carry immutable bodies/evidence; checkpoint projections do not.
+    resource_retry_snapshot_max_bytes: int = Field(default=8388608, ge=65536, le=67108864)
     workflow_checkpoint_max_bytes: int = Field(default=65536, ge=4096, le=1048576)
     workflow_timeline_default_limit: int = Field(default=100, ge=1, le=500)
     workflow_timeline_max_limit: int = Field(default=500, ge=1, le=1000)
@@ -196,7 +328,7 @@ class Settings(BaseSettings):
     # driver default.
     sqlite_busy_timeout_seconds: int = Field(default=60, ge=1, le=300)
     knowledge_base_dir: str = "../knowledge_base/rag_engineering_training"
-    vector_store_dir: str = "./chroma_db"
+    vector_store_dir: str = "./data/chroma_bge_m3"
     chroma_collection_prefix: str = "kb"
     # Deprecated compatibility input. During the compatibility window this is
     # interpreted as a prefix, never as one fixed collection shared by all KBs.
@@ -211,6 +343,7 @@ class Settings(BaseSettings):
     rerank_batch_size: int = 4
     rerank_max_length: int = 512
     rerank_max_chunks_per_document: int = 2
+    learning_retrieval_refinement_enabled: bool = True
     resources_dir: str = "./data/generated_resources"
     admin_health_token: SecretStr = SecretStr("")
     auth_jwt_secret: SecretStr = SecretStr("development-only-change-me")
@@ -218,10 +351,36 @@ class Settings(BaseSettings):
     auth_token_expire_minutes: int = 480
     auth_cookie_name: str = "training_pilot_token"
     auth_cookie_secure: bool = False
+    cors_allow_origins: list[str] = Field(default_factory=list)
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     debug: bool = False
     sql_echo: bool = False
+
+    @field_validator("cors_allow_origins")
+    @classmethod
+    def validate_cors_origins(cls, value: list[str]) -> list[str]:
+        origins = []
+        for origin in value:
+            origin = origin.strip().rstrip("/")
+            parsed = urlparse(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+                or "*" in origin
+            ):
+                raise ValueError("CFG_CORS_ORIGIN_INVALID")
+            try:
+                parsed.port
+            except ValueError as exc:
+                raise ValueError("CFG_CORS_ORIGIN_INVALID") from exc
+            origins.append(origin)
+        return list(dict.fromkeys(origins))
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
@@ -407,6 +566,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_runtime_settings(self):
+        if self.generation_dispatch_mode not in {"worker", "background"}:
+            raise ValueError("CFG_INVALID_GENERATION_DISPATCH_MODE")
+        if self.db_type == "sqlite" and self.generation_dispatch_mode != "worker":
+            raise ValueError("CFG_SQLITE_REQUIRES_GENERATION_WORKER")
         legacy_prefix = (self.chroma_collection_name or "").strip()
         if legacy_prefix and "chroma_collection_prefix" not in self.model_fields_set:
             self.chroma_collection_prefix = legacy_prefix
@@ -424,8 +587,23 @@ class Settings(BaseSettings):
             raise ValueError("CFG_INVALID_LLM_RETRY_POLICY")
         if self.claim_schema_repair_attempts > self.claim_max_attempts - 1:
             raise ValueError("CFG_INVALID_CLAIM_RETRY_POLICY")
+        if self.claim_evidence_retrieval_queries_per_claim > self.claim_evidence_retrieval_max_queries_per_claim:
+            raise ValueError("CFG_INVALID_CLAIM_EVIDENCE_RETRIEVAL_POLICY")
+        if self.claim_evidence_retrieval_downstream_reserve_seconds >= self.claim_evidence_retrieval_max_wall_seconds:
+            raise ValueError("CFG_INVALID_CLAIM_EVIDENCE_RETRIEVAL_POLICY")
+        if self.claim_evidence_retrieval_excerpt_chars > self.claim_evidence_retrieval_excerpt_structural_cap:
+            raise ValueError("CFG_INVALID_CLAIM_EVIDENCE_RETRIEVAL_POLICY")
+        if self.claim_evidence_retrieval_max_estimated_tokens < (
+            self.claim_evidence_retrieval_rejudge_input_cap
+            + self.claim_evidence_retrieval_rejudge_output_cap
+        ):
+            raise ValueError("CFG_INVALID_CLAIM_EVIDENCE_RETRIEVAL_POLICY")
         if self.retrieval_min_evidence > self.retrieval_max_evidence:
             raise ValueError("CFG_INVALID_RETRIEVAL_POLICY")
+        if self.retrieval_timeout_seconds >= self.llm_workflow_timeout_seconds:
+            raise ValueError("CFG_INVALID_RETRIEVAL_TIMEOUT")
+        if self.retrieval_balanced_candidates_enabled and self.retrieval_dense_reserve > self.rerank_candidate_k:
+            raise ValueError("CFG_INVALID_RETRIEVAL_DENSE_RESERVE")
         if self.workflow_sse_heartbeat_seconds <= self.workflow_sse_poll_interval_seconds:
             raise ValueError("CFG_INVALID_WORKFLOW_STREAMING_POLICY")
         if self.report_sse_heartbeat_seconds <= self.report_sse_poll_interval_seconds:
@@ -495,6 +673,19 @@ class Settings(BaseSettings):
             raise ValueError("CFG_LLM_MODEL_MISSING")
         if not self.embedding_model.strip():
             raise ValueError("CFG_EMBEDDING_MODEL_MISSING")
+        secret = self.auth_jwt_secret.get_secret_value().strip()
+        if (
+            len(secret.encode("utf-8")) < 32
+            or secret.lower() in {
+                "development-only-change-me", "replace-with-a-long-random-secret",
+                "your-jwt-secret-here", "changeme", "change_me",
+            }
+        ):
+            raise ValueError("CFG_PRODUCTION_AUTH_SECRET_INVALID")
+        if not self.auth_cookie_secure:
+            raise ValueError("CFG_PRODUCTION_SECURE_COOKIE_REQUIRED")
+        if any(urlparse(origin).scheme != "https" for origin in self.cors_allow_origins):
+            raise ValueError("CFG_PRODUCTION_CORS_HTTPS_REQUIRED")
         return self
 
 

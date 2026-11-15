@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鹈鹕的海边骑行</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; overflow: hidden; background: #f6e7cd; font-family: Georgia, 'Noto Serif SC', serif; }
+  main { width: min(100%, 1200px); padding: 24px; }
+  svg { display: block; width: 100%; height: auto; overflow: hidden; border-radius: 14px; box-shadow: 0 18px 50px #63503922; }
+  .wheel { transform-box: fill-box; transform-origin: center; animation: spin 1.5s linear infinite; }
+  .crank { transform-origin: 500px 455px; animation: spin 1.5s linear infinite; }
+  .bird { animation: bob 1.5s ease-in-out infinite; transform-origin: 500px 390px; }
+  .cloud { animation: drift 18s ease-in-out infinite alternate; }
+  .cloud.two { animation-duration: 25s; animation-direction: alternate-reverse; }
+  .grass { animation: sway 2.5s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: bottom; }
+  .grass:nth-child(even) { animation-delay: -1.2s; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes bob { 50% { transform: translateY(-4px) rotate(-1deg); } }
+  @keyframes drift { to { transform: translateX(28px); } }
+  @keyframes sway { to { transform: rotate(7deg); } }
+</style>
+</head>
+<body>
+<main>
+<svg viewBox="0 0 1000 650" role="img" aria-labelledby="title desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="title">鹈鹕的海边骑行</title>
+  <desc id="desc">一只戴着围巾的鹈鹕骑着自行车，沿着海边的小路悠闲前行。车轮和踏板不停转动。</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#bde4df"/><stop offset="1" stop-color="#f7e9cb"/></linearGradient>
+    <linearGradient id="sea" x2="0" y2="1"><stop stop-color="#82c7c3"/><stop offset="1" stop-color="#afdcd0"/></linearGradient>
+    <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".8" fill="#5f8377" opacity=".2"/></pattern>
+  </defs>
+  <rect width="1000" height="650" fill="url(#sky)"/>
+  <circle cx="805" cy="116" r="48" fill="#f8d77f"/>
+  <g class="cloud" fill="#fff9eb" opacity=".8"><path d="M118 143c5-22 34-28 48-10 12-13 38-8 40 10 21-2 27 21 8 24h-98c-19-2-17-21 2-24z"/></g>
+  <g class="cloud two" fill="#fff9eb" opacity=".7"><path d="M590 96c5-17 27-22 39-8 10-10 30-6 32 8 17-1 21 16 6 19h-78c-15-2-13-17 1-19z"/></g>
+  <path d="M0 331 Q180 307 340 327 T680 320 T1000 318 V470 H0Z" fill="url(#sea)"/>
+  <g fill="none" stroke="#e8f4df" stroke-width="3" stroke-linecap="round" opacity=".7"><path d="M65 362h86m20 0h26M750 368h86m18 0h30M130 407h58m18 0h18M800 423h90"/></g>
+  <path d="M0 459 Q230 438 460 454 T1000 447 V650 H0Z" fill="#e9ca98"/>
+  <path d="M0 505 Q270 485 510 502 T1000 490 V650 H0Z" fill="#d9ad78"/>
+  <path d="M0 505 Q270 485 510 502 T1000 490" fill="none" stroke="#f8e5ba" stroke-width="5"/>
+  <rect y="505" width="1000" height="145" fill="url(#dots)"/>
+  <g fill="none" stroke="#799b70" stroke-width="5" stroke-linecap="round"><path class="grass" d="M100 510q-3-24-17-35m17 35q5-19 17-27"/><path class="grass" d="M885 500q-3-24-17-35m17 35q5-19 17-27"/><path class="grass" d="M188 593q-2-16-12-23m12 23q4-13 12-18"/></g>
+  <g fill="#fff7db"><circle cx="82" cy="475" r="5"/><circle cx="116" cy="482" r="4"/><circle cx="868" cy="466" r="5"/><circle cx="901" cy="473" r="4"/></g>
+  <text x="55" y="72" font-size="14" letter-spacing="4" fill="#426c65">A LITTLE SEASIDE ADVENTURE</text>
+  <text x="55" y="105" font-size="25" fill="#426c65">慢慢骑，慢慢看海。</text>
+  <ellipse cx="503" cy="563" rx="287" ry="18" fill="#a77954" opacity=".18"/>
+  <!-- Wheels -->
+  <g fill="none" stroke-linecap="round">
+    <g class="wheel"><circle cx="312" cy="457" r="98" stroke="#344f4b" stroke-width="12"/><circle cx="312" cy="457" r="86" stroke="#f8e6c4" stroke-width="3"/><g stroke="#69867b" stroke-width="2"><path d="M226 457h172M312 371v172M251 396l122 122M251 518l122-122"/></g><circle cx="312" cy="457" r="8" fill="#344f4b" stroke="none"/></g>
+    <g class="wheel"><circle cx="690" cy="457" r="98" stroke="#344f4b" stroke-width="12"/><circle cx="690" cy="457" r="86" stroke="#f8e6c4" stroke-width="3"/><g stroke="#69867b" stroke-width="2"><path d="M604 457h172M690 371v172M629 396l122 122M629 518l122-122"/></g><circle cx="690" cy="457" r="8" fill="#344f4b" stroke="none"/></g>
+  </g>
+  <!-- Bicycle frame -->
+  <g fill="none" stroke="#d56d4d" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"><path d="M312 457l112-145 76 143H312l146-105h151l81 107M500 455l109-105"/><path d="M609 350l-15-46h43q20 0 20-17"/></g>
+  <path d="M397 311h57" stroke="#385450" stroke-width="11" stroke-linecap="round"/>
+  <path d="M425 312l-9-20" stroke="#385450" stroke-width="6"/>
+  <path d="M586 301h38" stroke="#385450" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="500" cy="455" r="24" fill="#f5d9ad" stroke="#b85f46" stroke-width="4"/>
+  <g class="crank" stroke="#385450" stroke-width="6" stroke-linecap="round"><path d="M500 455l18 32m-36-64l18 32"/><path d="M508 488h23m-60-66h23" stroke-width="8"/></g>
+  <!-- Rider -->
+  <g class="bird">
+    <path d="M397 334q-24 24-46 12 18-2 27-20-22 11-34-1 23-3 42-22" fill="#e8e2d1" stroke="#405a53" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M451 350q-13 35 8 65l24 29" fill="none" stroke="#d9854d" stroke-width="12" stroke-linecap="round"/>
+    <path d="M483 444l23 5" fill="none" stroke="#405a53" stroke-width="8" stroke-linecap="round"/>
+    <path d="M423 347q-8 42 24 61l36 18" fill="none" stroke="#e6a05f" stroke-width="12" stroke-linecap="round"/>
+    <path d="M482 426l20 4" fill="none" stroke="#405a53" stroke-width="8" stroke-linecap="round"/>
+    <path d="M375 297q-4-72 63-81 63-8 95 47 17 30-3 64-27 45-100 45-53 0-55-75z" fill="#fff9eb" stroke="#405a53" stroke-width="5"/>
+    <path d="M389 292q22-29 68-23 39 5 54 28-22 39-78 38-34-1-44-43z" fill="#e8ece0" stroke="#a7b8a6" stroke-width="3"/>
+    <path d="M476 322q36 21 57 5l56-34" fill="none" stroke="#e8ece0" stroke-width="16" stroke-linecap="round"/>
+    <path d="M478 321q36 21 57 5l55-33" fill="none" stroke="#405a53" stroke-width="3" stroke-linecap="round"/>
+    <path d="M437 236q-10-36 0-73 9-34 42-39 36-6 49 21 12 24-2 54l-10 35" fill="#fff9eb" stroke="#405a53" stroke-width="5"/>
+    <path d="M522 168q39 6 103 29-44 6-104 1z" fill="#e8a24f" stroke="#405a53" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M522 197q31 8 81 2-17 35-49 37-26 1-32-39z" fill="#f0bf77" stroke="#405a53" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="501" cy="158" r="4.5" fill="#344f4b"/><circle cx="502" cy="157" r="1.3" fill="white"/>
+    <path d="M434 213q42 14 88-1l5 20q-49 18-96 0z" fill="#d66d4d" stroke="#405a53" stroke-width="4"/>
+    <path d="M438 229q-26 2-56-13 8 20 29 29-22 0-42-7 14 20 51 20l28-21" fill="#d66d4d" stroke="#405a53" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M455 219l2 14m13-12 2 14" stroke="#f6bd86" stroke-width="4"/>
+  </g>
+  <g fill="#426c65" font-size="12" letter-spacing="3"><text x="792" y="598">ENJOY THE RIDE</text></g>
+</svg>
+</main>
+</body>
+</html>

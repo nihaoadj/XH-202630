@@ -1,0 +1,11 @@
+[
+  {"code":"GENERATION_TARGET_INVALID","status_code":422,"message":"生成目标无效"},
+  {"code":"ROUND_SELECTION_INVALID","status_code":422,"message":"学习轮次选择无效"},
+  {"code":"ROUND_ASSESSMENT_INVALID","status_code":422,"message":"学习轮次测评无效"},
+  {"code":"ROUND_SELECTION_CONFLICT","status_code":409,"message":"学习轮次选择发生冲突"},
+  {"code":"ROUND_STAGE_NOT_READY","status_code":409,"message":"学习轮次尚未准备好测评"},
+  {"code":"ROUND_ATTEMPT_CONFLICT","status_code":409,"message":"学习轮次测评提交发生冲突"},
+  {"code":"ROUND_CORRECTION_BUDGET_EXHAUSTED","status_code":409,"message":"本轮纠错额度已用尽"},
+  {"code":"ROUND_BUDGET_EXHAUSTED","status_code":409,"message":"本轮执行预算已用尽"},
+  {"code":"ROUND_CREATION_DISABLED","status_code":409,"message":"暂未启用新学习轮次"}
+]

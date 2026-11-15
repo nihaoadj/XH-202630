@@ -1,0 +1,244 @@
+# 使用结构化生成进行带源高亮的 RAG 
+_作者: [Aymeric Roucher](https://huggingface.co/m-ric)_
+
+**结构化生成是一种方法**，它强制 LLN 的输出遵循某些约束，例如遵循特定的模式。
+
+这有许多用例：
+
+- ✅ 输出一个具有特定键的字典
+- 📏 确保输出长度超过 N 个字符
+- ⚙️ 更一般地说，强制输出遵循特定的正则表达式模式以进行下游处理。
+- 💡 在检索增强生成（RAG）中突出显示支持答案的源
+
+在这个 notebook 中，我们特别演示了最后一个用例：
+
+**➡️ 我们构建了一个 RAG 系统，它不仅提供答案，还突出显示这个答案所基于的支持片段。**
+
+_如果你需要 RAG 的入门介绍，可以查看[这个其他的教程](https://github.com/huggingface/cookbook/blob/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/advanced_rag)。_
+
+这个 notebook 首先展示了通过提示进行结构化生成的简单方法，并突出了其局限性，然后演示了受限解码以实现更高效的结构化生成。
+
+它利用了 HuggingFace 推理端点（示例展示了一个[无服务器](https://huggingface.co/docs/api-inference/quicktour)端点，但你可以直接将端点更改为[专用](https://huggingface.co/docs/inference-endpoints/en/guides/access)端点），然后还展示了一个使用[outlines](https://github.com/outlines-dev/outlines)，一个结构化文本生成库的本地流水线。
+
+```python
+!pip install pandas json huggingface_hub pydantic outlines accelerate -q
+```
+
+```python
+import pandas as pd
+import json
+from huggingface_hub import InferenceClient
+
+pd.set_option("display.max_colwidth", None)
+```
+
+```python
+repo_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+
+llm_client = InferenceClient(model=repo_id, timeout=120)
+
+# Test your LLM client
+llm_client.text_generation(prompt="How are you today?", max_new_tokens=20)
+```
+
+## 提示模型
+
+为了从模型中获得结构化输出，你可以简单地用适当的指导原则提示一个足够强大的模型，并且大多数时候它应该能够直接工作。
+
+在这种情况下，我们希望 RAG 模型不仅生成答案，还生成一个置信度分数和一些源代码片段。
+我们希望将这些生成为一个 JSON 字典，然后可以轻松地解析它以进行下游处理（在这里，我们将只突出显示源代码片段）。
+
+```python
+RELEVANT_CONTEXT = """
+Document:
+
+The weather is really nice in Paris today.
+To define a stop sequence in Transformers, you should pass the stop_sequence argument in your pipeline or model.
+
+"""
+```
+
+```python
+RAG_PROMPT_TEMPLATE_JSON = """
+Answer the user query based on the source documents.
+
+Here are the source documents: {context}
+
+
+You should provide your answer as a JSON blob, and also provide all relevant short source snippets from the documents on which you directly based your answer, and a confidence score as a float between 0 and 1.
+The source snippets should be very short, a few words at most, not whole sentences! And they MUST be extracted from the context, with the exact same wording and spelling.
+
+Your answer should be built as follows, it must contain the "Answer:" and "End of answer." sequences.
+
+Answer:
+{{
+  "answer": your_answer,
+  "confidence_score": your_confidence_score,
+  "source_snippets": ["snippet_1", "snippet_2", ...]
+}}
+End of answer.
+
+Now begin!
+Here is the user question: {user_query}.
+Answer:
+"""
+```
+
+```python
+USER_QUERY = "How can I define a stop sequence in Transformers?"
+```
+
+```python
+prompt = RAG_PROMPT_TEMPLATE_JSON.format(
+    context=RELEVANT_CONTEXT, user_query=USER_QUERY
+)
+print(prompt)
+```
+
+```python
+answer = llm_client.text_generation(
+    prompt,
+    max_new_tokens=1000,
+)
+
+answer = answer.split("End of answer.")[0]
+print(answer)
+```
+
+LLM 的输出是一个字典的字符串表示：所以我们只需使用 `literal_eval` 将其作为字典加载。
+
+```python
+from ast import literal_eval
+
+parsed_answer = literal_eval(answer)
+```
+
+```python
+def highlight(s):
+    return "\x1b[1;32m" + s + "\x1b[0m"
+
+
+def print_results(answer, source_text, highlight_snippets):
+    print("Answer:", highlight(answer))
+    print("\n\n", "=" * 10 + " Source documents " + "=" * 10)
+    for snippet in highlight_snippets:
+        source_text = source_text.replace(snippet.strip(), highlight(snippet.strip()))
+    print(source_text)
+
+
+print_results(
+    parsed_answer["answer"], RELEVANT_CONTEXT, parsed_answer["source_snippets"]
+)
+```
+
+成功了！🥳
+
+但是使用一个不那么强大的模型会怎么样呢？
+
+为了模拟一个不那么强大的模型可能产生的连贯性较差的输出，我们增加了温度（temperature）。
+
+```python
+answer = llm_client.text_generation(
+    prompt,
+    max_new_tokens=250,
+    temperature=1.6,
+    return_full_text=False,
+)
+print(answer)
+```
+
+现在，输出甚至不是正确的 JSON 格式。
+
+## 👉 受限解码
+
+为了强制输出 JSON，我们将使用**受限解码**，在这种解码方式中，我们强制 LLM 只输出符合称为**语法**的一组规则的令牌。
+
+这个语法可以使用 Pydantic 模型、JSON 模式或正则表达式来定义。然后 AI 将生成符合指定语法的响应。
+
+例如，这里我们遵循[Pydantic 类型](https://docs.pydantic.dev/latest/api/types/)。
+
+```python
+from pydantic import BaseModel, confloat, StringConstraints
+from typing import List, Annotated
+
+
+class AnswerWithSnippets(BaseModel):
+    answer: Annotated[str, StringConstraints(min_length=10, max_length=100)]
+    confidence: Annotated[float, confloat(ge=0.0, le=1.0)]
+    source_snippets: List[Annotated[str, StringConstraints(max_length=30)]]
+```
+
+我建议检查生成的模式，以确保它正确地表示了你的需求：
+
+```python
+AnswerWithSnippets.schema()
+```
+
+你可以使用客户端的 `text_generation` 方法，或者使用其 `post` 方法。
+
+```python
+# Using text_generation
+answer = llm_client.text_generation(
+    prompt,
+    grammar={"type": "json", "value": AnswerWithSnippets.schema()},
+    max_new_tokens=250,
+    temperature=1.6,
+    return_full_text=False,
+)
+print(answer)
+
+# Using post
+data = {
+    "inputs": prompt,
+    "parameters": {
+        "temperature": 1.6,
+        "return_full_text": False,
+        "grammar": {"type": "json", "value": AnswerWithSnippets.schema()},
+        "max_new_tokens": 250,
+    },
+}
+answer = json.loads(llm_client.post(json=data))[0]["generated_text"]
+print(answer)
+```
+
+✅ 尽管由于温度较高，答案仍然没有意义，但现在生成的输出是正确的 JSON 格式，具有我们在语法中定义的确切键和类型！
+
+然后它可以被解析以进行进一步处理。
+
+### 使用 Outlines 在本地流水线上应用语法
+
+[Outlines](https://github.com/outlines-dev/outlines/) 是在我们的推理 API 底层运行的库，用于约束输出生成。你也可以在本地使用它。
+
+它通过 [在 logits 上施加 bias](https://github.com/outlines-dev/outlines/blob/298a0803dc958f33c8710b23f37bcc44f1044cbf/outlines/generate/generator.py#L143) 来强制选择仅符合你约束的选项。
+
+```python
+import outlines
+
+repo_id = "mustafaaljadery/gemma-2B-10M"
+# Load model locally
+model = outlines.models.transformers(repo_id)
+
+schema_as_str = json.dumps(AnswerWithSnippets.schema())
+
+generator = outlines.generate.json(model, schema_as_str)
+
+# Use the `generator` to sample an output from the model
+result = generator(prompt)
+print(result)
+```
+
+你还可以使用 [文本生成推理](https://huggingface.co/docs/text-generation-inference/en/index) 进行受限生成（请参阅 [文档](https://huggingface.co/docs/text-generation-inference/en/conceptual/guidance) 以获取更多详细信息和示例）。
+
+现在我们已经展示了一个特定的 RAG 用例，但受限生成对于更多的事情都非常有帮助。
+
+例如，在你的 [LLM 判断](https://github.com/huggingface/cookbook/blob/b23df069425fe24cd9a38f8a86c5cb9e163917a0/notebooks/zh-CN/llm_judge) 工作流程中，你也可以使用受限生成来输出一个 JSON，如下所示：
+
+```
+{
+    "score": 1,
+    "rationale": "The answer does not match the true answer at all.",
+    "confidence_level": 0.85
+}
+```
+
+今天的内容就到这里，恭喜你跟到最后！👏

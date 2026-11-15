@@ -3,6 +3,8 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.resource_workflows.learning_documents.state import AgentState
+from app.agents.shared.evidence_scope import allocation_for_state
+from app.config import get_settings
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.agent_contracts import (
@@ -12,6 +14,7 @@ from app.models.shared.agent_contracts import (
     PlannerOutput,
     build_trace_item,
     require_agent_fallback,
+    make_error_info,
     start_step,
 )
 from app.models.shared.llm import LLMCallContext
@@ -26,6 +29,7 @@ PLANNER_PROMPT = """你是一名学习路径规划 Agent。请根据学习者画
 4. 不得预设、暗示或偏向任何固定领域；领域范围只能从用户输入、学习者画像和知识库片段中推断。
 5. 按当前主题所属领域的知识结构安排先修知识、补救内容和进阶挑战。
 6. 当输入提供目标能力节点时，目标节点是本次生成的硬范围；weak_points 只能作为画像背景，不能新增、替换或扩展目标节点。
+7. 若选择实操指南，其生成要求必须指定一个可亲手完成的最小操作目标，说明示例输入、运行环境和可观察的完成结果；仅使用当前资源可用的冻结证据，不得把概念复述或纸笔推演当作实操目标。
 
 请用 JSON 格式输出：
 {
@@ -45,6 +49,16 @@ PLANNER_PROMPT = """你是一名学习路径规划 Agent。请根据学习者画
 不要包含额外解释。
 """
 
+LECTURE_PLANNING_GUIDANCE = """
+本次包含讲义。仅在 resource_requirements["讲义"] 中安排读者应理解的目标概念、概念关系和适用边界，按请求难度组织讲解。需要示例时优先选用所分配冻结证据支持的短例，明确它要解释哪个概念。只有同一情境有助于串联多个目标概念且材料齐全时才安排贯穿案例。可以省略示例或缩小示例范围，避免依赖缺失的原文、题目或外部资料。正文以解释概念为主，末尾自检可省略。
+"""
+
+PRACTICE_PLANNING_GUIDANCE = """
+本次包含实操指南。为 resource_requirements["实操指南"] 选择一个与目标节点和所分配冻结证据相符的最小可运行任务：学习者必须实际运行程序或命令，让输入经过处理并产生可观察的输出或文件。手动填写诊断表、摘录证据、回答问题、拆解观点和抄写预填答案可以作为辅助练习，不能充当主要操作；即使教材把它称作“实验”也一样。
+该要求用一段文字明确写出五项内容：任务（运行什么以完成什么目标）、环境与工具（学习者需要准备什么）、输入（首次使用时在哪一步用代码创建或定义）、逐步执行动作（每个独立步骤运行哪段代码）、结果验证（每步观察什么输出或文件，如何核对）。不要规划“准备阶段给出整份脚本，再分步复制、运行和阅读”的流程；不含可运行代码的保存、阅读和检查动作并入相邻步骤。不要预先给出全部操作结果让学习者只需复制。示例输入可以是标明“教学示例”的短文或数据，但不能要求学习者自行查找未展示的资料。
+优先使用冻结证据中与目标节点匹配的操作方法。若专有服务、模型或向量库的依赖超出当前节点或证据支持范围，选择更小的本地可运行演示，并明确它只是教学演示，不宣称实现完整服务；不要因此退化为纯手动演练，也不要编造 API、环境能力或实测数值。其他资源类型的要求仍按其自身用途规划。
+"""
+
 
 def _fallback_plan(state: AgentState) -> dict:
     learner = state["learner"]
@@ -53,6 +67,15 @@ def _fallback_plan(state: AgentState) -> dict:
     target_nodes = list(dict.fromkeys(str(item).strip() for item in state.get("target_skill_nodes", []) if str(item).strip()))
     weak_points = diagnosis.get("weak_points") or learner.weak_points or [topic]
     focus_points = target_nodes or weak_points
+    lecture_requirement = (
+        "先解释目标节点，再串联到当前学习主题的完整知识结构。" if target_nodes
+        else "先解释薄弱知识点，再串联到当前学习主题的完整知识结构。"
+    )
+    if "讲义" in state.get("resource_types", []):
+        lecture_requirement = (
+            "按难度解释当前目标范围内的概念、关系和边界。"
+            "需要时用冻结证据支持的短例帮助讲解，自检可省略。"
+        )
 
     learning_path = []
     for index, point in enumerate(focus_points[:3], start=1):
@@ -74,8 +97,8 @@ def _fallback_plan(state: AgentState) -> dict:
         "remedial_points": focus_points[:3],
         "challenge_points": [f"{point} 进阶挑战" for point in focus_points[:2]] if learner.skill_level in {"高级", "进阶"} else [],
         "resource_requirements": {
-            "讲义": "先解释目标节点，再串联到当前学习主题的完整知识结构。" if target_nodes else "先解释薄弱知识点，再串联到当前学习主题的完整知识结构。",
-            "实操指南": "提供可执行步骤、参数选择和常见错误排查。",
+            "讲义": lecture_requirement,
+            "实操指南": "围绕当前节点完成最小操作任务：准备阶段只说明环境；示例输入在首次使用的步骤用代码创建；每个独立步骤都有可运行代码，按顺序执行并观察输出；最后核查产物及关键失败条件。只使用冻结证据支持的接口和参数。",
             "分阶测试题": "覆盖基础理解、参数判断和小型实操分析。",
             "复习清单": "提炼必会要点、易错点、自测项目和可执行复习节奏。",
             "案例分析": "用受控证据构造情境，要求分析、决策并给出可追溯的参考方案。",
@@ -98,16 +121,21 @@ def plan_node(
     if not evidence:
         raise ApplicationError(ErrorCode.EVIDENCE_INSUFFICIENT, status_code=422)
 
+    allocation = allocation_for_state(state)
     evidence_summary = [
         {
             "evidence_id": item.evidence_id,
             "source_path": item.locator.source_path,
             "section": item.locator.section,
-            "excerpt": item.excerpt[:160],
+            "excerpt": item.excerpt if allocation else item.excerpt[:160],
             "normalized_score": item.normalized_score,
         }
-        for item in evidence[:5]
+        for item in (evidence if allocation else evidence[:5])
     ]
+
+    if allocation:
+        for summary, item in zip(evidence_summary, evidence):
+            summary["locator"] = item.locator.model_dump(mode="json")
 
     user_input = f"""
 学习主题：{node_input.topic}
@@ -131,13 +159,31 @@ def plan_node(
 {json.dumps(evidence_summary, ensure_ascii=False)}
 """
 
+    if allocation:
+        user_input += "\n已选资源类型与冻结分配（正文仅在上述证据中提供）：\n" + json.dumps({
+            "resource_types": node_input.resource_types,
+            "allocation": allocation.model_dump(mode="json"),
+            "node_evidence_map": node_input.node_evidence_map,
+            "available_evidence_ids": {kind: allocation.available_ids(kind) for kind in node_input.resource_types},
+        }, ensure_ascii=False)
     llm_result = None
     error = None
     try:
         messages = [
-            SystemMessage(content=PLANNER_PROMPT),
+            SystemMessage(content=PLANNER_PROMPT
+                          + (LECTURE_PLANNING_GUIDANCE if "讲义" in node_input.resource_types else "")
+                          + (PRACTICE_PLANNING_GUIDANCE if "实操指南" in node_input.resource_types else "")
+                          + ("\n只为已选资源类型输出要求；各类型要求必须依据其 available_evidence_ids，不得调整冻结分配。" if allocation else "")),
             HumanMessage(content=user_input),
         ]
+        options = llm_gateway.options_for("planner", temperature=0.1)
+        if allocation:
+            settings = get_settings()
+            # UTF-8 bytes plus framing reserve bound tokens conservatively; this is not tokenization.
+            estimated = len(json.dumps({"messages": [message.content for message in messages], "schema": PlannerLLMOutput.model_json_schema()}, ensure_ascii=False).encode("utf-8")) + 1024
+            window = settings.resource_aware_planner_context_tokens
+            if window is None or estimated > settings.resource_aware_planner_input_budget_tokens or estimated + options.max_output_tokens > window:
+                raise LLMGatewayError(error=make_error_info(ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, source="planner", category="input_budget", safe_detail="complete_planner_input_budget_exceeded_or_window_unconfigured"), call_id="planner-input-budget", retry_count=0, latency_ms=0, attempts=[])
         llm_result = llm_gateway.invoke_structured(
             messages=messages,
             output_schema=PlannerLLMOutput,
@@ -149,14 +195,18 @@ def plan_node(
                 generation_attempt=step_context["attempt"],
                 workflow_deadline_at=state.get("workflow_deadline_at"),
             ),
-            options=llm_gateway.options_for("planner", temperature=0.1),
+            options=options,
         )
         plan = llm_result.output.model_dump(mode="python")
     except LLMGatewayError as exc:
         error = require_agent_fallback(state, exc.error)
         llm_result = exc
         plan = _fallback_plan(state)
+        if exc.error.category == "input_budget":
+            plan["decision_reason"] = "完整输入预算预检未通过，未执行 AI 规划；使用显式降级规则规划。"
 
+    if allocation:
+        plan["resource_requirements"] = {kind: value for kind, value in plan.get("resource_requirements", {}).items() if kind in node_input.resource_types}
     path = plan.get("learning_path", [])
     target_nodes = list(node_input.target_skill_nodes)
     if target_nodes:
@@ -194,7 +244,7 @@ def plan_node(
         input_summary=f"目标节点：{node_input.target_skill_nodes}；诊断盲区：{diagnosis.get('weak_points', learner.weak_points)}；证据数：{len(evidence)}",
         output_summary=f"学习路径：{path_summary}",
         decision_reason=plan.get("decision_reason", "根据诊断盲区、知识库证据和学习目标规划资源生成顺序。"),
-        evidence_refs=[item.evidence_id for item in evidence[:5]],
+        evidence_refs=[item.evidence_id for item in (evidence if allocation else evidence[:5])],
         error=error,
         step_context=step_context,
         llm_metadata=llm_result.trace_metadata() if llm_result else None,

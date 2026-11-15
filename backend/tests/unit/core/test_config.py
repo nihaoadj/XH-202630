@@ -13,6 +13,61 @@ def make_settings(**overrides):
     return Settings(**values)
 
 
+def test_public_generation_uses_configured_post_retrieval_budget(monkeypatch):
+    from app.models.learning_documents.schemas import GenerateCreateRequest, GenerateRequest
+    from app.models.feedback.rounds import GenerateRoundCreateRequestV1
+    import app.config
+
+    monkeypatch.setattr(app.config, "get_settings", lambda: make_settings(
+        claim_post_retrieval_default_max_iterations=2,
+    ))
+    payload = dict(
+        learner_id="learner", topic="RAG", resource_types=["讲义"],
+        include_claim_check=True, include_claim_evidence_retrieval=True,
+    )
+    assert GenerateCreateRequest(**payload).claim_post_retrieval_max_iterations == 2
+    assert GenerateRoundCreateRequestV1(**payload, selection_key="configured-budget").claim_post_retrieval_max_iterations == 2
+    assert GenerateCreateRequest(**payload, claim_post_retrieval_max_iterations=0).claim_post_retrieval_max_iterations == 0
+    assert GenerateRequest.from_frozen_payload(payload).claim_post_retrieval_max_iterations == 0
+    assert GenerateCreateRequest(learner_id="learner", topic="RAG", resource_types=["讲义"]).claim_post_retrieval_max_iterations == 0
+    with pytest.raises(ValidationError):
+        make_settings(claim_post_retrieval_default_max_iterations=4)
+
+
+def test_claim_extraction_unified_input_defaults_and_boundaries():
+    settings = make_settings()
+    assert settings.claim_extraction_target_tokens == 6144
+    assert settings.claim_extraction_batch_claims == 30
+    assert settings.claim_extraction_input_version == "unified_context_v5"
+    assert make_settings(claim_extraction_input_version="legacy_context_v1").claim_extraction_input_version == "legacy_context_v1"
+    for overrides in ({"claim_extraction_batch_claims": 31}, {"claim_extraction_input_version": "unknown"}):
+        with pytest.raises(ValidationError):
+            make_settings(**overrides)
+
+
+def test_claim_publication_threshold_defaults_and_custom_values():
+    settings = make_settings()
+    assert settings.claim_user_review_min_factual_pass_rate == 0.85
+    assert settings.claim_gap_auto_publish_min_factual_pass_rate == 0.95
+    custom = make_settings(claim_user_review_min_factual_pass_rate=0.8, claim_gap_auto_publish_min_factual_pass_rate=0.97)
+    assert custom.claim_gap_auto_publish_min_factual_pass_rate == 0.97
+    with pytest.raises(ValidationError):
+        make_settings(claim_gap_auto_publish_min_factual_pass_rate=0.8)
+    with pytest.raises(ValidationError):
+        make_settings(claim_gap_auto_publish_min_factual_pass_rate=1.01)
+
+
+@pytest.mark.parametrize("capacity", [1024, 65536, 262144])
+def test_resource_input_capacity_accepts_explicit_overrides(capacity):
+    assert make_settings(llm_resource_generator_max_input_tokens=capacity).llm_resource_generator_max_input_tokens == capacity
+
+
+@pytest.mark.parametrize("capacity", [1023, 262145])
+def test_resource_input_capacity_rejects_out_of_range_values(capacity):
+    with pytest.raises(ValidationError, match="CFG_INVALID_LLM_TOKEN_LIMIT"):
+        make_settings(llm_resource_generator_max_input_tokens=capacity)
+
+
 def test_settings_safe_defaults():
     settings = make_settings()
 
@@ -34,7 +89,10 @@ def test_settings_safe_defaults():
     assert settings.claim_max_claims_per_resource == 10
     assert settings.claim_warning_publish_enabled is False
     assert settings.claim_warning_publish_min_factual_pass_rate == 0.80
+    assert settings.retrieval_top_k_default == 6
+    assert settings.retrieval_english_score_bonus == 0.08
     assert settings.llm_max_output_tokens == 16384
+    assert settings.llm_resource_generator_max_input_tokens == 262144
     assert settings.claim_max_output_tokens == 32768
     assert settings.claim_truncated_retry_output_tokens == 65536
     assert settings.text_resource_request_timeout_seconds == 240.0
@@ -154,6 +212,8 @@ def test_settings_accept_legal_app_modes(mode):
     overrides = {"app_mode": mode}
     if mode == "production":
         overrides["llm_api_key"] = "test-production-key"
+        overrides["auth_jwt_secret"] = "synthetic-production-secret-0123456789"
+        overrides["auth_cookie_secure"] = True
     assert make_settings(**overrides).app_mode == mode
 
 
@@ -254,6 +314,24 @@ def test_retrieval_min_evidence_cannot_exceed_maximum():
         make_settings(retrieval_min_evidence=4, retrieval_max_evidence=3)
 
 
+def test_retrieval_top_k_default_and_explicit_policy_override():
+    from app.core.retrieval.retriever import retrieval_policy_from_settings
+
+    settings = make_settings()
+
+    assert retrieval_policy_from_settings(settings).top_k_per_query == 6
+    assert retrieval_policy_from_settings(settings, top_k_override=3).top_k_per_query == 3
+
+
+@pytest.mark.parametrize(
+    "value",
+    [-0.01, 0.250001, float("nan"), float("inf"), float("-inf")],
+)
+def test_settings_reject_invalid_retrieval_english_score_bonus(value):
+    with pytest.raises(ValidationError):
+        make_settings(retrieval_english_score_bonus=value)
+
+
 @pytest.mark.parametrize(
     ("overrides", "code"),
     [
@@ -339,3 +417,9 @@ def test_debug_does_not_enable_sql_echo(monkeypatch, tmp_path):
 
     assert captured.get("echo", False) is False
     assert captured.get("hide_parameters", True) is True
+
+
+@pytest.mark.parametrize("threshold", [.84, 1.01, float("nan"), float("inf")])
+def test_redundancy_threshold_is_finite_and_conservative(threshold):
+    with pytest.raises(ValidationError):
+        make_settings(retrieval_redundancy_threshold=threshold)

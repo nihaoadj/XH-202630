@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1146" viewBox="0 0 1200 1146" role="img" aria-labelledby="title desc">
+  <title id="title">文本学习资源生成链路</title>
+  <desc id="desc">主线由上至下。提交任务并由 Worker 领取，依次完成诊断、检索、证据门禁、规划、生成、普通审核和可选 Claim 核验，最后逐版本决定发布。左侧虚线表示返工，右侧展示停止生成、保存草稿和跳过 Claim 的分支。</desc>
+  <defs>
+    <style>
+      text{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#18314c}
+      .title{font-size:34px;font-weight:700}.head{font-size:21px;font-weight:700}
+      .body{font-size:17px;fill:#405872}.label{font-size:15px;font-weight:600;fill:#495e75}
+      .card{stroke-width:1.5}.blue{fill:#edf5ff;stroke:#a5c5e6}.violet{fill:#f3effc;stroke:#c4b4e2}
+      .green{fill:#eaf7f1;stroke:#a0c9b5}.amber{fill:#fff5e4;stroke:#dac28c}.neutral{fill:#fff;stroke:#c7d4e2}
+      .flow{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+      .main{stroke:#3d658b;marker-end:url(#arrow)}.branch{stroke:#748197;marker-end:url(#side)}
+      .retry{stroke:#765e9d;stroke-dasharray:6 5;marker-end:url(#return)}
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" markerUnits="userSpaceOnUse" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#3d658b"/></marker>
+    <marker id="side" viewBox="0 0 10 10" markerUnits="userSpaceOnUse" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#748197"/></marker>
+    <marker id="return" viewBox="0 0 10 10" markerUnits="userSpaceOnUse" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#765e9d"/></marker>
+  </defs>
+  <rect width="1200" height="1146" rx="22" fill="#f7fafe"/>
+  <text x="50" y="55" class="title" text-anchor="start">文本学习资源生成链路</text>
+  <g class="node">
+    <rect x="340" y="84" width="520" height="82" rx="15" class="card blue"/>
+  <text x="358" y="113" class="head" text-anchor="start">提交任务 · Worker 领取</text>
+  <text x="358" y="139" class="body" text-anchor="start">保存 SQLite 任务和冻结请求，由文本 Worker 领取</text>
+  </g>
+  <path d="M600 170V187" class="flow main"/>
+  <g class="node">
+    <rect x="340" y="191" width="520" height="106" rx="15" class="card blue"/>
+  <text x="358" y="220" class="head" text-anchor="start">诊断 → 混合检索</text>
+  <text x="358" y="246" class="body" text-anchor="start">读取画像与薄弱项，建议资源难度</text>
+  <text x="358" y="269" class="body" text-anchor="start">节点优先 · 向量与 BM25 → RRF → 可选 Rerank</text>
+  </g>
+  <path d="M600 301V318" class="flow main"/>
+  <g class="node">
+    <rect x="340" y="322" width="520" height="82" rx="15" class="card blue"/>
+  <text x="358" y="351" class="head" text-anchor="start">证据门禁</text>
+  <text x="358" y="377" class="body" text-anchor="start">核对证据数量、相关性、来源归属与唯一性</text>
+  </g>
+  <path d="M864 363H917" class="flow branch"/>
+  <text x="869" y="353" class="label" text-anchor="start">未通过</text>
+  <g class="node">
+    <rect x="921" y="322" width="229" height="82" rx="15" class="card amber"/>
+  <text x="939" y="351" class="head" text-anchor="start">终止本次生产</text>
+  <text x="939" y="377" class="body" text-anchor="start">记录原因，资源未发布</text>
+  </g>
+  <path d="M600 408V434" class="flow main"/>
+  <text x="613" y="427" class="label" text-anchor="start">通过</text>
+  <g class="node">
+    <rect x="340" y="438" width="520" height="106" rx="15" class="card blue"/>
+  <text x="358" y="467" class="head" text-anchor="start">资源规划 → 按类型生成</text>
+  <text x="358" y="493" class="body" text-anchor="start">Planner 冻结 ResourceSpec，专用 Agent 生成内容</text>
+  <text x="358" y="516" class="body" text-anchor="start">保存独立资源版本，进入对应审核分支</text>
+  </g>
+  <path d="M864 491H917" class="flow branch"/>
+  <text x="875" y="481" class="label" text-anchor="start">关闭</text>
+  <g class="node">
+    <rect x="921" y="450" width="229" height="82" rx="15" class="card neutral"/>
+  <text x="939" y="479" class="head" text-anchor="start">保存草稿</text>
+  <text x="939" y="505" class="body" text-anchor="start">草稿保持未发布</text>
+  </g>
+  <path d="M600 548V579" class="flow main"/>
+  <g class="node">
+    <rect x="340" y="583" width="520" height="82" rx="15" class="card violet"/>
+  <text x="358" y="612" class="head" text-anchor="start">普通审核</text>
+  <text x="358" y="638" class="body" text-anchor="start">逐版本检查覆盖、难度、内容与自包含性</text>
+  </g>
+  <path d="M336 619H225V469H336" class="flow retry"/>
+  <text x="67" y="556" class="label" text-anchor="start">普通审核返工</text>
+  <path d="M600 669V715" class="flow main"/>
+  <text x="613" y="698" class="label" text-anchor="start">已启用且资源符合条件</text>
+  <g class="node">
+    <rect x="340" y="719" width="520" height="128" rx="15" class="card violet"/>
+  <text x="358" y="748" class="head" text-anchor="start">Claim 事实核验 · 可选</text>
+  <text x="358" y="774" class="body" text-anchor="start">抽取事实，依据冻结证据初判</text>
+  <text x="358" y="797" class="body" text-anchor="start">开启补检时，优先修订矛盾或超阈值缺证</text>
+  <text x="358" y="820" class="body" text-anchor="start">初判完整且符合补检条件 → 补证重判</text>
+  </g>
+  <path d="M336 781H225V619" class="flow retry" style="marker-end:none"/>
+  <circle cx="225" cy="619" r="3" fill="#765e9d"/>
+  <text x="60" y="741" class="label" text-anchor="start">Claim 定向返工</text>
+  <text x="60" y="765" class="label" text-anchor="start">补检前后额度独立</text>
+  <path d="M864 623H977V899H864" class="flow branch"/>
+  <text x="989" y="702" class="label" text-anchor="start">未进入 Claim 核验</text>
+  <path d="M600 851V879" class="flow main"/>
+  <g class="node">
+    <rect x="340" y="883" width="520" height="82" rx="15" class="card green"/>
+  <text x="358" y="912" class="head" text-anchor="start">逐资源版本判定</text>
+  <text x="358" y="938" class="body" text-anchor="start">按普通审核、适用的 Claim 结论与发布门禁收口</text>
+  </g>
+  <path d="M600 969V984M223 984H977" fill="none" stroke="#3d658b" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M223 984V1002" class="flow main"/>
+  <path d="M600 984V1002" class="flow main"/>
+  <path d="M977 984V1002" class="flow main"/>
+  <g class="node">
+    <rect x="83" y="1006" width="280" height="77" rx="15" class="card green"/>
+  <text x="101" y="1035" class="head" text-anchor="start">发布</text>
+  <text x="101" y="1061" class="body" text-anchor="start">满足发布规则</text>
+  </g>
+  <g class="node">
+    <rect x="460" y="1006" width="280" height="77" rx="15" class="card amber"/>
+  <text x="478" y="1035" class="head" text-anchor="start">待用户决定</text>
+  <text x="478" y="1061" class="body" text-anchor="start">符合待决定条件</text>
+  </g>
+  <g class="node">
+    <rect x="837" y="1006" width="280" height="77" rx="15" class="card neutral"/>
+  <text x="855" y="1035" class="head" text-anchor="start">保持未发布</text>
+  <text x="855" y="1061" class="body" text-anchor="start">未满足发布条件</text>
+  </g>
+  <text x="83" y="1120" class="body">单资源重试创建新 Run，复用已验证的计划与证据，直接进入生成节点。</text>
+</svg>

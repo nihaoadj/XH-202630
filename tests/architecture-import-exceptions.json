@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "exceptions": [
+    {
+      "source": "core/courseware/evaluation.py",
+      "target": "scripts.courseware_harness.offline",
+      "reason": "Existing offline evaluation compatibility entry delegates to the script-owned harness.",
+      "remove_when": "Migrate its callers to the script package, then remove this entry after import scanning and full courseware regression."
+    },
+    {
+      "source": "core/courseware/live_workflow_smoke.py",
+      "target": "scripts.courseware_harness.live",
+      "reason": "Existing lazy live-acceptance compatibility export; ordinary runtime does not load the harness.",
+      "remove_when": "Migrate compatibility consumers to the script package and verify public imports plus full regression before deleting this entry."
+    }
+  ]
+}

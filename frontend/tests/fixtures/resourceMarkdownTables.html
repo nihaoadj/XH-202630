@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>隔离表格验收</title></head>
+<body><div id="app"></div><script type="module">
+import { createApp, h } from 'vue'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
+import '../../src/styles/theme.css'
+import ResourceViewer from '../../src/features/learning-documents/ResourceViewer.vue'
+const content = '# 表格验收\n\n| 阶段 | 链路顺序 | 作用 |\n| -- | ---------------- | -- |\n| 离线 | 来源登记→解析清洗→切片→文档编码→索引 | 可复用索引 |\n| 在线 | 查询→候选召回→融合重排→证据包→生成→引用检查 | 当前问题回答 |\n\n| 层级 | 检查项 |\n| --- | --- |\n| 解析 | 条件、表头、否定词 |\n| 生成 | 结论是否超出证据 |\n\n表格之后的正文。'
+const resource = { resource_id: 'isolated-table', resource_type: '讲义', difficulty: '初级', knowledge_points: ['表格示例'], source_refs: [], content_text: content }
+createApp({ render: () => h(ResourceViewer, { resources: [resource] }) }).use(ElementPlus).mount('#app')
+</script><style>body{margin:0}#app{max-width:960px;margin:0 auto;padding:12px;box-sizing:border-box}</style></body>
+</html>

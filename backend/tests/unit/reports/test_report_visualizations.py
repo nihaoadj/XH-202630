@@ -1,6 +1,10 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
+from backend.tests.unit.reviews.test_claim_resolution import claim, judgement, session, supplement
+
 from app.db.feedback.memory import MemoryFeedbackRepository
 from app.db.audit.memory import MemoryAuditRepository
 from app.db.learning_documents.memory import MemoryResourceRepository
@@ -16,6 +20,8 @@ from app.models.learners.mastery import (
     CurriculumProgressStatus,
 )
 from app.models.learning_documents.schemas import LearningResource
+from app.models.reviews.claim_evidence_retrieval import ClaimEvidenceRetrievalStatus
+from app.models.reviews.claims import ClaimVerdict
 from app.services.reports import reports as reports_module
 from app.services.reports.reports import ReportService
 
@@ -122,7 +128,7 @@ def test_resource_credibility_scores_reuse_review_claim_and_source_evidence(monk
     service.audit_repo = SimpleNamespace(get_review_by_resource=lambda _resource_id: SimpleNamespace(
         review_id="review", status="approved", issues=[],
     ))
-    service._claims_for_resource = lambda _resource: ([object()], [object()])
+    service._claims_for_resource = lambda _resource, *_batch: ([object()], [])
     monkeypatch.setattr(reports_module, "compute_claim_metric", lambda _claims, _judgements: SimpleNamespace(
         metric_status=SimpleNamespace(value="complete"), claim_hallucination_rate=0.0,
         factual_claim_total=1, supported_claim_total=1, contradicted_claim_total=0,
@@ -158,7 +164,7 @@ def test_resource_credibility_normalizes_workflow_approve_status(monkeypatch):
 
     service = _service()
     service.audit_repo = audit
-    service._claims_for_resource = lambda _resource: ([object()], [object()])
+    service._claims_for_resource = lambda _resource, *_batch: ([object()], [])
     monkeypatch.setattr(reports_module, "compute_claim_metric", lambda _claims, _judgements: SimpleNamespace(
         metric_status=SimpleNamespace(value="complete"), claim_hallucination_rate=0.0,
         factual_claim_total=1, supported_claim_total=1, contradicted_claim_total=0,
@@ -180,7 +186,7 @@ def test_resource_credibility_caps_claim_missing_and_hard_failures(monkeypatch):
     service.audit_repo = SimpleNamespace(get_review_by_resource=lambda _resource_id: SimpleNamespace(
         review_id="review", status="approved", issues=[],
     ))
-    service._claims_for_resource = lambda _resource: ([], [])
+    service._claims_for_resource = lambda _resource, *_batch: ([], [])
 
     capped = service._resource_credibility([_credibility_resource(source_refs=[_verified_ref()])], knowledge_base_id="kb")["items"][0]
     assert capped["credibility_score"] == 80.0
@@ -200,29 +206,96 @@ def test_resource_credibility_caps_claim_missing_and_hard_failures(monkeypatch):
     assert "SOURCE_REF_CROSS_KNOWLEDGE_BASE" in cross_base["reason_codes"]
 
 
-def test_resource_difficulty_curve_reuses_credibility_projection():
+@pytest.mark.parametrize(("scenario", "score"), [
+    ("active", 94.12), ("inactive", 76.47), ("other_review", 76.47), ("incomplete_activation", None),
+])
+def test_report_curve_uses_only_effective_claim_supplements(scenario, score):
+    records = [claim(index) for index in range(34)]
+    base = [
+        judgement(record, ClaimVerdict.SUPPORTED if index < 26 else ClaimVerdict.NOT_IN_EVIDENCE)
+        for index, record in enumerate(records)
+    ]
+    targets = records[26:]
+    supplement_session = session(
+        status=ClaimEvidenceRetrievalStatus.COMPLETED, active=scenario != "inactive",
+        targets=[record.claim_id for record in targets],
+    )
+    supplements = [
+        supplement(
+            record, ClaimVerdict.SUPPORTED if index < 6 else ClaimVerdict.NOT_IN_EVIDENCE,
+            session_id=supplement_session.session_id,
+        )
+        for index, record in enumerate(targets)
+    ]
+    if scenario == "other_review":
+        supplement_session = supplement_session.model_copy(update={"review_id": "old-review"})
+        supplements = [item.model_copy(update={"review_id": "old-review"}) for item in supplements]
+    if scenario == "incomplete_activation":
+        supplements.pop()
+    service = ReportService(
+        MemoryResourceRepository(), MemoryFeedbackRepository(),
+        claim_repo=SimpleNamespace(list_claims_by_runs=lambda _: records, list_judgements_by_runs=lambda _: base),
+        supplement_repo=SimpleNamespace(list_sessions=lambda _: [supplement_session], list_supplements=lambda _: supplements),
+    )
     resource = LearningResource(
-        resource_id="foundation-guide", learner_id="learner", topic="基础", resource_type="讲义",
-        difficulty="中级", content_text="", knowledge_points=["foundation"], source_refs=[],
-        learning_path_node="foundation", publication_status="published",
+        resource_id="res-1", run_id="run-1", review_id="rev-1", resource_type="讲义",
+        difficulty="中级", knowledge_points=["foundation"], source_refs=[],
+        review_status="approved", publication_status="published",
     )
-    credibility = {
-        "resource_id": "foundation-guide", "resource_version": resource.version,
-        "credibility_score": 80.0, "credibility_level": "good", "grade": "trusted",
-        "score_breakdown": {"publication_review_score": 40.0, "source_traceability_score": 50.0,
-                            "claim_review_score": 0.0, "claim_review_passed": False,
-                            "score_ceiling": 80.0, "ceiling_applied": True, "reason_codes": []},
-    }
-    curve = _service()._build_resource_difficulty_curve(
-        _projection(), [resource], credibility_items=[credibility],
-        credibility_summary={"scoring_strategy_version": "audit-40/source-50/claim-10/v1", "scored_count": 1,
-                             "average_credibility_score": 80.0, "claim_review_passed_count": 0,
-                             "claim_ceiling_applied_count": 1},
+    credibility = service._resource_credibility([resource])["items"]
+    curve = service._build_resource_difficulty_curve(_projection(), [resource], credibility_items=credibility)
+    point = next(item for item in curve["points"] if item["resource_id"] == resource.resource_id)
+    assert point["claim_review_score"] == score, (point, credibility)
+    if score is None:
+        assert credibility[0]["claim_support"]["metric_status"] == "incomplete"
+        assert point["credibility_unavailable_reason"] == "claim_unmeasured"
+    else:
+        assert credibility[0]["claim_support"]["supported_claim_count"] == (32 if scenario == "active" else 26)
+
+
+def test_resource_difficulty_curve_separates_review_sources_and_unavailable_evidence():
+    definitions = [
+        ("ordinary", False, "passed", "legacy_unavailable", None, 95, None),
+        ("claim", True, "passed", "complete", 0.04, 96, None),
+        ("incomplete", True, "passed", "incomplete", None, None, "claim_unmeasured"),
+        ("no_facts", True, "passed", "not_applicable", 0.0, None, "claim_not_applicable"),
+        ("failed", False, "failed", "legacy_unavailable", None, None, "review_failed"),
+        ("unknown", None, "passed", "legacy_unavailable", None, None, "claim_configuration_unknown"),
+    ]
+    resources, evidence, flags = [], [], {}
+    for name, enabled, review, metric, rate, _, _ in definitions:
+        resources.append(LearningResource(
+            resource_id=name, run_id=name, batch_id="history", resource_type="讲义",
+            difficulty="中级", knowledge_points=["foundation"], source_refs=[],
+            publication_status="published", published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ))
+        if enabled is not None:
+            flags[name] = enabled
+        evidence.append({
+            "resource_id": name, "resource_version": 1,
+            "publication_review": {"status": review},
+            "claim_support": {"metric_status": metric, "unsupported_rate": rate},
+        })
+    service = _service()
+    curve = service._build_resource_difficulty_curve(
+        _projection(), resources, credibility_items=evidence, claim_enabled_by_run=flags,
     )
-    point = curve["points"][0]
-    assert point["credibility_score"] == credibility["credibility_score"]
-    assert point["credibility_score_breakdown"] == credibility["score_breakdown"]
-    assert curve["summary"]["average_credibility_score"] == 80.0
+    points = {point["resource_id"]: point for point in curve["points"]}
+    for name, _, _, _, _, score, reason in definitions:
+        assert points[name]["credibility_score"] == score
+        assert points[name]["credibility_unavailable_reason"] == reason
+    assert curve["summary"]["average_credibility_score"] is None
+
+    latest = resources[0].model_copy(update={
+        "resource_id": "latest", "batch_id": "latest", "published_at": datetime(2026, 1, 2, tzinfo=timezone.utc),
+    })
+    history = service._build_resource_difficulty_curve(
+        _projection(), [*resources, latest], credibility_items=evidence, claim_enabled_by_run=flags,
+    )["points"][0]
+    assert history["point_type"] == "batch_average"
+    assert history["credibility_score"] is None
+    assert history["ordinary_review_score"] == 95
+    assert history["claim_review_score"] == 96
 
 
 def test_learning_node_mastery_map_covers_all_nodes_without_dimension_axes():
@@ -346,10 +419,10 @@ def test_resource_curve_and_path_graph_do_not_invent_readiness_or_prerequisites(
     ]
     service = _service()
     curve = service._build_resource_difficulty_curve(_projection(), resources)
-    foundation = next(item for item in curve["points"] if item["resource_id"] == "foundation-guide")
-    advanced = next(item for item in curve["points"] if item["resource_id"] == "advanced-guide")
-    assert foundation["learner_readiness_score"] == 0.4
-    assert foundation["match_status"] == "challenging"
+    foundation = next(item for item in curve["points"] if item["resource_ids"] == ["foundation-guide"] and item["point_type"] != "resource")
+    advanced = next(item for item in curve["points"] if item["resource_ids"] == ["advanced-guide"] and item["point_type"] != "resource")
+    assert foundation["difficulty_fit_score"] is None
+    assert foundation["match_status"] == "not_measured"
     assert advanced["learner_readiness_score"] is None
     assert advanced["resource_difficulty_score"] is None
     assert advanced["match_status"] == "not_measured"
@@ -379,25 +452,73 @@ def test_resource_difficulty_curve_expands_latest_batch_and_averages_history():
         resource("new-b", "batch-new", "高级", datetime(2026, 8, 25, tzinfo=timezone.utc)),
     ]
 
-    curve = _service()._build_resource_difficulty_curve(_projection(), resources)
+    attempts = [SimpleNamespace(source_resource_id=resource_id, overall_score=score)
+                for resource_id, score in [("old-a", .8), ("old-b", .6), ("new-a", .9)]]
+    # A joint assessment uses the primary result, once, for the anchor batch.
+    joint = SimpleNamespace(
+        attempt_id="joint", source_resource_id="new-b", overall_score=.2,
+        metadata={"round_context": {"roles": {"foundation": "primary", "other": "review"}}},
+        knowledge_point_results=[SimpleNamespace(knowledge_point_id="foundation", score=.7)],
+    )
+    curve = _service()._build_resource_difficulty_curve(
+        _projection(), resources, attempts=[*attempts, joint, joint],
+    )
 
     assert [point["resource_id"] for point in curve["points"]] == [
-        "batch:batch-old", "new-a", "new-b",
+        "batch:batch-old", "batch:batch-new", "new-a", "new-b",
     ]
     history = curve["points"][0]
     assert history["point_type"] == "batch_average"
     assert history["resource_count"] == 2
     assert history["resource_ids"] == ["old-a", "old-b"]
-    assert history["learner_readiness_score"] == 0.4
-    assert history["resource_difficulty_score"] == 0.6
-    assert history["difficulty_gap"] == 0.2
-    assert curve["summary"]["total_point_count"] == 3
+    assert history["difficulty_fit_score"] == 70
+    latest = curve["points"][1]
+    assert latest["point_type"] == "batch_fit"
+    assert latest["difficulty_fit_score"] == 80
+    assert latest["feedback_count"] == 2
+    assert latest["ordinary_review_score"] is None
+    assert all(point["difficulty_fit_score"] is None for point in curve["points"][2:])
+    assert curve["summary"]["measured_point_count"] == 2
+    assert curve["summary"]["total_point_count"] == 4
     assert curve["summary"]["total_resource_count"] == 4
     assert curve["summary"]["aggregated_batch_count"] == 1
     assert curve["summary"]["expanded_resource_count"] == 2
 
 
-def test_resource_difficulty_curve_calibrates_up_from_low_formal_feedback():
+def test_latest_batch_averages_available_review_scores_without_assessment():
+    definitions = [("ordinary", False, None), ("claim-a", True, .0588),
+                   ("claim-b", True, 0.), ("missing", True, None)]
+    resources = [
+        LearningResource(
+            resource_id=name, run_id=name, batch_id="latest", resource_type="讲义",
+            difficulty="中级", knowledge_points=["foundation"], source_refs=[], publication_status="published",
+        )
+        for name, _, _ in definitions
+    ]
+    evidence = [
+        {
+            "resource_id": name, "resource_version": 1,
+            "publication_review": {"status": "passed"},
+            "claim_support": {"metric_status": "complete" if rate is not None else "incomplete",
+                              "unsupported_rate": rate},
+        }
+        for name, _, rate in definitions
+    ]
+    curve = _service()._build_resource_difficulty_curve(
+        _projection(), resources, credibility_items=evidence,
+        claim_enabled_by_run={name: enabled for name, enabled, _ in definitions},
+    )
+    latest, *details = curve["points"]
+    assert latest["point_type"] == "batch_fit"
+    assert latest["difficulty_fit_score"] is None
+    assert latest["ordinary_review_score"] == 95
+    assert latest["claim_review_score"] == 97.06
+    assert latest["credibility_score"] is None
+    assert len(details) == 4
+    assert curve["summary"]["claim_review_scored_count"] == 2
+
+
+def test_resource_difficulty_fit_uses_formal_score_when_no_experience():
     resource = LearningResource(
         resource_id="feedback-resource", learner_id="learner", topic="反馈资源", resource_type="讲义",
         difficulty="中级", content_text="", knowledge_points=["foundation"], source_refs=[],
@@ -411,13 +532,36 @@ def test_resource_difficulty_curve_calibrates_up_from_low_formal_feedback():
         _projection(), [resource], attempts=[attempt],
     )["points"][0]
 
-    assert point["default_resource_difficulty_score"] == 0.65
-    assert point["resource_difficulty_score"] > point["default_resource_difficulty_score"]
-    assert point["difficulty_source"] == "calibrated_history"
-    assert point["feedback_score"] == 0.2
+    assert point["difficulty_fit_score"] == 20
+    assert point["experience_score"] is None
     assert point["feedback_count"] == 1
-    assert point["difficulty_adjustment"] > 0
-    assert "DIFFICULTY_CALIBRATED_FROM_LOW_FEEDBACK" in point["reason_codes"]
+
+
+def test_resource_difficulty_fit_combines_same_version_score_and_experience():
+    from app.models.reports.contracts import ResourceDifficultyCurveV1
+
+    resource = LearningResource(
+        resource_id="guide", resource_type="讲义", difficulty="中级", version=2,
+        knowledge_points=["foundation"], source_refs=[], publication_status="published",
+    )
+
+    def attempt(version, score, feeling):
+        return SimpleNamespace(source_resource_id="guide", source_resource_version=version,
+                               overall_score=score, metadata={"learning_reflection": {"difficulty_feeling": feeling}})
+
+    def point(*attempts, difficulty="中级"):
+        variant = resource.model_copy(update={"difficulty": difficulty})
+        curve = _service()._build_resource_difficulty_curve(_projection(), [variant], attempts=attempts)
+        return ResourceDifficultyCurveV1.model_validate(curve).points[0]
+
+    easier = point(attempt(2, .85, "too_easy"), attempt(1, .1, "too_hard"))
+    assert easier.feedback_count == easier.subjective_feedback_count == 1
+    assert easier.experience_score == 50
+    assert easier.difficulty_fit_score == 78
+    assert point(attempt(2, .85, "fit"), difficulty="未知").difficulty_fit_score == 88
+    assert point(attempt(2, .85, "fit"), difficulty="高级").difficulty_fit_score == 88
+    assert point(attempt(2, 0, "too_hard")).difficulty_fit_score == 10
+    assert point(attempt(1, .85, "fit")).difficulty_fit_score is None
 
 
 def test_learning_path_current_nodes_use_latest_effective_generation_batch():
@@ -469,7 +613,7 @@ def test_learning_path_focus_only_contains_latest_batch_nodes():
     generation_options = SimpleNamespace(
         recommended_node_ids=["advanced"],
         reinforce_weakness=[],
-        learn_new_knowledge=[SimpleNamespace(skill_node_id="advanced")],
+        learn_new_knowledge=[SimpleNamespace(skill_node_id="advanced", blocked_by_node_ids=[], eligibility_status="available")],
     )
     graph = _service()._build_learning_path_graph(
         _projection(), None, generation_options, current_batch_node_ids={"foundation"},
@@ -480,6 +624,37 @@ def test_learning_path_focus_only_contains_latest_batch_nodes():
     advanced = next(item for item in graph["nodes"] if item["skill_node_id"] == "advanced")
     assert advanced["role"] == "next"
     assert advanced["is_current_batch"] is False
+
+
+def test_learning_path_uses_same_status_for_selectable_siblings_with_or_without_legacy_challenge():
+    projection = _projection()
+    sibling = projection.nodes[1].model_copy(update={"skill_node_id": "sibling", "name": "另一后继"})
+    projection = projection.model_copy(update={"nodes": [*projection.nodes, sibling]})
+    old_challenge = SimpleNamespace(
+        knowledge_point_id="advanced", node_type=SimpleNamespace(value="challenge"),
+        status=SimpleNamespace(value="available"),
+    )
+    path = SimpleNamespace(path_id="path", version=1, nodes=[old_challenge])
+    candidates = [
+        SimpleNamespace(skill_node_id=node_id, blocked_by_node_ids=[], eligibility_status="available")
+        for node_id in ("advanced", "sibling")
+    ]
+    options = SimpleNamespace(recommended_node_ids=["sibling"], reinforce_weakness=[], learn_new_knowledge=candidates)
+
+    graph = _service()._build_learning_path_graph(projection, path, options)
+    nodes = {node["skill_node_id"]: node for node in graph["nodes"]}
+    for node_id in ("advanced", "sibling"):
+        assert nodes[node_id]["role"] == "next"
+        assert nodes[node_id]["blocked"] is False
+        assert nodes[node_id]["blocked_by_node_ids"] == []
+    assert graph["recommended_next_node_ids"] == ["sibling"]
+
+    candidates[0].blocked_by_node_ids = ["foundation"]
+    graph = _service()._build_learning_path_graph(projection, path, options)
+    node = next(node for node in graph["nodes"] if node["skill_node_id"] == "advanced")
+    assert node["role"] != "next"
+    assert node["blocked"] is True
+    assert old_challenge.node_type.value == "challenge"
 
 
 def test_learning_path_does_not_infer_current_from_learning_mastery():

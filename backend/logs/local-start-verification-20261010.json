@@ -1,0 +1,51 @@
+{
+  "duration_seconds": 0.2,
+  "overall_result": "passed",
+  "checks": {
+    "worker_live": {
+      "url": "http://127.0.0.1:8081/health/live",
+      "http_status": 200,
+      "service_status": "ready",
+      "check_result": "passed"
+    },
+    "worker_ready": {
+      "url": "http://127.0.0.1:8081/health/ready",
+      "http_status": 200,
+      "service_status": "ready",
+      "check_result": "passed"
+    },
+    "frontend": {
+      "url": "http://127.0.0.1:5173/",
+      "http_status": 200,
+      "service_status": null,
+      "check_result": "passed",
+      "checks": {
+        "vite_client": true,
+        "root_node": true
+      }
+    },
+    "backend_ready": {
+      "url": "http://127.0.0.1:8000/health/ready",
+      "http_status": 200,
+      "service_status": "ready",
+      "check_result": "passed"
+    },
+    "backend_health": {
+      "url": "http://127.0.0.1:8000/health",
+      "http_status": 200,
+      "service_status": "ready",
+      "check_result": "passed"
+    },
+    "frontend_health_proxy": {
+      "url": "http://127.0.0.1:5173/health",
+      "http_status": 200,
+      "service_status": "ready",
+      "check_result": "passed",
+      "checks": {
+        "matches_backend_http_status": true,
+        "matches_backend_service_status": true
+      }
+    }
+  },
+  "verified_at_utc": "2026-10-10T07:34:32.903940+00:00"
+}

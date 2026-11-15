@@ -1,17 +1,60 @@
 from __future__ import annotations
 
+from app.models.generation.correction_dispatch import wrap_correction_dispatch, unwrap_correction_dispatch
+from app.services.generation.lecture_policy import freeze_lecture_policy, resolve_lecture_dispatch
+from app.agents.resource_workflows.learning_documents.reviewing.lecture_authority import lecture_workflow_version
+from app.services.generation.resource_review_policy import (
+    freeze_resource_review_policy,
+    resolve_resource_review_dispatch,
+)
+from app.agents.resource_workflows.learning_documents.reviewing.resource_authority import (
+    resource_workflow_version,
+)
+
+from collections.abc import Callable
+
 import logging
 import uuid
 
 from app.db.generation.base import BaseGenerationJobRepository
+from app.core.execution import ExecutionFence, execution_fence
+from app.models.generation.dispatch import TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION
+from app.models.generation.dispatch import ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION
+from app.models.reviews.claim_extraction import policy_from_input
+from app.agents.resource_workflows.learning_documents.claim_extraction.budget import snapshot_fields
+from app.config import get_settings
+from app.models.generation.resource_retry import ResourceRetryContext
+from app.services.generation.resource_retry import prepare_resource_retry
+from app.services.generation.dispatch import submission_identity
+from app.models.shared.persistence import canonical_hash
+from app.db.generation.fencing import ExecutionLeaseLost
+from app.db.shared.retry import run_with_sqlite_retry
+from sqlalchemy.exc import IntegrityError
+from app.db.feedback.feedback_loop_base import BaseFeedbackLoopRepository
+from app.services.learning_documents.resources import ResourceService
+from app.services.learning_documents.publication_summary import load_publication_summary
+from app.services.generation.continuation import (
+    create_continuation,
+    execute_continuation,
+    prepare_continuation,
+)
+from app.services.generation.continuation_uow import (
+    ContinuationAtomicityError,
+    ContinuationUnitOfWork,
+    has_standard_core_writers,
+    has_standard_writers,
+)
 from app.models.learning_documents.schemas import (
+    ContinueResourceBatchRequest,
     GenerateRequest,
     GenerationJobCreateResponse,
     GenerationJobListResponse,
     GenerationJobStatusResponse,
     LearnerProfile,
 )
-from app.models.generation.progress import ResourceExecutionProgress, RunResourceProgressSummary
+from app.models.generation.progress import (
+    ResourceExecutionProgress, RoundBindingSummaryV1, RunResourceProgressSummary,
+)
 from app.services.generation.generation import GenerationService
 from app.services.learners.mastery import MasteryService
 from app.models.learning_documents.types import FEEDBACK_ONLY_RESOURCE_TYPES
@@ -30,17 +73,124 @@ class GenerationJobService:
         job_repo: BaseGenerationJobRepository,
         generation_service: GenerationService,
         mastery_service: MasteryService | None = None,
+        dispatch_mode: str = "background",
+        round_repository=None,
+        round_uow_factory=None,
     ):
         self.job_repo = job_repo
         self.generation_service = generation_service
         self.mastery_service = mastery_service
+        self.dispatch_mode = dispatch_mode
+        self.round_repository = round_repository
+        self.round_uow_factory = round_uow_factory
+
+    def create_continuation(
+        self,
+        learner: LearnerProfile,
+        batch_id: str,
+        payload: ContinueResourceBatchRequest,
+        *,
+        resource_service_factory: Callable[[], ResourceService],
+        feedback_repo_factory: Callable[[], BaseFeedbackLoopRepository],
+        run_id: str | None = None, submission_hash: str | None = None,
+        round_uow_factory=None,
+    ) -> tuple[GenerationJobCreateResponse, GenerateRequest]:
+        """Prepare a continuation; the API schedules the returned request last."""
+        if run_id and submission_hash:
+            found = self._existing_submission(run_id, submission_hash)
+            if found:
+                return found, GenerateRequest.from_frozen_payload(self.job_repo.get(run_id).request_payload)
+        # Preserve lightweight stubs with custom mutation methods only when
+        # they have no standard persistence graph. Such a path retains legacy
+        # behavior and makes no transactional-atomicity claim.
+        custom_mutator = any(
+            getattr(getattr(self, name), "__func__", getattr(self, name))
+            is not getattr(GenerationJobService, name)
+            for name in ("create_job", "mark_superseded")
+        )
+        if custom_mutator and has_standard_core_writers(self):
+            raise ContinuationAtomicityError(
+                "custom continuation mutators cannot use standard repositories"
+            )
+        if custom_mutator:
+            return create_continuation(
+                self, learner, batch_id, payload,
+                resource_service_factory=resource_service_factory,
+                feedback_repo_factory=feedback_repo_factory,
+            )
+
+        prepared = prepare_continuation(
+            self,
+            learner,
+            batch_id,
+            payload,
+            resource_service_factory=resource_service_factory,
+        )
+        if self.round_repository is not None and self.round_repository.one(
+            "learning_round_job_bindings", run_id=prepared.source_job_run_id,
+        ):
+            from app.services.generation.round_continuations import create_round_continuation
+            return create_round_continuation(self, learner, prepared, run_id, submission_hash,
+                                             round_uow_factory=round_uow_factory)
+
+        feedback_repositories = [
+            feedback_repo_factory()
+            for _ in range(prepared.feedback_repo_call_count)
+        ]
+        repository_index = 0
+
+        def planned_feedback_repo_factory():
+            nonlocal repository_index
+            if repository_index >= len(feedback_repositories):
+                raise RuntimeError("continuation requested an unplanned feedback repository")
+            repository = feedback_repositories[repository_index]
+            repository_index += 1
+            return repository
+
+        # Unknown custom repositories retain their legacy direct behavior when
+        # no standard participant is present. Once any standard writer is in
+        # the graph, the UOW validates every writer before the first mutation.
+        if not has_standard_writers(self, feedback_repositories):
+            return execute_continuation(
+                prepared,
+                self,
+                learner,
+                feedback_repo_factory=planned_feedback_repo_factory,
+            )
+
+        run_id = run_id or str(uuid.uuid4())
+        uow = ContinuationUnitOfWork(self, feedback_repositories)
+        try:
+            with uow:
+                result = execute_continuation(
+                    prepared,
+                    uow.generation_job_service,
+                    learner,
+                    feedback_repo_factory=uow.feedback_repo_factory,
+                    run_id=run_id, submission_hash=submission_hash,
+                )
+        except Exception:
+            if uow.schedule_failed:
+                request = prepared.generation_request
+                knowledge_base_id = request.knowledge_base_id or learner.knowledge_base_id
+                if self.job_repo.get(run_id) is None:
+                    self.job_repo.create_failed(
+                        run_id=run_id,
+                        batch_id=prepared.batch_id,
+                        learner_id=request.learner_id,
+                        topic=request.topic,
+                        knowledge_base_id=knowledge_base_id,
+                        request_payload=request.model_dump(mode="json"),
+                        error_message="CURRICULUM_SCHEDULE_FAILED",
+                    )
+            raise
+        return result
 
     def _initial_generation_target(self, learner: LearnerProfile) -> list[str] | None:
         """Return the frozen initial-diagnosis target for the first batch.
 
-        The initial placement decision is authoritative until the learner has
-        a published resource.  Later batches intentionally fall back to the
-        normal mastery/exposure recommendation policy.
+        This is the default when the request omits a target. Later batches use
+        the normal mastery and exposure recommendation policy.
         """
         if self.mastery_service is None:
             return None
@@ -62,7 +212,92 @@ class GenerationJobService:
             return None
         return [target]
 
-    def create_job(
+    @property
+    def durable_dispatch(self) -> bool:
+        return self.dispatch_mode == "worker" and bool(getattr(self.job_repo, "supports_durable_dispatch", False))
+
+    def _existing_submission(self, run_id, submission_hash):
+        job = self.job_repo.get(run_id)
+        if job is None:
+            return None
+        metadata = self.job_repo.get_dispatch(run_id) if hasattr(self.job_repo, "get_dispatch") else {}
+        if not metadata or metadata.get("submission_hash") != submission_hash:
+            raise ApplicationError(ErrorCode.GENERATION_IDEMPOTENCY_CONFLICT, status_code=409)
+        return GenerationJobCreateResponse(message="generation job accepted", run_id=job.run_id,
+            batch_id=job.batch_id or job.run_id, learner_id=job.learner_id, topic=job.topic,
+            knowledge_base_id=job.knowledge_base_id, job_status=job.job_status, focus_snapshot=job.focus_snapshot)
+
+    def create_resource_retry(self, learner, source_run_id, spec_id, representation, *, idempotency_key=None,
+                              round_uow_factory=None):
+        context = prepare_resource_retry(self, learner, source_run_id, spec_id, representation)
+        identity = submission_identity(
+            learner, context, idempotency_key if idempotency_key is not None else context.context_hash,
+            f"resource-retry:{source_run_id}:{spec_id}:{representation}",
+        )
+        source = self.job_repo.get(source_run_id)
+        if self.round_repository is not None:
+            binding = self.round_repository.one("learning_round_job_bindings", run_id=source_run_id)
+            if binding is not None:
+                from app.services.generation.round_continuations import create_bound_job
+                return create_bound_job(self, context.learner, binding, context.request.model_copy(deep=True),
+                    identity["run_id"], identity["submission_hash"], relation="retry", source_run_id=source_run_id,
+                    retry_context=context.model_dump(mode="json"), round_uow_factory=round_uow_factory)
+        job = self.create_job(context.learner, context.request.model_copy(deep=True),
+                              batch_id=source.batch_id or source_run_id,
+                              resource_retry_context=context.model_dump(mode="json"), **identity)
+        return job, context.request
+
+    def create_round_job(self, learner, req, repository, stage_node_id, *, run_id):
+        from copy import copy
+        from app.services.generation.round_context import load_round_context
+        bound = copy(self)
+        bound.round_repository = repository
+        bound._trusted_round_binding = load_round_context(repository, learner, stage_node_id, req)
+        bound._continuation_atomicity_active = True
+        return bound.create_job(learner, req, run_id=run_id, batch_id=bound._trusted_round_binding.batch_id,
+                                submission_hash=canonical_hash(req.model_dump(mode="json")))
+
+    def _round_binding(self, learner, req, run_id):
+        from app.services.generation.round_context import load_round_context
+        binding = getattr(self, "_trusted_round_binding", None)
+        if binding is not None:
+            return binding
+        if self.round_repository is not None and run_id:
+            stored = self.round_repository.one("learning_round_job_bindings", run_id=run_id)
+            if stored:
+                return load_round_context(self.round_repository, learner, stored["stage_node_id"], req,
+                    relation_kind=stored["relation_kind"], source_run_id=stored["source_run_id"])
+        return None
+
+    def create_job(self, learner, req, *, run_id=None, batch_id=None, retry_failed=False, submission_hash=None,
+                   resource_retry_context=None):
+        if run_id and submission_hash and not retry_failed:
+            found = self._existing_submission(run_id, submission_hash)
+            if found:
+                return found
+        if self.durable_dispatch and not getattr(self, "_continuation_atomicity_active", False):
+            def atomic_create():
+                if run_id and submission_hash and not retry_failed:
+                    found = self._existing_submission(run_id, submission_hash)
+                    if found:
+                        return found
+                with ContinuationUnitOfWork(self, []) as uow:
+                    return uow.generation_job_service._create_job(
+                        learner, req.model_copy(deep=True), run_id=run_id, batch_id=batch_id,
+                        retry_failed=retry_failed, submission_hash=submission_hash,
+                        resource_retry_context=resource_retry_context,
+                    )
+            try:
+                return run_with_sqlite_retry(atomic_create)
+            except IntegrityError:
+                if run_id and self.job_repo.get(run_id) is not None:
+                    return run_with_sqlite_retry(atomic_create)
+                raise
+        return self._create_job(learner, req, run_id=run_id, batch_id=batch_id,
+                                retry_failed=retry_failed, submission_hash=submission_hash,
+                                resource_retry_context=resource_retry_context)
+
+    def _create_job(
         self,
         learner: LearnerProfile,
         req: GenerateRequest,
@@ -70,7 +305,12 @@ class GenerationJobService:
         run_id: str | None = None,
         batch_id: str | None = None,
         retry_failed: bool = False,
+        submission_hash: str | None = None,
+        resource_retry_context: dict | None = None,
     ) -> GenerationJobCreateResponse:
+        if "实操指南" in req.resource_types and req.include_claim_check:
+            raise ApplicationError(ErrorCode.GENERATION_TARGET_INVALID, status_code=422)
+        round_binding = self._round_binding(learner, req, run_id)
         feedback_only = set(req.resource_types) & set(FEEDBACK_ONLY_RESOURCE_TYPES)
         correction_followup = (
             "个性化纠错训练包" in req.resource_types
@@ -85,10 +325,24 @@ class GenerationJobService:
         batch_id = batch_id or run_id
         knowledge_base_id = req.knowledge_base_id or learner.knowledge_base_id
         existing = self.job_repo.get(run_id)
+        if retry_failed:
+            seen = set()
+            while existing and existing.superseded_by_run_id:
+                if existing.run_id in seen:
+                    raise ValueError("generation retry lineage contains a cycle")
+                seen.add(existing.run_id)
+                run_id = existing.superseded_by_run_id
+                existing = self.job_repo.get(run_id)
+        if existing and submission_hash and hasattr(self.job_repo, "get_dispatch"):
+            stored = self.job_repo.get_dispatch(run_id) or {}
+            legacy_retry = (retry_failed and existing.job_status == "failed"
+                            and stored.get("dispatch_mode") == "legacy" and not stored.get("submission_hash"))
+            if stored.get("submission_hash") != submission_hash and not legacy_retry:
+                raise ApplicationError(ErrorCode.GENERATION_IDEMPOTENCY_CONFLICT, status_code=409)
         created_new = False
         rescheduled_retry = False
         focus_snapshot = None
-        if existing is None and self.mastery_service is not None:
+        if existing is None and self.mastery_service is not None and resource_retry_context is None and round_binding is None:
             # The generic auto entry point must obey the same tier policy as a
             # feedback follow-up.  Do not let a three-node focus snapshot mix tiers.
             auto_targets = None
@@ -138,9 +392,12 @@ class GenerationJobService:
                 focus_snapshot = LearnerFocusSnapshotV1.model_validate(raw_snapshot)
                 req.target_skill_nodes = list(focus_snapshot.adopted_node_ids)
                 req.constraints = {**req.constraints, "learner_focus_snapshot": raw_snapshot}
-        if self.mastery_service is not None and req.target_skill_nodes:
+        if self.mastery_service is not None and req.target_skill_nodes and resource_retry_context is None:
             try:
-                if correction_followup:
+                if round_binding is not None:
+                    tier = next(node.tier for node in self.mastery_service.knowledge_service.list_skill_nodes(learner.knowledge_base_id)
+                                if node.node_id == round_binding.node_id)
+                elif correction_followup:
                     tier = self.mastery_service.validate_correction_targets(
                         learner,
                         req.target_skill_nodes,
@@ -183,10 +440,24 @@ class GenerationJobService:
             ):
                 raise ValueError("run_id already belongs to another generation request")
             if existing.job_status == "failed" and retry_failed:
-                requeued = self.job_repo.mark_queued(run_id)
-                if requeued is None:
+                audit = getattr(self.generation_service, "audit_repo", None)
+                prior_run = audit.get_run(run_id) if audit is not None else None
+                if self.durable_dispatch or (prior_run and prior_run.status.value in {"failed", "interrupted"}):
+                    parent_id = run_id
+                    retry_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"generation-retry:{parent_id}"))
+                    if not hasattr(self.job_repo, "create_retry"):
+                        raise ApplicationError(ErrorCode.WORKFLOW_PERSISTENCE_CONFLICT, status_code=409)
+                    run_id = self.job_repo.create_retry(parent_id, run_id=retry_id,
+                        learner_id=req.learner_id, topic=req.topic, knowledge_base_id=knowledge_base_id,
+                        request_payload=req.model_dump(mode="json"), batch_id=batch_id,
+                        dispatch_snapshot=self._dispatch_snapshot(learner, req) if (self.durable_dispatch
+                            or callable(getattr(self.generation_service, "freeze_claim_extraction", None))) else None,
+                        submission_hash=submission_hash)
+                    existing = self.job_repo.get(run_id)
+                else:
+                    existing = self.job_repo.mark_queued(run_id)
+                if existing is None:
                     raise ValueError("generation job disappeared during retry")
-                existing = requeued
                 rescheduled_retry = True
             job_status = existing.job_status
         else:
@@ -197,16 +468,22 @@ class GenerationJobService:
                 topic=req.topic,
                 knowledge_base_id=knowledge_base_id,
                 request_payload=req.model_dump(mode="json"),
+                **({"dispatch_snapshot": self._dispatch_snapshot(learner, req, resource_retry_context),
+                    "submission_hash": submission_hash} if (self.durable_dispatch or resource_retry_context is not None
+                        or callable(getattr(self.generation_service, "freeze_claim_extraction", None))) else
+                   {"submission_hash": submission_hash} if submission_hash and hasattr(self.job_repo, "get_dispatch") else {}),
             )
             job_status = "queued"
             created_new = True
-        if (created_new or rescheduled_retry) and self.mastery_service is not None:
+        if (created_new or rescheduled_retry) and self.mastery_service is not None and round_binding is None:
             try:
                 self.mastery_service.schedule_generation(
                     learner, run_id=run_id, selected_node_ids=req.target_skill_nodes,
                     selection_type=selection_type,
                 )
             except Exception:
+                if getattr(self, "_continuation_atomicity_active", False):
+                    self._continuation_schedule_failed = True
                 self.job_repo.mark_failed(run_id, "CURRICULUM_SCHEDULE_FAILED")
                 self.mastery_service.release_failed_generation(learner, run_id=run_id)
                 raise
@@ -221,9 +498,171 @@ class GenerationJobService:
             focus_snapshot=focus_snapshot,
         )
 
+    def _dispatch_snapshot(self, learner, request, resource_retry_context=None):
+        from app.agents.resource_workflows.learning_documents.claim_extraction.budget import for_correction_contract
+        freeze_correction = getattr(self.generation_service, "freeze_correction_package", None)
+        contract = (ResourceRetryContext.from_snapshot(resource_retry_context).correction_package_snapshot
+                    if resource_retry_context is not None else
+                    freeze_correction(request) if freeze_correction is not None else None)
+        snapshot = {"workflow_version": TEXT_WORKFLOW_VERSION, "learner": learner.model_dump(mode="json"),
+                    "request_hash": canonical_hash(request.model_dump(mode="json"))}
+        freeze = getattr(self.generation_service, "freeze_claim_extraction", None)
+        if freeze is not None:
+            snapshot.update(for_correction_contract(freeze(request), contract))
+        elif request.include_claim_check and get_settings().claim_extraction_strategy != "legacy_v3":
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+        freeze_supplement = getattr(
+            self.generation_service, "freeze_claim_evidence_retrieval", None,
+        )
+        if freeze_supplement is not None:
+            snapshot.update(freeze_supplement(request))
+        elif request.include_claim_evidence_retrieval:
+            # A worker without the feature must reject the dispatch instead of
+            # silently running the closed graph.
+            raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+        if resource_retry_context is not None:
+            context = ResourceRetryContext.from_snapshot(resource_retry_context)
+            if context.request != request or context.learner != learner:
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            snapshot["resource_retry_context"] = context.model_dump(mode="json")
+            # Older workers must reject this dispatch instead of silently
+            # starting an ordinary diagnose/retrieve/plan workflow.
+            snapshot["workflow_version"] = RESOURCE_RETRY_WORKFLOW_VERSION
+        if snapshot.get("claim_extraction_policy"):
+            snapshot["workflow_version"] = ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION if resource_retry_context else ESTIMATE_TEXT_WORKFLOW_VERSION
+        lecture = freeze_lecture_policy(request, get_settings())
+        if lecture:
+            snapshot.update(lecture)
+            snapshot["base_workflow_version"] = snapshot["workflow_version"]
+            snapshot["workflow_version"] = lecture_workflow_version(lecture["lecture_review_contract_version"])
+            snapshot["lecture_dispatch_hash"] = canonical_hash(snapshot)
+        resource = freeze_resource_review_policy(request, get_settings())
+        if resource:
+            if "lecture_dispatch_hash" in snapshot:
+                # A run cannot route 讲义 through both the legacy lecture loop and
+                # the generic loop; the two versioned strategies are exclusive.
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=422)
+            snapshot.update(resource)
+            snapshot["base_workflow_version"] = snapshot["workflow_version"]
+            snapshot["workflow_version"] = resource_workflow_version(resource["resource_review_contract_version"])
+            snapshot["resource_dispatch_hash"] = canonical_hash(snapshot)
+        if contract:
+            snapshot = wrap_correction_dispatch(snapshot, contract)
+        return snapshot
+
+    def _generate_with_budget(self, learner, request, **kwargs):
+        from contextlib import nullcontext
+        from app.core.llm.budget import round_call_scope
+        from app.models.shared.llm import LLMBudgetScope
+        from app.services.feedback.round_budget import RoundBudgetGuard
+        scope = nullcontext()
+        if self.round_repository is not None:
+            binding = self.round_repository.one("learning_round_job_bindings", run_id=kwargs["run_id"])
+            if binding:
+                member = self.round_repository.one("learning_round_stage_nodes", stage_node_id=binding["stage_node_id"])
+                stage = self.round_repository.one("learning_round_stages", stage_id=member["stage_id"])
+                input_cap = stage["budget_snapshot"]["input_capacity"]
+                retry_snapshot = kwargs.get("resource_retry_context")
+                if binding["relation_kind"] == "retry" and retry_snapshot is not None:
+                    retry_context = ResourceRetryContext.from_snapshot(retry_snapshot)
+                    input_cap = retry_context.input_capacity or input_cap
+                scope = round_call_scope(LLMBudgetScope(scope_id=member["stage_node_id"], stage_id=stage["stage_id"], kind="production"),
+                                         input_cap=input_cap,
+                                         guard=RoundBudgetGuard(self.round_repository))
+        with scope:
+            return self.generation_service.generate_with_run_id(learner, request, **kwargs)
+
+    def run_claim(self, claim):
+        """Only a persisted, still-owned claim can execute the frozen submission."""
+        error_code = None
+        resource_ids = []
+        learner = None
+        preflight_failed = True
+        try:
+            snapshot, correction_contract = unwrap_correction_dispatch(claim.snapshot)
+            req = GenerateRequest.from_frozen_payload(claim.request_payload)
+            frozen_learner = LearnerProfile.model_validate(snapshot["learner"])
+            if (req.learner_id != claim.learner_id or frozen_learner.learner_id != claim.learner_id
+                    or canonical_hash(claim.request_payload) != snapshot.get("request_hash")):
+                raise ValueError("frozen generation input mismatch")
+            learner = frozen_learner
+            resource = {}
+            if snapshot.get("workflow_version") == "learning_documents.resource_issue.v1":
+                version, resource = resolve_resource_review_dispatch(snapshot)
+                lecture = {}
+            else:
+                version, lecture = resolve_lecture_dispatch(snapshot)
+            if version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}:
+                raise ValueError("unsupported frozen workflow")
+            if (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (snapshot.get("resource_retry_context") is not None):
+                raise ValueError("retry dispatch version mismatch")
+            private = snapshot_fields(snapshot)
+            from app.agents.resource_workflows.learning_documents.claim_evidence_retrieval.policy import (
+                PRIVATE_FIELDS as SUPPLEMENT_FIELDS,
+                policy_from_state,
+            )
+
+            supplement_private = {
+                key: snapshot[key]
+                for key in SUPPLEMENT_FIELDS
+                if key in snapshot
+            }
+            policy = policy_from_input({"include_claim_check": req.include_claim_check, **private})
+            if (version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None):
+                raise ValueError("frozen extraction dispatch mismatch")
+            if bool(supplement_private) != req.include_claim_evidence_retrieval:
+                raise ValueError("frozen supplement dispatch mismatch")
+            if supplement_private:
+                policy_from_state(supplement_private)
+            with execution_fence(ExecutionFence(claim.run_id, claim.owner, claim.epoch)):
+                retry_context = snapshot.get("resource_retry_context")
+                preflight_failed = False
+                response = self._generate_with_budget(
+                    learner, req, run_id=claim.run_id, batch_id=claim.batch_id,
+                    **({"correction_package_snapshot": correction_contract or {}} if hasattr(self.generation_service, "freeze_correction_package") else {}),
+                    **({"claim_extraction_snapshot": private} if hasattr(self.generation_service, "freeze_claim_extraction") else {}),
+                    **({"claim_evidence_retrieval_snapshot": supplement_private} if hasattr(self.generation_service, "freeze_claim_evidence_retrieval") else {}),
+                    **({"resource_retry_context": retry_context} if retry_context is not None else {}),
+                    **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
+                    **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}))
+                resource_ids = [item.resource_id for item in response.resources]
+                if getattr(response, "workflow_status", None) == "failed":
+                    error_code = "GENERATION_EXECUTION_FAILED"
+        except ExecutionLeaseLost:
+            return False
+        except Exception as exc:
+            error_code = exc.code.value if isinstance(exc, ApplicationError) else "GENERATION_EXECUTION_FAILED"
+            logger.error("Generation attempt failed run_id=%s epoch=%s code=%s type=%s",
+                         claim.run_id, claim.epoch, error_code, type(exc).__name__)
+        finished = self.job_repo.finish_claim(claim, resource_ids=resource_ids, error_code=error_code,
+            **({"reject_frozen_snapshot":bool(error_code and preflight_failed)}
+               if getattr(self.job_repo,"supports_frozen_rejection",False) else {}))
+        if (finished and error_code and learner and self.mastery_service
+                and getattr(self.job_repo.get(claim.run_id),"job_status",None)=="failed"):
+            self.mastery_service.release_failed_generation(learner, run_id=claim.run_id)
+        return finished
+
     def get_job(self, run_id: str) -> GenerationJobStatusResponse | None:
         job = self.job_repo.get(run_id)
         return self._with_resource_progress(job) if job else None
+
+    def _round_binding_summary(self, run_id: str):
+        """Resolve a read-only round binding; unknown runs stay unbound."""
+        if self.round_repository is None:
+            return None
+        binding = self.round_repository.one("learning_round_job_bindings", run_id=run_id)
+        if binding is None:
+            return None
+        stage_node = self.round_repository.one("learning_round_stage_nodes", stage_node_id=binding["stage_node_id"])
+        if stage_node is None:
+            return None
+        stage = self.round_repository.one("learning_round_stages", stage_id=stage_node["stage_id"])
+        member = self.round_repository.one("learning_round_nodes", round_node_id=stage_node["round_node_id"])
+        if stage is None or member is None:
+            return None
+        return RoundBindingSummaryV1(round_id=stage["round_id"], member_id=member["round_node_id"],
+                                     stage_id=stage["stage_id"], stage_node_id=stage_node["stage_node_id"],
+                                     role=member["role"])
 
     def _with_resource_progress(
         self, job: GenerationJobStatusResponse,
@@ -261,7 +700,19 @@ class GenerationJobService:
             # can be approved while Claim extraction is still in progress.
             published=published,
             can_finalize=bool(total and terminal == total), items=executions)
-        return job.model_copy(update={"resource_progress_summary": summary})
+        # Logical-resource publication facts stay separate from the per-execution
+        # progress above; the executions just read are reused, never re-queried.
+        publish_summary = load_publication_summary(
+            run_id=job.run_id,
+            request_payload=job.request_payload,
+            resource_repository=resource_repo,
+            executions=records,
+        )
+        return job.model_copy(update={
+            "resource_progress_summary": summary,
+            "publish_summary": publish_summary,
+            "round_binding": self._round_binding_summary(job.run_id),
+        })
 
     def mark_superseded(self, run_id: str, replacement_run_id: str) -> GenerationJobStatusResponse | None:
         return self.job_repo.mark_superseded(run_id, replacement_run_id)
@@ -282,22 +733,64 @@ class GenerationJobService:
         run_id: str,
         batch_id: str | None = None,
     ) -> None:
-        self.job_repo.mark_running(run_id)
+        metadata = {}
+        if hasattr(self.job_repo, "get_dispatch"):
+            metadata = self.job_repo.get_dispatch(run_id) or {}
+            if metadata.get("dispatch_mode") == "worker":
+                raise ExecutionLeaseLost()
+        if hasattr(self.job_repo, "try_start_background"):
+            if not self.job_repo.try_start_background(run_id):
+                return
+        else:
+            self.job_repo.mark_running(run_id)
         try:
             job = self.job_repo.get(run_id)
+            if job and "claim_workflow_version" not in job.request_payload:
+                req = GenerateRequest.from_frozen_payload(job.request_payload)
             effective_batch_id = batch_id or (job.batch_id if job else run_id)
-            response = self.generation_service.generate_with_run_id(
+            snapshot, correction_contract = unwrap_correction_dispatch(metadata.get("dispatch_snapshot") or {})
+            retry_context = snapshot.get("resource_retry_context")
+            lecture = {}
+            resource = {}
+            if snapshot:
+                if snapshot.get("workflow_version") == "learning_documents.resource_issue.v1":
+                    version, resource = resolve_resource_review_dispatch(snapshot)
+                else:
+                    version, lecture = resolve_lecture_dispatch(snapshot)
+                if (version not in {TEXT_WORKFLOW_VERSION, RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}
+                        or (version in {RESOURCE_RETRY_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (retry_context is not None)):
+                    raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            if snapshot:
+                learner = LearnerProfile.model_validate(snapshot["learner"])
+                req = GenerateRequest.from_frozen_payload(job.request_payload)
+                if canonical_hash(job.request_payload) != snapshot.get("request_hash"):
+                    raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            private = snapshot_fields(snapshot)
+            supplement_private = {key: snapshot[key] for key in (
+                "claim_evidence_retrieval_policy", "claim_evidence_retrieval_policy_hash",
+            ) if key in snapshot}
+            policy = policy_from_input({"include_claim_check": req.include_claim_check, **private})
+            if snapshot and ((version in {ESTIMATE_TEXT_WORKFLOW_VERSION, ESTIMATE_RESOURCE_RETRY_WORKFLOW_VERSION}) != (policy is not None)):
+                raise ApplicationError(ErrorCode.WORKFLOW_CONTRACT_INVALID, status_code=409)
+            response = self._generate_with_budget(
                 learner,
                 req,
                 run_id=run_id,
                 batch_id=effective_batch_id,
+                **({"resource_retry_context": retry_context} if retry_context is not None else {}),
+                **({"claim_extraction_snapshot": private} if hasattr(self.generation_service,"freeze_claim_extraction") else {}),
+                **({"claim_evidence_retrieval_snapshot": supplement_private}
+                   if hasattr(self.generation_service, "freeze_claim_evidence_retrieval") else {}),
+                **({"lecture_review_snapshot": lecture, "lecture_dispatch_snapshot": snapshot if lecture else None} if hasattr(self.generation_service, "freeze_lecture_review") else {}),
+                **({"correction_package_snapshot": correction_contract or {}} if hasattr(self.generation_service, "freeze_correction_package") else {}),
+                **({"resource_review_snapshot": resource, "resource_dispatch_snapshot": snapshot if resource else None} if hasattr(self.generation_service, "freeze_resource_review") else {}),
             )
             self.job_repo.mark_completed(
                 run_id,
                 [resource.resource_id for resource in response.resources],
             )
         except Exception as exc:
-            logger.exception("Generation job failed run_id=%s", run_id)
+            logger.error("Generation job failed run_id=%s type=%s", run_id, type(exc).__name__)
             self.job_repo.mark_failed(run_id, str(exc))
             if self.mastery_service is not None:
                 self.mastery_service.release_failed_generation(learner, run_id=run_id)

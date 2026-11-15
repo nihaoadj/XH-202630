@@ -1,251 +1,65 @@
 # 领域知识个性化生成与多智能体协同决策系统
 
-> 提交代码前，请先仔细阅读 [`git-workflow.md`](./git-workflow.md)，并按其中的分支、提交信息和协作规范操作。
+**项目编号 XH-202630**
 
-题目编号：XH-202630  
-文档版本：2.0
+面向领域技能学习者的工作台。系统依据能力诊断确定学习起点，从领域知识库检索证据，生成与当前节点匹配的材料，再通过测评决定下一轮。学习者可以追溯资源来源、查看审核结果，并在系统推荐的补学、巩固或进阶方案中确认下一步。
 
-本项目面向多领域技能学习者，构建“学习者画像输入 → 能力诊断 → 多 Agent 协同决策 → 个性化资源生成 → 审核纠偏与知识溯源 → 学情报告 → 学习反馈 → 动态调整学习路径”的领域知识个性化生成系统。RAG 工程训练是当前示例知识库和比赛分工中的一个方向，实际生成方向由用户输入的学习主题、学习者画像和所接入的知识库共同决定。
+[快速启动](#快速启动) · [功能说明](docs/features.md) · [系统架构](docs/architecture.md) · [演示手册](docs/demo-runbook.md)
 
-## 项目亮点
+## 能做什么
 
-- 多智能体协同：基于 LangGraph 实现学情诊断、知识库检索、学习路径规划、个性化资源生成、审核纠偏、反馈决策等 Agent 的协同闭环。
-- 证据约束 Tutor：已发布资源与测评题支持多轮启发式导学；提示等级由服务端递进，回答按 Frozen Evidence、SourceRef、受控检索顺序取证，证据不足时安全拒答。
-- 反馈真实闭环：正式 Attempt 会原子更新知识点掌握度、画像版本和持久化学习路径；补救或进阶决策复用异步生成任务，并保留父子 Run 来源关系。
-- 实时 Agent 轨迹：生成页通过 SSE 只读持久化 WorkflowEvent，支持 queued snapshot、断线续传、事件去重、terminal close 与轮询降级。
-- 幻觉防控：引入冻结 Evidence、独立 Claim 抽取/判定、审核纠偏与可复核指标。
-- 节点优先检索：带能力目标的请求先在模块级 Chunk—节点映射范围内执行向量、BM25 与精排；无映射或证据不足时自动回退全库检索，底层故障保持原有错误语义。
-- 个性化适配：基于学习者画像动态匹配资源难度、生成学习路径与分阶测试。
-- 可视化决策：提供 Agent 调度过程、学情报告、资源难度匹配曲线等可视化能力。
-- 可回放运行记录：Run 在模型调用前建档，节点 Step/Event/Evidence/Checkpoint 持续落库，可跨进程只读查询并识别中断。
+| 学习任务 | 系统提供的能力 |
+|---|---|
+| 找到起点 | 从方向问卷了解目标和偏好，结合能力诊断推荐首批学习节点。每个方向有独立画像和学习记录。 |
+| 获取材料 | 按当前节点生成讲义、实操指南、分阶测试题、复习清单或案例分析。可查看任务进度、引用来源、审核结果及发布版本。 |
+| 阅读与练习 | 在资源架切换同批材料，进入专注阅读或向 Tutor 提问。符合条件的实操指南和复习清单可生成 HTML 互动课件。 |
+| 检验学习效果 | 按阶段提交测评，查看节点评分与学习小结。可以再次作答，也可以为需要巩固的节点生成纠错材料和新题。 |
+| 安排下一轮 | 结合测评、先修关系和个人选择调整后续目标。历史页保留学习过程，报告展示当前掌握度、学习路径及生成资源质量。 |
 
-## 技术栈
+**例如**，在「RAG 工程链路培训」中，学习者选定「Chunk 切分」后，可先用讲义理解切分参数，再用实操指南测试参数变化，最后用分阶测试题验证掌握情况。若需要巩固，可以在反馈页确认本轮纠错并生成新题。
 
-| 层级 | 技术 |
-|------|------|
-| 前端 | Vue 3 + Element Plus + ECharts |
-| 后端 API | FastAPI (Python 3.11+) |
-| Agent 编排 | LangChain + LangGraph |
-| 大模型 | 国产大模型 API（通义千问 / 文心一言 / DeepSeek 等，可配置） |
-| 向量数据库 | ChromaDB |
-| 关系数据库 | SQLite（当前开发、演示和部署） |
-| 部署 | Docker / 直接部署 |
+## 快速启动
 
-## 快速开始
+需要 **Python 3.11、Node.js 24 和 npm**。本地运行使用 SQLite、Chroma、FastAPI Web、文本生成 Worker 和互动课件 Worker。
 
-> 当前后端已经形成从证据检索、审核返工、Claim 审计、发布到反馈闭环和 SSE 回放的可执行 P0 链路，但尚未通过 P0-09 全部比赛 Gate，不能宣称生产就绪。正式演示前请先执行 `docs/demo-runbook.md` 中的离线、runtime、数据库和前端验收。
+1. **准备新环境**。按部署指南安装锁定依赖，配置 `backend/.env`，准备本地 Embedding 模型并初始化知识库。已有数据环境可直接启动或按指南升级。[首次安装与配置](docs/deployment.md#1-首次安装)
+2. **启用轮次**。要体验阶段测评和下一轮选择，在 `backend/.env` 设置 `LEARNING_ROUND_CREATION_ENABLED=true` 后启动服务。模板默认关闭此开关。生成真实资源需配置有效的模型服务凭据。[配置说明](docs/deployment.md#2-配置和初始化)
+3. **启动应用**。在项目虚拟环境中，从仓库根运行：
 
-配置文件默认读取 `backend/.env`，运行时数据统一落在 `backend/data/` 和 `backend/chroma_db/`。  
-默认 `KNOWLEDGE_BASE_DIR` 指向 RAG 工程训练示例知识库；接入其他领域时，将该配置改为对应知识库目录即可，后端 Agent 不会把生成方向固定为 RAG。
+   ```powershell
+   python scripts/start_local.py
+   ```
 
-```bash
-# 1. 进入后端并安装依赖
-cd backend
-pip install -r requirements.txt
+| 本地入口 | 用途 |
+|---|---|
+| [学习工作台](http://127.0.0.1:5173) | 注册或登录，选择学习方向 |
+| [FastAPI 接口文档](http://127.0.0.1:8000/docs) | 查看接口和请求结构 |
+| [Web 就绪](http://127.0.0.1:8000/health/ready) · [文本 Worker](http://127.0.0.1:8082/health/ready) · [课件 Worker](http://127.0.0.1:8081/health/ready) | 检查服务。任务持续排队时，查看对应 Worker 的状态和日志 |
 
-# 2. 初始化知识库与学习画像示例数据
-cd ..
-# 在项目根目录执行，脚本会自动定位 backend/ 与 examples/
-python scripts/ingest_knowledge.py
-python scripts/init_db.py
+## 技术结构
 
-# 3. 推荐：一键启动 Web、互动课件 Durable Worker 与前端
-# 首次安装依赖、创建本地配置时使用 --install --bootstrap；初始化数据需显式附加 --initialize
-python scripts/start_local.py
-```
+![Vue 学习工作台、FastAPI、领域服务、双 Worker 与持久化数据](docs/assets/系统整体架构图.svg)
 
-启动器会等待后端 `/health` 与课件 Worker `/health/ready`，并把日志写入 `backend/logs/`。互动课件 Worker 默认在 `127.0.0.1:8081` 提供 `/health/live`、`/health/ready` 和安全的 `/metrics`；Web 进程不会自动启动它。当前 SQLite Worker 每轮只 claim 一个任务，`COURSEWARE_WORKER_BATCH_SIZE` 大于 `1` 会被安全归一为 `1`，不能作为并发或横向扩容手段。
+- **生成与审核**。检索优先覆盖目标节点，冻结可用证据后再规划和生成。普通审核负责材料质量，支持的资源可启用 Claim 逐条核验事实与缺证补检。
+- **服务与数据**。文本和互动课件分别由持久 Worker 执行。资源版本、审核与学习事实可通过任务和轮次追溯。
+- **前端与后端**。Vue 3 和 Vite 构建学习工作台，FastAPI 提供认证、业务 API 和任务事件流。[系统架构](docs/architecture.md)
 
-完整的一键启动、首次安装、手动三进程启动、Worker 健康检查、停机和 SQLite 数据保护方案见 [部署说明](docs/deployment.md)。
+| 目录 | 内容 |
+|---|---|
+| `frontend/src/features/` | 按业务领域组织的页面与交互 |
+| `backend/app/` | API、服务、Agent 工作流、检索、渲染和仓储 |
+| `knowledge_base/` | 方向目录、教材、参考来源、技能节点和题库 |
+| `scripts/`、`backend/scripts/` | 启动、入库、Worker 和验证工具 |
 
-知识索引异常后，可按知识库 ID 显式重新入库并对账 SQL/Chroma：
+## 开发与验证
 
-```bash
-python scripts/ingest_knowledge.py --knowledge-base-id rag_engineering_training
-```
+从仓库根运行 `python scripts/run_tests.py --list` 查看可用套件，按改动选择验证范围。例如，使用 `python scripts/run_tests.py --suite learning-round-api` 检查学习轮次接口。[测试指南](docs/testing/README.md)
 
-运行模式和退出语义：
-
-| 模式 | degraded fallback | 存储建议 | 启动/生成语义 |
-|---|---|---|---|
-| `development` | 默认禁止，可显式开启 | SQLite | not-ready 时保留 `/health`，生成返回 503 |
-| `demo` | 仅显式 `ALLOW_DEGRADED_GENERATION=true` | SQLite | fallback 必须标记 degraded |
-| `production` | 永远禁止 | SQLite | 核心依赖或默认 KB not-ready 时 fail-fast；同一数据库只运行一个 Durable Worker |
-
-`scripts/check_environment.py` 不调用计费 LLM、不下载 Embedding，退出码为 0=ready、2=degraded、1=not-ready。公共 `/health` 与 `/health/ready` 只检查默认 KB 和核心依赖；其他 KB 的异常不会轻易把整个服务变成 503。全 KB 详情位于 token 保护的管理员接口，见 `docs/api.md`。
-
-当前项目不依赖 PostgreSQL。代码中保留的 PostgreSQL 方言分支仅是可选兼容基础，仓库未捆绑 PostgreSQL 驱动，也没有完成真实迁移和并发验收；以后若更换数据库，必须先单独立项并更新部署文档，不能直接把兼容分支视为已支持的生产方案。
-
-数据库迁移或比赛联调前，可在项目根目录执行只读完整性预检：
-
-```powershell
-python scripts/check_database_integrity.py
-```
-
-该脚本检查 SQLite 外键开关、现有 FK 违规、资源版本重复/NULL、数据库唯一约束和 Resource 到 Run、Step、父版本的真实外键。退出码为 0=ready、2=约束缺失警告、1=存在阻塞迁移的数据问题；脚本不会修改或删除数据。
-
-`LLM_STRUCTURED_OUTPUT_MODE=auto` 会先尝试 function calling。若所用 OpenAI-compatible 服务明确不支持该能力，请在本地 `.env` 显式设为 `text`，避免每个 Agent 固定产生一次 BAD_REQUEST 后再回退；不要提交真实 `.env` 或 API Key。
-
-生成 Agent 与独立交互式 Tutor 统一通过可注入的 `LLMGateway` 调用模型。Tutor 不进入资源生成 LangGraph，也不直接修改画像、掌握度、路径或资源。默认 Tutor 请求预算为 25 秒、最近上下文 6 轮、Evidence 4 条、最高提示等级 3。结构化输出和 Evidence ID 子集均会严格校验。配置项及模式说明见 `backend/.env.example` 和 `docs/deployment.md`。
-
-## 后端目录说明
-
-```text
-backend/
-├── app/
-│   ├── api/<domain>/              # HTTP 路由、认证依赖、请求解析与响应映射
-│   ├── services/<domain>/         # 用例编排、事务边界和领域门面
-│   ├── agents/                    # 学习 Agent、资源工作流和共享 Agent 能力
-│   ├── core/                      # 课件运行时、LLM、事件、检索、安全和存储等基础能力
-│   ├── db/<domain>/               # SQL/内存仓储、迁移和共享数据库能力
-│   ├── models/<domain>/           # DTO、领域契约和共享枚举
-│   ├── utils/                     # 通用内部工具
-│   ├── config.py                  # 应用配置
-│   └── main.py                    # FastAPI 入口
-├── tests/                        # 分层测试套件
-│   ├── unit/                    # Agent、核心组件、模型契约与纯策略
-│   ├── integration/             # API、持久化、服务与工作流集成
-│   ├── migrations/              # 数据库迁移与历史兼容性
-│   ├── e2e/                     # 生命周期、重启、恢复与回放
-│   ├── live/                    # 显式启用的真实 Provider 冒烟测试
-│   ├── fakes/                   # 共享测试替身
-│   └── fixtures/                # 固定验收数据
-├── data/                         # 运行时数据目录（自动生成，不进入版本控制）
-│   ├── domain_knowledge.db       # SQLite 数据库文件
-│   ├── generated_resources/      # 生成的资源文件
-│   └── .gitkeep
-├── chroma_db/                    # ChromaDB 向量索引目录（自动生成，不进入版本控制）
-├── logs/                         # 应用日志目录（不进入版本控制）
-├── .env.example                  # 环境变量模板
-└── requirements.txt              # Python 依赖
-```
-
-## 项目目录
-
-```text
-version1/
-├── .venv/                       # 本地 Python 虚拟环境（不进入版本控制）
-├── backend/                     # FastAPI 后端与多智能体核心实现
-├── frontend/                    # Vue3 前端可视化界面
-│   ├── src/
-│   │   ├── api/                 # axios 接口封装
-│   │   ├── assets/
-│   │   ├── components/          # 可复用组件
-│   │   ├── composables/         # 跨页面组合逻辑
-│   │   ├── features/<domain>/   # 按领域组织的页面与交互逻辑
-│   │   ├── router/              # Vue Router 路由配置
-│   │   ├── stores/              # Pinia 全局状态
-│   │   ├── styles/
-│   │   ├── utils/
-│   │   └── views/               # 首页、学习方向、诊断、资源、历史等页面
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-├── knowledge_base/              # 领域知识库原文档与元数据
-│   ├── learning_catalog_seed.json
-│   ├── questionnaire_common.json
-│   ├── rag_engineering_training/
-│   └── demo_industrial_internet/
-├── examples/                    # 示例学习者画像等示例数据（仅用于初始化演示）
-│   ├── learner_profiles/
-│   └── generated_samples/
-├── docs/                        # 设计实现方案、部署说明、API 文档
-│   ├── architecture.md
-│   ├── knowledge_base_database.md
-│   ├── api.md
-│   └── ...
-├── scripts/                     # 初始化与辅助脚本
-│   ├── ingest_knowledge.py
-│   ├── init_db.py
-│   └── check_environment.py      # 只读、脱敏的运行环境检查
-├── Dockerfile
-├── git-workflow.md
-├── README.md
-└── .gitignore
-```
-
-### 运行时数据说明
-
-| 目录/文件 | 用途 | 是否进入版本控制 |
-|-----------|------|------------------|
-| `.venv/` | 项目根目录下的本地 Python 虚拟环境 | 否 |
-| `backend/data/domain_knowledge.db` | SQLite 数据库文件 | 否 |
-| `backend/data/generated_resources/` | 运行时生成的资源文件 | 否（保留目录结构） |
-| `backend/chroma_db/` | ChromaDB 向量索引 | 否（保留目录结构） |
-| `backend/logs/` | 应用日志文件 | 否（保留目录结构） |
-| `examples/` | 示例学习者画像等静态示例数据 | 是 |
-| `knowledge_base/` | 领域知识库原文档 | 是 |
-
-## 测试运行
-
-完整的层级、功能覆盖矩阵、数据/证据规范见 [项目测试方案](docs/testing/README.md)，比赛54用例、来源快照与三指标口径见 [比赛评测方案](docs/testing/competition.md)。统一入口按套件运行，默认关闭真实模型调用，每次输出独立日志、JUnit 和 JSON/Markdown 摘要：
-
-```powershell
-python scripts/run_tests.py --list
-python scripts/run_tests.py --profile quick
-python scripts/run_tests.py --profile regression
-python scripts/run_tests.py --profile acceptance
-python scripts/run_tests.py --suite backend-api --suite backend-migration
-```
-
-`quick` 用于快速定位；`regression` 包括后端全量、比赛金标、课件冻结评测、前端八项单元与构建；`acceptance` 追加两项实际浏览器专项。产物位于 `output/test-runs/`，原浏览器截图路径保留。临时目录/cache 隔离到本次报告；离线金标和冻结回放的 PASS 不能当作正式模型质量成绩。
-
-后端测试按执行层级分类，并由 `backend/tests/conftest.py` 自动添加 pytest marker：
-
-```powershell
-python -m pytest
-python -m pytest -m unit
-python -m pytest -m integration
-python -m pytest -m migration
-python -m pytest -m e2e
-```
-
-真实 LLM 测试默认跳过，必须显式启用：
-
-```powershell
-$env:RUN_LIVE_LLM = "1"
-python -m pytest -m live_llm
-```
-
-互动课件改动还应执行冻结评测、浏览器质量门和前端构建：
-
-```powershell
-python backend/scripts/courseware_eval.py `
-  --manifest backend/tests/fixtures/courseware/evals/manifest.json `
-  --baseline backend/tests/fixtures/courseware/evals/baseline.json `
-  --output backend/courseware-eval-report.json
-npm --prefix frontend run test:courseware-browser
-npm --prefix frontend run test:workflow-events
-npm --prefix frontend run test:tutor
-npm --prefix frontend run build
-```
-
-`backend/courseware-eval-report.json` 等评测报告和浏览器证据为本地产物，不应提交。`pytest-asyncio` 已列入 `backend/requirements.txt`，以确保全新环境能收集异步报告流测试。
-
-## 核心指标
-
-- 专业知识幻觉率 < 5%
-- 学习者画像-资源难度适配准确率 ≥ 85%
-- 核心知识点覆盖率 ≥ 90%
-
-## 协作开发入口
-
-当前处于 P0 比赛级收敛与验收阶段，分发任务时优先阅读：
-
-- `docs/architecture.md`：统一系统分层、模块职责、运行时路径和主流程口径。
-- `docs/api.md`：当前真实接口契约。
-- `docs/knowledge_base_database.md`：当前知识库、问卷、诊断与数据库落库说明。
-- `git-workflow.md`：Git 分支、提交信息、禁止提交内容和文档同步规则。
-- `docs/demo-runbook.md`：P0-09 固定 fixture、分层 Gate、主 Demo、故障恢复与浏览器 checklist。
-
-## P0-09 比赛验收
-
-默认离线验收不访问公网、不调用收费 Provider：
-
-```powershell
-python scripts/p0_09_preflight.py --output wzx/out/p0-09-preflight.json
-python scripts/run_p0_09_acceptance.py --offline --output wzx/out/p0-09-offline-manifest.json
-python scripts/run_p0_09_acceptance.py --runtime --output wzx/out/p0-09-runtime-manifest.json
-```
-
-状态只使用 `PASS`、`FAIL`、`SKIP`、`NOT_MEASURABLE`；小型 fixture 的实际值不等于正式统计达标。Live Provider 测试必须显式设置 `RUN_LIVE_LLM=1`，并与 deterministic offline 结果分开报告。
+| 进一步了解 | 文档 |
+|---|---|
+| 页面和完整学习流程 | [功能说明](docs/features.md) |
+| 服务配置、静态构建和升级恢复 | [部署指南](docs/deployment.md) |
+| 认证、任务、测评和事件契约 | [API 指南](docs/api.md) |
+| 持久化关系和索引维护 | [知识库与数据库](docs/knowledge_base_database.md) |
+| 演示流程、比赛指标和真实测试 | [演示手册](docs/demo-runbook.md) · [比赛评测](docs/testing/competition.md) · [评测记录约定](docs/evaluations/README.md) |
+| 分支、提交和本地文件管理 | [Git 协作规范](git-workflow.md) |

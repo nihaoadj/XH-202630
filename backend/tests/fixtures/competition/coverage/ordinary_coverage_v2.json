@@ -1,0 +1,548 @@
+{
+  "fixture_version": "v1",
+  "knowledge_base_id": "rag_engineering_training",
+  "coverage_fixture_version": "ordinary-coverage/v2",
+  "design_note": "离线普通审核覆盖观察：逐 case 的冻结目标及其 covered/missing 结果，仅用于校验新覆盖定义、case/target 绑定与报告聚合，不是真实模型审核输出。3 个目标被标记为 missing，用于证明覆盖不是常量 100%。",
+  "cases": [
+    {
+      "case_id": "gold-student-t1-basics-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t1-basics-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t1-basics-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t1-embed-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "embedding",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t1-embed-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "embedding",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t1-embed-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "embedding",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t2-chunking-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "chunking",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t2-chunking-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "chunking",
+          "covered": false
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t2-chunking-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "chunking",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t2-retrieval-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "similarity_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t2-retrieval-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "similarity_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t2-retrieval-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "similarity_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t3-eval-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_evaluation",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t3-eval-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_evaluation",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t3-eval-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_evaluation",
+          "covered": false
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t3-tuning-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_tuning",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t3-tuning-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_tuning",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-student-t3-tuning-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_tuning",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t1-parsing-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "document_parsing",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t1-parsing-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "document_parsing",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t1-parsing-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "document_parsing",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t1-basics-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t1-basics-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t1-basics-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t2-vector-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "vector_store",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t2-vector-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "vector_store",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t2-vector-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "vector_store",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t2-prompt-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "prompt_assembly",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t2-prompt-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "prompt_assembly",
+          "covered": false
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t2-prompt-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "prompt_assembly",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t3-hybrid-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "hybrid_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t3-hybrid-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "hybrid_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t3-hybrid-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "hybrid_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t3-rerank-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rerank",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t3-rerank-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rerank",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-backend-t3-rerank-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rerank",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t1-embed-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "embedding",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t1-embed-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "embedding",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t1-embed-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "embedding",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t1-basics-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t1-basics-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t1-basics-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_basics",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t2-retrieval-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "similarity_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t2-retrieval-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "similarity_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t2-retrieval-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "similarity_retrieval",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t2-citation-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "citation",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t2-citation-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "citation",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t2-citation-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "citation",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t3-hallucination-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "hallucination_control",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t3-hallucination-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "hallucination_control",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t3-hallucination-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "hallucination_control",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t3-tuning-text",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_tuning",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t3-tuning-practice",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_tuning",
+          "covered": true
+        }
+      ]
+    },
+    {
+      "case_id": "gold-data-t3-tuning-assessment",
+      "observed": true,
+      "targets": [
+        {
+          "target_id": "rag_tuning",
+          "covered": true
+        }
+      ]
+    }
+  ]
+}

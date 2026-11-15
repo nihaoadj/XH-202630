@@ -3,13 +3,16 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import './styles/auth.css'
 import './styles/theme.css'
+import './styles/selects.css'
 
 import App from './App.vue'
 import router from './router'
 import { createPinia } from 'pinia'
+import { moduleMotion } from './ui/motion'
 
 const app = createApp(App)
 const pinia = createPinia()
+app.directive('module-motion', moduleMotion)
 
 app
   .use(ElementPlus)

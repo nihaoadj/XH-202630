@@ -404,8 +404,7 @@
 }
 
 .auth-input-shell .el-input__wrapper,
-.auth-input-shell .el-input-number,
-.auth-input-shell .el-select__wrapper {
+.auth-input-shell .el-input-number {
   width: 100%;
   padding: 0;
   box-shadow: none !important;

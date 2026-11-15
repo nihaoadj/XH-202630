@@ -143,6 +143,8 @@ class GeneratedResourceORM(Base):
     review_practice_payload_hash = Column(String(64), nullable=True, index=True)
     practice_guide_payload = Column(JSON, nullable=True, comment="结构化实操指南内部 payload")
     practice_guide_payload_hash = Column(String(64), nullable=True, index=True)
+    correction_package_payload = Column(JSON, nullable=True)
+    correction_package_payload_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
 
 
@@ -273,6 +275,16 @@ class GenerationJobORM(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     started_at = Column(DateTime(timezone=True), nullable=True, comment="开始时间")
     finished_at = Column(DateTime(timezone=True), nullable=True, comment="完成时间")
+
+    dispatch_mode = Column(String(16), nullable=False, default="legacy", server_default="legacy")
+    dispatch_snapshot = Column(JSON, nullable=True)
+    submission_hash = Column(String(64), nullable=True)
+    claim_owner = Column(String(128), nullable=True)
+    claim_epoch = Column(Integer, nullable=False, default=0, server_default="0")
+    claim_count = Column(Integer, nullable=False, default=0, server_default="0")
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    next_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    retry_of_run_id = Column(String(128), nullable=True, unique=True)
 
 
 class ResourceSpecORM(Base):
@@ -643,6 +655,7 @@ class KnowledgeDocumentVersionORM(Base):
             "knowledge_base_id",
             "document_id",
             "content_hash",
+            "identity_revision",
             name="uq_kb_document_content_version",
         ),
     )
@@ -655,6 +668,7 @@ class KnowledgeDocumentVersionORM(Base):
     source_type = Column(String(32), nullable=False)
     source_version = Column(String(64), nullable=True)
     content_hash = Column(String(64), nullable=False, index=True)
+    identity_revision = Column(String(128), nullable=False, default="", server_default=text("''"))
     enabled = Column(Boolean, nullable=False, default=True)
     is_current = Column(Boolean, nullable=False, default=True, index=True)
     extra_metadata = Column("metadata", JSON, default=dict)
@@ -947,6 +961,7 @@ class AgentRunORM(Base):
     __tablename__ = "agent_runs"
 
     run_id = Column(String(128), primary_key=True)
+    claim_extraction_mode = Column(String(32), nullable=False, default="legacy_v3", server_default="legacy_v3")
     schema_version = Column(String(16), nullable=False, default="1.0")
     learner_id = Column(String(64), ForeignKey("learner_profiles.learner_id"), nullable=True, index=True)
     knowledge_base_id = Column(String(128), ForeignKey("knowledge_bases.knowledge_base_id"), nullable=True, index=True)
@@ -974,6 +989,20 @@ class AgentRunORM(Base):
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     ended_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ClaimExtractionRunORM(Base):
+    __tablename__ = "claim_extraction_runs"
+
+    run_id = Column(String(128), ForeignKey("agent_runs.run_id", ondelete="CASCADE"), primary_key=True)
+    schema_version = Column(String(16), nullable=False, default="1.0")
+    policy_hash = Column(String(64), nullable=False)
+    policy_json = Column(JSON, nullable=False)
+    revision = Column(Integer, nullable=False, default=0)
+    state_hash = Column(String(64), nullable=False)
+    state_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
 
 
 class AgentStepORM(Base):

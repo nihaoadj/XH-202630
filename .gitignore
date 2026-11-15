@@ -28,6 +28,7 @@ venv/
 !/backend/data/generated_resources/**/
 !/backend/data/generated_resources/**/.gitkeep
 backend/data/models/
+backend/data/chroma_bge_m3/
 
 # Vector store
 backend/chroma_db/*
@@ -36,6 +37,8 @@ backend/chroma_db/*
 
 # Logs
 backend/logs/*.log
+backend/logs/*.txt
+backend/.live-claim-runs/
 !backend/logs/.gitkeep
 
 # Testing
@@ -79,8 +82,10 @@ backend/logs/local-dev-processes.json
 /deliverables/debug-review-cover.png
 /deliverables/taskbook-render/
 
-# Local update plans and skills
+# Local update plans, extension ideas and skills
 /docs/update_plan/
+/docs/extension_ideas/
+/docs/assets/backup/
 /skills/
 /.skills/
 
@@ -109,3 +114,6 @@ __extracted_pdf.txt
 # Local startup helpers
 scripts/local-*.ps1
 **/.codex-run-*.ps1
+
+# Local dedicated test-account credentials (never commit)
+/output/local-credentials/

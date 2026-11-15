@@ -14,7 +14,7 @@ def __getattr__(name: str):
 
         return DurableWorkflowRunner
     if name in {"RecordedNode", "recorded_node"}:
-        from app.services.runs.recorded_node import RecordedNode, recorded_node
+        from app.agents.shared.recorded_node import RecordedNode, recorded_node
 
         return {"RecordedNode": RecordedNode, "recorded_node": recorded_node}[name]
     if name == "WorkflowArtifactRecorder":

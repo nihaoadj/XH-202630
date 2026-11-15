@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from app.config import PROJECT_ROOT
+from app.core.retrieval.knowledge_paths import resolve_knowledge_file
 
 
 def confined_path(root: Path, relative: str) -> Path:
@@ -35,7 +36,7 @@ def build_source_snapshot(knowledge_base_id: str, claims_payload: dict,
     documents = {item["id"]: item for item in metadata.get("documents", [])}
     files = {"metadata.json": text_hash(kb / "metadata.json")}
     for document in documents.values():
-        files[document["file"]] = text_hash(confined_path(kb, document["file"]))
+        files[document["file"]] = text_hash(resolve_knowledge_file(kb, document["file"]))
     for name in ("questionnaire.json", "diagnostic_questions.json", "assessment_questions.json"):
         if (kb / name).exists():
             files[name] = text_hash(kb / name)
@@ -46,7 +47,7 @@ def build_source_snapshot(knowledge_base_id: str, claims_payload: dict,
             document = documents.get(claim.get("source_document_id"))
             if not match or not document or int(match[1]) != document.get("module_number"):
                 raise ValueError(f"unknown source reference: {evidence_id}")
-            text = confined_path(kb, document["file"]).read_text(encoding="utf-8")
+            text = resolve_knowledge_file(kb, document["file"]).read_text(encoding="utf-8")
             sections = list(re.finditer(r"^## .+$", text, re.MULTILINE))
             section = next((i for i, item in enumerate(sections)
                             if re.match(rf"## {int(match[2])}\.", item.group())), None)

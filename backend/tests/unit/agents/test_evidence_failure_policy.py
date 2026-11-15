@@ -22,6 +22,8 @@ def _settings(**overrides):
     values.update(overrides)
     if values["app_mode"] == "production":
         values["llm_api_key"] = "test-production-key"
+        values["auth_jwt_secret"] = "synthetic-production-secret-0123456789"
+        values["auth_cookie_secure"] = True
     return Settings(**values)
 
 

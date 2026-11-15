@@ -18,7 +18,7 @@ def test_revision_parts_are_a_versioned_allow_list_contract():
     parts = ReportRevisionPartsV1(profile="a", mastery="b", activity="c", text_resources="d")
     assert parts.model_dump() == {
         "profile": "a", "mastery": "b", "activity": "c", "text_resources": "d",
-        "resource_match": "", "path": "",
+        "resource_match": "", "path": "", "history": "", "projection": "",
     }
 
 

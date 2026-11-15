@@ -8,6 +8,7 @@ from app.core.retrieval.knowledge_base import load_knowledge_base_manifest
 from app.core.security.errors import ApplicationError, ErrorCode
 from app.models.shared.agent_contracts import GeneratedArtifact, ResourceGenerationContext, ResourceSpec, ReviewPracticeNodeBlockV2, ReviewPracticePackageV2
 from .base import BaseResourceGenerationAgent
+from .revision_prompts import attach_revision_fields
 
 REVIEW_PRACTICE_PROMPT = """你是 ReviewChecklistAgent。一次只能为一个能力节点生成主动回忆训练的严格 JSON。
 只使用输入的当前节点 Evidence 和允许知识点；不得使用常识补全、相邻节点或未冻结的前置知识。
@@ -96,19 +97,19 @@ def render_review_practice_markdown(package: dict) -> str:
                 answer_number += 1
                 answers.append((item, "example", answer_number)); lines += [f"#### 题目 {answer_number}", "", f"A. {item['candidate_a']}", "", f"B. {item['candidate_b']}", "", "判断哪个是正例、哪个是反例，并说明决定性差异。", "", "[ ] 会  [ ] 模糊  [ ] 不会", ""]
         else: lines += ["本节点证据未提供足以构成明确边界的正反例；请先完成上方回忆与辨析。", ""]
-        lines += ["### 节点知识小结", "", block["knowledge_summary"], "", "小结依据：已完成来源核验。", ""]
+        lines += ["### 节点知识小结", "", block["knowledge_summary"], "", "小结依据：请结合关联材料核对。", ""]
     lines += ["## 答案与证据解释", ""]
     for item, kind, visible_number in answers:
         lines += [f"### 题目 {visible_number}", ""]
         if kind == "distinction": lines += [f"判断：{'正确' if item['truth_value'] else '错误'}", "", f"纠正：{item['correction']}", ""]
         elif kind == "example": lines += [f"正例：{item['positive_candidate']}", "", f"决定性边界：{item['decisive_boundary']}", ""]
         else: lines += [f"参考答案：{item['reference_answer']}", ""]
-        lines += [f"解释：{item['explanation']}", "", f"达标标准：{item['pass_criteria']}", "", "证据依据：已完成来源核验。", ""]
+        lines += [f"解释：{item['explanation']}", "", f"达标标准：{item['pass_criteria']}", "", "证据依据：请结合关联材料核对。", ""]
     lines += ["## 自评与下一步", "", "出现“不会”：返回对应节点讲义或薄弱点强化包；两项及以上“模糊”：核对答案后重新闭卷作答；全部“会”且满足达标标准：进入实操指南或分阶测试题。", ""]
     return "\n".join(lines).rstrip()
 
 class ReviewChecklistAgent(BaseResourceGenerationAgent[ReviewPracticeNodeBlockV2]):
-    resource_type = "复习清单"; agent_name = "ReviewChecklistAgent"; prompt_version = "review-practice-v3-node-summary"; artifact_format = "json"; validation_retry_attempts = 2
+    resource_type = "复习清单"; agent_name = "ReviewChecklistAgent"; prompt_version = "review-practice-v4-self-contained"; artifact_format = "json"; validation_retry_attempts = 2
     @staticmethod
     def _node_descriptor(node_id: str) -> tuple[str, list[str]]:
         try: nodes = load_knowledge_base_manifest().get("skill_nodes", [])
@@ -127,7 +128,9 @@ class ReviewChecklistAgent(BaseResourceGenerationAgent[ReviewPracticeNodeBlockV2
                    "allowed_knowledge_points":[node_id,*points], "allowed_evidence_ids":evidence_ids,
                    "evidence":[item.model_dump(mode="json") for item in context.evidence if item.evidence_id in evidence_ids],
                    "difficulty":spec.difficulty}
-        if context.generation_attempt > 1:
+        if context.claim_review_revision is not None or context.resource_review_revision is not None:
+            attach_revision_fields(payload, context)
+        elif context.generation_attempt > 1:
             payload["revision_feedback"] = context.constraints.get("revision_feedback", {})
             payload["previous_version_content"] = context.constraints.get("previous_version_content", "")
             payload["revision_guidance"] = "这是一次审核返工；仅修改反馈指出的问题，保留上一版本其余正确内容。"

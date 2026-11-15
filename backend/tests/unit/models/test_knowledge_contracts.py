@@ -201,3 +201,19 @@ def test_source_refs_are_verified_system_projections_not_legacy_guesses():
         [refs[0].model_copy(update={"chunk_id": "forged"})],
         [item],
     ) is False
+
+
+@pytest.mark.parametrize("count", [0, 3, 5, 8])
+def test_resource_citations_default_to_five_without_padding_or_reordering(count):
+    items = [_evidence().model_copy(update={"evidence_id": f"e-{i}", "rank": i + 1}) for i in range(count)]
+    refs = source_refs_from_evidence(items)
+    assert len(refs) == min(count, 5)
+    assert [ref.evidence_id for ref in refs] == [item.evidence_id for item in items[:5]]
+    for ref, item in zip(refs, items):
+        assert ref.score == item.normalized_score
+        assert ref.raw_score == item.raw_score
+        assert ref.retrieval_config_hash == item.config_hash
+        assert ref.chunk_id == item.chunk_id
+    if items:
+        assert source_refs_are_scoped(refs, items)
+    assert len(source_refs_from_evidence(items, limit=3)) == min(count, 3)

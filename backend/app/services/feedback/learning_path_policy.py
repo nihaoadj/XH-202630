@@ -51,7 +51,6 @@ def mutate_learning_path(
     decision_id: str,
     policy: FeedbackPolicyDecision,
     existing: LearningPath | None,
-    advance_knowledge_point_id: str | None = None,
 ) -> tuple[LearningPath, PathMutation]:
     path = ensure_learning_path(attempt, existing)
     before_version = path.version
@@ -129,28 +128,6 @@ def mutate_learning_path(
                 node.status = PathNodeStatus.AVAILABLE
                 node.updated_at = now
                 unlocked.append(node.node_id)
-        if not unlocked and advance_knowledge_point_id and (
-            advance_knowledge_point_id != current.knowledge_point_id
-        ):
-            point_id = advance_knowledge_point_id
-            node_id = _stable_id("node", path.path_id, "challenge", point_id, before_version)
-            challenge = LearningPathNode(
-                node_id=node_id,
-                path_id=path.path_id,
-                knowledge_point_id=point_id,
-                node_type=PathNodeType.CHALLENGE,
-                sequence=max(item.sequence for item in path.nodes) + 1,
-                status=PathNodeStatus.AVAILABLE,
-                prerequisite_ids=[current.node_id],
-                parent_node_id=current.node_id,
-                source="feedback",
-                difficulty="高级",
-                created_at=now,
-                updated_at=now,
-            )
-            path.nodes.append(challenge)
-            inserted.append(node_id)
-            unlocked.append(node_id)
 
     _validate_path(path)
     changed = bool(inserted or unlocked or completed)

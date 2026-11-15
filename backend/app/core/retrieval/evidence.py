@@ -7,7 +7,7 @@ from app.models.learning_documents.schemas import SourceRef
 def source_refs_from_evidence(
     evidence: list[EvidenceItem],
     *,
-    limit: int = 3,
+    limit: int = 5,
 ) -> list[SourceRef]:
     refs: list[SourceRef] = []
     for item in evidence[:limit]:

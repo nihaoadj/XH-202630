@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.config import get_settings  # noqa: E402
-from app.core.vector_store import ChromaVectorSearchBackend  # noqa: E402
+from app.core.retrieval.vector_store import ChromaVectorSearchBackend  # noqa: E402
 
 
 def main() -> None:

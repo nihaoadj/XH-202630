@@ -1,0 +1,51 @@
+{
+  "schema_version": "source-locating-fixtures-2.0",
+  "synthetic": true,
+  "splits": {
+    "calibration": {
+      "path": "calibration.json",
+      "sha256": "c1a4a593197b444691468339bc42a2d63dadaa2c9301eecd05a6808b80ddfb4a",
+      "count": 120
+    },
+    "acceptance": {
+      "path": "acceptance.json",
+      "sha256": "80d18bc23dcf5d944d47ddbecaa0a62e6c7256c5ff23917cf0b46f8ae957492a",
+      "count": 120
+    }
+  },
+  "source_groups": [
+    "calibration-source-0",
+    "calibration-source-1",
+    "calibration-source-2",
+    "calibration-source-3",
+    "calibration-source-4",
+    "calibration-source-5",
+    "acceptance-source-0",
+    "acceptance-source-1",
+    "acceptance-source-2",
+    "acceptance-source-3",
+    "acceptance-source-4",
+    "acceptance-source-5"
+  ],
+  "category_counts": {
+    "exact": 20,
+    "format": 20,
+    "edit": 20,
+    "reject": 60
+  },
+  "legacy_snapshot": {
+    "path": "policies/estimate_2_0_baseline.json",
+    "sha256": "937838434a110af5d4182aaa80f44740b822a396f294611ce93d2bbccd43caf9",
+    "note": "frozen v1 EstimatePolicy without source_locating; byte-compat reference"
+  },
+  "rules_parameters": {
+    "path": "rules_parameters.json"
+  },
+  "frozen_gates": {
+    "unique_exact_span_accuracy": 1.0,
+    "format_recovery_min": 0.95,
+    "edit_recovery_min": 0.8,
+    "must_reject_wrong_accept": 0,
+    "accepted_wrong_span": 0
+  }
+}

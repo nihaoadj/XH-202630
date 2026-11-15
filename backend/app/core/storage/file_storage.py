@@ -75,6 +75,7 @@ def save_resource_file(
     resource_type: str,
     content: bytes,
     resource_id: Optional[str] = None,
+    *, immutable: bool = False,
 ) -> Tuple[str, int, str]:
     """保存文件类资源到磁盘
 
@@ -102,8 +103,12 @@ def save_resource_file(
     filename = f"{resource_id}{ext}"
     file_path = target_dir / filename
 
-    with open(file_path, "wb") as f:
-        f.write(content)
+    try:
+        with open(file_path, "xb" if immutable else "wb") as f:
+            f.write(content)
+    except FileExistsError:
+        if not immutable or file_path.read_bytes() != content:
+            raise ValueError("RESOURCE_ARTIFACT_IMMUTABLE") from None
 
     file_size = os.path.getsize(file_path)
 
@@ -119,7 +124,7 @@ def save_text_resource(
     resource_id: Optional[str] = None,
 ) -> Tuple[str, int, str]:
     """保存文本类资源到磁盘，返回文件路径信息"""
-    return save_resource_file(learner_id, resource_type, text.encode("utf-8"), resource_id)
+    return save_resource_file(learner_id, resource_type, text.encode("utf-8"), resource_id, immutable=True)
 
 
 def load_resource_file(relative_path: str) -> bytes:

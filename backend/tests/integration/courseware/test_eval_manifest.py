@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from app.core.courseware.evaluation import execute_workflow_case
+from scripts.courseware_harness.offline import execute_workflow_case
 
 
 def test_compact_courseware_eval_manifest_is_complete_and_bounded():

@@ -1,4 +1,12 @@
-from typing import List
+from collections.abc import Callable
+from typing import TYPE_CHECKING, List
+
+from app.config import Settings
+from app.db.audit.base import BaseAuditRepository
+from app.services.learning_documents.publication import decide_claim_publication
+
+if TYPE_CHECKING:
+    from app.services.runs.queries import RunQueryService
 
 from app.db.learning_documents.base import BaseResourceRepository
 from app.models.learning_documents.schemas import LearningResource, ResourceDetail
@@ -20,6 +28,22 @@ class ResourceService:
 
     def update_publication_decision(self, resource_id: str, *, publish: bool) -> LearningResource | None:
         return self.repo.update_publication_decision(resource_id, publish=publish)
+
+    def decide_claim_publication(
+        self,
+        resource: LearningResource,
+        *,
+        resource_id: str,
+        publish: bool,
+        settings_factory: Callable[[], Settings],
+        run_query_factory: Callable[[], "RunQueryService"],
+        audit_factory: Callable[[], BaseAuditRepository],
+    ) -> LearningResource | None:
+        """Apply Claim gates without changing the decision/event commit order."""
+        return decide_claim_publication(
+            self, resource, resource_id=resource_id, publish=publish, settings_factory=settings_factory,
+            run_query_factory=run_query_factory, audit_factory=audit_factory,
+        )
 
     def list_by_learner_with_filter(
         self,

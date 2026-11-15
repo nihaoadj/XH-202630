@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "parser_version": "passthrough-v1",
+  "sources": [
+    {
+      "id": "source_langchain_markdown_splitter",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "upstream_path": "src/oss/python/integrations/splitters/markdown_header_metadata_splitter.mdx",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/src/oss/python/integrations/splitters/markdown_header_metadata_splitter.mdx",
+      "snapshot_path": "references/en/langchain/markdown_splitter/original.mdx",
+      "sha256": "9e74b44f9fe42bfb6f527b0cc261d234dd4b5858501caa508403f60e0c718d07",
+      "normalized_path": "references/en/langchain/markdown_splitter/content.md",
+      "normalized_sha256": "6f59ceeb4d78d5cef59769d1babbeb4c8239c4c41596b4563adf672c49c168d6",
+      "license_path": "licenses/langchain/LICENSE",
+      "parser_version": "passthrough-v1+corpus-clean-v1",
+      "document_type": "authoritative_original",
+      "fetched_at": "2026-10-26T06:56:49Z",
+      "cleaning": {
+        "profile": "corpus-clean-v1",
+        "base_normalized_sha256": "d968d91a42a9b902ea58b931b9fbff3257ad96d8f8a27c7bab30edb7fd510943"
+      }
+    },
+    {
+      "id": "source_sbert_semantic_search",
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "upstream_path": "examples/sentence_transformer/applications/semantic-search/README.md",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/semantic-search/README.md",
+      "snapshot_path": "references/en/sentence_transformers/semantic_search/original.md",
+      "sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+      "normalized_path": "references/en/sentence_transformers/semantic_search/content.md",
+      "normalized_sha256": "b6cac22cf354b8094980df9b9ae917153426ef08ccab72753c82d66a43d8aba2",
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "parser_version": "passthrough-v1",
+      "document_type": "authoritative_original",
+      "fetched_at": "2026-10-26T06:56:49Z"
+    },
+    {
+      "id": "source_sbert_retrieve_rerank",
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "upstream_path": "examples/sentence_transformer/applications/retrieve_rerank/README.md",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/examples/sentence_transformer/applications/retrieve_rerank/README.md",
+      "snapshot_path": "references/en/sentence_transformers/retrieve_rerank/original.md",
+      "sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+      "normalized_path": "references/en/sentence_transformers/retrieve_rerank/content.md",
+      "normalized_sha256": "09b06f45ace03283345462a5a317f988b28d4cf95990ac61d4e51612eca4be9a",
+      "license_path": "licenses/sentence-transformers/LICENSE",
+      "parser_version": "passthrough-v1",
+      "document_type": "authoritative_original",
+      "fetched_at": "2026-10-26T06:56:49Z"
+    }
+  ],
+  "licenses": [
+    {
+      "id": "langchain",
+      "repository": "langchain-ai/docs",
+      "commit": "4506df5fb4105a39b84c2b7390d21bed89e28668",
+      "upstream_path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/langchain-ai/docs/4506df5fb4105a39b84c2b7390d21bed89e28668/LICENSE",
+      "path": "licenses/langchain/LICENSE",
+      "sha256": "98af1351ea856e008c835bc89a312905960a318072f950732bf346c741027c7d",
+      "fetched_at": "2026-10-26T06:56:49Z"
+    },
+    {
+      "id": "sentence-transformers",
+      "repository": "huggingface/sentence-transformers",
+      "commit": "33f9bd81610560e48ff5eac80e910496b49ae193",
+      "upstream_path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/huggingface/sentence-transformers/33f9bd81610560e48ff5eac80e910496b49ae193/LICENSE",
+      "path": "licenses/sentence-transformers/LICENSE",
+      "sha256": "624b030fd62b8b989dd502d5bb6322cbc0dbb524ab9c9708f32efe33d7275735",
+      "fetched_at": "2026-10-26T06:56:49Z"
+    }
+  ],
+  "candidate_cleaning_profile": "corpus-clean-v1"
+}

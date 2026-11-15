@@ -1,0 +1,9 @@
+"""Optional private hooks; core never owns business persistence."""
+from typing import Protocol, Any
+
+
+class AttemptObserver(Protocol):
+    def before_attempt(self, context, attempt, prepared_messages, output_schema,
+                       mode, max_output_tokens, timeout_seconds) -> Any: ...
+    def after_attempt(self, ticket, raw_response, elapsed_ms) -> bool: ...
+    def on_attempt_error(self, ticket, exception, elapsed_ms) -> bool: ...

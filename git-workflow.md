@@ -109,7 +109,7 @@ git push origin feature/<name>
 | 日志 | `backend/logs/*.log`, `*.log` |
 | 依赖目录 | `node_modules/`, `venv/`, `.venv/` |
 | 缓存 | `__pycache__/`, `.pytest_cache/` |
-| 本地更新计划和 skills | `docs/update_plan/`, `.agents/`, `.codex/`, `skills/`, `.skills/` |
+| 本地更新计划、方向拓展和 skills | `docs/update_plan/`, `docs/extension_ideas/`, `.agents/`, `.codex/`, `skills/`, `.skills/` |
 | 评测与预览产物 | `output/test-runs/`, `frontend/tests/test-results/`, 课件评测报告与 CI/live 产物、`deliverables/` 内的生成预览 |
 
 允许提交的占位文件：

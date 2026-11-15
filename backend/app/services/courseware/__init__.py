@@ -5,7 +5,7 @@ __all__ = ["CandidateReleaseCoordinator", "CoursewareAdmissionError", "Coursewar
 
 def __getattr__(name: str):
     if name == "CandidateReleaseCoordinator":
-        from app.services.courseware.release import CandidateReleaseCoordinator
+        from app.agents.resource_workflows.interactive_courseware.release import CandidateReleaseCoordinator
         return CandidateReleaseCoordinator
     if name in {"CoursewareAdmissionError", "CoursewareService"}:
         from app.services.courseware.service import (

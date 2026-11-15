@@ -39,7 +39,7 @@ REQUIRED_SECTIONS = ("案例背景", "任务目标", "分析过程", "参考方�
 class CaseStudyAgent(BaseResourceGenerationAgent):
     resource_type = "案例分析"
     agent_name = "CaseStudyAgent"
-    prompt_version = "case-study-v1-markdown"
+    prompt_version = "case-study-v2-self-contained"
     artifact_format = "markdown"
 
     def generate(

@@ -10,8 +10,11 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, TypedDict
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.shared.common import ErrorInfo
-from app.models.knowledge.knowledge import EvidenceItem, RetrievalStatus
+from app.models.knowledge.knowledge import EvidenceAllocation, EvidenceItem, RetrievalStatus
 from app.models.learning_documents.schemas import LearnerProfile, LearningResource
+from app.models.reviews.review_audit import ReviewAuditRecordV2, ReviewAuditRecordV1, ReviewPolicySnapshotV1
+from app.models.reviews.claim_extraction import PolicyContract
+from app.models.reviews.claim_evidence_retrieval import ClaimEvidenceRetrievalPolicyV1
 
 
 WORKFLOW_SCHEMA_VERSION = "1.0"
@@ -135,6 +138,41 @@ class WorkflowConstraints(BaseModel):
 
 
 class WorkflowState(TypedDict, total=False):
+    claim_extraction_mode: str
+    claim_extraction_policy: Dict[str, Any] | None
+    claim_extraction_policy_hash: str | None
+    claim_extraction_refs: List[Dict[str, Any]]
+    claim_evidence_retrieval_policy: Dict[str, Any] | None
+    claim_evidence_retrieval_policy_hash: str | None
+    claim_evidence_retrieval_refs: List[Dict[str, Any]]
+    claim_evidence_new_evidence_ids: List[str]
+    claim_evidence_hard_block_resource_ids: List[str]
+    # Runtime-only channels: bounded supplements authorised for one resource
+    # version and the screenshot of the scopes they came from.  Neither is part
+    # of the checkpoint projection; the durable scope rows are the authority.
+    supplement_retrieved_evidence: List[EvidenceItem]
+    claim_evidence_scopes: Dict[str, List[Dict[str, Any]]]
+    claim_evidence_lineage: Dict[str, Dict[str, Any]]
+    lecture_dispatch_snapshot: Dict[str, Any]
+    lecture_review_contract_version: str
+    lecture_review_policy: Dict[str, Any]
+    lecture_review_policy_hash: str
+    lecture_ledgers: Dict[str, Any]
+    lecture_revision: Dict[str, Any]
+    lecture_stop_reasons: Dict[str, str]
+    correction_package_snapshot: Dict[str, Any]
+    resource_dispatch_snapshot: Dict[str, Any]
+    resource_review_contract_version: str
+    resource_review_policy: Dict[str, Any]
+    resource_review_policy_hash: str
+    resource_review_identity: Dict[str, Any]
+    resource_review_identity_hash: str
+    resource_ledgers: Dict[str, Any]
+    resource_revision: Dict[str, Any]
+    resource_stop_reasons: Dict[str, str]
+    review_policy: Dict[str, Any] | None
+    review_audit: Dict[str, Any] | None
+    review_audit_refs: List[Dict[str, Any]]
     """LangGraph channels for the complete GenerateRequest contract."""
 
     schema_version: Literal["1.0"]
@@ -151,8 +189,15 @@ class WorkflowState(TypedDict, total=False):
     generation_mode: str
     include_review: bool
     include_claim_check: bool
+    include_claim_evidence_retrieval: bool
     max_iterations: int
     claim_max_iterations: int
+    claim_post_retrieval_max_iterations: int
+    claim_gap_revision_threshold: int
+    claim_workflow_version: str
+    claim_revision_phase: str
+    claim_post_retrieval_resource_keys: List[str]
+    claim_post_retrieval_revision_count: int
     constraints: Dict[str, Any]
 
     workflow_status: str
@@ -170,6 +215,8 @@ class WorkflowState(TypedDict, total=False):
     retrieval_dropped_candidate_count: int
     retrieval_partial_failure_count: int
     retrieval_profile: Dict[str, Any]
+    retrieval_strategy_version: str
+    evidence_allocation: Optional[EvidenceAllocation]
 
     diagnosis: Dict[str, Any]
     retrieved_evidence: List[EvidenceItem]
@@ -199,12 +246,38 @@ class WorkflowState(TypedDict, total=False):
 
     # Compatibility alias retained while callers migrate to generation_attempt.
     iteration: int
+    resource_retry_context: Dict[str, Any]
+    regeneration_source: Optional[LearningResource]
 
 
 class WorkflowStateSnapshot(BaseModel):
+    claim_extraction_mode: str | None = None
+    claim_extraction_policy: PolicyContract | None = None
+    claim_extraction_policy_hash: str | None = None
+    claim_extraction_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    claim_evidence_retrieval_policy: "ClaimEvidenceRetrievalPolicyV1 | None" = None
+    claim_evidence_retrieval_policy_hash: str | None = None
     """Validated, JSON-serializable snapshot used at the workflow boundary."""
 
     schema_version: Literal["1.0"] = WORKFLOW_SCHEMA_VERSION
+    lecture_review_contract_version: str | None = None
+    lecture_review_policy: Dict[str, Any] | None = None
+    lecture_review_policy_hash: str | None = None
+    lecture_ledgers: Dict[str, Any] = Field(default_factory=dict)
+    lecture_revision: Dict[str, Any] = Field(default_factory=dict)
+    lecture_stop_reasons: Dict[str, str] = Field(default_factory=dict)
+    resource_review_contract_version: str | None = None
+    resource_review_policy: Dict[str, Any] | None = None
+    resource_review_policy_hash: str | None = None
+    resource_review_identity: Dict[str, Any] | None = None
+    resource_review_identity_hash: str | None = None
+    resource_ledgers: Dict[str, Any] = Field(default_factory=dict)
+    resource_revision: Dict[str, Any] = Field(default_factory=dict)
+    resource_stop_reasons: Dict[str, str] = Field(default_factory=dict)
+    correction_package_snapshot: Dict[str, Any] | None = None
+    review_policy: ReviewPolicySnapshotV1 | None = None
+    review_audit: ReviewAuditRecordV1 | ReviewAuditRecordV2 | None = None
+    review_audit_refs: List[Dict[str, Any]] = Field(default_factory=list)
     run_id: str = Field(min_length=1)
     batch_id: str = Field(min_length=1)
     learner_id: str = Field(min_length=1)
@@ -218,8 +291,15 @@ class WorkflowStateSnapshot(BaseModel):
     generation_mode: Literal["draft", "standard", "strict"] = "standard"
     include_review: bool = True
     include_claim_check: bool = False
+    include_claim_evidence_retrieval: bool = False
     max_iterations: int = Field(default=2, ge=0, le=3)
-    claim_max_iterations: int = Field(default=0, ge=0, le=3)
+    claim_max_iterations: int = Field(default=1, ge=0, le=3)
+    claim_post_retrieval_max_iterations: int = Field(default=0, ge=0, le=3)
+    claim_gap_revision_threshold: int = Field(default=8, ge=0, le=128)
+    claim_workflow_version: Literal["legacy_v1", "contradiction_first_v1", "contradiction_first_v2", "contradiction_first_v3"] = "legacy_v1"
+    claim_revision_phase: Literal["legacy_v1", "contradiction", "post_retrieval", "exhausted"] = "legacy_v1"
+    claim_post_retrieval_resource_keys: List[str] = Field(default_factory=list)
+    claim_post_retrieval_revision_count: int = Field(default=0, ge=0)
     constraints: Dict[str, Any] = Field(default_factory=dict)
 
     workflow_status: WorkflowStatus = WorkflowStatus.RUNNING
@@ -237,6 +317,8 @@ class WorkflowStateSnapshot(BaseModel):
     retrieval_dropped_candidate_count: int = Field(default=0, ge=0)
     retrieval_partial_failure_count: int = Field(default=0, ge=0)
     retrieval_profile: Dict[str, Any] = Field(default_factory=dict)
+    retrieval_strategy_version: str = "legacy"
+    evidence_allocation: Optional[EvidenceAllocation] = None
 
     diagnosis: Dict[str, Any] = Field(default_factory=dict)
     retrieved_evidence: List[EvidenceItem] = Field(default_factory=list)
@@ -255,6 +337,9 @@ class WorkflowStateSnapshot(BaseModel):
     assessment_claim_skipped_resource_ids: List[str] = Field(default_factory=list)
     claim_failed_resource_ids: List[str] = Field(default_factory=list)
     claim_eligible_resource_ids: List[str] = Field(default_factory=list)
+    claim_evidence_retrieval_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    claim_evidence_new_evidence_ids: List[str] = Field(default_factory=list)
+    claim_evidence_hard_block_resource_ids: List[str] = Field(default_factory=list)
     final_decision: str = ""
     trace: List[Dict[str, Any]] = Field(default_factory=list)
     errors: List[ErrorInfo] = Field(default_factory=list)
@@ -266,7 +351,12 @@ class WorkflowStateSnapshot(BaseModel):
             raise ValueError("learner_id must match learner.learner_id")
         if self.revision_count > self.max_iterations:
             raise ValueError("revision_count cannot exceed max_iterations")
-        if self.claim_revision_count > self.claim_max_iterations:
+        post = self.claim_post_retrieval_revision_count
+        if post > self.claim_post_retrieval_max_iterations or post > self.claim_revision_count:
+            raise ValueError("invalid post-retrieval revision count")
+        if post and (self.claim_workflow_version == "legacy_v1" or not self.include_claim_evidence_retrieval):
+            raise ValueError("post-retrieval revisions require the staged supplement workflow")
+        if self.claim_revision_count - post > self.claim_max_iterations:
             raise ValueError("claim_revision_count cannot exceed claim_max_iterations")
         if self.generation_attempt != self.revision_count + self.claim_revision_count + 1:
             raise ValueError("generation_attempt must equal total revisions + 1")
@@ -274,11 +364,32 @@ class WorkflowStateSnapshot(BaseModel):
 
     def as_state(self) -> WorkflowState:
         payload = self.model_dump(mode="python")
+        if self.claim_extraction_policy is None and self.claim_extraction_mode is None:
+            for key in ("claim_extraction_mode", "claim_extraction_policy", "claim_extraction_policy_hash", "claim_extraction_refs"):
+                payload.pop(key, None)
+        elif self.claim_extraction_policy is not None:
+            payload["claim_extraction_policy"] = self.claim_extraction_policy.model_dump(mode="json")
+        if self.claim_evidence_retrieval_policy is None:
+            for key in (
+                "claim_evidence_retrieval_policy",
+                "claim_evidence_retrieval_policy_hash",
+            ):
+                payload.pop(key, None)
+        if self.lecture_review_contract_version is None:
+            for key in ("lecture_review_contract_version", "lecture_review_policy", "lecture_review_policy_hash", "lecture_ledgers", "lecture_revision", "lecture_stop_reasons"):
+                payload.pop(key, None)
+        if self.resource_review_contract_version is None:
+            for key in ("resource_review_contract_version", "resource_review_policy", "resource_review_policy_hash", "resource_review_identity", "resource_review_identity_hash", "resource_ledgers", "resource_revision", "resource_stop_reasons"):
+                payload.pop(key, None)
         # LangGraph keeps these runtime values in-process; preserve typed models for
         # existing node code while normalizing public enum channels to strings.
         payload["learner"] = self.learner
         payload["generated_resources"] = self.generated_resources
         payload["workflow_status"] = self.workflow_status.value
+        if self.claim_evidence_retrieval_policy is not None:
+            payload["claim_evidence_retrieval_policy"] = (
+                self.claim_evidence_retrieval_policy.model_dump(mode="json")
+            )
         payload["claim_check_status"] = self.claim_check_status.value
         payload["retrieval_status"] = self.retrieval_status.value
         return payload  # type: ignore[return-value]

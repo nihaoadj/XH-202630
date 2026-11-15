@@ -1,0 +1,217 @@
+# 使用 Hugging Face 和 Milvus 构建 RAG 系统
+
+_作者: [张晨](https://github.com/zc277584121)_
+
+[Milvus](https://milvus.io/) 是一个广受欢迎的开源向量数据库，为人工智能应用提供高性能和可扩展的向量相似性搜索。在本教程中，我们将向您展示如何使用 Hugging Face 和 Milvus 构建 RAG（检索增强生成）流程。
+
+RAG 系统将检索系统与 LLM 相结合。该系统首先使用向量数据库 Milvus 从语料库中检索相关文档，然后使用 Hugging Face 的 LLM 根据检索到的文档生成回答。
+
+## 准备
+### 依赖关系和环境
+
+```python
+! pip install --upgrade pymilvus sentence-transformers huggingface-hub langchain_community langchain-text-splitters pypdf tqdm
+```
+
+> 如果您使用 Google Colab，要启用刚刚安装的依赖项，您可能需要 **重新启动运行时**（单击屏幕顶部的“运行时”菜单，然后从下拉菜单中选择“重新启动会话”） 。
+
+另外，我们建议您配置您的 [Hugging Face User Access Token](https://huggingface.co/docs/hub/security-tokens)，并将其设置在您的环境变量中，因为我们将使用 Hugging Face Hub 的 LLM 。如果不设置 token 环境变量，您可能会受到较低的请求速率限制。
+
+```python
+import os
+
+os.environ["HF_TOKEN"] = "hf_..."
+```
+
+### 准备数据
+
+我们使用 [AI Act PDF](https://artificialintelligenceact.eu/wp-content/uploads/2021/08/The-AI-Act.pdf) 作为我们 RAG 中的私有知识。这是一个针对人工智能的监管框架，具有不同风险级别，对应或多或少的监管。
+
+```python
+%%bash
+
+if [ ! -f "The-AI-Act.pdf" ]; then
+    wget -q https://artificialintelligenceact.eu/wp-content/uploads/2021/08/The-AI-Act.pdf
+fi
+```
+
+我们使用 LangChain 的 [`PyPDFLoader`](https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/pdf/) 从 PDF 中提取文本，然后将文本拆分为更小的块。默认情况下，我们将块大小设置为 1000，重叠设置为 200，这意味着每个块将有近 1000 个字符，两个块之间的重叠将是 200 个字符。
+
+```python
+from langchain_community.document_loaders import PyPDFLoader
+
+loader = PyPDFLoader("The-AI-Act.pdf")
+docs = loader.load()
+print(len(docs))
+```
+
+```python
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+chunks = text_splitter.split_documents(docs)
+```
+
+```python
+text_lines = [chunk.page_content for chunk in chunks]
+```
+
+### 准备 embedding 模型
+定义一个函数来生成文本 embedding。我们使用 [BGE embedding模型](https://huggingface.co/BAAI/bge-small-en-v1.5) 作为示例，但您也可以将其更改为任何其他 embedding 模型，例如在 [MTEB排行榜](https://huggingface.co/spaces/mteb/leaderboard) 上选择。
+
+```python
+from sentence_transformers import SentenceTransformer
+
+embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+
+def emb_text(text):
+    return embedding_model.encode([text], normalize_embeddings=True).tolist()[0]
+```
+
+生成测试 embedding 并打印其大小和前几个元素。
+
+```python
+test_embedding = emb_text("This is a test")
+embedding_dim = len(test_embedding)
+print(embedding_dim)
+print(test_embedding[:10])
+```
+
+## 将数据加载到 Milvus 中
+
+### 创建 collection
+
+```python
+from pymilvus import MilvusClient
+
+milvus_client = MilvusClient(uri="./hf_milvus_demo.db")
+
+collection_name = "rag_collection"
+```
+
+> 对于 `MilvusClient` 的参数：
+> - 将 `uri` 设置为本地文件，例如 `./hf_milvus_demo.db` ，是最方便的方法，因为它会自动使用 [Milvus Lite](https://milvus.io/docs/milvus_lite.md) 将所有数据存储在此文件中。
+> - 如果您有大量数据，例如超过一百万个向量，您可以在 [Docker 或 Kubernetes](https://milvus.io/docs/quickstart.md) 上设置性能更高的 Milvus 服务器。在此设置中，请使用服务器 uri，例如 `http://localhost:19530` 作为您的 `uri` 。
+> - 如果您想使用 Milvus 的全托管云服务 [Zilliz Cloud](https://zilliz.com/cloud) ，请调整 `uri` 和 `token`，分别对应 Zilliz Cloud 中 [Public Endpoint 和 Api key](https://docs.zilliz.com/docs/on-zilliz-cloud-console#cluster-details) 。
+
+检查 collection 是否已存在，如果存在则将其删除。
+
+```python
+if milvus_client.has_collection(collection_name):
+    milvus_client.drop_collection(collection_name)
+```
+
+使用指定参数创建一个新 collection。
+
+如果我们不指定任何字段信息，Milvus 会自动创建一个默认的 `id` 字段作为主键，并创建一个 `vector` 字段来存储向量数据。保留的 JSON 字段用于存储未定义 schema 的字段及其值。
+
+```python
+milvus_client.create_collection(
+    collection_name=collection_name,
+    dimension=embedding_dim,
+    metric_type="IP",  # Inner product distance
+    consistency_level="Strong",  # Strong consistency level
+)
+```
+
+### 插入数据
+迭代文本行，创建 embedding，然后将数据插入到 Milvus 中。
+
+这是一个新字段 `text`，它是 collection schema 中的未定义字段。它将自动添加到保留的 JSON 动态字段中，从更高的层次看来，它可被视为普通字段。
+
+```python
+from tqdm import tqdm
+
+data = []
+
+for i, line in enumerate(tqdm(text_lines, desc="Creating embeddings")):
+    data.append({"id": i, "vector": emb_text(line), "text": line})
+
+insert_res = milvus_client.insert(collection_name=collection_name, data=data)
+insert_res["insert_count"]
+```
+
+## 构建 RAG
+
+### 检索查询数据
+
+让我们具体指定一个有关该语料的问题。
+
+```python
+question = "What is the legal basis for the proposal?"
+```
+
+在 collection 中搜索问题并检索语义前 3 个匹配项。
+
+```python
+search_res = milvus_client.search(
+    collection_name=collection_name,
+    data=[
+        emb_text(question)
+    ],  # Use the `emb_text` function to convert the question to an embedding vector
+    limit=3,  # Return top 3 results
+    search_params={"metric_type": "IP", "params": {}},  # Inner product distance
+    output_fields=["text"],  # Return the text field
+)
+```
+
+我们来看看查询的搜索结果
+
+```python
+import json
+
+retrieved_lines_with_distances = [
+    (res["entity"]["text"], res["distance"]) for res in search_res[0]
+]
+print(json.dumps(retrieved_lines_with_distances, indent=4))
+```
+
+### 使用 LLM 获取 RAG 回答
+
+在合并到 LLM 提示词之前，我们首先将检索到的文档列表展平为纯字符串。
+
+```python
+context = "\n".join(
+    [line_with_distance[0] for line_with_distance in retrieved_lines_with_distances]
+)
+```
+
+定义语言模型的提示词。该提示与从 Milvus 检索到的文档组合在一起。
+
+```python
+PROMPT = """
+Use the following pieces of information enclosed in <context> tags to provide an answer to the question enclosed in <question> tags.
+<context>
+{context}
+</context>
+<question>
+{question}
+</question>
+"""
+```
+
+我们使用部署在 Hugging Face 推理服务上的 [Mixtral-8x7B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1) 根据提示词生成响应。
+
+```python
+from huggingface_hub import InferenceClient
+
+repo_id = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+
+llm_client = InferenceClient(model=repo_id, timeout=120)
+```
+
+我们设置提示词格式并生成最后的回答。
+
+```python
+prompt = PROMPT.format(context=context, question=question)
+```
+
+```python
+answer = llm_client.text_generation(
+    prompt,
+    max_new_tokens=1000,
+).strip()
+print(answer)
+```
+
+恭喜！您已经使用 Hugging Face 和 Milvus 构建了 RAG 流程。
