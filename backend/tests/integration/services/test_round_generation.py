@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.config import Settings
+from app.core.llm.budget import LLMBudgetUnavailable, effective_context
 from app.db.feedback.feedback_loop_memory import MemoryFeedbackLoopRepository
 from app.db.feedback.memory import MemoryFeedbackRepository
 from app.db.feedback.round_memory import MemoryRoundRepository
@@ -16,7 +17,8 @@ from app.db.learners.memory import MemoryLearnerRepository
 from app.db.learners.tier_progress import MemoryTierProgressRepository
 from app.db.learning_documents.memory import MemoryResourceRepository
 from app.models.feedback.rounds import GenerateRoundCreateRequestV1, RoundAttemptSubmitV1
-from app.models.learning_documents.schemas import ExerciseItem, LearnerProfile, LearningResource, SkillNode
+from app.models.feedback.feedback_loop import FeedbackAnalysis
+from app.models.learning_documents.schemas import ExerciseItem, LearnerProfile, LearningPreferences, LearningResource, SkillNode
 from app.services.feedback.feedback import FeedbackService
 from app.services.feedback.round_assessment import RoundAssessment
 from app.services.feedback.round_feedback import RoundFeedback
@@ -25,13 +27,17 @@ from app.services.generation.jobs import GenerationJobService
 from app.services.learners.mastery import MasteryService
 
 
-def fixture(sql=False):
+def fixture(sql=False, *, branching=False):
     learners = MemoryLearnerRepository()
     profile = LearnerProfile(learner_id="learner", learner_type="test", education="test", major="test",
                              knowledge_base_id="kb", learning_goal="test")
     learners.save(profile)
     resources = MemoryResourceRepository()
     nodes = [SkillNode(node_id=key, knowledge_base_id="kb", name=key, tier=1) for key in ("a", "b")]
+    if branching:
+        nodes[0].children = ["b", "c"]
+        nodes[1].prerequisites = ["a"]
+        nodes.append(SkillNode(node_id="c", knowledge_base_id="kb", name="c", tier=1, prerequisites=["a"]))
     knowledge = SimpleNamespace(list_skill_nodes=lambda *_: nodes, load_assessment_questions=lambda *_: [],
                                 load_diagnostic_questions=lambda *_: [], select_diagnostic_questions=lambda *args, **kwargs: [])
     mastery_repository = MemoryMasteryRepository(learners)
@@ -110,13 +116,150 @@ def create_payload(key="selection-key", node="a"):
                                         resource_types=["讲义"], selection_key=key)
 
 
+def test_first_round_uses_explicit_eligible_node_instead_of_recommendation():
+    service, profile = fixture()
+    profile.learning_preferences = LearningPreferences(metadata={
+        "initial_diagnostic_flow": {"status": "final", "initial_recommended_node_id": "a"},
+    })
+    service.learners.save(profile)
+
+    created = service.create(profile, create_payload(node="b"))
+
+    assert next(member for member in created.members if member.role == "primary").node_id == "b"
+
+
+@pytest.mark.parametrize("sql", [False, True])
+def test_failed_successor_can_return_to_initially_passed_prerequisite(sql):
+    from app.models.feedback.rounds import RoundNextSelectionV1
+    from app.models.learners.mastery import AbilityEvidenceV1
+    service, profile = fixture(sql)
+    nodes = service.feedback.mastery_service.knowledge_service.list_skill_nodes("kb")
+    nodes[1].prerequisites = ["a"]
+    profile.learning_preferences = LearningPreferences(metadata={
+        "initial_diagnostic_flow": {
+            "status": "final", "initial_recommended_node_id": "b",
+            "pass_policy_version": "initial-pass/v1",
+            "node_passes": {"a": {
+                "diagnostic_result_id": "diag-pass", "valid_question_count": 3,
+                "correct_question_count": 3,
+                "covered_dimensions": ["concept", "scenario", "misconception"],
+            }},
+        },
+    })
+    service.learners.save(profile)
+    mastery = service.feedback.mastery_service
+    mastery.repository.apply_evidence([AbilityEvidenceV1(
+        evidence_id="root-pass", learner_id="learner", knowledge_base_id="kb", skill_node_id="a",
+        source_type="diagnosis", source_id="diag-pass", source_hash="f" * 64,
+        observed_score=1, verified=True, occurred_at=datetime.now(timezone.utc),
+    )], {"a": "a", "b": "b"}, increment_profile_version=True)
+    profile = service.learners.get("learner")
+    created = service.create(profile, create_payload(node="b"))
+    publish(service, created)
+    failed = submit(service, profile, created, "failed-successor", answer="B")
+    current = service.learners.get("learner")
+    candidates = service.next_candidates(current, failed.attempt_id)
+    root = next(node for node in candidates.generation_options.learning_candidates if node.skill_node_id == "a")
+    assert "INITIAL_DIAGNOSTIC_PASSED" in root.reason_codes
+    assert "PREVIOUSLY_MASTERED_REVIEW" in root.reason_codes
+    assert root.blocked_by_node_ids == []
+    following = service.next(current, RoundNextSelectionV1(
+        learner_id="learner", source_attempt_id=failed.attempt_id, selection_key="return-to-root",
+        primary_learning_intent="downgrade_learning", primary_node_id="a", primary_resource_types=["讲义"],
+    ))
+    assert following.members[0].node_id == "a"
+    assert "a" in current.learning_preferences.metadata["initial_diagnostic_flow"]["node_passes"]
+
+
+@pytest.mark.parametrize("sql, tier, extra_prerequisite", [(False, 1, False), (True, 2, False), (False, 1, True)])
+def test_prerequisite_repair_returns_to_original_after_pass(sql, tier, extra_prerequisite):
+    from app.core.security.errors import ApplicationError
+    from app.models.feedback.rounds import RoundNextSelectionV1
+
+    service, profile = fixture(sql)
+    mastery = service.feedback.mastery_service
+    nodes = mastery.knowledge_service.list_skill_nodes("kb")
+    prerequisite, original = nodes
+    original.tier = tier
+    original.prerequisites = ["a"]
+    state = mastery.initialize_tier_progress(profile)
+    mastery.tier_progress_repo.save(state.model_copy(update={"active_tier": tier, "highest_unlocked_tier": tier}))
+    created = service.create(profile, create_payload(node="b"))
+    if extra_prerequisite:
+        nodes.append(SkillNode(node_id="c", knowledge_base_id="kb", name="c", tier=1))
+        original.prerequisites.append("c")
+    publish(service, created)
+    failed = submit(service, profile, created, "failed-original", answer="B")
+
+    def choose(result, node, key, intent):
+        current = service.learners.get("learner")
+        payload = RoundNextSelectionV1(
+            learner_id="learner", source_attempt_id=result.attempt_id, selection_key=key,
+            primary_learning_intent=intent, primary_node_id=node, primary_resource_types=["讲义", "分阶测试题"],
+            follow_remediation=True,
+        )
+        return service.next(current, payload)
+
+    current = service.learners.get("learner")
+    repair = service.candidates(current, created.round_id, source_attempt_id=failed.attempt_id).remediation_recommendation
+    assert repair.kind == ("downgrade" if tier == 2 else "prerequisite")
+    assert repair.node.skill_node_id == prerequisite.node_id
+    foundation = choose(failed, "a", "choose-foundation", "downgrade_learning")
+    assert mastery.initialize_tier_progress(service.learners.get("learner")).active_tier == 1
+    publish(service, foundation)
+    failed_foundation = submit(service, profile, foundation, "failed-foundation", answer="B")
+    current = service.learners.get("learner")
+    recommendation = service.candidates(current, foundation.round_id, source_attempt_id=failed_foundation.attempt_id)
+    assert recommendation.remediation_recommendation.kind == "practice_prerequisite"
+    with pytest.raises(ApplicationError):
+        choose(failed_foundation, "b", "blocked-return", "reinforce_weakness")
+    practice = choose(failed_foundation, "a", "practice-foundation", "reinforce_weakness")
+    publish(service, practice)
+    passed = submit(service, profile, practice, "passed-foundation")
+    current = service.learners.get("learner")
+    recommendation = service.candidates(current, practice.round_id, source_attempt_id=passed.attempt_id)
+    if extra_prerequisite:
+        assert recommendation.remediation_recommendation.node.skill_node_id == "c"
+        with pytest.raises(ApplicationError):
+            choose(passed, "b", "other-prerequisite-blocks", "reinforce_weakness")
+        remaining = choose(passed, "c", "choose-other-foundation", "downgrade_learning")
+        publish(service, remaining)
+        passed = submit(service, profile, remaining, "passed-other-foundation")
+        current = service.learners.get("learner")
+        recommendation = service.candidates(current, remaining.round_id, source_attempt_id=passed.attempt_id)
+    assert recommendation.remediation_recommendation.kind == "return_to_original"
+    returned = choose(passed, "b", "confirmed-return", "reinforce_weakness")
+    assert returned.members[0].node_id == "b"
+    assert mastery.initialize_tier_progress(service.learners.get("learner")).active_tier == tier
+    assert choose(passed, "b", "confirmed-return", "reinforce_weakness") == returned
+
+
 def test_create_round_is_single_target_and_replay_does_not_duplicate_jobs():
     service, profile = fixture()
     first = service.create(profile, create_payload())
     second = service.create(profile, create_payload())
     assert first.model_dump() == second.model_dump()
     assert len(service.repository.find("learning_rounds")) == 1
+    stage = service.repository.one("learning_round_stages", stage_id=first.stage_id)
+    assert stage["budget_snapshot"]["input_capacity"] == 262144
+    service.settings = service.settings.model_copy(update={"llm_resource_generator_max_input_tokens": 65536})
+    assert service.repository.one("learning_round_stages", stage_id=first.stage_id)["budget_snapshot"]["input_capacity"] == 262144
     assert len(service.feedback.generation_job_service.job_repo.list_by_learner("learner")) == 1
+
+
+def test_staged_claim_budget_reaches_the_frozen_round_job_request():
+    service, profile = fixture()
+    payload = create_payload().model_copy(update={"include_claim_check": True,
+        "include_claim_evidence_retrieval": True, "claim_post_retrieval_max_iterations": 2})
+    result = service.create(profile, payload)
+    job = service.feedback.generation_job_service.job_repo.get(result.members[0].job_ids[0])
+    assert job.request_payload["include_claim_evidence_retrieval"] is True
+    assert job.request_payload["claim_post_retrieval_max_iterations"] == 2
+    assert job.request_payload["claim_workflow_version"] == "contradiction_first_v3"
+    assert job.request_payload["max_iterations"] == 3
+    assert job.request_payload["claim_max_iterations"] == 2
+    with pytest.raises(Exception):
+        service.create(profile, payload.model_copy(update={"claim_post_retrieval_max_iterations": 1}))
 
 
 @pytest.mark.parametrize("sql", [False, True])
@@ -129,10 +272,29 @@ def test_frozen_session_and_single_formal_submit_are_idempotent(sql):
     payload = RoundAttemptSubmitV1(learner_id="learner", session_id=session.session_id, manifest_hash=session.manifest_hash,
         idempotency_key="submission-key", expected_profile_version=profile.profile_version, submitted_at=datetime.now(timezone.utc),
         answers=[{"question_id": q.question_id, "answer": "A"} for group in session.groups for q in group.questions])
+    analysis_scopes = []
+
+    def analyze(**kwargs):
+        scope = effective_context(kwargs["context"]).budget_scope
+        analysis_scopes.append(scope.scope_id)
+        if not sql:
+            raise LLMBudgetUnavailable("ROUND_BUDGET_EXHAUSTED")
+        return SimpleNamespace(output=FeedbackAnalysis(
+            summary="本轮已完成测评。",
+            reflection_insight="可以继续练习。",
+            learner_suggestions=["复盘逐题结果。"],
+            analysis_status="llm",
+        ))
+
+    service.feedback.llm_gateway = SimpleNamespace(options_for=lambda *args, **kwargs: None, invoke_structured=analyze)
     submitted = RoundFeedback(service).submit(profile, result.round_id, result.stage_id, payload)
     assert submitted.nodes[0].score == 1
     assert RoundFeedback(service).submit(profile, result.round_id, result.stage_id, payload) == submitted
+    assert RoundFeedback(service).result(profile, result.round_id, result.stage_id) == submitted
     assert len(service.feedback.feedback_loop_repo.list_attempts("learner")) == 1
+    stored = service.feedback.list_results("learner")[0]
+    assert stored.analysis.analysis_status == ("llm" if sql else "fallback")
+    assert analysis_scopes == [session.session_id]
 
 
 def test_missing_answer_never_creates_a_formal_attempt():
@@ -155,6 +317,29 @@ def submit(service, profile, result, key, answer="A"):
         submitted_at=datetime.now(timezone.utc), answers=[{"question_id": q.question_id, "answer": answer}
                                                        for group in session.groups for q in group.questions])
     return RoundFeedback(service).submit(profile, result.round_id, result.stage_id, payload)
+
+
+@pytest.mark.parametrize("sql", [False, True])
+def test_advance_leaves_both_successors_available_until_learner_selects_one(sql):
+    from app.models.feedback.rounds import RoundNextSelectionV1
+
+    service, profile = fixture(sql, branching=True)
+    service.feedback.knowledge_catalog = service.feedback.mastery_service.knowledge_service
+    first = service.create(profile, create_payload())
+    publish(service, first)
+    result = submit(service, profile, first, "branch-pass")
+
+    path = service.feedback.feedback_loop_repo.get_current_path(profile.learner_id)
+    assert [(node.knowledge_point_id, node.status.value) for node in path.nodes] == [("a", "completed")]
+    current = service.learners.get(profile.learner_id)
+    options = service.feedback.mastery_service.next_generation_options(current)
+    assert {node.skill_node_id for node in options.learn_new_knowledge if not node.blocked_by_node_ids} == {"b", "c"}
+    following = service.next(current, RoundNextSelectionV1(
+        learner_id=profile.learner_id, source_attempt_id=result.attempt_id, selection_key="branch-choice",
+        primary_learning_intent="learn_new_knowledge", primary_node_id="c",
+        primary_resource_types=["讲义"],
+    ))
+    assert [(member.node_id, member.role) for member in following.members] == [("c", "primary")]
 
 
 def dual_round(service, profile):

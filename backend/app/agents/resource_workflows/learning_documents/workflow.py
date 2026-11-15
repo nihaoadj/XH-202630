@@ -263,8 +263,33 @@ def finalize_evidence_insufficient_node(state: AgentState) -> dict[str, Any]:
     }
 
 
+def _manual_revision_available(state: AgentState) -> bool:
+    context = state.get("resource_retry_context") or {}
+    constraints = context.get("request", {}).get("constraints", {})
+    if not constraints.get("resource_retry_single_pass"):
+        return True  # Frozen historical runs retain their original policy.
+    return (constraints.get("resource_retry_action") == "recheck"
+            and state.get("revision_count", 0) + state.get("claim_revision_count", 0) < 1)
+
+
 def route_after_review(state: AgentState) -> str:
     decision = _review_decision(state)
+    # A failed revised artifact is only a placeholder, not a reviewed child of
+    # the last valid ledger. Do not build another work order against that stale
+    # parent binding. Finalization preserves the failure and published siblings;
+    # an explicit retry can resume from its durable source context.
+    failed_ids = {
+        item.get("resource_id") for item in state.get("resource_executions", [])
+        if isinstance(item, dict) and item.get("validation_status") == "failed"
+    }
+    ledgers = state.get("resource_ledgers") or {}
+    if any(
+        resource.resource_id in failed_ids
+        and resource.parent_resource_id
+        and resource.resource_spec_id in ledgers
+        for resource in state.get("generated_resources", [])
+    ):
+        return "finalize"
     retryable_generation_failure = any(
         isinstance(item, dict)
         and item.get("resource_id")
@@ -278,12 +303,12 @@ def route_after_review(state: AgentState) -> str:
         )
         for item in state.get("resource_executions", [])
     )
-    if retryable_generation_failure and state.get("revision_count", 0) < state.get("max_iterations", 2):
+    if _manual_revision_available(state) and retryable_generation_failure and state.get("revision_count", 0) < state.get("max_iterations", 2):
         # Generation/contract failures are transient and safe to retry. They
         # previously went straight to human review, so one malformed test
         # response could also prevent its sibling lecture from being retried.
         return "prepare_revision"
-    if decision == ReviewDecision.REVISE and state.get("revision_count", 0) < state.get("max_iterations", 2):
+    if _manual_revision_available(state) and decision == ReviewDecision.REVISE and state.get("revision_count", 0) < state.get("max_iterations", 2):
         return "prepare_revision"
     # Claim audit is an explicitly requested independent evidence check.  It
     # must not disappear merely because the ordinary reviewer concludes
@@ -312,10 +337,19 @@ def route_after_initial_claim_judge(state: AgentState) -> str:
         return "claim_decide"
     if state.get("claim_failed_resource_ids"):
         return "claim_decide"
+    from .claim_routing import contradiction_first, contradicted_resource_ids, select_revision_bad, include_large_gaps
+    blocked = contradicted_resource_ids(state) if contradiction_first(state) else set()
+    if blocked or state.get("claim_workflow_version") == "contradiction_first_v3":
+        problems = [j for j in state.get("claim_judgements", []) if isinstance(j, dict)
+                    and (include_large_gaps(state) or j.get("verdict") == "contradicted")]
+        _, phase = select_revision_bad(state, problems)
+        if phase != "exhausted" and _manual_revision_available(state):
+            return "claim_decide"
     round0 = [
         item for item in state.get("claim_judgements", [])
         if isinstance(item, dict)
         and item.get("verdict") == ClaimVerdict.NOT_IN_EVIDENCE.value
+        and item.get("resource_id") not in blocked
     ]
     claims = {str(item.get("claim_id")): item for item in state.get("extracted_claims", []) if isinstance(item, dict)}
     if not any(
@@ -333,6 +367,27 @@ def route_after_claim_evidence_retrieve(state: AgentState) -> str:
     return "claim_decide"
 
 
+def _unchanged_structured_claim_revisions(state: AgentState) -> set[str]:
+    from .claim_extraction.resource_sources import build_source
+    from app.models.reviews.claim_extraction import policy_from_input
+    policy = policy_from_input(state)
+    entries = (state.get("constraints") or {}).get("generation_revision_inputs") or {}
+    unchanged = set()
+    for resource in state.get("generated_resources", []):
+        entry = entries.get(resource.resource_spec_id) or {}
+        if entry.get("kind") != "claim" or resource.resource_type not in {"复习清单", "分阶测试题", "个性化纠错训练包"}:
+            continue
+        previous = entry.get("input") or {}
+        package = (resource.correction_package_payload if resource.resource_type == "个性化纠错训练包" else
+                   resource.assessment_payload if resource.resource_type == "分阶测试题" else resource.review_practice_payload)
+        if (resource.parent_resource_id == previous.get("parent_resource_id")
+                and package is not None and package == previous.get("previous_structured_payload")):
+            source = build_source(resource, policy)
+            if source.snapshot and source.text == previous.get("previous_text"):
+                unchanged.add(resource.resource_id)
+    return unchanged
+
+
 def route_after_claim_decide(state: AgentState) -> str:
     if _review_decision(state) != ReviewDecision.REVISE:
         return "finalize"
@@ -341,14 +396,25 @@ def route_after_claim_decide(state: AgentState) -> str:
         for instruction in state.get("review_result", {}).get("revision_instructions", [])
     )
     if claim_revision_requested:
+        requested_claims = {c for i in state.get("review_result", {}).get("revision_instructions", [])
+                            for c in i.get("target_claim_ids", [])}
+        requested_resources = {c["resource_id"] for c in state.get("extracted_claims", [])
+                               if c["claim_id"] in requested_claims}
+        if requested_resources and requested_resources <= _unchanged_structured_claim_revisions(state):
+            return "finalize"
         # Claim corrections cannot borrow ordinary-review revision allowance.
         # Finalization preserves the existing human-review/publication gate.
+        from .claim_routing import contradiction_first, revision_available
+        phase = state.get("claim_revision_phase", "legacy_v1")
+        available = (phase != "exhausted" and revision_available(state, phase)
+                     if contradiction_first(state) else
+                     state.get("claim_revision_count", 0) < state.get("claim_max_iterations", 1))
         return (
             "prepare_claim_revision"
-            if state.get("claim_revision_count", 0) < state.get("claim_max_iterations", 1)
+            if _manual_revision_available(state) and available
             else "finalize"
         )
-    if _review_decision(state) == ReviewDecision.REVISE and (
+    if _manual_revision_available(state) and _review_decision(state) == ReviewDecision.REVISE and (
         state.get("revision_count", 0) < state.get("max_iterations", 2)
     ):
         return "prepare_revision"
@@ -395,6 +461,11 @@ def _generation_revision_inputs(
             for item in state.get("extracted_claims", [])
             if isinstance(item, dict)
         ]
+        from .claim_routing import contradiction_first
+        if contradiction_first(state):
+            selected_claim_ids = {cid for instruction in review_feedback.get("revision_instructions", [])
+                                  for cid in instruction.get("target_claim_ids", [])}
+            claims = [claim for claim in claims if claim.claim_id in selected_claim_ids]
         judgements = [
             ClaimJudgement.model_validate(item)
             for item in state.get("claim_judgements", [])
@@ -433,6 +504,7 @@ def _generation_revision_inputs(
                 resource=resource,
                 targets=tuple(frozen_targets.get(spec_id, [])),
                 work_order=work_order,
+                input_contract=state["resource_review_policy"].get("input_contract"),
             )
         elif state.get("lecture_review_policy"):
             # Legacy dedicated lecture loop: keep the historical
@@ -455,6 +527,11 @@ def _generation_revision_inputs(
 def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, Any]:
     revision_count = state.get("revision_count", 0) + (0 if claim_only else 1)
     claim_revision_count = state.get("claim_revision_count", 0) + (1 if claim_only else 0)
+    post_revision_count = state.get("claim_post_retrieval_revision_count", 0) + int(
+        claim_only and state.get("claim_revision_phase") == "post_retrieval")
+    post_stage = claim_only and state.get("claim_revision_phase") == "post_retrieval"
+    phase_count = post_revision_count if post_stage else claim_revision_count - post_revision_count
+    phase_limit = state.get("claim_post_retrieval_max_iterations", 0) if post_stage else state.get("claim_max_iterations", 1)
     generation_attempt = revision_count + claim_revision_count + 1
     step_context = start_step(state, attempt=generation_attempt)
     review = state.get("review_result", {})
@@ -624,10 +701,10 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
     trace_item = build_trace_item(
         state,
         agent_name="supervisor",
-        action="准备 Claim 返工" if claim_only else "准备普通审核返工",
+        action=("准备补检后修订" if post_stage else "准备 Claim 返工") if claim_only else "准备普通审核返工",
         status=StepStatus.SUCCESS,
         input_summary=(
-            f"Claim 已返工：{claim_revision_count - 1}/{state.get('claim_max_iterations', 1)}"
+            f"本阶段 Claim 已返工：{phase_count - 1}/{phase_limit}"
             if claim_only else f"普通审核已返工：{revision_count - 1}/{state.get('max_iterations', 2)}"
         ),
         output_summary=(
@@ -651,6 +728,7 @@ def _prepare_revision_node(state: AgentState, *, claim_only: bool) -> dict[str, 
         "claim_check_status": ClaimCheckStatus.PENDING.value,
         "revision_count": revision_count,
         "claim_revision_count": claim_revision_count,
+        "claim_post_retrieval_revision_count": post_revision_count,
         "generation_attempt": generation_attempt,
         **({"lecture_revision": lecture_revision} if state.get("lecture_review_policy") else {}),
         **({"resource_revision": resource_revision} if state.get("resource_review_policy") else {}),
@@ -767,6 +845,8 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             if strict_with_degradation
             else "返工额度已用尽或审核无法自动决策，需人工复核"
         )
+        if (state.get("errors") and state["errors"][-1].get("code") == "REVIEW_INPUT_BUDGET_EXCEEDED"):
+            final_decision = "审核输入超过上下文预算，未完成复审，资源保持未发布"
 
     claim_status = (
         state.get("claim_check_status", ClaimCheckStatus.NOT_REQUESTED.value)
@@ -777,6 +857,8 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     review["revision_count"] = state.get("revision_count", 0)
     review["claim_revision_count"] = state.get("claim_revision_count", 0)
     review["claim_max_iterations"] = state.get("claim_max_iterations", 1)
+    review["claim_post_retrieval_revision_count"] = state.get("claim_post_retrieval_revision_count", 0)
+    review["claim_post_retrieval_max_iterations"] = state.get("claim_post_retrieval_max_iterations", 0)
     resource_reviews = state.get("resource_review_results", {})
     claim_eligible_ids = set(state.get("claim_eligible_resource_ids", []))
     claim_metrics = state.get("claim_metrics", {})
@@ -787,11 +869,21 @@ def decide_node(state: AgentState) -> dict[str, Any]:
         for item in review.get("issues", [])
         if isinstance(item, dict) and item.get("resource_id")
     }
+    non_gap_claim_problem_ids = {
+        str(item.get("resource_id"))
+        for item in review.get("issues", [])
+        if isinstance(item, dict)
+        and item.get("resource_id")
+        and item.get("code") != "evidence_gap"
+    }
     now = datetime.now(timezone.utc)
     allow_partial_claim_publish = bool(get_settings().claim_partial_publish)
     settings = get_settings()
     allow_claim_user_review = bool(getattr(settings, "claim_user_review_enabled", True))
-    claim_user_review_threshold = float(getattr(settings, "claim_user_review_min_factual_pass_rate", 0.60))
+    claim_user_review_threshold = float(getattr(settings, "claim_user_review_min_factual_pass_rate", 0.85))
+    claim_gap_auto_publish_threshold = float(
+        getattr(settings, "claim_gap_auto_publish_min_factual_pass_rate", 0.95)
+    )
 
     resources = []
     for resource in state.get("generated_resources", []):
@@ -816,6 +908,7 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             is_claim_eligible=canonical_id in claim_eligible_ids,
             claim_failed=canonical_id in claim_failed_ids,
             has_claim_problem=canonical_id in claim_problem_ids,
+            has_non_gap_claim_problem=canonical_id in non_gap_claim_problem_ids,
             claim_metric_status=metric.get("metric_status"),
             factual_claim_total=int(metric.get("factual_claim_total", 0) or 0),
             supported_claim_total=int(metric.get("supported_claim_total", 0) or 0),
@@ -828,6 +921,7 @@ def decide_node(state: AgentState) -> dict[str, Any]:
             allow_partial_claim_publish=allow_partial_claim_publish,
             claim_user_review_enabled=allow_claim_user_review,
             claim_user_review_min_factual_pass_rate=claim_user_review_threshold,
+            claim_gap_auto_publish_min_factual_pass_rate=claim_gap_auto_publish_threshold,
         ))
         publish = publication.publish
         claim_decision_pending = publication.claim_publish_decision_pending
@@ -861,6 +955,9 @@ def decide_node(state: AgentState) -> dict[str, Any]:
     if any(item.claim_publish_decision_pending for item in resources):
         workflow_status = WorkflowStatus.HUMAN_REVIEW
         final_decision = "Claim 审核报告待用户决定是否发布"
+    elif any(item.resource_id in _unchanged_structured_claim_revisions(state)
+             and item.publication_status != "published" for item in resources):
+        final_decision = "定向修订未改变内容，审核问题仍未解决"
     if resources and not locked_resource_ids and all(item.publication_status == "published" for item in resources):
         workflow_status = WorkflowStatus.COMPLETED
         if any(item.claim_warning_publish for item in resources):
@@ -899,7 +996,8 @@ def decide_node(state: AgentState) -> dict[str, Any]:
         status=trace_status,
         input_summary=(
         f"审核决策：{decision.value}；普通返工：{state.get('revision_count', 0)}/{state.get('max_iterations', 2)}；"
-            f"Claim 返工：{state.get('claim_revision_count', 0)}/{state.get('claim_max_iterations', 1)}"
+            f"Claim 返工共 {state.get('claim_revision_count', 0)} 次；补检后修订："
+            f"{state.get('claim_post_retrieval_revision_count', 0)}/{state.get('claim_post_retrieval_max_iterations', 0)}"
         ),
         output_summary=f"最终决策：{final_decision}",
         decision_reason="综合审核结论、降级状态和业务返工额度确定资源终态。",

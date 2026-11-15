@@ -117,6 +117,8 @@ class PublicationInputs:
     allow_partial_claim_publish: bool = False
     claim_user_review_enabled: bool = False
     claim_user_review_min_factual_pass_rate: float = 0.0
+    claim_gap_auto_publish_min_factual_pass_rate: float = 0.95
+    has_non_gap_claim_problem: bool = False
     # A persisted round-1 counter-evidence or source conflict permanently binds
     # this resource version.  It is checked before every other allowance.
     claim_hard_block: bool = False
@@ -155,6 +157,7 @@ def resolve_publication(inputs: PublicationInputs) -> PublicationDecision:
     claim_metric_complete = inputs.claim_metric_status == "complete"
     partial_metric_allowed = (
         inputs.allow_partial_claim_publish
+        and not inputs.claim_failed
         and inputs.is_claim_eligible
         and inputs.item_decision == ReviewDecision.APPROVE.value
         and inputs.claim_metric_status == "incomplete"
@@ -166,8 +169,21 @@ def resolve_publication(inputs: PublicationInputs) -> PublicationDecision:
         and claim_metric_complete
         and factual_pass_rate is not None
         and factual_pass_rate >= inputs.claim_user_review_min_factual_pass_rate
+        and not inputs.claim_failed
         and inputs.contradicted_claim_total == 0
         and inputs.not_in_evidence_claim_total > 0
+    )
+    gap_auto_publish_allowed = (
+        inputs.include_claim_check
+        and inputs.item_decision == ReviewDecision.APPROVE.value
+        and inputs.is_claim_eligible
+        and not inputs.claim_failed
+        and claim_metric_complete
+        and factual_pass_rate is not None
+        and factual_pass_rate >= inputs.claim_gap_auto_publish_min_factual_pass_rate
+        and inputs.contradicted_claim_total == 0
+        and inputs.not_in_evidence_claim_total > 0
+        and not inputs.has_non_gap_claim_problem
     )
 
     if inputs.claim_hard_block:
@@ -179,14 +195,20 @@ def resolve_publication(inputs: PublicationInputs) -> PublicationDecision:
     elif inputs.is_locked:
         review_status = ResourceStatus.HUMAN_REVIEW
         reason = PublicationReason.GENERATION_LOCKED
+    elif inputs.include_claim_check and inputs.claim_failed:
+        review_status = ResourceStatus.HUMAN_REVIEW
+        reason = PublicationReason.CLAIM_GATE_FAILED
     elif (
-        inputs.has_claim_problem
+        (inputs.has_claim_problem or (inputs.include_claim_check and (
+            inputs.not_in_evidence_claim_total > 0 or inputs.contradicted_claim_total > 0
+        )))
         and not partial_metric_allowed
         and not user_review_allowed
+        and not gap_auto_publish_allowed
     ):
         review_status = ResourceStatus.HUMAN_REVIEW
         reason = PublicationReason.CLAIM_GATE_FAILED
-    elif user_review_allowed:
+    elif user_review_allowed and not gap_auto_publish_allowed:
         review_status = ResourceStatus.HUMAN_REVIEW
         reason = PublicationReason.CLAIM_USER_REVIEW_REQUIRED
     else:
@@ -205,10 +227,16 @@ def resolve_publication(inputs: PublicationInputs) -> PublicationDecision:
         claim_gate_passed = (
             inputs.is_claim_eligible
             and not inputs.claim_failed
-            and not inputs.has_claim_problem
+            and (not inputs.has_claim_problem or gap_auto_publish_allowed)
+            and inputs.contradicted_claim_total == 0
             and inputs.claim_metric_status in {"complete", "not_applicable"}
         )
-        if not claim_gate_passed and not partial_metric_allowed and not user_review_allowed:
+        if (
+            not claim_gate_passed
+            and not partial_metric_allowed
+            and not user_review_allowed
+            and not gap_auto_publish_allowed
+        ):
             review_status = ResourceStatus.HUMAN_REVIEW
             reason = (
                 PublicationReason.CLAIM_METRIC_INCOMPLETE
@@ -221,7 +249,7 @@ def resolve_publication(inputs: PublicationInputs) -> PublicationDecision:
         review_status=review_status,
         publish=publish,
         reason=reason,
-        claim_publish_decision_pending=user_review_allowed,
+        claim_publish_decision_pending=(reason == PublicationReason.CLAIM_USER_REVIEW_REQUIRED),
         claim_degraded_publish=bool(
             publish
             and inputs.allow_partial_claim_publish

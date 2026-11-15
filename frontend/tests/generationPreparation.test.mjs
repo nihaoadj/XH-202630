@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { api } from '../src/api/client.js'
 import { generateApi } from '../src/features/generation/api.js'
 import {
-  planRetryGeneration, planRegeneratePending, planAppendResources, planRetryResource, executeGenerationPlan,
+  canRetryResource, planRetryGeneration, planAppendResources, planRetryResource, executeGenerationPlan,
 } from '../src/features/generation/generationCommands.js'
 import { useGenerationResources } from '../src/features/generation/useGenerationResources.js'
 import { useGenerationCommands } from '../src/features/generation/useGenerationCommands.js'
@@ -13,16 +13,19 @@ const job = { learner_id: 'learner-A', run_id: 'run-A', batch_id: 'batch-A',
 const before = structuredClone(job)
 assert.deepEqual(planRetryGeneration(job), [{ batchId: 'batch-A', data: {
   learner_id: 'learner-A', resource_types: ['讲义', '复习清单'], instructions: '保留原要求', source_run_id: 'run-A',
+  replace_existing_types: true,
 } }])
+for (const state of ['generated', 'reviewing', 'claim_checking']) {
+  const resource = { resource_spec_id: 'spec-A', resource_execution_state: state }
+  assert.equal(canRetryResource({ job_status: 'failed' }, resource), true)
+  assert.equal(canRetryResource({ job_status: 'running' }, resource), false)
+  assert.equal(canRetryResource({ job_status: 'completed' }, resource), false)
+  assert.equal(canRetryResource({ job_status: 'failed' }, { ...resource, publication_status: 'published' }), false)
+  assert.equal(canRetryResource({ job_status: 'failed' }, { ...resource, request_placeholder: true }), false)
+}
 assert.equal(planRetryGeneration({ run_id: 'run' }), null)
 assert.equal(planAppendResources(job, [], true), null)
 assert.equal(planRetryResource(job, {}), null)
-assert.equal(planRegeneratePending(job, [], false), null)
-assert.deepEqual(planRegeneratePending(job, ['复习清单', '讲义'], true)[0].data, {
-  learner_id: 'learner-A', resource_types: ['复习清单'], source_run_id: 'run-A', replace_existing_types: true,
-  instructions: '统一重新生成本任务中未通过审核的资源：复习清单、讲义。',
-})
-assert.deepEqual(planRegeneratePending(job, ['复习清单', '讲义'], false)[0].data.resource_types, ['复习清单', '讲义'])
 assert.equal(planRetryResource(job, { resource_type: '讲义', representation: 'text' }), null)
 assert.equal(planRetryResource(job, { resource_spec_id: 'spec-A', representation: 'interactive_courseware' }), null)
 assert.equal(planRetryResource({ learner_id: 'learner-A' }, { resource_spec_id: 'spec-A', representation: 'text' }), null)
@@ -32,6 +35,15 @@ assert.deepEqual(planRetryResource(job, { resource_spec_id: 'spec-A', representa
 const split = planAppendResources(job, ['复习清单', '讲义', '复习清单'], true)
 assert.deepEqual(split.map(item => item.data.resource_types), [['复习清单'], ['讲义']])
 assert.deepEqual(planAppendResources(job, ['复习清单', '讲义'], false).map(item => item.data.resource_types), [['复习清单', '讲义']])
+const practiceSplit = planAppendResources(job, ['实操指南', '讲义'], true, true)
+assert.equal(practiceSplit[0].data.include_claim_check, false)
+assert.equal(practiceSplit[0].data.include_claim_evidence_retrieval, false)
+assert.equal(practiceSplit[1].data.include_claim_check, true)
+assert.equal(practiceSplit[1].data.include_claim_evidence_retrieval, true)
+assert.equal(planRetryGeneration({ ...job, request_payload: {
+  ...job.request_payload, resource_types: ['实操指南'], include_claim_check: true,
+  include_claim_evidence_retrieval: true,
+} })[0].data.include_claim_check, false)
 assert.deepEqual(job, before)
 
 function deferred() {
@@ -72,6 +84,15 @@ try {
   const retry = await generateApi.retryResourceRepresentation('run/A', 'spec A', 'text')
   assert.equal(retry.config.url, '/generate/jobs/run%2FA/resource-specs/spec%20A/representations/text/retry')
   assert.equal(retry.data.run_id, 'child')
+  const createdBodies = []
+  api.defaults.adapter = async config => {
+    createdBodies.push(JSON.parse(config.data))
+    return { data: JSON.stringify({ run_id: 'child', learner_id: 'learner-A', batch_id: 'batch-A', topic: '合成', job_status: 'queued' }), status: 200, statusText: 'OK', headers: {}, config }
+  }
+  await generateApi.createJobsForClaim({ learner_id: 'learner-A', resource_types: ['实操指南', '讲义'],
+    include_claim_check: true, include_claim_evidence_retrieval: true })
+  assert.deepEqual(createdBodies.map(body => [body.resource_types[0], body.include_claim_check, body.include_claim_evidence_retrieval]),
+    [['实操指南', false, false], ['讲义', true, true]])
   api.defaults.adapter = async config => ({ data: '{}', status: 200, statusText: 'OK', headers: {}, config })
   await assert.rejects(generateApi.retryResourceRepresentation('run-A', 'spec-A', 'text'))
 } finally { api.defaults.adapter = previousAdapter; globalThis.window = previousWindow }
@@ -155,7 +176,7 @@ function harness(overrides = {}) {
 }
 
 // Exercise the production command pipeline, not just plans or the shared guard.
-const commandKinds = ['retry', 'pending', 'append', 'resource']
+const commandKinds = ['retry', 'append', 'resource']
 function commandHarness({ listGate, streamGate } = {}) {
   const context = ref({ learnerId: 'learner-A', runId: 'run-A' })
   const pending = []
@@ -193,11 +214,11 @@ function commandHarness({ listGate, streamGate } = {}) {
   function start(kind, { claim = false, key = 'spec-A:text' } = {}) {
     const source = { ...job, learner_id: context.value.learnerId, run_id: context.value.runId }
     const plan = kind === 'retry' ? planRetryGeneration(source)
-      : kind === 'pending' ? planRegeneratePending(source, ['复习清单', '讲义'], claim)
+
         : kind === 'append' ? planAppendResources(source, ['复习清单', '讲义', '复习清单'], claim)
           : planRetryResource(source, { resource_spec_id: key.split(':')[0], representation: 'text' })
     const command = {
-      channel: kind === 'pending' ? 'retry' : kind,
+      channel: kind,
       busyValue: kind === 'resource' ? key : '',
       execute: () => executeGenerationPlan(plan, generateApi.continueBatch, generateApi.retryResourceRepresentation),
       succeeded: () => { if (kind === 'append') ui.dialog = false; ui.notices.push(`success:${kind}`) },

@@ -87,6 +87,28 @@
   color: #738494;
 }
 
+.workspace-glass-select.el-select .el-select__wrapper:not(.is-disabled),
+.workspace-glass-control {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, #f7fafc, #edf3f6) padding-box,
+    linear-gradient(112deg, #99bec0, #e6ecf1 47%, #abcacc) border-box;
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 1px rgb(111 142 167 / 15%),
+    0 3px 5px -4px rgb(33 64 86 / 24%), 0 12px 24px -17px rgb(33 64 86 / 30%);
+}
+
+.workspace-glass-select.el-select .el-select__wrapper:not(.is-disabled):hover {
+  border-color: #a1bec8;
+  box-shadow: inset 0 1px 0 #fff, 0 3px 5px -4px rgb(33 64 86 / 24%);
+}
+
+.workspace-glass-select.el-select .el-select__wrapper:not(.is-disabled):is(.is-focused, :focus-within) {
+  border-color: #6e9fa6;
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 2px rgb(23 107 112 / 15%),
+    0 3px 5px -4px rgb(33 64 86 / 24%);
+}
+
 .el-form-item.is-error .el-select .el-select__wrapper {
   box-shadow: 0 0 0 1px var(--el-color-danger) inset;
 }

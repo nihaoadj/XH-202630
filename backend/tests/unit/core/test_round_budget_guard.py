@@ -1,6 +1,12 @@
 """Round gateway guards reserve before dispatch and retain uncertain usage."""
 
 import pytest
+from pydantic import BaseModel
+from langchain_core.messages import HumanMessage
+
+from app.config import Settings
+from app.core.llm.gateway import LLMGateway
+from app.models.reviews.resource_review_model_output import ModelReviewV4
 
 from app.core.llm.budget import LLMBudgetUnavailable, budgeted_transport_call, reserve_call
 from app.core.llm.budget import effective_context, round_call_scope
@@ -39,6 +45,43 @@ def test_reservation_precedes_dispatch_and_complete_usage_releases_unused_capaci
     budgeted_transport_call(invoke, guard, ticket)
     assert rounds.one("learning_round_budget_reservations", reservation_id=ticket)["known_tokens"] == 20
     assert reserve_call(guard, context("second"), 1, 50)
+
+
+def test_plain_text_dispatch_inside_a_round_scope_needs_no_json_schema():
+    """Plain-text calls carry BaseModel as a placeholder, not a real schema.
+
+    Regression: the byte-level upper bound must not ask pydantic for the JSON
+    schema of ``BaseModel`` itself, which raises AttributeError and used to
+    surface as a bogus LLM_UPSTREAM_UNAVAILABLE before any provider request.
+    """
+    rounds, guard = budget_fixture(cap=10_000)
+    ticket = reserve_call(guard, context(), 1, 50)
+    dispatched = []
+
+    def invoke(**kwargs):
+        dispatched.append(kwargs)
+        return RawLLMResponse(content="# 讲义", usage=LLMUsage(input_tokens=10, output_tokens=10))
+
+    with round_call_scope(LLMBudgetScope(scope_id="sa", stage_id="s", kind="production"),
+                          input_cap=10_000, guard=guard):
+        budgeted_transport_call(invoke, guard, ticket, messages=["system", "user"], output_schema=BaseModel)
+
+    assert len(dispatched) == 1
+    assert rounds.one("learning_round_budget_reservations", reservation_id=ticket)["state"] == "settled"
+
+
+def test_concrete_schema_still_contributes_to_the_input_bound():
+    rounds, guard = budget_fixture(cap=10_000)
+    ticket = reserve_call(guard, context(), 1, 50)
+
+    def invoke(**kwargs):
+        return RawLLMResponse(content="{}", usage=LLMUsage(input_tokens=10, output_tokens=10))
+
+    with round_call_scope(LLMBudgetScope(scope_id="sa", stage_id="s", kind="production"),
+                          input_cap=10_000, guard=guard):
+        budgeted_transport_call(invoke, guard, ticket, messages=["user"], output_schema=RawLLMResponse)
+
+    assert rounds.one("learning_round_budget_reservations", reservation_id=ticket)["state"] == "settled"
 
 
 def test_unknown_transport_usage_conservatively_consumes_the_reservation():
@@ -107,3 +150,35 @@ def test_call_scope_does_not_leak_to_an_unrelated_thread():
     with round_call_scope(context().budget_scope, 20, guard):
         with ThreadPoolExecutor(max_workers=1) as executor:
             assert executor.submit(effective_context, ordinary).result().budget_scope is None
+
+
+@pytest.mark.parametrize("input_cap, allowed", [(65536, False), (262144, True)])
+def test_wrapped_review_input_fits_raised_round_capacity(input_cap, allowed):
+    _, guard = budget_fixture(cap=1_048_576)
+    messages = LLMGateway._json_mode_messages([HumanMessage(content="x" * 50_000)], ModelReviewV4)
+    dispatched = []
+
+    def invoke(**kwargs):
+        dispatched.append(True)
+        return RawLLMResponse(content="{}", usage=LLMUsage(input_tokens=15000, output_tokens=100))
+
+    with round_call_scope(context().budget_scope, input_cap, guard):
+        ticket = reserve_call(guard, effective_context(context()), 1, 16384)
+        if allowed:
+            budgeted_transport_call(invoke, guard, ticket, messages=messages, output_schema=ModelReviewV4)
+        else:
+            with pytest.raises(LLMBudgetUnavailable, match="ROUND_INPUT_CAPACITY_EXCEEDED"):
+                budgeted_transport_call(invoke, guard, ticket, messages=messages, output_schema=ModelReviewV4)
+    assert bool(dispatched) is allowed
+
+
+def test_raised_input_capacity_still_blocks_oversized_requests():
+    cap = Settings(_env_file=None).llm_resource_generator_max_input_tokens
+    _, guard = budget_fixture(cap=1_048_576)
+    with round_call_scope(context().budget_scope, cap, guard):
+        ticket = reserve_call(guard, effective_context(context()), 1, 16384)
+        with pytest.raises(LLMBudgetUnavailable, match="ROUND_INPUT_CAPACITY_EXCEEDED"):
+            budgeted_transport_call(
+                lambda **kwargs: pytest.fail("Oversized request must not reach transport"),
+                guard, ticket, messages=[HumanMessage(content="x" * cap)], output_schema=ModelReviewV4,
+            )

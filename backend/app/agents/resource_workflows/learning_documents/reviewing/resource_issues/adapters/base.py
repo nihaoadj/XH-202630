@@ -72,9 +72,20 @@ class LocationIndex:
             require(location.paragraph_id in self.paragraph_ids and line is not None,
                     "LOCATION_OUT_OF_BOUNDS", f"{path}.paragraph_id",
                     "location must belong to the bound content")
-            require(location.quote is None or location.quote in line,
+            end_id = location.end_paragraph_id or location.paragraph_id
+            require(end_id in self.paragraph_ids and end_id is not None,
+                    "LOCATION_OUT_OF_BOUNDS", f"{path}.end_paragraph_id",
+                    "end location must belong to the bound content")
+            start_number = int(location.paragraph_id[1:])
+            end_number = int(end_id[1:])
+            require(start_number < end_number if location.end_paragraph_id else start_number == end_number,
+                    "LOCATION_OUT_OF_BOUNDS", f"{path}.end_paragraph_id",
+                    "an explicit end location must follow the start location")
+            span = "\n".join(self.paragraph_text[f"p{number:06d}"]
+                             for number in range(start_number, end_number + 1))
+            require(location.quote is None or location.quote in span,
                     "LOCATION_OUT_OF_BOUNDS", f"{path}.quote",
-                    "quote must belong to the bound paragraph")
+                    "quote must belong to the bound line range")
             require(tuple(location.heading_path) == tuple(self.heading_paths.get(location.paragraph_id, ())),
                     "LOCATION_OUT_OF_BOUNDS", f"{path}.heading_path",
                     "heading path must match the bound content")

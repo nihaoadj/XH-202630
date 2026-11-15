@@ -1,3 +1,5 @@
+import { workflowResourceEvent, workflowResourceIdentity } from '../features/generation/resourceWorkflowPresentation.js'
+
 const TERMINAL_STATUSES = new Set(['completed', 'degraded', 'human_review', 'failed', 'interrupted'])
 const MARKER_EVENTS = new Set([
   'run_created', 'run_started', 'evidence_snapshot_saved', 'resource_version_created',
@@ -64,6 +66,9 @@ export function createInitialTimelineState() {
     markers: [],
     childRuns: [],
     resourceExecutions: [],
+    resourceVersions: [],
+    resourceReviews: [],
+    resourceEvents: [],
     resourceProgressSummary: null,
     lastSequence: 0,
     seenEventIds: [],
@@ -294,6 +299,7 @@ function upsertStep(steps, event) {
     ...current,
     key,
     step_id: event.step_id,
+    run_id: event.run_id || current.run_id,
     sequence: event.step_sequence || current.sequence || event.sequence,
     agent_name: current.agent_name || event.node_name || 'workflow',
     node_name: event.node_name || current.node_name,
@@ -334,6 +340,7 @@ function updateStepMetrics(steps, event) {
 
 export function reduceWorkflowEvent(state, rawEvent) {
   const event = normalizeEvent(rawEvent)
+  if (state.runSummary?.run_id && event.run_id && state.runSummary.run_id !== event.run_id) return state
   if (!Number.isInteger(event.sequence) || event.sequence <= 0) return state
   if (event.event_id && state.seenEventIds.includes(event.event_id)) return state
   const isResourceEvent = isResourceWorkflowEvent(event)
@@ -346,6 +353,16 @@ export function reduceWorkflowEvent(state, rawEvent) {
   let markers = state.markers
   let childRuns = state.childRuns
   let resourceExecutions = state.resourceExecutions || []
+  const resourceEvent = workflowResourceEvent(event)
+  const resourceEvents = resourceEvent
+    ? [...(state.resourceEvents || []).filter(item => item.event_id !== resourceEvent.event_id || !resourceEvent.event_id), resourceEvent]
+    : state.resourceEvents || []
+  let resourceVersions = state.resourceVersions || []
+  if (resourceEvent?.payload.resource_id) {
+    const identity = workflowResourceIdentity({ ...resourceEvent.payload, run_id: event.run_id })
+    const previous = resourceVersions.find(item => item.resource_id === identity.resource_id)
+    resourceVersions = [...resourceVersions.filter(item => item.resource_id !== identity.resource_id), { ...previous, ...identity }]
+  }
   if (isResourceEvent) resourceExecutions = upsertResourceExecution(resourceExecutions, event, event.sequence)
   if (event.event_type.startsWith('step_')) {
     steps = upsertStep(steps, event)
@@ -381,6 +398,8 @@ export function reduceWorkflowEvent(state, rawEvent) {
     markers,
     childRuns,
     resourceExecutions,
+    resourceVersions,
+    resourceEvents,
     lastSequence: Math.max(state.lastSequence, event.sequence),
     seenEventIds: event.event_id ? [...state.seenEventIds, event.event_id].slice(-1000) : state.seenEventIds,
     terminal: state.terminal || ['run_completed', 'run_failed', 'run_interrupted'].includes(event.event_type),
@@ -396,10 +415,15 @@ export function hydrateWorkflowTimeline(timeline) {
     replay_completeness: timeline.replay_completeness,
     is_terminal: TERMINAL_STATUSES.has(timeline.run?.status),
   })
+  const belongs = item => !item.run_id || !timeline.run?.run_id || item.run_id === timeline.run.run_id
+  state.resourceVersions = (timeline.resource_versions || []).filter(belongs).map(workflowResourceIdentity)
+  state.resourceReviews = (timeline.reviews || []).filter(belongs).map(workflowResourceIdentity)
   for (const step of timeline.steps || []) {
+    if (!belongs(step)) continue
     state.steps.push({
       key: step.step_id,
       step_id: step.step_id,
+      run_id: step.run_id || timeline.run?.run_id,
       sequence: step.step_sequence,
       agent_name: step.agent_name || step.node_name,
       node_name: step.node_name,

@@ -136,6 +136,16 @@ def test_multi_select_creates_resource_scoped_jobs_for_supported_sources(tmp_pat
     assert created.status_code == 202
     jobs = created.json()["jobs"]
     assert len(jobs) == 2
+    assert [job["source_summary"][0]["resource_id"] for job in jobs] == ["guide", "checklist"]
+    for job in jobs:
+        assert job["source_summary"][0]["title"]
+        detail = client.get(f"/api/resources/courseware/jobs/{job['run_id']}")
+        assert detail.status_code == 200
+        assert detail.json()["source_summary"] == job["source_summary"]
+    listed = client.get("/api/resources/courseware/jobs", params={"learner_id": "courseware-learner"})
+    assert listed.status_code == 200
+    assert {job["run_id"] for job in listed.json()["items"]} == {job["run_id"] for job in jobs}
+    assert all(job["source_summary"] for job in listed.json()["items"])
     assert [client.app.container.courseware_service().repo.get_job(job["run_id"])["source_resource_ids"] for job in jobs] == [
         ["guide"], ["checklist"],
     ]

@@ -178,7 +178,7 @@ def render_assessment_markdown(package: dict) -> str:
 class AssessmentAgent(BaseResourceGenerationAgent[AssessmentNodeBlockV2]):
     resource_type = "分阶测试题"
     agent_name = "AssessmentAgent"
-    prompt_version = "assessment-resource-v8-scored-evidence-grounded"
+    prompt_version = "assessment-resource-v9-self-contained"
     artifact_format = "json"
     default_max_output_tokens = 8192
     validation_retry_attempts = 2

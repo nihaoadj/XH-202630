@@ -8,7 +8,7 @@ from typing import Any
 from app.core.storage import file_storage
 from app.db.audit.base import BaseAuditRepository
 from app.models.learning_documents.schemas import LearningResource
-from app.models.shared.agent_contracts import PracticeGuidePackageV3, ReviewPracticePackageV2
+from app.models.shared.agent_contracts import ReviewPracticePackageV2, validate_practice_guide_package
 from app.agents.resource_workflows.interactive_courseware.ports import SourceResourcePort
 
 
@@ -97,7 +97,9 @@ def _structured_practice_source_blocks(package: dict[str, Any], resource_id: str
             "text": "\n".join([f"## {title}", f"目标：{goal}", *(f"- {item}" for item in items)]),
             "kind": "practice_phase", "practice_phase_id": phase_id,
         })
-    append_phase("prepare", "准备阶段", package["preparation"]["goal"], package["preparation"]["items"])
+    preparation = package["preparation"]
+    materials = [f"材料：{item['name']}\n{item['content']}" for item in preparation.get("materials") or []]
+    append_phase("prepare", "准备阶段", preparation["goal"], [*preparation["items"], *materials])
     for step in package["practice"].get("steps") or []:
         if not isinstance(step, dict) or not step.get("step_id"):
             continue
@@ -126,10 +128,10 @@ def _required_practice_package(source: LearningResource) -> dict[str, Any]:
     step boundaries and can produce malformed courseware pages.
     """
     package = source.practice_guide_payload
-    if not isinstance(package, dict) or package.get("schema_version") != "3.0":
-        raise CoursewareAdmissionError("实操指南缺少 V3 固定阶段 JSON，需重新生成后才能创建互动课件")
+    if not isinstance(package, dict) or package.get("schema_version") not in {"3.0", "4.0", "5.0", "6.0"}:
+        raise CoursewareAdmissionError("实操指南缺少 V3/V4/V5/V6 固定阶段 JSON，需重新生成后才能创建互动课件")
     try:
-        validated = PracticeGuidePackageV3.model_validate(
+        validated = validate_practice_guide_package(
             {key: value for key, value in package.items() if key != "payload_hash"}
         )
     except ValueError as exc:
@@ -302,3 +304,35 @@ def frozen_source_batch_id(resource_service: SourceResourcePort, source_resource
             return None
         values.append(batch_id)
     return values[0] if values and len(set(values)) == 1 else None
+
+
+def source_display_summaries(resource_service: SourceResourcePort, job: dict[str, Any]) -> list[dict[str, Any]]:
+    """Whitelist source labels; frozen versions take precedence over live resources."""
+    snapshots = {item["resource_id"]: item for item in job.get("source_snapshots") or []
+                 if isinstance(item, dict) and item.get("resource_id")}
+    summaries = []
+    for resource_id in job.get("source_resource_ids") or []:
+        source = snapshots.get(resource_id)
+        if source is None:
+            resource = resource_service.get(resource_id)
+            if resource is None or getattr(resource, "learner_id", None) != job["learner_id"]:
+                continue
+            source = {
+                "resource_type": resource.resource_type, "topic": resource.topic,
+                "knowledge_points": resource.knowledge_points, "version": resource.version,
+                "content": resource.content_text or "",
+                "practice_guide_payload": resource.practice_guide_payload,
+                "review_practice_payload": resource.review_practice_payload,
+            }
+        packages = [source.get(key) for key in ("practice_guide_payload", "review_practice_payload")]
+        title = next((str(item["title"]).strip() for item in packages
+                      if isinstance(item, dict) and item.get("title")), "")
+        if not title:
+            heading = re.search(r"^#{1,6}\s+(.+)$", source.get("content") or "", re.MULTILINE)
+            title = heading.group(1).strip() if heading else str(source.get("resource_type") or "学习资源")
+        summaries.append({
+            "resource_id": resource_id, "resource_type": source.get("resource_type") or "学习资源",
+            "title": title[:240], "topic": source.get("topic"),
+            "knowledge_points": list(source.get("knowledge_points") or []), "version": source.get("version") or 1,
+        })
+    return summaries

@@ -59,7 +59,7 @@ class ResourceDifficultyPointV1(BaseModel):
     resource_id: str
     skill_node_id: str
     skill_name: str
-    point_type: Literal["resource", "batch_average"] = "resource"
+    point_type: Literal["resource", "batch_average", "batch_fit"] = "resource"
     batch_id: str | None = None
     resource_name: str | None = None
     resource_count: int = Field(default=1, ge=1)
@@ -75,7 +75,16 @@ class ResourceDifficultyPointV1(BaseModel):
     reason_codes: List[str] = Field(default_factory=list)
     feedback_score: float | None = Field(default=None, ge=0.0, le=1.0)
     feedback_count: int = Field(default=0, ge=0)
-    difficulty_adjustment: float = Field(default=0.0, ge=0.0, le=1.0)
+    difficulty_adjustment: float = Field(default=0.0, ge=-0.20, le=0.20)
+    difficulty_fit_score: float | None = Field(default=None, ge=0.0, le=100.0)
+    experience_score: float | None = Field(default=None, ge=0.0, le=100.0)
+    subjective_feedback_count: int = Field(default=0, ge=0)
+    subjective_difficulty_adjustment: float = Field(default=0.0, ge=-0.08, le=0.08)
+    objective_difficulty_adjustment: float = Field(default=0.0, ge=0.0, le=0.20)
+    credibility_score_source: Literal["ordinary_review", "claim"] | None = None
+    credibility_unavailable_reason: str | None = None
+    ordinary_review_score: float | None = Field(default=None, ge=0.0, le=100.0)
+    claim_review_score: float | None = Field(default=None, ge=0.0, le=100.0)
     credibility_score: float | None = Field(default=None, ge=0.0, le=100.0)
     credibility_level: str | None = None
     credibility_grade: str | None = None
@@ -172,6 +181,19 @@ class ReportRevisionPartsV1(BaseModel):
     projection: str = ""
 
 
+class ReportRecentResourceQualityV1(ResourceQualityMetricsV1):
+    learning_node_id: str | None = None
+    learning_node_name: str | None = None
+
+
+class ReportResourceQualityBatchV1(BaseModel):
+    key: str
+    topic: str
+    created_at: datetime | None = None
+    summary: ResourceQualitySummaryV1
+    items: List[ResourceQualityMetricsV1] = Field(default_factory=list)
+
+
 class ReportResponse(BaseModel):
     learning_round_summary: LearningRoundDetailV1 | None = None
     remediation_needs: List[Dict[str, Any]] = Field(default_factory=list)
@@ -192,7 +214,8 @@ class ReportResponse(BaseModel):
     # endpoint.  Missing/None keeps every legacy consumer valid; the frontend
     # shows "unknown" and never back-fills a number from a legacy score.
     resource_quality_summary: Optional[ResourceQualitySummaryV1] = None
-    recent_resource_quality: List[ResourceQualityMetricsV1] = Field(default_factory=list)
+    recent_resource_quality: List[ReportRecentResourceQualityV1] = Field(default_factory=list)
+    resource_quality_batches: List[ReportResourceQualityBatchV1] = Field(default_factory=list)
     as_of_profile_version: int = 1
     generated_at: datetime
     learner_id: str

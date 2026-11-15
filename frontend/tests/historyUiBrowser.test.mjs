@@ -319,7 +319,7 @@ async function checkProfileAndJourneyBehaviors(page) {
   const afterRefresh = audit.requests.filter((item) => item.method === 'GET' && item.path === '/api/profiles/').length
   assert.ok(afterRefresh > beforeRefresh, 'refresh action should reload the profile directory')
 
-  await chooseOption(page, '能力层级', '进阶')
+  await chooseOption(page, '能力层级', '高级')
   const filteredCount = await profileButtons.count()
   assert.equal(filteredCount, fixtureProfiles.filter((item) => item.skill_level === '进阶').length, 'level filter should restrict visible profiles')
   const advanced = profileButtons.filter({ hasText: '进阶画像' }).first().locator(':scope > .profile-item')

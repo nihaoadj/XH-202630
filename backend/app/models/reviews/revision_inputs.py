@@ -157,7 +157,7 @@ class ResourceReviewRevisionInput(_Private):
     schema_version: Literal["1.0"] = REVISION_INPUT_SCHEMA_VERSION
     kind: Literal["ordinary"] = ORDINARY_KIND
     revision_source: Literal["ordinary", "compat"] = "ordinary"
-    input_version: Literal["1.0"] = "1.0"
+    input_version: Literal["1.0", "2.0"] = "1.0"
     resource_spec_id: str = Field(min_length=1, max_length=128)
     parent_resource_id: str | None = Field(default=None, max_length=128)
     parent_version: int | None = Field(default=None, ge=1)

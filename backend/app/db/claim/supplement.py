@@ -241,6 +241,15 @@ class BaseClaimSupplementRepository(ABC):
         now: datetime | None = None,
     ) -> ClaimEvidenceRetrievalSessionV1: ...
 
+    @abstractmethod
+    def fail_session(
+        self, session_id: str, *, reason_code: str,
+        status: ClaimEvidenceRetrievalStatus = ClaimEvidenceRetrievalStatus.UNAVAILABLE,
+        now: datetime | None = None,
+    ) -> ClaimEvidenceRetrievalSessionV1:
+        """Close an inactive non-terminal session without decoding corrupt grants."""
+        ...
+
     # ---- batches ----------------------------------------------------
     @abstractmethod
     def save_batch(self, batch: ClaimEvidenceRetrievalBatchV1) -> ClaimEvidenceRetrievalBatchV1: ...
@@ -1090,8 +1099,40 @@ class SQLClaimSupplementRepository(BaseClaimSupplementRepository):
                     row.hard_block_reason = hard_block_reason
                 if status in TERMINAL_STATUSES:
                     row.completed_at = stamped
+                validated = self._session(row)
                 db.commit()
-                return self._session(row)
+                return validated
+
+        return run_with_sqlite_retry(once)
+
+    def fail_session(self, session_id, *, reason_code,
+                     status=ClaimEvidenceRetrievalStatus.UNAVAILABLE, now=None):
+        if status not in {ClaimEvidenceRetrievalStatus.UNAVAILABLE,
+                          ClaimEvidenceRetrievalStatus.BUDGET_EXHAUSTED}:
+            raise ValueError("invalid session failure status")
+        from app.db.shared.retry import run_with_sqlite_retry
+
+        def once():
+            with self.session_factory() as db:
+                row = db.query(ClaimEvidenceRetrievalSessionORM).filter_by(
+                    session_id=session_id).with_for_update().one_or_none()
+                if row is None:
+                    raise PersistenceConflict("supplement session missing")
+                from app.db.generation.fencing import assert_execution_ownership
+                assert_execution_ownership(db, row.run_id)
+                current = ClaimEvidenceRetrievalStatus(row.status)
+                if current in TERMINAL_STATUSES:
+                    return self._session(row)
+                if row.active:
+                    raise PersistenceConflict("active session cannot fail")
+                self._check_terminal(current, status)
+                row.status = status.value
+                row.reason_code = reason_code
+                row.evidence_scope_ids = []
+                row.updated_at = row.completed_at = now or datetime.now(timezone.utc)
+                validated = self._session(row)
+                db.commit()
+                return validated
 
         return run_with_sqlite_retry(once)
 
@@ -1877,9 +1918,29 @@ class MemoryClaimSupplementRepository(BaseClaimSupplementRepository):
                 update["hard_block_reason"] = hard_block_reason
             if status in TERMINAL_STATUSES:
                 update["completed_at"] = stamped
-            updated = current.model_copy(update=update)
+            updated = ClaimEvidenceRetrievalSessionV1.model_validate({
+                **current.model_dump(mode="python"), **update,
+            })
             self._sessions[session_id] = updated
             return updated.model_copy(deep=True)
+
+    def fail_session(self, session_id, *, reason_code,
+                     status=ClaimEvidenceRetrievalStatus.UNAVAILABLE, now=None):
+        if status not in {ClaimEvidenceRetrievalStatus.UNAVAILABLE,
+                          ClaimEvidenceRetrievalStatus.BUDGET_EXHAUSTED}:
+            raise ValueError("invalid session failure status")
+        with self._transaction():
+            current = self._sessions.get(session_id)
+            if current is None:
+                raise PersistenceConflict("supplement session missing")
+            if current.status in TERMINAL_STATUSES:
+                return current.model_copy(deep=True)
+            if current.active:
+                raise PersistenceConflict("active session cannot fail")
+            return self.update_session(
+                session_id, expected_status=current.status, status=status,
+                reason_code=reason_code, evidence_scope_ids=[], now=now,
+            )
 
     # ---- batches ----------------------------------------------------
     def save_batch(self, batch):

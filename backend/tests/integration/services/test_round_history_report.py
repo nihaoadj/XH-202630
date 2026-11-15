@@ -8,6 +8,7 @@ from app.models.learning_documents.schemas import GenerateRequest
 from app.services.learners.history import LearningHistoryService
 from app.services.learners.profiles import ProfileService
 from app.services.reports.reports import ReportService
+from types import SimpleNamespace
 from tests.integration.services.test_round_generation import create_payload, dual_round, fixture
 
 
@@ -65,6 +66,32 @@ def test_round_jobs_never_appear_as_a_second_legacy_batch():
     assert page.rounds == []
     assert all(run_id not in item.run_ids for item in page.rounds)
     assert page.learning_rounds[0].round_id == created.round_id
+    assert all(event.event_id != run_id and event.payload.get("run_id") != run_id
+               for event in page.unlinked_events)
+    assert page.current_state.current_nodes[0]["node_id"] == created.primary_node_id
+    assert page.current_state.current_nodes[0]["name"] == "a"
+    assert "资源生成" in page.current_state.next_action
+
+
+def test_current_primary_is_independent_of_history_page_and_review_member():
+    service, profile = fixture()
+    created = dual_round(service, profile)
+    legacy_job(service, "legacy-run", "legacy-batch")
+    for offset in (0, 1):
+        page = history_for(service).journey("learner", offset=offset, limit=1)
+        assert [node["node_id"] for node in page.current_state.current_nodes] == [created.primary_node_id]
+
+
+def test_completed_round_target_does_not_invent_mastery_and_provides_next_step():
+    service, profile = fixture()
+    primary = SimpleNamespace(role="primary", node_id="a", node_name="真实主节点", tier=1,
+                              state="completed", remediation_status="resolved")
+    latest_round = SimpleNamespace(round_id="round", members=[primary])
+    state = history_for(service)._current_state(profile, [], latest_round=latest_round)
+    assert state.current_nodes[0]["name"] == "真实主节点"
+    assert state.current_nodes[0]["status"] == "completed"
+    assert state.completed_nodes == []
+    assert state.next_action == "前往学习反馈选择下一步学习方案"
 
 
 def test_report_current_targets_use_the_latest_round_primary_only():

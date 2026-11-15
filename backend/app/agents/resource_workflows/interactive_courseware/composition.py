@@ -181,7 +181,7 @@ def _compose_blueprint_scenes(
             None,
         )
         if (slot.kind == "practice" and isinstance(practice_package, dict)
-                and practice_package.get("schema_version") == "3.0" and (practice_step_id or practice_phase_id)):
+                and practice_package.get("schema_version") in {"3.0", "4.0", "5.0", "6.0"} and (practice_step_id or practice_phase_id)):
             source_id = str(structured_practice_source["resource_id"])
             source_refs = [{"source_resource_id": source_id, "source_block_ids": block_ids}]
             if practice_phase_id in {"prepare", "verify", "reflect"}:
@@ -209,9 +209,19 @@ def _compose_blueprint_scenes(
                     component_blocks.append({
                         "schema_version": "1.0", "block_id": f"{slot.scene_id}:items", "component": "steps",
                         "text": "准备项目" if practice_phase_id == "prepare" else "最终检查项",
-                        "presentation_role": "practice_phase_items", "steps": display_blocks,
+                        "presentation_role": "practice_phase_items", "steps": list(display_blocks),
                         "source_json_path": item_path, "evidence_json_path": evidence_path, "source_refs": source_refs,
                     })
+                if practice_phase_id == "prepare" and practice_package["schema_version"] == "5.0":
+                    material_rows = [f"{item['name']}：{item['content']}" for item in phase.get("materials") or []]
+                    if material_rows:
+                        display_blocks.extend(material_rows)
+                        component_blocks.append({
+                            "schema_version": "1.0", "block_id": f"{slot.scene_id}:materials", "component": "steps",
+                            "text": "本次使用的材料", "presentation_role": "practice_phase_items",
+                            "steps": material_rows, "source_json_path": "preparation.materials",
+                            "evidence_json_path": evidence_path, "source_refs": source_refs,
+                        })
                 if practice_phase_id == "reflect":
                     summary = str(phase.get("summary") or "")
                     display_blocks = [summary]
@@ -219,7 +229,7 @@ def _compose_blueprint_scenes(
                 scene = {
                     "scene_id": slot.scene_id, "kind": "practice", "page_role": "practice_workspace",
                     "layout_recipe_id": slot.layout_recipe_id or "practice_workspace", "key_question": slot.key_question,
-                    "practice_variant": practice_phase_id, "practice_json_schema_version": "3.0", "practice_json_subject": phase_key, "required_zones": list(slot.required_zones),
+                    "practice_variant": practice_phase_id, "practice_json_schema_version": practice_package["schema_version"], "practice_json_subject": phase_key, "required_zones": list(slot.required_zones),
                     "content_budget": slot.content_budget.model_dump(mode="json"), "title": labels[practice_phase_id],
                     "lead": str(phase.get("goal") or ""), "blocks": display_blocks,
                     "conclusion": f"完成{labels[practice_phase_id]}后，再进入下一阶段。", "steps": [str(item) for item in items],
@@ -245,7 +255,7 @@ def _compose_blueprint_scenes(
             scene = {
                 "scene_id": slot.scene_id, "kind": "practice", "page_role": "practice_workspace",
                 "layout_recipe_id": slot.layout_recipe_id or "practice_workspace",
-                "key_question": slot.key_question, "practice_variant": slot.practice_variant, "practice_json_schema_version": "3.0", "practice_json_subject": f"practice.steps.{practice_step_id}", "title_source_json_path": f"practice.steps.{practice_step_id}.title",
+                "key_question": slot.key_question, "practice_variant": slot.practice_variant, "practice_json_schema_version": practice_package["schema_version"], "practice_json_subject": f"practice.steps.{practice_step_id}", "title_source_json_path": f"practice.steps.{practice_step_id}.title",
                 "required_zones": list(slot.required_zones), "content_budget": slot.content_budget.model_dump(mode="json"),
                 "title": f"步骤 {step_number}｜{str(practice_step.get('title') or practice_step_id)}",
                 "lead": instruction, "blocks": [instruction, f"完成验证：{verification}"],

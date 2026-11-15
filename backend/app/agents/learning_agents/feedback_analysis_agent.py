@@ -16,7 +16,7 @@ def analyze_feedback(
     llm_gateway: LLMGateway,
     profile: LearnerProfile,
     request: LearningAttemptSubmit,
-    policy: FeedbackPolicyDecision,
+    policy: FeedbackPolicyDecision | None,
     mutations: list[KnowledgeStateMutation],
 ) -> LLMCallResult[FeedbackAnalysis]:
     reflection = request.metadata.get("learning_reflection", {})
@@ -30,8 +30,6 @@ def analyze_feedback(
             "max_score": max_score,
             "score_rate": score_rate,
             "scoring_rule": "按每道题的实际得分汇总，部分得分计入总分；correct_count 仅表示完全正确题数",
-            "decision": policy.action.value,
-            "reason": policy.decision_reason,
             "knowledge_points": [
                 {
                     "id": item.knowledge_point_id,
@@ -50,6 +48,19 @@ def analyze_feedback(
         "learner_reflection": reflection,
         "profile": {"skill_level": profile.skill_level, "weak_points": profile.weak_points[:12]},
     }
+    if policy is not None:
+        payload["objective_scores"].update(decision=policy.action.value, reason=policy.decision_reason)
+    else:
+        payload["objective_scores"]["questions"] = [
+            {
+                "number": index,
+                "type": item.get("question_type"),
+                "knowledge_point": item.get("knowledge_point"),
+                "score": item.get("score"),
+                "max_score": item.get("max_score"),
+            }
+            for index, item in enumerate(request.metadata.get("question_results") or [], start=1)
+        ]
     return llm_gateway.invoke_structured(
         messages=[
             SystemMessage(content=(

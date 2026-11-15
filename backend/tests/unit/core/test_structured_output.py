@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict, RootModel
 
 from app.core.security.errors import ErrorCode
 from app.core.llm.structured_output import StructuredOutputError, parse_structured_output
+from app.models.reviews.resource_review import ResourceIssueV1
 
 
 class Payload(BaseModel):
@@ -88,3 +89,27 @@ def test_schema_error_safe_detail_does_not_contain_input_value():
         parse_structured_output({"name": secret, "score": "wrong"}, Payload)
     assert caught.value.code == ErrorCode.LLM_OUTPUT_SCHEMA_INVALID
     assert secret not in (caught.value.safe_detail or "")
+
+
+class IssuePayload(BaseModel):
+    issues: list[ResourceIssueV1]
+
+
+def test_resource_issue_cross_field_error_has_safe_rule_code():
+    issue = {
+        "issue_id": "temporary-1", "code": "TEST", "severity": "high",
+        "blocking": False, "dimension": "self_contained",
+        "location": {"kind": "root"}, "impact": "sensitive-content",
+        "requirement": "fix", "acceptance": "checked", "criteria_version": 1,
+        "path": "reorganize_existing", "teaching_rule_id": "known-rule",
+        "executability": "executable", "rationale": "reason",
+    }
+    with pytest.raises(StructuredOutputError) as caught:
+        parse_structured_output({"issues": [issue]}, IssuePayload)
+    assert caught.value.safe_detail == "issues.0:value_error:high_severity_must_block"
+    assert "sensitive-content" not in caught.value.safe_detail
+
+    issue.update(severity="medium", blocking=True)
+    with pytest.raises(StructuredOutputError) as caught:
+        parse_structured_output({"issues": [issue]}, IssuePayload)
+    assert caught.value.safe_detail == "issues.0:value_error:blocking_rule_missing"

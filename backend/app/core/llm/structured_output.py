@@ -160,6 +160,31 @@ def parse_structured_output(
         first = exc.errors(include_url=False, include_context=False, include_input=False)[0]
         location = ".".join(str(part) for part in first.get("loc", ())) or "root"
         detail = f"{location}:{first.get('type', 'validation_error')}"
+        # ResourceIssueV1's cross-field validators use fixed messages. Expose
+        # only a known rule code: arbitrary Pydantic messages can echo input.
+        issue_rule_codes = {
+            "high severity issue must block": "high_severity_must_block",
+            "blocking issue requires a blocking rule": "blocking_rule_missing",
+            "program gate issue cannot cite evidence or findings": "program_gate_references_forbidden",
+            "program gate issue has a fixed reconstruction path": "program_gate_path_invalid",
+            "issue requires evidence, a teaching rule, or finding keys": "issue_support_missing",
+            "technical addition requires frozen evidence": "technical_evidence_missing",
+            "path and executability disagree": "path_executability_mismatch",
+            "duplicate affected target": "duplicate_affected_target",
+            "blocking coverage issue requires affected targets": "coverage_targets_missing",
+            "only coverage issues may affect specific targets": "affected_targets_not_coverage",
+        }
+        loc = first.get("loc", ())
+        if (
+            len(loc) in {2, 3}
+            and loc[0] == "issues"
+            and isinstance(loc[1], int)
+            and (len(loc) == 2 or loc[2] in {"coverage", "factual_evidence", "difficulty", "self_contained"})
+            and first.get("type") == "value_error"
+        ):
+            message = first.get("msg", "").removeprefix("Value error, ")
+            if rule_code := issue_rule_codes.get(message):
+                detail = f"{detail}:{rule_code}"
         raise StructuredOutputError(
             ErrorCode.LLM_OUTPUT_SCHEMA_INVALID,
             safe_detail=detail,

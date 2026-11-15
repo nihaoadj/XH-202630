@@ -1,12 +1,12 @@
 <template>
   <section class="execution-graph" aria-label="工作流执行链路">
     <p class="execution-graph-accessible-description">
-      最新有编号记录在上，箭头从旧步骤指向新步骤。返工和复审独立显示，关键节点可查看详情；无编号记录置后，执行顺序未记录。
+      最新有编号记录在上，箭头从旧步骤指向新步骤。{{ resourceSequence ? 'STEP 按本资源实际记录连续编号，原始 Run 编号可在提示与详情中查看。' : 'STEP 为原始 Run 步骤编号。' }}返工和复审独立显示，关键节点可查看详情；无编号记录置后，执行顺序未记录。
     </p>
 
     <div v-if="!displayNodes.length" class="execution-graph-empty">
       <span class="execution-graph-waiting-orbit" aria-hidden="true"><span></span></span>
-      <span>等待执行记录</span>
+      <span>{{ emptyLabel }}</span>
     </div>
 
     <div v-else ref="planeElement" class="execution-graph-plane">
@@ -47,12 +47,12 @@
             :type="entry.meta.inspectable ? 'button' : undefined"
             class="execution-graph-node"
             :class="[
-              `status-${statusTone(entry.step.status)}`,
+              `status-${statusTone(entry.step.display_status || entry.step.status)}`,
               {
                 'is-inspectable': entry.meta.inspectable,
                 'is-selected': selectedKey === entry.recordKey,
                 'is-revision': isRevision(entry),
-                'is-terminal': entry.meta.key === 'finalize',
+                'is-terminal': entry.meta.key === 'finalize' && (!entry.step.display_status || entry.step.display_status === 'success'),
               },
             ]"
             :data-step-id="entry.recordKey"
@@ -88,7 +88,9 @@
 
             <span class="execution-graph-node-content">
               <span class="execution-graph-node-eyebrow">
-                <span class="execution-graph-sequence">{{ sequenceLabel(entry) }}</span>
+                <span class="execution-graph-sequence" :title="entry.sequence == null ? '执行顺序未记录' : `原始 Run 步骤 #${entry.sequence}`">{{ sequenceLabel(entry) }}</span>
+                <span v-if="entry.step.scope_label" class="execution-graph-scope">{{ entry.step.scope_label }}</span>
+                <span v-if="entry.step.version_label" class="execution-graph-version">{{ entry.step.version_label }}</span>
                 <span v-if="entry.totalCalls > 1" class="execution-graph-call-count">第 {{ entry.callIndex }} 次调用</span>
                 <span v-if="isRevision(entry)" class="execution-graph-revision-label">返工</span>
               </span>
@@ -96,12 +98,12 @@
                 <strong class="execution-graph-node-title">{{ entry.meta.title }}</strong>
                 <span class="execution-graph-status">
                   <span class="execution-graph-status-dot" aria-hidden="true"></span>
-                  {{ statusLabel(entry.step.status) }}
+                  {{ entry.step.display_status_label || statusLabel(entry.step.status) }}
                 </span>
               </span>
               <span class="execution-graph-node-footer execution-graph-node-secondary">
                 <span class="execution-graph-action">{{ actionLabel(entry) }}</span>
-                <span v-if="hasDuration(entry.step)" class="execution-graph-duration">{{ formatDuration(entry.step.duration_ms) }}</span>
+                <span v-if="hasDuration(entry.step)" class="execution-graph-duration">{{ entry.step.duration_scope ? `${entry.step.duration_scope} ` : '' }}{{ formatDuration(entry.step.duration_ms) }}</span>
                 <svg v-if="entry.meta.inspectable" class="execution-graph-inspect" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                   <path d="M3 7h8M8 4l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
@@ -119,7 +121,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { canInspectStep, formatDuration, workflowNodeMeta } from './workflowPresentation'
 import { iconPaths } from './workflowNodeIcons.js'
 
-const props = defineProps({ trace: { type: Array, default: () => [] } })
+const props = defineProps({ resourceSequence: Boolean, trace: { type: Array, default: () => [] }, emptyLabel: { type: String, default: '等待执行记录' } })
 const emit = defineEmits(['inspect-step'])
 const selectedKey = ref(null)
 const planeElement = ref(null)
@@ -164,6 +166,7 @@ const chronologicalNodes = computed(() => {
     const key = callKey(record)
     totals.set(key, (totals.get(key) || 0) + 1)
   }
+  let resourceSequence = 0
   return orderedTrace.value.map((record, flowIndex) => {
     const key = callKey(record)
     const callIndex = (calls.get(key) || 0) + 1
@@ -172,6 +175,7 @@ const chronologicalNodes = computed(() => {
     identities.set(record.recordKey, duplicateIndex + 1)
     return {
       ...record,
+      resourceSequence: record.sequence == null ? null : ++resourceSequence,
       key: `${record.recordKey}:${duplicateIndex}`,
       flowIndex,
       callIndex,
@@ -283,8 +287,8 @@ function measureConnections() {
       path: `M ${from.x} ${from.y} C ${from.x} ${middleY}, ${to.x} ${middleY}, ${to.x} ${to.y}`,
       arrowTransform: `translate(${(from.x + to.x) / 2} ${middleY}) rotate(${arrowAngle})`,
       directed: from.entry.sequence != null && to.entry.sequence != null && from.entry.sequence < to.entry.sequence,
-      tone: isRevision(to.entry) ? 'warning' : statusTone(to.entry.step.status),
-      active: to.entry.step.status === 'running',
+      tone: isRevision(to.entry) ? 'warning' : statusTone(to.entry.step.display_status || to.entry.step.status),
+      active: (to.entry.step.display_status || to.entry.step.status) === 'running',
     })
   }
   const measured = { width: bounds.width, height: bounds.height, edges }
@@ -316,17 +320,17 @@ function inspectStep(entry) {
 }
 
 function sequenceLabel(entry) {
-  return entry.sequence == null ? '顺序未记录' : `STEP ${String(entry.sequence).padStart(2, '0')}`
+  return entry.sequence == null ? '顺序未记录' : `STEP ${String(props.resourceSequence ? entry.resourceSequence : entry.sequence).padStart(2, '0')}`
 }
 
 function actionLabel(entry) {
-  return entry.step.action || entry.meta.description
+  return entry.step.display_action || entry.step.action || entry.meta.description
 }
 
 function nodeLabel(entry) {
-  const execution = entry.sequence == null ? '执行顺序未记录' : `执行 #${entry.sequence}`
+  const execution = entry.sequence == null ? '执行顺序未记录' : (props.resourceSequence ? `本资源步骤 #${entry.resourceSequence}，原始 Run 步骤 #${entry.sequence}` : `执行 #${entry.sequence}`)
   const call = entry.totalCalls > 1 ? `，第 ${entry.callIndex} 次调用` : ''
-  return `${entry.meta.title}，${execution}${call}，${actionLabel(entry)}，${statusLabel(entry.step.status)}，查看执行详情`
+  return `${entry.meta.title}，${execution}${call}，${entry.step.scope_label || ''}，${entry.step.version_label || ''}，${actionLabel(entry)}，${entry.step.display_status_label || statusLabel(entry.step.status)}，查看执行详情`
 }
 
 function isRevision(entry) {
@@ -365,15 +369,17 @@ function statusTone(status) {
   position: relative;
   min-width: 0;
   padding: 16px 12px;
-  border: 1px solid #dbe8ec;
+  border: 1px solid transparent;
   border-radius: 16px;
   background:
-    radial-gradient(ellipse at 0 0, #c9eae630, transparent 52%),
-    radial-gradient(ellipse at 100% 100%, #dce9f530, transparent 50%),
-    radial-gradient(#698f9c26 0.7px, transparent 0.8px),
-    var(--graph-background);
-  background-size: auto, auto, 18px 18px, auto;
-  box-shadow: inset 0 1px 0 #ffffff, 0 6px 20px #10233905;
+    radial-gradient(#698f9c26 0.7px, transparent 0.8px) 0 0 / 18px 18px padding-box,
+    linear-gradient(150deg, #edf7f7, var(--graph-background) 38%, #eff5f9) padding-box,
+    linear-gradient(135deg, #9fc5ca, #e4edf2 46%, #bfd7df) border-box;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 4px rgb(82 125 148 / 14%),
+    0 3px 7px -3px rgb(33 64 86 / 26%),
+    0 10px 20px -12px rgb(33 64 86 / 32%);
   color: var(--graph-text);
   isolation: isolate;
   overflow-anchor: none;
@@ -460,6 +466,8 @@ function statusTone(status) {
 .execution-graph-node-eyebrow { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; min-width: 0; color: var(--node-muted); font-size: 12px; line-height: 1.4; }
 .execution-graph-sequence { color: var(--node-sequence); font: 600 12px/1.4 Consolas, monospace; letter-spacing: 0.04em; }
 .execution-graph-call-count { color: var(--node-muted); font-size: 12px; line-height: 1.4; }
+.execution-graph-scope { padding:1px 5px; border:1px solid #dbe8ec; border-radius:4px; color:var(--node-muted); font-size:11px; line-height:1.4; }
+.execution-graph-version { color:var(--node-muted); font:11px/1.4 Consolas,monospace; }
 .execution-graph-revision-label { color: var(--node-accent); font-size: 12px; line-height: 1.4; }
 .execution-graph-node-main { display:flex; align-items:center; gap:8px; min-width:0; }
 .execution-graph-node-title { flex: 1 1 auto; min-width: 0; color: var(--node-text); font-size: 14px; font-weight: 700; line-height: 1.55; overflow-wrap: anywhere; }

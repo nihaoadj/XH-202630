@@ -43,7 +43,8 @@ def _validate_frozen_fields(snapshot: dict) -> dict:
     if version not in {"1.0", RESOURCE_CONTRACT_VERSION}:
         raise ValueError("unknown resource review contract version")
     data = snapshot["resource_review_policy"]
-    if not isinstance(data, dict) or set(data) != set(ResourceReviewPolicyV1.model_fields):
+    all_fields = set(ResourceReviewPolicyV1.model_fields)
+    if not isinstance(data, dict) or set(data) not in (all_fields, all_fields - {"input_contract"}):
         raise ValueError("resource review policy fields missing or unknown")
     policy = ResourceReviewPolicyV1.model_validate(data).model_dump(mode="json")
     if policy != data or policy_hash(policy) != snapshot["resource_review_policy_hash"]:

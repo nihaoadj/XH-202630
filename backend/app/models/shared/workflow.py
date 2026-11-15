@@ -160,6 +160,7 @@ class WorkflowState(TypedDict, total=False):
     lecture_ledgers: Dict[str, Any]
     lecture_revision: Dict[str, Any]
     lecture_stop_reasons: Dict[str, str]
+    correction_package_snapshot: Dict[str, Any]
     resource_dispatch_snapshot: Dict[str, Any]
     resource_review_contract_version: str
     resource_review_policy: Dict[str, Any]
@@ -191,6 +192,12 @@ class WorkflowState(TypedDict, total=False):
     include_claim_evidence_retrieval: bool
     max_iterations: int
     claim_max_iterations: int
+    claim_post_retrieval_max_iterations: int
+    claim_gap_revision_threshold: int
+    claim_workflow_version: str
+    claim_revision_phase: str
+    claim_post_retrieval_resource_keys: List[str]
+    claim_post_retrieval_revision_count: int
     constraints: Dict[str, Any]
 
     workflow_status: str
@@ -267,6 +274,7 @@ class WorkflowStateSnapshot(BaseModel):
     resource_ledgers: Dict[str, Any] = Field(default_factory=dict)
     resource_revision: Dict[str, Any] = Field(default_factory=dict)
     resource_stop_reasons: Dict[str, str] = Field(default_factory=dict)
+    correction_package_snapshot: Dict[str, Any] | None = None
     review_policy: ReviewPolicySnapshotV1 | None = None
     review_audit: ReviewAuditRecordV1 | ReviewAuditRecordV2 | None = None
     review_audit_refs: List[Dict[str, Any]] = Field(default_factory=list)
@@ -286,6 +294,12 @@ class WorkflowStateSnapshot(BaseModel):
     include_claim_evidence_retrieval: bool = False
     max_iterations: int = Field(default=2, ge=0, le=3)
     claim_max_iterations: int = Field(default=1, ge=0, le=3)
+    claim_post_retrieval_max_iterations: int = Field(default=0, ge=0, le=3)
+    claim_gap_revision_threshold: int = Field(default=8, ge=0, le=128)
+    claim_workflow_version: Literal["legacy_v1", "contradiction_first_v1", "contradiction_first_v2", "contradiction_first_v3"] = "legacy_v1"
+    claim_revision_phase: Literal["legacy_v1", "contradiction", "post_retrieval", "exhausted"] = "legacy_v1"
+    claim_post_retrieval_resource_keys: List[str] = Field(default_factory=list)
+    claim_post_retrieval_revision_count: int = Field(default=0, ge=0)
     constraints: Dict[str, Any] = Field(default_factory=dict)
 
     workflow_status: WorkflowStatus = WorkflowStatus.RUNNING
@@ -337,7 +351,12 @@ class WorkflowStateSnapshot(BaseModel):
             raise ValueError("learner_id must match learner.learner_id")
         if self.revision_count > self.max_iterations:
             raise ValueError("revision_count cannot exceed max_iterations")
-        if self.claim_revision_count > self.claim_max_iterations:
+        post = self.claim_post_retrieval_revision_count
+        if post > self.claim_post_retrieval_max_iterations or post > self.claim_revision_count:
+            raise ValueError("invalid post-retrieval revision count")
+        if post and (self.claim_workflow_version == "legacy_v1" or not self.include_claim_evidence_retrieval):
+            raise ValueError("post-retrieval revisions require the staged supplement workflow")
+        if self.claim_revision_count - post > self.claim_max_iterations:
             raise ValueError("claim_revision_count cannot exceed claim_max_iterations")
         if self.generation_attempt != self.revision_count + self.claim_revision_count + 1:
             raise ValueError("generation_attempt must equal total revisions + 1")

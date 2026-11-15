@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040" role="img" aria-labelledby="title desc">
   <title id="title">RAG 工程知识库的能力节点关系图</title>
-  <desc id="desc">当前知识库的十三个真实能力节点，按零基础、Python 基础和进阶 RAG 三层从左到右排列，箭头表示先修关系。</desc>
+  <desc id="desc">RAG 工程方向的十三个能力节点，按零基础、Python 基础和进阶 RAG 三层从左到右排列，箭头表示先修关系。</desc>
   <defs>
     <style>
       text { font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif; fill:#17324d; }
-      .title{font-size:34px;font-weight:700}.sub{font-size:18px;fill:#54708b}.tier{font-size:22px;font-weight:700}.tier-sub{font-size:15px;fill:#607a91}.node{stroke-width:2}.node-title{font-size:18px;font-weight:700}.node-sub{font-size:14px;fill:#587088}.edge{stroke:#97b8d3;stroke-width:2.5;fill:none;marker-end:url(#arrow)}.edge-strong{stroke:#5692bd;stroke-width:3;fill:none;marker-end:url(#arrowStrong)}.note{font-size:17px;fill:#49657e}.legend{font-size:15px;fill:#607a91}
+      .title{font-size:34px;font-weight:700}.sub{font-size:18px;fill:#54708b}.tier{font-size:22px;font-weight:700}.tier-sub{font-size:15px;fill:#607a91}.node{stroke-width:2}.node-title{font-size:18px;font-weight:700}.node-sub{font-size:14px;fill:#587088}.edge{stroke:#5692bd;stroke-width:2.5;fill:none;marker-end:url(#arrow)}.edge-strong{stroke:#5692bd;stroke-width:3;fill:none;marker-end:url(#arrowStrong)}.note{font-size:17px;fill:#49657e}.legend{font-size:15px;fill:#607a91}
     </style>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#97b8d3"/></marker>
-    <marker id="arrowStrong" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#5692bd"/></marker>
+    <marker id="arrow" markerUnits="userSpaceOnUse" viewBox="0 0 14 12" markerWidth="14" markerHeight="12" refX="14" refY="6" orient="auto"><path d="M0 0L14 6L0 12Z" fill="#5692bd"/></marker>
+    <marker id="arrowStrong" markerUnits="userSpaceOnUse" viewBox="0 0 14 12" markerWidth="14" markerHeight="12" refX="14" refY="6" orient="auto"><path d="M0 0L14 6L0 12Z" fill="#5692bd"/></marker>
   </defs>
   <rect width="1600" height="1040" fill="#f8fbfe"/>
   <text x="800" y="62" text-anchor="middle" class="title">RAG 工程知识库：能力节点关系图</text>
-  <text x="800" y="94" text-anchor="middle" class="sub">当前真实节点按学习层级从左到右排列；箭头表示“必须先具备的能力”</text>
+  <text x="800" y="94" text-anchor="middle" class="sub">3 个学习阶、13 个节点、15 条先修关系</text>
 
   <!-- Tier headers follow the project's learning-path layout: left to right. -->
   <rect x="90" y="135" width="385" height="70" rx="16" fill="#edf8f0" stroke="#9bd4aa" stroke-width="2"/>
@@ -41,21 +41,21 @@
   <g transform="translate(1195,885)"><rect class="node" width="245" height="76" rx="14" fill="#fff" stroke="#bca6e7"/><text x="122" y="33" text-anchor="middle" class="node-title">RAG 调优</text><text x="122" y="58" text-anchor="middle" class="node-sub">参数调优、消融实验</text></g>
 
   <!-- Exact prerequisite edges from metadata.json, parent → child. -->
-  <path class="edge-strong" d="M282 376L282 465"/>
-  <path class="edge" d="M160 338C92 338 92 668 160 668"/>
-  <path class="edge" d="M405 503L677 293"/>
-  <path class="edge" d="M405 668L677 433"/>
-  <path class="edge-strong" d="M922 293C980 293 980 505 850 535"/>
-  <path class="edge-strong" d="M799 471L799 535"/>
-  <path class="edge" d="M922 553L1195 293"/>
-  <path class="edge" d="M922 592L1195 433"/>
-  <path class="edge-strong" d="M799 611L799 675"/>
-  <path class="edge" d="M799 751L799 815"/>
-  <path class="edge-strong" d="M922 853L1195 643"/>
-  <path class="edge" d="M1317 681L1317 745"/>
-  <path class="edge-strong" d="M1317 821L1317 885"/>
-  <path class="edge" d="M1440 293H1470Q1485 293 1485 308V893Q1485 908 1470 908H1440"/>
-  <path class="edge" d="M1440 433H1515Q1530 433 1530 448V936Q1530 951 1515 951H1440"/>
+  <path class="edge-strong" d="M282 376V462"/>
+  <path class="edge" d="M160 338H147C91 338 91 668 132 668H157"/>
+  <path class="edge" d="M405 503L674 293"/>
+  <path class="edge" d="M405 668L674 433"/>
+  <path class="edge-strong" d="M905 331C976 363 976 488 905 532"/>
+  <path class="edge-strong" d="M799 471V532"/>
+  <path class="edge" d="M922 553L1192 293"/>
+  <path class="edge" d="M922 592L1192 433"/>
+  <path class="edge-strong" d="M799 611V672"/>
+  <path class="edge" d="M799 751V812"/>
+  <path class="edge-strong" d="M922 853L1192 643"/>
+  <path class="edge" d="M1317 681V742"/>
+  <path class="edge-strong" d="M1317 821V882"/>
+  <path class="edge" d="M1440 293H1513Q1530 293 1530 310V921Q1530 938 1513 938H1443"/>
+  <path class="edge" d="M1440 433H1470Q1485 433 1485 448V893Q1485 908 1470 908H1443"/>
 
-  <g transform="translate(110,988)"><line x1="0" y1="0" x2="44" y2="0" class="edge-strong"/><text x="60" y="5" class="legend">箭头方向：前置能力 → 后续能力</text><text x="520" y="5" class="legend">按阶次从左到右；同阶节点可有前置关系。</text></g>
+  <g transform="translate(110,988)"><line x1="0" y1="0" x2="44" y2="0" class="edge-strong"/><text x="60" y="5" class="legend">箭头方向：先修节点 → 后继节点</text></g>
 </svg>

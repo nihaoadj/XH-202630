@@ -80,11 +80,12 @@ def get_run_timeline(
     effective_limit = limit or settings.workflow_timeline_default_limit
     effective_limit = min(effective_limit, settings.workflow_timeline_max_limit)
     service: RunQueryService = request.app.container.run_query_service()
-    return service.get_timeline(
+    from app.services.reviews.assessment_privacy import public_timeline
+    return public_timeline(service.get_timeline(
         run_id,
         after_sequence=after_sequence,
         limit=effective_limit,
-    )
+    ))
 
 
 @router.get("/{run_id}/evidence", response_model=list[PersistedEvidenceSnapshot])
@@ -96,7 +97,8 @@ def get_run_evidence(run_id: str, request: Request):
 @router.get("/{run_id}/claims", response_model=RunClaimsResponse)
 def get_run_claims(run_id: str, request: Request):
     service: RunQueryService = request.app.container.run_query_service()
-    return service.get_claims(run_id)
+    from app.services.reviews.assessment_privacy import public_claims
+    return public_claims(service.get_claims(run_id))
 
 
 @router.get(

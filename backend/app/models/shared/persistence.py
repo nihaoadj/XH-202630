@@ -487,6 +487,8 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
     """Build the bounded allow-list projection used for read-only replay."""
 
     projection: dict[str, Any] = {}
+    if state.get("correction_package_snapshot"):
+        projection["correction_package_snapshot"] = _jsonable(state["correction_package_snapshot"])
     if state.get("claim_extraction_policy") is not None:
         for key in ("claim_extraction_mode", "claim_extraction_policy", "claim_extraction_policy_hash"):
             projection[key] = _jsonable(state[key])
@@ -542,6 +544,11 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "include_claim_evidence_retrieval",
         "max_iterations",
         "claim_max_iterations",
+        "claim_post_retrieval_max_iterations",
+        "claim_workflow_version",
+        "claim_gap_revision_threshold",
+        "claim_revision_phase",
+        "claim_post_retrieval_revision_count",
         "workflow_status",
         "current_node",
         "generation_attempt",
@@ -558,6 +565,8 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "iteration",
     )
     for key in scalar_fields:
+        if key.startswith("claim_") and key not in state:
+            continue
         value = state.get(key)
         if value is None or isinstance(value, (str, int, float, bool)):
             projection[key] = value
@@ -568,6 +577,7 @@ def build_checkpoint_projection(state: dict[str, Any]) -> dict[str, Any]:
         "assessment_claim_skipped_resource_ids",
         "claim_failed_resource_ids",
         "claim_eligible_resource_ids",
+        "claim_post_retrieval_resource_keys",
     ):
         projection[key] = list(state.get(key, []))[:100]
     constraints = dict(state.get("constraints", {}))

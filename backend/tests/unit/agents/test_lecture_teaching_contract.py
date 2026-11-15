@@ -80,9 +80,13 @@ def test_out_of_scope_evidence_is_not_added_for_teaching_convenience():
 def test_generation_and_review_share_all_teaching_rules_and_version():
     assert set(TEACHING_RULES) == {"self_contained", "audience", "presentation", "scope", "progression"}
     assert all(value in LECTURE_REVIEW_GUIDANCE for value in TEACHING_RULES.values())
-    assert "lab-B" in TEXT_RESOURCE_PROMPT and "Q1–Q4" in TEXT_RESOURCE_PROMPT
+    assert "按概念之间的关系组织正文" in TEXT_RESOURCE_PROMPT
+    assert "正文讲完即可结束" in TEXT_RESOURCE_PROMPT
+    assert "一至两项自检" in TEXT_RESOURCE_PROMPT
+    assert "冻结 evidence" in TEXT_RESOURCE_PROMPT
+    assert "只依赖正文内足够的摘要或要点" in LECTURE_REVIEW_GUIDANCE
     assert "内部完成" in TEXT_RESOURCE_PROMPT and "不输出自检报告" in TEXT_RESOURCE_PROMPT
-    assert TextResourceAgent.prompt_version == "text-resource-v6-teaching-contract"
+    assert TextResourceAgent.prompt_version == "text-resource-v8-concept-explanation"
 
 
 @pytest.mark.parametrize("kind", ["讲义", "案例分析"])

@@ -38,7 +38,6 @@
     </slot>
 
     <section class="reader-content">
-      <div class="content-label"><span></span>学习内容</div>
       <div
         class="resource-content markdown-body"
         v-html="renderedContent(res)"
@@ -52,7 +51,7 @@
         :style="selectionActionStyle"
         @mousedown.prevent
         @click="askTutorAboutSelection"
-      >就这段向 Tutor 提问</button>
+      ><TutorMark /> 就这段向 Tutor 提问</button>
     </section>
 
     <footer class="reader-footer">
@@ -76,6 +75,7 @@ import { Download } from '@element-plus/icons-vue'
 import { resourceApi } from './api.js'
 import { renderMarkdown } from '../../utils/markdown.js'
 import SourceRefList from './SourceRefList.vue'
+import TutorMark from '../tutor/TutorMark.vue'
 
 const props = defineProps({
   resources: { type: Array, default: () => [] },
@@ -190,7 +190,7 @@ function askTutorAboutSelection() {
 </script>
 
 <style scoped>
-.reader-card { overflow: hidden; border: 1px solid #dce6ef; border-radius: 10px; background: #fff; box-shadow: 0 14px 32px rgba(35,62,94,.06); }
+.reader-card { overflow: hidden; border: 1px solid #dce6ef; border-radius: 0; background: #fff; box-shadow: 0 14px 32px rgba(35,62,94,.06); }
 .reader-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 58px; padding: 12px 24px; background: #fbfdff; border-bottom: 1px solid #e4ebf3; }.reader-title-wrap { display: flex; min-width: 0; align-items: center; gap: 12px; }.learning-status { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; color: #2058a7; font-size: 13px; font-weight: 800; }.learning-status i { width: 7px; height: 7px; border-radius: 50%; background: #4a90ff; box-shadow: 0 0 0 3px rgba(53, 174, 148, .14); }.resource-kicker { overflow: hidden; padding-left: 12px; border-left: 1px solid #d9e7e5; color: #2058a7; font-size: 16px; font-weight: 800; letter-spacing: 0; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }.reader-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }.learning-progress { color: #52728a; font-size: 12px; font-weight: 650; white-space: nowrap; }.reader-actions :deep(.el-tag) { height: 28px; padding: 0 10px; font-weight: 650; }.download-button { height: 32px; padding: 0 12px; border-color: #9fc5ec; border-radius: 8px; background: #eff7ff; color: #2467b3; font-weight: 700; }.download-button:hover, .download-button:focus-visible { border-color: #2467b3; background: #2467b3; color: #fff; }
 .reader-content { padding: 32px 40px 18px; }.content-label { display: flex; align-items: center; gap: 8px; margin-bottom: 19px; color: #2058a7; font-size: 13px; font-weight: 800; }.content-label span { width: 4px; height: 16px; border-radius: 99px; background: #2058a7; }.resource-content { color: #34475e; font-size: 15px; line-height: 1.9; }.resource-content :deep(h1), .resource-content :deep(h2), .resource-content :deep(h3), .resource-content :deep(h4), .resource-content :deep(h5), .resource-content :deep(h6) { margin: 30px 0 12px; color: #172033; line-height: 1.35; }.resource-content :deep(h1) { font-size: 25px; }.resource-content :deep(h2) { font-size: 21px; }.resource-content :deep(h3) { font-size: 18px; }.resource-content :deep(p), .resource-content :deep(ul), .resource-content :deep(pre) { margin: 0 0 16px; }.resource-content :deep(ul) { padding-left: 22px; }.resource-content :deep(li + li) { margin-top: 6px; }.resource-content :deep(code) { padding: 2px 6px; border-radius: 5px; background: #ecf3f8; color: #185e7b; font-family: Consolas,'Courier New',monospace; font-size: .9em; }.resource-content :deep(pre) { padding: 16px 18px; border-radius: 10px; background: #10253e; color: #e8f2fb; overflow-x: auto; }.resource-content :deep(pre code) { padding: 0; background: transparent; color: inherit; }
 .selection-question-popover { position:fixed; z-index:45; padding:8px 11px; border:1px solid #197f73; border-radius:8px; background:#218f81; box-shadow:0 8px 19px rgba(25,118,106,.24); color:#fff; font-size:12px; font-weight:750; cursor:pointer; }.selection-question-popover:hover,.selection-question-popover:focus-visible { border-color:#13695f; background:#176f65; }
@@ -319,9 +319,6 @@ function askTutorAboutSelection() {
 }
 .resource-content :deep(ul), .resource-content :deep(ol) { padding-left: 28px; }
 
-/* Keep document headings prominent in both the library and generation pages. */
-.content-label { gap: 9px; margin-bottom: 21px; color: #1d5aa8; font-size: 16px; }
-.content-label span { width: 5px; height: 20px; background: #1d5aa8; }
 .resource-content :deep(h1), .resource-content :deep(h2), .resource-content :deep(h3), .resource-content :deep(h4) { color: #102d56; font-weight: 800; line-height: 1.3; }
 .resource-content :deep(h1) { font-size: 31px; }
 .resource-content :deep(h2) { font-size: 25px; }
@@ -334,4 +331,5 @@ function askTutorAboutSelection() {
 .resource-content :deep(th) { background: #edf3fa; color: #173858; font-weight: 700; }
 .resource-content :deep(tbody tr:nth-child(even) td) { background: #f8fafc; }
 .resource-content :deep(.markdown-table-scroll:focus-visible) { outline: 2px solid #2467b3; outline-offset: 2px; }
+.selection-question-popover { display: inline-flex; align-items: center; gap: 6px; }
 </style>

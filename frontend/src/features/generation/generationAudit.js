@@ -12,7 +12,15 @@ export function associatedStepResources(snapshot, step, runId) {
   for (const review of snapshot.reviews || []) {
     if (review.run_id === runId && reviewIds.has(review.review_id)) ids.add(review.resource_id)
   }
-  return (snapshot.resource_versions || []).filter(item => item.run_id === runId && ids.has(item.resource_id))
+  const scope = step.resource_scope
+  if (scope?.runId && scope.runId !== runId) return []
+  // A completed worker event can arrive while the aggregate step is still
+  // running and its persisted resource_ids have not been filled yet.
+  if (scope) for (const id of scope.resourceIds) ids.add(id)
+  return (snapshot.resource_versions || []).filter(item => item.run_id === runId && ids.has(item.resource_id)
+    && (!scope || (scope.resourceIds.includes(item.resource_id)
+      && (!scope.specId || !item.resource_spec_id || item.resource_spec_id === scope.specId)
+      && (item.representation || 'text') === scope.representation)))
 }
 
 export function claimAuditSummary(report, enabled = true) {

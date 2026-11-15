@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
+from datetime import timezone
 from typing import Any
 
 from app.db.feedback.round_models import ROUND_MODELS
@@ -46,6 +47,23 @@ class BaseRoundRepository(ABC):
 
     @abstractmethod
     def list_rounds(self, learner_id: str, offset: int = 0, limit: int = 20) -> tuple[list[Record], int]: ...
+
+    def latest_primary_node(self, learner_id: str, knowledge_base_id: str) -> Record | None:
+        """Latest confirmed normal round; review and legacy never set the rating."""
+        rounds = self.find("learning_rounds", learner_id=learner_id,
+                           knowledge_base_id=knowledge_base_id, protocol_version="learning-round/v1")
+
+        def order(row):
+            created = row["created_at"]
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            return created.timestamp(), row["round_id"]
+
+        for row in sorted(rounds, key=order, reverse=True):
+            primary = self.one("learning_round_nodes", round_id=row["round_id"], role="primary")
+            if primary is not None:
+                return primary
+        return None
 
 
 def validate_relation(repository: BaseRoundRepository, table: str, row: Record) -> None:

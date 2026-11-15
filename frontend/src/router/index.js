@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { nextTick } from 'vue'
 import HomeView from '../features/home/HomeView.vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -30,6 +31,16 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+router.afterEach(async (to, from, failure) => {
+  if (failure || to.path === from.path) return
+  await nextTick()
+  const content = document.querySelector('.content-area')
+  if (content) {
+    content.scrollTop = 0
+    content.scrollLeft = 0
+  }
 })
 
 router.beforeEach(async (to) => {

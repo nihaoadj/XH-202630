@@ -34,7 +34,7 @@ def _practice_step_groups(
             for step in structured_steps
         ]
     package = source.get("practice_guide_payload")
-    if isinstance(package, dict) and package.get("schema_version") == "3.0":
+    if isinstance(package, dict) and package.get("schema_version") in {"3.0", "4.0", "5.0", "6.0"}:
         blocks_by_step = {
             str(block.get("practice_step_id")): str(block.get("block_id"))
             for block in source.get("blocks") or [] if block.get("practice_step_id") and block.get("block_id")

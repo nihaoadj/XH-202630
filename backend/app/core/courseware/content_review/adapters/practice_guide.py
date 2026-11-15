@@ -1,9 +1,10 @@
-"""V3 practice covers and teaching metadata, with optional code rules."""
+"""V3–V6 practice covers and teaching metadata, with versioned source validation."""
 import re
 from app.core.courseware.content_review.adapters.base import DeclaredAdapter
 from app.core.courseware.content_review.projections import practice_projection
 from app.models.courseware.content import CoursewarePlanEnrichmentV2
-from app.models.shared.agent_contracts import PracticeGuidePackageV3
+from app.models.shared.agent_contracts import PracticeGuidePackageV3, validate_practice_guide_package
+from app.models.courseware.content_review import json_hash
 
 
 class PracticeGuideAdapter(DeclaredAdapter):
@@ -12,6 +13,15 @@ class PracticeGuideAdapter(DeclaredAdapter):
     source_model = PracticeGuidePackageV3
     candidate_model = CoursewarePlanEnrichmentV2
     candidate_slot = "enrichment"
+
+    def validate_source(self, snapshot):
+        payload = snapshot[self.source_key]
+        raw = {key: value for key, value in payload.items() if key != "payload_hash"}
+        validate_practice_guide_package(raw)
+        digest = json_hash(raw)
+        if payload.get("payload_hash") != digest or snapshot.get(self.source_key + "_hash") != digest:
+            raise ValueError("frozen source payload hash mismatch")
+        return payload
 
     def refine_design(self, snapshot, design):
         payload = self.validate_source(snapshot)

@@ -76,6 +76,7 @@ async function visibleWrapperMetrics(page) {
     const radius = Number.parseFloat(style.borderTopLeftRadius)
     return [{
       label: node.closest('.el-select')?.getAttribute('aria-label') || node.closest('.el-select')?.className || '',
+      glass: !node.classList.contains('is-disabled') && Boolean(node.closest('.workspace-glass-select')),
       width: Number(rect.width.toFixed(2)), height: Number(rect.height.toFixed(2)),
       radius, fontSize: style.fontSize, boxShadow: style.boxShadow,
     }]
@@ -133,7 +134,8 @@ async function assertVisibleSurface(page, viewport) {
   assert.ok(metrics.length, 'page should expose at least one visible Element Plus select wrapper')
   const expectedFontSize = viewport.width <= 600 ? '16px' : '13px'
   for (const item of metrics) {
-    assert.ok(Math.abs(item.radius - 10) < 0.1, `select wrapper should use 10px radius: ${JSON.stringify(item)}`)
+    const expectedRadius = item.glass ? 12 : 10
+    assert.ok(Math.abs(item.radius - expectedRadius) < 0.1, `select wrapper should use ${expectedRadius}px radius: ${JSON.stringify(item)}`)
     assert.ok(item.height >= 44, `select wrapper should be at least 44px high: ${JSON.stringify(item)}`)
     assert.equal(item.fontSize, expectedFontSize, `select font should match ${viewport.width}px viewport: ${JSON.stringify(item)}`)
   }
@@ -190,7 +192,7 @@ export async function inspectElementSelect({
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, radius: Number.parseFloat(style.borderTopLeftRadius), shadow: style.boxShadow }
       })
       assert.deepEqual([hovered.x, hovered.y, hovered.width, hovered.height], [normal.x, normal.y, normal.width, normal.height], `${id}: hover must not change select geometry`)
-      assert.ok(Math.abs(hovered.radius - 10) < 0.1, `${id}: hover must retain shared radius`)
+      assert.ok(Math.abs(hovered.radius - normal.radius) < 0.1, `${id}: hover must retain the default radius`)
       const input = select.locator('input').first()
       if (await input.count()) await input.evaluate((node) => node.focus({ preventScroll: true }))
       else await wrapper.evaluate((node) => node.focus({ preventScroll: true }))
@@ -201,7 +203,7 @@ export async function inspectElementSelect({
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, radius: Number.parseFloat(style.borderTopLeftRadius), shadow: style.boxShadow }
       })
       assert.deepEqual([focused.x, focused.y, focused.width, focused.height], [normal.x, normal.y, normal.width, normal.height], `${id}: focus must not change select geometry`)
-      assert.ok(Math.abs(focused.radius - 10) < 0.1, `${id}: focus must retain shared radius`)
+      assert.ok(Math.abs(focused.radius - normal.radius) < 0.1, `${id}: focus must retain the default radius`)
       assert.notEqual(focused.shadow, normal.shadow, `${id}: focus should visibly change the wrapper shadow`)
       const triggerText = select.locator('.el-select__selected-item, .el-select__placeholder').first()
       const triggerContrast = await contrastFor(triggerText)

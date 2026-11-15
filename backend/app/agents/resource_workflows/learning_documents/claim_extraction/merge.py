@@ -6,8 +6,6 @@ the target unit, then rewrites ``source_text`` from the frozen resource text so
 the materializer's exact-substring gate never needs its full-text fallback.
 """
 from app.models.reviews.claim_extraction import (
-    BatchOutput,
-    BatchOutputV2,
     LocationDiagnostic,
     content_digest,
     digest,
@@ -139,12 +137,15 @@ def validate_output_with_diagnostics(text, batch, output, *, resource, policy, a
     v1 returns ``diagnostics=None``; v2 returns a bounded per-candidate list.
     """
     is_v2 = getattr(policy, "source_locating", None) is not None
+    from app.models.reviews.claim_extraction import batch_output_schema
+    schema = batch_output_schema(policy.batch_claims, is_v2)
+    raw = output.model_dump(mode="json") if hasattr(output, "model_dump") else output
     if is_v2:
-        parsed = BatchOutputV2.model_validate(output)
+        parsed = schema.model_validate(raw)
         candidates, diagnostics = _validate_v2(text, batch, parsed, resource=resource,
                                                policy=policy, allowed_nodes=allowed_nodes)
     else:
-        parsed = BatchOutput.model_validate(output)
+        parsed = schema.model_validate(raw)
         candidates = _validate_v1(text, batch, parsed, resource=resource,
                                   policy=policy, allowed_nodes=allowed_nodes)
         diagnostics = None

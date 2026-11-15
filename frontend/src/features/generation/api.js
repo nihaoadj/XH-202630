@@ -12,9 +12,14 @@ export const generateApi = {
   createJobsForClaim: data => {
     const types = [...new Set(data?.resource_types || [])]
     if (data?.include_claim_check && types.length > 1) {
-      return Promise.all(types.map(resource_type => generateApi.createJob({ ...data, resource_types: [resource_type] })))
+      return Promise.all(types.map(resource_type => generateApi.createJob({
+        ...data, resource_types: [resource_type],
+        ...(resource_type === '实操指南' ? { include_claim_check: false, include_claim_evidence_retrieval: false } : {}),
+      })))
     }
-    return Promise.all([generateApi.createJob(data)])
+    return Promise.all([generateApi.createJob(types[0] === '实操指南' ? {
+      ...data, include_claim_check: false, include_claim_evidence_retrieval: false,
+    } : data)])
   },
   /** @param {string} learnerId @returns {Promise<import('axios').AxiosResponse<import('../../contracts/generated/contracts').GenerationJobListResponse>>} */
   listJobs: learnerId => api.get('/generate/jobs', { params: { learner_id: learnerId } }).then(requireJobListResponse),

@@ -46,6 +46,7 @@
       "onboardingState.test.mjs",
       "learningReport.test.mjs",
       "resourceShelfOrder.test.mjs",
+      "resourceStudyContext.test.mjs",
       "resourceMarkdownTables.test.mjs",
       "coursewareEvents.test.mjs",
       "coursewareUserJourney.test.mjs",
@@ -54,9 +55,13 @@
       "unit/utils/workflowDetailPresentation.test.mjs",
       "contracts.test.mjs",
       "generationPreparation.test.mjs",
+      "nextRoundLearning.test.mjs",
       "apiModules.test.mjs",
       "publicationSummary.test.mjs",
-      "resourceQuality.test.mjs"
+      "resourceQuality.test.mjs",
+      "resourceWorkflowPresentation.test.mjs",
+      "profileRating.test.mjs",
+      "coursewareTaskPresentation.test.mjs"
     ],
     "browser": [
       "landingBrowser.test.mjs",
@@ -71,6 +76,8 @@
       "reportUiBrowser.test.mjs",
       "userProfileUiBrowser.test.mjs",
       "profileRequestBrowser.test.mjs",
+      "profileRatingBrowser.test.mjs",
+      "coursewareTaskNavigationBrowser.test.mjs",
       "motionBrowser.test.mjs",
       "tutorUiBrowser.test.mjs",
       "coursewareSyncBrowser.test.mjs",
@@ -79,7 +86,9 @@
       "onboardingContinuityBrowser.test.mjs",
       "coursewareContentReviewBrowser.test.mjs",
       "publicationSummaryBrowser.test.mjs",
-      "resourceQualityBrowser.test.mjs"
+      "resourceQualityBrowser.test.mjs",
+      "resourceWorkflowBrowser.test.mjs",
+      "resourceFeedbackNavigationBrowser.test.mjs"
     ]
   },
   "suites": [
@@ -436,6 +445,32 @@
         "backend/scripts/courseware_content_review_eval.py",
         "--output",
         "{output}/courseware-content-review.json"
+      ]
+    },
+    {
+      "id": "claim-input-context-focused",
+      "purpose": "T66 unified extraction semantics, JSON field filtering/dependencies, bounded Markdown context, 6K/30 and frozen restore compatibility",
+      "evidence_type": "deterministic_process",
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "--import-mode=importlib",
+        "backend/tests/integration/workflow/test_unified_claim_input.py",
+        "backend/tests/integration/workflow/test_structured_claim_sources.py",
+        "backend/tests/integration/workflow/test_checklist_claim_context_v2.py",
+        "backend/tests/integration/workflow/test_correction_claim_context_v4.py",
+        "backend/tests/integration/workflow/test_claim_extraction_v2.py",
+        "backend/tests/unit/models/test_claim_density_policy.py",
+        "backend/tests/unit/models/test_claim_source_locating_policy.py",
+        "backend/tests/unit/agents/test_claim_density_batching.py",
+        "backend/tests/integration/persistence/test_claim_estimate_attempts.py",
+        "backend/tests/integration/persistence/test_claim_source_locating_persistence.py",
+        "backend/tests/integration/services/test_resource_issue_dispatch.py",
+        "backend/tests/unit/core/test_config.py::test_claim_extraction_unified_input_defaults_and_boundaries",
+        "-q",
+        "--junitxml={output}/claim-input-context-focused.xml"
       ]
     },
     {

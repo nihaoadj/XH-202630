@@ -40,11 +40,18 @@ def build_review_request(*, profile: ReviewProfile, prompt_bundle: ReviewPromptB
             # Omit a duplicate projection only after proving exact canonical rendering.
             if (resource.content_text or "") != render_practice_guide_markdown(resource.practice_guide_payload):
                 content += f"\n\n待核对的完整 Markdown 投影：\n{resource.content_text or ''}"
+        constraints = audit_input.constraints or {}
+        if resource.correction_package_payload is not None:
+            from app.core.learning_documents.correction_package import validated_correction_package, correction_audit_source, CORRECTION_AUDIT_GUIDANCE, COMPACT_AUDIT_GUIDANCE
+            package = validated_correction_package(resource)
+            guidance = COMPACT_AUDIT_GUIDANCE if package.schema_version == "correction-package-v2" else CORRECTION_AUDIT_GUIDANCE
+            content = guidance + "\n" + correction_audit_source(package).text
+            constraints = {"target_node_name": package.learning_status.target.node_name}
         body = (f"专业知识片段：\n{context}\n\n待审核的唯一资源：\n"
                 f"resource_id={resource.resource_id}\nresource_type={resource.resource_type}\n"
                 f"难度={resource.difficulty}\n{content}\n\n"
                 f"目标难度：{audit_input.difficulty or '按画像与诊断结果'}\n"
-                f"生成约束：{json.dumps(audit_input.constraints or {}, ensure_ascii=False)}")
+                f"生成约束：{json.dumps(constraints, ensure_ascii=False)}")
         internal = internal_assessment_review_payload(resource)
         if internal:
             body += f"\n\n仅供内部审核的完整结构化题卷（含答案、rubric 与 evidence ID；不得在输出中复述）：\n{internal}"

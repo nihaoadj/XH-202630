@@ -19,7 +19,7 @@ import hashlib
 import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from .evidence_context import EvidenceContextCarryOverV1
 
@@ -50,6 +50,7 @@ class ResourceLocationV1(ResourceContract):
     locator_version: Literal["resource-locator-v1"] = "resource-locator-v1"
     # paragraph locations (讲义/案例分析/纠错包)
     paragraph_id: str | None = None
+    end_paragraph_id: str | None = None
     heading_path: list[str] = Field(default_factory=list, max_length=12)
     quote: str | None = Field(default=None, min_length=1, max_length=240)
     # structured locations (实操指南/分阶测试题/复习清单)
@@ -67,13 +68,20 @@ class ResourceLocationV1(ResourceContract):
         elif self.kind == "structured":
             if self.unit_id is None and not self.missing_fields:
                 raise ValueError("structured location requires unit_id or missing_fields")
-            if self.paragraph_id is not None or self.heading_path or self.quote is not None:
+            if self.paragraph_id is not None or self.end_paragraph_id is not None or self.heading_path or self.quote is not None:
                 raise ValueError("structured location cannot carry paragraph fields")
         elif self.kind == "root":
-            if any((self.paragraph_id, self.unit_id, self.heading_path, self.field_path,
+            if any((self.paragraph_id, self.end_paragraph_id, self.unit_id, self.heading_path, self.field_path,
                     self.missing_fields, self.quote)):
                 raise ValueError("root location must be empty")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize_compatible(self, handler):
+        data = handler(self)
+        if self.end_paragraph_id is None:
+            data.pop("end_paragraph_id", None)
+        return data
 
 
 class ResourceFindingV1(ResourceContract):
@@ -88,7 +96,13 @@ class ResourceFindingV1(ResourceContract):
     question_id: str = Field(min_length=1, max_length=128)
     skill_node_id: str = Field(default="", max_length=128)
     scope_decision: Literal["in_scope", "out_of_scope", "insufficient_evidence"]
-    supported_evidence_ids: list[str] = Field(default_factory=list, max_length=1)
+    supported_evidence_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("supported_evidence_ids")
+    @classmethod
+    def deduplicate_evidence(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
+
     answer_check: Literal["pass", "fail", "insufficient_evidence"] | None = None
     clarity_check: Literal["pass", "fail"] | None = None
     rubric_check: Literal["pass", "fail", "insufficient_evidence", "not_applicable"] | None = None

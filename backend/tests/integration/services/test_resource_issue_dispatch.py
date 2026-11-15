@@ -41,6 +41,21 @@ def test_resource_issue_v1_freezes_contract_and_hash():
     assert frozen["resource_review_contract_version"] == "1.1"
     assert frozen["resource_review_policy"]["strategy"] == "resource_issue_v1"
     assert frozen["resource_review_policy_hash"] == canonical_hash(frozen["resource_review_policy"])
+    assert frozen["resource_review_policy"]["input_contract"] == "single_representation_v4"
+
+
+def test_pre_t61_frozen_policy_without_input_contract_keeps_identity_and_hash():
+    import copy
+    frozen = copy.deepcopy(freeze_resource_review_policy(_request(), _settings("resource_issue_v1", 262144)))
+    frozen["resource_review_policy"].pop("input_contract")
+    frozen["resource_review_policy_hash"] = canonical_hash(frozen["resource_review_policy"])
+    assert resource_review_fields(frozen) == frozen
+    old_hash = frozen["resource_review_policy_hash"]
+    bad = copy.deepcopy(frozen)
+    bad["resource_review_policy"]["input_contract"] = "single_representation_v1"
+    with pytest.raises(ValueError, match="hash"):
+        resource_review_fields(bad)
+    assert frozen["resource_review_policy_hash"] == old_hash
 
 
 def test_resource_issue_v1_ignored_without_review_or_types():

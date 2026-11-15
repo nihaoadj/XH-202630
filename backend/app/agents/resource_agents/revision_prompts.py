@@ -9,6 +9,7 @@ database work.
 from __future__ import annotations
 
 from typing import Any
+from hashlib import sha256
 
 from app.models.reviews.revision_inputs import (
     ClaimReviewRevisionInput,
@@ -38,6 +39,57 @@ CLAIM_REVISION_GUIDANCE = (
     "5) 输出完整产物，沿用本类型原有输出格式。"
 )
 
+MINIMAL_CLAIM_REVISION_GUIDANCE = (
+    "本次额外约束：只处理problems明确列出的矛盾和无证据断言，依据输入中已有的冻结evidence，"
+    "优先改为有证据支持的表述；仍无支持时收缩或删除，不凭常识补事实，不把缺证等同事实为假。"
+    "以previous_text为底稿，仅修改revision_edit_policy.target_ranges中的目标原句及必须同步的关联内容。"
+    "groups.context_text只是阅读上下文，不代表整段均可改写。"
+    "preserve_ranges中的非目标内容尽量逐字复制，保留标题、章节顺序、编号、Markdown格式、标点和空白；"
+    "不顺带润色、换例子、重排段落或扩写。只有目标修改造成引用、答案或解释不一致时才做最小同步。"
+    "输出前逐段对照旧正文检查，确认非目标部分保持一致，并输出完整产物。"
+)
+
+
+def _minimal_edit_policy(claim: ClaimReviewRevisionInput) -> dict[str, Any]:
+    """Original-text coordinates guide copying without expanding edit scope."""
+    text = claim.previous_text or ""
+    def digest(value):
+        return sha256(value.encode("utf-8")).hexdigest()
+    if digest(text) != claim.content_hash:
+        raise ValueError("revision preservation parent hash mismatch")
+    target_span_ids = {problem.source_span_id for problem in claim.problems}
+    intervals = []
+    for span in claim.spans:
+        if span.span_id not in target_span_ids:
+            continue
+        if (span.source_end > len(text)
+                or text[span.source_start:span.source_end] != span.source_text
+                or digest(span.source_text) != span.source_text_hash):
+            raise ValueError("revision preservation span mismatch")
+        intervals.append((span.source_start, span.source_end))
+    merged: list[list[int]] = []
+    for start, end in sorted(intervals):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    preserved = []
+    cursor = 0
+    for start, end in merged:
+        if cursor < start:
+            preserved.append((cursor, start))
+        cursor = end
+    if cursor < len(text):
+        preserved.append((cursor, len(text)))
+    return {
+        "mode": "minimal_change_v1",
+        "parent_content_hash": claim.content_hash,
+        "coordinate_system": "previous_text Python character offsets; end exclusive",
+        "target_ranges": [{"start": start, "end": end} for start, end in merged],
+        "preserve_ranges": [{"start": start, "end": end, "sha256": digest(text[start:end])}
+                            for start, end in preserved],
+    }
+
 
 def attach_revision_fields(payload: dict[str, Any], context) -> dict[str, Any]:
     """Attach the single active generation revision input to a prompt payload.
@@ -51,9 +103,25 @@ def attach_revision_fields(payload: dict[str, Any], context) -> dict[str, Any]:
     if claim is not None:
         payload["claim_review_revision"] = _dump(claim)
         payload["revision_guidance"] = CLAIM_REVISION_GUIDANCE
+        if (getattr(context, "constraints", {}) or {}).get("_claim_revision_edit_policy") == "minimal_change_v1":
+            payload["revision_edit_policy"] = _minimal_edit_policy(claim)
+            payload["revision_guidance"] += MINIMAL_CLAIM_REVISION_GUIDANCE
     elif ordinary is not None:
-        payload["resource_review_revision"] = _dump(ordinary)
-        payload["revision_guidance"] = ORDINARY_REVISION_GUIDANCE
+        revision = _dump(ordinary)
+        if ordinary.input_version == "2.0" and ordinary.previous_text is not None:
+            from app.agents.resource_workflows.learning_documents.reviewing.resource_issues.adapters.base import paragraphs
+
+            revision["previous_text"] = "\n".join(
+                f"{line_id} | {line}" for line_id, line in paragraphs(ordinary.previous_text).items())
+            payload["revision_guidance"] = (
+                ORDINARY_REVISION_GUIDANCE
+                + " 本次 previous_text 每行前的 p000001 等编号仅用于匹配旧版 issue.location 的"
+                  " paragraph_id/end_paragraph_id，编号不是正文；输出完整新版时不得包含编号。"
+                  " 旧版位置不可当作新版位置，跨行问题应处理起止行所覆盖的完整内容。"
+            )
+        else:
+            payload["revision_guidance"] = ORDINARY_REVISION_GUIDANCE
+        payload["resource_review_revision"] = revision
     return payload
 
 

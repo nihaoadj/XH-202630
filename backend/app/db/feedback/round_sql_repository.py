@@ -66,6 +66,17 @@ class SQLRoundRepository(BaseRoundRepository):
         rows = query.order_by(model.created_at.desc(), model.round_id.desc()).offset(offset).limit(limit).all()
         return [deepcopy({c.name: getattr(row, c.name) for c in model.__table__.columns}) for row in rows], total
 
+    def latest_primary_node(self, learner_id: str, knowledge_base_id: str) -> Record | None:
+        if self._session is None:
+            with self.session_factory() as db:
+                return SQLRoundRepository(self.session_factory, db).latest_primary_node(learner_id, knowledge_base_id)
+        parent, node = MODELS["learning_rounds"], MODELS["learning_round_nodes"]
+        row = self._session.query(node).join(parent, parent.round_id == node.round_id).filter(
+            parent.learner_id == learner_id, parent.knowledge_base_id == knowledge_base_id,
+            parent.protocol_version == "learning-round/v1", node.role == "primary",
+        ).order_by(parent.created_at.desc(), parent.round_id.desc()).first()
+        return deepcopy({c.name: getattr(row, c.name) for c in node.__table__.columns}) if row else None
+
     def insert(self, table: str, values: Record) -> Record:
         if self._session is None:
             raise RuntimeError("round writes require a transaction")

@@ -23,9 +23,9 @@ def validate_scene_shape(scene: Mapping[str, Any]) -> list[str]:
         errors.append("invalid:source_refs")
     if not isinstance(scene.get("source_map"), Mapping):
         errors.append("invalid:source_map")
-    if scene.get("kind") == "practice" and not scene.get("steps") and scene.get("practice_json_schema_version") != "3.0":
+    if scene.get("kind") == "practice" and not scene.get("steps") and scene.get("practice_json_schema_version") not in {"3.0", "4.0", "5.0", "6.0"}:
         errors.append("invalid:practice_steps")
-    if scene.get("practice_json_schema_version") == "3.0":
+    if scene.get("practice_json_schema_version") in {"3.0", "4.0", "5.0", "6.0"}:
         blocks = scene.get("component_blocks") or []
         if not blocks or any(
             not isinstance(block, Mapping)
@@ -44,7 +44,10 @@ def validate_scene_shape(scene: Mapping[str, Any]) -> list[str]:
             "verify": {"verification.goal": "key_point", "verification.checklist": "steps"},
             "reflect": {"reflection.goal": "key_point", "reflection.summary": "callout"},
         }
-        if variant in phase_contracts and component_by_path != phase_contracts[variant]:
+        expected = dict(phase_contracts.get(variant, {}))
+        if variant == "prepare" and scene.get("practice_json_schema_version") == "5.0" and "preparation.materials" in component_by_path:
+            expected["preparation.materials"] = "steps"
+        if variant in phase_contracts and component_by_path != expected:
             errors.append("invalid:practice_phase_component_contract")
         if variant in {"guided", "code"}:
             subject = str(scene.get("practice_json_subject") or "")

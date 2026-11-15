@@ -156,6 +156,7 @@ class LearningHistoryService:
             return None
 
         jobs = self.generation_job_repo.list_by_learner(learner_id)
+        bound = set()
         if self.round_service is not None:
             bound = self._learner_bound_run_ids(learner_id)
             jobs = [job for job in jobs if job.run_id not in bound]
@@ -314,6 +315,7 @@ class LearningHistoryService:
                 round_item.path_change["next_steps"] = next_rounds
 
         normal_rounds = []
+        current_rounds = []
         if self.round_service is not None:
             roots = self.round_service.repository.find("learning_rounds", learner_id=learner_id)
             for root in roots:
@@ -325,14 +327,17 @@ class LearningHistoryService:
                         parent.run_summary["learning_round"] = detail.model_dump(mode="json")
                 else:
                     normal_rounds.append(detail)
+                    if root["knowledge_base_id"] == profile.knowledge_base_id:
+                        current_rounds.append(detail)
         combined = [(item.occurred_at, item.round_id or item.run_id, "legacy", item) for item in rounds]
         combined.extend((item.created_at, item.round_id, "round", item) for item in normal_rounds)
         combined.sort(key=lambda item: (_datetime_sort_value(item[0]), item[1]), reverse=True)
         selected = combined[offset:offset + limit]
         page = [item[3] for item in selected if item[2] == "legacy"]
         round_page = [item[3] for item in selected if item[2] == "round"]
-        current_state = self._current_state(profile, results)
-        linked_run_ids = {job.run_id for job in jobs}
+        latest_round = max(current_rounds, key=lambda item: (_datetime_sort_value(item.created_at), item.round_id), default=None)
+        current_state = self._current_state(profile, results, latest_round=latest_round)
+        linked_run_ids = {job.run_id for job in jobs} | bound
         timeline = self.timeline(learner_id)
         unlinked_events = [
             event for event in (timeline.events if timeline else [])
@@ -571,7 +576,7 @@ class LearningHistoryService:
             "error_message": job_error,
         }
 
-    def _current_state(self, profile, results) -> LearningJourneyCurrentState:
+    def _current_state(self, profile, results, latest_round=None) -> LearningJourneyCurrentState:
         path = self.feedback_loop_repo.get_current_path(profile.learner_id) if self.feedback_loop_repo else None
         nodes = path.nodes if path else []
         node_summary = lambda node: {"node_id": node.node_id, "knowledge_point_id": node.knowledge_point_id,
@@ -579,7 +584,7 @@ class LearningHistoryService:
         latest = max(results, key=lambda item: item.attempt.submitted_at, default=None)
         latest_assessment = self._assessment_summary(latest) if latest else None
         next_action = self._feedback_summary(latest).get("next_action") if latest else None
-        return LearningJourneyCurrentState(
+        state = LearningJourneyCurrentState(
             path_id=path.path_id if path else None,
             path_version=path.version if path else None,
             current_nodes=[node_summary(item) for item in nodes if item.status.value == "in_progress"],
@@ -590,6 +595,37 @@ class LearningHistoryService:
             next_action=next_action,
             latest_assessment=latest_assessment,
         )
+        if latest_round is None:
+            return state
+        primary = next((member for member in latest_round.members if member.role == "primary"), None)
+        if primary is None:
+            return state
+        # The latest round owns the current target; completed assessment is not
+        # proof of permanent mastery, so completed_nodes stays path-derived.
+        state.current_nodes = [{
+            "node_id": primary.node_id, "knowledge_point_id": primary.node_id,
+            "name": primary.node_name, "status": primary.state, "tier": primary.tier,
+            "round_id": latest_round.round_id,
+        }]
+        round_results = [item for item in results
+                         if ((item.attempt.metadata or {}).get("round_context") or {}).get("round_id") == latest_round.round_id
+                         and any(point.knowledge_point_id == primary.node_id for point in item.attempt.knowledge_point_results)]
+        round_latest = max(round_results, key=lambda item: _datetime_sort_value(item.attempt.submitted_at), default=None)
+        if round_latest:
+            state.latest_assessment = self._assessment_summary(round_latest)
+        guidance = self._feedback_summary(round_latest).get("next_action") if round_latest else None
+        fallback = {
+            "producing": "等待本轮资源生成后开始学习",
+            "failed": "回到运行进度重试失败的资源",
+            "awaiting_assessment": "完成本轮资源学习后进行测评",
+            "completed": "前往学习反馈选择下一步学习方案",
+        }[primary.state]
+        if primary.state == "completed" and primary.remediation_status == "remediate":
+            fallback = "先补齐前置知识，通过后返回当前节点重新测评"
+        elif primary.state == "completed" and primary.remediation_status == "practice":
+            fallback = "围绕当前节点纠错巩固后再次测评"
+        state.next_action = guidance or fallback
+        return state
 
     def timeline(self, learner_id: str) -> LearningHistoryTimelineResponse | None:
         profile = self.profile_service.get(learner_id)

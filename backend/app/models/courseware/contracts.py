@@ -62,6 +62,15 @@ class CoursewareBatchCreateRequest(BaseModel):
         return cleaned
 
 
+class CoursewareSourceSummary(BaseModel):
+    resource_id: str
+    resource_type: str
+    title: str
+    topic: str | None = None
+    knowledge_points: list[str] = Field(default_factory=list)
+    version: int = 1
+
+
 class CoursewareJobResponse(BaseModel):
     run_id: str
     learner_id: str
@@ -70,6 +79,7 @@ class CoursewareJobResponse(BaseModel):
     publish_mode: Literal["manual", "automatic"] = "automatic"
     resource_id: str | None = None
     source_batch_id: str | None = None
+    source_summary: list[CoursewareSourceSummary] = Field(default_factory=list)
     request_options: dict[str, Any] = Field(default_factory=dict)
     quality_summary: dict[str, Any] = Field(default_factory=dict)
     # Warning payloads may carry machine-readable flags (for example

@@ -73,6 +73,13 @@ class FixtureCounter(OfflineClaimCounter, CharacterEstimator):
 
 def neutral_settings(**updates):
     from app.config import Settings
+    # Historical fixture contracts stay explicit; new capacity/context tests opt in.
+    updates.setdefault("claim_extraction_target_tokens", 4096)
+    updates.setdefault("claim_extraction_batch_claims", 16)
+    updates.setdefault("claim_extraction_input_version", "legacy_context_v1")
+    # These fixtures exercise the historical ordinary-review workflow. Tests of
+    # the current issue-ledger workflow opt in explicitly instead.
+    updates.setdefault("resource_review_strategy", "compat")
     updates.setdefault("claim_extraction_output_tokens", 8192)
     updates.setdefault("claim_extraction_attempt_timeout_seconds", 60)
     # Existing estimate fixtures freeze the historical v1 prompt (no source

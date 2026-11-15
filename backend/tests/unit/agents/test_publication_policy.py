@@ -15,6 +15,24 @@ from app.agents.shared.policies import (
 from app.models.shared.workflow import ResourceStatus
 
 
+@pytest.mark.parametrize('supported,published,pending', [(84,False,False),(85,False,True),(94,False,True),(95,True,False),(98,True,False)])
+def test_gap_publication_boundaries(supported, published, pending):
+    result = resolve_publication(_inputs(**_claim_metric(factual=100, supported=supported, not_in_evidence=100-supported), has_claim_problem=True))
+    assert result.publish is published
+    assert result.claim_publish_decision_pending is pending
+
+
+@pytest.mark.parametrize('guard', ['claim_failed','claim_hard_block','claim_publication_barrier','is_locked','has_non_gap_claim_problem'])
+def test_high_pass_rate_cannot_bypass_guard(guard):
+    result = resolve_publication(_inputs(**_claim_metric(factual=100, supported=98, not_in_evidence=2), has_claim_problem=True, **{guard:True}))
+    assert not result.publish
+
+
+def test_custom_auto_threshold_is_inclusive():
+    result = resolve_publication(_inputs(**_claim_metric(factual=100, supported=97, not_in_evidence=3), has_claim_problem=True, claim_gap_auto_publish_min_factual_pass_rate=0.97))
+    assert result.publish
+
+
 def _inputs(**overrides) -> PublicationInputs:
     payload = {
         "item_decision": "approve",
@@ -32,7 +50,7 @@ def _inputs(**overrides) -> PublicationInputs:
         "not_in_evidence_claim_total": 0,
         "allow_partial_claim_publish": False,
         "claim_user_review_enabled": True,
-        "claim_user_review_min_factual_pass_rate": 0.60,
+        "claim_user_review_min_factual_pass_rate": 0.85,
     }
     payload.update(overrides)
     return PublicationInputs(**payload)
@@ -160,19 +178,19 @@ def test_not_applicable_and_zero_denominator_still_pass_the_gate():
     assert zero_denominator.factual_pass_rate is None
 
 
-def test_user_review_threshold_boundary_pends_publication():
+def test_user_review_threshold_boundary_does_not_offer_publication():
     at_threshold = resolve_publication(
-        _inputs(**_claim_metric(factual=5, supported=3, not_in_evidence=2))
+        _inputs(**_claim_metric(factual=5, supported=3, not_in_evidence=2), has_claim_problem=True)
     )
     assert at_threshold.factual_pass_rate == pytest.approx(0.6)
     assert at_threshold.review_status is ResourceStatus.HUMAN_REVIEW
-    assert at_threshold.claim_publish_decision_pending is True
-    assert at_threshold.reason is PublicationReason.CLAIM_USER_REVIEW_REQUIRED
+    assert at_threshold.claim_publish_decision_pending is False
+    assert at_threshold.reason is PublicationReason.CLAIM_GATE_FAILED
 
     below = resolve_publication(
         _inputs(**_claim_metric(factual=5, supported=2, not_in_evidence=3))
     )
-    assert below.publish is True
+    assert below.publish is False
     assert below.claim_publish_decision_pending is False
 
 
@@ -181,7 +199,7 @@ def test_contradicted_claim_never_requests_user_review():
         _inputs(**_claim_metric(factual=5, supported=4, contradicted=1))
     )
     assert decision.claim_publish_decision_pending is False
-    assert decision.publish is True
+    assert decision.publish is False
 
 
 def test_user_review_switch_off_keeps_automatic_publication():
@@ -189,13 +207,12 @@ def test_user_review_switch_off_keeps_automatic_publication():
         **_claim_metric(factual=5, supported=3, not_in_evidence=2),
         claim_user_review_enabled=False,
     ))
-    assert decision.publish is True
+    assert decision.publish is False
     assert decision.claim_publish_decision_pending is False
-    assert decision.reason is PublicationReason.APPROVED
 
 
 def test_inputs_are_immutable_and_calls_are_repeatable():
-    inputs = _inputs(**_claim_metric(factual=5, supported=3, not_in_evidence=2))
+    inputs = _inputs(**_claim_metric(factual=20, supported=18, not_in_evidence=2))
     assert dataclasses.is_dataclass(inputs)
     with pytest.raises(dataclasses.FrozenInstanceError):
         inputs.is_locked = True  # type: ignore[misc]
@@ -204,3 +221,10 @@ def test_inputs_are_immutable_and_calls_are_repeatable():
     assert first == second
     assert isinstance(first, PublicationDecision)
     assert first.reason is PublicationReason.CLAIM_USER_REVIEW_REQUIRED
+
+
+@pytest.mark.parametrize("guard", ["claim_hard_block", "claim_publication_barrier", "is_locked"])
+def test_resource_barriers_do_not_offer_user_publication(guard):
+    decision = resolve_publication(_inputs(**_claim_metric(factual=5, supported=4, not_in_evidence=1), **{guard: True}))
+    assert not decision.publish
+    assert not decision.claim_publish_decision_pending

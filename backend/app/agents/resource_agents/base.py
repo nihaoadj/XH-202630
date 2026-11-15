@@ -6,7 +6,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 from pydantic import BaseModel
 
 from app.core.security.errors import ApplicationError, ErrorCode
@@ -23,6 +23,26 @@ from app.agents.resource_agents.revision_prompts import attach_revision_fields
 
 
 ArtifactOutputT = TypeVar("ArtifactOutputT", bound=BaseModel)
+
+
+SELF_CONTAINED_RESOURCE_RULE = """
+所有面向学习者的资源必须独立可用：学习、理解、作答或操作所必需的材料，要在资源正文中给出足够内容；
+不得让学习者另找输入中仅供生成和审核使用的 evidence、文档编号、案例、原题或其他不可见资料。
+可以标注来源供延伸阅读，但来源不能代替正文所需的解释、题设或操作输入。
+若证据允许呈现的内容不足以完成任务，就缩小任务；不得凭空补造材料、答案或学习者原始作答。
+"""
+
+
+def with_self_contained_rule(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """Apply the same learner-facing rule to every text resource call."""
+    for index, message in enumerate(messages):
+        if isinstance(message, SystemMessage):
+            return [
+                *messages[:index],
+                message.model_copy(update={"content": message.content + "\n" + SELF_CONTAINED_RESOURCE_RULE}),
+                *messages[index + 1:],
+            ]
+    raise ValueError("resource generation requires a system prompt")
 
 
 @runtime_checkable
@@ -103,6 +123,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         prompt_constraints.pop("previous_version_content", None)
         # Never forward the whole spec→input map to a single worker.
         prompt_constraints.pop("generation_revision_inputs", None)
+        prompt_constraints.pop("_claim_revision_edit_policy", None)
         lecture_revision = prompt_constraints.pop("lecture_revision", None)
         if lecture_revision:
             prompt_constraints.pop("revision_feedback", None)
@@ -176,6 +197,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         output_schema: type[ArtifactOutputT],
         representation: ResourceRepresentation,
         max_output_tokens: int | None = None,
+        strict_max_output_tokens: bool = False,
         request_timeout_seconds: float | None = None,
         max_attempts: int | None = None,
     ) -> LLMCallResult[ArtifactOutputT]:
@@ -194,7 +216,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
         # Do not accidentally shrink that dedicated budget back to the generic
         # text representation limit.
         options = options.model_copy(update={
-            "max_output_tokens": max(requested_budget, options.max_output_tokens),
+            "max_output_tokens": requested_budget if strict_max_output_tokens else max(requested_budget, options.max_output_tokens),
             **({"request_timeout_seconds": request_timeout_seconds} if request_timeout_seconds is not None else {}),
             # Agents that run their own bounded validation loop must be able to
             # collapse the SDK retry to one call; otherwise the two layers
@@ -208,7 +230,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
 
         with exclusive_resource_scope((spec.resource_spec_id, spec.resource_type)):
             return llm_gateway.invoke_structured(
-                messages=messages,
+                messages=with_self_contained_rule(messages),
                 output_schema=output_schema,
                 context=LLMCallContext(
                     run_id=context.run_id,
@@ -266,7 +288,7 @@ class BaseResourceGenerationAgent(ABC, Generic[ArtifactOutputT]):
 
         with exclusive_resource_scope((spec.resource_spec_id, spec.resource_type)):
             return llm_gateway.invoke_plain_text(
-                messages=messages,
+                messages=with_self_contained_rule(messages),
                 context=LLMCallContext(
                     run_id=context.run_id,
                     step_id=context.step_id,

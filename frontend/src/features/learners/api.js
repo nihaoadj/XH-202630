@@ -4,6 +4,7 @@ export const profileApi = {
   list: (params) => api.get('/profiles/', { params }),
   get: (id) => api.get(`/profiles/${id}`),
   abilityNodes: (id) => api.get(`/profiles/${id}/ability-nodes`),
+  initialNodeCandidates: (id) => api.get(`/profiles/${encodeURIComponent(id)}/initial-node-candidates`),
   update: (id, data) => api.patch(`/profiles/${id}`, data),
   delete: (id) => api.delete(`/profiles/${id}`),
 }

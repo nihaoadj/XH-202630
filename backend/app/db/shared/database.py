@@ -1,4 +1,6 @@
 """数据库引擎、会话工厂与 SQLite 轻量迁移。"""
+from app.db.migrations.p0_40_correction_package_json import apply_p0_40_correction_package_json_migration
+from app.db.migrations.p0_41_round_retake import apply_p0_41_round_retake_migration
 import json
 from functools import lru_cache
 
@@ -193,6 +195,8 @@ def init_database():
     apply_p0_37_claim_estimate_migration(engine)
     apply_p0_38_learning_rounds_migration(engine)
     apply_p0_39_claim_evidence_retrieval_migration(engine)
+    apply_p0_40_correction_package_json_migration(engine)
+    apply_p0_41_round_retake_migration(engine)
 
 
 def _sqlite_tables(conn) -> set[str]:

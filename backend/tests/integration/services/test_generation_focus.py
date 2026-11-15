@@ -123,6 +123,56 @@ def test_later_generation_returns_to_automatic_recommendation_after_publication(
     assert created.focus_snapshot.adopted_node_ids == ["weak"]
 
 
+def test_first_generation_accepts_eligible_override_and_rejects_unmet_prerequisite():
+    jobs, profile = _fixture()
+    profile.learning_preferences = LearningPreferences(metadata={
+        "initial_diagnostic_flow": {"status": "final", "initial_recommended_node_id": "next"},
+    })
+    mastery = jobs.mastery_service
+    nodes = mastery.knowledge_service.list_skill_nodes("kb")
+    nodes.append(SimpleNamespace(
+        node_id="blocked", name="Blocked", tier=1, prerequisites=["next"], children=[],
+    ))
+
+    assert [node.node_id for node in mastery.initial_generation_candidates(profile)] == ["next", "weak"]
+    with pytest.raises(ValueError, match="只允许选择一个"):
+        mastery.validate_generation_targets(profile, ["next", "weak"])
+    with pytest.raises(ValueError, match="先修条件"):
+        mastery.validate_generation_targets(profile, ["blocked"])
+
+    request = _request(target_skill_nodes=["weak"])
+    created = jobs.create_job(profile, request, run_id="run-first-override")
+    assert request.target_skill_nodes == ["weak"]
+    assert created.focus_snapshot.adopted_node_ids == ["weak"]
+
+
+@pytest.mark.parametrize("complete", [False, True])
+def test_initial_pass_requires_full_diagnostic_coverage_to_unlock_successor(complete):
+    jobs, profile = _fixture()
+    nodes = jobs.mastery_service.knowledge_service.list_skill_nodes("kb")
+    nodes[1].prerequisites = ["weak"]
+    profile.learning_preferences = LearningPreferences(metadata={
+        "initial_diagnostic_flow": {
+            "status": "final", "initial_recommended_node_id": "weak",
+            "pass_policy_version": "initial-pass/v1",
+            "node_passes": {"weak": {
+                "diagnostic_result_id": "diag-full", "valid_question_count": 3,
+                "correct_question_count": 3,
+                "covered_dimensions": ["concept", "scenario", "misconception"] if complete else ["concept"],
+            }},
+        },
+    })
+    allowed = {node.node_id for node in jobs.mastery_service.initial_generation_candidates(profile)}
+    if complete:
+        assert "next" in allowed
+        jobs.mastery_service.validate_generation_targets(profile, ["next"])
+        assert jobs.mastery_service.next_generation_options(profile).recommended_node_ids == ["next"]
+    else:
+        assert allowed == {"weak"}
+        with pytest.raises(ValueError, match="先修条件"):
+            jobs.mastery_service.validate_generation_targets(profile, ["next"])
+
+
 def test_auto_generation_does_not_fall_back_to_unscoped_multi_node_plan():
     jobs, profile = _fixture()
     original_focus_snapshot = jobs.mastery_service.focus_snapshot

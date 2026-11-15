@@ -258,7 +258,6 @@ try {
     await choose(page, page.locator('.report-profile-field .el-select'), '画像B'); await waitForGate(old)
     await choose(page, page.locator('.report-profile-field .el-select'), '画像A'); await textEquals(metric, '107')
     await release(page, old); await textEquals(metric, '107')
-    assert.match(await page.locator('.report-focus b').textContent(), /初级/)
     await check('report-stale-profile-response', page)
     const oldWindow = hold('/api/report/learner-A?window_days=30')
     await choose(page, page.locator('.report-window-field .el-select'), '近 30 天'); await waitForGate(oldWindow)

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 from pydantic import ValidationError
 
 from app.api.dependencies import ensure_profile_access, request_user
-from app.models.learning_documents.schemas import LearnerProfile, LearnerProfileUpdate, StatusResponse
+from app.models.learning_documents.schemas import LearnerProfile, LearnerProfileUpdate, SkillNode, StatusResponse
 from app.models.learners.mastery import AbilityNodesResponseV1
 from app.services.learners.profiles import ProfileService
 
@@ -35,6 +35,14 @@ def get_ability_nodes(learner_id: str, request: Request):
     if profile is None:
         raise HTTPException(status_code=404, detail="学习者画像不存在")
     return request.app.container.mastery_service().ability_nodes(profile)
+
+
+@router.get("/{learner_id}/initial-node-candidates", response_model=list[SkillNode])
+def get_initial_node_candidates(learner_id: str, request: Request):
+    profile = ensure_profile_access(request, request.app.container.profile_service().get(learner_id))
+    if profile is None:
+        raise HTTPException(status_code=404, detail="学习者画像不存在")
+    return request.app.container.mastery_service().initial_generation_candidates(profile)
 
 
 @router.get("/{learner_id}", response_model=LearnerProfile)

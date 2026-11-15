@@ -120,10 +120,9 @@ def validate_assessment_findings(*, findings, questions, allowed_evidence_by_que
     for question in questions:
         item = by_id[question["question_id"]]
         decision = item["scope_decision"] if combined else item["decision"]
-        supported = item["supported_evidence_ids"]
-        if (len(supported) > 1 or len(supported) != len(set(supported))
-                or set(supported) - allowed_evidence_by_question[question["question_id"]]
-                or (decision == "in_scope" and len(supported) != 1)):
+        supported = list(dict.fromkeys(item["supported_evidence_ids"]))
+        if (set(supported) - allowed_evidence_by_question[question["question_id"]]
+                or (decision == "in_scope" and not supported)):
             raise ValueError("assessment finding evidence invalid")
         codes = []
         reasons = []

@@ -9,7 +9,7 @@ from app.core.execution import current_execution_session, current_execution_fenc
 from app.core.llm.counting import CharacterEstimator
 from app.models.reviews.claim_extraction import (
     LEGACY, ESTIMATE, PRIVATE_FIELDS, EstimatePolicy, AttemptTicket, LogicalExtraction,
-    DensityBatchingPolicy, SourceLocatingPolicy, BatchOutputV2, PROMPT_VERSION_V2,
+    DensityBatchingPolicy, SourceLocatingPolicy, PROMPT_VERSION_V2,
     digest, policy_from_input,
 )
 
@@ -36,11 +36,15 @@ def validate_counter(counter, gateway, frozen_policy=None):
     return counter.parameters
 
 
-def freeze_policy(settings, gateway, counter):
+def freeze_policy(settings, gateway, counter, *, correction=False):
+    from .resource_sources import frozen_extension
+    from .contextual_correction_sources import frozen_extension as correction_extension
     from .profiles import load_counter
     from ..claim_review_agent import JUDGE_PROMPT
     from app.models.reviews.claims import ClaimJudgementLLMOutput
     from .prompts.extract_v2 import PROMPT as PROMPT_V2
+    from .input_context import frozen_extension as input_extension, compose_prompt
+    from app.models.reviews.claim_extraction import batch_output_schema
     from .source_locating.rules import load_rules
     counter = counter if counter is not None else load_counter(settings, gateway)
     parameters = validate_counter(counter, gateway)
@@ -60,13 +64,20 @@ def freeze_policy(settings, gateway, counter):
         raise ValueError("neutral extraction requires LLM_THINKING_MODE=disabled")
     source_locating = None
     prompt_version = None
+    input_version = settings.claim_extraction_input_version
+    input_contract = (input_extension("claim-input-context-v1") if input_version == "unified_context_v1"
+                      else input_extension("claim-input-context-v2") if input_version == "unified_context_v2"
+                      else input_extension("claim-input-context-v3") if input_version == "unified_context_v3"
+                      else input_extension() if input_version == "unified_context_v4"
+                      else input_extension("claim-input-context-v5") if input_version == "unified_context_v5" else None)
+    prompt = compose_prompt(PROMPT_V2, input_contract["version"]) if input_contract else PROMPT_V2
     if settings.claim_extraction_source_locating_mode in {"exact_v1", "tolerant_v1"}:
         rules = load_rules()
         source_locating = SourceLocatingPolicy(
             locator_algorithm_version="locator-v2",
             mode=settings.claim_extraction_source_locating_mode,
-            extractor_prompt_hash=digest(PROMPT_V2),
-            output_schema_hash=digest(BatchOutputV2.model_json_schema()),
+            extractor_prompt_hash=digest(prompt),
+            output_schema_hash=digest(batch_output_schema(settings.claim_extraction_batch_claims, True).model_json_schema()),
             rules_hash=rules.hash,
             max_edits=rules.thresholds.max_edits,
             max_edit_ratio=rules.thresholds.max_edit_ratio,
@@ -79,7 +90,7 @@ def freeze_policy(settings, gateway, counter):
             max_work_cells_per_batch=rules.thresholds.max_work_cells_per_batch,
         )
         prompt_version = PROMPT_VERSION_V2
-    values = dict(estimator_parameters=parameters.model_dump(),
+    values = dict(input_contract=input_contract, correction_sources=correction_extension() if correction else None, structured_sources=frozen_extension(), estimator_parameters=parameters.model_dump(),
         model_name=gateway_model(gateway),
         endpoint_hash=endpoint, thinking_mode=thinking, context_limit=settings.claim_extraction_context_limit,
         judge_options=judge, judge_prompt_hash=digest(JUDGE_PROMPT),
@@ -109,9 +120,25 @@ def frozen_snapshot(settings, request, gateway, counter):
         return {}
     if settings.claim_extraction_strategy != ESTIMATE:
         raise ValueError("retired neutral strategy; create a new estimate run")
-    policy = freeze_policy(settings, gateway, counter)
+    policy = freeze_policy(settings, gateway, counter, correction="个性化纠错训练包" in request.resource_types)
     return dict(claim_extraction_mode=ESTIMATE, claim_extraction_policy=policy.model_dump(mode="json"),
                 claim_extraction_policy_hash=digest(policy))
+
+
+def for_correction_contract(snapshot, contract):
+    """Freeze a new V1 retry with its compatible pre-V4 source.
+
+    Call only while creating a new dispatch; historical snapshots are immutable.
+    """
+    if not contract or contract.get("version") != "correction-json-generation-v1":
+        return snapshot
+    from .contextual_correction_sources import frozen_extension as contextual_extension
+    from .compact_correction_sources import frozen_extension as compact_extension
+    policy = snapshot.get("claim_extraction_policy")
+    if not policy or policy.get("correction_sources") != contextual_extension():
+        return snapshot
+    policy = {**policy, "correction_sources": compact_extension()}
+    return {**snapshot, "claim_extraction_policy": policy, "claim_extraction_policy_hash": digest(policy)}
 
 
 def validate_entry(state, repository):
@@ -408,15 +435,30 @@ class ExtractionAttemptObserver:
         return False
 
 
+def judge_repair_options(options):
+    """One recovery request, within the original output/time/context bounds."""
+    return options.model_copy(update={
+        "max_attempts": 1, "allow_schema_repair": False, "allow_text_fallback": False,
+    })
+
+
 class GuardedJudgeGateway:
     """Validate immediately before the original Judge call without changing it."""
     def __init__(self, state, gateway, repository, counter):
         self.state, self.gateway, self.repository, self.counter = state, gateway, repository, counter
+        self._initial_resources = set()
+        self._repaired_resources = set()
 
     def options_for(self, *args, **kwargs):
         return self.gateway.options_for(*args, **kwargs)
 
     def invoke_structured(self, **kwargs):
+        return self._invoke(kwargs, repair=False)
+
+    def repair_judgements(self, **kwargs):
+        return self._invoke(kwargs, repair=True)
+
+    def _invoke(self, kwargs, *, repair):
         from app.agents.shared.evidence_scope import resolve_review_evidence_context
         from app.models.reviews.claims import ClaimRecord, ClaimJudgementLLMOutput
         snapshot = validate_entry(self.state, self.repository)
@@ -428,7 +470,8 @@ class GuardedJudgeGateway:
         # CAS checks actual run/job lease, session and epoch in the same transaction.
         snapshot = self.repository.compare_and_swap(snapshot, snapshot.state, owner=session.owner, session_id=session.session_id)
         check_judge_config(snapshot.policy, self.gateway, self.counter)
-        if kwargs["options"] != snapshot.policy.judge_options or kwargs["output_schema"] is not ClaimJudgementLLMOutput:
+        expected_options = judge_repair_options(snapshot.policy.judge_options) if repair else snapshot.policy.judge_options
+        if kwargs["options"] != expected_options or kwargs["output_schema"] is not ClaimJudgementLLMOutput:
             raise ValueError("neutral Judge call contract mismatch")
         import json
         payload = json.loads(kwargs["messages"][-1].content)
@@ -440,14 +483,28 @@ class GuardedJudgeGateway:
         result = next((r for r in snapshot.state.results.values() if r.resource_id == resource_id
                        and r.resource_version == resource.version and r.generation_attempt == self.state.get("generation_attempt", 1)
                        and r.final_result_hash == digest(claims)), None)
-        if result is None or result.status != "completed" or result.content_hash != content_hash(resource.content_text or "") or result.evidence_hash != digest([e.model_dump(mode="json") for e in evidence]):
+        from .resource_sources import build_source
+        source = build_source(resource, snapshot.policy)
+        if result is None or result.status != "completed" or result.content_hash != content_hash(source.text) or result.source_snapshot != source.snapshot or result.evidence_hash != digest([e.model_dump(mode="json") for e in evidence]):
             raise ValueError("neutral Judge frozen result/evidence mismatch")
         if result.review_id != current_review_id or any(c.review_id != current_review_id for c in claims):
             raise ValueError("neutral Judge frozen review mismatch")
-        expected = judge_messages(claims, evidence)
+        selected = claims
+        if repair:
+            if resource_id not in self._initial_resources or resource_id in self._repaired_resources:
+                raise ValueError("Judge recovery requires one initial call and permits one recovery")
+            requested = [item["claim_id"] for item in payload["claims"]]
+            selected = [c for c in claims if c.claim_id in set(requested)]
+            if not requested or len(requested) != len(set(requested)) or len(selected) != len(requested):
+                raise ValueError("Judge recovery must be a unique frozen Claim subset")
+        expected = judge_messages(selected, evidence)
         if [m.content for m in kwargs["messages"]] != [m.content for m in expected]:
             raise ValueError("neutral Judge message mismatch")
-        check_judge_capacity(snapshot.policy, self.gateway, self.counter, claims, evidence)
+        check_judge_capacity(snapshot.policy, self.gateway, self.counter, selected, evidence)
+        if repair:
+            self._repaired_resources.add(resource_id)
+        else:
+            self._initial_resources.add(resource_id)
         return self.gateway.invoke_structured(**kwargs, attempt_observer=JudgeWindowObserver(snapshot.policy, self.counter))
 
 

@@ -616,3 +616,48 @@ def test_query_budget_is_enforced_by_the_ledger(storage):
     repository.record_query_count(run_id="run-001", count=90)
     with pytest.raises(SupplementBudgetExceeded):
         repository.record_query_count(run_id="run-001", count=10)
+
+
+@pytest.mark.parametrize("ids", [[f"ev-{i}" for i in range(9)], ["ev-1", "ev-1"]])
+def test_session_grant_validation_rolls_back_before_commit(storage, ids):
+    from pydantic import ValidationError
+    repository, _, _ = storage
+    session = repository.create_session(_session())
+    repository.update_session(session.session_id, expected_status=session.status,
+        status=ClaimEvidenceRetrievalStatus.QUERYING, now=NOW)
+    repository.update_session(session.session_id, expected_status=ClaimEvidenceRetrievalStatus.QUERYING,
+        status=ClaimEvidenceRetrievalStatus.RETRIEVING, now=NOW)
+    with pytest.raises(ValidationError):
+        repository.update_session(session.session_id,
+            expected_status=ClaimEvidenceRetrievalStatus.RETRIEVING,
+            status=ClaimEvidenceRetrievalStatus.REJUDGING,
+            evidence_scope_ids=ids, now=NOW)
+    persisted = repository.get_session(session.session_id)
+    assert persisted.status is ClaimEvidenceRetrievalStatus.RETRIEVING
+    assert persisted.evidence_scope_ids == []
+
+
+def test_corrupt_inactive_session_can_fail_once_preserving_hard_block(storage):
+    from app.db.claim.supplement_models import ClaimEvidenceRetrievalSessionORM
+    repository, _, _ = storage
+    session = repository.create_session(_session())
+    invalid = [f"ev-{i}" for i in range(16)]
+    if isinstance(repository, MemoryClaimSupplementRepository):
+        repository._sessions[session.session_id] = session.model_copy(update={
+            "status": ClaimEvidenceRetrievalStatus.REJUDGING,
+            "evidence_scope_ids": invalid, "hard_block": True,
+            "hard_block_reason": "evidence_conflict"})
+    else:
+        with repository.session_factory() as db:
+            row = db.get(ClaimEvidenceRetrievalSessionORM, session.session_id)
+            row.status = "rejudging"
+            row.evidence_scope_ids = invalid
+            row.hard_block = True
+            row.hard_block_reason = "evidence_conflict"
+            db.commit()
+    closed = repository.fail_session(session.session_id, reason_code="invalid_evidence_scope", now=NOW)
+    assert closed.status is ClaimEvidenceRetrievalStatus.UNAVAILABLE
+    assert closed.evidence_scope_ids == [] and not closed.active
+    assert closed.hard_block and closed.hard_block_reason == "evidence_conflict"
+    assert repository.fail_session(session.session_id, reason_code="other", now=NOW + timedelta(seconds=1)) == closed
+    assert repository.get_session(session.session_id) == closed

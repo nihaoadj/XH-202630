@@ -227,14 +227,20 @@ def review_node(
                 else:
                     error_category = "input_budget" if isinstance(exc, ReviewInputBudgetError) else "review_validation"
                     error = _fail_closed_review_error(make_error_info(
-                        ErrorCode.LLM_OUTPUT_SCHEMA_INVALID, source="reviewer",
-                        attempt=node_input.generation_attempt, category=error_category))
+                        ErrorCode.REVIEW_INPUT_BUDGET_EXCEEDED if isinstance(exc, ReviewInputBudgetError)
+                        else ErrorCode.WORKFLOW_CONTRACT_INVALID, source="reviewer",
+                        attempt=node_input.generation_attempt, category=error_category,
+                        safe_detail=exc.safe_detail() if isinstance(exc, ReviewInputBudgetError) else None))
+                technical_failure = state["resource_review_policy"].get("input_contract") == "single_representation_v4"
+                description = "审核能力不可用或结果无效，无法安全完成自动审核。"
+                if technical_failure and error_category in {"schema", "parse", "review_validation"}:
+                    description = "普通审核结果校验失败，保持未发布。"
                 raw = {"decision": "human_review", "hallucination_score": 0.5,
-                       "issues": [{"code": "evidence_gap", "severity": "high",
+                       "issues": [{"code": "other" if technical_failure else "evidence_gap", "severity": "high",
                                    "resource_type": resource.resource_type, "knowledge_point": None,
-                                   "description": "审核能力不可用或结果无效，无法安全完成自动审核。"}],
+                                   "description": description}],
                        "difficulty_match": False, "coverage_rate": 0.0,
-                       "suggestion": "保持未发布。", "revision_instructions": []}
+                   "suggestion": error.message, "revision_instructions": []}
         elif structured_review := check_resource_structure(resource=resource, context=state):
             raw = structured_review
         else:
@@ -309,6 +315,9 @@ def review_node(
                     phase = ("practice_semantic_v2" if resource.resource_type == "实操指南" else
                              "assessment_package_v1" if resource.resource_type == "分阶测试题" else "content_v2")
                     profile = resolve_review_profile(resource_type=resource.resource_type, phase=phase, policy=policy)
+                    if resource.correction_package_payload is not None:
+                        from app.agents.resource_workflows.learning_documents.reviewing.profiles import correction_content_profile
+                        profile = correction_content_profile(profile, compact=resource.correction_package_payload.get("schema_version") == "correction-package-v2")
                     bundle = build_review_prompt(profile=profile, enabled_specialties=select_specialties(profile=profile, resource=resource))
                     request = build_review_request(profile=profile, prompt_bundle=bundle, audit_input=ReviewAuditInput(
                         resource=resource, evidence=tuple(evidence), difficulty=node_input.difficulty_preference,
@@ -407,7 +416,7 @@ def review_node(
                               for item in results.values()), default=0.0),
         "difficulty_match": all(item.get("difficulty_match", False)
                                 for item in results.values()),
-        "suggestion": "资源级审核结果已按最严格结论聚合。",
+        "suggestion": trace_error.message if trace_error is not None else "资源级审核结果已按最严格结论聚合。",
     }
     status = (
         StepStatus.DEGRADED

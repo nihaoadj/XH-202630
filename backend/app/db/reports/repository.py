@@ -17,6 +17,7 @@ _SUPPORTED_REPOSITORIES = {
     ("app.db.feedback.feedback_loop_sql_repository", "SQLFeedbackLoopRepository"),
     ("app.db.generation.sql_repository", "SQLGenerationJobRepository"),
     ("app.db.claim.sql_repository", "SQLClaimRepository"),
+    ("app.db.claim.supplement", "SQLClaimSupplementRepository"),
     ("app.db.audit.sql_repository", "SQLAuditRepository"),
     ("app.db.diagnosis.sql_repository", "SQLDiagnosisRepository"),
     ("app.db.learners.sql_repository", "SQLLearnerRepository"),

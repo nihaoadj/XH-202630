@@ -90,6 +90,7 @@
 </template>
 
 <script setup>
+import { currentProfileRating } from '../../utils/profileRating.js'
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -112,7 +113,7 @@ const props = defineProps({
     activeRunId: { type: String, default: '' },
     sourceResources: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['open-text-workspace', 'created', 'published'])
+const emit = defineEmits(['open-text-workspace', 'created', 'published', 'open-resource'])
 
 const WORKSPACE_KIND_STORAGE_KEY = 'generation_workspace_kind'
 const ACTIVE_RUN_STORAGE_KEY = 'courseware_active_run_id'
@@ -143,7 +144,7 @@ const availableSourceResources = ref([]);
 /** @type {import('vue').Ref<CoursewareJobSummary[]>} */
 const jobs = ref([])
 const selectedLearnerId = ref(props.learnerId || route.query.learnerId || localStorage.getItem('last_learner_id') || '')
-const selectedRunId = ref(props.activeRunId || route.query.runId || '')
+const selectedRunId = ref(props.embedded ? props.activeRunId : route.query.runId || '')
 /** @type {import('vue').Ref<CoursewareJobSummary|null>} */
 const currentJob = ref(null);
 const selectedSourceIds = ref([])
@@ -181,7 +182,7 @@ const activeStage = computed(() => {
 const connectionLabel = computed(() => ({ live: '实时同步', polling: '轮询恢复', terminal: '已完成', idle: '等待连接', error: '连接已断开' }[connectionStatus.value] || '任务记录'))
 
 function profileLabel(profile) {
-  return `${trackName(profile.knowledge_base_id)} / ${profile.skill_level || '未分级'}`
+  return `${trackName(profile.knowledge_base_id)} / ${currentProfileRating(profile) || '未分级'}`
 }
 function trackName(id) {
   return tracks.value.find((track) => track.track_id === id)?.name || id || '未命名方向'
@@ -307,6 +308,7 @@ async function loadSourceResources() {
 const { stopTracking, dispose: disposeTracking, loadJobs, loadCurrentJob, refreshCurrentJob } = useCoursewareTracking({
   selectedLearnerId, selectedRunId, jobs, currentJob, connectionStatus, published,
   rememberedRunId, syncRoute, emit, messages: ElMessage,
+  preferredRunId: () => props.embedded ? props.activeRunId : '',
 })
 
 function refreshSelectedJob() { return refreshCurrentJob(selectedRunId.value) }
@@ -400,7 +402,7 @@ async function retryScene(sceneId) {
 function openPublishedResource() {
   if (!currentJob.value?.resource_id) return
   if (props.embedded) {
-    emit('published', currentJob.value)
+    emit('open-resource', currentJob.value)
     return
   }
   // Standalone courseware has no source batch. Keep its own run so the
@@ -449,7 +451,7 @@ watch(() => props.learnerId, async (learnerId) => {
     await Promise.all([loadSourceResources(), loadJobs()])
 }, { flush: 'sync' })
 watch(() => props.activeRunId, async (runId) => {
-    if (!props.embedded || !runId || runId === selectedRunId.value) return;
+    if (!props.embedded || runId === selectedRunId.value) return;
     stopTracking();
     invalidateCurrentAction()
     currentJob.value = null

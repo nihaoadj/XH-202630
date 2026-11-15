@@ -33,7 +33,9 @@ assert.match(resourceViewer, /captureSelectedText/, 'reader must collect selecte
 assert.match(resourceViewer, /就这段向 Tutor 提问/, 'reader must offer a selected-text Tutor action')
 assert.match(drawer, /已引用材料/, 'Tutor composer must display selected material separately from the question')
 assert.match(drawer, /引用材料：/, 'Tutor turn must include the quoted material for grounded tutoring')
-assert.match(feedbackView, /需要提示/, 'evaluation questions must expose the Tutor entry')
+assert.doesNotMatch(feedbackView, /需要提示|<TutorDrawer/, 'formal assessment must not expose a Tutor entry or panel')
+const roundQuestions = readFileSync(new URL('../src/features/feedback/RoundEvaluationGroups.vue', import.meta.url), 'utf8')
+assert.doesNotMatch(roundQuestions, /需要提示|\$emit\('hint'/, 'round assessments must also require independent answers')
 assert.match(drawer, /source_type: props\.contextType === 'question_help' && props\.batchId \? 'batch'/, 'batch feedback must create a batch-scoped Tutor session')
 assert.match(drawer, /watch\(\(\) => props\.modelValue,[\s\S]*?ensureSession\(\)/, 'opening the panel must restore or create a session')
 assert.match(drawer, /tutorApi\.getSession/, 'refresh restore must load persisted turns')
@@ -82,7 +84,7 @@ const pendingCorrectionRunId = ref('')
 const store = { currentProfile: { profile_version: 7 }, setCurrentProfile(profile) { this.currentProfile = profile } }
 const evaluationFlow = useFeedbackEvaluation({
   feedbackApi, form, selectedRunId: ref('batch-1'), pendingCorrectionRunId, feedbackResults,
-  result, evaluation, evaluationAnswers, tutorOpen: ref(false), tutorQuestion: ref(null),
+  result, evaluation, evaluationAnswers,
   tutorHelpCount, canSubmit: ref(true), submitting, feedbackStatus, activeTask: ref(null),
   store, resultPanelRef: ref({ scrollIntoView: options => scrolls.push(options) }),
   feedbackScrollBehavior: () => 'auto',

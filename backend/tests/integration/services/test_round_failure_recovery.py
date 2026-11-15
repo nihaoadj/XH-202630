@@ -63,7 +63,7 @@ def test_expired_scoring_becomes_resumable_without_mutating_the_frozen_submissio
         assert row["attempt_id"] is None
         with pytest.raises(ApplicationError) as stale_owner:
             feedback._commit(profile, created.round_id, created.stage_id, abandoned, prepared, anchor,
-                             "abandoned-owner", abandoned["submission_hash"])
+                             "abandoned-owner", abandoned["submission_hash"], None)
         assert stale_owner.value.code == ErrorCode.ROUND_ATTEMPT_CONFLICT
         return prepared, anchor
 
@@ -78,7 +78,7 @@ def test_expired_scoring_becomes_resumable_without_mutating_the_frozen_submissio
     _, prepared, anchor = prepared_by_new_owner[0]
     with pytest.raises(ApplicationError) as late_owner:
         feedback._commit(profile, created.round_id, created.stage_id, abandoned, prepared, anchor,
-                         "abandoned-owner", abandoned["submission_hash"])
+                         "abandoned-owner", abandoned["submission_hash"], None)
     assert late_owner.value.code == ErrorCode.ROUND_ATTEMPT_CONFLICT
     assert len(service.feedback.feedback_loop_repo.list_attempts(profile.learner_id)) == 1
     assert service.learners.get(profile.learner_id).profile_version == before_version + 1

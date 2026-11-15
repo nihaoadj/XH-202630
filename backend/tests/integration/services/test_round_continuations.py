@@ -100,7 +100,7 @@ def test_review_append_is_rejected_without_writing(sql):
 
 
 @pytest.mark.parametrize("sql", [False, True])
-def test_recovery_respects_budget_limit_and_never_replaces_published_work(sql):
+def test_manual_recovery_exceeds_H_without_replacing_published_work(sql):
     service, profile = wired(sql)
     created = service.create(profile, create_payload())
     source = created.members[0].job_ids[0]
@@ -110,21 +110,38 @@ def test_recovery_respects_budget_limit_and_never_replaces_published_work(sql):
     stored = binding(service, source)
     limit = service.repository.one("learning_round_stages", stage_id=created.stage_id)["budget_snapshot"]["H"]
 
-    for index in range(limit):
+    for index in range(limit + 3):
         create_bound_job(jobs, profile, stored, request.model_copy(deep=True), f"recovery-{index}",
                          canonical_hash(["recovery", index]), relation="retry", source_run_id=source)
 
-    with pytest.raises(ApplicationError) as caught:
-        create_bound_job(jobs, profile, stored, request.model_copy(deep=True), "recovery-overflow",
-                         canonical_hash(["recovery", "overflow"]), relation="retry", source_run_id=source)
-    assert caught.value.code == ErrorCode.ROUND_CORRECTION_BUDGET_EXHAUSTED
-    assert caught.value.status_code == 409
+    before_replay = stage_node(service, created)
+    assert before_replay["budget_counters"]["resource_recoveries"]["讲义"] == limit + 3
+    assert before_replay["recovery_count"] == limit + 3
+    create_bound_job(jobs, profile, stored, request.model_copy(deep=True), "recovery-0",
+                     canonical_hash(["recovery", 0]), relation="retry", source_run_id=source)
+    assert stage_node(service, created) == before_replay
+    assert service.repository.one("learning_round_stages", stage_id=created.stage_id)["budget_snapshot"]["H"] == limit
 
     publish(service, created)
     with pytest.raises(ApplicationError) as published:
         create_bound_job(jobs, profile, stored, request.model_copy(deep=True), "recovery-published",
                          canonical_hash(["recovery", "published"]), relation="retry", source_run_id=source)
     assert published.value.code == ErrorCode.ROUND_SELECTION_CONFLICT
+
+
+@pytest.mark.parametrize("sql", [False, True])
+def test_manual_batch_retry_continuation_also_has_no_count_limit(sql):
+    service, profile = wired(sql)
+    created = service.create(profile, create_payload())
+    source = created.members[0].job_ids[0]
+    jobs = service.feedback.generation_job_service
+    jobs.job_repo.mark_failed(source, "INTERNAL_ERROR")
+    payload = continuation_payload(source, ("讲义",), replace_existing_types=True)
+    limit = service.repository.one("learning_round_stages", stage_id=created.stage_id)["budget_snapshot"]["H"]
+    for index in range(limit + 2):
+        job, _ = continue_batch(service, payload, f"manual-retry-{index}")
+        assert binding(service, job.run_id)["relation_kind"] == "retry"
+    assert stage_node(service, created)["budget_counters"]["resource_recoveries"]["讲义"] == limit + 2
 
 
 @pytest.mark.parametrize("sql", [False, True])

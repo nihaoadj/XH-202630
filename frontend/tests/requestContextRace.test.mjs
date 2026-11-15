@@ -260,12 +260,10 @@ function makeFollowupFixture() {
   const form = reactive({ learner_id: 'learner-A' })
   const result = ref({ attempt: { attempt_id: 'attempt-A' } })
   const selectingOption = ref('')
-  const selectedResourceTypes = ref(['practice', 'checklist'])
   const includeClaimCheck = ref(true)
+  const includeClaimEvidenceRetrieval = ref(false)
+  const claimPostRetrievalMaxIterations = ref(0)
   const generationOptions = ref({ snapshot_hash: 'snapshot-A' })
-  const selectedDifficulty = ref('advanced')
-  const learningIntent = ref('reinforce_weakness')
-  const selectedNodesForFollowup = ref(['node-A'])
   const correctionPackageOption = ref({
     eligible: true, option_id: 'correction-A', recommended_target_ids: ['node-weak'], snapshot_hash: 'correction-snapshot-A',
   })
@@ -276,12 +274,10 @@ function makeFollowupFixture() {
     form,
     result,
     selectingOption,
-    selectedResourceTypes,
     includeClaimCheck,
+    includeClaimEvidenceRetrieval,
+    claimPostRetrievalMaxIterations,
     generationOptions,
-    selectedDifficulty,
-    learningIntent,
-    selectedNodesForFollowup,
     correctionPackageOption,
     router: { push: value => routes.push(value) },
     messages: {
@@ -291,8 +287,9 @@ function makeFollowupFixture() {
     contextVersion,
   })
   return {
-    feedbackApi, form, result, selectingOption, selectedResourceTypes, includeClaimCheck,
-    generationOptions, selectedDifficulty, learningIntent, selectedNodesForFollowup,
+    feedbackApi, form, result, selectingOption, includeClaimCheck,
+    includeClaimEvidenceRetrieval, claimPostRetrievalMaxIterations,
+    generationOptions,
     correctionPackageOption, contextVersion, messages, routes, hook,
   }
 }
@@ -305,12 +302,12 @@ async function testFollowupPayloadAndStaleCompletion() {
     selectionPayload = payload
     return pending.promise
   }
-  const selection = fixture.hook.selectFeedbackOption('custom-selection')
+  const selection = fixture.hook.selectCorrectionPackage()
   assert.deepEqual(selectionPayload, {
-    learner_id: 'learner-A', attempt_id: 'attempt-A', option_id: 'custom-selection',
-    resource_types: ['practice', 'checklist'], include_claim_check: true,
-    learning_intent: 'reinforce_weakness', selected_skill_node_ids: ['node-A'],
-    next_generation_snapshot_hash: 'snapshot-A',
+    learner_id: 'learner-A', attempt_id: 'attempt-A', option_id: 'correction-A',
+    learning_intent: 'reinforce_weakness', include_claim_check: true,
+    include_claim_evidence_retrieval: false,
+    selected_skill_node_ids: ['node-weak'], next_generation_snapshot_hash: 'correction-snapshot-A',
   })
   fixture.form.learner_id = 'learner-B'
   fixture.contextVersion.value += 1
@@ -326,7 +323,7 @@ async function testFollowupPayloadAndStaleCompletion() {
   const failed = makeFollowupFixture()
   const pendingFailure = deferred()
   failed.feedbackApi.selectFollowup = () => pendingFailure.promise
-  const staleFailure = failed.hook.selectFeedbackOption('option-A')
+  const staleFailure = failed.hook.selectCorrectionPackage()
   failed.form.learner_id = 'learner-B'
   failed.contextVersion.value += 1
   failed.selectingOption.value = ''
@@ -345,11 +342,17 @@ async function testFollowupPayloadAndStaleCompletion() {
   assert.deepEqual(correctionPayload, {
     learner_id: 'learner-A', attempt_id: 'attempt-A', option_id: 'correction-A',
     learning_intent: 'reinforce_weakness', include_claim_check: true,
+    include_claim_evidence_retrieval: false,
     selected_skill_node_ids: ['node-weak'], next_generation_snapshot_hash: 'correction-snapshot-A',
   })
   assert.equal(active.result.value.followup_run_id, 'run-correction')
   assert.deepEqual(active.messages.successes, ['纠错包与新测评题正在创建'])
   assert.equal(active.selectingOption.value, '')
+  active.includeClaimEvidenceRetrieval.value = true
+  active.claimPostRetrievalMaxIterations.value = 2
+  await active.hook.selectCorrectionPackage()
+  assert.equal(correctionPayload.claim_post_retrieval_max_iterations, 2)
+  assert.equal(correctionPayload.include_claim_evidence_retrieval, true)
 }
 
 class FakeEventSource {

@@ -196,7 +196,8 @@ def test_checklist_node_tier_difficulty_ignores_surface_complexity_only_for_chec
 
 def test_text_resource_uses_bounded_long_form_timeout_and_output_budget(monkeypatch):
     spec, context, _ = _inputs("讲义")
-    gateway = ScriptedLLMGateway(["# 受控检索讲义\n\n## 学习目标\n\n掌握证据范围。"])
+    markdown = "# 受控检索讲义\n\n## 证据能支持什么\n\n找到相关资料后，仍要判断它能支持哪些结论。"
+    gateway = ScriptedLLMGateway([markdown])
     monkeypatch.setattr(
         "app.agents.resource_agents.text.get_settings",
         lambda: SimpleNamespace(
@@ -207,7 +208,7 @@ def test_text_resource_uses_bounded_long_form_timeout_and_output_budget(monkeypa
 
     artifact = TextResourceAgent().generate(spec, context, llm_gateway=gateway)
 
-    assert artifact.content_text.startswith("# 受控检索讲义")
+    assert artifact.content_text == markdown
     assert gateway.calls[0]["options"].request_timeout_seconds == 240.0
     assert gateway.calls[0]["options"].max_output_tokens == 32768
 

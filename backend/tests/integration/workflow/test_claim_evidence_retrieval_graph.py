@@ -74,6 +74,7 @@ def _request() -> GenerateRequest:
         resource_types=["讲义"], include_review=True, include_claim_check=True,
         include_claim_evidence_retrieval=True, target_skill_nodes=["skill-rag"],
         profile_focus_mode="off", max_iterations=1, claim_max_iterations=1,
+        claim_post_retrieval_max_iterations=1,
     )
 
 
@@ -276,6 +277,9 @@ def _service(monkeypatch, *, gateway, retriever, audit, resources, claims, suppl
             "evidence": [item.evidence_id for item in context.evidence],
             "supplement": list(context.supplement_evidence_ids),
             "revision": revision,
+            "problem_verdicts": [p.verdict for p in context.claim_review_revision.problems]
+                if context.claim_review_revision else [],
+            "edit_policy": context.constraints.get("_claim_revision_edit_policy"),
         })
         cited = list(spec.evidence_ids)
         if revision and context.supplement_evidence_ids:
@@ -309,9 +313,46 @@ def _service(monkeypatch, *, gateway, retriever, audit, resources, claims, suppl
     return service, seen_generation
 
 
+@pytest.mark.parametrize("post_budget,contradictions_first,extra_gaps", [(0,False,0), (1,False,0), (0,True,0), (1,True,0), (0,True,9), (0,False,9)])
 def test_compiled_graph_runs_supplement_revision_and_child_review(
-    monkeypatch, stores, tmp_path,
+    monkeypatch, stores, tmp_path, post_budget, contradictions_first, extra_gaps,
 ):
+    if extra_gaps:
+        original_extract = _scripted_extraction
+        additions = [f"待核实陈述{i}。" for i in range(extra_gaps)]
+        monkeypatch.setitem(globals(), "INITIAL_CONTENT", INITIAL_CONTENT + "".join(additions))
+        def extraction_with_gaps(call):
+            output = original_extract(call)
+            payload = json.loads(call["messages"][1].content)
+            for unit, result in zip(payload["target_units"], output["units"]):
+                for sentence in additions:
+                    if sentence in unit["text"]:
+                        result["status"] = "claims"
+                        result["claims"].append({"claim_text":sentence, "claim_type":"factual",
+                                                 "source_text":sentence, "knowledge_point_id":"skill-rag"})
+            return output
+        monkeypatch.setitem(globals(), "_scripted_extraction", extraction_with_gaps)
+    if contradictions_first or extra_gaps:
+        original_judge = _scripted_judge
+        def judge_with_initial_contradiction(call):
+            payload = json.loads(call["messages"][1].content)
+            output = original_judge(call)
+            for claim, judgement in zip(payload["claims"], output["judgements"]):
+                if claim["resource_version"] == 1:
+                    contradictory = contradictions_first and "召回率必须达到" in claim["claim_text"]
+                    judgement.update(verdict="contradicted" if contradictory else "supported" if not contradictions_first and "向量检索" in claim["claim_text"] else "not_in_evidence",
+                                     evidence_ids=[BASE_EVIDENCE_ID] if contradictory or (not contradictions_first and "向量检索" in claim["claim_text"]) else [])
+                elif claim["resource_version"] == 2 and "每周巡检" in claim["claim_text"]:
+                    judgement.update(verdict="not_in_evidence", evidence_ids=[])
+            return output
+        def successful_supplement(call):
+            payload = json.loads(call["messages"][1].content)
+            return {"judgements": [{"claim_id": c["claim_id"],
+                "verdict": "not_in_evidence" if post_budget else "supported",
+                "evidence_ids": [] if post_budget else [SUPPLEMENT_EVIDENCE_ID], "reason": "checked", "confidence": .9}
+                for c in payload["claims"]]}
+        monkeypatch.setitem(globals(), "_scripted_judge", judge_with_initial_contradiction)
+        monkeypatch.setitem(globals(), "_scripted_rejudge", successful_supplement)
     audit, resources, claims, supplement, factory = stores
     route, seen_schemas = _router()
     # The frozen resource-review execution identity binds the reviewer model:
@@ -345,6 +386,7 @@ def test_compiled_graph_runs_supplement_revision_and_child_review(
 
     learner = _learner()
     request = _request()
+    request = request.model_copy(update={"claim_post_retrieval_max_iterations": post_budget})
     with factory() as db:
         db.add(KnowledgeBaseORM(knowledge_base_id="kb-fixture", name="synthetic"))
         db.add(LearnerProfileORM(
@@ -353,6 +395,32 @@ def test_compiled_graph_runs_supplement_revision_and_child_review(
         db.commit()
 
     response = service.generate_with_run_id(learner, request, run_id="run-graph")
+
+    if contradictions_first or extra_gaps:
+        assert response.workflow_status == "completed", response.error_codes
+        judges = [i for i, name in enumerate(seen_schemas) if name == "ClaimJudgementLLMOutput"]
+        assert len(judges) == 2 + post_budget
+        assert seen_schemas.index("ClaimQueryBatchOutputV1") > judges[1]
+        assert len(seen_generation) == 2 + post_budget
+        assert seen_generation[1]["problem_verdicts"].count("contradicted") == int(contradictions_first)
+        assert seen_generation[1]["problem_verdicts"].count("not_in_evidence") == (extra_gaps + 1 if extra_gaps else 0)
+        assert seen_generation[1]["edit_policy"] == "minimal_change_v1"
+        assert not seen_generation[1]["supplement"]
+        assert response.resources[0].version == 2 + post_budget
+        assert response.resources[0].claim_factual_pass_rate == 1.0
+        assert any(scope.purpose == "generation" for scope in supplement.list_evidence_sets(["run-graph"])) == bool(post_budget)
+        if post_budget:
+            assert seen_generation[2]["problem_verdicts"] == ["not_in_evidence"]
+        return
+
+    if post_budget == 0:
+        assert response.workflow_status == "human_review", response.error_codes
+        assert len(seen_generation) == 1
+        assert response.resources[0].version == 1
+        assert response.resources[0].publication_status == "unpublished"
+        assert "ClaimSupplementJudgementLLMOutput" in seen_schemas
+        assert all(scope.purpose != "generation" for scope in supplement.list_evidence_sets(["run-graph"]))
+        return
 
     # The whole chain ran on the compiled graph: query and rejudge are real
     # node calls, not helper-assembled state.

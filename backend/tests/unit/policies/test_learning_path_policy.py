@@ -6,6 +6,7 @@ from app.models.feedback.feedback_loop import (
     KnowledgePointAttemptResult,
     LearningAttempt,
     PathMutationType,
+    PathNodeStatus,
     PathNodeType,
 )
 from app.services.feedback.learning_path_policy import mutate_learning_path
@@ -61,21 +62,26 @@ def test_high_score_completes_current_and_unlocks_the_next_node():
         existing=None,
     )
     current = next(item for item in path.nodes if item.node_type == PathNodeType.CORE)
+    successor = current.model_copy(update={
+        "node_id": "existing-successor", "knowledge_point_id": "skill-b",
+        "status": PathNodeStatus.LOCKED, "sequence": len(path.nodes) + 1,
+        "prerequisite_ids": [current.node_id],
+    })
+    path.nodes.append(successor)
     high = _attempt(0.95, "a2", current.node_id)
     advanced, mutation = mutate_learning_path(
         attempt=high,
         decision_id="d2",
         policy=decide_attempt(high, FeedbackContext(learner_id="learner", profile_version=2)),
         existing=path,
-        advance_knowledge_point_id="skill-b",
     )
     assert current.node_id in mutation.completed_node_ids
-    assert mutation.unlocked_node_ids
-    challenge = next(item for item in advanced.nodes if item.node_type == PathNodeType.CHALLENGE)
-    assert challenge.knowledge_point_id == "skill-b"
+    assert mutation.unlocked_node_ids == [successor.node_id]
+    assert mutation.inserted_node_ids == []
+    assert next(item for item in advanced.nodes if item.node_id == successor.node_id).status == PathNodeStatus.AVAILABLE
 
 
-def test_high_score_does_not_create_a_challenge_for_the_completed_node():
+def test_high_score_without_existing_successors_waits_for_learner_selection():
     attempt = _attempt(0.95, "a1")
 
     path, mutation = mutate_learning_path(
@@ -87,4 +93,5 @@ def test_high_score_does_not_create_a_challenge_for_the_completed_node():
 
     assert mutation.completed_node_ids
     assert mutation.unlocked_node_ids == []
-    assert not any(item.node_type == PathNodeType.CHALLENGE for item in path.nodes)
+    assert mutation.inserted_node_ids == []
+    assert [node.knowledge_point_id for node in path.nodes] == ["skill-a"]

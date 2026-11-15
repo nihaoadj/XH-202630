@@ -25,6 +25,18 @@ def test_review_plan_is_two_fixed_resources_and_uses_its_own_tier():
     assert all(req.target_skill_nodes == ["b"] and req.difficulty_preference == "初级" for req in result.requests)
 
 
+def test_primary_practice_keeps_ordinary_review_without_claim():
+    node = SkillNode(node_id="b", knowledge_base_id="kb", name="B", tier=1)
+    result = plan_member(round_id="r", stage_id="s", learner_id="l", knowledge_base_id="kb", node=node,
+                         role="primary", primary_resource_types=["实操指南", "讲义"],
+                         include_claim_check=True, include_claim_evidence_retrieval=True)
+    practice, lecture = result.requests
+    assert practice.resource_types == ["实操指南"]
+    assert practice.include_review and not practice.include_claim_check and not practice.include_claim_evidence_retrieval
+    assert lecture.resource_types == ["讲义"]
+    assert lecture.include_claim_check and lecture.include_claim_evidence_retrieval
+
+
 def test_two_correction_plans_are_four_separate_node_scoped_resources():
     results = [plan_member(round_id="r", stage_id="correction", learner_id="l", knowledge_base_id="kb",
                            node=SkillNode(node_id=key, knowledge_base_id="kb", name=key, tier=tier), role=role,

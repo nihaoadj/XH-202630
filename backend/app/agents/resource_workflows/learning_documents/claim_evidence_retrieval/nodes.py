@@ -283,6 +283,11 @@ def claim_evidence_retrieve_node(
     claims = _claims(state)
     judgements = _round0_judgements(state)
     targets = _targets_by_resource(claims, judgements)
+    from ..claim_routing import contradiction_first, contradicted_resource_ids, resource_keys
+    staged = contradiction_first(state)
+    if staged:
+        blocked = contradicted_resource_ids(state)
+        targets = {rid: items for rid, items in targets.items() if rid not in blocked}
     resources = {
         item.resource_id: item for item in state.get("generated_resources", [])
     }
@@ -309,7 +314,9 @@ def claim_evidence_retrieve_node(
     evidence_refs: list[str] = []
     errors: list[dict[str, Any]] = []
     failed_resources: list[str] = []
-    used_excerpts = 0
+    used_excerpts = len({evidence_id
+                         for prior in supplement_repository.list_sessions([run_id])
+                         for evidence_id in prior.evidence_scope_ids})
     query_total = 0
     for resource_id in sorted(targets):
         resource = resources.get(resource_id)
@@ -322,6 +329,21 @@ def claim_evidence_retrieve_node(
             if item.resource_version == resource.version
         ]
         if not target_claims:
+            continue
+        from ..claim_extraction.resource_sources import source_for_claims
+        try:
+            source = source_for_claims(resource, [c for c in resource_claims if c.resource_id == resource_id
+                                                 and c.resource_version == resource.version])
+            if source.snapshot and any(source.text[c.source_start:c.source_end] != c.source_text
+                                       for c in target_claims):
+                raise ValueError("structured supplement Claim source mismatch")
+        except ValueError:
+            failed_resources.append(resource_id)
+            errors.append(make_error_info(
+                "CLAIM_EXTRACTION_INVALID", source=NODE_RETRIEVE,
+                attempt=state.get("generation_attempt", 1), category="claim_audit",
+                safe_detail="structured supplement source invalid",
+            ).model_dump(mode="json"))
             continue
         verdicts = {
             item.claim_id: item.verdict
@@ -490,7 +512,10 @@ def claim_evidence_retrieve_node(
             )
             claim_ids_by_query: dict[str, tuple[str, ...]] = {}
             for item in retrieval_plans:
-                claim_ids_by_query.update(item.claim_ids_by_query)
+                for query, ids in item.claim_ids_by_query.items():
+                    claim_ids_by_query[query] = tuple(dict.fromkeys(
+                        (*claim_ids_by_query.get(query, ()), *ids)
+                    ))
             base_pool = authorized_pool_identities(base_evidence)
             batches = []
             saved_evidence: list[EvidenceItem] = []
@@ -503,7 +528,9 @@ def claim_evidence_retrieve_node(
                     input_hash=item.input_hash,
                     status=ClaimEvidenceBatchStatus.PLANNED,
                     payload={"queries": len(item.queries)},
-                    expected_claim_ids=list(session.target_claim_ids),
+                    expected_claim_ids=list(dict.fromkeys(
+                        claim_id for ids in item.claim_ids_by_query.values() for claim_id in ids
+                    )),
                     updated_at=utcnow(),
                 ))
                 batch = run_retrieval_batch(
@@ -515,42 +542,44 @@ def claim_evidence_retrieve_node(
                     policy=policy,
                 )
                 batches.append(batch)
-                selection = select_new_evidence(
-                    batches,
-                    claim_ids_by_query=claim_ids_by_query,
-                    base_pool=base_pool,
-                    claim_order=session.target_claim_ids,
-                    per_resource_cap=policy.max_new_excerpts_per_resource,
-                    remaining_total=max(0, policy.max_new_excerpts - used_excerpts),
-                )
-                snapshots = _snapshots_for(
-                    selection.selected, step_id=step_id, run_id=run_id,
-                )
+            selection = select_new_evidence(
+                batches,
+                claim_ids_by_query=claim_ids_by_query,
+                base_pool=base_pool,
+                claim_order=session.target_claim_ids,
+                per_resource_cap=policy.max_new_excerpts_per_resource,
+                remaining_total=max(0, policy.max_new_excerpts - used_excerpts),
+            )
+            selected_by_id = {ev.evidence_id: ev for ev in selection.selected}
+            pending_ids = set(selected_by_id)
+            for item, batch in zip(retrieval_plans, batches):
+                # Each selected snapshot belongs to its first retrieval batch.
+                # A repeated candidate never consumes another quota or grant.
+                batch_ids = {ev.evidence_id for ev in batch.evidence}
+                selected = [ev for ident, ev in selected_by_id.items()
+                            if ident in pending_ids and ident in batch_ids]
+                pending_ids.difference_update(ev.evidence_id for ev in selected)
+                snapshots = _snapshots_for(selected, step_id=step_id, run_id=run_id)
                 supplement_repository.complete_retrieval_batch(
-                    batch_id=item.batch_id,
-                    run_id=run_id,
-                    step_id=step_id,
-                    owner=owner,
-                    epoch=epoch,
+                    batch_id=item.batch_id, run_id=run_id, step_id=step_id,
+                    owner=owner, epoch=epoch,
                     output_hash=canonical_hash({
-                        "evidence_ids": [ev.evidence_id for ev in selection.selected],
+                        "evidence_ids": [ev.evidence_id for ev in selected],
                         "status": batch.status.value,
                     }),
                     payload={
                         "query_hashes": batch.query_hashes,
                         "candidate_count": batch.candidate_count,
                         "new_identity_total": selection.new_identity_total,
-                        "selected_count": len(selection.selected),
+                        "selected_count": len(selected),
                         "dropped_by_cap": selection.dropped_by_cap_total,
                         "candidates": list(selection.candidates)[:40],
                     },
-                    evidence=snapshots,
-                    now=utcnow(),
+                    evidence=snapshots, now=utcnow(),
                 )
-                if selection.selected:
-                    saved_evidence.extend(selection.selected)
-                    evidence_refs.extend(ev.evidence_id for ev in selection.selected)
-                    used_excerpts += len(selection.selected)
+            saved_evidence = list(selection.selected)
+            evidence_refs.extend(ev.evidence_id for ev in saved_evidence)
+            used_excerpts += len(saved_evidence)
             if not saved_evidence:
                 supplement_repository.update_session(
                     session.session_id,
@@ -568,9 +597,8 @@ def claim_evidence_retrieve_node(
                     ],
                 )
         except SupplementBudgetExceeded as exc:
-            supplement_repository.update_session(
+            supplement_repository.fail_session(
                 session.session_id,
-                expected_status=session.status,
                 status=ClaimEvidenceRetrievalStatus.BUDGET_EXHAUSTED,
                 reason_code="budget_exhausted",
             )
@@ -581,14 +609,9 @@ def claim_evidence_retrieve_node(
                 category="claim_audit", safe_detail=str(exc)[:200],
             ).model_dump(mode="json"))
         except Exception as exc:  # noqa: BLE001 - optional feature must not crash the run
-            current = supplement_repository.get_session(session.session_id)
-            if current is not None and current.status not in TERMINAL_STATUSES:
-                supplement_repository.update_session(
-                    session.session_id,
-                    expected_status=current.status,
-                    status=ClaimEvidenceRetrievalStatus.UNAVAILABLE,
-                    reason_code="retrieval_failed",
-                )
+            supplement_repository.fail_session(
+                session.session_id, reason_code="retrieval_failed",
+            )
             failed_resources.append(resource_id)
             errors.append(make_error_info(
                 "CLAIM_EVIDENCE_RETRIEVAL_UNAVAILABLE",
@@ -618,6 +641,10 @@ def claim_evidence_retrieve_node(
     )
     return {
         "claim_evidence_retrieval_refs": refs,
+        "claim_post_retrieval_resource_keys": sorted(
+            set(state.get("claim_post_retrieval_resource_keys", []))
+            | ({key for rid, key in resource_keys(state).items() if rid in targets} if staged else set())
+        ),
         "claim_evidence_new_evidence_ids": list(dict.fromkeys(evidence_refs)),
         "claim_evidence_hard_block_resource_ids": [],
         "current_node": NODE_RETRIEVE,
@@ -680,6 +707,13 @@ def _effective_state(
     sessions: Sequence[ClaimEvidenceRetrievalSessionV1],
     supplements: Sequence[ClaimSupplementJudgementV1],
 ) -> tuple[list[ClaimJudgement], dict[str, Any], list[str]]:
+    # The workflow holds the current versions only; a run's repository also
+    # contains activated parent versions. Never merge those into a child audit.
+    bindings = {(c.run_id, c.resource_id, c.resource_version, c.review_id) for c in claims}
+    sessions = [s for s in sessions
+                if (s.run_id, s.resource_id, s.resource_version, s.review_id) in bindings]
+    session_ids = {s.session_id for s in sessions}
+    supplements = [s for s in supplements if s.session_id in session_ids]
     resolution = resolve_effective_claim_judgements(round0, sessions, supplements)
     effective = resolution.ordered()
     metrics: dict[str, dict[str, Any]] = {}
@@ -733,6 +767,9 @@ def claim_evidence_rejudge_node(
     audit_repository,
 ) -> dict[str, Any]:
     step_context = start_step(state)
+    from ..claim_routing import contradiction_first, revision_available
+    allow_revision_scope = (not contradiction_first(state)
+                            or revision_available(state, "post_retrieval"))
     policy = policy_from_state(state)
     if policy is None:
         return {"current_node": NODE_REJUDGE, "trace": [], "errors": []}
@@ -933,15 +970,16 @@ def claim_evidence_rejudge_node(
                 )
             # The version is permanently blocked, but the targeted revision must
             # still be able to cite the new counter-evidence it was asked to fix.
-            _record_generation_scope(
-                repository=supplement_repository,
-                session=current,
-                base_evidence=base_evidence,
-                added=added,
-                parent_scope_id=scope.scope_id,
-                scope_state=scope_state,
-                supplement_pool=supplement_pool,
-            )
+            if allow_revision_scope:
+                _record_generation_scope(
+                    repository=supplement_repository,
+                    session=current,
+                    base_evidence=base_evidence,
+                    added=added,
+                    parent_scope_id=scope.scope_id,
+                    scope_state=scope_state,
+                    supplement_pool=supplement_pool,
+                )
             continue
         if failed or completed != len(batches):
             if current.status is ClaimEvidenceRetrievalStatus.REJUDGING:
@@ -1013,7 +1051,7 @@ def claim_evidence_rejudge_node(
                 if item.verdict in {ClaimVerdict.CONTRADICTED, ClaimVerdict.NOT_IN_EVIDENCE}
                 or item.evidence_conflict
             ]
-            if remaining:
+            if remaining and allow_revision_scope:
                 _record_generation_scope(
                     repository=supplement_repository,
                     session=current,

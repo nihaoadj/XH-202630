@@ -50,6 +50,7 @@ from app.models.learning_documents.schemas import (
     RunEvaluationSubmitRequest,
     RunEvaluationSubmitResponse,
 )
+from app.core.llm.budget import LLMBudgetUnavailable
 from app.core.llm.gateway import LLMGateway, LLMGatewayError
 from app.models.shared.assessment import ASSESSMENT_TOTAL_SCORE
 from app.services.knowledge.knowledge import KnowledgeService
@@ -245,17 +246,12 @@ class FeedbackService:
         attempt = attempt.model_copy(update={
             "metadata": {**attempt.metadata, "llm_analysis": analysis.model_dump(mode="json")},
         })
-        advance_knowledge_point_id = (
-            self._next_path_node_id(profile, point_ids, context.learning_path)
-            if policy.action.value == "advance" else None
-        )
         try:
             learning_path, path_mutation = mutate_learning_path(
                 attempt=attempt,
                 decision_id=decision_id,
                 policy=policy,
                 existing=context.learning_path,
-                advance_knowledge_point_id=advance_knowledge_point_id,
             )
         except ValueError as exc:
             raise ApplicationError(ErrorCode.LEARNING_PATH_MUTATION_INVALID, status_code=422) from exc
@@ -341,52 +337,6 @@ class FeedbackService:
         material = "\x1f".join(str(part) for part in parts)
         return f"{prefix}_{hashlib.sha256(material.encode()).hexdigest()[:32]}"
 
-    def _next_path_node_id(
-        self,
-        profile: LearnerProfile,
-        assessed_node_ids: list[str],
-        existing_path=None,
-    ) -> str | None:
-        """Return an immediately reachable graph successor for an advance.
-
-        The path mutation itself only knows the nodes already placed on a
-        learner's path.  When an assessment covers a single terminal path node,
-        using that assessed node again as a "challenge" falsely reports an
-        advance to the same topic.  A successor is safe to add only when all of
-        its graph prerequisites are already complete (including this assessed
-        step); otherwise the path remains completed until a valid next node is
-        selected.
-        """
-        if self.knowledge_catalog is None or not profile.knowledge_base_id:
-            return None
-        completed_or_assessed = {str(node_id) for node_id in assessed_node_ids if node_id}
-        completed_or_assessed.update(
-            str(node.knowledge_point_id)
-            for node in (getattr(existing_path, "nodes", None) or [])
-            if getattr(getattr(node, "status", None), "value", getattr(node, "status", None)) == "completed"
-            and getattr(node, "knowledge_point_id", None)
-        )
-        if not completed_or_assessed:
-            return None
-        try:
-            nodes = self.knowledge_catalog.list_skill_nodes(profile.knowledge_base_id)
-        except Exception:
-            logger.warning("Unable to resolve the next learning-path node", exc_info=True)
-            return None
-        by_id = {node.node_id: node for node in nodes}
-        candidates: list[str] = []
-        for node_id in sorted(str(node_id) for node_id in assessed_node_ids if node_id):
-            node = by_id.get(node_id)
-            if node is None:
-                continue
-            for child_id in sorted(node.children):
-                child = by_id.get(child_id)
-                if child is None or child_id in completed_or_assessed:
-                    continue
-                if set(child.prerequisites) <= completed_or_assessed:
-                    candidates.append(child_id)
-        return min(candidates) if candidates else None
-
     def _profile_patch(self, profile, attempt, decision, mutations) -> dict:
         weak = self._display_skill_node_names(profile, profile.weak_points)
         strong = self._display_skill_node_names(profile, profile.strong_points)
@@ -449,13 +399,13 @@ class FeedbackService:
     def _analyze_feedback(self, profile, request, policy, mutations) -> FeedbackAnalysis:
         """Return an analysis object even when the optional LLM call is unavailable."""
         fallback = FeedbackAnalysis(
-            summary=policy.decision_reason,
+            summary=policy.decision_reason if policy else f"本次测评得分率为 {request.overall_score:.1%}，可以结合逐题结果复盘。",
             reflection_insight="已记录你的学习感受；建议结合测评结果安排下一步练习。",
             profile_update_suggestions=[
                 f"关注：{item.knowledge_point_id}" for item in mutations if item.after.status == "weak"
             ][:5],
             learner_suggestions=["先复盘错题，再选择下方最符合当前目标的资源方案。"],
-            report_highlights=[f"本轮策略：{policy.action.value}"],
+            report_highlights=[f"本轮策略：{policy.action.value}"] if policy else ["本轮测评成绩已记录。"],
             analysis_status="fallback",
         )
         if self.llm_gateway is None:
@@ -465,7 +415,7 @@ class FeedbackService:
             if result is None or result.output is None:
                 return fallback
             return result.output.model_copy(update={"analysis_status": "llm"})
-        except LLMGatewayError:
+        except (LLMGatewayError, LLMBudgetUnavailable):
             logger.warning("Feedback analysis LLM unavailable; using deterministic fallback")
             return fallback
 
@@ -632,6 +582,14 @@ class FeedbackService:
             "downgrade_learning_candidates": [
                 item.model_dump(mode="json") for item in downgrade_candidates
             ],
+            "cross_tier_review_pairs": (
+                recommendations.cross_tier_review_pairs(
+                    generation_options, self.knowledge_catalog.list_skill_nodes(profile.knowledge_base_id),
+                )
+                if generation_options and generation_options.cross_tier_new_knowledge
+                and profile and profile.knowledge_base_id and self.knowledge_catalog
+                else {}
+            ),
             "correction_package_option": correction_option.model_dump(mode="json") if correction_option else None,
             "tier_unlock": (
                 {"from_tier": tier_unlock[0], "to_tier": tier_unlock[1]}
@@ -978,7 +936,9 @@ class FeedbackService:
             )
             jobs = []
             for index, item_request in enumerate(requests):
-                item_run_id = run_id if len(requests) == 1 else self._stable_id("run", run_id, item_request.resource_types[0])
+                item_run_id = (run_id if len(requests) == 1 else
+                    self._stable_id("run", run_id, *item_request.target_skill_nodes, item_request.resource_types[0])
+                    if correction_snapshot else self._stable_id("run", run_id, item_request.resource_types[0]))
                 jobs.append(self.generation_job_service.create_job(
                     profile, item_request, run_id=item_run_id,
                     batch_id=source_batch_id or None, retry_failed=True,
@@ -1004,7 +964,7 @@ class FeedbackService:
                     "option_id": option.option_id,
                     "resource_types": resource_types,
                     "difficulty": difficulty,
-                    "child_run_id": job.run_id,
+                    "child_run_id": updated.followup_run_id if updated is not None else jobs[0].run_id,
                     "child_run_ids": [item.run_id for item in jobs],
                 },
                 "queued",

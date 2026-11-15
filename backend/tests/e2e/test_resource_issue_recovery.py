@@ -51,7 +51,7 @@ def _approve(call):
     """Echo the frozen binding and return a clean, fully-covered approve."""
     payload = json.loads(call["messages"][1].content)
     return {
-        "binding": payload["binding"],
+        **({"binding": payload["binding"]} if "binding" in payload else {}),
         "dimensions": {"factual_evidence": "pass", "difficulty": "pass", "self_contained": "pass"},
         "targets": [{"target": t, "status": "covered", "reason": "已讲解", "location": {"kind": "root"}}
                     for t in payload["targets"]],
@@ -61,7 +61,7 @@ def _approve(call):
     }
 
 
-def _resource_state():
+def _resource_state(input_contract=None):
     state = state_for()
     resource = state["generated_resources"][0].model_copy(update={
         "resource_type": "讲义", "resource_spec_id": str(uuid4()), "resource_family_id": str(uuid4()),
@@ -70,7 +70,7 @@ def _resource_state():
         "review_status": None,
     })
     policy = ResourceReviewPolicyV1(context_tokens=262144, max_output_tokens=16384,
-                                    max_physical_attempts=2).model_dump(mode="json")
+                                    max_physical_attempts=2, input_contract=input_contract).model_dump(mode="json")
     state.update(generated_resources=[resource], resource_review_policy=policy,
                  resource_review_policy_hash=policy_hash(policy),
                  resource_review_contract_version="1.1", **execution_identity_fields("fake-model"),
@@ -81,7 +81,8 @@ def _resource_state():
 
 @pytest.mark.parametrize("storage", ["memory", "sqlite"])
 @pytest.mark.parametrize("boundary", ["generated", "audit_committed", "checkpointed", "completed", "empty_refs"])
-def test_resource_issue_fault_boundaries(storage, boundary, tmp_path, monkeypatch):
+@pytest.mark.parametrize("input_contract", [None, "single_representation_v4"])
+def test_resource_issue_fault_boundaries(storage, boundary, input_contract, tmp_path, monkeypatch):
     engine = None
     if storage == "sqlite":
         audit, engine = sqlite_repository(tmp_path)
@@ -89,7 +90,7 @@ def test_resource_issue_fault_boundaries(storage, boundary, tmp_path, monkeypatc
     else:
         audit, resources = MemoryAuditRepository(), MemoryResourceRepository()
     try:
-        state, source = _resource_state()
+        state, source = _resource_state(input_contract)
         learner = LearnerProfile(learner_id="durable-resource", learner_type="测试", education="本科",
                                  major="测试", learning_goal="测试")
         specs = build_resource_specs(run_id=state["run_id"], resource_types=["讲义"], topic="题目",
