@@ -56,7 +56,8 @@ backend/.local-eval-artifacts/
 .tmp-ci-*/
 .tmp-full-latest/
 backend/.tmp-courseware-*
-frontend/tests/test-results/
+/frontend/**/test-results/
+/frontend/**/playwright-report/
 
 # Browser/e2e runtime profiles and local review artifacts
 .tmp-edge-courseware*
@@ -69,13 +70,12 @@ backend/courseware-eval-report.json
 backend/courseware-ci-artifacts/
 backend/courseware-live-workflow-artifacts/
 backend/courseware-live-model.json
-output/test-runs/
-frontend/test-results/
 backend/logs/local-dev-processes.json
 /.live-claim-runs/
 /wzx/out/
 
 # Generated exports/previews; retain source scripts and authored documents
+/output/
 /deliverables/ai-beginner-profile-artifacts-*
 /deliverables/review-*.png
 /deliverables/review-*.html
@@ -93,6 +93,7 @@ backend/logs/local-dev-processes.json
 .agents/
 .codex/
 .codex_tmp/
+/.workbuddy/
 
 # Frontend
 node_modules/
@@ -114,6 +115,9 @@ __extracted_pdf.txt
 # Local startup helpers
 scripts/local-*.ps1
 **/.codex-run-*.ps1
+/restart_services.ps1
+/frontend/open_test_account_page.mjs
 
-# Local dedicated test-account credentials (never commit)
-/output/local-credentials/
+# Standalone local experiments
+/pelican-*.html
+/perler_work_hush/

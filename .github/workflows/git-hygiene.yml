@@ -1,0 +1,21 @@
+name: Git tracked-file check
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  tracked-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject tracked files that match the repository ignore rules
+        shell: bash
+        run: |
+          ignored_tracked="$(git -c core.quotepath=false ls-files --cached --ignored --exclude-standard)"
+          if [[ -n "$ignored_tracked" ]]; then
+            echo "::error::Tracked files match the repository ignore rules."
+            printf '%s\n' "$ignored_tracked"
+            exit 1
+          fi
